@@ -6,7 +6,8 @@ import { z } from "zod";
 
 import { ActorTypeSchema, ErrorCodeSchema, ScopeSchema } from "./enums.js";
 
-export const UuidSchema = z.uuid();
+export const AnyUuidSchema = z.uuid();
+export const UuidSchema = z.uuidv7();
 
 export const ActorRefSchema = z.object({
   type: ActorTypeSchema,

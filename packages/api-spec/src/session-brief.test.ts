@@ -100,6 +100,12 @@ describe("SessionBriefSchema", () => {
     expect(parsed.schema_version).toBe("1");
     expect(parsed.budget.tokenizer).toBe("js_length_div_4");
     expect(parsed.task?.status).toBe("in_progress");
+    expect(
+      SessionBriefSchema.safeParse({
+        ...validSessionBrief,
+        project: { ...validSessionBrief.project, id: "018f1e2c-3d4e-4000-8000-000000000001" },
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects missing never-drop required fields", () => {

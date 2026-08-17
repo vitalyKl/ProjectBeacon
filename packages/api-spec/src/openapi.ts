@@ -11,6 +11,33 @@ function asComponentSchema(schema: z.ZodType): JsonSchema {
   return json;
 }
 
+function markDefaultedFieldsOptional(schema: JsonSchema): JsonSchema {
+  const properties = schema["properties"];
+  const required = schema["required"];
+  if (
+    properties === null ||
+    typeof properties !== "object" ||
+    Array.isArray(properties) ||
+    !Array.isArray(required)
+  ) {
+    return schema;
+  }
+
+  const optional = new Set(
+    Object.entries(properties as Record<string, unknown>)
+      .filter(([, value]) => {
+        return value !== null && typeof value === "object" && !Array.isArray(value) && "default" in value;
+      })
+      .map(([name]) => name),
+  );
+
+  schema["required"] = required.filter((name) => typeof name === "string" && !optional.has(name));
+  if ((schema["required"] as unknown[]).length === 0) {
+    delete schema["required"];
+  }
+  return schema;
+}
+
 export function toOpenApi(): {
   openapi: "3.1.0";
   info: { title: string; version: string; description: string };
@@ -21,7 +48,7 @@ export function toOpenApi(): {
   const SessionBrief = asComponentSchema(SessionBriefSchema);
   const ErrorResponse = asComponentSchema(ErrorResponseSchema);
   const CompileInput = asComponentSchema(CompileInputSchema);
-  const PaginationQuery = asComponentSchema(PaginationQuerySchema);
+  const PaginationQuery = markDefaultedFieldsOptional(asComponentSchema(PaginationQuerySchema));
   const SessionBriefPage = asComponentSchema(paginatedResponseSchema(SessionBriefSchema));
 
   return {
@@ -41,7 +68,12 @@ export function toOpenApi(): {
               name: "id",
               in: "path",
               required: true,
-              schema: { type: "string", format: "uuid" },
+              schema: {
+                type: "string",
+                format: "uuid",
+                pattern:
+                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+              },
             },
           ],
           requestBody: {

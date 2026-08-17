@@ -4,7 +4,6 @@ import { z } from "zod";
 import { LinkedPathSchema, UuidSchema } from "./common.js";
 import {
   ConstraintKindSchema,
-  ContextSectionIdSchema,
   MilestoneStatusSchema,
   ScopeTypeSchema,
   TaskStatusSchema,
@@ -12,23 +11,36 @@ import {
   TokenizerIdSchema,
 } from "./enums.js";
 
-export const ContextSectionSchema = z
-  .object({
-    id: ContextSectionIdSchema,
+const ContextSectionFields = {
+  title: z.string(),
+  body_md: z.string(),
+  ordinal: z.number().int(),
+} as const;
+
+export const ContextSectionSchema = z.discriminatedUnion("id", [
+  z.object({
+    id: z.literal("custom"),
+    key: z.string().min(1),
+    ...ContextSectionFields,
+  }),
+  z.object({
+    id: z.enum([
+      "goals",
+      "non_goals",
+      "architecture",
+      "conventions",
+      "glossary",
+      "ownership",
+      "pitfalls",
+      "commands",
+      "stack",
+      "security",
+      "style",
+    ]),
     key: z.string().min(1).optional(),
-    title: z.string(),
-    body_md: z.string(),
-    ordinal: z.number().int(),
-  })
-  .superRefine((section, ctx) => {
-    if (section.id === "custom" && (section.key === undefined || section.key.length === 0)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["key"],
-        message: 'key is required when id is "custom"',
-      });
-    }
-  });
+    ...ContextSectionFields,
+  }),
+]);
 
 export const TaskSummarySchema = z.object({
   id: UuidSchema,

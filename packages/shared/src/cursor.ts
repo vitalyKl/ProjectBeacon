@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 
-import { isUuid } from "./ids.js";
+import { isUuidV7 } from "./ids.js";
 
 export type CursorPayload = {
   t: string;
@@ -28,8 +28,8 @@ export function encodeCursor(payload: CursorPayload): string {
   if (!isIsoTimestamp(payload.t)) {
     throw new CursorError("cursor timestamp is not ISO-8601");
   }
-  if (!isUuid(payload.id)) {
-    throw new CursorError("cursor id is not a uuid");
+  if (!isUuidV7(payload.id)) {
+    throw new CursorError("cursor id is not a uuidv7");
   }
   return Buffer.from(JSON.stringify({ t: payload.t, id: payload.id }), "utf8").toString("base64url");
 }
@@ -61,8 +61,8 @@ export function decodeCursor(cursor: string): CursorPayload {
   if (typeof t !== "string" || !isIsoTimestamp(t)) {
     throw new CursorError("cursor timestamp is not ISO-8601");
   }
-  if (typeof id !== "string" || !isUuid(id)) {
-    throw new CursorError("cursor id is not a uuid");
+  if (typeof id !== "string" || !isUuidV7(id)) {
+    throw new CursorError("cursor id is not a uuidv7");
   }
 
   return { t, id };

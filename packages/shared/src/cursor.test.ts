@@ -29,6 +29,10 @@ describe("cursor codec", () => {
       Buffer.from(JSON.stringify({ t: PAYLOAD.t }), "utf8").toString("base64url"),
       Buffer.from(JSON.stringify({ t: "yesterday", id: PAYLOAD.id }), "utf8").toString("base64url"),
       Buffer.from(JSON.stringify({ t: PAYLOAD.t, id: "not-a-uuid" }), "utf8").toString("base64url"),
+      Buffer.from(
+        JSON.stringify({ t: PAYLOAD.t, id: "018f1e2c-3d4e-4000-8000-000000000001" }),
+        "utf8",
+      ).toString("base64url"),
     ];
 
     for (const cursor of cases) {

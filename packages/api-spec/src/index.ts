@@ -7,6 +7,7 @@ export {
   LinkedPathSchema,
   PaginationQuerySchema,
   ScopeListSchema,
+  AnyUuidSchema,
   UuidSchema,
   paginatedResponseSchema,
   type ActorRef,
