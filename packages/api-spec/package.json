@@ -11,11 +11,18 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "generate:openapi": "vitest run src/openapi.test.ts"
+  },
+  "dependencies": {
+    "@beacon/shared": "workspace:*",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@beacon/config": "workspace:*",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   }
 }
