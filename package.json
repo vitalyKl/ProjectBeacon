@@ -21,5 +21,8 @@
     "prettier": "catalog:",
     "turbo": "^2.5.8",
     "typescript": "catalog:"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

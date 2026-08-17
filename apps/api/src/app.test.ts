@@ -1,0 +1,50 @@
+import { describe, expect, it } from "vitest";
+import { createApp } from "./app.js";
+
+describe("GET /health", () => {
+  it("returns 200 without touching the database", async () => {
+    const app = createApp({
+      checkReady: async () => {
+        throw new Error("health must not call ready check");
+      },
+    });
+
+    const res = await app.request("/health");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ok" });
+  });
+});
+
+describe("GET /ready", () => {
+  it("returns 200 when Postgres is reachable", async () => {
+    const app = createApp({ checkReady: async () => true });
+
+    const res = await app.request("/ready");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: "ok" });
+  });
+
+  it("returns 503 when Postgres is not reachable", async () => {
+    const app = createApp({ checkReady: async () => false });
+
+    const res = await app.request("/ready");
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ status: "unavailable" });
+  });
+
+  it("returns 503 when the ready check throws", async () => {
+    const app = createApp({
+      checkReady: async () => {
+        throw new Error("connection refused");
+      },
+    });
+
+    const res = await app.request("/ready");
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ status: "unavailable" });
+  });
+});

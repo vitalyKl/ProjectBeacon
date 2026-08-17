@@ -1,0 +1,49 @@
+# web, worker, and mcp services are added in later PRs.
+# API :8080 is published so `docker compose up` can answer liveness.
+# Later PRs stop publishing the API and only publish web :3000.
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: beacon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: beacon
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beacon -d beacon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Postgres is not published to the host by default.
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8080"
+      DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
+    ports:
+      # Temporary: later PRs unpublish the API and only expose web :3000.
+      - "8080:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pgdata:
