@@ -62,18 +62,43 @@ export async function exchangeGithubCode(
   }
 
   const record = userBody as Record<string, unknown>;
-  if (typeof record["id"] !== "number" || typeof record["login"] !== "string") {
+  if (typeof record["login"] !== "string") {
+    return { ok: false };
+  }
+  const id = parseGithubUserId(record["id"]);
+  if (id === undefined) {
     return { ok: false };
   }
 
   return {
     ok: true,
     profile: {
-      id: BigInt(record["id"]),
+      id,
       login: record["login"],
       email: typeof record["email"] === "string" ? record["email"] : null,
       name: typeof record["name"] === "string" ? record["name"] : null,
       avatarUrl: typeof record["avatar_url"] === "string" ? record["avatar_url"] : null,
     },
   };
+}
+
+export function parseGithubUserId(value: unknown): bigint | undefined {
+  if (typeof value === "bigint") {
+    return value > 0n ? value : undefined;
+  }
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value <= 0) {
+      return undefined;
+    }
+    return BigInt(value);
+  }
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    try {
+      const id = BigInt(value);
+      return id > 0n ? id : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }

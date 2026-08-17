@@ -48,11 +48,11 @@ export async function issueSession(
   return { token, session };
 }
 
-export async function resolveSession(
+export async function lookupValidSession(
   store: AuthStore,
   token: string | undefined,
   now: Date,
-): Promise<{ user: UserRecord; session: SessionRecord; rolled: boolean } | undefined> {
+): Promise<{ user: UserRecord; session: SessionRecord } | undefined> {
   if (!token) {
     return undefined;
   }
@@ -67,6 +67,20 @@ export async function resolveSession(
     return undefined;
   }
 
+  return { user, session };
+}
+
+export async function resolveSession(
+  store: AuthStore,
+  token: string | undefined,
+  now: Date,
+): Promise<{ user: UserRecord; session: SessionRecord; rolled: boolean } | undefined> {
+  const found = await lookupValidSession(store, token, now);
+  if (!found) {
+    return undefined;
+  }
+
+  const { user, session } = found;
   let rolled = false;
   if (now.getTime() - session.lastSeenAt.getTime() > ROLLING_REFRESH_AFTER_MS) {
     const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);

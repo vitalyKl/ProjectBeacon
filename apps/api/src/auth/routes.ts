@@ -1,4 +1,5 @@
 import { uuidv7 } from "@beacon/shared";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context, Hono } from "hono";
 
 import { errorJson } from "../errors.js";
@@ -7,8 +8,14 @@ import { clearSessionCookie, readSessionCookie, writeSessionCookie } from "./coo
 import { isGithubOAuthEnabled, type AuthConfig } from "./config.js";
 import { exchangeGithubCode } from "./github.js";
 import { hashPassword, isPasswordPolicyOk, verifyPassword } from "./password.js";
-import { issueSession, resolveSession, toPublicUser } from "./session.js";
-import { LoginTakenError, type AuthStore, type UserRecord } from "./store.js";
+import { issueSession, lookupValidSession, resolveSession, toPublicUser } from "./session.js";
+import {
+  BootstrapConsumedError,
+  GithubIdTakenError,
+  LoginTakenError,
+  type AuthStore,
+  type UserRecord,
+} from "./store.js";
 import { parseBearer, tokenEquals } from "./tokens.js";
 
 export type AuthDeps = {
@@ -20,13 +27,34 @@ export type AuthDeps = {
 
 const LOGIN_TAKEN_MESSAGE = "login is already taken";
 
-function requestMeta(c: Context): { userAgent: string | null; ip: string | null } {
-  const forwarded = c.req.header("x-forwarded-for");
-  const raw = forwarded?.split(",")[0]?.trim() || c.req.header("x-real-ip") || undefined;
-  const ip = raw && (/^[0-9.]+$/.test(raw) || raw.includes(":")) ? raw : null;
+function isPlausibleIp(value: string): boolean {
+  return /^[0-9.]+$/.test(value) || value.includes(":");
+}
+
+function requestIp(c: Context, trustProxy: boolean): string | null {
+  if (trustProxy) {
+    const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
+    const raw = forwarded || c.req.header("x-real-ip")?.trim();
+    if (raw && isPlausibleIp(raw)) {
+      return raw;
+    }
+  }
+
+  try {
+    const address = getConnInfo(c).remote.address;
+    if (address && isPlausibleIp(address)) {
+      return address;
+    }
+  } catch {
+    // app.request() has no socket
+  }
+  return null;
+}
+
+function requestMeta(c: Context, trustProxy: boolean): { userAgent: string | null; ip: string | null } {
   return {
     userAgent: c.req.header("user-agent") ?? null,
-    ip,
+    ip: requestIp(c, trustProxy),
   };
 }
 
@@ -57,23 +85,18 @@ function parsePassword(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-async function createLocalUser(
-  store: AuthStore,
-  now: Date,
-  login: string,
-  password: string,
-): Promise<UserRecord> {
-  return store.createUser({
+function newLocalUser(now: Date, login: string, passwordHash: string): UserRecord {
+  return {
     id: uuidv7(now.getTime()),
     githubId: null,
     login,
     email: null,
     name: null,
     avatarUrl: null,
-    passwordHash: await hashPassword(password),
+    passwordHash,
     createdAt: now,
     updatedAt: now,
-  });
+  };
 }
 
 async function establishSession(
@@ -82,7 +105,7 @@ async function establishSession(
   user: UserRecord,
 ): Promise<Response> {
   const now = deps.clock.now();
-  const { token } = await issueSession(deps.store, user, now, requestMeta(c));
+  const { token } = await issueSession(deps.store, user, now, requestMeta(c, deps.config.trustProxy));
   writeSessionCookie(c, token, deps.config.secureCookies);
   return c.json(toPublicUser(user));
 }
@@ -105,26 +128,29 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
     if (!tokenEquals(deps.config.bootstrapAdminToken, provided)) {
       return errorJson(c, 401, "unauthorized", "invalid bootstrap token");
     }
-    if (await deps.store.hasAnyUser()) {
-      return errorJson(c, 409, "bootstrap_consumed", "bootstrap has already been consumed");
-    }
 
     const body = await readObject(c);
     const login = parseLogin(body?.["login"]);
     const password = parsePassword(body?.["password"]);
     if (!login || password === undefined) {
-      return errorJson(c, 400, "forbidden", "login and password are required");
+      return errorJson(c, 400, "unauthorized", "login and password are required", {
+        reason: "invalid_body",
+      });
     }
     if (!isPasswordPolicyOk(password)) {
-      return errorJson(c, 400, "forbidden", "password must be at least 10 characters");
+      return errorJson(c, 400, "unauthorized", "password must be at least 10 characters", {
+        reason: "password_policy",
+      });
     }
 
     try {
-      const user = await createLocalUser(deps.store, deps.clock.now(), login, password);
+      const user = await deps.store.createFirstUser(
+        newLocalUser(deps.clock.now(), login, await hashPassword(password)),
+      );
       return establishSession(c, deps, user);
     } catch (error) {
-      if (error instanceof LoginTakenError) {
-        return errorJson(c, 409, "login_taken", LOGIN_TAKEN_MESSAGE);
+      if (error instanceof BootstrapConsumedError || error instanceof LoginTakenError) {
+        return errorJson(c, 409, "bootstrap_consumed", "bootstrap has already been consumed");
       }
       throw error;
     }
@@ -142,14 +168,20 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
     const login = parseLogin(body?.["login"]);
     const password = parsePassword(body?.["password"]);
     if (!login || password === undefined) {
-      return errorJson(c, 400, "forbidden", "login and password are required");
+      return errorJson(c, 400, "unauthorized", "login and password are required", {
+        reason: "invalid_body",
+      });
     }
     if (!isPasswordPolicyOk(password)) {
-      return errorJson(c, 400, "forbidden", "password must be at least 10 characters");
+      return errorJson(c, 400, "unauthorized", "password must be at least 10 characters", {
+        reason: "password_policy",
+      });
     }
 
     try {
-      const user = await createLocalUser(deps.store, deps.clock.now(), login, password);
+      const user = await deps.store.createUser(
+        newLocalUser(deps.clock.now(), login, await hashPassword(password)),
+      );
       return establishSession(c, deps, user);
     } catch (error) {
       if (error instanceof LoginTakenError) {
@@ -181,7 +213,7 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
   app.post("/v1/auth/logout", async (c) => {
     const token = readSessionCookie(c);
     const now = deps.clock.now();
-    const resolved = await resolveSession(deps.store, token, now);
+    const resolved = await lookupValidSession(deps.store, token, now);
     if (resolved) {
       await deps.store.revokeSession(resolved.session.id, now);
     }
@@ -230,6 +262,13 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
       });
       return establishSession(c, deps, user);
     } catch (error) {
+      if (error instanceof GithubIdTakenError) {
+        const raced = await deps.store.findUserByGithubId(exchanged.profile.id);
+        if (raced) {
+          return establishSession(c, deps, raced);
+        }
+        return errorJson(c, 401, "unauthorized", "invalid GitHub authorization code");
+      }
       if (error instanceof LoginTakenError) {
         return errorJson(c, 409, "login_taken", LOGIN_TAKEN_MESSAGE);
       }

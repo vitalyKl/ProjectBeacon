@@ -30,12 +30,29 @@ export class LoginTakenError extends Error {
   }
 }
 
+export class BootstrapConsumedError extends Error {
+  override readonly name = "BootstrapConsumedError";
+
+  constructor() {
+    super("bootstrap has already been consumed");
+  }
+}
+
+export class GithubIdTakenError extends Error {
+  override readonly name = "GithubIdTakenError";
+
+  constructor() {
+    super("github account is already linked");
+  }
+}
+
 export interface AuthStore {
   hasAnyUser(): Promise<boolean>;
   findUserById(id: string): Promise<UserRecord | undefined>;
   findUserByLogin(login: string): Promise<UserRecord | undefined>;
   findUserByGithubId(githubId: bigint): Promise<UserRecord | undefined>;
   createUser(user: UserRecord): Promise<UserRecord>;
+  createFirstUser(user: UserRecord): Promise<UserRecord>;
   createSession(session: SessionRecord): Promise<SessionRecord>;
   findSessionByTokenHash(tokenHash: Buffer): Promise<SessionRecord | undefined>;
   updateSessionRolling(id: string, lastSeenAt: Date, expiresAt: Date): Promise<void>;
@@ -61,9 +78,15 @@ function cloneSession(session: SessionRecord): SessionRecord {
 export class MemoryAuthStore implements AuthStore {
   private readonly users = new Map<string, UserRecord>();
   private readonly sessions = new Map<string, SessionRecord>();
+  private writeTail: Promise<void> = Promise.resolve();
 
-  async hasAnyUser(): Promise<boolean> {
-    return this.users.size > 0;
+  private enqueueWrite<T>(fn: () => T): Promise<T> {
+    const run = this.writeTail.then(fn);
+    this.writeTail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   async findUserById(id: string): Promise<UserRecord | undefined> {
@@ -89,12 +112,31 @@ export class MemoryAuthStore implements AuthStore {
     return undefined;
   }
 
+  async hasAnyUser(): Promise<boolean> {
+    return this.users.size > 0;
+  }
+
   async createUser(user: UserRecord): Promise<UserRecord> {
-    if (await this.findUserByLogin(user.login)) {
-      throw new LoginTakenError();
-    }
-    if (user.githubId !== null && (await this.findUserByGithubId(user.githubId))) {
-      throw new LoginTakenError();
+    return this.enqueueWrite(() => this.insertUser(user));
+  }
+
+  async createFirstUser(user: UserRecord): Promise<UserRecord> {
+    return this.enqueueWrite(() => {
+      if (this.users.size > 0) {
+        throw new BootstrapConsumedError();
+      }
+      return this.insertUser(user);
+    });
+  }
+
+  private insertUser(user: UserRecord): UserRecord {
+    for (const existing of this.users.values()) {
+      if (existing.login === user.login) {
+        throw new LoginTakenError();
+      }
+      if (user.githubId !== null && existing.githubId === user.githubId) {
+        throw new GithubIdTakenError();
+      }
     }
     this.users.set(user.id, cloneUser(user));
     return cloneUser(user);

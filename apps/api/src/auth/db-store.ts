@@ -1,30 +1,57 @@
 import { userSessions, users, type Db } from "@beacon/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
+  BootstrapConsumedError,
+  GithubIdTakenError,
   LoginTakenError,
   type AuthStore,
   type SessionRecord,
   type UserRecord,
 } from "./store.js";
 
-function isUniqueViolation(error: unknown): boolean {
+const BOOTSTRAP_LOCK_KEY = 8_811_201;
+
+type UniqueConstraint = "login" | "github_id" | "unknown";
+
+function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
   for (let i = 0; i < 4 && current; i += 1) {
-    if (
-      typeof current === "object" &&
-      current !== null &&
-      "code" in current &&
-      (current as { code: unknown }).code === "23505"
-    ) {
-      return true;
+    if (typeof current === "object" && current !== null && "code" in current) {
+      const code = (current as { code: unknown }).code;
+      if (code === "23505") {
+        const constraint =
+          "constraint_name" in current && typeof current.constraint_name === "string"
+            ? current.constraint_name
+            : "constraint" in current && typeof current.constraint === "string"
+              ? current.constraint
+              : "";
+        if (constraint.includes("login")) {
+          return "login";
+        }
+        if (constraint.includes("github_id")) {
+          return "github_id";
+        }
+        return "unknown";
+      }
     }
     current =
       typeof current === "object" && current !== null && "cause" in current
         ? (current as { cause: unknown }).cause
         : undefined;
   }
-  return false;
+  return undefined;
+}
+
+function mapUserInsertError(error: unknown): never {
+  const constraint = uniqueConstraint(error);
+  if (constraint === "login") {
+    throw new LoginTakenError();
+  }
+  if (constraint === "github_id") {
+    throw new GithubIdTakenError();
+  }
+  throw error;
 }
 
 function asBuffer(value: Buffer | Uint8Array): Buffer {
@@ -84,30 +111,55 @@ export class DbAuthStore implements AuthStore {
 
   async createUser(user: UserRecord): Promise<UserRecord> {
     try {
-      const [row] = await this.db
-        .insert(users)
-        .values({
-          id: user.id,
-          githubId: user.githubId,
-          login: user.login,
-          email: user.email,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-          passwordHash: user.passwordHash,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        })
-        .returning();
-      if (!row) {
-        throw new Error("insert user returned no row");
-      }
-      return toUser(row);
+      return toUser(await this.insertUser(this.db, user));
     } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new LoginTakenError();
+      mapUserInsertError(error);
+    }
+  }
+
+  async createFirstUser(user: UserRecord): Promise<UserRecord> {
+    try {
+      return await this.db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(${BOOTSTRAP_LOCK_KEY})`);
+        const existing = await tx.select({ id: users.id }).from(users).limit(1);
+        if (existing.length > 0) {
+          throw new BootstrapConsumedError();
+        }
+        return toUser(await this.insertUser(tx, user));
+      });
+    } catch (error) {
+      if (error instanceof BootstrapConsumedError) {
+        throw error;
+      }
+      if (uniqueConstraint(error)) {
+        throw new BootstrapConsumedError();
       }
       throw error;
     }
+  }
+
+  private async insertUser(
+    db: Pick<Db, "insert">,
+    user: UserRecord,
+  ): Promise<typeof users.$inferSelect> {
+    const [row] = await db
+      .insert(users)
+      .values({
+        id: user.id,
+        githubId: user.githubId,
+        login: user.login,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+        passwordHash: user.passwordHash,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert user returned no row");
+    }
+    return row;
   }
 
   async createSession(session: SessionRecord): Promise<SessionRecord> {
