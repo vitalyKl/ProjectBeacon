@@ -1,6 +1,5 @@
-# web, worker, and mcp services are added in later PRs.
-# API :8080 is published so `docker compose up` can answer liveness.
-# Later PRs stop publishing the API and only publish web :3000.
+# web, worker, and mcp are not in this compose yet.
+# API :8080 is published so host liveness (/health) works.
 
 services:
   postgres:
@@ -30,7 +29,6 @@ services:
       PORT: "8080"
       DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
     ports:
-      # Temporary: later PRs unpublish the API and only expose web :3000.
       - "8080:8080"
     healthcheck:
       test:
