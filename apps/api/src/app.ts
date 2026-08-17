@@ -1,11 +1,38 @@
+import { createDb } from "@beacon/db";
 import { Hono } from "hono";
+
+import { type AuthConfig, loadAuthConfig } from "./auth/config.js";
+import { systemClock, type Clock } from "./auth/clock.js";
+import { DbAuthStore } from "./auth/db-store.js";
+import { mountAuth } from "./auth/routes.js";
+import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
 import { checkDatabase } from "./db.js";
 
 export const packageName = "@beacon/api";
 
 export type ReadyCheck = () => Promise<boolean>;
 
-export function createApp(options: { checkReady?: ReadyCheck } = {}): Hono {
+export type CreateAppOptions = {
+  checkReady?: ReadyCheck;
+  store?: AuthStore;
+  config?: AuthConfig;
+  clock?: Clock;
+  githubFetch?: typeof fetch;
+  databaseUrl?: string;
+};
+
+function resolveStore(options: CreateAppOptions): AuthStore {
+  if (options.store) {
+    return options.store;
+  }
+  const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
+  if (databaseUrl) {
+    return new DbAuthStore(createDb(databaseUrl));
+  }
+  return new MemoryAuthStore();
+}
+
+export function createApp(options: CreateAppOptions = {}): Hono {
   const checkReady = options.checkReady ?? (() => checkDatabase(process.env.DATABASE_URL));
   const app = new Hono();
 
@@ -21,6 +48,13 @@ export function createApp(options: { checkReady?: ReadyCheck } = {}): Hono {
       // ignore
     }
     return c.json({ status: "unavailable" }, 503);
+  });
+
+  mountAuth(app, {
+    store: resolveStore(options),
+    config: options.config ?? loadAuthConfig(),
+    clock: options.clock ?? systemClock,
+    githubFetch: options.githubFetch ?? fetch,
   });
 
   return app;

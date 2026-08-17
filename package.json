@@ -31,5 +31,6 @@
       "tree-sitter-python",
       "tree-sitter-typescript"
     ]
+    "onlyBuiltDependencies": ["esbuild", "@node-rs/argon2"]
   }
 }

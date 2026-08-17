@@ -17,7 +17,11 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@beacon/db": "workspace:*",
+    "@beacon/shared": "workspace:*",
     "@hono/node-server": "^1.19.9",
+    "@node-rs/argon2": "^2.0.2",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.11.3",
     "postgres": "^3.4.8",
     "tsx": "^4.21.0"
