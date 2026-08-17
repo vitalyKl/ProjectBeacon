@@ -18,6 +18,7 @@ import type {
 
 interface FileState {
   path: string;
+  size: number;
   mtime: number;
   sha256: string;
 }
@@ -71,8 +72,20 @@ export class Indexer {
     const existing = this.loadExisting();
     const seen = new Set<string>();
     const pending: PendingFile[] = [];
+    const visitedDirs = new Set<string>();
 
     const walk = (absDir: string): void => {
+      let realDir: string;
+      try {
+        realDir = fs.realpathSync(absDir);
+      } catch {
+        return;
+      }
+      if (visitedDirs.has(realDir)) {
+        return;
+      }
+      visitedDirs.add(realDir);
+
       let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(absDir, { withFileTypes: true });
@@ -81,7 +94,13 @@ export class Indexer {
       }
       for (const entry of entries) {
         const absPath = path.join(absDir, entry.name);
-        if (entry.isDirectory()) {
+        let st: fs.Stats;
+        try {
+          st = fs.statSync(absPath);
+        } catch {
+          continue;
+        }
+        if (st.isDirectory()) {
           if (isDeniedDirName(entry.name)) {
             stats.skippedDenied += 1;
             continue;
@@ -89,7 +108,7 @@ export class Indexer {
           walk(absPath);
           continue;
         }
-        if (!entry.isFile()) {
+        if (!st.isFile()) {
           continue;
         }
         let repoPath: string;
@@ -104,17 +123,17 @@ export class Indexer {
         }
         stats.scanned += 1;
         seen.add(repoPath);
-        const st = fs.statSync(absPath);
         const mtime = Math.trunc(st.mtimeMs);
         const prev = existing.get(repoPath);
-        if (prev && prev.mtime === mtime) {
+        if (prev && prev.mtime === mtime && prev.size === st.size) {
           stats.skippedUnchanged += 1;
           continue;
         }
         const file = this.readFile(repoPath, absPath, st.size, mtime);
         if (prev && prev.sha256 === file.sha256) {
-          this.db.prepare("UPDATE files SET mtime = ?, indexed_at = ? WHERE path = ?").run(
+          this.db.prepare("UPDATE files SET mtime = ?, size = ?, indexed_at = ? WHERE path = ?").run(
             mtime,
+            st.size,
             Date.now(),
             repoPath,
           );
@@ -140,7 +159,7 @@ export class Indexer {
   }
 
   private loadExisting(): Map<string, FileState> {
-    const rows = this.db.prepare("SELECT path, mtime, sha256 FROM files").all() as FileState[];
+    const rows = this.db.prepare("SELECT path, size, mtime, sha256 FROM files").all() as FileState[];
     return new Map(rows.map((row) => [row.path, row]));
   }
 

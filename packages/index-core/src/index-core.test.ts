@@ -137,4 +137,80 @@ describe("IndexCore", () => {
     expect(rebuilt.indexed).toBeGreaterThan(0);
     expect(core.searchSymbols({ q: "Greeter" }).length).toBeGreaterThan(0);
   });
+
+  it("searches FTS reserved-word symbols without throwing", () => {
+    const root = fixtureRepo();
+    fs.writeFileSync(path.join(root, "src", "ops.ts"), "export function AND() {}\nexport function ORder() {}\n");
+    const core = openCore(root);
+    core.index();
+    expect(() => core.searchSymbols({ q: "AND", prefix: true })).not.toThrow();
+    expect(core.searchSymbols({ q: "AND", prefix: true }).some((hit) => hit.name === "AND")).toBe(true);
+    expect(core.searchSymbols({ q: "OR", prefix: true }).some((hit) => hit.name === "ORder")).toBe(true);
+    expect(() =>
+      core.getChangedScope({ identifiers: ["AND", "NOT"] }),
+    ).not.toThrow();
+  });
+
+  it("does not treat LIKE wildcards in path prefixes as matches", () => {
+    const root = fixtureRepo();
+    fs.mkdirSync(path.join(root, "src", "_hidden"), { recursive: true });
+    fs.writeFileSync(path.join(root, "src", "_hidden", "keep.ts"), "export function keep() {}\n");
+    const core = openCore(root);
+    core.index();
+    const wild = core.getChangedScope({ pathPrefixes: ["src/_"] });
+    expect(wild.paths).toContain("src/_hidden/keep.ts");
+    expect(wild.paths).not.toContain("src/greet.ts");
+    const percent = core.getChangedScope({ pathPrefixes: ["src/%"] });
+    expect(percent.paths).not.toContain("src/greet.ts");
+  });
+
+  it("matches multi-word content queries without concatenating tokens", () => {
+    const root = fixtureRepo();
+    fs.writeFileSync(path.join(root, "src", "phrase.ts"), "export const note = 'hello world from indexer';\n");
+    const core = openCore(root);
+    core.index();
+    const hits = core.searchContent({ q: "hello world", useRipgrep: false });
+    expect(hits.some((hit) => hit.path === "src/phrase.ts")).toBe(true);
+    const missing = core.searchContent({ q: "hello missingtoken", useRipgrep: false });
+    expect(missing.every((hit) => hit.path !== "src/phrase.ts")).toBe(true);
+  });
+
+  it("rejects path-escape inputs on query APIs", () => {
+    const core = openCore();
+    core.index();
+    expect(() => core.readIndexedFileMetadata("../outside.ts")).toThrow();
+    expect(() => core.getRelatedFiles({ path: "../outside.ts" })).toThrow();
+    expect(() => core.getChangedScope({ linkedPaths: ["../secret.ts"] })).toThrow();
+  });
+
+  it("follows file and directory symlinks without looping", () => {
+    const root = fixtureRepo();
+    const linkedDir = path.join(root, "linked-src");
+    const linkedFile = path.join(root, "alias-greet.ts");
+    try {
+      fs.symlinkSync(path.join(root, "src"), linkedDir, "dir");
+      fs.symlinkSync(path.join(root, "src", "greet.ts"), linkedFile, "file");
+    } catch {
+      return;
+    }
+    fs.symlinkSync(root, path.join(root, "loop"), "dir");
+    const core = openCore(root);
+    const stats = core.index();
+    expect(stats.indexed).toBeGreaterThan(0);
+    expect(core.readIndexedFileMetadata("alias-greet.ts")).not.toBeNull();
+    expect(core.readIndexedFileMetadata("linked-src/greet.ts")).not.toBeNull();
+  });
+
+  it("reindexes when size changes even if mtime is preserved", () => {
+    const root = fixtureRepo();
+    const target = path.join(root, "src", "util.js");
+    const core = openCore(root);
+    core.index();
+    const before = fs.statSync(target);
+    fs.writeFileSync(target, "export function helper() { return 'changed-size-value'; }\n");
+    fs.utimesSync(target, before.atime, before.mtime);
+    const second = core.index();
+    expect(second.indexed).toBe(1);
+    expect(core.searchContent({ q: "changed-size-value", useRipgrep: false }).length).toBeGreaterThan(0);
+  });
 });

@@ -1,3 +1,4 @@
+import { escapeLikePrefix, ftsContentQuery, ftsPrefixToken } from "./fts.js";
 import { parentDir, toRepoPosixPath } from "./paths.js";
 import { searchRipgrep } from "./ripgrep.js";
 import type { SqliteDb } from "./db.js";
@@ -81,18 +82,6 @@ function mapDir(row: DirRow, children: string[]): DirCapsule {
   };
 }
 
-function escapeFts(term: string): string {
-  return `"${term.replaceAll('"', '""')}"`;
-}
-
-function ftsPrefixQuery(raw: string): string {
-  const token = raw.trim().replace(/[^\p{L}\p{N}_]+/gu, "");
-  if (!token) {
-    return "";
-  }
-  return `${token}*`;
-}
-
 export function getTree(db: SqliteDb, repoRoot: string, options: GetTreeOptions = {}): DirCapsule[] {
   const depth = options.depth ?? 2;
   const root = options.root ? toRepoPosixPath(repoRoot, options.root) : ".";
@@ -155,7 +144,7 @@ export function searchSymbols(db: SqliteDb, options: SearchSymbolsOptions): Symb
         .all(q, limit) as SymbolRow[]
     ).map(mapSymbol);
   }
-  const fts = ftsPrefixQuery(q);
+  const fts = ftsPrefixToken(q);
   if (fts) {
     const ftsHits = db
       .prepare(
@@ -173,9 +162,9 @@ export function searchSymbols(db: SqliteDb, options: SearchSymbolsOptions): Symb
   return (
     db
       .prepare(
-        "SELECT id, path, name, kind, start_line, end_line, parent_name FROM symbols WHERE name LIKE ? LIMIT ?",
+        "SELECT id, path, name, kind, start_line, end_line, parent_name FROM symbols WHERE name LIKE ? ESCAPE '\\' LIMIT ?",
       )
-      .all(`${q}%`, limit) as SymbolRow[]
+      .all(`${escapeLikePrefix(q)}%`, limit) as SymbolRow[]
   ).map(mapSymbol);
 }
 
@@ -189,7 +178,7 @@ export function searchContent(
   if (!q) {
     return [];
   }
-  const fts = ftsPrefixQuery(q) || escapeFts(q);
+  const fts = ftsContentQuery(q);
   const rows = db
     .prepare("SELECT path FROM files_fts WHERE files_fts MATCH ? LIMIT ?")
     .all(fts, limit) as { path: string }[];
@@ -255,8 +244,8 @@ export function getChangedScope(db: SqliteDb, options: GetChangedScopeOptions): 
 
   for (const prefix of options.pathPrefixes ?? []) {
     const rows = db
-      .prepare("SELECT path FROM files WHERE path = ? OR path LIKE ? LIMIT ?")
-      .all(prefix, `${prefix}%`, cap) as { path: string }[];
+      .prepare("SELECT path FROM files WHERE path = ? OR path LIKE ? ESCAPE '\\' LIMIT ?")
+      .all(prefix, `${escapeLikePrefix(prefix)}%`, cap) as { path: string }[];
     for (const row of rows) {
       add(row.path, `prefix:${prefix}`);
     }
@@ -267,7 +256,7 @@ export function getChangedScope(db: SqliteDb, options: GetChangedScopeOptions): 
     if (!token) {
       continue;
     }
-    const fts = ftsPrefixQuery(token);
+    const fts = ftsPrefixToken(token);
     if (fts) {
       const symbolHits = db
         .prepare("SELECT path FROM symbols_fts WHERE symbols_fts MATCH ? LIMIT ?")

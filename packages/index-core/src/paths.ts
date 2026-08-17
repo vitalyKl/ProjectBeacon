@@ -49,10 +49,8 @@ export function normalizeRepoRoot(repoRoot: string): string {
   return path.resolve(repoRoot);
 }
 
-/**
- * Convert a user/OS path into a repo-relative POSIX path stored in SQLite.
- * Windows `\` becomes `/`. In-repo drive prefixes are stripped. Escapes throw.
- */
+// Compare both the caller-supplied root and path.resolve(root) so Unix-style
+// fixtures stay testable on Windows without treating them as C:\... escapes.
 export function toRepoPosixPath(repoRoot: string, input: string): string {
   const logicalRoot = collapsePosix(repoRoot);
   const resolvedRoot = collapsePosix(path.resolve(repoRoot));

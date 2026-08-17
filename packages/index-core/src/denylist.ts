@@ -40,15 +40,16 @@ const DENIED_FILE_PATTERNS = [
 ];
 
 export function isDeniedDirName(name: string): boolean {
-  return DENIED_DIR_NAMES.has(name);
+  return DENIED_DIR_NAMES.has(name.toLowerCase());
 }
 
 export function isDeniedFile(repoPosixPath: string): boolean {
   const name = basename(repoPosixPath);
-  if (DENIED_FILE_NAMES.has(name)) {
+  const lower = name.toLowerCase();
+  if (DENIED_FILE_NAMES.has(lower)) {
     return true;
   }
-  if (DENIED_FILE_SUFFIXES.some((suffix) => name.endsWith(suffix))) {
+  if (DENIED_FILE_SUFFIXES.some((suffix) => lower.endsWith(suffix))) {
     return true;
   }
   return DENIED_FILE_PATTERNS.some((pattern) => pattern.test(name));

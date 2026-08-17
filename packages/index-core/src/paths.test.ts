@@ -20,7 +20,11 @@ describe("path normalization", () => {
   it("rejects paths that escape the repo root", () => {
     const root = path.join(os.tmpdir(), "beacon-index-root");
     expect(() => toRepoPosixPath(root, "../outside.ts")).toThrow(PathEscapeError);
+    expect(() => toRepoPosixPath(root, "..\\outside.ts")).toThrow(PathEscapeError);
     expect(() => toRepoPosixPath(root, path.join(root, "..", "other", "file.ts"))).toThrow(
+      PathEscapeError,
+    );
+    expect(() => toRepoPosixPath("D:\\work\\beacon", "C:\\Windows\\system32\\cmd.exe")).toThrow(
       PathEscapeError,
     );
   });

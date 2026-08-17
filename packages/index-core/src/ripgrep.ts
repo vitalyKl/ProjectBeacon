@@ -2,12 +2,36 @@ import { spawnSync } from "node:child_process";
 import { toPosix } from "./paths.js";
 import type { ContentHit } from "./types.js";
 
+const RG_GLOBS = [
+  "!.git/**",
+  "!node_modules/**",
+  "!dist/**",
+  "!.next/**",
+  "!.turbo/**",
+  "!coverage/**",
+  "!.env",
+  "!.env.*",
+  "!*.pem",
+  "!*.key",
+];
+
 export function searchRipgrep(
   repoRoot: string,
   query: string,
   limit: number,
 ): ContentHit[] | null {
-  const result = spawnSync("rg", ["--json", "--max-count", "1", "-m", String(limit), "--", query], {
+  const args = [
+    "--json",
+    "--hidden",
+    "--max-count",
+    String(limit),
+    "--max-filesize",
+    "1M",
+    ...RG_GLOBS.flatMap((glob) => ["--glob", glob]),
+    "--",
+    query,
+  ];
+  const result = spawnSync("rg", args, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 750,
