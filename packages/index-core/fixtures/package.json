@@ -1,0 +1,5 @@
+{
+  "name": "index-core-fixture",
+  "type": "module",
+  "main": "./src/index.ts"
+}

@@ -1,0 +1,68 @@
+import { basename } from "./paths.js";
+
+const DENIED_DIR_NAMES = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  ".next",
+  ".turbo",
+  "coverage",
+  "out",
+  ".cache",
+  ".vercel",
+  "target",
+  "vendor",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "build",
+]);
+
+const DENIED_FILE_NAMES = new Set([
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.production",
+  ".env.test",
+  ".env.staging",
+  "id_rsa",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+]);
+
+const DENIED_FILE_SUFFIXES = [".pem", ".key", ".p12", ".pfx", ".keystore"];
+
+const DENIED_FILE_PATTERNS = [
+  /^\.env\..+$/,
+  /.*secret.*/i,
+  /.*credentials.*\.json$/i,
+];
+
+export function isDeniedDirName(name: string): boolean {
+  return DENIED_DIR_NAMES.has(name);
+}
+
+export function isDeniedFile(repoPosixPath: string): boolean {
+  const name = basename(repoPosixPath);
+  if (DENIED_FILE_NAMES.has(name)) {
+    return true;
+  }
+  if (DENIED_FILE_SUFFIXES.some((suffix) => name.endsWith(suffix))) {
+    return true;
+  }
+  return DENIED_FILE_PATTERNS.some((pattern) => pattern.test(name));
+}
+
+export function pathHasDeniedSegment(repoPosixPath: string): boolean {
+  if (repoPosixPath === "." || repoPosixPath === "") {
+    return false;
+  }
+  return repoPosixPath.split("/").some((segment) => isDeniedDirName(segment));
+}
+
+export const BINARY_PROBE_BYTES = 8 * 1024;
+
+export function containsNul(buffer: Uint8Array): boolean {
+  return buffer.includes(0);
+}

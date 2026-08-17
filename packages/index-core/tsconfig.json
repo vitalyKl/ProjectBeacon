@@ -1,8 +1,9 @@
 {
   "extends": "@beacon/config/tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "noEmit": true
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"]
 }

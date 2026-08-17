@@ -11,11 +11,24 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "bench": "tsx scripts/bench.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "tree-sitter": "^0.25.1",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2"
   },
   "devDependencies": {
     "@beacon/config": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.3.0",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "tsx": "^4.20.5",
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   }
 }
