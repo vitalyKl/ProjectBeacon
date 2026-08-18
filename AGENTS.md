@@ -2,7 +2,7 @@
 
 TypeScript monorepo (pnpm workspaces + Turborepo).
 
-This tree is a pre-implementation bootstrap: layout and shared tooling only. Do not invent application files that are not already in the repo.
+Application packages live under `apps/` and `packages/`. Follow existing conventions.
 
 ## Layout
 

@@ -18,4 +18,4 @@ pnpm typecheck
 
 Workspace scripts: `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm dev`.
 
-Self-host Compose is Postgres 16 + API only (web/worker/mcp are not in this compose yet). Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`. `docker compose up` publishes API `:8080` so host `/health` and `/ready` work.
+Self-host Compose is Postgres 16 + API + web (worker/mcp are not in this compose yet). Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`. `docker compose up` publishes web `:3000` (same-origin `/v1` rewrite) and API `:8080` so host `/health` still works. Later PRs may unpublish the API port.

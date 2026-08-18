@@ -1,5 +1,5 @@
-# web, worker, and mcp are not in this compose yet.
-# API :8080 is published so host liveness (/health) works.
+# worker and mcp are not in this compose yet.
+# Later PRs may unpublish API :8080; both stay published for now so API /health still works.
 
 services:
   postgres:
@@ -28,6 +28,12 @@ services:
       HOST: "0.0.0.0"
       PORT: "8080"
       DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
+      BOOTSTRAP_ADMIN_TOKEN: ${BOOTSTRAP_ADMIN_TOKEN:-}
+      AUTH_LOCAL: ${AUTH_LOCAL:-true}
+      AUTH_LOCAL_INVITE_ONLY: ${AUTH_LOCAL_INVITE_ONLY:-true}
+      AUTH_GITHUB: ${AUTH_GITHUB:-false}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
     ports:
       - "8080:8080"
     healthcheck:
@@ -42,6 +48,25 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        BEACON_API_URL: http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      BEACON_API_URL: http://api:8080
+      BEACON_PUBLIC_URL: ${BEACON_PUBLIC_URL:-http://localhost:3000}
+      AUTH_GITHUB: ${AUTH_GITHUB:-false}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+    ports:
+      - "3000:3000"
 
 volumes:
   pgdata:
