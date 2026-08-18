@@ -1,5 +1,6 @@
 import { uuidv7 } from "@beacon/shared";
 
+import type { OrgRecord } from "../orgs/types.js";
 import {
   generateSessionToken,
   hashSessionToken,
@@ -16,6 +17,18 @@ export type PublicUser = {
   avatar_url: string | null;
 };
 
+export type PublicOrg = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: OrgRecord["kind"];
+};
+
+export type PublicMe = PublicUser & {
+  personal_org: PublicOrg | null;
+  orgs: PublicOrg[];
+};
+
 export function toPublicUser(user: UserRecord): PublicUser {
   return {
     id: user.id,
@@ -23,6 +36,24 @@ export function toPublicUser(user: UserRecord): PublicUser {
     email: user.email,
     name: user.name,
     avatar_url: user.avatarUrl,
+  };
+}
+
+export function toPublicOrg(org: OrgRecord): PublicOrg {
+  return {
+    id: org.id,
+    slug: org.slug,
+    name: org.name,
+    kind: org.kind,
+  };
+}
+
+export function toPublicMe(user: UserRecord, orgs: OrgRecord[]): PublicMe {
+  const personal = orgs.find((org) => org.kind === "personal") ?? null;
+  return {
+    ...toPublicUser(user),
+    personal_org: personal ? toPublicOrg(personal) : null,
+    orgs: orgs.map(toPublicOrg),
   };
 }
 

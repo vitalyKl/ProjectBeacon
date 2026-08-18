@@ -314,7 +314,7 @@ describe("POST /v1/auth/register", () => {
 
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
-      error: { code: "forbidden", message: "invites land in PR 06", details: {} },
+      error: { code: "forbidden", message: "local registration requires an invite", details: {} },
     });
   });
 

@@ -3,12 +3,13 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context, Hono } from "hono";
 
 import { errorJson } from "../errors.js";
+import { readObject } from "../http.js";
 import type { Clock } from "./clock.js";
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from "./cookies.js";
 import { isGithubOAuthEnabled, type AuthConfig } from "./config.js";
 import { exchangeGithubCode } from "./github.js";
 import { hashPassword, isPasswordPolicyOk, verifyPassword } from "./password.js";
-import { issueSession, lookupValidSession, resolveSession, toPublicUser } from "./session.js";
+import { issueSession, lookupValidSession, resolveSession, toPublicMe, toPublicUser } from "./session.js";
 import {
   BootstrapConsumedError,
   GithubIdTakenError,
@@ -58,18 +59,6 @@ function requestMeta(c: Context, trustProxy: boolean): { userAgent: string | nul
   };
 }
 
-async function readObject(c: Context): Promise<Record<string, unknown> | undefined> {
-  try {
-    const body: unknown = await c.req.json();
-    if (body === null || typeof body !== "object" || Array.isArray(body)) {
-      return undefined;
-    }
-    return body as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
-}
-
 function parseLogin(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -105,12 +94,13 @@ async function establishSession(
   user: UserRecord,
 ): Promise<Response> {
   const now = deps.clock.now();
+  await deps.store.ensurePersonalOrg(user, now);
   const { token } = await issueSession(deps.store, user, now, requestMeta(c, deps.config.trustProxy));
   writeSessionCookie(c, token, deps.config.secureCookies);
   return c.json(toPublicUser(user));
 }
 
-async function loadSession(c: Context, deps: AuthDeps) {
+export async function loadSession(c: Context, deps: AuthDeps) {
   const token = readSessionCookie(c);
   const resolved = await resolveSession(deps.store, token, deps.clock.now());
   if (!resolved) {
@@ -161,7 +151,7 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
       return errorJson(c, 403, "forbidden", "local registration is disabled");
     }
     if (deps.config.authLocalInviteOnly) {
-      return errorJson(c, 403, "forbidden", "invites land in PR 06");
+      return errorJson(c, 403, "forbidden", "local registration requires an invite");
     }
 
     const body = await readObject(c);
@@ -281,6 +271,11 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
     if (!resolved) {
       return errorJson(c, 401, "unauthorized", "authentication required");
     }
-    return c.json(toPublicUser(resolved.user));
+    const personal = await deps.store.ensurePersonalOrg(resolved.user, deps.clock.now());
+    const orgs = await deps.store.listOrgsForUser(resolved.user.id);
+    if (!orgs.some((org) => org.id === personal.id)) {
+      orgs.unshift(personal);
+    }
+    return c.json(toPublicMe(resolved.user, orgs));
   });
 }

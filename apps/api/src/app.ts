@@ -7,6 +7,7 @@ import { DbAuthStore } from "./auth/db-store.js";
 import { mountAuth } from "./auth/routes.js";
 import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
 import { checkDatabase } from "./db.js";
+import { mountOrgs } from "./orgs/routes.js";
 
 export const packageName = "@beacon/api";
 
@@ -50,12 +51,14 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     return c.json({ status: "unavailable" }, 503);
   });
 
-  mountAuth(app, {
+  const authDeps = {
     store: resolveStore(options),
     config: options.config ?? loadAuthConfig(),
     clock: options.clock ?? systemClock,
     githubFetch: options.githubFetch ?? fetch,
-  });
+  };
+  mountAuth(app, authDeps);
+  mountOrgs(app, authDeps);
 
   return app;
 }
