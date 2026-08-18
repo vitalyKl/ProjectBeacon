@@ -4,11 +4,13 @@ import { Hono } from "hono";
 import { type AuthConfig, loadAuthConfig } from "./auth/config.js";
 import { systemClock, type Clock } from "./auth/clock.js";
 import { DbAuthStore } from "./auth/db-store.js";
+import { DEFAULT_RATE_LIMITS, type RateLimitConfig } from "./auth/rate-limit.js";
 import { mountAuth } from "./auth/routes.js";
 import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
 import { checkDatabase } from "./db.js";
 import { mountOrgs } from "./orgs/routes.js";
 import { mountRoadmap } from "./roadmap/routes.js";
+import { mountTokens } from "./tokens/routes.js";
 
 export const packageName = "@beacon/api";
 
@@ -21,6 +23,7 @@ export type CreateAppOptions = {
   clock?: Clock;
   githubFetch?: typeof fetch;
   databaseUrl?: string;
+  rateLimits?: RateLimitConfig;
 };
 
 function resolveStore(options: CreateAppOptions): AuthStore {
@@ -57,10 +60,12 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     config: options.config ?? loadAuthConfig(),
     clock: options.clock ?? systemClock,
     githubFetch: options.githubFetch ?? fetch,
+    rateLimits: options.rateLimits ?? DEFAULT_RATE_LIMITS,
   };
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);
   mountRoadmap(app, authDeps);
+  mountTokens(app, authDeps);
 
   return app;
 }

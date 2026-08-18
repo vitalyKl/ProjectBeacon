@@ -1,5 +1,7 @@
 import {
   activityEvents,
+  apiTokens,
+  approvalRequests,
   idempotencyKeys,
   milestones,
   orgInvites,
@@ -8,6 +10,7 @@ import {
   projectInvites,
   projectMembers,
   projects,
+  rateBuckets,
   taskComments,
   taskDependencies,
   tasks,
@@ -15,6 +18,7 @@ import {
   users,
   type Db,
 } from "@beacon/db";
+import { isScope, type Scope } from "@beacon/shared";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { slugCandidate, slugFromLogin } from "../slug.js";
@@ -48,9 +52,13 @@ import {
   type TaskCommentRecord,
   type TaskDependencyRecord,
   type TaskPatch,
+  type ApprovalRecord,
+  type RateBucketRecord,
   type TaskRecord,
+  type TokenRecord,
   type UserRecord,
 } from "./store.js";
+import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
 import {
   IDEMPOTENCY_TTL_MS,
@@ -299,6 +307,73 @@ function toActivity(row: typeof activityEvents.$inferSelect): ActivityEventRecor
     verb: row.verb,
     payload: asPayload(row.payload),
     createdAt: row.createdAt,
+  };
+}
+
+function toSession(row: typeof userSessions.$inferSelect): SessionRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenHash: asBuffer(row.tokenHash),
+    createdAt: row.createdAt,
+    lastSeenAt: row.lastSeenAt,
+    expiresAt: row.expiresAt,
+    revokedAt: row.revokedAt,
+    userAgent: row.userAgent,
+    ip: row.ip,
+  };
+}
+
+function asScopes(value: string[] | null): Scope[] {
+  if (!value) {
+    return [];
+  }
+  return value.filter(isScope);
+}
+
+function asPayload(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function toToken(row: typeof apiTokens.$inferSelect): TokenRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    name: row.name,
+    tokenHash: asBuffer(row.tokenHash),
+    prefix: row.prefix,
+    scopes: asScopes(row.scopes),
+    createdBy: row.createdBy,
+    lastUsedAt: row.lastUsedAt,
+    expiresAt: row.expiresAt,
+    revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+  };
+}
+
+function toApproval(row: typeof approvalRequests.$inferSelect): ApprovalRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    sessionId: row.sessionId,
+    action: row.action,
+    payload: asPayload(row.payload),
+    status: row.status as ApprovalStatus,
+    requestedAt: row.requestedAt,
+    resolvedAt: row.resolvedAt,
+    resolvedBy: row.resolvedBy,
+  };
+}
+
+function toRateBucket(row: typeof rateBuckets.$inferSelect): RateBucketRecord {
+  return {
+    bucketKey: row.bucketKey,
+    windowStart: row.windowStart,
+    count: row.count,
+    bytes: row.bytes,
   };
 }
 
@@ -1278,5 +1353,160 @@ export class DbAuthStore implements AuthStore {
       });
       return response;
     });
+  }
+  async createApiToken(token: TokenRecord): Promise<TokenRecord> {
+    const [row] = await this.db
+      .insert(apiTokens)
+      .values({
+        id: token.id,
+        projectId: token.projectId,
+        name: token.name,
+        tokenHash: token.tokenHash,
+        prefix: token.prefix,
+        scopes: token.scopes,
+        createdBy: token.createdBy,
+        lastUsedAt: token.lastUsedAt,
+        expiresAt: token.expiresAt,
+        revokedAt: token.revokedAt,
+        createdAt: token.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert api token returned no row");
+    }
+    return toToken(row);
+  }
+
+  async listApiTokens(projectId: string): Promise<TokenRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(apiTokens)
+      .where(eq(apiTokens.projectId, projectId))
+      .orderBy(asc(apiTokens.createdAt), asc(apiTokens.id));
+    return rows.map(toToken);
+  }
+
+  async findApiTokenById(id: string): Promise<TokenRecord | undefined> {
+    const [row] = await this.db.select().from(apiTokens).where(eq(apiTokens.id, id)).limit(1);
+    return row ? toToken(row) : undefined;
+  }
+
+  async findApiTokenByHash(tokenHash: Buffer): Promise<TokenRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(apiTokens)
+      .where(eq(apiTokens.tokenHash, tokenHash))
+      .limit(1);
+    return row ? toToken(row) : undefined;
+  }
+
+  async touchApiToken(id: string, lastUsedAt: Date): Promise<void> {
+    await this.db.update(apiTokens).set({ lastUsedAt }).where(eq(apiTokens.id, id));
+  }
+
+  async revokeApiToken(id: string, revokedAt: Date): Promise<TokenRecord | undefined> {
+    const [row] = await this.db
+      .update(apiTokens)
+      .set({ revokedAt })
+      .where(and(eq(apiTokens.id, id), isNull(apiTokens.revokedAt)))
+      .returning();
+    if (row) {
+      return toToken(row);
+    }
+    const existing = await this.findApiTokenById(id);
+    return existing;
+  }
+
+  async createApproval(approval: ApprovalRecord): Promise<ApprovalRecord> {
+    const [row] = await this.db
+      .insert(approvalRequests)
+      .values({
+        id: approval.id,
+        projectId: approval.projectId,
+        sessionId: approval.sessionId,
+        action: approval.action,
+        payload: approval.payload,
+        status: approval.status,
+        requestedAt: approval.requestedAt,
+        resolvedAt: approval.resolvedAt,
+        resolvedBy: approval.resolvedBy,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert approval returned no row");
+    }
+    return toApproval(row);
+  }
+
+  async listApprovals(
+    projectId: string,
+    status?: ApprovalRecord["status"],
+  ): Promise<ApprovalRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(approvalRequests)
+      .where(
+        status
+          ? and(eq(approvalRequests.projectId, projectId), eq(approvalRequests.status, status))
+          : eq(approvalRequests.projectId, projectId),
+      )
+      .orderBy(asc(approvalRequests.requestedAt), asc(approvalRequests.id));
+    return rows.map(toApproval);
+  }
+
+  async findApprovalById(id: string): Promise<ApprovalRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, id))
+      .limit(1);
+    return row ? toApproval(row) : undefined;
+  }
+
+  async resolveApproval(
+    id: string,
+    decision: "approved" | "denied",
+    resolvedAt: Date,
+    resolvedBy: string | null,
+  ): Promise<ApprovalRecord | undefined> {
+    const [row] = await this.db
+      .update(approvalRequests)
+      .set({
+        status: decision,
+        resolvedAt,
+        resolvedBy,
+      })
+      .where(and(eq(approvalRequests.id, id), eq(approvalRequests.status, "pending")))
+      .returning();
+    return row ? toApproval(row) : undefined;
+  }
+
+  async consumeRateBucket(input: {
+    bucketKey: string;
+    windowStart: Date;
+    countDelta: number;
+    bytesDelta: number;
+  }): Promise<RateBucketRecord> {
+    const [row] = await this.db
+      .insert(rateBuckets)
+      .values({
+        bucketKey: input.bucketKey,
+        windowStart: input.windowStart,
+        count: input.countDelta,
+        bytes: BigInt(input.bytesDelta),
+      })
+      .onConflictDoUpdate({
+        target: rateBuckets.bucketKey,
+        set: {
+          windowStart: sql`case when ${rateBuckets.windowStart} = ${input.windowStart} then ${rateBuckets.windowStart} else ${input.windowStart} end`,
+          count: sql`case when ${rateBuckets.windowStart} = ${input.windowStart} then ${rateBuckets.count} + ${input.countDelta} else ${input.countDelta} end`,
+          bytes: sql`case when ${rateBuckets.windowStart} = ${input.windowStart} then ${rateBuckets.bytes} + ${input.bytesDelta} else ${input.bytesDelta} end`,
+        },
+      })
+      .returning();
+    if (!row) {
+      throw new Error("upsert rate bucket returned no row");
+    }
+    return toRateBucket(row);
   }
 }

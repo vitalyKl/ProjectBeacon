@@ -25,12 +25,14 @@ import {
   type UserRecord,
 } from "./store.js";
 import { parseBearer, tokenEquals } from "./tokens.js";
+import type { RateLimitConfig } from "./rate-limit.js";
 
 export type AuthDeps = {
   store: AuthStore;
   config: AuthConfig;
   clock: Clock;
   githubFetch: typeof fetch;
+  rateLimits: RateLimitConfig;
 };
 
 const LOGIN_TAKEN_MESSAGE = "login is already taken";

@@ -17,5 +17,5 @@ export {
   PAGINATION_MAX_LIMIT,
   type Page,
 } from "./pagination.js";
-export { isScope, SCOPES, type Scope } from "./scopes.js";
+export { DEFAULT_TOKEN_SCOPES, isScope, SCOPES, type Scope } from "./scopes.js";
 export { jsLengthDiv4, TOKENIZER_ID } from "./tokenizer.js";
