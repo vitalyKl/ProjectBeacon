@@ -2,7 +2,7 @@ import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 import { authorizeProjectActor, isAdminActor, requireActor, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor, taskStatusOnCreate } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
-import { DependencyCycleError, VersionConflictError, UserRecord } from "../auth/store.js";
+import { DependencyCycleError, VersionConflictError, type UserRecord } from "../auth/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
@@ -157,6 +157,9 @@ async function requireTaskActor(
   }
   const access = await authorizeProjectActor(c, deps, actor, task.projectId, needed);
   if (access instanceof Response) {
+    if (access.status === 404) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
     return access;
   }
   return { ...access, task };
@@ -233,7 +236,7 @@ async function requireAssignee(
 export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   app.get("/v1/projects/:id/milestones", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
-    if (isResponse(access)) {
+    if (access instanceof Response) {
       return access;
     }
     const page = parsePageQuery(c);
@@ -249,8 +252,12 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/projects/:id/milestones", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
-    if (isResponse(access)) {
+    const session = await requireSession(c, deps);
+    if (isResponse(session)) {
+      return session;
+    }
+    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
+    if (access instanceof Response) {
       return access;
     }
 
@@ -291,10 +298,11 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       sortOrder,
       createdAt: now,
     });
-    await writeActorActivity(deps.store, access.actor, {
+    await writeActivity(deps.store, {
       projectId: access.project.id,
       objectType: "milestone",
       objectId: milestone.id,
+      actorId: session.user.id,
       verb: "create",
       now,
     });
@@ -303,7 +311,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
 
   app.get("/v1/projects/:id/tasks", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
-    if (isResponse(access)) {
+    if (access instanceof Response) {
       return access;
     }
     const page = parsePageQuery(c);
@@ -320,7 +328,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
 
   app.post("/v1/projects/:id/tasks", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
-    if (isResponse(access)) {
+    if (access instanceof Response) {
       return access;
     }
 
@@ -335,7 +343,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     const title = parseOptionalString(body?.["title"], 200);
     const description =
       body?.["description"] === undefined ? "" : parseText(body["description"], 8000, true);
-    const statusRaw = body?.["status"] === undefined ? "backlog" : body["status"];
+    const statusRaw = taskStatusOnCreate(
+      access.actor,
+      typeof body?.["status"] === "string" ? body["status"] : undefined,
+    );
     const typeRaw = body?.["type"] === undefined ? "task" : body["type"];
     const priority = body?.["priority"] === undefined ? 0 : parsePriority(body["priority"]);
     const milestoneId =
@@ -394,12 +405,12 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       return assigneeError;
     }
 
-    const status = taskStatusOnCreate(access.actor, statusRaw) as TaskStatus;
+    const status: TaskStatus = statusRaw;
     const type: TaskType = typeRaw;
-    const idempotency = actorIdempotencyRef(access.actor);
+    const actor = actorActivity(access.actor);
     const presented = await deps.store.withIdempotency(
-      idempotency.type,
-      idempotency.id,
+      actor.actorType === "token" ? "token" : "user",
+      actor.actorId,
       idempotencyKey,
       now,
       async (writes) => {
@@ -425,10 +436,12 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           createdAt: now,
           updatedAt: now,
         });
-        await writeActorActivity(writes, access.actor, {
+        await writeActivity(writes, {
           projectId: access.project.id,
           objectType: "task",
           objectId: task.id,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "create",
           payload: { status: task.status, type: task.type },
           now,
@@ -440,11 +453,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.get("/v1/tasks/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "read");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:read");
     if (access instanceof Response) {
       return access;
     }
@@ -452,11 +461,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.patch("/v1/tasks/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -490,6 +495,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (body["status"] !== undefined) {
       if (typeof body["status"] !== "string" || !isTaskStatus(body["status"])) {
         return errorJson(c, 400, "unauthorized", "invalid status", { reason: "invalid_body" });
+      }
+      const terminal = rejectAgentTerminalStatus(c, access.actor, body["status"]);
+      if (terminal) {
+        return terminal;
       }
       patch.status = body["status"];
     }
@@ -583,9 +592,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     }
 
     const now = deps.clock.now();
+    const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(access.task.id, expectedVersion, patch, now, {
-        releaseLock: true,
+        releaseLock: shouldReleaseLockOnTaskWrite(access.actor, access.role, patch.status),
       });
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -594,7 +604,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
-        actorId: session.user.id,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
         verb: "update",
         payload: { version: updated.task.version },
         now,
@@ -604,7 +615,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
-          actorId: session.user.id,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "lock_released",
           now,
         });
@@ -644,11 +656,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/tasks/:id/comments", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -665,17 +673,18 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (!commentBody) {
       return errorJson(c, 400, "unauthorized", "body is required", { reason: "invalid_body" });
     }
+    const actor = actorActivity(access.actor);
     const presented = await deps.store.withIdempotency(
-      "user",
-      session.user.id,
+      actor.actorType === "token" ? "token" : "user",
+      actor.actorId,
       idempotencyKey,
       now,
       async (writes) => {
         const comment = await writes.createComment({
           id: uuidv7(now.getTime()),
           taskId: access.task.id,
-          authorType: "user",
-          authorId: session.user.id,
+          authorType: actor.actorType === "token" ? "agent" : "user",
+          authorId: actor.actorId,
           body: commentBody,
           createdAt: now,
         });
@@ -683,7 +692,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: access.task.id,
-          actorId: session.user.id,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "comment",
           payload: { comment_id: comment.id },
           now,
@@ -695,11 +705,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/tasks/:id/status", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -716,15 +722,20 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         reason: "invalid_body",
       });
     }
+    const terminal = rejectAgentTerminalStatus(c, access.actor, statusRaw);
+    if (terminal) {
+      return terminal;
+    }
 
     const now = deps.clock.now();
+    const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(
         access.task.id,
         expectedVersion,
         { status: statusRaw },
         now,
-        { releaseLock: true },
+        { releaseLock: shouldReleaseLockOnTaskWrite(access.actor, access.role, statusRaw) },
       );
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -733,7 +744,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
-        actorId: session.user.id,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
         verb: "status",
         payload: { from: access.task.status, to: updated.task.status },
         now,
@@ -743,7 +755,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
-          actorId: session.user.id,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "lock_released",
           now,
         });
@@ -758,11 +771,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/tasks/:id/dependencies", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -795,11 +804,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         toTaskId,
         type,
       });
+      const actor = actorActivity(access.actor);
       await writeActivity(deps.store, {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: access.task.id,
-        actorId: session.user.id,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
         verb: "update",
         payload: { dependency: presentDependency(dependency) },
         now: deps.clock.now(),

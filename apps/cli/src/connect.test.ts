@@ -3,12 +3,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { parseConnectArgs } from "./cli.js";
 import { connect } from "./connect.js";
 import { parseTomlScalars } from "./config.js";
 
 const TOKEN = "bcn_" + "A".repeat(43);
+const PROJECT_ID = "01934567-89ab-7cde-89ab-0123456789ac";
 
-function mockFetch(status: number, body: unknown = { items: [], next_cursor: null }): typeof fetch {
+function mockFetch(
+  status: number,
+  body: unknown = { id: PROJECT_ID, name: "Beacon" },
+): typeof fetch {
   return (async () =>
     new Response(JSON.stringify(body), {
       status,
@@ -17,23 +22,28 @@ function mockFetch(status: number, body: unknown = { items: [], next_cursor: nul
 }
 
 describe("beacon connect", () => {
-  it("stores a valid token without calling the API when no project is set", async () => {
+  it("stores token and project after proving project:read", async () => {
     const home = await mkdtemp(join(tmpdir(), "beacon-connect-"));
     const calls: string[] = [];
     const fetchImpl = (async (input: string | URL) => {
       calls.push(String(input));
-      return new Response("{}", { status: 200 });
+      return new Response(JSON.stringify({ id: PROJECT_ID, name: "Beacon" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }) as typeof fetch;
 
     const result = await connect({
       token: TOKEN,
+      projectId: PROJECT_ID,
       env: { BEACON_HOME: home, BEACON_URL: "http://127.0.0.1:8080" },
       fetchImpl,
     });
     expect(result.ok).toBe(true);
-    expect(calls).toHaveLength(0);
+    expect(calls[0]).toContain(`/v1/projects/${PROJECT_ID}`);
     const saved = parseTomlScalars(await readFile(join(home, "config.toml"), "utf8"));
     expect(saved["token"]).toBe(TOKEN);
+    expect(saved["project_id"]).toBe(PROJECT_ID);
     expect(saved["url"]).toBe("http://127.0.0.1:8080");
   });
 
@@ -41,6 +51,7 @@ describe("beacon connect", () => {
     const home = await mkdtemp(join(tmpdir(), "beacon-connect-"));
     const result = await connect({
       token: "not-a-token",
+      projectId: PROJECT_ID,
       env: { BEACON_HOME: home },
     });
     expect(result.ok).toBe(false);
@@ -55,7 +66,7 @@ describe("beacon connect", () => {
     const home = await mkdtemp(join(tmpdir(), "beacon-connect-"));
     const result = await connect({
       token: TOKEN,
-      projectId: "01934567-89ab-7cde-89ab-0123456789ac",
+      projectId: PROJECT_ID,
       env: { BEACON_HOME: home, BEACON_URL: "http://127.0.0.1:8080" },
       fetchImpl: mockFetch(403, {
         error: { code: "forbidden", message: "insufficient token scope" },
@@ -68,15 +79,38 @@ describe("beacon connect", () => {
     expect(result.message).toContain("project:read");
   });
 
-  it("requires a token argument", async () => {
-    const result = await connect({
-      token: undefined,
-      env: { BEACON_HOME: await mkdtemp(join(tmpdir(), "beacon-connect-")) },
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) {
+  it("requires a token and project", async () => {
+    const home = await mkdtemp(join(tmpdir(), "beacon-connect-"));
+    const missingToken = await connect({ token: undefined, env: { BEACON_HOME: home } });
+    expect(missingToken.ok).toBe(false);
+    if (missingToken.ok) {
       throw new Error("expected failure");
     }
-    expect(result.message).toBe("Usage: beacon connect <token>");
+    expect(missingToken.message).toBe("Usage: beacon connect <token> --project <project-id>");
+
+    const missingProject = await connect({
+      token: TOKEN,
+      env: { BEACON_HOME: home },
+    });
+    expect(missingProject.ok).toBe(false);
+    if (missingProject.ok) {
+      throw new Error("expected failure");
+    }
+    expect(missingProject.message).toContain("--project");
+  });
+
+  it("parses flags before the token", () => {
+    expect(
+      parseConnectArgs(["--url", "http://127.0.0.1:8080", "--project", PROJECT_ID, TOKEN]),
+    ).toEqual({
+      token: TOKEN,
+      url: "http://127.0.0.1:8080",
+      projectId: PROJECT_ID,
+    });
+    expect(parseConnectArgs([TOKEN, "--project", PROJECT_ID])).toEqual({
+      token: TOKEN,
+      url: undefined,
+      projectId: PROJECT_ID,
+    });
   });
 });

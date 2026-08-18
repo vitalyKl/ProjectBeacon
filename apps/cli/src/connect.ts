@@ -1,3 +1,6 @@
+import { isUuid } from "@beacon/shared";
+
+import { fetchProjectRead, isForbidden, isNotFound, isUnauthorized } from "./api.js";
 import {
   applyConfigPatch,
   normalizeBeaconUrl,
@@ -6,10 +9,9 @@ import {
   writeConfigFile,
   type RuntimeConfig,
 } from "./config.js";
-import { fetchProjectRead, isForbidden, isNotFound, isUnauthorized } from "./api.js";
 import { isProjectTokenFormat } from "./token.js";
 
-export const CONNECT_USAGE = "Usage: beacon connect <token>";
+export const CONNECT_USAGE = "Usage: beacon connect <token> --project <project-id>";
 
 export type ConnectOptions = {
   token?: string;
@@ -41,32 +43,38 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
   const runtime = resolveRuntimeConfig(env, existing);
   const url = normalizeBeaconUrl(options.url?.trim() || runtime.url);
   const projectId = options.projectId?.trim() || runtime.project_id;
-
-  if (projectId) {
-    try {
-      const access = await fetchProjectRead(url, token, projectId, options.fetchImpl);
-      if (!access.ok) {
-        return mapConnectFailure(access.error);
-      }
-    } catch {
-      return {
-        ok: false,
-        exitCode: 1,
-        message: `Could not reach ${url}. Check BEACON_URL and try again.`,
-      };
-    }
+  if (!projectId) {
+    return {
+      ok: false,
+      exitCode: 2,
+      message: "Project is required. Pass --project <id> or set BEACON_PROJECT.",
+    };
+  }
+  if (!isUuid(projectId)) {
+    return { ok: false, exitCode: 2, message: "Project id must be a UUID." };
   }
 
-  const next = applyConfigPatch(existing, {
-    url,
-    token,
-    ...(projectId ? { project_id: projectId } : {}),
-  });
+  let projectLabel = projectId;
+  try {
+    const access = await fetchProjectRead(url, token, projectId, options.fetchImpl);
+    if (!access.ok) {
+      return mapConnectFailure(access.error);
+    }
+    projectLabel = access.project?.name ?? access.project?.slug ?? projectId;
+  } catch {
+    return {
+      ok: false,
+      exitCode: 1,
+      message: `Could not reach ${url}. Check BEACON_URL and try again.`,
+    };
+  }
+
+  const next = applyConfigPatch(existing, { url, token, project_id: projectId });
   await writeConfigFile(runtime.configPath, next);
   return {
     ok: true,
     config: { ...runtime, url, token, project_id: projectId },
-    message: `Connected. Token saved to ${runtime.configPath}.`,
+    message: `Connected to ${projectLabel}. Token saved to ${runtime.configPath}.`,
   };
 }
 

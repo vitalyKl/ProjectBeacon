@@ -1,6 +1,7 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
+import { requireProjectActor } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { loadSession } from "../auth/routes.js";
 import type { UserRecord } from "../auth/store.js";
@@ -334,11 +335,7 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
   });
 
   app.get("/v1/projects/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
     if (access instanceof Response) {
       return access;
     }

@@ -426,14 +426,51 @@ function toolInputSchema(name: ToolName): JsonSchema {
   return schema;
 }
 
+export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
+  get_project: "Get the current project.",
+  get_context_pack: "Compile a project context pack for the current path or task.",
+  search_context: "Search project context nodes.",
+  get_task_brief: "Compile a session brief for a task.",
+  list_milestones: "List project milestones.",
+  list_tasks: "List project tasks.",
+  get_task: "Get a task by id.",
+  create_task: "Create a task in backlog.",
+  update_task: "Update a task with an expected version.",
+  add_comment: "Add a comment to a task.",
+  set_status: "Set a task status. Agents cannot mark done or canceled here.",
+  link_dependency: "Link two tasks as blocks or relates.",
+  list_decisions: "List project decisions.",
+  record_decision: "Record a proposed decision.",
+  get_constraints: "List project constraints.",
+  create_constraint: "Propose a constraint.",
+  apply_constraint: "Apply a proposed constraint.",
+  get_tree: "Get a repository tree summary.",
+  search_code: "Search code for symbols, paths, or content.",
+  get_file: "Read a source file excerpt.",
+  get_symbol: "Look up a symbol.",
+  get_owners: "Get owners for a path.",
+  get_related_files: "Get files related by imports.",
+  get_changed_scope: "Guess files in scope for a task.",
+  start_work: "Start work on a task and return a session brief.",
+  finish_work: "Finish a work session and write a handoff.",
+  write_handoff: "Write a handoff without changing task status.",
+  get_handoff: "Get the latest handoff for a task.",
+  github_list_prs: "List GitHub pull requests for a repo.",
+  github_list_issues: "List GitHub issues for a repo.",
+  github_link_issue: "Link a GitHub issue to a task.",
+  github_sync_now: "Trigger a GitHub sync.",
+};
+
 export type ToolDefinition = {
   name: ToolName;
+  description: string;
   inputSchema: JsonSchema;
 };
 
 export function listToolDefinitions(): ToolDefinition[] {
   return TOOL_NAMES.map((name) => ({
     name,
+    description: TOOL_DESCRIPTIONS[name],
     inputSchema: toolInputSchema(name),
   }));
 }
@@ -441,6 +478,7 @@ export function listToolDefinitions(): ToolDefinition[] {
 export function getToolDefinition(name: ToolName): ToolDefinition {
   return {
     name,
+    description: TOOL_DESCRIPTIONS[name],
     inputSchema: toolInputSchema(name),
   };
 }

@@ -339,7 +339,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly constraints = new Map<string, ConstraintRecord>();
   private readonly decisions = new Map<string, DecisionRecord>();
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
-  private readonly projectRepos = new Map<string, ProjectRepoRecord>();
+  private readonly projectRepos = new Map<string, ProjectRepoRef>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
   private readonly agentSessions = new Map<string, AgentSessionRecord>();
@@ -957,8 +957,8 @@ export class MemoryAuthStore implements AuthStore {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
 
-  seedProjectRepo(repo: ProjectRepoRecord): void {
-    this.projectRepos.set(repo.id, cloneProjectRepo(repo));
+  seedProjectRepo(repo: ProjectRepoRef): void {
+    this.projectRepos.set(repo.id, { ...repo });
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
@@ -1030,7 +1030,9 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneConstraint(constraint));
       }
     }
-    result.sort((a, b) => a.id.localeCompare(b.id));
+    result.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
+    );
     return result;
   }
 
@@ -1186,6 +1188,8 @@ export class MemoryAuthStore implements AuthStore {
       const writes: IdempotentWrites = {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
+        createDecision: async (decision) => this.insertDecisionUnlocked(decision),
+        createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
         startWork: async (input) => this.startWorkUnlocked(input),
       };
@@ -1819,7 +1823,8 @@ function cloneConstraint(constraint: ConstraintRecord): ConstraintRecord {
 function cloneDecision(decision: DecisionRecord): DecisionRecord {
   return {
     ...decision,
-    relatedPaths: [...decision.relatedPaths],
+    relatedPaths: decision.relatedPaths.map((path) => ({ ...path })),
+    relatedTaskIds: [...decision.relatedTaskIds],
     createdAt: new Date(decision.createdAt),
   };
 }
@@ -1869,6 +1874,7 @@ function cloneHandoff(handoff: HandoffRecord): HandoffRecord {
 }
 
 export type ProjectRepoRef = {
+
   id: string;
   projectId: string;
 };

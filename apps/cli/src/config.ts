@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { resolveBeaconHome, resolveConfigPath } from "./home.js";
@@ -102,6 +102,9 @@ export async function readConfigFile(path: string): Promise<ConfigFile> {
 export async function writeConfigFile(path: string, file: ConfigFile): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, serializeConfigFile(file), { encoding: "utf8", mode: 0o600 });
+  if (process.platform !== "win32") {
+    await chmod(path, 0o600);
+  }
 }
 
 export function applyConfigPatch(file: ConfigFile, patch: Partial<BeaconConfig>): ConfigFile {

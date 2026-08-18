@@ -57,9 +57,11 @@ describe("tool catalog", () => {
       expect(isToolName(name)).toBe(true);
       expect(TOOL_ARG_SCHEMAS[name]).toBeDefined();
     }
-    expect(listToolDefinitions().map((tool) => tool.name).sort()).toEqual(
-      [...REQUIRED_TOOLS].sort(),
-    );
+    expect(
+      listToolDefinitions()
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual([...REQUIRED_TOOLS].sort());
   });
 
   it("does not expose run_shell or code:write", () => {
@@ -113,8 +115,7 @@ describe("tool catalog", () => {
   it("publishes write_handoff session_id or task_id in JSON Schema", () => {
     const schema = getToolDefinition("write_handoff").inputSchema;
     const variants = [schema["anyOf"], schema["oneOf"]].find(Array.isArray) as
-      | Record<string, unknown>[]
-      | undefined;
+      Record<string, unknown>[] | undefined;
     expect(variants).toBeDefined();
     const requiredSets = (variants ?? []).map((variant) => {
       const required = variant["required"];
@@ -122,5 +123,11 @@ describe("tool catalog", () => {
     });
     expect(requiredSets.some((required) => required.includes("session_id"))).toBe(true);
     expect(requiredSets.some((required) => required.includes("task_id"))).toBe(true);
+  });
+
+  it("publishes a description for every tool", () => {
+    for (const tool of listToolDefinitions()) {
+      expect(tool.description.length).toBeGreaterThan(8);
+    }
   });
 });

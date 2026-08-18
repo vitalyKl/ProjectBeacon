@@ -6,6 +6,12 @@ export type ApiError = {
   message: string;
 };
 
+export type ProjectSnapshot = {
+  id: string;
+  name?: string;
+  slug?: string;
+};
+
 export type FetchLike = typeof fetch;
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -59,15 +65,30 @@ export function isNotFound(error: ApiError): boolean {
   return error.status === 404 || error.code === "not_found";
 }
 
+export function asProjectSnapshot(value: unknown): ProjectSnapshot | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record["id"] !== "string") {
+    return undefined;
+  }
+  return {
+    id: record["id"],
+    name: typeof record["name"] === "string" ? record["name"] : undefined,
+    slug: typeof record["slug"] === "string" ? record["slug"] : undefined,
+  };
+}
+
 export async function fetchProjectRead(
   baseUrl: string,
   token: string,
   projectId: string,
   fetchImpl: FetchLike = fetch,
-): Promise<{ ok: true } | { ok: false; error: ApiError }> {
-  const result = await apiGet(baseUrl, token, `/v1/projects/${projectId}/sessions`, fetchImpl);
+): Promise<{ ok: true; project?: ProjectSnapshot } | { ok: false; error: ApiError }> {
+  const result = await apiGet(baseUrl, token, `/v1/projects/${projectId}`, fetchImpl);
   if (result.status >= 200 && result.status < 300) {
-    return { ok: true };
+    return { ok: true, project: asProjectSnapshot(result.body) };
   }
   return { ok: false, error: describeApiFailure(result.status, result.body) };
 }

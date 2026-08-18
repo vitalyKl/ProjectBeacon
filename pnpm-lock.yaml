@@ -99,6 +99,9 @@ importers:
       '@beacon/mcp-tools':
         specifier: workspace:*
         version: link:../../packages/mcp-tools
+      '@beacon/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       tsx:
         specifier: ^4.21.0
         version: 4.23.12

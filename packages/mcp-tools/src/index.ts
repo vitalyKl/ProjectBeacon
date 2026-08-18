@@ -17,6 +17,7 @@ export {
   GITHUB_TOOLS,
   IDEMPOTENT_TOOLS,
   TOOL_ARG_SCHEMAS,
+  TOOL_DESCRIPTIONS,
   TOOL_NAMES,
   getToolDefinition,
   isCodeTool,

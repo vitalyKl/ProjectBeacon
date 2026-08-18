@@ -59,6 +59,21 @@ function ctx(fetchImpl: typeof fetch, extra: Partial<InvokeContext> = {}): Invok
 }
 
 describe("stdio MCP", () => {
+  it("fails initialize when Beacon is unreachable", async () => {
+    const fetchImpl = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as typeof fetch;
+    const reply = await handleRpc(
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+      ctx(fetchImpl),
+      { initialized: false },
+      () => assertProjectRead(ctx(fetchImpl)),
+    );
+    expect(reply).toMatchObject({
+      error: { message: "Could not reach Beacon.", data: { code: "unavailable" } },
+    });
+  });
+
   it("fails initialize without project:read", async () => {
     const { fetchImpl } = mockFetch(() => ({
       status: 403,
@@ -104,8 +119,10 @@ describe("stdio MCP", () => {
       state,
       async () => undefined,
     );
-    const tools = (listed as { result: { tools: { name: string }[] } }).result.tools;
+    const tools = (listed as { result: { tools: { name: string; description?: string }[] } }).result
+      .tools;
     expect(tools.map((tool) => tool.name).sort()).toEqual([...TOOL_NAMES].sort());
+    expect(tools.every((tool) => (tool.description ?? "").length > 8)).toBe(true);
   });
 
   it("forwards non-code tools to /v1 and returns 503 for code tools", async () => {

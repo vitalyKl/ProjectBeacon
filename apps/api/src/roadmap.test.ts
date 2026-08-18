@@ -68,6 +68,15 @@ type TaskBody = {
   project_id: string;
 };
 
+async function mintToken(app: ReturnType<typeof createApp>, cookie: string, projectId: string) {
+  const minted = await app.request(`/v1/projects/${projectId}/tokens`, {
+    method: "POST",
+    headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+    body: JSON.stringify({ name: "agent" }),
+  });
+  return (await minted.json()) as { token: string };
+}
+
 async function createTask(
   app: ReturnType<typeof createApp>,
   token: string,
@@ -686,5 +695,64 @@ describe("milestones and tasks", () => {
     });
     const page = (await listed.json()) as { items: TaskBody[] };
     expect(page.items).toHaveLength(2);
+  });
+
+  it("lets a project token list, create, get, comment, and link tasks", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "agent-board");
+    const minted = await mintToken(alice.app, alice.token, project.id);
+    const headers = {
+      authorization: `Bearer ${minted.token}`,
+      "content-type": "application/json",
+    };
+
+    const milestones = await alice.app.request(`/v1/projects/${project.id}/milestones`, {
+      headers: { authorization: `Bearer ${minted.token}` },
+    });
+    expect(milestones.status).toBe(200);
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: { ...headers, "idempotency-key": "agent-task" },
+      body: JSON.stringify({ title: "Agent task", status: "ready" }),
+    });
+    expect(created.status).toBe(201);
+    const task = (await created.json()) as TaskBody;
+    expect(task.status).toBe("backlog");
+
+    const listed = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      headers: { authorization: `Bearer ${minted.token}` },
+    });
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      items: [expect.objectContaining({ id: task.id })],
+    });
+
+    const got = await alice.app.request(`/v1/tasks/${task.id}`, {
+      headers: { authorization: `Bearer ${minted.token}` },
+    });
+    expect(got.status).toBe(200);
+    expect(await got.json()).toMatchObject({ id: task.id, project_id: project.id });
+
+    const comment = await alice.app.request(`/v1/tasks/${task.id}/comments`, {
+      method: "POST",
+      headers: { ...headers, "idempotency-key": "agent-comment" },
+      body: JSON.stringify({ body: "noted" }),
+    });
+    expect(comment.status).toBe(201);
+
+    const other = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: { ...headers, "idempotency-key": "agent-other" },
+      body: JSON.stringify({ title: "Other" }),
+    });
+    const otherTask = (await other.json()) as TaskBody;
+    const link = await alice.app.request(`/v1/tasks/${task.id}/dependencies`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ to_task_id: otherTask.id, type: "relates" }),
+    });
+    expect(link.status).toBe(201);
   });
 });

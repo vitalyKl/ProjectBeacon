@@ -59,7 +59,7 @@ export async function assertProjectRead(ctx: InvokeContext): Promise<void> {
     );
   }
   const fetchImpl = ctx.fetch ?? fetch;
-  const url = `${ctx.baseUrl.replace(/\/+$/, "")}/v1/projects/${ctx.projectId}/sessions`;
+  const url = `${ctx.baseUrl.replace(/\/+$/, "")}/v1/projects/${ctx.projectId}`;
   let response: Response;
   try {
     response = await fetchImpl(url, {
@@ -70,7 +70,7 @@ export async function assertProjectRead(ctx: InvokeContext): Promise<void> {
       },
     });
   } catch {
-    throw new InitializeError("unauthorized", "Could not reach Beacon.");
+    throw new InitializeError("unavailable", "Could not reach Beacon.");
   }
   if (response.status === 401) {
     throw new InitializeError("unauthorized", "Token is invalid or expired.");
@@ -81,9 +81,15 @@ export async function assertProjectRead(ctx: InvokeContext): Promise<void> {
   if (response.status === 404) {
     throw new InitializeError("not_found", "Project not found for this token.");
   }
+  if (response.status === 429) {
+    throw new InitializeError(
+      "rate_limited",
+      "Beacon rate limited the request. Try again shortly.",
+    );
+  }
   if (!response.ok) {
     throw new InitializeError(
-      "unauthorized",
+      "unavailable",
       `Could not verify project access (${response.status}).`,
     );
   }
@@ -136,6 +142,7 @@ function toolList() {
   return {
     tools: listToolDefinitions().map((tool) => ({
       name: tool.name,
+      description: tool.description,
       inputSchema: tool.inputSchema,
     })),
   };

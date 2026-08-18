@@ -8,9 +8,15 @@ import { serveStdio } from "./stdio.js";
 export const USAGE = `Usage: beacon <command>
 
 Commands:
-  connect <token>   Save a project token minted in Beacon
-  mcp               Start the stdio MCP server
-  help              Show this help`;
+  connect <token> --project <id>   Save a project token minted in Beacon
+  mcp                              Start the stdio MCP server
+  help                             Show this help
+
+Options:
+  --url <url>         Control plane URL (or BEACON_URL)
+  --project <id>      Project id (or BEACON_PROJECT)
+
+BEACON_HOME defaults to ~/.beacon (Unix) or %USERPROFILE%\\.beacon (Windows).`;
 
 export type CliIo = {
   stdout: { write(chunk: string): void };
@@ -25,30 +31,33 @@ export type RunCliOptions = {
   serve?: typeof serveStdio;
 };
 
-function parseFlag(args: string[], name: string): string | undefined {
-  const prefix = `${name}=`;
+export function parseConnectArgs(args: string[]): {
+  token?: string;
+  url?: string;
+  projectId?: string;
+} {
+  let url: string | undefined;
+  let projectId: string | undefined;
+  const positionals: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (!arg) {
       continue;
     }
-    if (arg === name) {
-      return args[i + 1];
+    if (arg === "--url" || arg.startsWith("--url=")) {
+      url = arg === "--url" ? args[++i] : arg.slice("--url=".length);
+      continue;
     }
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
+    if (arg === "--project" || arg.startsWith("--project=")) {
+      projectId = arg === "--project" ? args[++i] : arg.slice("--project=".length);
+      continue;
     }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    positionals.push(arg);
   }
-  return undefined;
-}
-
-function positionalToken(args: string[]): string | undefined {
-  for (const arg of args) {
-    if (!arg.startsWith("-")) {
-      return arg;
-    }
-  }
-  return undefined;
+  return { token: positionals[0], url, projectId };
 }
 
 async function loadRuntime(env: NodeJS.ProcessEnv) {
@@ -62,10 +71,11 @@ async function buildInvokeContext(
   fetchImpl: typeof fetch | undefined,
 ): Promise<{ ok: true; ctx: InvokeContext } | { ok: false; message: string }> {
   const runtime = await loadRuntime(env);
-  if (!runtime.token) {
+  if (!runtime.token || !runtime.project_id) {
     return {
       ok: false,
-      message: "Not connected. Run beacon connect <token> with a project token minted in Beacon.",
+      message:
+        "Not connected. Run beacon connect <token> --project <id> with a project token minted in Beacon.",
     };
   }
   return {
@@ -92,10 +102,11 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
   }
 
   if (command === "connect") {
+    const parsed = parseConnectArgs(rest);
     const result = await connect({
-      token: positionalToken(rest),
-      url: parseFlag(rest, "--url") ?? env["BEACON_URL"],
-      projectId: parseFlag(rest, "--project") ?? env["BEACON_PROJECT"],
+      token: parsed.token,
+      url: parsed.url ?? env["BEACON_URL"],
+      projectId: parsed.projectId ?? env["BEACON_PROJECT"],
       env,
       fetchImpl: options.fetchImpl,
     });
@@ -105,7 +116,9 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
     }
     io.stderr.write(`${result.message}\n`);
     if (result.message === CONNECT_USAGE) {
-      io.stderr.write("Mint a project token in Beacon, then run beacon connect <token>.\n");
+      io.stderr.write(
+        "Mint a project token in Beacon, then run beacon connect <token> --project <id>.\n",
+      );
     }
     return result.exitCode;
   }

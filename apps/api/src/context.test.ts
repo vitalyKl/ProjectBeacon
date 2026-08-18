@@ -584,6 +584,31 @@ describe("POST /v1/projects/:id/context/compile", () => {
     expect(await res.json()).toMatchObject({ error: { code: "not_found" } });
     expect(await store.listContextRevisions(project.id)).toHaveLength(0);
   });
+
+  it("lets a project token compile and search context", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "search");
+    const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ name: "agent" }),
+    });
+    const secret = ((await minted.json()) as { token: string }).token;
+
+    const compile = await alice.app.request(`/v1/projects/${project.id}/context/compile`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(compile.status).toBe(200);
+
+    const empty = await alice.app.request(`/v1/projects/${project.id}/context/search?q=auth`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({ items: [], next_cursor: null });
+  });
 });
 
 describe("GET /v1/projects/:id/context/revisions/:revId", () => {

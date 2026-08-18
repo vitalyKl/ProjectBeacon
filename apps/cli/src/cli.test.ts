@@ -37,7 +37,9 @@ describe("runCli", () => {
     const out = capture();
     const code = await runCli({ argv: ["help"], io: out.io });
     expect(code).toBe(0);
-    expect(out.stdout).toContain("connect <token>");
+    expect(out.stdout).toContain("connect <token> --project <id>");
+    expect(out.stdout).toContain("BEACON_HOME");
+    expect(out.stdout).toContain("BEACON_URL");
     expect(out.stdout).toContain("mcp");
     expect(out.stdout.toLowerCase()).not.toContain("device-flow");
     expect(out.stdout.toLowerCase()).not.toContain("indexer");
@@ -59,7 +61,7 @@ describe("runCli", () => {
 
     await writeFile(
       join(home, "config.toml"),
-      `url = "http://127.0.0.1:8080"\ntoken = "${TOKEN}"\n`,
+      `url = "http://127.0.0.1:8080"\ntoken = "${TOKEN}"\nproject_id = "01934567-89ab-7cde-89ab-0123456789ac"\n`,
       "utf8",
     );
     let started = false;

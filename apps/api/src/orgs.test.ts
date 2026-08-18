@@ -180,6 +180,31 @@ describe("orgs and projects", () => {
     expect(listed.items).toEqual([expect.objectContaining({ role: "admin" })]);
   });
 
+  it("lets a project token read GET /v1/projects/:id", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "agent", name: "Agent" }),
+    });
+    const project = (await created.json()) as { id: string; name: string };
+    const minted = await app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ name: "cli" }),
+    });
+    const secret = ((await minted.json()) as { token: string }).token;
+
+    const res = await app.request(`/v1/projects/${project.id}`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: project.id, name: "Agent" });
+  });
+
   it("rejects non-private visibility", async () => {
     const store = new MemoryAuthStore();
     const { app, token } = await bootstrapAdmin(store);
@@ -260,7 +285,9 @@ describe("orgs and projects", () => {
       headers: { cookie: cookieHeader(alice.token!) },
     });
     expect(accept.status).toBe(200);
-    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "admin" });
+    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({
+      role: "admin",
+    });
   });
 
   it("lets a project admin set a lower role via POST /members", async () => {
@@ -282,7 +309,9 @@ describe("orgs and projects", () => {
       body: JSON.stringify({ user_id: alice.user.id, role: "admin" }),
     });
     expect(add.status).toBe(201);
-    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "admin" });
+    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({
+      role: "admin",
+    });
 
     const demote = await app.request(`/v1/projects/${project.id}/members`, {
       method: "POST",
@@ -291,7 +320,9 @@ describe("orgs and projects", () => {
     });
     expect(demote.status).toBe(201);
     expect(await demote.json()).toMatchObject({ user_id: alice.user.id, role: "read" });
-    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "read" });
+    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({
+      role: "read",
+    });
   });
 
   it("preserves org owner when accepting a lower org invite", async () => {
@@ -382,9 +413,9 @@ describe("orgs and projects", () => {
       headers: { cookie: cookieHeader(aliceToken!) },
     });
     expect(expired.status).toBe(404);
-    expect((await store.findProjectMember(project.id, (await store.findUserByLogin("alice"))!.id))?.role).toBe(
-      "read",
-    );
+    expect(
+      (await store.findProjectMember(project.id, (await store.findUserByLogin("alice"))!.id))?.role,
+    ).toBe("read");
   });
 
   it("does not accept an invite for a soft-deleted project", async () => {
