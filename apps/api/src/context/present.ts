@@ -1,6 +1,7 @@
 import type { ConstraintView, DecisionSummary, TaskSummary } from "@beacon/api-spec";
 
 import type { ConstraintRecord, ContextNodeRecord, DecisionRecord } from "./types.js";
+import type { UserRecord } from "../auth/store.js";
 import type { MilestoneRecord, TaskRecord } from "../roadmap/types.js";
 
 export function presentConstraint(constraint: ConstraintRecord): ConstraintView {
@@ -53,6 +54,31 @@ export function toCompileNode(node: ContextNodeRecord) {
     path: node.path,
     sections: node.sections.map((section) => ({ ...section })),
   };
+}
+
+export function presentContextNode(node: ContextNodeRecord, actor?: UserRecord) {
+  return {
+    id: node.id,
+    project_id: node.projectId,
+    repo_id: node.repoId,
+    task_id: node.taskId,
+    scope_type: node.scopeType,
+    path: node.path,
+    sections: node.sections.map((section) => ({ ...section })),
+    source: node.source,
+    source_path: node.sourcePath,
+    review_state: node.reviewState,
+    updated_at: node.updatedAt.toISOString(),
+    updated_by: {
+      type: node.updatedByType,
+      id: node.updatedById,
+      display: actor?.login ?? node.updatedById,
+    },
+  };
+}
+
+export function sectionsText(sections: ContextNodeRecord["sections"]): string {
+  return sections.map((section) => `${section.title}\n${section.body_md}`).join("\n\n");
 }
 
 function acceptanceMarkdown(task: TaskRecord): string {

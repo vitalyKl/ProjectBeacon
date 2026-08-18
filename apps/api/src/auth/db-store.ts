@@ -1,8 +1,14 @@
 import {
+  DEFAULT_SECURITY_CONSTRAINTS,
+  DEFAULT_SECURITY_CONSTRAINT_KIND,
+  DEFAULT_SECURITY_CONSTRAINT_STATUS,
+} from "@beacon/context";
+import {
   activityEvents,
   agentSessions,
   apiTokens,
   approvalRequests,
+  codeOwners,
   constraints,
   contextNodes,
   contextRevisions,
@@ -15,6 +21,7 @@ import {
   orgs,
   projectInvites,
   projectMembers,
+  projectRepos,
   projects,
   rateBuckets,
   taskComments,
@@ -24,7 +31,7 @@ import {
   users,
   type Db,
 } from "@beacon/db";
-import { isScope, type Scope } from "@beacon/shared";
+import { isScope, uuidv7, type Scope } from "@beacon/shared";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { slugCandidate, slugFromLogin } from "../slug.js";
@@ -49,11 +56,13 @@ import {
   isConstraintStatus,
   isContextScopeType,
   isDecisionStatus,
+  type CodeOwnerRecord,
   type ConstraintRecord,
   type ContextNodeRecord,
   type ContextRevisionRecord,
   type ContextRevisionTarget,
   type DecisionRecord,
+  type ProjectRepoRecord,
 } from "../context/types.js";
 import {
   BootstrapConsumedError,
@@ -404,6 +413,81 @@ function toContextNode(row: typeof contextNodes.$inferSelect): ContextNodeRecord
     updatedById: row.updatedById,
     updatedAt: row.updatedAt,
   };
+}
+
+function toProjectRepo(row: typeof projectRepos.$inferSelect): ProjectRepoRecord | undefined {
+  if (row.provider !== "github" && row.provider !== "local") {
+    return undefined;
+  }
+  if (
+    row.indexMode !== "sidecar" &&
+    row.indexMode !== "bind_mount" &&
+    row.indexMode !== "hosted_clone" &&
+    row.indexMode !== "both"
+  ) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    provider: row.provider,
+    remoteUrl: row.remoteUrl,
+    defaultBranch: row.defaultBranch,
+    githubRepoId: row.githubRepoId,
+    installationId: row.installationId,
+    localRootHint: row.localRootHint,
+    indexMode: row.indexMode,
+    lastIndexedSha: row.lastIndexedSha,
+    lastIndexedAt: row.lastIndexedAt,
+  };
+}
+
+function toCodeOwner(row: typeof codeOwners.$inferSelect): CodeOwnerRecord {
+  return {
+    id: row.id,
+    repoId: row.repoId,
+    pathPattern: row.pathPattern,
+    owners: [...row.owners],
+    source: row.source,
+  };
+}
+
+async function seedDefaultSecurityConstraints(
+  tx: Pick<Db, "select" | "insert">,
+  projectId: string,
+  createdAt: Date,
+): Promise<void> {
+  const existing = await tx
+    .select({ body: constraints.body })
+    .from(constraints)
+    .where(
+      and(
+        eq(constraints.projectId, projectId),
+        eq(constraints.kind, DEFAULT_SECURITY_CONSTRAINT_KIND),
+        eq(constraints.status, DEFAULT_SECURITY_CONSTRAINT_STATUS),
+      ),
+    );
+  const existingBodies = new Set(existing.map((row) => row.body));
+  const values = DEFAULT_SECURITY_CONSTRAINTS.flatMap((body, index) => {
+    if (existingBodies.has(body)) {
+      return [];
+    }
+    return [
+      {
+        id: uuidv7(createdAt.getTime() + index),
+        projectId,
+        kind: DEFAULT_SECURITY_CONSTRAINT_KIND,
+        body,
+        scopePath: "",
+        status: DEFAULT_SECURITY_CONSTRAINT_STATUS,
+        createdAt,
+      },
+    ];
+  });
+  if (values.length === 0) {
+    return;
+  }
+  await tx.insert(constraints).values(values);
 }
 
 function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | undefined {
@@ -949,6 +1033,7 @@ export class DbAuthStore implements AuthStore {
           role: "admin",
           createdAt: project.createdAt,
         });
+        await seedDefaultSecurityConstraints(tx, created.id, project.createdAt);
         return toProject(created);
       });
     } catch (error) {
@@ -1431,6 +1516,74 @@ export class DbAuthStore implements AuthStore {
     });
   }
 
+  async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
+    const existing = await this.db
+      .select()
+      .from(contextNodes)
+      .where(
+        and(
+          eq(contextNodes.projectId, node.projectId),
+          eq(contextNodes.scopeType, node.scopeType),
+          eq(contextNodes.path, node.path),
+          node.repoId === null ? isNull(contextNodes.repoId) : eq(contextNodes.repoId, node.repoId),
+          node.taskId === null ? isNull(contextNodes.taskId) : eq(contextNodes.taskId, node.taskId),
+        ),
+      )
+      .limit(1);
+    const current = existing[0];
+    if (current) {
+      const [row] = await this.db
+        .update(contextNodes)
+        .set({
+          sections: node.sections,
+          sectionsText: node.sectionsText,
+          source: node.source,
+          sourcePath: node.sourcePath,
+          reviewState: node.reviewState,
+          updatedByType: node.updatedByType,
+          updatedById: node.updatedById,
+          updatedAt: node.updatedAt,
+        })
+        .where(eq(contextNodes.id, current.id))
+        .returning();
+      if (!row) {
+        throw new Error("update context node returned no row");
+      }
+      const stored = toContextNode(row);
+      if (!stored) {
+        throw new Error("update context node returned invalid row");
+      }
+      return stored;
+    }
+    const [row] = await this.db
+      .insert(contextNodes)
+      .values({
+        id: node.id,
+        projectId: node.projectId,
+        repoId: node.repoId,
+        taskId: node.taskId,
+        scopeType: node.scopeType,
+        path: node.path,
+        sections: node.sections,
+        sectionsText: node.sectionsText,
+        source: node.source,
+        sourcePath: node.sourcePath,
+        reviewState: node.reviewState,
+        updatedByType: node.updatedByType,
+        updatedById: node.updatedById,
+        updatedAt: node.updatedAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert context node returned no row");
+    }
+    const stored = toContextNode(row);
+    if (!stored) {
+      throw new Error("insert context node returned invalid row");
+    }
+    return stored;
+  }
+
   async listActiveConstraints(projectId: string): Promise<ConstraintRecord[]> {
     const rows = await this.db
       .select()
@@ -1440,6 +1593,93 @@ export class DbAuthStore implements AuthStore {
     return rows.flatMap((row) => {
       const constraint = toConstraint(row);
       return constraint ? [constraint] : [];
+    });
+  }
+
+  async listConstraints(projectId: string): Promise<ConstraintRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(constraints)
+      .where(eq(constraints.projectId, projectId))
+      .orderBy(asc(constraints.id));
+    return rows.flatMap((row) => {
+      const constraint = toConstraint(row);
+      return constraint ? [constraint] : [];
+    });
+  }
+
+  async insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
+    const [row] = await this.db
+      .insert(constraints)
+      .values({
+        id: constraint.id,
+        projectId: constraint.projectId,
+        kind: constraint.kind,
+        body: constraint.body,
+        scopePath: constraint.scopePath,
+        status: constraint.status,
+        createdAt: constraint.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert constraint returned no row");
+    }
+    const stored = toConstraint(row);
+    if (!stored) {
+      throw new Error("insert constraint returned invalid row");
+    }
+    return stored;
+  }
+
+  async listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(projectRepos)
+      .where(eq(projectRepos.projectId, projectId))
+      .orderBy(asc(projectRepos.id));
+    return rows.flatMap((row) => {
+      const repo = toProjectRepo(row);
+      return repo ? [repo] : [];
+    });
+  }
+
+  async findProjectRepoById(id: string): Promise<ProjectRepoRecord | undefined> {
+    const [row] = await this.db.select().from(projectRepos).where(eq(projectRepos.id, id)).limit(1);
+    return row ? toProjectRepo(row) : undefined;
+  }
+
+  async listCodeOwners(repoId: string): Promise<CodeOwnerRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(codeOwners)
+      .where(eq(codeOwners.repoId, repoId))
+      .orderBy(asc(codeOwners.pathPattern), asc(codeOwners.id));
+    return rows.map(toCodeOwner);
+  }
+
+  async upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]> {
+    return this.db.transaction(async (tx) => {
+      await tx
+        .delete(codeOwners)
+        .where(and(eq(codeOwners.repoId, repoId), eq(codeOwners.source, "codeowners")));
+      const byPattern = new Map<string, CodeOwnerRecord>();
+      for (const row of rows) {
+        byPattern.set(row.pathPattern, row);
+      }
+      const values = [...byPattern.values()].map((row) => ({
+        id: row.id,
+        repoId,
+        pathPattern: row.pathPattern,
+        owners: row.owners,
+        source: row.source,
+      }));
+      if (values.length === 0) {
+        return [];
+      }
+      const inserted = await tx.insert(codeOwners).values(values).returning();
+      return inserted
+        .map(toCodeOwner)
+        .sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
     });
   }
 

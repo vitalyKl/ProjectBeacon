@@ -74,6 +74,28 @@ export type ContextRevisionRecord = {
   createdAt: Date;
 };
 
+export type CodeOwnerRecord = {
+  id: string;
+  repoId: string;
+  pathPattern: string;
+  owners: string[];
+  source: string;
+};
+
+export type ProjectRepoRecord = {
+  id: string;
+  projectId: string;
+  provider: "github" | "local";
+  remoteUrl: string | null;
+  defaultBranch: string;
+  githubRepoId: bigint | null;
+  installationId: bigint | null;
+  localRootHint: string | null;
+  indexMode: "sidecar" | "bind_mount" | "hosted_clone" | "both";
+  lastIndexedSha: string | null;
+  lastIndexedAt: Date | null;
+};
+
 export function isContextScopeType(value: string): value is ContextScopeType {
   return (CONTEXT_SCOPE_TYPES as readonly string[]).includes(value);
 }

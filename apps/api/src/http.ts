@@ -1,15 +1,19 @@
 import type { Context } from "hono";
 
-export async function readObject(c: Context): Promise<Record<string, unknown> | undefined> {
+export async function readJson(c: Context): Promise<unknown> {
   try {
-    const body: unknown = await c.req.json();
-    if (body === null || typeof body !== "object" || Array.isArray(body)) {
-      return undefined;
-    }
-    return body as Record<string, unknown>;
+    return await c.req.json();
   } catch {
     return undefined;
   }
+}
+
+export async function readObject(c: Context): Promise<Record<string, unknown> | undefined> {
+  const body = await readJson(c);
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return undefined;
+  }
+  return body as Record<string, unknown>;
 }
 
 export function parseOptionalString(value: unknown, max = 256): string | undefined {

@@ -1,8 +1,17 @@
+import {
+  DEFAULT_SECURITY_CONSTRAINTS,
+  DEFAULT_SECURITY_CONSTRAINT_KIND,
+  DEFAULT_SECURITY_CONSTRAINT_STATUS,
+} from "@beacon/context";
+import { uuidv7 } from "@beacon/shared";
+
 import type {
+  CodeOwnerRecord,
   ConstraintRecord,
   ContextNodeRecord,
   ContextRevisionRecord,
   DecisionRecord,
+  ProjectRepoRecord,
 } from "../context/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import {
@@ -76,10 +85,12 @@ export {
 } from "../orgs/types.js";
 export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
 export type {
+  CodeOwnerRecord,
   ConstraintRecord,
   ContextNodeRecord,
   ContextRevisionRecord,
   DecisionRecord,
+  ProjectRepoRecord,
 } from "../context/types.js";
 export type {
   ActivityEventRecord,
@@ -224,10 +235,17 @@ export interface AuthStore {
     filters?: { objectType?: string; objectId?: string },
   ): Promise<ActivityEventRecord[]>;
   listContextNodes(projectId: string): Promise<ContextNodeRecord[]>;
+  upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
   listActiveConstraints(projectId: string): Promise<ConstraintRecord[]>;
+  listConstraints(projectId: string): Promise<ConstraintRecord[]>;
+  insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
   listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]>;
   insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord>;
   listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]>;
+  listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]>;
+  findProjectRepoById(id: string): Promise<ProjectRepoRecord | undefined>;
+  upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]>;
+  listCodeOwners(repoId: string): Promise<CodeOwnerRecord[]>;
   withIdempotency(
     actorType: IdempotencyActorType,
     actorId: string,
@@ -348,6 +366,8 @@ export class MemoryAuthStore implements AuthStore {
   private readonly constraints = new Map<string, ConstraintRecord>();
   private readonly decisions = new Map<string, DecisionRecord>();
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
+  private readonly projectRepos = new Map<string, ProjectRepoRecord>();
+  private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<
     string,
     { response: unknown; createdAt: Date }
@@ -623,6 +643,7 @@ export class MemoryAuthStore implements AuthStore {
         role: "admin",
         createdAt: project.createdAt,
       });
+      this.seedDefaultSecurityConstraints(project.id, project.createdAt);
       return cloneProject(project);
     });
   }
@@ -951,6 +972,44 @@ export class MemoryAuthStore implements AuthStore {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
 
+  seedProjectRepo(repo: ProjectRepoRecord): void {
+    this.projectRepos.set(repo.id, cloneProjectRepo(repo));
+  }
+
+  async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
+    return this.enqueueWrite(() => {
+      const existing = this.findContextNodeByScope(node);
+      if (existing) {
+        existing.sections = node.sections.map((section) => ({ ...section }));
+        existing.sectionsText = node.sectionsText;
+        existing.source = node.source;
+        existing.sourcePath = node.sourcePath;
+        existing.reviewState = node.reviewState;
+        existing.updatedByType = node.updatedByType;
+        existing.updatedById = node.updatedById;
+        existing.updatedAt = new Date(node.updatedAt);
+        return cloneContextNode(existing);
+      }
+      this.contextNodes.set(node.id, cloneContextNode(node));
+      return cloneContextNode(node);
+    });
+  }
+
+  private findContextNodeByScope(node: ContextNodeRecord): ContextNodeRecord | undefined {
+    for (const existing of this.contextNodes.values()) {
+      if (
+        existing.projectId === node.projectId &&
+        existing.scopeType === node.scopeType &&
+        existing.repoId === node.repoId &&
+        existing.path === node.path &&
+        existing.taskId === node.taskId
+      ) {
+        return existing;
+      }
+    }
+    return undefined;
+  }
+
   async listActiveConstraints(projectId: string): Promise<ConstraintRecord[]> {
     const result: ConstraintRecord[] = [];
     for (const constraint of this.constraints.values()) {
@@ -962,8 +1021,105 @@ export class MemoryAuthStore implements AuthStore {
     return result;
   }
 
+  async listConstraints(projectId: string): Promise<ConstraintRecord[]> {
+    const result: ConstraintRecord[] = [];
+    for (const constraint of this.constraints.values()) {
+      if (constraint.projectId === projectId) {
+        result.push(cloneConstraint(constraint));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  async insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
+    return this.enqueueWrite(() => {
+      if (this.constraints.has(constraint.id)) {
+        throw new UniqueViolationError("constraints_pkey");
+      }
+      this.constraints.set(constraint.id, cloneConstraint(constraint));
+      return cloneConstraint(constraint);
+    });
+  }
+
   seedConstraint(constraint: ConstraintRecord): void {
     this.constraints.set(constraint.id, cloneConstraint(constraint));
+  }
+
+  private seedDefaultSecurityConstraints(projectId: string, createdAt: Date): void {
+    const existing = [...this.constraints.values()].filter(
+      (constraint) =>
+        constraint.projectId === projectId &&
+        constraint.kind === DEFAULT_SECURITY_CONSTRAINT_KIND &&
+        constraint.status === DEFAULT_SECURITY_CONSTRAINT_STATUS,
+    );
+    const existingBodies = new Set(existing.map((constraint) => constraint.body));
+    let offset = 0;
+    for (const body of DEFAULT_SECURITY_CONSTRAINTS) {
+      if (existingBodies.has(body)) {
+        continue;
+      }
+      const id = uuidv7(createdAt.getTime() + offset);
+      offset += 1;
+      this.constraints.set(id, {
+        id,
+        projectId,
+        kind: DEFAULT_SECURITY_CONSTRAINT_KIND,
+        body,
+        scopePath: "",
+        status: DEFAULT_SECURITY_CONSTRAINT_STATUS,
+        createdAt: new Date(createdAt),
+      });
+    }
+  }
+
+  async listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]> {
+    const result: ProjectRepoRecord[] = [];
+    for (const repo of this.projectRepos.values()) {
+      if (repo.projectId === projectId) {
+        result.push(cloneProjectRepo(repo));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  async findProjectRepoById(id: string): Promise<ProjectRepoRecord | undefined> {
+    const repo = this.projectRepos.get(id);
+    return repo ? cloneProjectRepo(repo) : undefined;
+  }
+
+  async listCodeOwners(repoId: string): Promise<CodeOwnerRecord[]> {
+    const result: CodeOwnerRecord[] = [];
+    for (const row of this.codeOwners.values()) {
+      if (row.repoId === repoId) {
+        result.push(cloneCodeOwner(row));
+      }
+    }
+    result.sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
+    return result;
+  }
+
+  async upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]> {
+    return this.enqueueWrite(() => {
+      for (const [id, existing] of this.codeOwners) {
+        if (existing.repoId === repoId && existing.source === "codeowners") {
+          this.codeOwners.delete(id);
+        }
+      }
+      const written: CodeOwnerRecord[] = [];
+      const byPattern = new Map<string, CodeOwnerRecord>();
+      for (const row of rows) {
+        byPattern.set(row.pathPattern, row);
+      }
+      for (const row of byPattern.values()) {
+        const stored = cloneCodeOwner({ ...row, repoId });
+        this.codeOwners.set(stored.id, stored);
+        written.push(cloneCodeOwner(stored));
+      }
+      written.sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
+      return written;
+    });
   }
 
   async listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]> {
@@ -1227,6 +1383,17 @@ function cloneContextRevision(revision: ContextRevisionRecord): ContextRevisionR
     sourceNodeIds: [...revision.sourceNodeIds],
     createdAt: new Date(revision.createdAt),
   };
+}
+
+function cloneProjectRepo(repo: ProjectRepoRecord): ProjectRepoRecord {
+  return {
+    ...repo,
+    lastIndexedAt: repo.lastIndexedAt ? new Date(repo.lastIndexedAt) : null,
+  };
+}
+
+function cloneCodeOwner(row: CodeOwnerRecord): CodeOwnerRecord {
+  return { ...row, owners: [...row.owners] };
 }
 
 function idempotencyKey(actorType: IdempotencyActorType, actorId: string, key: string): string {
