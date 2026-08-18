@@ -15,15 +15,7 @@ export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } f
 import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
 export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../sessions/types.js";
 export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
-import {
-  ACTIVITY_RETENTION_MS,
-  BRIEF_RETENTION_PER_PROJECT,
-  IDEMPOTENCY_RETENTION_MS,
-  idsOlderThanKeep,
-  isUserSessionPastRetention,
-  type ExpireLocksCounts,
-  type RetentionCounts,
-} from "../jobs/policy.js";
+import { ACTIVITY_RETENTION_MS, BRIEF_RETENTION_PER_PROJECT, IDEMPOTENCY_RETENTION_MS, idsOlderThanKeep, isUserSessionPastRetention, type ExpireLocksCounts, type RetentionCounts, decideExpiredLocks } from "../jobs/policy.js";
 
 export type UserRecord = {
 
@@ -1713,6 +1705,11 @@ export class MemoryAuthStore implements AuthStore {
       let briefsDeleted = 0;
       for (const revisions of byProject.values()) {
         for (const id of idsOlderThanKeep(revisions, BRIEF_RETENTION_PER_PROJECT)) {
+          for (const session of this.agentSessions.values()) {
+            if (session.contextRevisionId === id) {
+              session.contextRevisionId = null;
+            }
+          }
           this.contextRevisions.delete(id);
           briefsDeleted += 1;
         }
@@ -1749,37 +1746,31 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   private expireLocksUnlocked(now: Date): ExpireLocksCounts {
-    let locksReleased = 0;
-    const releasedSessionIds = new Set<string>();
-    for (const task of this.tasks.values()) {
-      if (!task.lockedBySessionId || !task.lockExpiresAt) {
-        continue;
-      }
-      if (task.lockExpiresAt.getTime() > now.getTime()) {
-        continue;
-      }
-      releasedSessionIds.add(task.lockedBySessionId);
-      task.lockedBySessionId = null;
-      task.lockExpiresAt = null;
-      locksReleased += 1;
-    }
-
-    let sessionsAbandoned = 0;
-    for (const session of this.agentSessions.values()) {
-      if (session.status !== "active") {
-        continue;
-      }
-      const expiredByOwnTtl =
-        session.lockExpiresAt !== null && session.lockExpiresAt.getTime() <= now.getTime();
-      if (!expiredByOwnTtl && !releasedSessionIds.has(session.id)) {
+    const decided = decideExpiredLocks(
+      [...this.agentSessions.values()],
+      [...this.tasks.values()],
+      now,
+    );
+    for (const sessionId of decided.sessionIds) {
+      const session = this.agentSessions.get(sessionId);
+      if (!session || session.status !== "active") {
         continue;
       }
       session.status = "abandoned";
       session.finishedAt = new Date(now);
-      sessionsAbandoned += 1;
     }
-
-    return { locksReleased, sessionsAbandoned };
+    for (const taskId of decided.taskIds) {
+      const task = this.tasks.get(taskId);
+      if (!task) {
+        continue;
+      }
+      task.lockedBySessionId = null;
+      task.lockExpiresAt = null;
+    }
+    return {
+      locksReleased: decided.taskIds.length,
+      sessionsAbandoned: decided.sessionIds.length,
+    };
   }
     string,
     { response: unknown; createdAt: Date }

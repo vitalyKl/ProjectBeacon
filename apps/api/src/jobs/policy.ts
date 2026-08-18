@@ -45,3 +45,48 @@ export function isUserSessionPastRetention(
     session.expiresAt.getTime() <= cutoff
   );
 }
+
+export function isExpiredLock(expiresAt: Date | null, now: Date): boolean {
+  return expiresAt !== null && expiresAt.getTime() <= now.getTime();
+}
+
+export function decideExpiredLocks(
+  sessions: readonly {
+    id: string;
+    status: string;
+    lockExpiresAt: Date | null;
+    taskId: string | null;
+  }[],
+  tasks: readonly {
+    id: string;
+    lockedBySessionId: string | null;
+    lockExpiresAt: Date | null;
+  }[],
+  now: Date,
+): { sessionIds: string[]; taskIds: string[] } {
+  const byId = new Map(sessions.map((session) => [session.id, session]));
+  const sessionIds = new Set<string>();
+  const taskIds: string[] = [];
+
+  for (const session of sessions) {
+    if (session.status === "active" && isExpiredLock(session.lockExpiresAt, now)) {
+      sessionIds.add(session.id);
+    }
+  }
+
+  for (const task of tasks) {
+    if (!task.lockedBySessionId || !isExpiredLock(task.lockExpiresAt, now)) {
+      continue;
+    }
+    const holder = byId.get(task.lockedBySessionId);
+    if (holder && holder.status === "active" && !isExpiredLock(holder.lockExpiresAt, now)) {
+      continue;
+    }
+    taskIds.push(task.id);
+    if (holder?.status === "active") {
+      sessionIds.add(holder.id);
+    }
+  }
+
+  return { sessionIds: [...sessionIds], taskIds };
+}

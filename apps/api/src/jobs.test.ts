@@ -235,4 +235,103 @@ describe("worker hygiene jobs", () => {
     expect(session?.status).toBe("abandoned");
     expect(session?.finishedAt?.toISOString()).toBe(now.toISOString());
   });
+
+  it("unlinks start_work sessions before dropping ranked-out briefs", async () => {
+    const store = new MemoryAuthStore();
+    const projectId = "99999999-9999-7999-8999-999999999999";
+    const start = new Date("2026-01-01T00:00:00.000Z");
+    const oldestId = uuidv7(start.getTime());
+    for (let i = 0; i < BRIEF_RETENTION_PER_PROJECT + 1; i += 1) {
+      const createdAt = new Date(start.getTime() + i * 1000);
+      const id = i === 0 ? oldestId : uuidv7(createdAt.getTime());
+      store.seedContextRevision(revision(projectId, createdAt, id));
+    }
+    store.putAgentSession({
+      id: "aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa",
+      projectId,
+      taskId: null,
+      tokenId: null,
+      agentName: "agent",
+      agentHost: "custom",
+      status: "finished",
+      contextRevisionId: oldestId,
+      startedAt: start,
+      finishedAt: start,
+      lockExpiresAt: null,
+      lastHeartbeatAt: start,
+    });
+
+    const app = createApp({ store, config: testConfig(), checkReady: async () => true });
+    const res = await app.request("/v1/jobs/retention", {
+      method: "POST",
+      headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ briefs_deleted: 1 });
+    expect(await store.listContextRevisions(projectId)).toHaveLength(BRIEF_RETENTION_PER_PROJECT);
+    expect(
+      (await store.findAgentSessionById("aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa"))?.contextRevisionId,
+    ).toBeNull();
+    expect(
+      await store
+        .listContextRevisions(projectId)
+        .then((rows) => rows.some((row) => row.id === oldestId)),
+    ).toBe(false);
+  });
+
+  it("does not abandon a session whose heartbeat renewed the lock", async () => {
+    const store = new MemoryAuthStore();
+    const startedAt = new Date("2026-01-01T00:00:00.000Z");
+    const expireAt = new Date("2026-01-01T05:00:00.000Z");
+    const projectId = "bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb";
+    const sessionId = "cccccccc-cccc-7ccc-8ccc-cccccccccccc";
+    const taskId = "dddddddd-dddd-7ddd-8ddd-dddddddddddd";
+    store.putAgentSession({
+      id: sessionId,
+      projectId,
+      taskId,
+      tokenId: null,
+      agentName: "agent",
+      agentHost: "custom",
+      status: "active",
+      contextRevisionId: null,
+      startedAt,
+      finishedAt: null,
+      lockExpiresAt: startedAt,
+      lastHeartbeatAt: startedAt,
+    });
+    await store.createTask({
+      id: taskId,
+      projectId,
+      milestoneId: null,
+      parentId: null,
+      title: "Locked",
+      description: "",
+      status: "in_progress",
+      priority: 0,
+      type: "task",
+      version: 1,
+      assigneeUserId: null,
+      assigneeAgentName: null,
+      agentBrief: "",
+      linkedPaths: [],
+      githubIssueId: null,
+      lockedBySessionId: sessionId,
+      lockExpiresAt: startedAt,
+      deletedAt: null,
+      createdAt: startedAt,
+      updatedAt: startedAt,
+    });
+
+    const renewed = await store.heartbeatSession(sessionId, expireAt);
+    const counts = await store.expireLocks(expireAt);
+    expect(renewed?.status).toBe("active");
+    expect(renewed?.lockExpiresAt?.getTime()).toBe(expireAt.getTime() + LOCK_TTL_MS);
+    expect(counts).toEqual({ locksReleased: 0, sessionsAbandoned: 0 });
+    expect((await store.findAgentSessionById(sessionId))?.status).toBe("active");
+    expect((await store.findTaskById(taskId))?.lockedBySessionId).toBe(sessionId);
+    expect((await store.findTaskById(taskId))?.lockExpiresAt?.getTime()).toBe(
+      expireAt.getTime() + LOCK_TTL_MS,
+    );
+  });
 });

@@ -17,6 +17,7 @@ import {
   BRIEF_RETENTION_PER_PROJECT,
   IDEMPOTENCY_RETENTION_MS,
   USER_SESSION_RETENTION_MS,
+  decideExpiredLocks,
   type ExpireLocksCounts,
   type RetentionCounts,
 } from "../jobs/policy.js";
@@ -2397,14 +2398,14 @@ export class DbAuthStore implements AuthStore {
       .where(sql`${ranked.rank} > ${BRIEF_RETENTION_PER_PROJECT}`);
     let briefsDeleted = 0;
     if (staleBriefs.length > 0) {
+      const staleBriefIds = staleBriefs.map((row) => row.id);
+      await this.db
+        .update(agentSessions)
+        .set({ contextRevisionId: null })
+        .where(inArray(agentSessions.contextRevisionId, staleBriefIds));
       const deletedBriefs = await this.db
         .delete(contextRevisions)
-        .where(
-          inArray(
-            contextRevisions.id,
-            staleBriefs.map((row) => row.id),
-          ),
-        )
+        .where(inArray(contextRevisions.id, staleBriefIds))
         .returning({ id: contextRevisions.id });
       briefsDeleted = deletedBriefs.length;
     }
@@ -2433,56 +2434,84 @@ export class DbAuthStore implements AuthStore {
 
   async expireLocks(now: Date): Promise<ExpireLocksCounts> {
     return this.db.transaction(async (tx) => {
-      const expiredTasks = await tx
+      const expiredTaskHolders = await tx
         .select({
           id: tasks.id,
           lockedBySessionId: tasks.lockedBySessionId,
         })
         .from(tasks)
-        .where(and(sql`${tasks.lockedBySessionId} IS NOT NULL`, lte(tasks.lockExpiresAt, now)))
+        .where(and(sql`${tasks.lockedBySessionId} IS NOT NULL`, lte(tasks.lockExpiresAt, now)));
+      const holderIds = expiredTaskHolders.flatMap((task) =>
+        task.lockedBySessionId ? [task.lockedBySessionId] : [],
+      );
+
+      const candidateSessions = await tx
+        .select({
+          id: agentSessions.id,
+          status: agentSessions.status,
+          lockExpiresAt: agentSessions.lockExpiresAt,
+          taskId: agentSessions.taskId,
+        })
+        .from(agentSessions)
+        .where(
+          or(
+            and(eq(agentSessions.status, "active"), lte(agentSessions.lockExpiresAt, now)),
+            holderIds.length > 0 ? inArray(agentSessions.id, holderIds) : sql`false`,
+          ),
+        )
+        .orderBy(asc(agentSessions.id))
         .for("update");
 
-      const sessionIds = new Set<string>();
-      for (const task of expiredTasks) {
-        if (task.lockedBySessionId) {
-          sessionIds.add(task.lockedBySessionId);
+      const candidateTaskIds = new Set<string>();
+      for (const session of candidateSessions) {
+        if (session.taskId) {
+          candidateTaskIds.add(session.taskId);
         }
       }
-
-      let locksReleased = 0;
-      if (expiredTasks.length > 0) {
-        const released = await tx
-          .update(tasks)
-          .set({ lockedBySessionId: null, lockExpiresAt: null })
-          .where(
-            inArray(
-              tasks.id,
-              expiredTasks.map((task) => task.id),
-            ),
-          )
-          .returning({ id: tasks.id });
-        locksReleased = released.length;
+      for (const task of expiredTaskHolders) {
+        candidateTaskIds.add(task.id);
       }
 
-      const expiredSessions = await tx
-        .select({ id: agentSessions.id })
-        .from(agentSessions)
-        .where(and(eq(agentSessions.status, "active"), lte(agentSessions.lockExpiresAt, now)))
-        .for("update");
-      for (const session of expiredSessions) {
-        sessionIds.add(session.id);
-      }
+      const lockedTasks =
+        candidateTaskIds.size === 0
+          ? []
+          : await tx
+              .select({
+                id: tasks.id,
+                lockedBySessionId: tasks.lockedBySessionId,
+                lockExpiresAt: tasks.lockExpiresAt,
+              })
+              .from(tasks)
+              .where(inArray(tasks.id, [...candidateTaskIds]))
+              .orderBy(asc(tasks.id))
+              .for("update");
+
+      const decided = decideExpiredLocks(candidateSessions, lockedTasks, now);
 
       let sessionsAbandoned = 0;
-      if (sessionIds.size > 0) {
+      if (decided.sessionIds.length > 0) {
         const abandoned = await tx
           .update(agentSessions)
           .set({ status: "abandoned", finishedAt: now })
           .where(
-            and(eq(agentSessions.status, "active"), inArray(agentSessions.id, [...sessionIds])),
+            and(
+              eq(agentSessions.status, "active"),
+              inArray(agentSessions.id, decided.sessionIds),
+              lte(agentSessions.lockExpiresAt, now),
+            ),
           )
           .returning({ id: agentSessions.id });
         sessionsAbandoned = abandoned.length;
+      }
+
+      let locksReleased = 0;
+      if (decided.taskIds.length > 0) {
+        const released = await tx
+          .update(tasks)
+          .set({ lockedBySessionId: null, lockExpiresAt: null })
+          .where(inArray(tasks.id, decided.taskIds))
+          .returning({ id: tasks.id });
+        locksReleased = released.length;
       }
 
       return { locksReleased, sessionsAbandoned };

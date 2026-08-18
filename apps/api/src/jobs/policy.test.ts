@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRIEF_RETENTION_PER_PROJECT,
   USER_SESSION_RETENTION_MS,
+  decideExpiredLocks,
   idsOlderThanKeep,
   isUserSessionPastRetention,
 } from "./policy.js";
@@ -35,5 +36,61 @@ describe("retention policy", () => {
       ),
     ).toBe(false);
     expect(isUserSessionPastRetention({ revokedAt: null, expiresAt: cutoff }, now)).toBe(true);
+  });
+
+  it("does not abandon or release a lock after the holder renews", () => {
+    const now = new Date("2026-01-01T05:00:00.000Z");
+    const expired = new Date("2026-01-01T00:00:00.000Z");
+    const renewed = new Date("2026-01-01T09:00:00.000Z");
+    const decided = decideExpiredLocks(
+      [
+        {
+          id: "session-1",
+          status: "active",
+          lockExpiresAt: renewed,
+          taskId: "task-1",
+        },
+      ],
+      [
+        {
+          id: "task-1",
+          lockedBySessionId: "session-1",
+          lockExpiresAt: expired,
+        },
+      ],
+      now,
+    );
+    expect(decided).toEqual({ sessionIds: [], taskIds: [] });
+  });
+
+  it("abandons a still-expired holder and a session whose own lease lapsed", () => {
+    const now = new Date("2026-01-01T05:00:00.000Z");
+    const expired = new Date("2026-01-01T00:00:00.000Z");
+    const decided = decideExpiredLocks(
+      [
+        {
+          id: "holder",
+          status: "active",
+          lockExpiresAt: expired,
+          taskId: "task-1",
+        },
+        {
+          id: "orphan",
+          status: "active",
+          lockExpiresAt: expired,
+          taskId: null,
+        },
+      ],
+      [
+        {
+          id: "task-1",
+          lockedBySessionId: "holder",
+          lockExpiresAt: expired,
+        },
+      ],
+      now,
+    );
+    expect(decided.sessionIds.sort()).toEqual(["holder", "orphan"]);
+    expect(decided.taskIds).toEqual(["task-1"]);
   });
 });
