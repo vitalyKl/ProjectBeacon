@@ -22,12 +22,7 @@ const EXTENSION_LANG: Record<string, LanguageId> = {
   ".mdx": "markdown",
 };
 
-export const SYMBOL_LANGUAGES = new Set<LanguageId>([
-  "typescript",
-  "tsx",
-  "javascript",
-  "python",
-]);
+export const SYMBOL_LANGUAGES = new Set<LanguageId>(["typescript", "tsx", "javascript", "python"]);
 
 export const IMPORTANT_FILE_NAMES = new Set([
   "readme",

@@ -121,8 +121,6 @@ export function lockExpiresAt(now: Date): Date {
 
 export function isLockActive(task: TaskRecord, now: Date): boolean {
   return Boolean(
-    task.lockedBySessionId &&
-      task.lockExpiresAt &&
-      task.lockExpiresAt.getTime() > now.getTime(),
+    task.lockedBySessionId && task.lockExpiresAt && task.lockExpiresAt.getTime() > now.getTime(),
   );
 }

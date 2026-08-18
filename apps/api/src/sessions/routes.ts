@@ -2,6 +2,7 @@ import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
 import {
+  actorActivityRef,
   actorHasCapability,
   authorizeProjectActor,
   isAdminActor,
@@ -11,6 +12,7 @@ import {
 } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../auth/store.js";
+import type { CodeGateway } from "../code/gateway.js";
 import { compileProjectBrief } from "../context/compile-brief.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -113,17 +115,17 @@ function parseOpenQuestions(value: unknown): string[] | undefined {
 }
 
 function actorRef(actor: AuthActor): { type: string; id: string } {
-  if (actor.kind === "token") {
-    return { type: "token", id: actor.token.id };
-  }
-  return { type: "user", id: actor.user.id };
+  return actorActivityRef(actor);
 }
 
 function defaultAgent(actor: AuthActor): { name: string; host: AgentHost } {
   if (actor.kind === "token") {
     return { name: actor.token.name, host: "custom" };
   }
-  return { name: actor.user.login, host: "custom" };
+  if (actor.kind === "user") {
+    return { name: actor.user.login, host: "custom" };
+  }
+  return { name: "worker", host: "custom" };
 }
 
 function parseAgent(
@@ -164,7 +166,11 @@ function taskLocked(c: Context, task: TaskRecord) {
   });
 }
 
-export function mountSessions(app: Hono, deps: AuthDeps): void {
+export type SessionDeps = AuthDeps & {
+  codeGateway?: CodeGateway;
+};
+
+export function mountSessions(app: Hono, deps: SessionDeps): void {
   app.get("/v1/projects/:id/sessions", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
@@ -236,6 +242,7 @@ export function mountSessions(app: Hono, deps: AuthDeps): void {
         budget_tokens: budgetTokens,
       },
       now,
+      deps.codeGateway,
     );
     if (!compiled.ok) {
       return errorJson(c, 404, "not_found", "task not found");

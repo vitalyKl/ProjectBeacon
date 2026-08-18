@@ -27,8 +27,7 @@ function migrate(db: SqliteDb): void {
     return;
   }
   const row = db.prepare("SELECT v FROM meta WHERE k = 'schema_version'").get() as
-    | { v: string }
-    | undefined;
+    { v: string } | undefined;
   if (!row) {
     db.prepare("INSERT INTO meta (k, v) VALUES ('schema_version', ?)").run(SCHEMA_VERSION);
   }

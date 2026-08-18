@@ -146,6 +146,20 @@ describe("IndexCore", () => {
     expect(scope.paths).toContain("src/index.ts");
   });
 
+  it("caps get_file excerpts and rejects binaries", async () => {
+    const { readFileExcerpt } = await import("./file.js");
+    const core = openCore();
+    core.index();
+    const text = readFileExcerpt(core.repoRoot, "src/greet.ts", { startLine: 1, endLine: 2 });
+    expect(text.ok).toBe(true);
+    if (text.ok) {
+      expect(text.startLine).toBe(1);
+      expect(text.content.split("\n").length).toBeLessThanOrEqual(400);
+    }
+    const binary = readFileExcerpt(core.repoRoot, "binary.dat");
+    expect(binary).toEqual({ ok: false, reason: "binary" });
+  });
+
   it("rebuilds from scratch", () => {
     const core = openCore();
     core.index();

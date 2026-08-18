@@ -16,6 +16,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     githubClientSecret: undefined,
     secureCookies: false,
     trustProxy: false,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }

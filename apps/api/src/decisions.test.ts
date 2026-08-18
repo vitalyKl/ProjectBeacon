@@ -11,6 +11,7 @@ const STRONG_PASSWORD = "correct-horse";
 function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
   return {
     bootstrapAdminToken: BOOTSTRAP_TOKEN,
+    workerToken: undefined,
     authLocal: true,
     authLocalInviteOnly: false,
     authGithub: false,
@@ -18,6 +19,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     githubClientSecret: undefined,
     secureCookies: false,
     trustProxy: false,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }
@@ -358,7 +361,19 @@ describe("decisions and constraints", () => {
     const alice = await registerUser(store, "alice");
     const project = await createProject(alice.app, alice.token, "links");
     const repoId = uuidv7();
-    store.seedProjectRepo({ id: repoId, projectId: project.id });
+    store.seedProjectRepo({
+      id: repoId,
+      projectId: project.id,
+      provider: "local",
+      remoteUrl: null,
+      defaultBranch: "main",
+      githubRepoId: null,
+      installationId: null,
+      localRootHint: ".",
+      indexMode: "sidecar",
+      lastIndexedSha: null,
+      lastIndexedAt: null,
+    });
 
     const taskRes = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
       method: "POST",

@@ -12,6 +12,8 @@ export type AuthConfig = {
   secureCookies: boolean;
   trustProxy: boolean;
   workerToken: string | undefined;
+  indexRpcUrl: string;
+  indexRpcToken: string | undefined;
 };
 
 export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
@@ -29,6 +31,8 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     secureCookies: env["NODE_ENV"] === "production",
     trustProxy: env["TRUST_PROXY"] === "true",
     workerToken: env["BEACON_WORKER_TOKEN"],
+    indexRpcUrl: (env["INDEX_RPC_URL"] ?? "http://worker:7744").replace(/\/+$/, ""),
+    indexRpcToken: env["INDEX_RPC_TOKEN"],
   };
 }
 

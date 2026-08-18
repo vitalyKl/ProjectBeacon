@@ -19,6 +19,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     githubClientSecret: undefined,
     secureCookies: false,
     trustProxy: false,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }
@@ -292,6 +294,44 @@ describe("project repos", () => {
       headers: { cookie: cookieHeader(alice.token) },
     });
     expect(await projectGet.json()).toMatchObject({ default_repo_id: repo.id });
+  });
+
+  it("registers a sidecar heartbeat and 503s code routes without an index", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "code");
+    const created = await alice.app.request(`/v1/projects/${project.id}/repos`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ provider: "local", index_mode: "sidecar", local_root_hint: "." }),
+    });
+    const repoId = ((await created.json()) as { id: string }).id;
+    const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ name: "sidecar", scopes: ["project:read", "code:read"] }),
+    });
+    const secret = ((await minted.json()) as { token: string }).token;
+
+    const registered = await alice.app.request(`/v1/repos/${repoId}/sidecar/register`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(registered.status).toBe(200);
+
+    const status = await alice.app.request(`/v1/repos/${repoId}`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(await status.json()).toMatchObject({
+      sidecar_connected: true,
+      worker_index_connected: false,
+    });
+
+    const tree = await alice.app.request(`/v1/repos/${repoId}/tree`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(tree.status).toBe(503);
+    expect(await tree.json()).toMatchObject({ error: { code: "code_index_unavailable" } });
   });
 
   it("rejects absolute or parent local_root_hint", async () => {

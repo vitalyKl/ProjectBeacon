@@ -43,11 +43,7 @@ export function alignedWindowStart(now: Date, windowMs: number): Date {
   return new Date(Math.floor(now.getTime() / windowMs) * windowMs);
 }
 
-function perMinuteCap(
-  limits: RateLimitConfig,
-  kind: RateActorKind,
-  name: RateLimitName,
-): number {
+function perMinuteCap(limits: RateLimitConfig, kind: RateActorKind, name: RateLimitName): number {
   switch (name) {
     case "overall":
       return kind === "token" ? limits.tokenPerMin : limits.humanPerMin;
@@ -65,9 +61,7 @@ function retryAfterSeconds(now: Date, windowStart: Date, windowMs: number): numb
   return Math.max(1, Math.ceil(remainingMs / 1000));
 }
 
-export type ConsumeRateResult =
-  | { ok: true }
-  | { ok: false; retryAfter: number };
+export type ConsumeRateResult = { ok: true } | { ok: false; retryAfter: number };
 
 export async function consumeRateLimit(
   store: AuthStore,

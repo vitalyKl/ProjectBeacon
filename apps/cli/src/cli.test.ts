@@ -41,6 +41,7 @@ describe("runCli", () => {
     expect(out.stdout).toContain("BEACON_HOME");
     expect(out.stdout).toContain("BEACON_URL");
     expect(out.stdout).toContain("mcp");
+    expect(out.stdout).toContain("sidecar");
     expect(out.stdout.toLowerCase()).not.toContain("device-flow");
     expect(out.stdout.toLowerCase()).not.toContain("indexer");
   });
@@ -65,6 +66,7 @@ describe("runCli", () => {
       "utf8",
     );
     let started = false;
+    let sidecar = false;
     const ready = await runCli({
       argv: ["mcp"],
       env: { BEACON_HOME: home },
@@ -72,8 +74,18 @@ describe("runCli", () => {
       serve: async () => {
         started = true;
       },
+      startSidecar: async () => {
+        sidecar = true;
+        return {
+          host: "127.0.0.1",
+          port: 1,
+          token: "t",
+          close: async () => undefined,
+        };
+      },
     });
     expect(ready).toBe(0);
     expect(started).toBe(true);
+    expect(sidecar).toBe(true);
   });
 });

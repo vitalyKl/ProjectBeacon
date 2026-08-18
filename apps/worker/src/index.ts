@@ -3,27 +3,11 @@ import { pathToFileURL } from "node:url";
 import { createWorkerApi } from "./client.js";
 import { loadWorkerConfig } from "./config.js";
 import { runDetectJob } from "./detect.js";
-import { DETECT_QUEUE, isDetectJobData, EXPIRE_LOCKS_CRON, EXPIRE_LOCKS_QUEUE, RETENTION_CRON, RETENTION_QUEUE, runExpireLocksJob, runRetentionJob } from "./jobs.js";
-import PgBoss from "pg-boss";
-
+import { DETECT_QUEUE, isDetectJobData, EXPIRE_LOCKS_CRON, EXPIRE_LOCKS_QUEUE, RETENTION_CRON, RETENTION_QUEUE, runExpireLocksJob, runRetentionJob, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE, isGithubImportJobData, isGithubInvalidateJobData } from "./jobs.js";
 import { createWorkerApi, loadWorkerEnv } from "./api.js";
 export { createWorkerApi, loadWorkerEnv } from "./api.js";
-export {
-  EXPIRE_LOCKS_CRON,
-  EXPIRE_LOCKS_QUEUE,
-  RETENTION_CRON,
-  RETENTION_QUEUE,
-  runExpireLocksJob,
-  runRetentionJob,
-import { runGithubImportJob, runGithubInvalidateJob } from "./github.js";
-import {
-  DETECT_QUEUE,
-  GITHUB_IMPORT_QUEUE,
-  GITHUB_INVALIDATE_QUEUE,
-  isDetectJobData,
-  isGithubImportJobData,
-  isGithubInvalidateJobData,
-} from "./jobs.js";
+export { EXPIRE_LOCKS_CRON, EXPIRE_LOCKS_QUEUE, RETENTION_CRON, RETENTION_QUEUE, runExpireLocksJob, runRetentionJob, import { runGithubImportJob, runGithubInvalidateJob } from "./github.js";
+import { startWorkerIndexHttp, WorkerIndexRegistry } from "./index-server.js";
 
 export const packageName = "@beacon/worker";
 
@@ -34,6 +18,9 @@ async function main(): Promise<void> {
   }
   if (!config.workerToken) {
     throw new Error("BEACON_WORKER_TOKEN is required");
+  }
+  if (!config.indexRpcToken) {
+    throw new Error("INDEX_RPC_TOKEN is required");
   }
 
   const { default: PgBoss } = await import("pg-boss");
@@ -48,6 +35,11 @@ async function main(): Promise<void> {
   await boss.createQueue(GITHUB_INVALIDATE_QUEUE);
 
   const api = createWorkerApi({ apiUrl: config.apiUrl, token: config.workerToken });
+  const registry = new WorkerIndexRegistry({
+    workspace: config.workspace,
+    indexDir: config.indexDir,
+  });
+  await startWorkerIndexHttp(config, registry);
 
   await boss.work(DETECT_QUEUE, async (jobs) => {
     for (const job of jobs) {
@@ -55,6 +47,13 @@ async function main(): Promise<void> {
         throw new Error("invalid detect job payload");
       }
       await runDetectJob(job.data, { api, workspace: config.workspace });
+      const repo = await api.getRepo(job.data.repo_id);
+      const core = await registry.ensureIndexed(repo);
+      if (core) {
+        await api.reportIndex(repo.id, {
+          last_indexed_at: core.lastIndexedAt()?.toISOString() ?? new Date().toISOString(),
+        });
+      }
     }
   });
   await boss.work(GITHUB_IMPORT_QUEUE, async (jobs) => {
@@ -79,6 +78,8 @@ async function main(): Promise<void> {
       level: "info",
       msg: "worker listening",
       queues: [DETECT_QUEUE, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE],
+      queue: DETECT_QUEUE,
+      index_rpc: `${config.indexRpcHost}:${config.indexRpcPort}`,
     }),
   );
 }

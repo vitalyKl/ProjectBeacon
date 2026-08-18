@@ -9,6 +9,7 @@ export const packageName = "@beacon/cli";
 export { runCli } from "./cli.js";
 export { connect } from "./connect.js";
 export { serveStdio } from "./stdio.js";
+export { startSidecar } from "./sidecar.js";
 
 function isDirectRun(): boolean {
   const entry = process.argv[1];

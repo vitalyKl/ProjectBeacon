@@ -3,6 +3,10 @@ export type WorkerConfig = {
   workerToken: string;
   databaseUrl: string;
   workspace: string | undefined;
+  indexRpcHost: string;
+  indexRpcPort: number;
+  indexRpcToken: string;
+  indexDir: string;
 };
 
 export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
@@ -10,5 +14,18 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const workerToken = env["BEACON_WORKER_TOKEN"] ?? "";
   const databaseUrl = env["DATABASE_URL"] ?? "";
   const workspace = env["BEACON_WORKSPACE"]?.trim() || undefined;
-  return { apiUrl, workerToken, databaseUrl, workspace };
+  const indexRpcHost = env["INDEX_RPC_HOST"]?.trim() || "0.0.0.0";
+  const indexRpcPort = Number.parseInt(env["INDEX_RPC_PORT"] ?? "7744", 10);
+  const indexRpcToken = env["INDEX_RPC_TOKEN"] ?? "";
+  const indexDir = env["BEACON_INDEX_DIR"]?.trim() || "/var/lib/beacon/index";
+  return {
+    apiUrl,
+    workerToken,
+    databaseUrl,
+    workspace,
+    indexRpcHost,
+    indexRpcPort: Number.isInteger(indexRpcPort) ? indexRpcPort : 7744,
+    indexRpcToken,
+    indexDir,
+  };
 }

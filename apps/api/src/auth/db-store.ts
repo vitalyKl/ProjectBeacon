@@ -1,5 +1,5 @@
 import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
-import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState } from "@beacon/db";
+import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState, sidecarConnections } from "@beacon/db";
 import { isScope, uuidv7, type Scope } from "@beacon/shared";
 import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or } from "drizzle-orm";
 import { slugCandidate, slugFromLogin } from "../slug.js";
@@ -27,15 +27,13 @@ const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
-
 type UniqueConstraint =
   | "login"
   | "github_id"
   | "org_slug"
   | "project_slug"
-  | "project_repo"
   | "context_node_scope"
-  | "github_issue"
+  | "project_repo"
   | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
@@ -62,14 +60,11 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         if (constraint.includes("projects_org_id_slug")) {
           return "project_slug";
         }
-        if (constraint.includes("project_repos")) {
-          return "project_repo";
-        }
-        if (constraint.includes("context_nodes")) {
+        if (constraint.includes("context_nodes_unique_scope")) {
           return "context_node_scope";
         }
-        if (constraint.includes("tasks_project_github_issue_id")) {
-          return "github_issue";
+        if (constraint.includes("project_repos")) {
+          return "project_repo";
         }
         return "unknown";
       }
@@ -990,6 +985,7 @@ export class DbAuthStore implements AuthStore {
           role: "admin",
           createdAt: project.createdAt,
         });
+        await seedDefaultSecurityConstraints(tx, created.id, project.createdAt);
         return toProject(created);
       });
     } catch (error) {
@@ -1205,42 +1201,35 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createTask(task: TaskRecord): Promise<TaskRecord> {
-    try {
-      const [row] = await this.db
-        .insert(tasks)
-        .values({
-          id: task.id,
-          projectId: task.projectId,
-          milestoneId: task.milestoneId,
-          parentId: task.parentId,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          priority: task.priority,
-          type: task.type,
-          version: task.version,
-          assigneeUserId: task.assigneeUserId,
-          assigneeAgentName: task.assigneeAgentName,
-          agentBrief: task.agentBrief,
-          linkedPaths: task.linkedPaths,
-          githubIssueId: task.githubIssueId,
-          lockedBySessionId: task.lockedBySessionId,
-          lockExpiresAt: task.lockExpiresAt,
-          deletedAt: task.deletedAt,
-          createdAt: task.createdAt,
-          updatedAt: task.updatedAt,
-        })
-        .returning();
-      if (!row) {
-        throw new Error("insert task returned no row");
-      }
-      return toTask(row);
-    } catch (error) {
-      if (uniqueConstraint(error) === "github_issue") {
-        throw new UniqueViolationError("tasks_project_github_issue_id_unique");
-      }
-      throw error;
+    const [row] = await this.db
+      .insert(tasks)
+      .values({
+        id: task.id,
+        projectId: task.projectId,
+        milestoneId: task.milestoneId,
+        parentId: task.parentId,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        type: task.type,
+        version: task.version,
+        assigneeUserId: task.assigneeUserId,
+        assigneeAgentName: task.assigneeAgentName,
+        agentBrief: task.agentBrief,
+        linkedPaths: task.linkedPaths,
+        githubIssueId: task.githubIssueId,
+        lockedBySessionId: task.lockedBySessionId,
+        lockExpiresAt: task.lockExpiresAt,
+        deletedAt: task.deletedAt,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert task returned no row");
     }
+    return toTask(row);
   }
 
   async listTasks(projectId: string): Promise<TaskRecord[]> {
@@ -1288,7 +1277,6 @@ export class DbAuthStore implements AuthStore {
             : {}),
           ...(patch.agentBrief !== undefined ? { agentBrief: patch.agentBrief } : {}),
           ...(patch.linkedPaths !== undefined ? { linkedPaths: patch.linkedPaths } : {}),
-          ...(patch.githubIssueId !== undefined ? { githubIssueId: patch.githubIssueId } : {}),
           ...(options?.releaseLock ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
           version: current.version + 1,
           updatedAt,
@@ -1303,11 +1291,6 @@ export class DbAuthStore implements AuthStore {
         return undefined;
       }
       return { task: toTask(row), lockReleased };
-    }).catch((error: unknown) => {
-      if (uniqueConstraint(error) === "github_issue") {
-        throw new UniqueViolationError("tasks_project_github_issue_id_unique");
-      }
-      throw error;
     });
   }
 
@@ -1606,7 +1589,7 @@ export class DbAuthStore implements AuthStore {
   }
 
   async insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
-    return insertConstraintTx(this.db, constraint);
+    return this.createConstraint(constraint);
   }
 
   async listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]> {
@@ -1728,42 +1711,35 @@ export class DbAuthStore implements AuthStore {
 
       const writes: IdempotentWrites = {
         createTask: async (task) => {
-          try {
-            const [row] = await tx
-              .insert(tasks)
-              .values({
-                id: task.id,
-                projectId: task.projectId,
-                milestoneId: task.milestoneId,
-                parentId: task.parentId,
-                title: task.title,
-                description: task.description,
-                status: task.status,
-                priority: task.priority,
-                type: task.type,
-                version: task.version,
-                assigneeUserId: task.assigneeUserId,
-                assigneeAgentName: task.assigneeAgentName,
-                agentBrief: task.agentBrief,
-                linkedPaths: task.linkedPaths,
-                githubIssueId: task.githubIssueId,
-                lockedBySessionId: task.lockedBySessionId,
-                lockExpiresAt: task.lockExpiresAt,
-                deletedAt: task.deletedAt,
-                createdAt: task.createdAt,
-                updatedAt: task.updatedAt,
-              })
-              .returning();
-            if (!row) {
-              throw new Error("insert task returned no row");
-            }
-            return toTask(row);
-          } catch (error) {
-            if (uniqueConstraint(error) === "github_issue") {
-              throw new UniqueViolationError("tasks_project_github_issue_id_unique");
-            }
-            throw error;
+          const [row] = await tx
+            .insert(tasks)
+            .values({
+              id: task.id,
+              projectId: task.projectId,
+              milestoneId: task.milestoneId,
+              parentId: task.parentId,
+              title: task.title,
+              description: task.description,
+              status: task.status,
+              priority: task.priority,
+              type: task.type,
+              version: task.version,
+              assigneeUserId: task.assigneeUserId,
+              assigneeAgentName: task.assigneeAgentName,
+              agentBrief: task.agentBrief,
+              linkedPaths: task.linkedPaths,
+              githubIssueId: task.githubIssueId,
+              lockedBySessionId: task.lockedBySessionId,
+              lockExpiresAt: task.lockExpiresAt,
+              deletedAt: task.deletedAt,
+              createdAt: task.createdAt,
+              updatedAt: task.updatedAt,
+            })
+            .returning();
+          if (!row) {
+            throw new Error("insert task returned no row");
           }
+          return toTask(row);
         },
         createComment: async (comment) => {
           const [row] = await tx
@@ -2141,7 +2117,26 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
-    return this.insertConstraint(constraint);
+    const [row] = await this.db
+      .insert(constraints)
+      .values({
+        id: constraint.id,
+        projectId: constraint.projectId,
+        kind: constraint.kind,
+        body: constraint.body,
+        scopePath: constraint.scopePath,
+        status: constraint.status,
+        createdAt: constraint.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert constraint returned no row");
+    }
+    const created = toConstraint(row);
+    if (!created) {
+      throw new Error("insert constraint returned invalid row");
+    }
+    return created;
   }
 
   async applyConstraint(id: string, appliedAt: Date): Promise<ConstraintRecord | undefined> {
@@ -2627,6 +2622,71 @@ export class DbAuthStore implements AuthStore {
       .returning();
     return row ? toProject(row) : undefined;
   }
+
+  async updateProjectRepoIndex(
+    id: string,
+    patch: { lastIndexedSha?: string | null; lastIndexedAt?: Date | null },
+  ): Promise<ProjectRepoRecord | undefined> {
+    const current = await this.findProjectRepoById(id);
+    if (!current) {
+      return undefined;
+    }
+    const [row] = await this.db
+      .update(projectRepos)
+      .set({
+        lastIndexedSha:
+          patch.lastIndexedSha === undefined ? current.lastIndexedSha : patch.lastIndexedSha,
+        lastIndexedAt:
+          patch.lastIndexedAt === undefined ? current.lastIndexedAt : patch.lastIndexedAt,
+      })
+      .where(eq(projectRepos.id, id))
+      .returning();
+    return row ? toProjectRepo(row) : undefined;
+  }
+
+  async upsertSidecarConnection(input: {
+    id: string;
+    repoId: string;
+    tokenId: string;
+    now: Date;
+  }): Promise<{
+    id: string;
+    repoId: string;
+    tokenId: string;
+    connectedAt: Date;
+    lastSeenAt: Date;
+  }> {
+    const existing = await this.findSidecarConnectionByRepoId(input.repoId);
+    if (existing) {
+      const [row] = await this.db
+        .update(sidecarConnections)
+        .set({ tokenId: input.tokenId, lastSeenAt: input.now })
+        .where(eq(sidecarConnections.id, existing.id))
+        .returning();
+      if (!row) {
+        throw new Error("update sidecar connection returned no row");
+      }
+      return toSidecar(row);
+    }
+    const [row] = await this.db
+      .insert(sidecarConnections)
+      .values({
+        id: input.id,
+        repoId: input.repoId,
+        tokenId: input.tokenId,
+        connectedAt: input.now,
+        lastSeenAt: input.now,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert sidecar connection returned no row");
+    }
+    return toSidecar(row);
+  }
+
+  async findSidecarConnectionByRepoId(
+    repoId: string,
+  ): Promise<
 }
 
 async function startWorkInTx(
@@ -2728,7 +2788,6 @@ async function startWorkInTx(
   return { session, stolenFrom };
 }
 
-
 type WriteTx = Pick<Db, "insert">;
 
 async function insertConstraintTx(
@@ -2816,5 +2875,21 @@ function toGithubSyncState(row: typeof githubSyncState.$inferSelect): GithubSync
     repoId: row.repoId,
     lastCursor: row.lastCursor,
     lastSyncedAt: row.lastSyncedAt,
+  };
+}
+
+function toSidecar(row: typeof sidecarConnections.$inferSelect): {
+  id: string;
+  repoId: string;
+  tokenId: string;
+  connectedAt: Date;
+  lastSeenAt: Date;
+} {
+  return {
+    id: row.id,
+    repoId: row.repoId,
+    tokenId: row.tokenId,
+    connectedAt: row.connectedAt,
+    lastSeenAt: row.lastSeenAt,
   };
 }

@@ -1,8 +1,16 @@
-import type { BriefHandoff, CompileInput } from "@beacon/api-spec";
+import type { BriefHandoff, ChangedScope, CompileInput, TreeCapsule } from "@beacon/api-spec";
 import { compileSessionBrief, type CompileResult } from "@beacon/context";
 import { uuidv7 } from "@beacon/shared";
 
 import type { AuthStore } from "../auth/store.js";
+import {
+  presentChangedScope,
+  presentTreeCapsule,
+  resolveRepoForCode,
+  taskChangedScopeQuery,
+  type CodeGateway,
+} from "../code/gateway.js";
+import type { TaskRecord } from "../roadmap/types.js";
 import { presentHandoff } from "../sessions/present.js";
 import {
   presentConstraint,
@@ -21,21 +29,27 @@ export async function compileProjectBrief(
     | "listActiveConstraints"
     | "listAcceptedDecisions"
     | "findLatestHandoffByTaskId"
+    | "findProjectRepoById"
+    | "listProjectRepos"
+    | "findProjectById"
   >,
   project: { id: string; name: string; slug: string },
   input: CompileInput,
   now: Date,
+  gateway?: CodeGateway,
 ): Promise<{ ok: true; compiled: CompileResult } | { ok: false; reason: "task_not_found" }> {
+  let task: TaskRecord | null = null;
   let taskSummary = null;
   let milestone = null;
   if (input.task_id) {
-    const task = await store.findTaskById(input.task_id);
-    if (!task || task.deletedAt || task.projectId !== project.id) {
+    const found = await store.findTaskById(input.task_id);
+    if (!found || found.deletedAt || found.projectId !== project.id) {
       return { ok: false, reason: "task_not_found" };
     }
-    taskSummary = presentTaskSummary(task);
-    if (task.milestoneId) {
-      const row = await store.findMilestoneById(task.milestoneId);
+    task = found;
+    taskSummary = presentTaskSummary(found);
+    if (found.milestoneId) {
+      const row = await store.findMilestoneById(found.milestoneId);
       if (row && row.projectId === project.id) {
         milestone = presentMilestoneBrief(row);
       }
@@ -56,6 +70,37 @@ export async function compileProjectBrief(
     }
   }
 
+  let changedScope: ChangedScope | null | undefined = input.extras?.changed_scope;
+  let treeCapsule: TreeCapsule | null | undefined = input.extras?.tree_capsule;
+  if (gateway && (changedScope === undefined || treeCapsule === undefined)) {
+    const resolved = await resolveRepoForCode(store, project.id, input.repo_id);
+    if (resolved.ok) {
+      if (treeCapsule === undefined && (input.include?.tree_capsule ?? true)) {
+        try {
+          const tree = await gateway.query(resolved.repo, {
+            kind: "tree",
+            path: input.path ?? ".",
+            depth: 2,
+          });
+          treeCapsule = presentTreeCapsule(resolved.repo.id, tree);
+        } catch {
+          treeCapsule = undefined;
+        }
+      }
+      if (changedScope === undefined && task && (input.include?.changed_scope ?? true)) {
+        try {
+          const scope = await gateway.query(
+            resolved.repo,
+            taskChangedScopeQuery(task, resolved.repo.id),
+          );
+          changedScope = presentChangedScope(resolved.repo.id, scope);
+        } catch {
+          changedScope = undefined;
+        }
+      }
+    }
+  }
+
   return {
     ok: true,
     compiled: compileSessionBrief(
@@ -64,6 +109,8 @@ export async function compileProjectBrief(
         extras: {
           ...input.extras,
           handoff: input.extras?.handoff ?? handoff,
+          changed_scope: changedScope,
+          tree_capsule: treeCapsule,
         },
       },
       {

@@ -166,10 +166,8 @@ async function requireTaskActor(
 }
 
 function actorActivity(actor: AuthActor): { actorType: string; actorId: string } {
-  if (actor.kind === "token") {
-    return { actorType: "token", actorId: actor.token.id };
-  }
-  return { actorType: "user", actorId: actor.user.id };
+  const ref = actorActivityRef(actor);
+  return { actorType: ref.type, actorId: ref.id };
 }
 
 function shouldReleaseLockOnTaskWrite(
@@ -252,11 +250,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/projects/:id/milestones", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -298,11 +292,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       sortOrder,
       createdAt: now,
     });
+    const actor = actorActivity(access.actor);
     await writeActivity(deps.store, {
       projectId: access.project.id,
       objectType: "milestone",
       objectId: milestone.id,
-      actorId: session.user.id,
+      actorId: actor.actorId,
+      actorType: actor.actorType,
       verb: "create",
       now,
     });

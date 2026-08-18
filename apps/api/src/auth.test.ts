@@ -26,6 +26,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     secureCookies: false,
     trustProxy: false,
     workerToken: undefined,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }
@@ -90,7 +92,11 @@ describe("POST /v1/auth/bootstrap", () => {
     });
     expect(second.res.status).toBe(409);
     expect(await second.res.json()).toEqual({
-      error: { code: "bootstrap_consumed", message: "bootstrap has already been consumed", details: {} },
+      error: {
+        code: "bootstrap_consumed",
+        message: "bootstrap has already been consumed",
+        details: {},
+      },
     });
   });
 
@@ -144,11 +150,16 @@ describe("POST /v1/auth/bootstrap", () => {
     expect(statuses).toEqual([200, 409]);
     const consumed = first.status === 409 ? first : second;
     expect(await consumed.json()).toEqual({
-      error: { code: "bootstrap_consumed", message: "bootstrap has already been consumed", details: {} },
+      error: {
+        code: "bootstrap_consumed",
+        message: "bootstrap has already been consumed",
+        details: {},
+      },
     });
-    expect(Boolean(await store.findUserByLogin("admin")) !== Boolean(await store.findUserByLogin("other"))).toBe(
-      true,
-    );
+    expect(
+      Boolean(await store.findUserByLogin("admin")) !==
+        Boolean(await store.findUserByLogin("other")),
+    ).toBe(true);
   });
 
   it("returns 400 without using forbidden for invalid bootstrap bodies", async () => {
@@ -571,6 +582,8 @@ describe("session ip metadata", () => {
       body: JSON.stringify({ login: "admin", password: STRONG_PASSWORD }),
     });
     const trustedToken = sessionCookie(trustedBoot);
-    expect((await trustedStore.findSessionByTokenHash(hashSessionToken(trustedToken!)))?.ip).toBe("203.0.113.9");
+    expect((await trustedStore.findSessionByTokenHash(hashSessionToken(trustedToken!)))?.ip).toBe(
+      "203.0.113.9",
+    );
   });
 });

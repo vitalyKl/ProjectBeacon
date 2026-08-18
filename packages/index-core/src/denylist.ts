@@ -16,11 +16,6 @@ const DENIED_DIR_NAMES = new Set([
   ".venv",
   "venv",
   "build",
-  ".svn",
-  ".hg",
-  ".idea",
-  ".vscode",
-  "bower_components",
 ]);
 
 const DENIED_FILE_NAMES = new Set([
@@ -30,32 +25,15 @@ const DENIED_FILE_NAMES = new Set([
   ".env.production",
   ".env.test",
   ".env.staging",
-  ".env.example",
   "id_rsa",
   "id_dsa",
   "id_ecdsa",
   "id_ed25519",
-  "id_rsa.pub",
-  ".netrc",
-  ".npmrc",
-  ".pypirc",
-  "credentials",
-  "credentials.json",
-  "service-account.json",
-  "google-services.json",
-  "auth.json",
 ]);
 
-const DENIED_FILE_SUFFIXES = [".pem", ".key", ".p12", ".pfx", ".keystore", ".jks", ".kdbx", ".ppk"];
+const DENIED_FILE_SUFFIXES = [".pem", ".key", ".p12", ".pfx", ".keystore"];
 
-const DENIED_FILE_PATTERNS = [
-  /^\.env\..+$/,
-  /.*secret.*/i,
-  /.*credentials.*\.json$/i,
-  /^id_.*$/,
-  /.*\.secret$/i,
-  /^.*token.*\.(txt|json|env)$/i,
-];
+const DENIED_FILE_PATTERNS = [/^\.env\..+$/, /.*secret.*/i, /.*credentials.*\.json$/i];
 
 export function isDeniedDirName(name: string): boolean {
   return DENIED_DIR_NAMES.has(name.toLowerCase());

@@ -36,6 +36,9 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
         index_mode: "bind_mount",
       };
     },
+    async reportIndex() {
+      return {};
+    },
     async importContext(projectId, repoId, files) {
       imports.push({ projectId, repoId, files });
       return {};

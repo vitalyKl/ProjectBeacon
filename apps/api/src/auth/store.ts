@@ -245,6 +245,19 @@ export interface AuthStore {
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined>;
   listDependencies(projectId: string): Promise<(TaskDependencyRecord & { createdAt: Date })[]>;
+  updateProjectRepoIndex(
+    id: string,
+    patch: { lastIndexedSha?: string | null; lastIndexedAt?: Date | null },
+  ): Promise<ProjectRepoRecord | undefined>;
+  upsertSidecarConnection(input: {
+    id: string;
+    repoId: string;
+    tokenId: string;
+    now: Date;
+  }): Promise<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>;
+  findSidecarConnectionByRepoId(
+    repoId: string,
+  ): Promise<
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -632,6 +645,7 @@ export class MemoryAuthStore implements AuthStore {
         role: "admin",
         createdAt: project.createdAt,
       });
+      this.seedDefaultSecurityConstraints(project.id, project.createdAt);
       return cloneProject(project);
     });
   }
@@ -1205,12 +1219,10 @@ export class MemoryAuthStore implements AuthStore {
       const writes: IdempotentWrites = {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
+        createDecision: async (decision) => this.insertDecisionUnlocked(decision),
+        createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
         startWork: async (input) => this.startWorkUnlocked(input),
-        createMilestone: async (milestone) => {
-          this.milestones.set(milestone.id, cloneMilestone(milestone));
-          return cloneMilestone(milestone);
-        },
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1899,6 +1911,63 @@ export class MemoryAuthStore implements AuthStore {
     }
     return result;
   }
+  private readonly sidecarConnections = new Map<
+
+  async updateProjectRepoIndex(
+    id: string,
+    patch: { lastIndexedSha?: string | null; lastIndexedAt?: Date | null },
+  ): Promise<ProjectRepoRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const repo = this.projectRepos.get(id);
+      if (!repo) {
+        return undefined;
+      }
+      if (patch.lastIndexedSha !== undefined) {
+        repo.lastIndexedSha = patch.lastIndexedSha;
+      }
+      if (patch.lastIndexedAt !== undefined) {
+        repo.lastIndexedAt = patch.lastIndexedAt ? new Date(patch.lastIndexedAt) : null;
+      }
+      return cloneProjectRepo(repo);
+    });
+  }
+
+  async upsertSidecarConnection(input: {
+    id: string;
+    repoId: string;
+    tokenId: string;
+    now: Date;
+  }): Promise<{
+    id: string;
+    repoId: string;
+    tokenId: string;
+    connectedAt: Date;
+    lastSeenAt: Date;
+  }> {
+    return this.enqueueWrite(() => {
+      const existing = [...this.sidecarConnections.values()].find(
+        (row) => row.repoId === input.repoId,
+      );
+      if (existing) {
+        existing.tokenId = input.tokenId;
+        existing.lastSeenAt = new Date(input.now);
+        return cloneSidecar(existing);
+      }
+      const created = {
+        id: input.id,
+        repoId: input.repoId,
+        tokenId: input.tokenId,
+        connectedAt: new Date(input.now),
+        lastSeenAt: new Date(input.now),
+      };
+      this.sidecarConnections.set(created.id, created);
+      return cloneSidecar(created);
+    });
+  }
+
+  async findSidecarConnectionByRepoId(
+    repoId: string,
+  ): Promise<
     string,
     { response: unknown; createdAt: Date }
   >();
@@ -1946,7 +2015,8 @@ function cloneConstraint(constraint: ConstraintRecord): ConstraintRecord {
 function cloneDecision(decision: DecisionRecord): DecisionRecord {
   return {
     ...decision,
-    relatedPaths: [...decision.relatedPaths],
+    relatedPaths: decision.relatedPaths.map((path) => ({ ...path })),
+    relatedTaskIds: [...decision.relatedTaskIds],
     createdAt: new Date(decision.createdAt),
   };
 }
@@ -2038,4 +2108,18 @@ function assertUniqueGithubIssue(
       throw new UniqueViolationError("tasks_project_github_issue_id_unique");
     }
   }
+}
+
+function cloneSidecar(row: {
+  id: string;
+  repoId: string;
+  tokenId: string;
+  connectedAt: Date;
+  lastSeenAt: Date;
+}): { id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date } {
+  return {
+    ...row,
+    connectedAt: new Date(row.connectedAt),
+    lastSeenAt: new Date(row.lastSeenAt),
+  };
 }

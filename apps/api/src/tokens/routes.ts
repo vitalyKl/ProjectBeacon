@@ -142,7 +142,9 @@ export function mountTokens(app: Hono, deps: AuthDeps): void {
     if (isResponse(access)) {
       return access;
     }
-    const items = (await deps.store.listApprovals(access.project.id, "pending")).map(presentApproval);
+    const items = (await deps.store.listApprovals(access.project.id, "pending")).map(
+      presentApproval,
+    );
     return c.json({ items, next_cursor: null });
   });
 
@@ -172,7 +174,9 @@ export function mountTokens(app: Hono, deps: AuthDeps): void {
     } else {
       const session = await deps.store.findAgentSessionById(sessionIdRaw);
       if (!session || session.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid session_id", { reason: "invalid_session" });
+        return errorJson(c, 400, "unauthorized", "invalid session_id", {
+          reason: "invalid_session",
+        });
       }
       sessionId = session.id;
     }

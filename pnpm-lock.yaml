@@ -53,6 +53,9 @@ importers:
       '@beacon/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@beacon/index-core':
+        specifier: workspace:*
+        version: link:../../packages/index-core
       '@beacon/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -96,6 +99,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@beacon/index-core':
+        specifier: workspace:*
+        version: link:../../packages/index-core
       '@beacon/mcp-tools':
         specifier: workspace:*
         version: link:../../packages/mcp-tools
@@ -207,6 +213,9 @@ importers:
       '@beacon/context':
         specifier: workspace:*
         version: link:../../packages/context
+      '@beacon/index-core':
+        specifier: workspace:*
+        version: link:../../packages/index-core
       pg-boss:
         specifier: ^10.4.2
         version: 10.4.2

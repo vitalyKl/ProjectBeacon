@@ -19,6 +19,7 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
+    "@beacon/index-core": "workspace:*",
     "@beacon/mcp-tools": "workspace:*",
     "@beacon/shared": "workspace:*",
     "tsx": "^4.21.0"

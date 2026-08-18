@@ -6,9 +6,7 @@ export type GithubProfile = {
   avatarUrl: string | null;
 };
 
-export type GithubExchangeResult =
-  | { ok: true; profile: GithubProfile }
-  | { ok: false };
+export type GithubExchangeResult = { ok: true; profile: GithubProfile } | { ok: false };
 
 export async function exchangeGithubCode(
   code: string,

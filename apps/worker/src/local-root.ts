@@ -8,6 +8,9 @@ export function parseLocalRootHint(value: string): string | undefined {
   if (trimmed.startsWith("/") || /^[A-Za-z]:/.test(trimmed)) {
     return undefined;
   }
+  if (trimmed === ".") {
+    return ".";
+  }
   const parts = trimmed.split("/");
   if (parts.some((part) => part === "" || part === "." || part === "..")) {
     return undefined;

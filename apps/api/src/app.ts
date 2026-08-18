@@ -17,6 +17,7 @@ import { mountTokenProbe, mountTokens } from "./tokens/routes.js";
 import { mountDecisions } from "./context/decisions.js";
 import { mountJobs } from "./jobs/routes.js";
 import { mountGithub } from "./github/routes.js";
+import { createCodeGateway, type CodeGateway } from "./code/gateway.js";
 
 export const packageName = "@beacon/api";
 
@@ -33,6 +34,7 @@ export type CreateAppOptions = {
   rateLimits?: RateLimitConfig;
   enableTokenProbe?: boolean;
   jobs?: JobQueue;
+  codeGateway?: CodeGateway;
 };
 
 function resolveStore(options: CreateAppOptions): AuthStore {
@@ -71,16 +73,21 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     githubFetch: options.githubFetch ?? fetch,
     rateLimits: options.rateLimits ?? DEFAULT_RATE_LIMITS,
   };
+  const codeGateway =
+    options.codeGateway ??
+    createCodeGateway({
+      config: authDeps.config,
+      store: authDeps.store,
+      now: () => authDeps.clock.now(),
+    });
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);
   mountRoadmap(app, authDeps);
-  mountContext(app, authDeps);
+  mountContext(app, { ...authDeps, codeGateway });
   mountDecisions(app, authDeps);
   mountTokens(app, authDeps);
-  mountSessions(app, authDeps);
-  const jobs = options.jobs ?? new MemoryJobQueue();
-  mountRepos(app, { ...authDeps, jobs });
-  mountGithub(app, { ...authDeps, jobs });
+  mountSessions(app, { ...authDeps, codeGateway });
+  mountRepos(app, { ...authDeps, jobs: options.jobs ?? new MemoryJobQueue(), codeGateway });
   if (options.enableTokenProbe) {
     mountTokenProbe(app, authDeps);
   }

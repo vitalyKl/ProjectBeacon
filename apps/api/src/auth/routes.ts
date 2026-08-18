@@ -61,7 +61,10 @@ function requestIp(c: Context, trustProxy: boolean): string | null {
   return null;
 }
 
-function requestMeta(c: Context, trustProxy: boolean): { userAgent: string | null; ip: string | null } {
+function requestMeta(
+  c: Context,
+  trustProxy: boolean,
+): { userAgent: string | null; ip: string | null } {
   return {
     userAgent: c.req.header("user-agent") ?? null,
     ip: requestIp(c, trustProxy),
@@ -97,14 +100,15 @@ function newLocalUser(now: Date, login: string, passwordHash: string): UserRecor
   };
 }
 
-async function establishSession(
-  c: Context,
-  deps: AuthDeps,
-  user: UserRecord,
-): Promise<Response> {
+async function establishSession(c: Context, deps: AuthDeps, user: UserRecord): Promise<Response> {
   const now = deps.clock.now();
   await deps.store.ensurePersonalOrg(user, now);
-  const { token } = await issueSession(deps.store, user, now, requestMeta(c, deps.config.trustProxy));
+  const { token } = await issueSession(
+    deps.store,
+    user,
+    now,
+    requestMeta(c, deps.config.trustProxy),
+  );
   writeSessionCookie(c, token, deps.config.secureCookies);
   return c.json(toPublicUser(user));
 }

@@ -11,6 +11,7 @@ import { presentConstraint, presentContextNode, presentDecision, presentMileston
 import { compileProjectBrief } from "./compile-brief.js";
 import { type ContextNodeRecord, isContextReviewState, isContextScopeType, type ContextReviewState, type ContextScopeType } from "./types.js";
 import { requireProjectActor } from "../auth/access.js";
+import type { CodeGateway } from "../code/gateway.js";
 
 const MAX_IMPORT_FILES = 200;
 const MAX_IMPORT_PATH = 1024;
@@ -71,7 +72,241 @@ async function resolveRepoId(
   return { ok: false, reason: "ambiguous" };
 }
 
-export function mountContext(app: Hono, deps: AuthDeps): void {
+export function mountContext(app: Hono, deps: ContextDeps): void {
+  app.get("/v1/projects/:id/context/nodes", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    const page = parsePageQuery(c);
+    if (page instanceof Response) {
+      return page;
+    }
+    const records = await deps.store.listContextNodes(access.project.id);
+    const result = paginateRecords(records, page, (item) => item.updatedAt);
+    const items = await Promise.all(
+      result.items.map(async (node) =>
+        presentContextNode(
+          node,
+          node.updatedByType === "user"
+            ? await deps.store.findUserById(node.updatedById)
+            : undefined,
+        ),
+      ),
+    );
+    return c.json({ items, next_cursor: result.next_cursor });
+  });
+
+  app.post("/v1/projects/:id/context/import", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    if (isResponse(access)) {
+      return access;
+    }
+
+    const files = parseImportFilesBody(await readJson(c));
+    if (!files) {
+      return errorJson(c, 400, "unauthorized", "files is required", { reason: "invalid_body" });
+    }
+
+    const repoQuery = c.req.query("repo_id");
+    const resolved = await resolveRepoId(deps, access.project.id, repoQuery);
+    if (!resolved.ok) {
+      if (resolved.reason === "ambiguous") {
+        return errorJson(
+          c,
+          400,
+          "repo_ambiguous",
+          "repo_id is required when the project has multiple repos",
+        );
+      }
+      return errorJson(c, 404, "not_found", "repo not found");
+    }
+
+    const parsed = parseImportFiles(files);
+    const mergedIncoming = new Map<string, (typeof parsed.nodes)[number]>();
+    for (const incoming of parsed.nodes) {
+      const repoId = incoming.scope_type === "project" ? null : resolved.repoId;
+      const key = `${incoming.scope_type}:${repoId ?? ""}:${incoming.path}`;
+      const existing = mergedIncoming.get(key);
+      if (!existing) {
+        mergedIncoming.set(key, {
+          ...incoming,
+          sections: incoming.sections.map((section) => ({ ...section })),
+        });
+        continue;
+      }
+      existing.sections = mergeSections([
+        {
+          id: "existing",
+          project_id: access.project.id,
+          repo_id: repoId,
+          task_id: null,
+          scope_type: incoming.scope_type,
+          path: incoming.path,
+          sections: existing.sections,
+        },
+        {
+          id: "incoming",
+          project_id: access.project.id,
+          repo_id: repoId,
+          task_id: null,
+          scope_type: incoming.scope_type,
+          path: incoming.path,
+          sections: incoming.sections,
+        },
+      ]);
+      existing.source_path = incoming.source_path;
+      existing.source = incoming.source;
+    }
+
+    const existingNodes = await deps.store.listContextNodes(access.project.id);
+    const now = deps.clock.now();
+    const nodes = [];
+    let ordinal = 0;
+    for (const incoming of mergedIncoming.values()) {
+      const repoId = incoming.scope_type === "project" ? null : resolved.repoId;
+      const prior = existingNodes.find(
+        (node) =>
+          node.scopeType === incoming.scope_type &&
+          node.repoId === repoId &&
+          node.path === incoming.path &&
+          node.taskId === null,
+      );
+      const sections = prior
+        ? mergeSections([
+            {
+              id: prior.id,
+              project_id: access.project.id,
+              repo_id: repoId,
+              task_id: null,
+              scope_type: incoming.scope_type,
+              path: incoming.path,
+              sections: prior.sections,
+            },
+            {
+              id: "incoming",
+              project_id: access.project.id,
+              repo_id: repoId,
+              task_id: null,
+              scope_type: incoming.scope_type,
+              path: incoming.path,
+              sections: incoming.sections,
+            },
+          ])
+        : incoming.sections;
+      const stored = await deps.store.upsertContextNode({
+        id: uuidv7(now.getTime() + ordinal),
+        projectId: access.project.id,
+        repoId,
+        taskId: null,
+        scopeType: incoming.scope_type,
+        path: incoming.path,
+        sections,
+        sectionsText: sectionsText(sections),
+        source: incoming.source,
+        sourcePath: incoming.source_path,
+        reviewState: "needs_review",
+        updatedByType:
+          access.actor.kind === "user"
+            ? "user"
+            : access.actor.kind === "token"
+              ? "token"
+              : "system",
+        updatedById:
+          access.actor.kind === "user"
+            ? access.actor.user.id
+            : access.actor.kind === "token"
+              ? access.actor.token.id
+              : "worker",
+        updatedAt: now,
+      });
+      nodes.push(stored);
+      ordinal += 1;
+    }
+
+    let ownersWritten = 0;
+    if (resolved.repoId && parsed.code_owners.length > 0) {
+      const written = await deps.store.upsertCodeOwners(
+        resolved.repoId,
+        parsed.code_owners.map((row, index) => ({
+          id: uuidv7(now.getTime() + 1_000 + index),
+          repoId: resolved.repoId!,
+          pathPattern: row.path_pattern,
+          owners: row.owners,
+          source: row.source,
+        })),
+      );
+      ownersWritten = written.length;
+    }
+
+    const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
+    return c.json({
+      nodes: await Promise.all(nodes.map(async (node) => presentContextNode(node, actorUser))),
+      code_owners_written: ownersWritten,
+    });
+  });
+
+  app.get("/v1/projects/:id/context/export/agents-md", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
+      return access;
+    }
+
+    const path = c.req.query("path") ?? "";
+    if (path.length > MAX_IMPORT_PATH) {
+      return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+    }
+    const resolved = await resolveRepoId(deps, access.project.id, c.req.query("repo_id"));
+    if (!resolved.ok) {
+      if (resolved.reason === "ambiguous") {
+        return errorJson(
+          c,
+          400,
+          "repo_ambiguous",
+          "repo_id is required when the project has multiple repos",
+        );
+      }
+      return errorJson(c, 404, "not_found", "repo not found");
+    }
+
+    const nodes = await deps.store.listContextNodes(access.project.id);
+    const wantedScope = path ? "path" : resolved.repoId ? "repo" : "project";
+    const exact =
+      nodes.find(
+        (node) =>
+          node.scopeType === wantedScope &&
+          node.repoId === resolved.repoId &&
+          node.path === path &&
+          node.taskId === null,
+      ) ??
+      (wantedScope === "project"
+        ? nodes.find(
+            (node) =>
+              node.scopeType === "repo" &&
+              node.repoId === null &&
+              node.path === "" &&
+              node.taskId === null,
+          )
+        : undefined);
+    const selected = exact
+      ? [toCompileNode(exact)]
+      : selectNodes(nodes.map(toCompileNode), {
+          project_id: access.project.id,
+          repo_id: resolved.repoId ?? undefined,
+          path,
+        });
+    const sections = mergeSections(selected);
+    const latest = (await deps.store.listContextRevisions(access.project.id))[0];
+    const markdown = exportAgentsMd({
+      revision: latest?.id ?? "uncompiled",
+      scope: { repo_id: resolved.repoId, path },
+      sections,
+    });
+    return c.text(markdown, 200, {
+      "content-type": "text/markdown; charset=utf-8",
+    });
+  });
+
   app.post("/v1/projects/:id/context/compile", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
@@ -94,27 +329,33 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     }
 
     const now = deps.clock.now();
-    const compiled = await compileProjectBrief(deps.store, access.project, input, now);
+    const compiled = await compileProjectBrief(
+      deps.store,
+      access.project,
+      input,
+      now,
+      deps.codeGateway,
+    );
     if (!compiled.ok) {
       return errorJson(c, 404, "not_found", "task not found");
     }
-    const { compiled: result } = compiled;
 
+    const brief = compiled.compiled.brief;
     await deps.store.insertContextRevision({
-      id: result.brief.revision_id,
+      id: brief.revision_id,
       projectId: access.project.id,
-      compiledHash: result.brief.compiled_hash,
-      compilerVersion: result.brief.compiler_version,
-      target: result.brief.target,
-      briefMarkdown: result.markdown,
-      briefJson: result.brief as unknown as Record<string, unknown>,
-      tokenEstimate: result.brief.budget.used_estimate,
-      sourceNodeIds: result.brief.sources.map((source) => source.node_id),
+      compiledHash: brief.compiled_hash,
+      compilerVersion: brief.compiler_version,
+      target: brief.target,
+      briefMarkdown: compiled.compiled.markdown,
+      briefJson: brief as unknown as Record<string, unknown>,
+      tokenEstimate: brief.budget.used_estimate,
+      sourceNodeIds: brief.sources.map((source) => source.node_id),
       sessionId: null,
       createdAt: now,
     });
 
-    return c.json(result.brief);
+    return c.json(brief);
   });
 
   app.get("/v1/projects/:id/context/search", async (c) => {
@@ -122,16 +363,33 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     if (isResponse(access)) {
       return access;
     }
+
     const q = c.req.query("q")?.trim() ?? "";
-    if (q.length === 0) {
+    if (!q) {
       return errorJson(c, 400, "unauthorized", "q is required", { reason: "invalid_query" });
     }
-    const limit = parseSearchLimit(c.req.query("limit"));
-    if (limit === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+    const limitRaw = c.req.query("limit");
+    let limit = PAGINATION_DEFAULT_LIMIT;
+    if (limitRaw !== undefined) {
+      if (!/^[0-9]+$/.test(limitRaw)) {
+        return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+      }
+      const parsed = Number(limitRaw);
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
+        return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+      }
+      limit = parsed;
     }
+
+    const needle = q.toLowerCase();
     const nodes = await deps.store.listContextNodes(access.project.id);
-    const items = nodes.filter((node) => nodeMatchesQuery(node, q)).slice(0, limit).map(toCompileNode);
+    const items = nodes
+      .filter((node) => {
+        const haystack = `${node.path}\n${node.sectionsText}`.toLowerCase();
+        return haystack.includes(needle);
+      })
+      .slice(0, limit)
+      .map((node) => presentContextNode(node));
     return c.json({ items, next_cursor: null });
   });
 }
@@ -264,3 +522,7 @@ function nodeMatchesQuery(
       section.body_md.toLowerCase().includes(needle),
   );
 }
+
+export type ContextDeps = AuthDeps & {
+  codeGateway?: CodeGateway;
+};

@@ -105,6 +105,27 @@ export interface SearchContentOptions {
 export interface GetSymbolOptions {
   name: string;
   path?: string;
+  kind?: string;
+}
+
+export type SearchMode = "symbol" | "content" | "path" | "auto";
+
+export interface SearchCodeOptions {
+  q: string;
+  mode?: SearchMode;
+  lang?: string;
+  pathPrefix?: string;
+  limit?: number;
+}
+
+export type SearchCodeHit =
+  | { kind: "symbol"; symbol: SymbolRecord }
+  | { kind: "content"; hit: ContentHit }
+  | { kind: "path"; path: string };
+
+export interface SearchCodeResult {
+  mode: SearchMode;
+  items: SearchCodeHit[];
 }
 
 export interface GetRelatedFilesOptions {

@@ -1,8 +1,9 @@
 import type { InvokeContext } from "@beacon/mcp-tools";
 
-import { unavailableCodeSource } from "./code-source.js";
 import { CONNECT_USAGE, connect } from "./connect.js";
 import { readConfigFile, resolveRuntimeConfig } from "./config.js";
+import { createLocalCodeSource } from "./local-code.js";
+import { startSidecar } from "./sidecar.js";
 import { serveStdio } from "./stdio.js";
 
 export const USAGE = `Usage: beacon <command>
@@ -10,6 +11,7 @@ export const USAGE = `Usage: beacon <command>
 Commands:
   connect <token> --project <id>   Save a project token minted in Beacon
   mcp                              Start the stdio MCP server
+  sidecar                          Start the local code index sidecar
   help                             Show this help
 
 Options:
@@ -29,6 +31,8 @@ export type RunCliOptions = {
   io?: CliIo;
   fetchImpl?: typeof fetch;
   serve?: typeof serveStdio;
+  cwd?: string;
+  startSidecar?: typeof startSidecar;
 };
 
 export function parseConnectArgs(args: string[]): {
@@ -69,6 +73,7 @@ async function loadRuntime(env: NodeJS.ProcessEnv) {
 async function buildInvokeContext(
   env: NodeJS.ProcessEnv,
   fetchImpl: typeof fetch | undefined,
+  cwd: string,
 ): Promise<{ ok: true; ctx: InvokeContext } | { ok: false; message: string }> {
   const runtime = await loadRuntime(env);
   if (!runtime.token || !runtime.project_id) {
@@ -85,15 +90,44 @@ async function buildInvokeContext(
       token: runtime.token,
       projectId: runtime.project_id,
       fetch: fetchImpl,
-      codeSource: unavailableCodeSource(),
+      codeSource: createLocalCodeSource({
+        cwd,
+        home: runtime.home,
+        map: { roots: {} },
+      }),
     },
   };
+}
+
+async function autoStartSidecar(
+  options: RunCliOptions,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+): Promise<void> {
+  const runtime = await loadRuntime(env);
+  if (!runtime.token || !runtime.project_id) {
+    return;
+  }
+  const start = options.startSidecar ?? startSidecar;
+  try {
+    await start({
+      home: runtime.home,
+      cwd,
+      url: runtime.url,
+      token: runtime.token,
+      projectId: runtime.project_id,
+      fetchImpl: options.fetchImpl,
+    });
+  } catch {
+    // sidecar is best-effort next to connect/mcp
+  }
 }
 
 export async function runCli(options: RunCliOptions = {}): Promise<number> {
   const argv = options.argv ?? process.argv.slice(2);
   const env = options.env ?? process.env;
   const io = options.io ?? { stdout: process.stdout, stderr: process.stderr };
+  const cwd = options.cwd ?? process.cwd();
   const [command, ...rest] = argv;
 
   if (!command || command === "help" || command === "--help" || command === "-h") {
@@ -111,6 +145,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
       fetchImpl: options.fetchImpl,
     });
     if (result.ok) {
+      await autoStartSidecar(options, env, cwd);
       io.stdout.write(`${result.message}\n`);
       return 0;
     }
@@ -124,13 +159,35 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
   }
 
   if (command === "mcp") {
-    const loaded = await buildInvokeContext(env, options.fetchImpl);
+    const loaded = await buildInvokeContext(env, options.fetchImpl, cwd);
     if (!loaded.ok) {
       io.stderr.write(`${loaded.message}\n`);
       return 1;
     }
+    await autoStartSidecar(options, env, cwd);
     const serve = options.serve ?? serveStdio;
     await serve({ ctx: loaded.ctx });
+    return 0;
+  }
+
+  if (command === "sidecar") {
+    const runtime = await loadRuntime(env);
+    if (!runtime.token || !runtime.project_id) {
+      io.stderr.write(
+        "Not connected. Run beacon connect <token> --project <id> with a project token minted in Beacon.\n",
+      );
+      return 1;
+    }
+    const start = options.startSidecar ?? startSidecar;
+    const started = await start({
+      home: runtime.home,
+      cwd,
+      url: runtime.url,
+      token: runtime.token,
+      projectId: runtime.project_id,
+      fetchImpl: options.fetchImpl,
+    });
+    io.stdout.write(`Sidecar listening on ${started.host}:${started.port}\n`);
     return 0;
   }
 

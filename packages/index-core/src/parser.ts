@@ -3,7 +3,13 @@ import JavaScript from "tree-sitter-javascript";
 import Python from "tree-sitter-python";
 import TypeScript from "tree-sitter-typescript";
 import { hasSymbolGrammar } from "./languages.js";
-import type { ExtractedImport, ExtractedSymbol, LanguageId, ParseResult, TreeSitterParser } from "./types.js";
+import type {
+  ExtractedImport,
+  ExtractedSymbol,
+  LanguageId,
+  ParseResult,
+  TreeSitterParser,
+} from "./types.js";
 
 type SyntaxNode = Parser.SyntaxNode;
 
@@ -149,7 +155,9 @@ function extractPython(root: SyntaxNode): ParseResult {
     if (node.type === "import_statement" || node.type === "import_from_statement") {
       const moduleNode =
         node.childForFieldName("module_name") ??
-        node.namedChildren.find((child) => child.type === "dotted_name" || child.type === "relative_import");
+        node.namedChildren.find(
+          (child) => child.type === "dotted_name" || child.type === "relative_import",
+        );
       if (moduleNode) {
         imports.push({ toSpec: moduleNode.text });
       }

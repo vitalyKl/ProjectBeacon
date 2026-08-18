@@ -43,6 +43,10 @@ export type GithubIssueView = {
 
 export type WorkerApi = {
   getRepo(repoId: string): Promise<RepoView>;
+  reportIndex(
+    repoId: string,
+    body: { last_indexed_sha?: string | null; last_indexed_at?: string | null },
+  ): Promise<unknown>;
   importContext(
     projectId: string,
     repoId: string,
@@ -180,6 +184,9 @@ export function createWorkerApi(options: {
   return {
     getRepo(repoId) {
       return request<RepoView>("GET", `/v1/repos/${repoId}`);
+    },
+    reportIndex(repoId, body) {
+      return request("POST", `/v1/repos/${repoId}/index`, { body });
     },
     importContext(projectId, repoId, files) {
       return request("POST", `/v1/projects/${projectId}/context/import?repo_id=${repoId}`, {

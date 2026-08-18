@@ -1,8 +1,10 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Hono, Context } from "hono";
-import { authorizeProjectActor, isAdminActor, requireActor, requireProjectActor } from "../auth/access.js";
+import { authorizeProjectActor, isAdminActor, requireActor, requireProjectActor, actorHasCapability } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { ProjectNotFoundError, UniqueViolationError } from "../auth/store.js";
+import { enforceRateLimit } from "../auth/rate-limit.js";
+import { CodeGatewayError, SIDECAR_SEEN_MS, createCodeGateway, taskChangedScopeQuery, type CodeGateway, type CodeQuery } from "../code/gateway.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -50,7 +52,160 @@ export function parseBindMountHint(value: unknown): string | undefined {
   return parts.join("/");
 }
 
+function parseOptionalBigInt(value: unknown): bigint | null | undefined {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    return BigInt(value);
+  }
+  return undefined;
+}
+
+export type RepoDeps = AuthDeps & {
+  jobs: JobQueue;
+  codeGateway?: CodeGateway;
+};
+
+async function loadAuthorizedRepo(
+  c: Context,
+  deps: RepoDeps,
+  needed: "project:read" | "project:write" | "code:read",
+) {
+  const id = c.req.param("id");
+  if (!id || !isUuid(id)) {
+    return errorJson(c, 404, "not_found", "repo not found");
+  }
+  const repo = await deps.store.findProjectRepoById(id);
+  if (!repo) {
+    return errorJson(c, 404, "not_found", "repo not found");
+  }
+  const access = await requireProjectActor(c, deps, repo.projectId, needed);
+  if (isResponse(access)) {
+    if (access.status === 404) {
+      return errorJson(c, 404, "not_found", "repo not found");
+    }
+    return access;
+  }
+  return { ...access, repo };
+}
+
+async function repoStatusExtras(deps: RepoDeps, repo: ProjectRepoRecord, gateway: CodeGateway) {
+  const sidecar = await deps.store.findSidecarConnectionByRepoId(repo.id);
+  const sidecarConnected = Boolean(
+    sidecar && deps.clock.now().getTime() - sidecar.lastSeenAt.getTime() <= SIDECAR_SEEN_MS,
+  );
+  const workerIndexConnected =
+    repo.indexMode === "bind_mount" ||
+    repo.indexMode === "hosted_clone" ||
+    repo.indexMode === "both"
+      ? await gateway.health(repo)
+      : false;
+  return { sidecarConnected, workerIndexConnected };
+}
+
+function parsePositiveInt(
+  value: string | undefined,
+  fallback?: number,
+): number | undefined | "invalid" {
+  if (value === undefined || value === "") {
+    return fallback;
+  }
+  if (!/^[0-9]+$/.test(value)) {
+    return "invalid";
+  }
+  return Number(value);
+}
+
+function gatewayError(c: Context, error: unknown): Response {
+  if (error instanceof CodeGatewayError) {
+    return errorJson(
+      c,
+      error.status as 400 | 401 | 403 | 404 | 415 | 429 | 503,
+      error.code as "unauthorized" | "not_found" | "unsupported_media" | "code_index_unavailable",
+      error.messageText,
+      error.details,
+    );
+  }
+  throw error;
+}
+
+async function runCodeQuery(
+  c: Context,
+  deps: RepoDeps,
+  repo: ProjectRepoRecord,
+  actor: { kind: "user" | "token" | "worker"; id: string },
+  query: CodeQuery,
+  gateway: CodeGateway,
+): Promise<Response> {
+  const now = deps.clock.now();
+  const limited = await enforceRateLimit(
+    c,
+    deps.store,
+    actor.kind === "user" ? "user" : "token",
+    actor.id,
+    deps.rateLimits,
+    now,
+    "code",
+  );
+  if (limited) {
+    return limited;
+  }
+  try {
+    const result = await gateway.query(repo, query);
+    if (query.kind === "file") {
+      const bytes =
+        result !== null && typeof result === "object" && "bytes" in result
+          ? Number((result as { bytes?: unknown }).bytes ?? 0)
+          : 0;
+      const byteLimit = await enforceRateLimit(
+        c,
+        deps.store,
+        actor.kind === "user" ? "user" : "token",
+        actor.id,
+        deps.rateLimits,
+        now,
+        "bytes",
+        { bytes },
+      );
+      if (byteLimit) {
+        return byteLimit;
+      }
+    }
+    return c.json(result);
+  } catch (error) {
+    return gatewayError(c, error);
+  }
+}
+
+function actorRateRef(actor: Awaited<ReturnType<typeof requireActor>>): {
+  kind: "user" | "token";
+  id: string;
+} {
+  if (actor instanceof Response) {
+    return { kind: "token", id: "unknown" };
+  }
+  if (actor.kind === "user") {
+    return { kind: "user", id: actor.user.id };
+  }
+  if (actor.kind === "token") {
+    return { kind: "token", id: actor.token.id };
+  }
+  return { kind: "token", id: "00000000-0000-0000-0000-000000000001" };
+}
+
 export function mountRepos(app: Hono, deps: RepoDeps): void {
+  const gateway =
+    deps.codeGateway ??
+    createCodeGateway({
+      config: deps.config,
+      store: deps.store,
+      now: () => deps.clock.now(),
+    });
+
   app.get("/v1/projects/:id/repos", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
@@ -155,19 +310,263 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
   });
 
   app.get("/v1/repos/:id", async (c) => {
-    const id = c.req.param("id");
-    if (!isUuid(id)) {
-      return errorJson(c, 404, "not_found", "repo not found");
+    const loaded = await loadAuthorizedRepo(c, deps, "project:read");
+    if (isResponse(loaded)) {
+      return loaded;
     }
-    const repo = await deps.store.findProjectRepoById(id);
-    if (!repo) {
-      return errorJson(c, 404, "not_found", "repo not found");
+    return c.json(
+      presentProjectRepo(loaded.repo, await repoStatusExtras(deps, loaded.repo, gateway)),
+    );
+  });
+
+  app.post("/v1/repos/:id/index", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "project:write");
+    if (isResponse(loaded)) {
+      return loaded;
     }
-    const access = await requireProjectActor(c, deps, repo.projectId, "project:read");
+    if (loaded.actor.kind !== "worker") {
+      return errorJson(c, 403, "forbidden", "insufficient token scope");
+    }
+    const body = await readObject(c);
+    const sha =
+      body?.["last_indexed_sha"] === undefined || body["last_indexed_sha"] === null
+        ? body?.["last_indexed_sha"] === null
+          ? null
+          : undefined
+        : parseOptionalString(body["last_indexed_sha"], 128);
+    const atRaw = body?.["last_indexed_at"];
+    let lastIndexedAt: Date | null | undefined;
+    if (atRaw === undefined) {
+      lastIndexedAt = deps.clock.now();
+    } else if (atRaw === null) {
+      lastIndexedAt = null;
+    } else if (typeof atRaw === "string") {
+      const parsed = new Date(atRaw);
+      lastIndexedAt = Number.isNaN(parsed.getTime()) ? undefined : parsed;
+    }
+    if (
+      sha === undefined &&
+      body?.["last_indexed_sha"] !== undefined &&
+      body["last_indexed_sha"] !== null
+    ) {
+      return errorJson(c, 400, "unauthorized", "invalid last_indexed_sha", {
+        reason: "invalid_body",
+      });
+    }
+    if (lastIndexedAt === undefined && atRaw !== undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid last_indexed_at", {
+        reason: "invalid_body",
+      });
+    }
+    const updated = await deps.store.updateProjectRepoIndex(loaded.repo.id, {
+      lastIndexedSha: sha,
+      lastIndexedAt,
+    });
+    return c.json(presentProjectRepo(updated ?? loaded.repo));
+  });
+
+  app.post("/v1/repos/:id/sidecar/register", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    if (loaded.actor.kind !== "token") {
+      return errorJson(c, 401, "unauthorized", "sidecar register requires a project token");
+    }
+    const now = deps.clock.now();
+    const row = await deps.store.upsertSidecarConnection({
+      id: uuidv7(now.getTime()),
+      repoId: loaded.repo.id,
+      tokenId: loaded.actor.token.id,
+      now,
+    });
+    return c.json({
+      repo_id: row.repoId,
+      last_seen_at: row.lastSeenAt.toISOString(),
+      connected_at: row.connectedAt.toISOString(),
+    });
+  });
+
+  app.get("/v1/repos/:id/tree", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const depth = parsePositiveInt(c.req.query("depth"), 2);
+    if (depth === "invalid" || depth === undefined || depth < 1 || depth > 4) {
+      return errorJson(c, 400, "unauthorized", "invalid depth", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      loaded.repo,
+      actorRateRef(loaded.actor),
+      { kind: "tree", path: c.req.query("path"), depth },
+      gateway,
+    );
+  });
+
+  app.get("/v1/repos/:id/search", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const q = c.req.query("q")?.trim();
+    if (!q) {
+      return errorJson(c, 400, "unauthorized", "q is required", { reason: "invalid_query" });
+    }
+    const limit = parsePositiveInt(c.req.query("limit"), 50);
+    if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
+      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      loaded.repo,
+      actorRateRef(loaded.actor),
+      {
+        kind: "search",
+        q,
+        mode: c.req.query("mode"),
+        lang: c.req.query("lang"),
+        pathPrefix: c.req.query("path_prefix"),
+        limit,
+      },
+      gateway,
+    );
+  });
+
+  app.get("/v1/repos/:id/files", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const path = c.req.query("path")?.trim();
+    if (!path) {
+      return errorJson(c, 400, "unauthorized", "path is required", { reason: "invalid_query" });
+    }
+    const startLine = parsePositiveInt(c.req.query("start_line"));
+    const endLine = parsePositiveInt(c.req.query("end_line"));
+    if (startLine === "invalid" || endLine === "invalid") {
+      return errorJson(c, 400, "unauthorized", "invalid line range", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      loaded.repo,
+      actorRateRef(loaded.actor),
+      { kind: "file", path, startLine, endLine },
+      gateway,
+    );
+  });
+
+  app.get("/v1/repos/:id/symbols", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const name = c.req.query("name")?.trim();
+    if (!name) {
+      return errorJson(c, 400, "unauthorized", "name is required", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      loaded.repo,
+      actorRateRef(loaded.actor),
+      { kind: "symbol", name, path: c.req.query("path"), symbolKind: c.req.query("kind") },
+      gateway,
+    );
+  });
+
+  app.get("/v1/repos/:id/owners", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const path = c.req.query("path")?.trim();
+    if (!path) {
+      return errorJson(c, 400, "unauthorized", "path is required", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      loaded.repo,
+      actorRateRef(loaded.actor),
+      { kind: "owners", path },
+      gateway,
+    );
+  });
+
+  app.get("/v1/repos/:id/related", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "code:read");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const path = c.req.query("path")?.trim();
+    if (!path) {
+      return errorJson(c, 400, "unauthorized", "path is required", { reason: "invalid_query" });
+    }
+    const limit = parsePositiveInt(c.req.query("limit"), 50);
+    if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
+      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      loaded.repo,
+      actorRateRef(loaded.actor),
+      { kind: "related", path, limit },
+      gateway,
+    );
+  });
+
+  app.get("/v1/tasks/:id/changed-scope", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (isResponse(actor)) {
+      return actor;
+    }
+    const taskId = c.req.param("id");
+    if (!isUuid(taskId)) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    const task = await deps.store.findTaskById(taskId);
+    if (!task || task.deletedAt) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    const access = await authorizeProjectActor(c, deps, actor, task.projectId, "code:read");
     if (isResponse(access)) {
+      if (access.status === 404) {
+        return errorJson(c, 404, "not_found", "task not found");
+      }
       return access;
     }
-    return c.json(presentProjectRepo(repo));
+    if (!actorHasCapability(access.actor, "tasks:read", access.role)) {
+      return errorJson(c, 403, "forbidden", "insufficient token scope");
+    }
+    const repos = await deps.store.listProjectRepos(access.project.id);
+    const requested = c.req.query("repo_id");
+    const repo =
+      (requested ? repos.find((item) => item.id === requested) : undefined) ??
+      (access.project.defaultRepoId
+        ? repos.find((item) => item.id === access.project.defaultRepoId)
+        : undefined) ??
+      (repos.length === 1 ? repos[0] : undefined);
+    if (!repo) {
+      return errorJson(c, 400, "repo_ambiguous", "repo_id is required");
+    }
+    const limit = parsePositiveInt(c.req.query("limit"), 50);
+    if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
+      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
+    }
+    return runCodeQuery(
+      c,
+      deps,
+      repo,
+      actorRateRef(access.actor),
+      taskChangedScopeQuery(task, repo.id, limit),
+      gateway,
+    );
   });
 
   app.post("/v1/repos/:id/detect", async (c) => {

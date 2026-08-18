@@ -59,7 +59,8 @@ export function toRepoPosixPath(repoRoot: string, input: string): string {
   const inputIsPosixAbs = inputPosix.startsWith("/");
   const inputIsWinAbs = path.win32.isAbsolute(input);
 
-  const candidateRoots = logicalRoot === resolvedRoot ? [resolvedRoot] : [logicalRoot, resolvedRoot];
+  const candidateRoots =
+    logicalRoot === resolvedRoot ? [resolvedRoot] : [logicalRoot, resolvedRoot];
   const sameFamilyAbsolute =
     inputHasDrive ||
     inputIsWinAbs ||

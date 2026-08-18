@@ -2,6 +2,8 @@ import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
 import {
+  actorActivityRef,
+  actorIdempotencyRef,
   authorizeProjectActor,
   constraintStatusOnCreate,
   decisionStatusOnCreate,
@@ -14,10 +16,7 @@ import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentApproval } from "../tokens/present.js";
-import {
-  presentConstraintRecord,
-  presentDecisionRecord,
-} from "./present.js";
+import { presentConstraintRecord, presentDecisionRecord } from "./present.js";
 import {
   isConstraintKind,
   isConstraintStatus,
@@ -53,9 +52,7 @@ function parseText(value: unknown, max: number, allowEmpty = false): string | un
   return allowEmpty ? value : value.trim();
 }
 
-function parseRelatedTaskIds(
-  value: unknown,
-): { ok: true; ids: string[] } | { ok: false } {
+function parseRelatedTaskIds(value: unknown): { ok: true; ids: string[] } | { ok: false } {
   if (value === undefined) {
     return { ok: true, ids: [] };
   }
@@ -109,17 +106,15 @@ function parseRelatedPaths(
 }
 
 function actorRef(actor: AuthActor): { type: string; id: string } {
+  const ref = actorActivityRef(actor);
   if (actor.kind === "token") {
     return { type: "agent", id: actor.token.id };
   }
-  return { type: "user", id: actor.user.id };
+  return ref;
 }
 
 function idempotencyActor(actor: AuthActor): { type: "token" | "user"; id: string } {
-  if (actor.kind === "token") {
-    return { type: "token", id: actor.token.id };
-  }
-  return { type: "user", id: actor.user.id };
+  return actorIdempotencyRef(actor);
 }
 
 function wantsApproval(body: Record<string, unknown> | undefined): boolean {

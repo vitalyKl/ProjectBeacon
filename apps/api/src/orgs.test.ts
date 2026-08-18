@@ -19,6 +19,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     secureCookies: false,
     trustProxy: false,
     workerToken: undefined,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }

@@ -11,6 +11,7 @@ const SUMMARY = "Finished the first cut of the API session routes.";
 function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
   return {
     bootstrapAdminToken: BOOTSTRAP_TOKEN,
+    workerToken: undefined,
     authLocal: true,
     authLocalInviteOnly: false,
     authGithub: false,
@@ -19,6 +20,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     secureCookies: false,
     trustProxy: false,
     workerToken: undefined,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }

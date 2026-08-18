@@ -82,21 +82,6 @@ export function presentMilestoneBrief(milestone: MilestoneRecord) {
   };
 }
 
-export function presentContextNode(node: ContextNodeRecord) {
-  return {
-    id: node.id,
-    project_id: node.projectId,
-    repo_id: node.repoId,
-    task_id: node.taskId,
-    scope_type: node.scopeType,
-    path: node.path,
-    source: node.source,
-    review_state: node.reviewState,
-    updated_at: node.updatedAt.toISOString(),
-    sections: node.sections.map((section) => ({ ...section })),
-  };
-}
-
 export function toCompileNode(node: ContextNodeRecord) {
   return {
     id: node.id,

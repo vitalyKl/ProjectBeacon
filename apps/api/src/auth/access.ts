@@ -71,10 +71,7 @@ export function taskStatusOnCreate(actor: AuthActor, requested: string | undefin
 }
 
 /** Non-admin tokens may only record decisions as proposed. */
-export function decisionStatusOnCreate(
-  actor: AuthActor,
-  requested: string | undefined,
-): string {
+export function decisionStatusOnCreate(actor: AuthActor, requested: string | undefined): string {
   if (actor.kind === "token" && !actor.token.scopes.includes("admin")) {
     return "proposed";
   }
@@ -82,10 +79,7 @@ export function decisionStatusOnCreate(
 }
 
 /** Non-admin tokens may only create constraints as proposed. */
-export function constraintStatusOnCreate(
-  actor: AuthActor,
-  requested: string | undefined,
-): string {
+export function constraintStatusOnCreate(actor: AuthActor, requested: string | undefined): string {
   if (actor.kind === "token" && !actor.token.scopes.includes("admin")) {
     return "proposed";
   }

@@ -43,6 +43,8 @@ services:
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
       BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
+      INDEX_RPC_URL: http://worker:7744
+      INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
     ports:
       - "8080:8080"
     healthcheck:
@@ -96,6 +98,12 @@ services:
     environment:
       DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
       BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
+      BEACON_WORKSPACE: ${BEACON_WORKSPACE:-/workspace}
+      INDEX_RPC_HOST: 0.0.0.0
+      INDEX_RPC_PORT: "7744"
+      INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
+      BEACON_INDEX_DIR: /var/lib/beacon/index
+    # Index HTTP stays on the Compose network (7744). It is not published.
     volumes:
       - ${BEACON_WORKSPACE:-./workspace}:/workspace:ro
       PORT: "8080"

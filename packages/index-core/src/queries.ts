@@ -82,10 +82,16 @@ function mapDir(row: DirRow, children: string[]): DirCapsule {
   };
 }
 
-export function getTree(db: SqliteDb, repoRoot: string, options: GetTreeOptions = {}): DirCapsule[] {
+export function getTree(
+  db: SqliteDb,
+  repoRoot: string,
+  options: GetTreeOptions = {},
+): DirCapsule[] {
   const depth = options.depth ?? 2;
   const root = options.root ? toRepoPosixPath(repoRoot, options.root) : ".";
-  const dirs = db.prepare("SELECT path, file_count, byte_size, langs_json, important_json FROM dirs").all() as DirRow[];
+  const dirs = db
+    .prepare("SELECT path, file_count, byte_size, langs_json, important_json FROM dirs")
+    .all() as DirRow[];
   const byPath = new Map(dirs.map((dir) => [dir.path, dir]));
   const childrenByParent = new Map<string, string[]>();
   for (const dir of dirs) {
@@ -168,6 +174,50 @@ export function searchSymbols(db: SqliteDb, options: SearchSymbolsOptions): Symb
   ).map(mapSymbol);
 }
 
+export function searchPaths(
+  db: SqliteDb,
+  options: { q: string; lang?: string; pathPrefix?: string; limit?: number },
+): { path: string }[] {
+  const limit = options.limit ?? 50;
+  const q = options.q.trim();
+  if (!q) {
+    return [];
+  }
+  const like = `%${escapeLikePrefix(q)}%`;
+  if (options.lang && options.pathPrefix) {
+    return db
+      .prepare(
+        "SELECT path FROM files WHERE path LIKE ? ESCAPE '\\' AND lang = ? AND (path = ? OR path LIKE ? ESCAPE '\\') LIMIT ?",
+      )
+      .all(
+        like,
+        options.lang,
+        options.pathPrefix,
+        `${escapeLikePrefix(options.pathPrefix)}%`,
+        limit,
+      ) as {
+      path: string;
+    }[];
+  }
+  if (options.lang) {
+    return db
+      .prepare("SELECT path FROM files WHERE path LIKE ? ESCAPE '\\' AND lang = ? LIMIT ?")
+      .all(like, options.lang, limit) as { path: string }[];
+  }
+  if (options.pathPrefix) {
+    return db
+      .prepare(
+        "SELECT path FROM files WHERE path LIKE ? ESCAPE '\\' AND (path = ? OR path LIKE ? ESCAPE '\\') LIMIT ?",
+      )
+      .all(like, options.pathPrefix, `${escapeLikePrefix(options.pathPrefix)}%`, limit) as {
+      path: string;
+    }[];
+  }
+  return db
+    .prepare("SELECT path FROM files WHERE path LIKE ? ESCAPE '\\' LIMIT ?")
+    .all(like, limit) as { path: string }[];
+}
+
 export function searchContent(
   db: SqliteDb,
   repoRoot: string,
@@ -215,13 +265,27 @@ export function getSymbol(db: SqliteDb, options: GetSymbolOptions): SymbolRecord
   return row ? mapSymbol(row) : null;
 }
 
+export function lastIndexedAtMs(db: SqliteDb): number | null {
+  const row = db.prepare("SELECT v FROM meta WHERE k = 'last_indexed_at'").get() as
+    { v: string } | undefined;
+  if (!row) {
+    return null;
+  }
+  const parsed = Number(row.v);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function getRelatedFiles(db: SqliteDb, options: GetRelatedFilesOptions): ImportEdge[] {
   const rows = db
     .prepare(
       `SELECT from_path, to_spec, to_path FROM imports
        WHERE from_path = ? OR to_path = ?`,
     )
-    .all(options.path, options.path) as { from_path: string; to_spec: string; to_path: string | null }[];
+    .all(options.path, options.path) as {
+    from_path: string;
+    to_spec: string;
+    to_path: string | null;
+  }[];
   return rows.map((row) => ({
     fromPath: row.from_path,
     toSpec: row.to_spec,

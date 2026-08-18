@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { resolveRipgrepPath } from "./binaries.js";
 import { toPosix } from "./paths.js";
 import type { ContentHit } from "./types.js";
 
@@ -15,11 +16,7 @@ const RG_GLOBS = [
   "!*.key",
 ];
 
-export function searchRipgrep(
-  repoRoot: string,
-  query: string,
-  limit: number,
-): ContentHit[] | null {
+export function searchRipgrep(repoRoot: string, query: string, limit: number): ContentHit[] | null {
   const args = [
     "--json",
     "--hidden",
@@ -31,7 +28,7 @@ export function searchRipgrep(
     "--",
     query,
   ];
-  const result = spawnSync("rg", args, {
+  const result = spawnSync(resolveRipgrepPath(), args, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 750,
