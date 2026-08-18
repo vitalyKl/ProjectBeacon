@@ -25,6 +25,7 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     githubClientSecret: undefined,
     secureCookies: false,
     trustProxy: false,
+    workerToken: undefined,
     ...overrides,
   };
 }

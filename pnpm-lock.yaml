@@ -164,7 +164,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/context
       pg-boss:
-        specifier: ^10.3.3
+        specifier: ^10.4.2
         version: 10.4.2
       tsx:
         specifier: ^4.21.0

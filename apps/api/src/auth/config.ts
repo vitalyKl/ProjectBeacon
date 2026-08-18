@@ -8,6 +8,7 @@ export type AuthConfig = {
   githubClientSecret: string | undefined;
   secureCookies: boolean;
   trustProxy: boolean;
+  workerToken: string | undefined;
 };
 
 export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
@@ -21,6 +22,7 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     githubClientSecret: env["GITHUB_OAUTH_CLIENT_SECRET"],
     secureCookies: env["NODE_ENV"] === "production",
     trustProxy: env["TRUST_PROXY"] === "true",
+    workerToken: env["BEACON_WORKER_TOKEN"],
   };
 }
 

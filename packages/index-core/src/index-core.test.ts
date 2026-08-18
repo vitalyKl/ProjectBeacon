@@ -10,7 +10,10 @@ const tempRoots: string[] = [];
 const cores: IndexCore[] = [];
 
 function tempDb(): string {
-  return path.join(os.tmpdir(), `beacon-index-${process.pid}-${Date.now()}-${Math.random()}.sqlite`);
+  return path.join(
+    os.tmpdir(),
+    `beacon-index-${process.pid}-${Date.now()}-${Math.random()}.sqlite`,
+  );
 }
 
 function copyDir(from: string, to: string): void {
@@ -34,7 +37,10 @@ function fixtureRepo(): string {
   tempRoots.push(root);
   copyDir(packagedFixtures, root);
   fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
-  fs.writeFileSync(path.join(root, "node_modules", "ignored.js"), "export function shouldNotIndex() {}\n");
+  fs.writeFileSync(
+    path.join(root, "node_modules", "ignored.js"),
+    "export function shouldNotIndex() {}\n",
+  );
   fs.mkdirSync(path.join(root, "dist"), { recursive: true });
   fs.writeFileSync(path.join(root, "dist", "bundle.js"), "export function bundled() {}\n");
   fs.writeFileSync(path.join(root, ".env"), "SECRET=do-not-index\n");
@@ -64,6 +70,16 @@ afterEach(() => {
 });
 
 describe("IndexCore", () => {
+  it("warns when indexed file contents look like Beacon tokens", () => {
+    const root = fixtureRepo();
+    const token = `bcn_${"B".repeat(43)}`;
+    fs.writeFileSync(path.join(root, "src", "token.ts"), `export const leaked = "${token}";\n`);
+    const core = openCore(root);
+    const stats = core.index();
+    expect(stats.warnings).toEqual([{ path: "src/token.ts", kind: "bcn_token" }]);
+    expect(core.readIndexedFileMetadata("src/token.ts")).not.toBeNull();
+  });
+
   it("indexes fixtures, skips denylist, and detects NUL binaries", () => {
     const core = openCore();
     const stats = core.index();
@@ -140,15 +156,20 @@ describe("IndexCore", () => {
 
   it("searches FTS reserved-word symbols without throwing", () => {
     const root = fixtureRepo();
-    fs.writeFileSync(path.join(root, "src", "ops.ts"), "export function AND() {}\nexport function ORder() {}\n");
+    fs.writeFileSync(
+      path.join(root, "src", "ops.ts"),
+      "export function AND() {}\nexport function ORder() {}\n",
+    );
     const core = openCore(root);
     core.index();
     expect(() => core.searchSymbols({ q: "AND", prefix: true })).not.toThrow();
-    expect(core.searchSymbols({ q: "AND", prefix: true }).some((hit) => hit.name === "AND")).toBe(true);
-    expect(core.searchSymbols({ q: "OR", prefix: true }).some((hit) => hit.name === "ORder")).toBe(true);
-    expect(() =>
-      core.getChangedScope({ identifiers: ["AND", "NOT"] }),
-    ).not.toThrow();
+    expect(core.searchSymbols({ q: "AND", prefix: true }).some((hit) => hit.name === "AND")).toBe(
+      true,
+    );
+    expect(core.searchSymbols({ q: "OR", prefix: true }).some((hit) => hit.name === "ORder")).toBe(
+      true,
+    );
+    expect(() => core.getChangedScope({ identifiers: ["AND", "NOT"] })).not.toThrow();
   });
 
   it("does not treat LIKE wildcards in path prefixes as matches", () => {
@@ -166,7 +187,10 @@ describe("IndexCore", () => {
 
   it("matches multi-word content queries without concatenating tokens", () => {
     const root = fixtureRepo();
-    fs.writeFileSync(path.join(root, "src", "phrase.ts"), "export const note = 'hello world from indexer';\n");
+    fs.writeFileSync(
+      path.join(root, "src", "phrase.ts"),
+      "export const note = 'hello world from indexer';\n",
+    );
     const core = openCore(root);
     core.index();
     const hits = core.searchContent({ q: "hello world", useRipgrep: false });
@@ -211,6 +235,8 @@ describe("IndexCore", () => {
     fs.utimesSync(target, before.atime, before.mtime);
     const second = core.index();
     expect(second.indexed).toBe(1);
-    expect(core.searchContent({ q: "changed-size-value", useRipgrep: false }).length).toBeGreaterThan(0);
+    expect(
+      core.searchContent({ q: "changed-size-value", useRipgrep: false }).length,
+    ).toBeGreaterThan(0);
   });
 });

@@ -15,6 +15,15 @@ export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } f
 import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
 export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../sessions/types.js";
 export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
+import {
+  ACTIVITY_RETENTION_MS,
+  BRIEF_RETENTION_PER_PROJECT,
+  IDEMPOTENCY_RETENTION_MS,
+  idsOlderThanKeep,
+  isUserSessionPastRetention,
+  type ExpireLocksCounts,
+  type RetentionCounts,
+} from "../jobs/policy.js";
 
 export type UserRecord = {
 
@@ -208,7 +217,7 @@ export interface AuthStore {
     now: Date,
     produce: (writes: IdempotentWrites) => Promise<unknown>,
   ): Promise<unknown>;
-  findAgentSessionById(id: string): Promise<AgentSessionRef | undefined>;
+  findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined>;
   listAgentSessions(projectId: string): Promise<AgentSessionRecord[]>;
   heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
   finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
@@ -223,6 +232,8 @@ export interface AuthStore {
   listComments(taskId: string): Promise<TaskCommentRecord[]>;
   createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord>;
   setDefaultRepoIfEmpty(projectId: string, repoId: string, updatedAt: Date): Promise<ProjectRecord>;
+  runRetention(now: Date): Promise<RetentionCounts>;
+  expireLocks(now: Date): Promise<ExpireLocksCounts>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -259,7 +270,6 @@ function cloneOrgInvite(invite: OrgInviteRecord): OrgInviteRecord {
 function cloneProject(project: ProjectRecord): ProjectRecord {
   return {
     ...project,
-    defaultRepoId: project.defaultRepoId,
     settings: { ...project.settings },
     createdAt: new Date(project.createdAt),
     updatedAt: new Date(project.updatedAt),
@@ -340,7 +350,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly projectRepos = new Map<string, ProjectRepoRecord>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
-  private readonly agentSessions = new Map<string, AgentSessionRef>();
+  private readonly agentSessions = new Map<string, AgentSessionRecord>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -611,7 +621,6 @@ export class MemoryAuthStore implements AuthStore {
         role: "admin",
         createdAt: project.createdAt,
       });
-      this.seedDefaultSecurityConstraints(project.id, project.createdAt);
       return cloneProject(project);
     });
   }
@@ -1186,6 +1195,7 @@ export class MemoryAuthStore implements AuthStore {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
+        startWork: async (input) => this.startWorkUnlocked(input),
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1327,13 +1337,34 @@ export class MemoryAuthStore implements AuthStore {
     existing.bytes += BigInt(input.bytesDelta);
     return cloneRateBucket(existing);
   }
-  putAgentSession(session: AgentSessionRef): void {
-    this.agentSessions.set(session.id, { ...session });
+  putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
+    if ("agentName" in session) {
+      this.agentSessions.set(session.id, cloneAgentSession(session));
+      return;
+    }
+    const now = new Date();
+    this.agentSessions.set(
+      session.id,
+      cloneAgentSession({
+        id: session.id,
+        projectId: session.projectId,
+        taskId: null,
+        tokenId: null,
+        agentName: "test",
+        agentHost: "custom",
+        status: "active",
+        contextRevisionId: null,
+        startedAt: now,
+        finishedAt: null,
+        lockExpiresAt: null,
+        lastHeartbeatAt: now,
+      }),
+    );
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
     const session = this.agentSessions.get(id);
-    return session ? { ...session } : undefined;
+    return session ? cloneAgentSession(session) : undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -1642,6 +1673,113 @@ export class MemoryAuthStore implements AuthStore {
       }
       return cloneProject(project);
     });
+  }
+  seedContextRevision(revision: ContextRevisionRecord): void {
+    this.contextRevisions.set(revision.id, cloneContextRevision(revision));
+  }
+  seedActivity(event: ActivityEventRecord): void {
+    this.activity.set(event.id, cloneActivity(event));
+  }
+  seedIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    createdAt: Date,
+    response: unknown = {},
+  ): void {
+    this.idempotency.set(idempotencyKey(actorType, actorId, key), {
+      response: structuredClone(response),
+      createdAt: new Date(createdAt),
+    });
+  }
+
+  async runRetention(now: Date): Promise<RetentionCounts> {
+    return this.enqueueWrite(() => {
+      const activityCutoff = now.getTime() - ACTIVITY_RETENTION_MS;
+      let activityDeleted = 0;
+      for (const [id, event] of this.activity) {
+        if (event.createdAt.getTime() < activityCutoff) {
+          this.activity.delete(id);
+          activityDeleted += 1;
+        }
+      }
+
+      const byProject = new Map<string, ContextRevisionRecord[]>();
+      for (const revision of this.contextRevisions.values()) {
+        const list = byProject.get(revision.projectId) ?? [];
+        list.push(revision);
+        byProject.set(revision.projectId, list);
+      }
+      let briefsDeleted = 0;
+      for (const revisions of byProject.values()) {
+        for (const id of idsOlderThanKeep(revisions, BRIEF_RETENTION_PER_PROJECT)) {
+          this.contextRevisions.delete(id);
+          briefsDeleted += 1;
+        }
+      }
+
+      const idempotencyCutoff = now.getTime() - IDEMPOTENCY_RETENTION_MS;
+      let idempotencyDeleted = 0;
+      for (const [key, slot] of this.idempotency) {
+        if (slot.createdAt.getTime() < idempotencyCutoff) {
+          this.idempotency.delete(key);
+          idempotencyDeleted += 1;
+        }
+      }
+
+      let sessionsDeleted = 0;
+      for (const [id, session] of this.sessions) {
+        if (isUserSessionPastRetention(session, now)) {
+          this.sessions.delete(id);
+          sessionsDeleted += 1;
+        }
+      }
+
+      return {
+        activityDeleted,
+        briefsDeleted,
+        idempotencyDeleted,
+        sessionsDeleted,
+      };
+    });
+  }
+
+  async expireLocks(now: Date): Promise<ExpireLocksCounts> {
+    return this.enqueueWrite(() => this.expireLocksUnlocked(now));
+  }
+
+  private expireLocksUnlocked(now: Date): ExpireLocksCounts {
+    let locksReleased = 0;
+    const releasedSessionIds = new Set<string>();
+    for (const task of this.tasks.values()) {
+      if (!task.lockedBySessionId || !task.lockExpiresAt) {
+        continue;
+      }
+      if (task.lockExpiresAt.getTime() > now.getTime()) {
+        continue;
+      }
+      releasedSessionIds.add(task.lockedBySessionId);
+      task.lockedBySessionId = null;
+      task.lockExpiresAt = null;
+      locksReleased += 1;
+    }
+
+    let sessionsAbandoned = 0;
+    for (const session of this.agentSessions.values()) {
+      if (session.status !== "active") {
+        continue;
+      }
+      const expiredByOwnTtl =
+        session.lockExpiresAt !== null && session.lockExpiresAt.getTime() <= now.getTime();
+      if (!expiredByOwnTtl && !releasedSessionIds.has(session.id)) {
+        continue;
+      }
+      session.status = "abandoned";
+      session.finishedAt = new Date(now);
+      sessionsAbandoned += 1;
+    }
+
+    return { locksReleased, sessionsAbandoned };
   }
     string,
     { response: unknown; createdAt: Date }

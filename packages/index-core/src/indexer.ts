@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BINARY_PROBE_BYTES, containsNul, isDeniedDirName, isDeniedFile } from "./denylist.js";
+import {
+  BINARY_PROBE_BYTES,
+  containsBeaconToken,
+  containsNul,
+  isDeniedDirName,
+  isDeniedFile,
+} from "./denylist.js";
 import { openDatabase, resetDatabase, type SqliteDb } from "./db.js";
 import { detectLanguage, isImportantFile } from "./languages.js";
 import { basename, parentDir, toFsPath, toRepoPosixPath } from "./paths.js";
@@ -66,6 +72,7 @@ export class Indexer {
       skippedDenied: 0,
       skippedBinary: 0,
       removed: 0,
+      warnings: [],
       elapsedMs: 0,
     };
 
@@ -131,12 +138,9 @@ export class Indexer {
         }
         const file = this.readFile(repoPath, absPath, st.size, mtime);
         if (prev && prev.sha256 === file.sha256) {
-          this.db.prepare("UPDATE files SET mtime = ?, size = ?, indexed_at = ? WHERE path = ?").run(
-            mtime,
-            st.size,
-            Date.now(),
-            repoPath,
-          );
+          this.db
+            .prepare("UPDATE files SET mtime = ?, size = ?, indexed_at = ? WHERE path = ?")
+            .run(mtime, st.size, Date.now(), repoPath);
           stats.skippedUnchanged += 1;
           continue;
         }
@@ -151,15 +155,24 @@ export class Indexer {
     stats.indexed = pending.length;
     stats.skippedBinary = pending.filter((file) => file.isBinary).length;
     stats.removed = stale.length;
+    for (const file of pending) {
+      if (file.content && containsBeaconToken(file.content)) {
+        stats.warnings.push({ path: file.path, kind: "bcn_token" });
+      }
+    }
     stats.elapsedMs = Date.now() - started;
-    this.db.prepare("INSERT INTO meta (k, v) VALUES ('last_indexed_at', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").run(
-      String(Date.now()),
-    );
+    this.db
+      .prepare(
+        "INSERT INTO meta (k, v) VALUES ('last_indexed_at', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+      )
+      .run(String(Date.now()));
     return stats;
   }
 
   private loadExisting(): Map<string, FileState> {
-    const rows = this.db.prepare("SELECT path, size, mtime, sha256 FROM files").all() as FileState[];
+    const rows = this.db
+      .prepare("SELECT path, size, mtime, sha256 FROM files")
+      .all() as FileState[];
     return new Map(rows.map((row) => [row.path, row]));
   }
 
@@ -331,7 +344,12 @@ export class Indexer {
 
       const dirStats = new Map<
         string,
-        { fileCount: number; byteSize: number; langs: Record<string, number>; important: Set<string> }
+        {
+          fileCount: number;
+          byteSize: number;
+          langs: Record<string, number>;
+          important: Set<string>;
+        }
       >();
       const ensure = (dirPath: string) => {
         let current = dirStats.get(dirPath);

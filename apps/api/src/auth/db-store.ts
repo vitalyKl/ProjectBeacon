@@ -1,7 +1,7 @@
 import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
 import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks } from "@beacon/db";
 import { isScope, uuidv7, type Scope } from "@beacon/shared";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or } from "drizzle-orm";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
@@ -11,13 +11,21 @@ import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
 import { IDEMPOTENCY_TTL_MS, type CommentAuthorType, type DependencyType, type IdempotencyActorType, type LinkedPath, type MilestoneStatus, type TaskStatus, type TaskType } from "../roadmap/types.js";
 import { InvalidReferenceError, isAgentHost, isAgentSessionStatus, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
+import {
+  ACTIVITY_DELETE_BATCH,
+  ACTIVITY_RETENTION_MS,
+  BRIEF_RETENTION_PER_PROJECT,
+  IDEMPOTENCY_RETENTION_MS,
+  USER_SESSION_RETENTION_MS,
+  type ExpireLocksCounts,
+  type RetentionCounts,
+} from "../jobs/policy.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
-type UniqueConstraint =
-  "login" | "github_id" | "org_slug" | "project_slug" | "context_node_scope" | "unknown";
+type UniqueConstraint = "login" | "github_id" | "org_slug" | "project_slug" | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
@@ -42,9 +50,6 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("projects_org_id_slug")) {
           return "project_slug";
-        }
-        if (constraint.includes("context_nodes_unique_scope")) {
-          return "context_node_scope";
         }
         return "unknown";
       }
@@ -962,7 +967,6 @@ export class DbAuthStore implements AuthStore {
           role: "admin",
           createdAt: project.createdAt,
         });
-        await seedDefaultSecurityConstraints(tx, created.id, project.createdAt);
         return toProject(created);
       });
     } catch (error) {
@@ -1768,6 +1772,7 @@ export class DbAuthStore implements AuthStore {
           }
           return toActivity(row);
         },
+        startWork: async (input) => startWorkInTx(tx, input),
       };
 
       const response = await produce(writes);
@@ -1937,13 +1942,13 @@ export class DbAuthStore implements AuthStore {
     return toRateBucket(row);
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
     const [row] = await this.db
-      .select({ id: agentSessions.id, projectId: agentSessions.projectId })
+      .select()
       .from(agentSessions)
       .where(eq(agentSessions.id, id))
       .limit(1);
-    return row ?? undefined;
+    return row ? toAgentSession(row) : undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -2347,6 +2352,141 @@ export class DbAuthStore implements AuthStore {
       }
       return raced;
     }
+  }
+
+  async runRetention(now: Date): Promise<RetentionCounts> {
+    const activityCutoff = new Date(now.getTime() - ACTIVITY_RETENTION_MS);
+    let activityDeleted = 0;
+    for (;;) {
+      const batch = await this.db
+        .select({ id: activityEvents.id })
+        .from(activityEvents)
+        .where(lt(activityEvents.createdAt, activityCutoff))
+        .orderBy(asc(activityEvents.createdAt), asc(activityEvents.id))
+        .limit(ACTIVITY_DELETE_BATCH);
+      if (batch.length === 0) {
+        break;
+      }
+      const deleted = await this.db
+        .delete(activityEvents)
+        .where(
+          inArray(
+            activityEvents.id,
+            batch.map((row) => row.id),
+          ),
+        )
+        .returning({ id: activityEvents.id });
+      activityDeleted += deleted.length;
+      if (batch.length < ACTIVITY_DELETE_BATCH) {
+        break;
+      }
+    }
+
+    const ranked = this.db
+      .select({
+        id: contextRevisions.id,
+        rank: sql<number>`row_number() over (partition by ${contextRevisions.projectId} order by ${contextRevisions.createdAt} desc, ${contextRevisions.id} desc)`.as(
+          "rank",
+        ),
+      })
+      .from(contextRevisions)
+      .as("ranked_briefs");
+    const staleBriefs = await this.db
+      .select({ id: ranked.id })
+      .from(ranked)
+      .where(sql`${ranked.rank} > ${BRIEF_RETENTION_PER_PROJECT}`);
+    let briefsDeleted = 0;
+    if (staleBriefs.length > 0) {
+      const deletedBriefs = await this.db
+        .delete(contextRevisions)
+        .where(
+          inArray(
+            contextRevisions.id,
+            staleBriefs.map((row) => row.id),
+          ),
+        )
+        .returning({ id: contextRevisions.id });
+      briefsDeleted = deletedBriefs.length;
+    }
+
+    const idempotencyCutoff = new Date(now.getTime() - IDEMPOTENCY_RETENTION_MS);
+    const deletedKeys = await this.db
+      .delete(idempotencyKeys)
+      .where(lt(idempotencyKeys.createdAt, idempotencyCutoff))
+      .returning({ key: idempotencyKeys.key });
+
+    const sessionCutoff = new Date(now.getTime() - USER_SESSION_RETENTION_MS);
+    const deletedSessions = await this.db
+      .delete(userSessions)
+      .where(
+        or(lte(userSessions.expiresAt, sessionCutoff), lte(userSessions.revokedAt, sessionCutoff)),
+      )
+      .returning({ id: userSessions.id });
+
+    return {
+      activityDeleted,
+      briefsDeleted,
+      idempotencyDeleted: deletedKeys.length,
+      sessionsDeleted: deletedSessions.length,
+    };
+  }
+
+  async expireLocks(now: Date): Promise<ExpireLocksCounts> {
+    return this.db.transaction(async (tx) => {
+      const expiredTasks = await tx
+        .select({
+          id: tasks.id,
+          lockedBySessionId: tasks.lockedBySessionId,
+        })
+        .from(tasks)
+        .where(and(sql`${tasks.lockedBySessionId} IS NOT NULL`, lte(tasks.lockExpiresAt, now)))
+        .for("update");
+
+      const sessionIds = new Set<string>();
+      for (const task of expiredTasks) {
+        if (task.lockedBySessionId) {
+          sessionIds.add(task.lockedBySessionId);
+        }
+      }
+
+      let locksReleased = 0;
+      if (expiredTasks.length > 0) {
+        const released = await tx
+          .update(tasks)
+          .set({ lockedBySessionId: null, lockExpiresAt: null })
+          .where(
+            inArray(
+              tasks.id,
+              expiredTasks.map((task) => task.id),
+            ),
+          )
+          .returning({ id: tasks.id });
+        locksReleased = released.length;
+      }
+
+      const expiredSessions = await tx
+        .select({ id: agentSessions.id })
+        .from(agentSessions)
+        .where(and(eq(agentSessions.status, "active"), lte(agentSessions.lockExpiresAt, now)))
+        .for("update");
+      for (const session of expiredSessions) {
+        sessionIds.add(session.id);
+      }
+
+      let sessionsAbandoned = 0;
+      if (sessionIds.size > 0) {
+        const abandoned = await tx
+          .update(agentSessions)
+          .set({ status: "abandoned", finishedAt: now })
+          .where(
+            and(eq(agentSessions.status, "active"), inArray(agentSessions.id, [...sessionIds])),
+          )
+          .returning({ id: agentSessions.id });
+        sessionsAbandoned = abandoned.length;
+      }
+
+      return { locksReleased, sessionsAbandoned };
+    });
   }
 }
 

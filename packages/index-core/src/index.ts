@@ -3,7 +3,9 @@ export const packageName = "@beacon/index-core";
 export { IndexCore } from "./index-core.js";
 export { NativeTreeSitterParser, createParser } from "./parser.js";
 export {
+  containsBeaconToken,
   containsNul,
+  findBeaconTokenHits,
   isDeniedDirName,
   isDeniedFile,
   pathHasDeniedSegment,
@@ -25,6 +27,7 @@ export type {
   ImportEdge,
   IndexCoreOptions,
   IndexStats,
+  IndexWarning,
   LanguageId,
   ParseResult,
   SearchContentOptions,
@@ -32,4 +35,3 @@ export type {
   SymbolRecord,
   TreeSitterParser,
 } from "./types.js";
-

@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@beacon/context": "workspace:*",
-    "pg-boss": "^10.3.3",
+    "pg-boss": "^10.4.2",
     "tsx": "^4.21.0"
   },
   "devDependencies": {

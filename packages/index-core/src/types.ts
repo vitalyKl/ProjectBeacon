@@ -69,6 +69,11 @@ export interface TreeSitterParser {
   parse(source: string, lang: LanguageId): ParseResult;
 }
 
+export interface IndexWarning {
+  path: string;
+  kind: "bcn_token";
+}
+
 export interface IndexStats {
   scanned: number;
   indexed: number;
@@ -76,6 +81,7 @@ export interface IndexStats {
   skippedDenied: number;
   skippedBinary: number;
   removed: number;
+  warnings: IndexWarning[];
   elapsedMs: number;
 }
 

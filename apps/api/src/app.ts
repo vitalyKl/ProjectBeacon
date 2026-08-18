@@ -15,7 +15,7 @@ import { mountRoadmap } from "./roadmap/routes.js";
 import { mountSessions } from "./sessions/routes.js";
 import { mountTokenProbe, mountTokens } from "./tokens/routes.js";
 import { mountDecisions } from "./context/decisions.js";
-import { mountRepos } from "./repos/routes.js";
+import { mountJobs } from "./jobs/routes.js";
 
 export const packageName = "@beacon/api";
 
@@ -74,9 +74,9 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   mountOrgs(app, authDeps);
   mountRoadmap(app, authDeps);
   mountContext(app, authDeps);
-  mountRepos(app, authDeps);
   mountTokens(app, authDeps);
-  mountRepos(app, { ...authDeps, jobs: options.jobs ?? new MemoryJobQueue() });
+  mountSessions(app, authDeps);
+  mountJobs(app, authDeps);
   if (options.enableTokenProbe) {
     mountTokenProbe(app, authDeps);
   }
