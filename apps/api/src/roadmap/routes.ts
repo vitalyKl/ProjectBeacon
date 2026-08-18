@@ -1,14 +1,8 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
-
-import {
-  authorizeProjectActor,
-  isAdminActor,
-  requireActor,
-  type AuthActor,
-} from "../auth/access.js";
+import { authorizeProjectActor, isAdminActor, requireActor, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
-import { DependencyCycleError, VersionConflictError, type UserRecord } from "../auth/store.js";
+import { DependencyCycleError, VersionConflictError, UserRecord } from "../auth/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
@@ -16,25 +10,8 @@ import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../org
 import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { isTerminalTaskStatus } from "../sessions/types.js";
 import { parsePageQuery, paginateRecords } from "./page.js";
-import {
-  presentActivity,
-  presentComment,
-  presentDependency,
-  presentMilestone,
-  presentTask,
-} from "./present.js";
-import {
-  isDependencyType,
-  isMilestoneStatus,
-  isTaskStatus,
-  isTaskType,
-  type DependencyType,
-  type LinkedPath,
-  type TaskPatch,
-  type TaskRecord,
-  type TaskStatus,
-  type TaskType,
-} from "./types.js";
+import { presentActivity, presentComment, presentDependency, presentMilestone, presentTask } from "./present.js";
+import { isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, type DependencyType, type LinkedPath, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
 
 function parseExpectedVersion(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isInteger(value) && value >= 1) {
@@ -255,12 +232,8 @@ async function requireAssignee(
 
 export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   app.get("/v1/projects/:id/milestones", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    if (isResponse(access)) {
       return access;
     }
     const page = parsePageQuery(c);
@@ -276,12 +249,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/projects/:id/milestones", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
+    if (isResponse(access)) {
       return access;
     }
 
@@ -312,50 +281,6 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     }
 
     const now = deps.clock.now();
-    const idempotencyKey = parseIdempotencyKey(c);
-    const seedPrefix = `beacon-dogfood:${access.project.id}:`;
-    if (idempotencyKey?.startsWith(seedPrefix)) {
-      const existingSameTitle = (await deps.store.listMilestones(access.project.id)).find(
-        (item) => item.title === title,
-      );
-      if (existingSameTitle) {
-        return c.json(presentMilestone(existingSameTitle), 201);
-      }
-    }
-    if (idempotencyKey) {
-      const presented = await deps.store.withIdempotency(
-        "user",
-        access.project.id,
-        idempotencyKey,
-        now,
-        async (writes) => {
-          if (!writes.createMilestone) {
-            throw new Error("createMilestone write is unavailable");
-          }
-          const created = await writes.createMilestone({
-            id: uuidv7(now.getTime()),
-            projectId: access.project.id,
-            title,
-            description,
-            status: statusRaw,
-            targetDate,
-            sortOrder,
-            createdAt: now,
-          });
-          await writeActivity(writes, {
-            projectId: access.project.id,
-            objectType: "milestone",
-            objectId: created.id,
-            actorId: session.user.id,
-            verb: "create",
-            now,
-          });
-          return presentMilestone(created);
-        },
-      );
-      return c.json(presented, 201);
-    }
-
     const milestone = await deps.store.createMilestone({
       id: uuidv7(now.getTime()),
       projectId: access.project.id,
@@ -366,11 +291,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       sortOrder,
       createdAt: now,
     });
-    await writeActivity(deps.store, {
+    await writeActorActivity(deps.store, access.actor, {
       projectId: access.project.id,
       objectType: "milestone",
       objectId: milestone.id,
-      actorId: session.user.id,
       verb: "create",
       now,
     });
@@ -378,12 +302,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.get("/v1/projects/:id/tasks", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    if (isResponse(access)) {
       return access;
     }
     const page = parsePageQuery(c);
@@ -399,12 +319,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/projects/:id/tasks", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
+    if (isResponse(access)) {
       return access;
     }
 
@@ -480,13 +396,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
 
     const status: TaskStatus = statusRaw;
     const type: TaskType = typeRaw;
-    const seedPrefix = `beacon-dogfood:${access.project.id}:`;
-    const idempotencyActorId = idempotencyKey.startsWith(seedPrefix)
-      ? access.project.id
-      : session.user.id;
+    const idempotency = actorIdempotencyRef(access.actor);
     const presented = await deps.store.withIdempotency(
-      "user",
-      idempotencyActorId,
+      idempotency.type,
+      idempotency.id,
       idempotencyKey,
       now,
       async (writes) => {
@@ -512,11 +425,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           createdAt: now,
           updatedAt: now,
         });
-        await writeActivity(writes, {
+        await writeActorActivity(writes, access.actor, {
           projectId: access.project.id,
           objectType: "task",
           objectId: task.id,
-          actorId: session.user.id,
           verb: "create",
           payload: { status: task.status, type: task.type },
           now,
@@ -540,7 +452,11 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.patch("/v1/tasks/:id", async (c) => {
-    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
+    const session = await requireSession(c, deps);
+    if (isResponse(session)) {
+      return session;
+    }
+    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
     if (access instanceof Response) {
       return access;
     }
@@ -574,10 +490,6 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (body["status"] !== undefined) {
       if (typeof body["status"] !== "string" || !isTaskStatus(body["status"])) {
         return errorJson(c, 400, "unauthorized", "invalid status", { reason: "invalid_body" });
-      }
-      const terminal = rejectAgentTerminalStatus(c, access.actor, body["status"]);
-      if (terminal) {
-        return terminal;
       }
       patch.status = body["status"];
     }
@@ -671,10 +583,9 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     }
 
     const now = deps.clock.now();
-    const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(access.task.id, expectedVersion, patch, now, {
-        releaseLock: shouldReleaseLockOnTaskWrite(access.actor, access.role, patch.status),
+        releaseLock: true,
       });
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -683,8 +594,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
-        actorId: actor.actorId,
-        actorType: actor.actorType,
+        actorId: session.user.id,
         verb: "update",
         payload: { version: updated.task.version },
         now,
@@ -694,8 +604,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
-          actorId: actor.actorId,
-          actorType: actor.actorType,
+          actorId: session.user.id,
           verb: "lock_released",
           now,
         });
@@ -785,29 +694,12 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     return c.json(presented, 201);
   });
 
-  app.get("/v1/tasks/:id/comments", async (c) => {
+  app.post("/v1/tasks/:id/status", async (c) => {
     const session = await requireSession(c, deps);
     if (isResponse(session)) {
       return session;
     }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "read");
-    if (access instanceof Response) {
-      return access;
-    }
-    const page = parsePageQuery(c);
-    if (page instanceof Response) {
-      return page;
-    }
-    const records = await deps.store.listComments(access.task.id);
-    const result = paginateRecords(records, page, (item) => item.createdAt);
-    return c.json({
-      items: result.items.map(presentComment),
-      next_cursor: result.next_cursor,
-    });
-  });
-
-  app.post("/v1/tasks/:id/status", async (c) => {
-    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
+    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
     if (access instanceof Response) {
       return access;
     }
@@ -824,20 +716,15 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         reason: "invalid_body",
       });
     }
-    const terminal = rejectAgentTerminalStatus(c, access.actor, statusRaw);
-    if (terminal) {
-      return terminal;
-    }
 
     const now = deps.clock.now();
-    const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(
         access.task.id,
         expectedVersion,
         { status: statusRaw },
         now,
-        { releaseLock: shouldReleaseLockOnTaskWrite(access.actor, access.role, statusRaw) },
+        { releaseLock: true },
       );
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -846,8 +733,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
-        actorId: actor.actorId,
-        actorType: actor.actorType,
+        actorId: session.user.id,
         verb: "status",
         payload: { from: access.task.status, to: updated.task.status },
         now,
@@ -857,8 +743,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
-          actorId: actor.actorId,
-          actorType: actor.actorType,
+          actorId: session.user.id,
           verb: "lock_released",
           now,
         });
@@ -953,4 +838,24 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       next_cursor: result.next_cursor,
     });
   });
+}
+
+function isResponse<T>(value: T | Response): value is Response {
+  return value instanceof Response;
+}
+
+function writeActorActivity(
+  writer: { writeActivity: AuthDeps["store"]["writeActivity"] },
+  actor: AuthActor,
+  input: {
+    projectId: string;
+    objectType: string;
+    objectId: string;
+    verb: string;
+    payload?: Record<string, unknown>;
+    now: Date;
+  },
+): Promise<void> {
+  const ref = actorActivityRef(actor);
+  return writeActivity(writer, { ...input, actorId: ref.id, actorType: ref.type });
 }

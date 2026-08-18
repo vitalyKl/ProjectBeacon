@@ -1,12 +1,6 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
-import type { Hono } from "hono";
-
-import {
-  authorizeProjectActor,
-  isAdminActor,
-  requireActor,
-  requireProjectActor,
-} from "../auth/access.js";
+import type { Hono, Context } from "hono";
+import { authorizeProjectActor, isAdminActor, requireActor, requireProjectActor } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { ProjectNotFoundError, UniqueViolationError } from "../auth/store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
@@ -14,6 +8,8 @@ import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentProjectRepo } from "./present.js";
+import type { JobQueue } from "../jobs/queue.js";
+import { parseLocalRootHint } from "./local-root.js";
 
 const INDEX_MODES = ["sidecar", "bind_mount", "hosted_clone", "both"] as const;
 const PROVIDERS = ["github", "local"] as const;
@@ -54,7 +50,7 @@ export function parseBindMountHint(value: unknown): string | undefined {
   return parts.join("/");
 }
 
-export function mountRepos(app: Hono, deps: AuthDeps): void {
+export function mountRepos(app: Hono, deps: RepoDeps): void {
   app.get("/v1/projects/:id/repos", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
@@ -77,115 +73,78 @@ export function mountRepos(app: Hono, deps: AuthDeps): void {
     if (isResponse(access)) {
       return access;
     }
-    if (!isAdminActor(access.actor, access.role)) {
-      return errorJson(c, 403, "forbidden", "insufficient project role");
-    }
 
     const body = await readObject(c);
-    const providerRaw = typeof body?.["provider"] === "string" ? body["provider"] : "local";
-    const indexModeRaw = typeof body?.["index_mode"] === "string" ? body["index_mode"] : undefined;
-    if (!isProvider(providerRaw) || !indexModeRaw || !isIndexMode(indexModeRaw)) {
-      return errorJson(c, 400, "unauthorized", "provider and index_mode are required", {
-        reason: "invalid_body",
-      });
-    }
-
+    const provider = parseProvider(body?.["provider"]);
+    const indexMode = parseIndexMode(body?.["index_mode"] ?? "sidecar");
     const defaultBranch = parseOptionalString(body?.["default_branch"], 200) ?? "main";
     const remoteUrl =
       body?.["remote_url"] === undefined || body["remote_url"] === null
         ? null
         : parseOptionalString(body["remote_url"], 2048);
-    if (
-      body?.["remote_url"] !== undefined &&
-      body["remote_url"] !== null &&
-      remoteUrl === undefined
-    ) {
-      return errorJson(c, 400, "unauthorized", "invalid remote_url", { reason: "invalid_body" });
-    }
-
+    const githubRepoId = parseOptionalBigInt(body?.["github_repo_id"]);
+    const installationId = parseOptionalBigInt(body?.["installation_id"]);
+    const localRootRaw = body?.["local_root_hint"];
     let localRootHint: string | null = null;
-    if (indexModeRaw === "bind_mount") {
-      const hint = parseBindMountHint(body?.["local_root_hint"]);
-      if (!hint) {
-        return errorJson(c, 400, "unauthorized", "local_root_hint must be a relative POSIX path", {
-          reason: "invalid_local_root_hint",
-        });
-      }
-      localRootHint = hint;
-    } else if (body?.["local_root_hint"] !== undefined && body["local_root_hint"] !== null) {
-      const hint = parseOptionalString(body["local_root_hint"], 512);
-      if (!hint) {
+    if (localRootRaw !== undefined && localRootRaw !== null) {
+      const parsed = parseLocalRootHint(localRootRaw);
+      if (!parsed) {
         return errorJson(c, 400, "unauthorized", "invalid local_root_hint", {
           reason: "invalid_body",
         });
       }
-      localRootHint = hint.replaceAll("\\", "/");
+      localRootHint = parsed;
     }
 
-    let githubRepoId: bigint | null = null;
-    if (body?.["github_repo_id"] !== undefined && body["github_repo_id"] !== null) {
-      const raw = body["github_repo_id"];
-      if ((typeof raw !== "string" && typeof raw !== "number") || !/^[0-9]+$/.test(String(raw))) {
-        return errorJson(c, 400, "unauthorized", "invalid github_repo_id", {
-          reason: "invalid_body",
-        });
-      }
-      githubRepoId = BigInt(raw);
+    if (
+      !provider ||
+      !indexMode ||
+      remoteUrl === undefined ||
+      githubRepoId === undefined ||
+      installationId === undefined
+    ) {
+      return errorJson(c, 400, "unauthorized", "provider is required", { reason: "invalid_body" });
     }
-
-    let installationId: bigint | null = null;
-    if (body?.["installation_id"] !== undefined && body["installation_id"] !== null) {
-      const raw = body["installation_id"];
-      if ((typeof raw !== "string" && typeof raw !== "number") || !/^[0-9]+$/.test(String(raw))) {
-        return errorJson(c, 400, "unauthorized", "invalid installation_id", {
-          reason: "invalid_body",
-        });
-      }
-      installationId = BigInt(raw);
+    if (provider === "local" && !localRootHint) {
+      return errorJson(c, 400, "unauthorized", "local_root_hint is required for local repos", {
+        reason: "invalid_body",
+      });
     }
-
-    if (providerRaw === "github" && githubRepoId === null) {
-      return errorJson(c, 400, "unauthorized", "github_repo_id is required", {
+    if (provider === "github" && !remoteUrl) {
+      return errorJson(c, 400, "unauthorized", "remote_url is required for github repos", {
         reason: "invalid_body",
       });
     }
 
     const now = deps.clock.now();
-    const record: ProjectRepoRecord = {
+    const repo: ProjectRepoRecord = {
       id: uuidv7(now.getTime()),
       projectId: access.project.id,
-      provider: providerRaw,
-      remoteUrl: remoteUrl ?? null,
+      provider,
+      remoteUrl,
       defaultBranch,
       githubRepoId,
       installationId,
       localRootHint,
-      indexMode: indexModeRaw,
+      indexMode,
       lastIndexedSha: null,
       lastIndexedAt: null,
     };
 
+    let created: ProjectRepoRecord;
     try {
-      const created = await deps.store.createProjectRepo(record);
-      return c.json(presentProjectRepo(created), 201);
+      created = await deps.store.createProjectRepo(repo);
     } catch (error) {
-      if (error instanceof ProjectNotFoundError) {
-        return errorJson(c, 404, "not_found", "project not found");
-      }
       if (error instanceof UniqueViolationError) {
-        return errorJson(c, 409, "login_taken", "repo is already connected", {
-          reason: "duplicate_repo",
-        });
+        return errorJson(c, 409, "login_taken", "repo already exists", { reason: "unique" });
       }
       throw error;
     }
+    const project = await deps.store.setDefaultRepoIfEmpty(access.project.id, created.id, now);
+    return c.json(presentProjectRepo({ ...created, projectId: project.id }), 201);
   });
 
   app.get("/v1/repos/:id", async (c) => {
-    const actor = await requireActor(c, deps);
-    if (isResponse(actor)) {
-      return actor;
-    }
     const id = c.req.param("id");
     if (!isUuid(id)) {
       return errorJson(c, 404, "not_found", "repo not found");
@@ -194,13 +153,95 @@ export function mountRepos(app: Hono, deps: AuthDeps): void {
     if (!repo) {
       return errorJson(c, 404, "not_found", "repo not found");
     }
-    const access = await authorizeProjectActor(c, deps, actor, repo.projectId, "project:read");
+    const access = await requireProjectActor(c, deps, repo.projectId, "project:read");
     if (isResponse(access)) {
-      if (access.status === 404) {
-        return errorJson(c, 404, "not_found", "repo not found");
-      }
       return access;
     }
     return c.json(presentProjectRepo(repo));
   });
+
+  app.post("/v1/repos/:id/detect", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) {
+      return errorJson(c, 404, "not_found", "repo not found");
+    }
+    const repo = await deps.store.findProjectRepoById(id);
+    if (!repo) {
+      return errorJson(c, 404, "not_found", "repo not found");
+    }
+    const access = await requireProjectActor(c, deps, repo.projectId, "project:write");
+    if (isResponse(access)) {
+      return access;
+    }
+
+    const enqueue = async (): Promise<{ id: string; status: "accepted" }> => {
+      const jobId = await deps.jobs.enqueueDetect(
+        { repo_id: repo.id, project_id: repo.projectId },
+        { singletonKey: `detect:${repo.id}` },
+      );
+      return { id: jobId, status: "accepted" };
+    };
+
+    const idempotencyKey = parseIdempotencyKey(c);
+    if (!idempotencyKey) {
+      const accepted = await enqueue();
+      return c.json(accepted, 202);
+    }
+
+    const now = deps.clock.now();
+    const actorId =
+      access.actor.kind === "user"
+        ? access.actor.user.id
+        : access.actor.kind === "token"
+          ? access.actor.token.id
+          : "00000000-0000-0000-0000-000000000001";
+    const actorType = access.actor.kind === "user" ? "user" : "token";
+    const presented = await deps.store.withIdempotency(
+      actorType,
+      actorId,
+      idempotencyKey,
+      now,
+      enqueue,
+    );
+    return c.json(presented, 202);
+  });
 }
+
+function parseIdempotencyKey(c: Context): string | undefined {
+  const header = c.req.header("idempotency-key")?.trim();
+  if (!header || header.length > 256) {
+    return undefined;
+  }
+  return header;
+}
+
+function parseProvider(value: unknown): Provider | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return (PROVIDERS as readonly string[]).includes(value) ? (value as Provider) : undefined;
+}
+
+function parseIndexMode(value: unknown): IndexMode | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return (INDEX_MODES as readonly string[]).includes(value) ? (value as IndexMode) : undefined;
+}
+
+function parseOptionalBigInt(value: unknown): bigint | null | undefined {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+    return BigInt(value);
+  }
+  return undefined;
+}
+
+export type RepoDeps = AuthDeps & {
+  jobs: JobQueue;
+};

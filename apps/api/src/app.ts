@@ -8,7 +8,9 @@ import { mountAuth } from "./auth/routes.js";
 import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
 import { mountContext } from "./context/routes.js";
 import { checkDatabase } from "./db.js";
+import { MemoryJobQueue, type JobQueue } from "./jobs/queue.js";
 import { mountOrgs } from "./orgs/routes.js";
+import { mountRepos } from "./repos/routes.js";
 import { mountRoadmap } from "./roadmap/routes.js";
 import { mountSessions } from "./sessions/routes.js";
 import { mountTokenProbe, mountTokens } from "./tokens/routes.js";
@@ -29,6 +31,7 @@ export type CreateAppOptions = {
   databaseUrl?: string;
   rateLimits?: RateLimitConfig;
   enableTokenProbe?: boolean;
+  jobs?: JobQueue;
 };
 
 function resolveStore(options: CreateAppOptions): AuthStore {
@@ -73,6 +76,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   mountContext(app, authDeps);
   mountRepos(app, authDeps);
   mountTokens(app, authDeps);
+  mountRepos(app, { ...authDeps, jobs: options.jobs ?? new MemoryJobQueue() });
   if (options.enableTokenProbe) {
     mountTokenProbe(app, authDeps);
   }

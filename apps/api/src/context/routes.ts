@@ -11,6 +11,8 @@ import { presentConstraint, presentContextNode, presentDecision, presentMileston
 import { compileProjectBrief } from "./compile-brief.js";
 import type { ContextNodeRecord } from "./types.js";
 
+import { requireProjectActor } from "../auth/access.js";
+
 const MAX_IMPORT_FILES = 200;
 const MAX_IMPORT_PATH = 1024;
 const MAX_IMPORT_CONTENT = 256_000;
@@ -72,12 +74,8 @@ async function resolveRepoId(
 
 export function mountContext(app: Hono, deps: AuthDeps): void {
   app.get("/v1/projects/:id/context/nodes", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
       return access;
     }
     const page = parsePageQuery(c);
@@ -99,100 +97,9 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     return c.json({ items, next_cursor: result.next_cursor });
   });
 
-  app.post("/v1/projects/:id/context/nodes", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
-    if (access instanceof Response) {
-      return access;
-    }
-    const body = await readObject(c);
-    const sections = parseNativeSections(body?.["sections"]);
-    if (!sections) {
-      return errorJson(c, 400, "unauthorized", "sections are required", { reason: "invalid_body" });
-    }
-    const existing = (await deps.store.listContextNodes(access.project.id)).find(
-      (node) =>
-        node.scopeType === "project" &&
-        node.path === "" &&
-        node.taskId === null &&
-        node.repoId === null,
-    );
-    const now = deps.clock.now();
-    const stored = await deps.store.upsertContextNode({
-      id: existing?.id ?? uuidv7(now.getTime()),
-      projectId: access.project.id,
-      repoId: null,
-      taskId: null,
-      scopeType: "project",
-      path: "",
-      sections,
-      sectionsText: sectionsText(sections),
-      source: existing?.source ?? "native",
-      sourcePath: existing?.sourcePath ?? null,
-      reviewState: "reviewed",
-      updatedByType: "user",
-      updatedById: session.user.id,
-      updatedAt: now,
-    });
-    return c.json(presentContextNode(stored, session.user), existing ? 200 : 201);
-  });
-
-  app.put("/v1/projects/:id/context/nodes/:nodeId", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
-    if (access instanceof Response) {
-      return access;
-    }
-    const nodeId = c.req.param("nodeId");
-    if (!isUuid(nodeId)) {
-      return errorJson(c, 404, "not_found", "node not found");
-    }
-
-    const body = await readObject(c);
-    const sections = parseNativeSections(body?.["sections"]);
-    if (!sections) {
-      return errorJson(c, 400, "unauthorized", "sections are required", { reason: "invalid_body" });
-    }
-
-    const existing = (await deps.store.listContextNodes(access.project.id)).find(
-      (node) => node.id === nodeId,
-    );
-    if (!existing) {
-      return errorJson(c, 404, "not_found", "node not found");
-    }
-    const now = deps.clock.now();
-    const stored = await deps.store.upsertContextNode({
-      id: existing.id,
-      projectId: access.project.id,
-      repoId: existing.repoId,
-      taskId: existing.taskId,
-      scopeType: existing.scopeType,
-      path: existing.path,
-      sections,
-      sectionsText: sectionsText(sections),
-      source: existing.source,
-      sourcePath: existing.sourcePath,
-      reviewState: "reviewed",
-      updatedByType: "user",
-      updatedById: session.user.id,
-      updatedAt: now,
-    });
-    return c.json(presentContextNode(stored, session.user));
-  });
-
   app.post("/v1/projects/:id/context/import", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    if (isResponse(access)) {
       return access;
     }
 
@@ -299,8 +206,18 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
         source: incoming.source,
         sourcePath: incoming.source_path,
         reviewState: "needs_review",
-        updatedByType: "user",
-        updatedById: session.user.id,
+        updatedByType:
+          access.actor.kind === "user"
+            ? "user"
+            : access.actor.kind === "token"
+              ? "token"
+              : "system",
+        updatedById:
+          access.actor.kind === "user"
+            ? access.actor.user.id
+            : access.actor.kind === "token"
+              ? access.actor.token.id
+              : "worker",
         updatedAt: now,
       });
       nodes.push(stored);
@@ -322,19 +239,16 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       ownersWritten = written.length;
     }
 
+    const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
     return c.json({
-      nodes: await Promise.all(nodes.map(async (node) => presentContextNode(node, session.user))),
+      nodes: await Promise.all(nodes.map(async (node) => presentContextNode(node, actorUser))),
       code_owners_written: ownersWritten,
     });
   });
 
   app.get("/v1/projects/:id/context/export/agents-md", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
       return access;
     }
 
@@ -394,12 +308,8 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/projects/:id/context/compile", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
-    if (access instanceof Response) {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
       return access;
     }
 
@@ -523,4 +433,8 @@ function parseNativeSections(value: unknown): ContextNodeRecord["sections"] | un
     });
   }
   return sections;
+}
+
+function isResponse<T>(value: T | Response): value is Response {
+  return value instanceof Response;
 }

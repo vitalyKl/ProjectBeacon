@@ -961,7 +961,6 @@ export class DbAuthStore implements AuthStore {
             name: project.name,
             description: project.description,
             visibility: "private",
-            defaultRepoId: project.defaultRepoId,
             settings: project.settings,
             deletedAt: null,
             createdAt: project.createdAt,
@@ -1008,7 +1007,7 @@ export class DbAuthStore implements AuthStore {
 
   async updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string; defaultRepoId?: string | null },
+    patch: { name?: string; description?: string; slug?: string },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined> {
     try {
@@ -1018,7 +1017,6 @@ export class DbAuthStore implements AuthStore {
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.description !== undefined ? { description: patch.description } : {}),
           ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
-          ...(patch.defaultRepoId !== undefined ? { defaultRepoId: patch.defaultRepoId } : {}),
           updatedAt,
         })
         .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
@@ -2227,55 +2225,56 @@ export class DbAuthStore implements AuthStore {
 
   async createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord> {
     try {
-      return await this.db.transaction(async (tx) => {
-        const [project] = await tx
-          .select()
-          .from(projects)
-          .where(and(eq(projects.id, repo.projectId), isNull(projects.deletedAt)))
-          .limit(1);
-        if (!project) {
-          throw new ProjectNotFoundError();
-        }
-        const [created] = await tx
-          .insert(projectRepos)
-          .values({
-            id: repo.id,
-            projectId: repo.projectId,
-            provider: repo.provider,
-            remoteUrl: repo.remoteUrl,
-            defaultBranch: repo.defaultBranch,
-            githubRepoId: repo.githubRepoId,
-            installationId: repo.installationId,
-            localRootHint: repo.localRootHint,
-            indexMode: repo.indexMode,
-            lastIndexedSha: repo.lastIndexedSha,
-            lastIndexedAt: repo.lastIndexedAt,
-          })
-          .returning();
-        if (!created) {
-          throw new Error("insert project repo returned no row");
-        }
-        const stored = toProjectRepo(created);
-        if (!stored) {
-          throw new Error("insert project repo returned invalid row");
-        }
-        if (!project.defaultRepoId) {
-          await tx
-            .update(projects)
-            .set({ defaultRepoId: stored.id, updatedAt: new Date() })
-            .where(and(eq(projects.id, repo.projectId), isNull(projects.defaultRepoId)));
-        }
-        return stored;
-      });
-    } catch (error) {
-      if (error instanceof ProjectNotFoundError) {
-        throw error;
+      const [row] = await this.db
+        .insert(projectRepos)
+        .values({
+          id: repo.id,
+          projectId: repo.projectId,
+          provider: repo.provider,
+          remoteUrl: repo.remoteUrl,
+          defaultBranch: repo.defaultBranch,
+          githubRepoId: repo.githubRepoId,
+          installationId: repo.installationId,
+          localRootHint: repo.localRootHint,
+          indexMode: repo.indexMode,
+          lastIndexedSha: repo.lastIndexedSha,
+          lastIndexedAt: repo.lastIndexedAt,
+        })
+        .returning();
+      if (!row) {
+        throw new Error("insert project repo returned no row");
       }
+      const stored = toProjectRepo(row);
+      if (!stored) {
+        throw new Error("insert project repo returned invalid row");
+      }
+      return stored;
+    } catch (error) {
       if (uniqueConstraint(error) === "project_repo") {
         throw new UniqueViolationError("project_repos");
       }
       throw error;
     }
+  }
+
+  async setDefaultRepoIfEmpty(
+    projectId: string,
+    repoId: string,
+    updatedAt: Date,
+  ): Promise<ProjectRecord> {
+    const [updated] = await this.db
+      .update(projects)
+      .set({ defaultRepoId: repoId, updatedAt })
+      .where(and(eq(projects.id, projectId), isNull(projects.defaultRepoId)))
+      .returning();
+    if (updated) {
+      return toProject(updated);
+    }
+    const existing = await this.findProjectById(projectId);
+    if (!existing) {
+      throw new Error("project not found");
+    }
+    return existing;
   }
 }
 

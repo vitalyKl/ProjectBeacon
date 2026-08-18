@@ -1,5 +1,6 @@
 export type AuthConfig = {
   bootstrapAdminToken: string | undefined;
+  workerToken: string | undefined;
   authLocal: boolean;
   authLocalInviteOnly: boolean;
   authGithub: boolean;
@@ -12,6 +13,7 @@ export type AuthConfig = {
 export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
   return {
     bootstrapAdminToken: env["BOOTSTRAP_ADMIN_TOKEN"],
+    workerToken: env["BEACON_WORKER_TOKEN"],
     authLocal: env["AUTH_LOCAL"] === "true",
     authLocalInviteOnly: env["AUTH_LOCAL_INVITE_ONLY"] !== "false",
     authGithub: env["AUTH_GITHUB"] === "true",

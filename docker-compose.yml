@@ -1,5 +1,8 @@
 # worker and mcp are not in this compose yet.
 # Later PRs may unpublish API :8080; both stay published for now so API /health still works.
+# mcp is still later. web is not in this compose yet.
+# API :8080 is published so host liveness (/health) works.
+# Worker ports are not published.
 
 services:
   postgres:
@@ -34,6 +37,7 @@ services:
       AUTH_GITHUB: ${AUTH_GITHUB:-false}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
     ports:
       - "8080:8080"
     healthcheck:
@@ -65,11 +69,26 @@ services:
       BEACON_PUBLIC_URL: ${BEACON_PUBLIC_URL:-http://localhost:3000}
       AUTH_GITHUB: ${AUTH_GITHUB:-false}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
-      BEACON_WORKSPACE: ${BEACON_WORKSPACE:-}
+      BEACON_WORKSPACE: ${BEACON_WORKSPACE:-/workspace}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
     ports:
       - "3000:3000"
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
+      BEACON_API_URL: http://api:8080
+      BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
+    volumes:
+      - ${BEACON_WORKSPACE:-./workspace}:/workspace:ro
 
 volumes:
   pgdata:

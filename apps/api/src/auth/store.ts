@@ -123,7 +123,7 @@ export interface AuthStore {
   findProjectById(id: string): Promise<ProjectRecord | undefined>;
   updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string; defaultRepoId?: string | null },
+    patch: { name?: string; description?: string; slug?: string },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined>;
   softDeleteProject(id: string, deletedAt: Date): Promise<ProjectRecord | undefined>;
@@ -212,6 +212,7 @@ export interface AuthStore {
   findProjectRepo(id: string): Promise<ProjectRepoRef | undefined>;
   listComments(taskId: string): Promise<TaskCommentRecord[]>;
   createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord>;
+  setDefaultRepoIfEmpty(projectId: string, repoId: string, updatedAt: Date): Promise<ProjectRecord>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -629,7 +630,7 @@ export class MemoryAuthStore implements AuthStore {
 
   async updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string; defaultRepoId?: string | null },
+    patch: { name?: string; description?: string; slug?: string },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined> {
     return this.enqueueWrite(() => {
@@ -654,9 +655,6 @@ export class MemoryAuthStore implements AuthStore {
       }
       if (patch.description !== undefined) {
         project.description = patch.description;
-      }
-      if (patch.defaultRepoId !== undefined) {
-        project.defaultRepoId = patch.defaultRepoId;
       }
       project.updatedAt = new Date(updatedAt);
       return cloneProject(project);
@@ -1550,37 +1548,51 @@ export class MemoryAuthStore implements AuthStore {
 
   async createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord> {
     return this.enqueueWrite(() => {
-      const project = this.projects.get(repo.projectId);
-      if (!project || project.deletedAt) {
-        throw new ProjectNotFoundError();
+      if (this.projectRepos.has(repo.id)) {
+        throw new UniqueViolationError("project_repos_pkey");
       }
-      for (const existing of this.projectRepos.values()) {
-        if (existing.id === repo.id) {
-          throw new UniqueViolationError("project_repos_pkey");
+      if (repo.provider === "github" && repo.githubRepoId !== null) {
+        for (const existing of this.projectRepos.values()) {
+          if (
+            existing.projectId === repo.projectId &&
+            existing.githubRepoId !== null &&
+            existing.githubRepoId === repo.githubRepoId
+          ) {
+            throw new UniqueViolationError("project_repos_project_id_github_repo_id_unique");
+          }
         }
-        if (
-          repo.githubRepoId !== null &&
-          existing.projectId === repo.projectId &&
-          existing.githubRepoId === repo.githubRepoId
-        ) {
-          throw new UniqueViolationError("project_repos_project_id_github_repo_id_unique");
-        }
-        if (
-          repo.provider === "local" &&
-          repo.localRootHint !== null &&
-          existing.projectId === repo.projectId &&
-          existing.provider === "local" &&
-          existing.localRootHint === repo.localRootHint
-        ) {
-          throw new UniqueViolationError("project_repos_local_root");
+      }
+      if (repo.provider === "local" && repo.localRootHint) {
+        for (const existing of this.projectRepos.values()) {
+          if (
+            existing.projectId === repo.projectId &&
+            existing.provider === "local" &&
+            existing.localRootHint === repo.localRootHint
+          ) {
+            throw new UniqueViolationError("project_repos_local_root");
+          }
         }
       }
       this.projectRepos.set(repo.id, cloneProjectRepo(repo));
-      if (!project.defaultRepoId) {
-        project.defaultRepoId = repo.id;
-        project.updatedAt = new Date();
-      }
       return cloneProjectRepo(repo);
+    });
+  }
+
+  async setDefaultRepoIfEmpty(
+    projectId: string,
+    repoId: string,
+    updatedAt: Date,
+  ): Promise<ProjectRecord> {
+    return this.enqueueWrite(() => {
+      const project = this.projects.get(projectId);
+      if (!project) {
+        throw new Error("project not found");
+      }
+      if (!project.defaultRepoId) {
+        project.defaultRepoId = repoId;
+        project.updatedAt = new Date(updatedAt);
+      }
+      return cloneProject(project);
     });
   }
     string,

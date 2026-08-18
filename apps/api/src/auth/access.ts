@@ -4,18 +4,16 @@ import type { Context } from "hono";
 import { errorJson } from "../errors.js";
 import type { ProjectRecord, ProjectRole } from "../orgs/types.js";
 import type { TokenRecord } from "../tokens/types.js";
-import { parseBearer } from "./tokens.js";
-import {
-  hashProjectToken,
-  isProjectTokenFormat,
-} from "./project-tokens.js";
+import { parseBearer, tokenEquals } from "./tokens.js";
+import { hashProjectToken, isProjectTokenFormat } from "./project-tokens.js";
 import { enforceRateLimit } from "./rate-limit.js";
 import { loadSession, type AuthDeps } from "./routes.js";
 import type { UserRecord } from "./store.js";
 
 export type AuthActor =
-  | { kind: "user"; user: UserRecord }
-  | { kind: "token"; token: TokenRecord };
+  { kind: "user"; user: UserRecord } | { kind: "token"; token: TokenRecord } | { kind: "worker" };
+
+export const WORKER_ACTOR_ID = "00000000-0000-0000-0000-000000000001";
 
 const READ_SCOPES: readonly Scope[] = [
   "project:read",
@@ -55,6 +53,9 @@ export function tokenHasScope(token: TokenRecord, scope: Scope): boolean {
 }
 
 export function isAdminActor(actor: AuthActor, role?: ProjectRole | null): boolean {
+  if (actor.kind === "worker") {
+    return true;
+  }
   if (actor.kind === "token") {
     return actor.token.scopes.includes("admin");
   }
@@ -62,10 +63,7 @@ export function isAdminActor(actor: AuthActor, role?: ProjectRole | null): boole
 }
 
 /** Non-admin tokens may only create tasks in backlog. */
-export function taskStatusOnCreate(
-  actor: AuthActor,
-  requested: string | undefined,
-): string {
+export function taskStatusOnCreate(actor: AuthActor, requested: string | undefined): string {
   if (actor.kind === "token" && !actor.token.scopes.includes("admin")) {
     return "backlog";
   }
@@ -99,6 +97,9 @@ export function actorHasCapability(
   needed: Scope,
   role?: ProjectRole | null,
 ): boolean {
+  if (actor.kind === "worker") {
+    return true;
+  }
   if (actor.kind === "token") {
     return tokenHasScope(actor.token, needed);
   }
@@ -106,6 +107,26 @@ export function actorHasCapability(
     return false;
   }
   return scopesForRole(role).includes(needed);
+}
+
+export function actorIdempotencyRef(actor: AuthActor): { type: "token" | "user"; id: string } {
+  if (actor.kind === "user") {
+    return { type: "user", id: actor.user.id };
+  }
+  if (actor.kind === "token") {
+    return { type: "token", id: actor.token.id };
+  }
+  return { type: "token", id: WORKER_ACTOR_ID };
+}
+
+export function actorActivityRef(actor: AuthActor): { type: string; id: string } {
+  if (actor.kind === "user") {
+    return { type: "user", id: actor.user.id };
+  }
+  if (actor.kind === "token") {
+    return { type: "token", id: actor.token.id };
+  }
+  return { type: "system", id: WORKER_ACTOR_ID };
 }
 
 function isResponse(value: AuthActor | Response): value is Response {
@@ -116,6 +137,22 @@ export async function requireActor(c: Context, deps: AuthDeps): Promise<AuthActo
   const authorization = c.req.header("authorization");
   if (authorization !== undefined) {
     const bearer = parseBearer(authorization);
+    if (deps.config.workerToken && tokenEquals(deps.config.workerToken, bearer)) {
+      const actor: AuthActor = { kind: "worker" };
+      const limited = await enforceRateLimit(
+        c,
+        deps.store,
+        "token",
+        WORKER_ACTOR_ID,
+        deps.rateLimits,
+        deps.clock.now(),
+        "overall",
+      );
+      if (limited) {
+        return limited;
+      }
+      return actor;
+    }
     if (!bearer || !isProjectTokenFormat(bearer)) {
       return errorJson(c, 401, "unauthorized", "invalid token");
     }
@@ -180,6 +217,10 @@ export async function authorizeProjectActor(
   const project = await deps.store.findProjectById(projectId);
   if (!project || project.deletedAt) {
     return errorJson(c, 404, "not_found", "project not found");
+  }
+
+  if (actor.kind === "worker") {
+    return { project, actor, role: "admin" };
   }
 
   if (actor.kind === "token") {

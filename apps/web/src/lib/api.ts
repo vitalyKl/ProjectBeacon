@@ -160,6 +160,8 @@ export async function fetchAllPages<T>(
     seen.add(next);
     cursor = next;
   }
+}
+
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
@@ -240,20 +242,6 @@ export function githubAuthorizeUrl(clientId: string, redirectTo: string): string
   url.searchParams.set("redirect_uri", redirectTo);
   url.searchParams.set("scope", "read:user user:email");
   return url.toString();
-}
-
-export async function createOrgProject(
-  orgId: string,
-  input: { name: string; slug: string },
-): Promise<PublicProject> {
-  const res = await apiFetch(`/v1/orgs/${encodeURIComponent(orgId)}/projects`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    throw await readApiError(res, "failed to create project");
-  }
-  return parseJson<PublicProject>(res);
 }
 
 export async function createProjectRepo(

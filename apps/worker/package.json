@@ -10,12 +10,22 @@
     }
   },
   "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint ."
   },
+  "dependencies": {
+    "@beacon/context": "workspace:*",
+    "pg-boss": "^10.3.3",
+    "tsx": "^4.21.0"
+  },
   "devDependencies": {
     "@beacon/config": "workspace:*",
+    "@types/node": "^22.18.0",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   }
 }
