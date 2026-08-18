@@ -4,16 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "tsx watch src/serve.ts",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port 3000",
+    "start": "tsx src/serve.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint ."
   },
   "dependencies": {
     "next": "16.3.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "@hono/node-server": "^1.19.9",
+    "hono": "^4.11.3",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@beacon/config": "workspace:*",
@@ -25,5 +28,11 @@
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4.3.3",
     "typescript": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   }
 }

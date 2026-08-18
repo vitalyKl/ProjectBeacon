@@ -120,22 +120,47 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)
 
   apps/mcp:
+    dependencies:
+      '@beacon/mcp-tools':
+        specifier: workspace:*
+        version: link:../../packages/mcp-tools
+      '@hono/node-server':
+        specifier: ^1.19.9
+        version: 1.19.17(hono@4.13.2)
+      hono:
+        specifier: ^4.11.3
+        version: 4.13.2
+      tsx:
+        specifier: ^4.21.0
+        version: 4.23.12
     devDependencies:
       '@beacon/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/node':
+        specifier: ^22.18.0
+        version: 22.20.1
       eslint:
         specifier: 'catalog:'
         version: 9.39.5(jiti@2.7.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)
 
   apps/web:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.19.9
+        version: 1.19.17(hono@4.13.2)
+      hono:
+        specifier: ^4.11.3
+        version: 4.13.2
       next:
         specifier: 16.3.1
         version: 16.3.1(@babel/core@7.29.7)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -145,6 +170,9 @@ importers:
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
+      tsx:
+        specifier: ^4.21.0
+        version: 4.23.12
     devDependencies:
       '@beacon/config':
         specifier: workspace:*

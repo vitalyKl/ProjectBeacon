@@ -10,12 +10,23 @@
     }
   },
   "scripts": {
+    "dev": "tsx watch src/serve.ts",
+    "start": "tsx src/serve.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint ."
   },
+  "dependencies": {
+    "@beacon/mcp-tools": "workspace:*",
+    "@hono/node-server": "^1.19.9",
+    "hono": "^4.11.3",
+    "tsx": "^4.21.0"
+  },
   "devDependencies": {
     "@beacon/config": "workspace:*",
+    "@types/node": "^22.18.0",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   }
 }

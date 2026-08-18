@@ -4,6 +4,8 @@
 # postgres + api + worker. web and mcp are omitted.
 # API :8080 is published so host liveness (/health) works.
 # Worker ports are not published.
+# postgres, api, mcp, and web. worker is not in this compose yet.
+# Web :3000 reverse-proxies /mcp to the mcp service.
 
 services:
   postgres:
@@ -60,6 +62,10 @@ services:
       dockerfile: Dockerfile.web
       args:
         BEACON_API_URL: http://api:8080
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
     depends_on:
       api:
         condition: service_healthy
@@ -85,13 +91,32 @@ services:
       postgres:
         condition: service_healthy
       api:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
-      BEACON_API_URL: http://api:8080
       BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
     volumes:
       - ${BEACON_WORKSPACE:-./workspace}:/workspace:ro
+      PORT: "8080"
+      BEACON_PROJECT_ID: ${BEACON_PROJECT_ID:-}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+      dockerfile: Dockerfile.web
+      mcp:
+      HOST: "0.0.0.0"
+      MCP_URL: http://mcp:8080
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
 
 volumes:
   pgdata:
