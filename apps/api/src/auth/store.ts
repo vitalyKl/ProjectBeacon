@@ -4,41 +4,18 @@ import {
   DEFAULT_SECURITY_CONSTRAINT_STATUS,
 } from "@beacon/context";
 import { uuidv7 } from "@beacon/shared";
-
-import type {
-  CodeOwnerRecord,
-  ConstraintRecord,
-  ContextNodeRecord,
-  ContextRevisionRecord,
-  DecisionRecord,
-  ProjectRepoRecord,
-} from "../context/types.js";
+import type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
-import {
-  higherOrgRole,
-  higherProjectRole,
-  OrgSlugTakenError,
-  ProjectSlugTakenError,
-  type OrgInviteRecord,
-  type OrgMemberRecord,
-  type OrgRecord,
-  type ProjectInviteRecord,
-  type ProjectMemberRecord,
-  type ProjectRecord,
-} from "../orgs/types.js";
+import { higherOrgRole, higherProjectRole, OrgSlugTakenError, ProjectSlugTakenError, type OrgInviteRecord, type OrgMemberRecord, type OrgRecord, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord } from "../orgs/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
-import {
-  DependencyCycleError,
-  IDEMPOTENCY_TTL_MS,
-  VersionConflictError,
-  type ActivityEventRecord,
-  type IdempotencyActorType,
-  type MilestoneRecord,
-  type TaskCommentRecord,
-  type TaskDependencyRecord,
-  type TaskPatch,
-  type TaskRecord,
-} from "../roadmap/types.js";
+import { DependencyCycleError, IDEMPOTENCY_TTL_MS, VersionConflictError, type ActivityEventRecord, type IdempotencyActorType, type MilestoneRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord } from "../roadmap/types.js";
+import type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
+export type { OrgInviteRecord, OrgMemberRecord, OrgRecord, ProjectInviteRecord, ProjectMemberRecord, ProjectRecord } from "../orgs/types.js";
+export { InviteTargetRequiredError, OrgSlugTakenError, ProjectSlugTakenError } from "../orgs/types.js";
+export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
+export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
+export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
+export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
 import {
   InvalidReferenceError,
   isLockActive,
@@ -52,14 +29,20 @@ import {
   type StartWorkInput,
   type StartWorkWriteResult,
 } from "../sessions/types.js";
-import type {
-  AgentSessionRef,
-  ApprovalRecord,
-  RateBucketRecord,
-  TokenRecord,
-} from "../tokens/types.js";
+
+export type {
+  AgentSessionRecord,
+  FinishWorkResult,
+  HandoffRecord,
+} from "../sessions/types.js";
+export {
+  InvalidReferenceError,
+  SessionNotActiveError,
+  TaskLockedError,
+} from "../sessions/types.js";
 
 export type UserRecord = {
+
   id: string;
   githubId: bigint | null;
   login: string;
@@ -72,6 +55,7 @@ export type UserRecord = {
 };
 
 export type SessionRecord = {
+
   id: string;
   userId: string;
   tokenHash: Buffer;
@@ -83,54 +67,8 @@ export type SessionRecord = {
   ip: string | null;
 };
 
-export type {
-  OrgInviteRecord,
-  OrgMemberRecord,
-  OrgRecord,
-  ProjectInviteRecord,
-  ProjectMemberRecord,
-  ProjectRecord,
-} from "../orgs/types.js";
-export {
-  InviteTargetRequiredError,
-  OrgSlugTakenError,
-  ProjectSlugTakenError,
-} from "../orgs/types.js";
-export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
-export type {
-  CodeOwnerRecord,
-  ConstraintRecord,
-  ContextNodeRecord,
-  ContextRevisionRecord,
-  DecisionRecord,
-  ProjectRepoRecord,
-} from "../context/types.js";
-export type {
-  ActivityEventRecord,
-  MilestoneRecord,
-  TaskCommentRecord,
-  TaskDependencyRecord,
-  TaskPatch,
-  TaskRecord,
-} from "../roadmap/types.js";
-export type {
-  AgentSessionRecord,
-  FinishWorkResult,
-  HandoffRecord,
-} from "../sessions/types.js";
-export {
-  InvalidReferenceError,
-  SessionNotActiveError,
-  TaskLockedError,
-} from "../sessions/types.js";
-export type {
-  AgentSessionRef,
-  ApprovalRecord,
-  RateBucketRecord,
-  TokenRecord,
-} from "../tokens/types.js";
-
 export type IdempotentWrites = {
+
   createTask(task: TaskRecord): Promise<TaskRecord>;
   createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
   writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
@@ -138,6 +76,7 @@ export type IdempotentWrites = {
 };
 
 export class LoginTakenError extends Error {
+
   override readonly name = "LoginTakenError";
 
   constructor() {
@@ -146,6 +85,7 @@ export class LoginTakenError extends Error {
 }
 
 export class BootstrapConsumedError extends Error {
+
   override readonly name = "BootstrapConsumedError";
 
   constructor() {
@@ -154,6 +94,7 @@ export class BootstrapConsumedError extends Error {
 }
 
 export class GithubIdTakenError extends Error {
+
   override readonly name = "GithubIdTakenError";
 
   constructor() {
@@ -162,6 +103,7 @@ export class GithubIdTakenError extends Error {
 }
 
 export class UniqueViolationError extends Error {
+
   override readonly name = "UniqueViolationError";
 
   constructor(constraint: string) {
@@ -170,6 +112,7 @@ export class UniqueViolationError extends Error {
 }
 
 export interface AuthStore {
+
   hasAnyUser(): Promise<boolean>;
   findUserById(id: string): Promise<UserRecord | undefined>;
   findUserByLogin(login: string): Promise<UserRecord | undefined>;
@@ -282,27 +225,6 @@ export interface AuthStore {
   heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
   finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
   findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined>;
-  createApiToken(token: TokenRecord): Promise<TokenRecord>;
-  listApiTokens(projectId: string): Promise<TokenRecord[]>;
-  findApiTokenById(id: string): Promise<TokenRecord | undefined>;
-  findApiTokenByHash(tokenHash: Buffer): Promise<TokenRecord | undefined>;
-  touchApiToken(id: string, lastUsedAt: Date): Promise<void>;
-  revokeApiToken(id: string, revokedAt: Date): Promise<TokenRecord | undefined>;
-  createApproval(approval: ApprovalRecord): Promise<ApprovalRecord>;
-  listApprovals(projectId: string, status?: ApprovalRecord["status"]): Promise<ApprovalRecord[]>;
-  findApprovalById(id: string): Promise<ApprovalRecord | undefined>;
-  resolveApproval(
-    id: string,
-    decision: "approved" | "denied",
-    resolvedAt: Date,
-    resolvedBy: string | null,
-  ): Promise<ApprovalRecord | undefined>;
-  consumeRateBucket(input: {
-    bucketKey: string;
-    windowStart: Date;
-    countDelta: number;
-    bytesDelta: number;
-  }): Promise<RateBucketRecord>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -395,6 +317,7 @@ function emailsEqual(left: string | null | undefined, right: string | null | und
 }
 
 export class MemoryAuthStore implements AuthStore {
+
   private readonly users = new Map<string, UserRecord>();
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly orgs = new Map<string, OrgRecord>();
@@ -417,17 +340,8 @@ export class MemoryAuthStore implements AuthStore {
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
   private readonly projectRepos = new Map<string, ProjectRepoRecord>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
-  private readonly idempotency = new Map<
-    string,
-    { response: unknown; createdAt: Date }
-  >();
-  private readonly agentSessions = new Map<string, AgentSessionRef>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
-  private readonly apiTokens = new Map<string, TokenRecord>();
-  private readonly approvals = new Map<string, ApprovalRecord>();
-  private readonly rateBuckets = new Map<string, RateBucketRecord>();
   private readonly agentSessions = new Map<string, AgentSessionRecord>();
-  private readonly handoffs = new Map<string, HandoffRecord>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -698,7 +612,6 @@ export class MemoryAuthStore implements AuthStore {
         role: "admin",
         createdAt: project.createdAt,
       });
-      this.seedDefaultSecurityConstraints(project.id, project.createdAt);
       return cloneProject(project);
     });
   }
@@ -1258,21 +1171,7 @@ export class MemoryAuthStore implements AuthStore {
     this.activity.set(event.id, cloneActivity(event));
     return cloneActivity(event);
   }
-}
-
-function cloneMilestone(milestone: MilestoneRecord): MilestoneRecord {
-  return { ...milestone, createdAt: new Date(milestone.createdAt) };
-}
-
-function cloneTask(task: TaskRecord): TaskRecord {
-  return {
-    ...task,
-    linkedPaths: task.linkedPaths.map((path) => ({ ...path })),
-    lockExpiresAt: task.lockExpiresAt ? new Date(task.lockExpiresAt) : null,
-    deletedAt: task.deletedAt ? new Date(task.deletedAt) : null,
-    createdAt: new Date(task.createdAt),
-    updatedAt: new Date(task.updatedAt),
-  };
+  private readonly handoffs = new Map<string, HandoffRecord>();
   async createApiToken(token: TokenRecord): Promise<TokenRecord> {
     this.apiTokens.set(token.id, cloneToken(token));
     return cloneToken(token);
@@ -1387,8 +1286,6 @@ function cloneTask(task: TaskRecord): TaskRecord {
     existing.bytes += BigInt(input.bytesDelta);
     return cloneRateBucket(existing);
   }
-
-  /** Test helper to seed an agent session. */
   putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
     if ("agentName" in session) {
       this.agentSessions.set(session.id, cloneAgentSession(session));
@@ -1584,6 +1481,24 @@ function cloneTask(task: TaskRecord): TaskRecord {
       previousStatus,
     };
   }
+    string,
+    { response: unknown; createdAt: Date }
+  >();
+}
+
+function cloneMilestone(milestone: MilestoneRecord): MilestoneRecord {
+  return { ...milestone, createdAt: new Date(milestone.createdAt) };
+}
+
+function cloneTask(task: TaskRecord): TaskRecord {
+  return {
+    ...task,
+    linkedPaths: task.linkedPaths.map((path) => ({ ...path })),
+    lockExpiresAt: task.lockExpiresAt ? new Date(task.lockExpiresAt) : null,
+    deletedAt: task.deletedAt ? new Date(task.deletedAt) : null,
+    createdAt: new Date(task.createdAt),
+    updatedAt: new Date(task.updatedAt),
+  };
 }
 
 function cloneComment(comment: TaskCommentRecord): TaskCommentRecord {
@@ -1637,6 +1552,12 @@ function cloneProjectRepo(repo: ProjectRepoRecord): ProjectRepoRecord {
 
 function cloneCodeOwner(row: CodeOwnerRecord): CodeOwnerRecord {
   return { ...row, owners: [...row.owners] };
+}
+
+function idempotencyKey(actorType: IdempotencyActorType, actorId: string, key: string): string {
+  return `${actorType}:${actorId}:${key}`;
+}
+
 function cloneAgentSession(session: AgentSessionRecord): AgentSessionRecord {
   return {
     ...session,
@@ -1654,8 +1575,4 @@ function cloneHandoff(handoff: HandoffRecord): HandoffRecord {
     openQuestions: [...handoff.openQuestions],
     createdAt: new Date(handoff.createdAt),
   };
-}
-
-function idempotencyKey(actorType: IdempotencyActorType, actorId: string, key: string): string {
-  return `${actorType}:${actorId}:${key}`;
 }
