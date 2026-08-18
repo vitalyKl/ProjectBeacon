@@ -646,6 +646,70 @@ describe("milestones and tasks", () => {
     });
   });
 
+  it("pages every outgoing edge from the same task", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "same-from");
+    const aRes = await createTask(alice.app, alice.token, project.id, { title: "A" }, "same-a");
+    const bRes = await createTask(alice.app, alice.token, project.id, { title: "B" }, "same-b");
+    const cRes = await createTask(alice.app, alice.token, project.id, { title: "C" }, "same-c");
+    const a = (await aRes.json()) as TaskBody;
+    const b = (await bRes.json()) as TaskBody;
+    const c = (await cRes.json()) as TaskBody;
+
+    const firstEdge = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: b.id, type: "blocks" }),
+    });
+    expect(firstEdge.status).toBe(201);
+    const secondEdge = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: c.id, type: "blocks" }),
+    });
+    expect(secondEdge.status).toBe(201);
+    const thirdEdge = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: b.id, type: "relates" }),
+    });
+    expect(thirdEdge.status).toBe(201);
+
+    const listed = await alice.app.request(`/v1/projects/${project.id}/dependencies`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(listed.status).toBe(200);
+    const listedBody = (await listed.json()) as {
+      items: { from_task_id: string; to_task_id: string; type: string }[];
+      next_cursor: string | null;
+    };
+    expect(listedBody.next_cursor).toBeNull();
+    expect(listedBody.items).toHaveLength(3);
+
+    const walked: { from_task_id: string; to_task_id: string; type: string }[] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 4; i += 1) {
+      const query = cursor ? `limit=1&cursor=${encodeURIComponent(cursor)}` : "limit=1";
+      const page = await alice.app.request(`/v1/projects/${project.id}/dependencies?${query}`, {
+        headers: { cookie: cookieHeader(alice.token) },
+      });
+      expect(page.status).toBe(200);
+      const body = (await page.json()) as {
+        items: { from_task_id: string; to_task_id: string; type: string }[];
+        next_cursor: string | null;
+      };
+      walked.push(...body.items);
+      cursor = body.next_cursor;
+      if (!cursor) {
+        break;
+      }
+    }
+    expect(cursor).toBeNull();
+    expect(walked).toHaveLength(listedBody.items.length);
+    expect(walked).toEqual(listedBody.items);
+  });
+
   it("rejects an unknown or non-member assignee", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");

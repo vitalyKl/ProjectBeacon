@@ -371,7 +371,7 @@ function DependencyView({
               ))}
               {layout.nodes.map((node) => (
                 <g key={node.task.id} transform={`translate(${node.x} ${node.y})`}>
-                  <Link href={`/app/tasks/${node.task.id}`}>
+                  <a href={`/app/tasks/${node.task.id}`}>
                     <rect
                       width={node.width}
                       height={node.height}
@@ -395,7 +395,7 @@ function DependencyView({
                       {statusLabel(node.task.status)}
                       {node.locked ? " · locked" : ""}
                     </text>
-                  </Link>
+                  </a>
                 </g>
               ))}
             </svg>

@@ -9,7 +9,7 @@ import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes
 import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { isTerminalTaskStatus } from "../sessions/types.js";
-import { parsePageQuery, paginateRecords } from "./page.js";
+import { parsePageQuery, paginateRecords, dependencyCursorId } from "./page.js";
 import { presentActivity, presentComment, presentDependency, presentMilestone, presentTask } from "./present.js";
 import { isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, type DependencyType, type LinkedPath, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
 
@@ -340,7 +340,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       return page;
     }
     const records = await deps.store.listDependencies(access.project.id);
-    const keyed = records.map((item) => ({ ...item, id: item.fromTaskId }));
+    const keyed = records.map((item) => ({
+      ...item,
+      id: dependencyCursorId(item.fromTaskId, item.toTaskId, item.type, item.createdAt),
+    }));
     const result = paginateRecords(keyed, page, (item) => item.createdAt);
     return c.json({
       items: result.items.map(presentDependency),
