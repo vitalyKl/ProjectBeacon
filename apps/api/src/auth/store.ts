@@ -181,7 +181,15 @@ export interface AuthStore {
   ): Promise<ActivityEventRecord[]>;
   listContextNodes(projectId: string): Promise<ContextNodeRecord[]>;
   findContextNodeById(id: string): Promise<ContextNodeRecord | undefined>;
+  findContextNodeByScope(scope: {
+    projectId: string;
+    scopeType: ContextNodeRecord["scopeType"];
+    repoId: string | null;
+    path: string;
+    taskId: string | null;
+  }): Promise<ContextNodeRecord | undefined>;
   upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
+  insertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
   listActiveConstraints(projectId: string): Promise<ConstraintRecord[]>;
   listConstraints(projectId: string): Promise<ConstraintRecord[]>;
   insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
@@ -933,6 +941,17 @@ export class MemoryAuthStore implements AuthStore {
     return node ? cloneContextNode(node) : undefined;
   }
 
+  async findContextNodeByScope(scope: {
+    projectId: string;
+    scopeType: ContextNodeRecord["scopeType"];
+    repoId: string | null;
+    path: string;
+    taskId: string | null;
+  }): Promise<ContextNodeRecord | undefined> {
+    const node = this.matchContextNodeByScope(scope);
+    return node ? cloneContextNode(node) : undefined;
+  }
+
   seedContextNode(node: ContextNodeRecord): void {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
@@ -943,7 +962,7 @@ export class MemoryAuthStore implements AuthStore {
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
     return this.enqueueWrite(() => {
-      const existing = this.findContextNodeByScope(node);
+      const existing = this.matchContextNodeByScope(node);
       if (existing) {
         existing.sections = node.sections.map((section) => ({ ...section }));
         existing.sectionsText = node.sectionsText;
@@ -960,14 +979,31 @@ export class MemoryAuthStore implements AuthStore {
     });
   }
 
-  private findContextNodeByScope(node: ContextNodeRecord): ContextNodeRecord | undefined {
+  async insertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
+    return this.enqueueWrite(() => {
+      const existing = this.matchContextNodeByScope(node);
+      if (existing) {
+        return cloneContextNode(existing);
+      }
+      this.contextNodes.set(node.id, cloneContextNode(node));
+      return cloneContextNode(node);
+    });
+  }
+
+  private matchContextNodeByScope(scope: {
+    projectId: string;
+    scopeType: ContextNodeRecord["scopeType"];
+    repoId: string | null;
+    path: string;
+    taskId: string | null;
+  }): ContextNodeRecord | undefined {
     for (const existing of this.contextNodes.values()) {
       if (
-        existing.projectId === node.projectId &&
-        existing.scopeType === node.scopeType &&
-        existing.repoId === node.repoId &&
-        existing.path === node.path &&
-        existing.taskId === node.taskId
+        existing.projectId === scope.projectId &&
+        existing.scopeType === scope.scopeType &&
+        existing.repoId === scope.repoId &&
+        existing.path === scope.path &&
+        existing.taskId === scope.taskId
       ) {
         return existing;
       }

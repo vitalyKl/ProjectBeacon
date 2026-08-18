@@ -261,20 +261,17 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       };
     }
 
-    const prior =
-      existing ??
-      (await deps.store.listContextNodes(access.project.id)).find(
-        (node) =>
-          node.scopeType === next.scopeType &&
-          node.repoId === next.repoId &&
-          node.path === next.path &&
-          node.taskId === next.taskId,
-      );
-    const stored = await deps.store.upsertContextNode(next);
-    if (!existing && stored.id !== nodeId) {
-      if (prior) {
-        await deps.store.upsertContextNode(prior);
-      }
+    if (existing) {
+      const stored = await deps.store.upsertContextNode(next);
+      return c.json(presentContextNode(stored, session.user));
+    }
+
+    const occupied = await deps.store.findContextNodeByScope(next);
+    if (occupied) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+    const stored = await deps.store.insertContextNode(next);
+    if (stored.id !== nodeId) {
       return errorJson(c, 404, "not_found", "node not found");
     }
     return c.json(presentContextNode(stored, session.user));

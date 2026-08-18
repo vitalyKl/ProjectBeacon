@@ -191,6 +191,7 @@ export function ContextEditor() {
     () => (creating ? null : (nodes.find((node) => node.id === selectedId) ?? null)),
     [creating, nodes, selectedId],
   );
+  const isCreate = creating || !selected;
 
   const applyNodes = useCallback((items: ContextNode[], preferId?: string | null) => {
     setNodes(items);
@@ -200,6 +201,13 @@ export function ContextEditor() {
     if (preferId) {
       creatingRef.current = false;
       setCreating(false);
+    }
+    if (items.length === 0) {
+      creatingRef.current = true;
+      setCreating(true);
+      setSelectedId(null);
+      setDrafts(emptyDraftsFromNode(null));
+      return;
     }
     setSelectedId((current) => {
       const nextId =
@@ -310,7 +318,7 @@ export function ContextEditor() {
     if (!project) {
       return;
     }
-    if (creating) {
+    if (isCreate) {
       if (createScope === "path" && createPath.trim().length === 0) {
         setError("path is required for path scope");
         return;
@@ -320,21 +328,20 @@ export function ContextEditor() {
         return;
       }
     } else if (!selected) {
-      setError("select a node or start a new brief");
       return;
     }
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const nodeId = creating || !selected ? randomUuidV7() : selected.id;
+      const nodeId = isCreate || !selected ? randomUuidV7() : selected.id;
       const body: Record<string, unknown> = {
         sections: draftsToSections(drafts),
       };
       if (reviewState) {
         body.review_state = reviewState;
       }
-      if (creating || !selected) {
+      if (isCreate) {
         body.scope_type = createScope;
         body.path = createScope === "path" ? createPath.trim() : "";
         if (createScope !== "project") {
@@ -540,13 +547,13 @@ export function ContextEditor() {
               New brief
             </button>
           </div>
-          {nodes.length === 0 && !creating ? (
+          {nodes.length === 0 && !isCreate ? (
             <p className="px-3 py-3 text-sm leading-6 text-muted">
               No brief yet. Write one here, or import an AGENTS.md / CLAUDE.md / conventions file.
             </p>
           ) : (
             <ul className="flex flex-col">
-              {creating ? (
+              {isCreate ? (
                 <li>
                   <div className="flex w-full flex-col items-start gap-1 bg-background px-3 py-2 text-left text-sm">
                     <span className="font-medium">New brief</span>
@@ -555,7 +562,7 @@ export function ContextEditor() {
                 </li>
               ) : null}
               {nodes.map((node) => {
-                const active = !creating && node.id === selectedId;
+                const active = !isCreate && node.id === selectedId;
                 return (
                   <li key={node.id}>
                     <button
@@ -604,7 +611,7 @@ export function ContextEditor() {
 
           {tab === "edit" ? (
             <div className="space-y-4 p-4">
-              {selected ? (
+              {!isCreate && selected ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-medium">{scopeLabel(selected)}</span>
                   <span className="text-muted">{sourceLabel(selected.source)}</span>

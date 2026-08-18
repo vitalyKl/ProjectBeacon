@@ -2276,6 +2276,78 @@ export class DbAuthStore implements AuthStore {
       .limit(1);
     return row ? toContextRevision(row) : undefined;
   }
+
+  async findContextNodeByScope(scope: {
+    projectId: string;
+    scopeType: ContextNodeRecord["scopeType"];
+    repoId: string | null;
+    path: string;
+    taskId: string | null;
+  }): Promise<ContextNodeRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(contextNodes)
+      .where(
+        and(
+          eq(contextNodes.projectId, scope.projectId),
+          eq(contextNodes.scopeType, scope.scopeType),
+          eq(contextNodes.path, scope.path),
+          scope.repoId === null
+            ? isNull(contextNodes.repoId)
+            : eq(contextNodes.repoId, scope.repoId),
+          scope.taskId === null
+            ? isNull(contextNodes.taskId)
+            : eq(contextNodes.taskId, scope.taskId),
+        ),
+      )
+      .limit(1);
+    return row ? toContextNode(row) : undefined;
+  }
+
+  async insertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
+    const existing = await this.findContextNodeByScope(node);
+    if (existing) {
+      return existing;
+    }
+    try {
+      const [row] = await this.db
+        .insert(contextNodes)
+        .values({
+          id: node.id,
+          projectId: node.projectId,
+          repoId: node.repoId,
+          taskId: node.taskId,
+          scopeType: node.scopeType,
+          path: node.path,
+          sections: node.sections,
+          sectionsText: node.sectionsText,
+          source: node.source,
+          sourcePath: node.sourcePath,
+          reviewState: node.reviewState,
+          updatedByType: node.updatedByType,
+          updatedById: node.updatedById,
+          updatedAt: node.updatedAt,
+        })
+        .returning();
+      if (!row) {
+        throw new Error("insert context node returned no row");
+      }
+      const stored = toContextNode(row);
+      if (!stored) {
+        throw new Error("insert context node returned invalid row");
+      }
+      return stored;
+    } catch (error) {
+      if (uniqueConstraint(error) !== "context_node_scope") {
+        throw error;
+      }
+      const raced = await this.findContextNodeByScope(node);
+      if (!raced) {
+        throw error;
+      }
+      return raced;
+    }
+  }
 }
 
 async function startWorkInTx(
