@@ -1,13 +1,14 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
+import { authorizeProjectActor, requireActor, type AuthActor } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
-import type { UserRecord } from "../auth/store.js";
-import { DependencyCycleError, VersionConflictError } from "../auth/store.js";
+import { DependencyCycleError, VersionConflictError, type UserRecord } from "../auth/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
 import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
+import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { parsePageQuery, paginateRecords } from "./page.js";
 import {
   presentActivity,
@@ -151,6 +152,40 @@ async function requireTaskAccess(
   return { task, project, role: member.role };
 }
 
+async function requireTaskActor(
+  c: Context,
+  deps: AuthDeps,
+  taskId: string,
+  needed: "tasks:read" | "tasks:write" | "tasks:delete",
+): Promise<
+  | { task: TaskRecord; project: ProjectRecord; actor: AuthActor; role: ProjectRole | null }
+  | Response
+> {
+  const actor = await requireActor(c, deps);
+  if (actor instanceof Response) {
+    return actor;
+  }
+  if (!isUuid(taskId)) {
+    return errorJson(c, 404, "not_found", "task not found");
+  }
+  const task = await deps.store.findTaskById(taskId);
+  if (!task || task.deletedAt) {
+    return errorJson(c, 404, "not_found", "task not found");
+  }
+  const access = await authorizeProjectActor(c, deps, actor, task.projectId, needed);
+  if (access instanceof Response) {
+    return access;
+  }
+  return { ...access, task };
+}
+
+function actorActivity(actor: AuthActor): { actorType: string; actorId: string } {
+  if (actor.kind === "token") {
+    return { actorType: "token", actorId: actor.token.id };
+  }
+  return { actorType: "user", actorId: actor.user.id };
+}
+
 async function writeActivity(
   writer: { writeActivity: AuthDeps["store"]["writeActivity"] },
   input: {
@@ -158,6 +193,7 @@ async function writeActivity(
     objectType: string;
     objectId: string;
     actorId: string;
+    actorType?: string;
     verb: string;
     payload?: Record<string, unknown>;
     now: Date;
@@ -168,7 +204,7 @@ async function writeActivity(
     projectId: input.projectId,
     objectType: input.objectType,
     objectId: input.objectId,
-    actorType: "user",
+    actorType: input.actorType ?? "user",
     actorId: input.actorId,
     verb: input.verb,
     payload: input.payload ?? {},
@@ -429,11 +465,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.patch("/v1/tasks/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -467,6 +499,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (body["status"] !== undefined) {
       if (typeof body["status"] !== "string" || !isTaskStatus(body["status"])) {
         return errorJson(c, 400, "unauthorized", "invalid status", { reason: "invalid_body" });
+      }
+      const terminal = rejectAgentTerminalStatus(c, access.actor, body["status"]);
+      if (terminal) {
+        return terminal;
       }
       patch.status = body["status"];
     }
@@ -554,9 +590,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     }
 
     const now = deps.clock.now();
+    const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(access.task.id, expectedVersion, patch, now, {
-        releaseLock: true,
+        releaseLock: access.actor.kind === "user",
       });
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -565,7 +602,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
-        actorId: session.user.id,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
         verb: "update",
         payload: { version: updated.task.version },
         now,
@@ -575,7 +613,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
-          actorId: session.user.id,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "lock_released",
           now,
         });
@@ -666,11 +705,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 
   app.post("/v1/tasks/:id/status", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "write");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -683,15 +718,20 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         reason: "invalid_body",
       });
     }
+    const terminal = rejectAgentTerminalStatus(c, access.actor, statusRaw);
+    if (terminal) {
+      return terminal;
+    }
 
     const now = deps.clock.now();
+    const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(
         access.task.id,
         expectedVersion,
         { status: statusRaw },
         now,
-        { releaseLock: true },
+        { releaseLock: access.actor.kind === "user" },
       );
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -700,7 +740,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
-        actorId: session.user.id,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
         verb: "status",
         payload: { from: access.task.status, to: updated.task.status },
         now,
@@ -710,7 +751,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
-          actorId: session.user.id,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "lock_released",
           now,
         });

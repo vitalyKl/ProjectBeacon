@@ -39,6 +39,18 @@ import {
   type TaskPatch,
   type TaskRecord,
 } from "../roadmap/types.js";
+import {
+  InvalidReferenceError,
+  isLockActive,
+  LOCK_TTL_MS,
+  TaskLockedError,
+  type AgentSessionRecord,
+  type FinishWorkInput,
+  type FinishWorkResult,
+  type HandoffRecord,
+  type StartWorkInput,
+  type StartWorkWriteResult,
+} from "../sessions/types.js";
 import type {
   AgentSessionRef,
   ApprovalRecord,
@@ -101,6 +113,12 @@ export type {
   TaskRecord,
 } from "../roadmap/types.js";
 export type {
+  AgentSessionRecord,
+  FinishWorkResult,
+  HandoffRecord,
+} from "../sessions/types.js";
+export { InvalidReferenceError, TaskLockedError } from "../sessions/types.js";
+export type {
   AgentSessionRef,
   ApprovalRecord,
   RateBucketRecord,
@@ -111,6 +129,7 @@ export type IdempotentWrites = {
   createTask(task: TaskRecord): Promise<TaskRecord>;
   createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
   writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
+  startWork(input: StartWorkInput): Promise<StartWorkWriteResult>;
 };
 
 export class LoginTakenError extends Error {
@@ -253,7 +272,32 @@ export interface AuthStore {
     now: Date,
     produce: (writes: IdempotentWrites) => Promise<unknown>,
   ): Promise<unknown>;
-  findAgentSessionById(id: string): Promise<AgentSessionRef | undefined>;
+  findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined>;
+  listAgentSessions(projectId: string): Promise<AgentSessionRecord[]>;
+  heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
+  finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
+  findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined>;
+  createApiToken(token: TokenRecord): Promise<TokenRecord>;
+  listApiTokens(projectId: string): Promise<TokenRecord[]>;
+  findApiTokenById(id: string): Promise<TokenRecord | undefined>;
+  findApiTokenByHash(tokenHash: Buffer): Promise<TokenRecord | undefined>;
+  touchApiToken(id: string, lastUsedAt: Date): Promise<void>;
+  revokeApiToken(id: string, revokedAt: Date): Promise<TokenRecord | undefined>;
+  createApproval(approval: ApprovalRecord): Promise<ApprovalRecord>;
+  listApprovals(projectId: string, status?: ApprovalRecord["status"]): Promise<ApprovalRecord[]>;
+  findApprovalById(id: string): Promise<ApprovalRecord | undefined>;
+  resolveApproval(
+    id: string,
+    decision: "approved" | "denied",
+    resolvedAt: Date,
+    resolvedBy: string | null,
+  ): Promise<ApprovalRecord | undefined>;
+  consumeRateBucket(input: {
+    bucketKey: string;
+    windowStart: Date;
+    countDelta: number;
+    bytesDelta: number;
+  }): Promise<RateBucketRecord>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -373,6 +417,12 @@ export class MemoryAuthStore implements AuthStore {
     { response: unknown; createdAt: Date }
   >();
   private readonly agentSessions = new Map<string, AgentSessionRef>();
+  private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
+  private readonly apiTokens = new Map<string, TokenRecord>();
+  private readonly approvals = new Map<string, ApprovalRecord>();
+  private readonly rateBuckets = new Map<string, RateBucketRecord>();
+  private readonly agentSessions = new Map<string, AgentSessionRecord>();
+  private readonly handoffs = new Map<string, HandoffRecord>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -1178,6 +1228,7 @@ export class MemoryAuthStore implements AuthStore {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
+        startWork: async (input) => this.startWorkUnlocked(input),
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1333,13 +1384,189 @@ function cloneTask(task: TaskRecord): TaskRecord {
   }
 
   /** Test helper until agent-session create exists. */
-  putAgentSession(session: AgentSessionRef): void {
-    this.agentSessions.set(session.id, { ...session });
+  putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
+    if ("agentName" in session) {
+      this.agentSessions.set(session.id, cloneAgentSession(session));
+      return;
+    }
+    const now = new Date();
+    this.agentSessions.set(
+      session.id,
+      cloneAgentSession({
+        id: session.id,
+        projectId: session.projectId,
+        taskId: null,
+        tokenId: null,
+        agentName: "test",
+        agentHost: "custom",
+        status: "active",
+        contextRevisionId: null,
+        startedAt: now,
+        finishedAt: null,
+        lockExpiresAt: null,
+        lastHeartbeatAt: now,
+      }),
+    );
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
     const session = this.agentSessions.get(id);
-    return session ? { ...session } : undefined;
+    return session ? cloneAgentSession(session) : undefined;
+  }
+
+  async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
+    const result: AgentSessionRecord[] = [];
+    for (const session of this.agentSessions.values()) {
+      if (session.projectId === projectId) {
+        result.push(cloneAgentSession(session));
+      }
+    }
+    result.sort(
+      (a, b) => b.startedAt.getTime() - a.startedAt.getTime() || b.id.localeCompare(a.id),
+    );
+    return result;
+  }
+
+  async heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const session = this.agentSessions.get(id);
+      if (!session || session.status !== "active") {
+        return session ? cloneAgentSession(session) : undefined;
+      }
+      session.lastHeartbeatAt = new Date(now);
+      session.lockExpiresAt = new Date(now.getTime() + LOCK_TTL_MS);
+      if (session.taskId) {
+        const task = this.tasks.get(session.taskId);
+        if (task && task.lockedBySessionId === session.id) {
+          task.lockExpiresAt = new Date(session.lockExpiresAt);
+        }
+      }
+      return cloneAgentSession(session);
+    });
+  }
+
+  async finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined> {
+    return this.enqueueWrite(() => this.finishWorkUnlocked(input));
+  }
+
+  async findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined> {
+    let latest: HandoffRecord | undefined;
+    for (const handoff of this.handoffs.values()) {
+      if (handoff.taskId !== taskId) {
+        continue;
+      }
+      if (
+        !latest ||
+        handoff.createdAt.getTime() > latest.createdAt.getTime() ||
+        (handoff.createdAt.getTime() === latest.createdAt.getTime() && handoff.id > latest.id)
+      ) {
+        latest = handoff;
+      }
+    }
+    return latest ? cloneHandoff(latest) : undefined;
+  }
+
+  private startWorkUnlocked(input: StartWorkInput): StartWorkWriteResult {
+    if (this.agentSessions.has(input.session.id)) {
+      throw new UniqueViolationError("agent_sessions_pkey");
+    }
+    if (this.contextRevisions.has(input.revision.id)) {
+      throw new UniqueViolationError("context_revisions_pkey");
+    }
+    if (input.session.tokenId) {
+      const token = this.apiTokens.get(input.session.tokenId);
+      if (!token || token.projectId !== input.session.projectId) {
+        throw new InvalidReferenceError("token");
+      }
+    }
+
+    let stolenFrom: string | null = null;
+    if (input.session.taskId) {
+      const task = this.tasks.get(input.session.taskId);
+      if (!task || task.deletedAt || task.projectId !== input.session.projectId) {
+        throw new InvalidReferenceError("task");
+      }
+      if (isLockActive(task, input.now) && task.lockedBySessionId !== input.session.id) {
+        if (!input.steal) {
+          throw new TaskLockedError(cloneTask(task));
+        }
+        stolenFrom = task.lockedBySessionId;
+      }
+    }
+
+    const revision = cloneContextRevision({ ...input.revision, sessionId: input.session.id });
+    this.contextRevisions.set(revision.id, revision);
+    this.agentSessions.set(input.session.id, cloneAgentSession(input.session));
+
+    if (input.session.taskId) {
+      const task = this.tasks.get(input.session.taskId);
+      if (task) {
+        if (stolenFrom) {
+          const previous = this.agentSessions.get(stolenFrom);
+          if (previous && previous.status === "active") {
+            previous.status = "abandoned";
+            previous.finishedAt = new Date(input.now);
+          }
+        }
+        task.lockedBySessionId = input.session.id;
+        task.lockExpiresAt = input.session.lockExpiresAt
+          ? new Date(input.session.lockExpiresAt)
+          : null;
+        task.updatedAt = new Date(input.now);
+      }
+    }
+    return { session: cloneAgentSession(input.session), stolenFrom };
+  }
+
+  private finishWorkUnlocked(input: FinishWorkInput): FinishWorkResult | undefined {
+    const session = this.agentSessions.get(input.sessionId);
+    if (!session) {
+      return undefined;
+    }
+    if (this.handoffs.has(input.handoffId)) {
+      throw new UniqueViolationError("handoffs_pkey");
+    }
+
+    const handoff: HandoffRecord = {
+      id: input.handoffId,
+      sessionId: session.id,
+      taskId: session.taskId,
+      summary: input.summary,
+      nextSteps: input.nextSteps,
+      filesTouched: input.filesTouched.map((path) => ({ ...path })),
+      openQuestions: [...input.openQuestions],
+      createdAt: new Date(input.now),
+    };
+    this.handoffs.set(handoff.id, cloneHandoff(handoff));
+
+    session.status = "finished";
+    session.finishedAt = new Date(input.now);
+
+    let task: TaskRecord | null = null;
+    let lockReleased = false;
+    let previousStatus: TaskRecord["status"] | null = null;
+    if (session.taskId) {
+      const current = this.tasks.get(session.taskId);
+      if (current && !current.deletedAt) {
+        previousStatus = current.status;
+        current.status = input.taskStatus;
+        lockReleased = current.lockedBySessionId === session.id;
+        if (lockReleased) {
+          current.lockedBySessionId = null;
+          current.lockExpiresAt = null;
+        }
+        current.version += 1;
+        current.updatedAt = new Date(input.now);
+        task = cloneTask(current);
+      }
+    }
+    return {
+      session: cloneAgentSession(session),
+      handoff: cloneHandoff(handoff),
+      task,
+      lockReleased,
+      previousStatus,
+    };
   }
 }
 
@@ -1394,6 +1621,23 @@ function cloneProjectRepo(repo: ProjectRepoRecord): ProjectRepoRecord {
 
 function cloneCodeOwner(row: CodeOwnerRecord): CodeOwnerRecord {
   return { ...row, owners: [...row.owners] };
+function cloneAgentSession(session: AgentSessionRecord): AgentSessionRecord {
+  return {
+    ...session,
+    startedAt: new Date(session.startedAt),
+    finishedAt: session.finishedAt ? new Date(session.finishedAt) : null,
+    lockExpiresAt: session.lockExpiresAt ? new Date(session.lockExpiresAt) : null,
+    lastHeartbeatAt: new Date(session.lastHeartbeatAt),
+  };
+}
+
+function cloneHandoff(handoff: HandoffRecord): HandoffRecord {
+  return {
+    ...handoff,
+    filesTouched: handoff.filesTouched.map((path) => ({ ...path })),
+    openQuestions: [...handoff.openQuestions],
+    createdAt: new Date(handoff.createdAt),
+  };
 }
 
 function idempotencyKey(actorType: IdempotencyActorType, actorId: string, key: string): string {

@@ -14,6 +14,7 @@ import {
   contextRevisions,
   decisionPaths,
   decisions,
+  handoffs,
   idempotencyKeys,
   milestones,
   orgInvites,
@@ -81,6 +82,7 @@ import {
   type TaskCommentRecord,
   type TaskDependencyRecord,
   type TaskPatch,
+  type TaskRecord,
   type ApprovalRecord,
   type RateBucketRecord,
   type TaskRecord,
@@ -99,6 +101,20 @@ import {
   type TaskStatus,
   type TaskType,
 } from "../roadmap/types.js";
+import {
+  InvalidReferenceError,
+  isAgentHost,
+  isAgentSessionStatus,
+  isLockActive,
+  LOCK_TTL_MS,
+  TaskLockedError,
+  type AgentSessionRecord,
+  type FinishWorkInput,
+  type FinishWorkResult,
+  type HandoffRecord,
+  type StartWorkInput,
+  type StartWorkWriteResult,
+} from "../sessions/types.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
@@ -554,6 +570,39 @@ function asBriefJson(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return {};
+}
+
+function toAgentSession(row: typeof agentSessions.$inferSelect): AgentSessionRecord | undefined {
+  if (!isAgentSessionStatus(row.status) || !isAgentHost(row.agentHost)) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    taskId: row.taskId,
+    tokenId: row.tokenId,
+    agentName: row.agentName,
+    agentHost: row.agentHost,
+    status: row.status,
+    contextRevisionId: row.contextRevisionId,
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+    lockExpiresAt: row.lockExpiresAt,
+    lastHeartbeatAt: row.lastHeartbeatAt,
+  };
+}
+
+function toHandoff(row: typeof handoffs.$inferSelect): HandoffRecord {
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    taskId: row.taskId,
+    summary: row.summary,
+    nextSteps: row.nextSteps,
+    filesTouched: asLinkedPaths(row.filesTouched),
+    openQuestions: row.openQuestions ?? [],
+    createdAt: row.createdAt,
+  };
 }
 
 function toContextRevision(row: typeof contextRevisions.$inferSelect): ContextRevisionRecord {
@@ -1848,6 +1897,7 @@ export class DbAuthStore implements AuthStore {
           }
           return toActivity(row);
         },
+        startWork: async (input) => startWorkInTx(tx, input),
       };
 
       const response = await produce(writes);
@@ -2017,12 +2067,252 @@ export class DbAuthStore implements AuthStore {
     return toRateBucket(row);
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
     const [row] = await this.db
-      .select({ id: agentSessions.id, projectId: agentSessions.projectId })
+      .select()
       .from(agentSessions)
       .where(eq(agentSessions.id, id))
       .limit(1);
-    return row ?? undefined;
+    return row ? toAgentSession(row) : undefined;
   }
+
+  async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(agentSessions)
+      .where(eq(agentSessions.projectId, projectId))
+      .orderBy(desc(agentSessions.startedAt), desc(agentSessions.id));
+    return rows.flatMap((row) => {
+      const session = toAgentSession(row);
+      return session ? [session] : [];
+    });
+  }
+
+  async heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(agentSessions)
+        .where(eq(agentSessions.id, id))
+        .limit(1)
+        .for("update");
+      if (!current) {
+        return undefined;
+      }
+      const mapped = toAgentSession(current);
+      if (!mapped || mapped.status !== "active") {
+        return mapped;
+      }
+      const lockExpiresAt = new Date(now.getTime() + LOCK_TTL_MS);
+      const [row] = await tx
+        .update(agentSessions)
+        .set({
+          lastHeartbeatAt: now,
+          lockExpiresAt,
+        })
+        .where(eq(agentSessions.id, id))
+        .returning();
+      if (current.taskId) {
+        await tx
+          .update(tasks)
+          .set({ lockExpiresAt })
+          .where(and(eq(tasks.id, current.taskId), eq(tasks.lockedBySessionId, id)));
+      }
+      return row ? toAgentSession(row) : mapped;
+    });
+  }
+
+  async finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [sessionRow] = await tx
+        .select()
+        .from(agentSessions)
+        .where(eq(agentSessions.id, input.sessionId))
+        .limit(1)
+        .for("update");
+      if (!sessionRow) {
+        return undefined;
+      }
+      const session = toAgentSession(sessionRow);
+      if (!session) {
+        return undefined;
+      }
+
+      const [handoffRow] = await tx
+        .insert(handoffs)
+        .values({
+          id: input.handoffId,
+          sessionId: session.id,
+          taskId: session.taskId,
+          summary: input.summary,
+          nextSteps: input.nextSteps,
+          filesTouched: input.filesTouched,
+          openQuestions: input.openQuestions,
+          createdAt: input.now,
+        })
+        .returning();
+      if (!handoffRow) {
+        throw new Error("insert handoff returned no row");
+      }
+
+      const [finishedRow] = await tx
+        .update(agentSessions)
+        .set({
+          status: "finished",
+          finishedAt: input.now,
+        })
+        .where(eq(agentSessions.id, session.id))
+        .returning();
+      const finished = finishedRow ? toAgentSession(finishedRow) : session;
+      if (!finished) {
+        throw new Error("finish session returned no row");
+      }
+
+      let task: TaskRecord | null = null;
+      let lockReleased = false;
+      let previousStatus: TaskStatus | null = null;
+      if (session.taskId) {
+        const [current] = await tx
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, session.taskId))
+          .limit(1)
+          .for("update");
+        if (current && !current.deletedAt) {
+          previousStatus = current.status as TaskStatus;
+          lockReleased = current.lockedBySessionId === session.id;
+          const [updated] = await tx
+            .update(tasks)
+            .set({
+              status: input.taskStatus,
+              version: current.version + 1,
+              updatedAt: input.now,
+              ...(lockReleased ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
+            })
+            .where(eq(tasks.id, current.id))
+            .returning();
+          if (updated) {
+            task = toTask(updated);
+          }
+        }
+      }
+
+      return {
+        session: finished,
+        handoff: toHandoff(handoffRow),
+        task,
+        lockReleased,
+        previousStatus,
+      };
+    });
+  }
+
+  async findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(handoffs)
+      .where(eq(handoffs.taskId, taskId))
+      .orderBy(desc(handoffs.createdAt), desc(handoffs.id))
+      .limit(1);
+    return row ? toHandoff(row) : undefined;
+  }
+}
+
+async function startWorkInTx(
+  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+  input: StartWorkInput,
+): Promise<StartWorkWriteResult> {
+  if (input.session.tokenId) {
+    const [token] = await tx
+      .select({ id: apiTokens.id, projectId: apiTokens.projectId })
+      .from(apiTokens)
+      .where(eq(apiTokens.id, input.session.tokenId))
+      .limit(1);
+    if (!token || token.projectId !== input.session.projectId) {
+      throw new InvalidReferenceError("token");
+    }
+  }
+
+  let stolenFrom: string | null = null;
+  if (input.session.taskId) {
+    const [task] = await tx
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, input.session.taskId))
+      .limit(1)
+      .for("update");
+    if (!task || task.deletedAt || task.projectId !== input.session.projectId) {
+      throw new InvalidReferenceError("task");
+    }
+    const mapped = toTask(task);
+    if (isLockActive(mapped, input.now) && task.lockedBySessionId !== input.session.id) {
+      if (!input.steal) {
+        throw new TaskLockedError(mapped);
+      }
+      stolenFrom = task.lockedBySessionId;
+    }
+  }
+
+  await tx.insert(contextRevisions).values({
+    id: input.revision.id,
+    projectId: input.revision.projectId,
+    compiledHash: input.revision.compiledHash,
+    compilerVersion: input.revision.compilerVersion,
+    target: input.revision.target,
+    briefMarkdown: input.revision.briefMarkdown,
+    briefJson: input.revision.briefJson,
+    tokenEstimate: input.revision.tokenEstimate,
+    sourceNodeIds: input.revision.sourceNodeIds,
+    sessionId: null,
+    createdAt: input.revision.createdAt,
+  });
+
+  const [row] = await tx
+    .insert(agentSessions)
+    .values({
+      id: input.session.id,
+      projectId: input.session.projectId,
+      taskId: input.session.taskId,
+      tokenId: input.session.tokenId,
+      agentName: input.session.agentName,
+      agentHost: input.session.agentHost,
+      status: input.session.status,
+      contextRevisionId: input.revision.id,
+      startedAt: input.session.startedAt,
+      finishedAt: input.session.finishedAt,
+      lockExpiresAt: input.session.lockExpiresAt,
+      lastHeartbeatAt: input.session.lastHeartbeatAt,
+    })
+    .returning();
+  if (!row) {
+    throw new Error("insert agent session returned no row");
+  }
+  const session = toAgentSession(row);
+  if (!session) {
+    throw new Error("insert agent session returned invalid row");
+  }
+
+  await tx
+    .update(contextRevisions)
+    .set({ sessionId: session.id })
+    .where(eq(contextRevisions.id, input.revision.id));
+
+  if (input.session.taskId) {
+    if (stolenFrom) {
+      await tx
+        .update(agentSessions)
+        .set({ status: "abandoned", finishedAt: input.now })
+        .where(and(eq(agentSessions.id, stolenFrom), eq(agentSessions.status, "active")));
+    }
+    await tx
+      .update(tasks)
+      .set({
+        lockedBySessionId: session.id,
+        lockExpiresAt: session.lockExpiresAt,
+        updatedAt: input.now,
+      })
+      .where(eq(tasks.id, input.session.taskId));
+  }
+
+  return { session, stolenFrom };
 }

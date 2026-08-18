@@ -15,15 +15,8 @@ import { errorJson } from "../errors.js";
 import { readJson, readObject } from "../http.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
-import {
-  presentConstraint,
-  presentContextNode,
-  presentDecision,
-  presentMilestoneBrief,
-  presentTaskSummary,
-  sectionsText,
-  toCompileNode,
-} from "./present.js";
+import { presentConstraint, presentContextNode, presentDecision, presentMilestoneBrief, presentTaskSummary, sectionsText, toCompileNode } from "./present.js";
+import { compileProjectBrief } from "./compile-brief.js";
 
 const MAX_IMPORT_FILES = 200;
 const MAX_IMPORT_PATH = 1024;
@@ -316,58 +309,27 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       });
     }
 
-    let taskSummary = null;
-    let milestone = null;
-    if (input.task_id) {
-      const task = await deps.store.findTaskById(input.task_id);
-      if (!task || task.deletedAt || task.projectId !== access.project.id) {
-        return errorJson(c, 404, "not_found", "task not found");
-      }
-      taskSummary = presentTaskSummary(task);
-      if (task.milestoneId) {
-        const row = await deps.store.findMilestoneById(task.milestoneId);
-        if (row && row.projectId === access.project.id) {
-          milestone = presentMilestoneBrief(row);
-        }
-      }
-    }
-
     const now = deps.clock.now();
-    const [nodes, constraints, decisions] = await Promise.all([
-      deps.store.listContextNodes(access.project.id),
-      deps.store.listActiveConstraints(access.project.id),
-      deps.store.listAcceptedDecisions(access.project.id),
-    ]);
-
-    const compiled = compileSessionBrief(input, {
-      project: {
-        id: access.project.id,
-        name: access.project.name,
-        slug: access.project.slug,
-      },
-      nodes: nodes.map(toCompileNode),
-      constraints: constraints.map(presentConstraint),
-      decisions: decisions.map(presentDecision),
-      task: taskSummary,
-      milestone,
-      revision_id: uuidv7(now.getTime()),
-      compiled_at: now.toISOString(),
-    });
+    const compiled = await compileProjectBrief(deps.store, access.project, input, now);
+    if (!compiled.ok) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    const { compiled: result } = compiled;
 
     await deps.store.insertContextRevision({
-      id: compiled.brief.revision_id,
+      id: result.brief.revision_id,
       projectId: access.project.id,
-      compiledHash: compiled.brief.compiled_hash,
-      compilerVersion: compiled.brief.compiler_version,
-      target: compiled.brief.target,
-      briefMarkdown: compiled.markdown,
-      briefJson: compiled.brief as unknown as Record<string, unknown>,
-      tokenEstimate: compiled.brief.budget.used_estimate,
-      sourceNodeIds: compiled.brief.sources.map((source) => source.node_id),
+      compiledHash: result.brief.compiled_hash,
+      compilerVersion: result.brief.compiler_version,
+      target: result.brief.target,
+      briefMarkdown: result.markdown,
+      briefJson: result.brief as unknown as Record<string, unknown>,
+      tokenEstimate: result.brief.budget.used_estimate,
+      sourceNodeIds: result.brief.sources.map((source) => source.node_id),
       sessionId: null,
       createdAt: now,
     });
 
-    return c.json(compiled.brief);
+    return c.json(result.brief);
   });
 }

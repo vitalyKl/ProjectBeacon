@@ -1,0 +1,509 @@
+import { isUuid, uuidv7 } from "@beacon/shared";
+import type { Context, Hono } from "hono";
+
+import {
+  actorHasCapability,
+  authorizeProjectActor,
+  isAdminActor,
+  requireActor,
+  requireProjectActor,
+  type AuthActor,
+} from "../auth/access.js";
+import type { AuthDeps } from "../auth/routes.js";
+import { InvalidReferenceError, TaskLockedError } from "../auth/store.js";
+import { compileProjectBrief } from "../context/compile-brief.js";
+import { errorJson } from "../errors.js";
+import { parseOptionalString, readObject } from "../http.js";
+import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import { presentTask } from "../roadmap/present.js";
+import { type LinkedPath, type TaskRecord } from "../roadmap/types.js";
+import { presentHandoffResource, presentSession } from "./present.js";
+import {
+  HANDOFF_SUMMARY_MIN,
+  isAgentHost,
+  isFinishWorkStatus,
+  isTerminalTaskStatus,
+  lockExpiresAt,
+  type AgentHost,
+  type FinishWorkStatus,
+} from "./types.js";
+
+function isResponse<T>(value: T | Response): value is Response {
+  return value instanceof Response;
+}
+
+function parseIdempotencyKey(c: Context): string | undefined {
+  const header = c.req.header("idempotency-key")?.trim();
+  if (!header || header.length > 256) {
+    return undefined;
+  }
+  return header;
+}
+
+function parseBoolean(value: unknown): boolean | undefined {
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return undefined;
+}
+
+function parseBudgetTokens(value: unknown): number | undefined | "invalid" {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  return "invalid";
+}
+
+function parseLinkedPaths(
+  value: unknown,
+): { ok: true; paths: LinkedPath[] } | { ok: false; reason: "invalid" | "repo_ambiguous" } {
+  if (value === undefined) {
+    return { ok: true, paths: [] };
+  }
+  if (!Array.isArray(value)) {
+    return { ok: false, reason: "invalid" };
+  }
+  const paths: LinkedPath[] = [];
+  for (const item of value) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      return { ok: false, reason: "invalid" };
+    }
+    const record = item as Record<string, unknown>;
+    const path = parseOptionalString(record["path"], 1024);
+    if (!path) {
+      return { ok: false, reason: "invalid" };
+    }
+    const repoId = record["repo_id"];
+    if (repoId === undefined || repoId === null) {
+      return { ok: false, reason: "repo_ambiguous" };
+    }
+    if (typeof repoId !== "string" || !isUuid(repoId)) {
+      return { ok: false, reason: "invalid" };
+    }
+    paths.push({ repo_id: repoId, path });
+  }
+  return { ok: true, paths };
+}
+
+function parseOpenQuestions(value: unknown): string[] | undefined {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const questions: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      return undefined;
+    }
+    const trimmed = item.trim();
+    if (trimmed.length === 0 || trimmed.length > 800) {
+      return undefined;
+    }
+    questions.push(trimmed);
+  }
+  return questions;
+}
+
+function actorRef(actor: AuthActor): { type: string; id: string } {
+  if (actor.kind === "token") {
+    return { type: "token", id: actor.token.id };
+  }
+  return { type: "user", id: actor.user.id };
+}
+
+function defaultAgent(actor: AuthActor): { name: string; host: AgentHost } {
+  if (actor.kind === "token") {
+    return { name: actor.token.name, host: "custom" };
+  }
+  return { name: actor.user.login, host: "custom" };
+}
+
+function parseAgent(
+  body: Record<string, unknown> | undefined,
+  actor: AuthActor,
+): { name: string; host: AgentHost } | undefined {
+  const fallback = defaultAgent(actor);
+  const raw = body?.["agent"];
+  if (raw === undefined) {
+    const name = parseOptionalString(body?.["agent_name"], 120) ?? fallback.name;
+    const hostRaw = body?.["agent_host"];
+    if (hostRaw === undefined) {
+      return { name, host: fallback.host };
+    }
+    if (typeof hostRaw !== "string" || !isAgentHost(hostRaw)) {
+      return undefined;
+    }
+    return { name, host: hostRaw };
+  }
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  const name = parseOptionalString(record["name"], 120) ?? fallback.name;
+  const hostRaw = record["host"];
+  if (hostRaw === undefined) {
+    return { name, host: fallback.host };
+  }
+  if (typeof hostRaw !== "string" || !isAgentHost(hostRaw)) {
+    return undefined;
+  }
+  return { name, host: hostRaw };
+}
+
+function taskLocked(c: Context, task: TaskRecord) {
+  return errorJson(c, 409, "task_locked", "task is locked by another session", {
+    task: presentTask(task),
+  });
+}
+
+export function mountSessions(app: Hono, deps: AuthDeps): void {
+  app.get("/v1/projects/:id/sessions", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    const page = parsePageQuery(c);
+    if (page instanceof Response) {
+      return page;
+    }
+    const records = await deps.store.listAgentSessions(access.project.id);
+    const result = paginateRecords(records, page, (item) => item.startedAt);
+    return c.json({
+      items: result.items.map(presentSession),
+      next_cursor: result.next_cursor,
+    });
+  });
+
+  app.post("/v1/projects/:id/sessions", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "sessions:write");
+    if (isResponse(access)) {
+      return access;
+    }
+
+    const idempotencyKey = parseIdempotencyKey(c);
+    if (!idempotencyKey) {
+      return errorJson(c, 400, "unauthorized", "Idempotency-Key is required", {
+        reason: "missing_idempotency_key",
+      });
+    }
+
+    const body = await readObject(c);
+    const taskIdRaw = body?.["task_id"];
+    if (typeof taskIdRaw !== "string" || !isUuid(taskIdRaw)) {
+      return errorJson(c, 400, "unauthorized", "task_id is required", { reason: "invalid_body" });
+    }
+    const steal = parseBoolean(body?.["steal"]);
+    if (steal === undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid steal", { reason: "invalid_body" });
+    }
+    if (steal && !actorHasCapability(access.actor, "tasks:write", access.role)) {
+      return errorJson(c, 403, "forbidden", "steal requires tasks:write");
+    }
+    const budgetTokens = parseBudgetTokens(body?.["budget_tokens"]);
+    if (budgetTokens === "invalid") {
+      return errorJson(c, 400, "unauthorized", "invalid budget_tokens", { reason: "invalid_body" });
+    }
+    const path =
+      body?.["path"] === undefined ? undefined : parseOptionalString(body["path"], 1024);
+    if (body?.["path"] !== undefined && path === undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+    }
+    const agent = parseAgent(body, access.actor);
+    if (!agent) {
+      return errorJson(c, 400, "unauthorized", "invalid agent", { reason: "invalid_body" });
+    }
+
+    const task = await deps.store.findTaskById(taskIdRaw);
+    if (!task || task.deletedAt || task.projectId !== access.project.id) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+
+    const now = deps.clock.now();
+    const compiled = await compileProjectBrief(
+      deps.store,
+      access.project,
+      {
+        project_id: access.project.id,
+        path,
+        task_id: task.id,
+        budget_tokens: budgetTokens,
+      },
+      now,
+    );
+    if (!compiled.ok) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+
+    const actor = actorRef(access.actor);
+    const sessionId = uuidv7(now.getTime());
+    const lockExpires = lockExpiresAt(now);
+    try {
+      const presented = await deps.store.withIdempotency(
+        actor.type === "token" ? "token" : "user",
+        actor.id,
+        idempotencyKey,
+        now,
+        async (writes) => {
+          const started = await writes.startWork({
+            session: {
+              id: sessionId,
+              projectId: access.project.id,
+              taskId: task.id,
+              tokenId: access.actor.kind === "token" ? access.actor.token.id : null,
+              agentName: agent.name,
+              agentHost: agent.host,
+              status: "active",
+              contextRevisionId: compiled.compiled.brief.revision_id,
+              startedAt: now,
+              finishedAt: null,
+              lockExpiresAt: lockExpires,
+              lastHeartbeatAt: now,
+            },
+            revision: {
+              id: compiled.compiled.brief.revision_id,
+              projectId: access.project.id,
+              compiledHash: compiled.compiled.brief.compiled_hash,
+              compilerVersion: compiled.compiled.brief.compiler_version,
+              target: compiled.compiled.brief.target,
+              briefMarkdown: compiled.compiled.markdown,
+              briefJson: compiled.compiled.brief as unknown as Record<string, unknown>,
+              tokenEstimate: compiled.compiled.brief.budget.used_estimate,
+              sourceNodeIds: compiled.compiled.brief.sources.map((source) => source.node_id),
+              sessionId,
+              createdAt: now,
+            },
+            steal,
+            now,
+          });
+          await writes.writeActivity({
+            id: uuidv7(now.getTime()),
+            projectId: access.project.id,
+            objectType: "session",
+            objectId: started.session.id,
+            actorType: actor.type,
+            actorId: actor.id,
+            verb: "start_work",
+            payload: { task_id: task.id, steal },
+            createdAt: now,
+          });
+          if (started.stolenFrom) {
+            await writes.writeActivity({
+              id: uuidv7(now.getTime()),
+              projectId: access.project.id,
+              objectType: "task",
+              objectId: task.id,
+              actorType: actor.type,
+              actorId: actor.id,
+              verb: "lock_stolen",
+              payload: {
+                from_session_id: started.stolenFrom,
+                to_session_id: started.session.id,
+              },
+              createdAt: now,
+            });
+          }
+          return {
+            session: presentSession(started.session),
+            brief: compiled.compiled.brief,
+          };
+        },
+      );
+      return c.json(presented, 200);
+    } catch (error) {
+      if (error instanceof TaskLockedError) {
+        return taskLocked(c, error.task);
+      }
+      if (error instanceof InvalidReferenceError) {
+        return errorJson(c, 404, "not_found", `${error.entity} not found`);
+      }
+      throw error;
+    }
+  });
+
+  app.post("/v1/sessions/:id/heartbeat", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (isResponse(actor)) {
+      return actor;
+    }
+    const id = c.req.param("id");
+    if (!isUuid(id)) {
+      return errorJson(c, 404, "not_found", "session not found");
+    }
+    const session = await deps.store.findAgentSessionById(id);
+    if (!session) {
+      return errorJson(c, 404, "not_found", "session not found");
+    }
+    const access = await authorizeProjectActor(c, deps, actor, session.projectId, "sessions:write");
+    if (isResponse(access)) {
+      return access;
+    }
+    if (session.status !== "active") {
+      return errorJson(c, 409, "version_conflict", "session is not active", {
+        reason: "session_inactive",
+      });
+    }
+    const updated = await deps.store.heartbeatSession(session.id, deps.clock.now());
+    if (!updated) {
+      return errorJson(c, 404, "not_found", "session not found");
+    }
+    return c.json(presentSession(updated));
+  });
+
+  app.post("/v1/sessions/:id/finish", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (isResponse(actor)) {
+      return actor;
+    }
+    const id = c.req.param("id");
+    if (!isUuid(id)) {
+      return errorJson(c, 404, "not_found", "session not found");
+    }
+    const session = await deps.store.findAgentSessionById(id);
+    if (!session) {
+      return errorJson(c, 404, "not_found", "session not found");
+    }
+    const access = await authorizeProjectActor(c, deps, actor, session.projectId, "sessions:write");
+    if (isResponse(access)) {
+      return access;
+    }
+    if (session.status !== "active") {
+      return errorJson(c, 409, "version_conflict", "session is not active", {
+        reason: "session_inactive",
+      });
+    }
+
+    const body = await readObject(c);
+    const summary = parseOptionalString(body?.["summary"], 8000);
+    if (!summary || summary.length < HANDOFF_SUMMARY_MIN) {
+      return errorJson(c, 400, "unauthorized", "summary must be at least 20 characters", {
+        reason: "invalid_body",
+      });
+    }
+    let nextSteps = "";
+    if (body?.["next_steps"] !== undefined) {
+      if (typeof body["next_steps"] !== "string" || body["next_steps"].length > 8000) {
+        return errorJson(c, 400, "unauthorized", "invalid next_steps", { reason: "invalid_body" });
+      }
+      nextSteps = body["next_steps"];
+    }
+    const filesTouched = parseLinkedPaths(body?.["files_touched"]);
+    if (!filesTouched.ok) {
+      if (filesTouched.reason === "repo_ambiguous") {
+        return errorJson(c, 400, "repo_ambiguous", "repo_id is required on files_touched");
+      }
+      return errorJson(c, 400, "unauthorized", "invalid files_touched", { reason: "invalid_body" });
+    }
+    const openQuestions = parseOpenQuestions(body?.["open_questions"]);
+    if (openQuestions === undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid open_questions", { reason: "invalid_body" });
+    }
+    const statusRaw = body?.["status"] === undefined ? "done" : body["status"];
+    if (typeof statusRaw !== "string" || !isFinishWorkStatus(statusRaw)) {
+      return errorJson(c, 400, "unauthorized", "invalid status", { reason: "invalid_body" });
+    }
+    const taskStatus: FinishWorkStatus = statusRaw;
+
+    const now = deps.clock.now();
+    const actorIds = actorRef(access.actor);
+    const finished = await deps.store.finishWork({
+      sessionId: session.id,
+      handoffId: uuidv7(now.getTime()),
+      summary,
+      nextSteps: nextSteps ?? "",
+      filesTouched: filesTouched.paths,
+      openQuestions,
+      taskStatus,
+      now,
+    });
+    if (!finished) {
+      return errorJson(c, 404, "not_found", "session not found");
+    }
+    await deps.store.writeActivity({
+      id: uuidv7(now.getTime()),
+      projectId: session.projectId,
+      objectType: "session",
+      objectId: session.id,
+      actorType: actorIds.type,
+      actorId: actorIds.id,
+      verb: "finish_work",
+      payload: { task_id: session.taskId, status: taskStatus },
+      createdAt: now,
+    });
+    if (finished.task && finished.previousStatus && finished.previousStatus !== finished.task.status) {
+      await deps.store.writeActivity({
+        id: uuidv7(now.getTime()),
+        projectId: session.projectId,
+        objectType: "task",
+        objectId: finished.task.id,
+        actorType: actorIds.type,
+        actorId: actorIds.id,
+        verb: "status",
+        payload: { from: finished.previousStatus, to: finished.task.status },
+        createdAt: now,
+      });
+    }
+    if (finished.lockReleased && finished.task) {
+      await deps.store.writeActivity({
+        id: uuidv7(now.getTime()),
+        projectId: session.projectId,
+        objectType: "task",
+        objectId: finished.task.id,
+        actorType: actorIds.type,
+        actorId: actorIds.id,
+        verb: "lock_released",
+        payload: {},
+        createdAt: now,
+      });
+    }
+    return c.json({
+      session: presentSession(finished.session),
+      handoff: presentHandoffResource(finished.handoff),
+      task: finished.task ? presentTask(finished.task) : null,
+    });
+  });
+
+  app.get("/v1/tasks/:id/handoff", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (isResponse(actor)) {
+      return actor;
+    }
+    const taskId = c.req.param("id");
+    if (!isUuid(taskId)) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    const task = await deps.store.findTaskById(taskId);
+    if (!task || task.deletedAt) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    const access = await authorizeProjectActor(c, deps, actor, task.projectId, "tasks:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    const handoff = await deps.store.findLatestHandoffByTaskId(task.id);
+    if (!handoff) {
+      return errorJson(c, 404, "not_found", "handoff not found");
+    }
+    return c.json(presentHandoffResource(handoff));
+  });
+}
+
+export function rejectAgentTerminalStatus(
+  c: Context,
+  actor: AuthActor,
+  status: string,
+): Response | undefined {
+  if (actor.kind === "token" && !isAdminActor(actor) && isTerminalTaskStatus(status)) {
+    return errorJson(c, 409, "finish_work_required", "use finish_work to enter a terminal status");
+  }
+  return undefined;
+}
+
+
