@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 
-import { AppShell } from "./app-shell";
+import { publicFlags } from "@/lib/flags";
 
-export default function AuthenticatedLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <AppShell>{children}</AppShell>;
+import { AppShell } from "./app-shell";
+import { SidecarTunnelBanner } from "./sidecar-tunnel-banner";
+
+export default async function AuthenticatedLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const flags = await publicFlags();
+  return (
+    <AppShell banner={<SidecarTunnelBanner enabled={flags.sidecarTunnel} />}>{children}</AppShell>
+  );
 }

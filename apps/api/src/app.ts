@@ -18,6 +18,9 @@ import { mountDecisions } from "./context/decisions.js";
 import { mountJobs } from "./jobs/routes.js";
 import { mountGithub } from "./github/routes.js";
 import { createCodeGateway, type CodeGateway } from "./code/gateway.js";
+import { isSidecarTunnelEnabled } from "./code/flags.js";
+import { createSidecarTunnelHub, type SidecarTunnelHub } from "./code/tunnel.js";
+import { errorJson } from "./errors.js";
 
 export const packageName = "@beacon/api";
 
@@ -35,6 +38,8 @@ export type CreateAppOptions = {
   enableTokenProbe?: boolean;
   jobs?: JobQueue;
   codeGateway?: CodeGateway;
+  sidecarTunnel?: SidecarTunnelHub;
+  sidecarTunnelEnabled?: () => boolean;
 };
 
 function resolveStore(options: CreateAppOptions): AuthStore {
@@ -48,9 +53,11 @@ function resolveStore(options: CreateAppOptions): AuthStore {
   return new MemoryAuthStore();
 }
 
-export function createApp(options: CreateAppOptions = {}): Hono {
+export function createApp(options: CreateAppOptions = {}): CreatedApp {
   const checkReady = options.checkReady ?? (() => checkDatabase(process.env.DATABASE_URL));
-  const app = new Hono();
+  const app = new Hono() as CreatedApp;
+  const sidecarTunnel = options.sidecarTunnel ?? createSidecarTunnelHub();
+  const sidecarTunnelEnabled = options.sidecarTunnelEnabled ?? (() => isSidecarTunnelEnabled());
 
   app.get("/health", (c) => c.json({ status: "ok" }));
 
@@ -79,6 +86,8 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       config: authDeps.config,
       store: authDeps.store,
       now: () => authDeps.clock.now(),
+      tunnel: sidecarTunnel,
+      tunnelEnabled: sidecarTunnelEnabled,
     });
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);
@@ -92,5 +101,27 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     mountTokenProbe(app, authDeps);
   }
 
+  app.get("/v1/sidecar", (c) => {
+    if (!sidecarTunnelEnabled()) {
+      return errorJson(c, 404, "not_found", "not found");
+    }
+    return errorJson(c, 400, "unauthorized", "websocket upgrade required");
+  });
+
+  app.sidecarTunnel = sidecarTunnel;
+  app.sidecarTunnelEnabled = sidecarTunnelEnabled;
+  app.authDeps = authDeps;
   return app;
 }
+
+export type CreatedApp = Hono & {
+  sidecarTunnel: SidecarTunnelHub;
+  sidecarTunnelEnabled: () => boolean;
+  authDeps: {
+    store: AuthStore;
+    config: AuthConfig;
+    clock: Clock;
+    githubFetch: typeof fetch;
+    rateLimits: RateLimitConfig;
+  };
+};

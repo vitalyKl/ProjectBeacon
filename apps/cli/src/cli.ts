@@ -18,7 +18,8 @@ Options:
   --url <url>         Control plane URL (or BEACON_URL)
   --project <id>      Project id (or BEACON_PROJECT)
 
-BEACON_HOME defaults to ~/.beacon (Unix) or %USERPROFILE%\\.beacon (Windows).`;
+BEACON_HOME defaults to ~/.beacon (Unix) or %USERPROFILE%\\.beacon (Windows).
+BEACON_HOST is the optional public host for the sidecar tunnel (wss://$BEACON_HOST/v1/sidecar).`;
 
 export type CliIo = {
   stdout: { write(chunk: string): void };
@@ -117,6 +118,7 @@ async function autoStartSidecar(
       token: runtime.token,
       projectId: runtime.project_id,
       fetchImpl: options.fetchImpl,
+      beaconHost: env["BEACON_HOST"],
     });
   } catch {
     // sidecar is best-effort next to mcp
@@ -185,6 +187,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
       token: runtime.token,
       projectId: runtime.project_id,
       fetchImpl: options.fetchImpl,
+      beaconHost: env["BEACON_HOST"],
     });
     io.stdout.write(`Sidecar listening on ${started.host}:${started.port}\n`);
     return 0;

@@ -163,7 +163,7 @@ Default: *context and tasks in the control plane; bytes on the machine that alre
 
 | `index_mode` | Who writes SQLite | How `CodeGateway` reaches it |
 | --- | --- | --- |
-| `sidecar` | Laptop `beacon sidecar` | Not used for HTTP `code:*` in v1 (stdio CLI hits local index). Register heartbeat only. |
+| `sidecar` | Laptop `beacon sidecar` | Local stdio hits the laptop index. With `ff.sidecar_tunnel` and a live WSS session, HTTP `code:*` may proxy over the tunnel. |
 | `bind_mount` | `apps/worker` | API → worker **loopback HTTP** (`INDEX_RPC_URL`, default `http://worker:7744`). Topology B. |
 | `hosted_clone` | `apps/worker` | Same worker loopback HTTP; tree is a GitHub clone, not a bind-mount. Flag `ff.hosted_clone`. |
 | `both` | Sidecar and/or worker | Prefer sidecar if `sidecar_connections.last_seen_at` within 60s; else hosted clone via worker HTTP; else 503. |
@@ -640,8 +640,8 @@ If the index is down, the **code tool** `get_changed_scope` returns 503. The **c
 `beacon sidecar` (also auto-started by `beacon mcp` and `beacon connect`).
 
 - Local HTTP on `127.0.0.1` only (refuse `0.0.0.0`) + token in `$BEACON_HOME/sidecar.json`.
-- `POST /v1/repos/:id/sidecar/register` tells the control plane the sidecar is alive (heartbeat every 20s). Used for UI status and `both` routing — **not** a data plane in v1.
-- Topology C (post-cut): sidecar dials `wss://$BEACON_HOST/v1/sidecar` with a `code:read` token. File bodies then transit the API. Off by default; project banner required.
+- `POST /v1/repos/:id/sidecar/register` tells the control plane the sidecar is alive (heartbeat every 20s). Used for UI status and `both` routing.
+- Topology C: sidecar dials `wss://$BEACON_HOST/v1/sidecar` with a `code:read` token. File bodies then transit the API. Off by default (`ff.sidecar_tunnel` / `FF_SIDECAR_TUNNEL`); project banner required.
 
 ### 10. Web interface and information architecture
 
@@ -867,6 +867,7 @@ The table below is **normative for v1**. `packages/api-spec` is the implementati
 | `GET` | `/v1/repos/:id` | `project:read` | `{ index_mode, sidecar_connected, worker_index_connected, last_indexed_at, last_indexed_sha }` |
 | `POST` | `/v1/repos/:id/detect` | `project:write` | Enqueue detector |
 | `POST` | `/v1/repos/:id/sidecar/register` | token + heartbeat | Laptop sidecar |
+| `GET` | `/v1/sidecar` | `code:read` token WSS | Sidecar tunnel. Off unless `ff.sidecar_tunnel`. |
 | `GET` | `/v1/projects/:id/context/nodes` | `context:read` | |
 | `PUT` | `/v1/projects/:id/context/nodes/:nodeId` | `context:write` | |
 | `POST` | `/v1/projects/:id/context/import` | `context:write` | Re-scan |

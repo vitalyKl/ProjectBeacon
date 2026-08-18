@@ -7,6 +7,13 @@ import { IndexCore, handleIndexRequest } from "@beacon/index-core";
 
 import { apiGet } from "./api.js";
 import { resolveBeaconHome } from "./home.js";
+import {
+  applyQuery,
+  defaultSidecarTunnelDialer,
+  sidecarTunnelUrl,
+  type SidecarTunnelDialer,
+  type TunnelRpcQuery,
+} from "./tunnel.js";
 
 export const SIDECAR_FILE_NAME = "sidecar.json";
 export const HEARTBEAT_MS = 20_000;
@@ -29,6 +36,8 @@ export type SidecarOptions = {
   fetchImpl?: typeof fetch;
   now?: () => Date;
   heartbeatMs?: number;
+  beaconHost?: string;
+  tunnelDialer?: SidecarTunnelDialer;
 };
 
 export function sidecarPath(home: string): string {
@@ -94,6 +103,153 @@ async function listProjectRepos(
     const id = (item as { id?: unknown }).id;
     return typeof id === "string" ? [{ id }] : [];
   });
+}
+
+type TunnelRequest = {
+  type: "req";
+  id: string;
+  repo_id: string;
+  path: string;
+  query?: TunnelRpcQuery;
+};
+
+function asTunnelRequest(value: unknown): TunnelRequest | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as {
+    type?: unknown;
+    id?: unknown;
+    repo_id?: unknown;
+    path?: unknown;
+    query?: unknown;
+  };
+  if (
+    record.type !== "req" ||
+    typeof record.id !== "string" ||
+    typeof record.repo_id !== "string" ||
+    typeof record.path !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    type: "req",
+    id: record.id,
+    repo_id: record.repo_id,
+    path: record.path,
+    query:
+      record.query !== null && typeof record.query === "object" && !Array.isArray(record.query)
+        ? (record.query as TunnelRpcQuery)
+        : undefined,
+  };
+}
+
+async function proxyLocalIndex(options: {
+  host: string;
+  port: number;
+  token: string;
+  repoId: string;
+  path: string;
+  query?: TunnelRpcQuery;
+  fetchImpl: typeof fetch;
+}): Promise<{ status: number; body: unknown }> {
+  const url = new URL(
+    `http://${options.host}:${options.port}/repos/${options.repoId}${options.path}`,
+  );
+  applyQuery(url, options.query);
+  try {
+    const response = await options.fetchImpl(url, {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${options.token}`,
+        accept: "application/json",
+      },
+    });
+    const text = await response.text();
+    let parsed: unknown;
+    if (text.length > 0) {
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch {
+        parsed = undefined;
+      }
+    }
+    return { status: response.status, body: parsed };
+  } catch {
+    return {
+      status: 503,
+      body: { error: { code: "code_index_unavailable", message: "code index unavailable" } },
+    };
+  }
+}
+
+function startOutboundTunnel(options: {
+  controlUrl: string;
+  token: string;
+  beaconHost?: string;
+  repoIds: () => string[];
+  local: { host: string; port: number; token: string };
+  fetchImpl: typeof fetch;
+  dialer: SidecarTunnelDialer;
+}): { close: () => void } {
+  const url = sidecarTunnelUrl(options.controlUrl, options.beaconHost);
+  const socket = options.dialer(url, { authorization: `Bearer ${options.token}` });
+
+  socket.on("open", () => {
+    socket.send(
+      JSON.stringify({ type: "hello", token: options.token, repo_ids: options.repoIds() }),
+    );
+  });
+  socket.on("message", (raw) => {
+    const text =
+      typeof raw === "string"
+        ? raw
+        : raw instanceof ArrayBuffer
+          ? Buffer.from(raw).toString("utf8")
+          : Buffer.isBuffer(raw)
+            ? raw.toString("utf8")
+            : undefined;
+    if (!text) {
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      return;
+    }
+    const request = asTunnelRequest(parsed);
+    if (!request) {
+      return;
+    }
+    void proxyLocalIndex({
+      host: options.local.host,
+      port: options.local.port,
+      token: options.local.token,
+      repoId: request.repo_id,
+      path: request.path,
+      query: request.query,
+      fetchImpl: options.fetchImpl,
+    }).then((result) => {
+      socket.send(
+        JSON.stringify({
+          type: "res",
+          id: request.id,
+          status: result.status,
+          body: result.body,
+        }),
+      );
+    });
+  });
+  socket.on("error", () => {
+    // outbound tunnel is best-effort next to local HTTP
+  });
+
+  return {
+    close() {
+      socket.close();
+    },
+  };
 }
 
 async function registerHeartbeats(options: SidecarOptions, repoIds: string[]): Promise<void> {
@@ -169,6 +325,8 @@ export async function startSidecar(options: SidecarOptions): Promise<{
   });
 
   let timer: NodeJS.Timeout | undefined;
+  let tunnel: { close: () => void } | undefined;
+  let liveRepoIds = options.projectId ? [defaultRepoId] : [];
   if (options.projectId) {
     const fetchImpl = options.fetchImpl ?? fetch;
     const tick = async () => {
@@ -179,6 +337,7 @@ export async function startSidecar(options: SidecarOptions): Promise<{
         fetchImpl,
       );
       const ids = repos.length > 0 ? repos.map((repo) => repo.id) : [defaultRepoId];
+      liveRepoIds = ids;
       await registerHeartbeats(options, ids);
     };
     await tick();
@@ -186,6 +345,15 @@ export async function startSidecar(options: SidecarOptions): Promise<{
       void tick();
     }, options.heartbeatMs ?? HEARTBEAT_MS);
     timer.unref?.();
+    tunnel = startOutboundTunnel({
+      controlUrl: options.url,
+      token: options.token,
+      beaconHost: options.beaconHost,
+      repoIds: () => liveRepoIds,
+      local: { host, port: bound.port, token },
+      fetchImpl,
+      dialer: options.tunnelDialer ?? defaultSidecarTunnelDialer,
+    });
   }
 
   return {
@@ -196,6 +364,7 @@ export async function startSidecar(options: SidecarOptions): Promise<{
       if (timer) {
         clearInterval(timer);
       }
+      tunnel?.close();
       for (const core of cores.values()) {
         core.close();
       }

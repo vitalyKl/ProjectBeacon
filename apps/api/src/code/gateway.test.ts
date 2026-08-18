@@ -79,6 +79,68 @@ describe("CodeGateway", () => {
       code: "code_index_unavailable",
     });
   });
+
+  it("proxies sidecar and both mode over a live tunnel when the flag is on", async () => {
+    const calls: string[] = [];
+    const tunnel = {
+      isLive: (repoId: string) => repoId === REPO.id,
+      query: async (repoId: string, path: string) => {
+        calls.push(`${repoId}${path}`);
+        return { items: [] };
+      },
+    };
+    const gateway = createCodeGateway({
+      config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
+      store: {
+        findSidecarConnectionByRepoId: async () => ({
+          id: "sid-1",
+          repoId: REPO.id,
+          tokenId: "tok-1",
+          connectedAt: new Date("2026-01-01T00:00:00.000Z"),
+          lastSeenAt: new Date("2026-01-01T00:00:30.000Z"),
+        }),
+      },
+      now: () => new Date("2026-01-01T00:00:40.000Z"),
+      fetchImpl: (async () => {
+        throw new Error("should not fetch");
+      }) as typeof fetch,
+      tunnel,
+      tunnelEnabled: () => true,
+    });
+    await expect(
+      gateway.query({ ...REPO, indexMode: "sidecar" }, { kind: "tree" }),
+    ).resolves.toEqual({
+      items: [],
+    });
+    await expect(gateway.query({ ...REPO, indexMode: "both" }, { kind: "tree" })).resolves.toEqual({
+      items: [],
+    });
+    expect(calls).toEqual([`${REPO.id}/tree`, `${REPO.id}/tree`]);
+  });
+
+  it("does not wait on a tunnel when the flag is off", async () => {
+    const gateway = createCodeGateway({
+      config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
+      store: { findSidecarConnectionByRepoId: async () => undefined },
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+      fetchImpl: (async () => {
+        throw new Error("should not fetch");
+      }) as typeof fetch,
+      tunnel: {
+        isLive: () => true,
+        query: async () => {
+          throw new Error("should not query tunnel");
+        },
+      },
+      tunnelEnabled: () => false,
+    });
+    await expect(
+      gateway.query({ ...REPO, indexMode: "sidecar" }, { kind: "tree" }),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: "code_index_unavailable",
+    });
+  });
 });
 
 describe("createIndexRpcClient", () => {
@@ -92,7 +154,7 @@ describe("createIndexRpcClient", () => {
           { status: 415 },
         )) as typeof fetch,
     });
-    await expect(client.request(REPO.id, "/files", { path: "a.bin" })).rejects.toMatchObject({
+    await expect(client.query(REPO.id, "/files", { path: "a.bin" })).rejects.toMatchObject({
       status: 415,
       code: "unsupported_media",
     });

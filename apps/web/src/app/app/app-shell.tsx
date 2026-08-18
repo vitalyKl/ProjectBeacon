@@ -28,7 +28,7 @@ function pickProject(projects: PublicProject[], storedId: string | null): Public
   return projects[0] ?? null;
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [me, setMe] = useState<PublicMe | null>(null);
@@ -179,6 +179,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
+        {banner}
         <div className="flex min-h-0 flex-1">
           <nav className="w-52 shrink-0 border-r border-border bg-surface px-3 py-4">
             <ul className="flex flex-col gap-1">

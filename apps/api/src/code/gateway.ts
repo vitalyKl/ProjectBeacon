@@ -59,7 +59,7 @@ export type CodeGateway = {
 type RpcQuery = Record<string, string | number | Array<string | undefined> | undefined>;
 
 type IndexRpcClient = {
-  request(repoId: string, path: string, query?: RpcQuery): Promise<unknown>;
+  query(repoId: string, path: string, query?: RpcQuery): Promise<unknown>;
   health(): Promise<boolean>;
 };
 
@@ -110,7 +110,7 @@ export function createIndexRpcClient(options: {
         return false;
       }
     },
-    async request(repoId, path, query) {
+    async query(repoId, path, query) {
       let response: Response;
       try {
         response = await requestRaw(`/repos/${repoId}${path}`, query);
@@ -159,12 +159,19 @@ function usesWorkerIndex(repo: ProjectRepoRecord): boolean {
   );
 }
 
+type TunnelClient = {
+  isLive(repoId: string): boolean;
+  query(repoId: string, path: string, query?: RpcQuery): Promise<unknown>;
+};
+
 export function createCodeGateway(options: {
   config: Pick<AuthConfig, "indexRpcUrl" | "indexRpcToken">;
   store: Pick<AuthStore, "findSidecarConnectionByRepoId">;
   now: () => Date;
   fetchImpl?: typeof fetch;
   rpc?: IndexRpcClient;
+  tunnel?: TunnelClient;
+  tunnelEnabled?: () => boolean;
 }): CodeGateway {
   const rpc =
     options.rpc ??
@@ -174,14 +181,18 @@ export function createCodeGateway(options: {
       fetchImpl: options.fetchImpl,
     });
 
-  async function route(repo: ProjectRepoRecord): Promise<"worker" | "none"> {
+  function tunnelLive(repoId: string): boolean {
+    return Boolean(options.tunnelEnabled?.() && options.tunnel?.isLive(repoId));
+  }
+
+  async function route(repo: ProjectRepoRecord): Promise<"tunnel" | "worker" | "none"> {
     if (repo.indexMode === "sidecar") {
-      return "none";
+      return tunnelLive(repo.id) ? "tunnel" : "none";
     }
     if (repo.indexMode === "both") {
       const sidecar = await options.store.findSidecarConnectionByRepoId(repo.id);
       if (sidecar && options.now().getTime() - sidecar.lastSeenAt.getTime() <= SIDECAR_SEEN_MS) {
-        return "none";
+        return tunnelLive(repo.id) ? "tunnel" : "none";
       }
     }
     if (usesWorkerIndex(repo)) {
@@ -190,56 +201,73 @@ export function createCodeGateway(options: {
     return "none";
   }
 
+  async function dispatch(repo: ProjectRepoRecord, target: "tunnel" | "worker", query: CodeQuery) {
+    const client = target === "tunnel" ? options.tunnel : rpc;
+    if (!client) {
+      throw new CodeGatewayError({
+        status: 503,
+        code: "code_index_unavailable",
+        message: "code index unavailable",
+      });
+    }
+    switch (query.kind) {
+      case "tree":
+        return client.query(repo.id, "/tree", { path: query.path, depth: query.depth });
+      case "search":
+        return client.query(repo.id, "/search", {
+          q: query.q,
+          mode: query.mode,
+          lang: query.lang,
+          path_prefix: query.pathPrefix,
+          limit: query.limit,
+        });
+      case "file":
+        return client.query(repo.id, "/files", {
+          path: query.path,
+          start_line: query.startLine,
+          end_line: query.endLine,
+        });
+      case "symbol":
+        return client.query(repo.id, "/symbols", {
+          name: query.name,
+          path: query.path,
+          kind: query.symbolKind,
+        });
+      case "owners":
+        return client.query(repo.id, "/owners", { path: query.path });
+      case "related":
+        return client.query(repo.id, "/related", { path: query.path, limit: query.limit });
+      case "changed_scope":
+        return client.query(repo.id, "/changed-scope", {
+          limit: query.limit,
+          identifier: query.identifiers,
+          linked_path: query.linkedPaths,
+          path_prefix: query.pathPrefixes,
+        });
+    }
+  }
+
   return {
     async health(repo) {
-      if ((await route(repo)) !== "worker") {
+      const target = await route(repo);
+      if (target === "tunnel") {
+        return true;
+      }
+      if (target !== "worker") {
         return false;
       }
       return rpc.health();
     },
     async query(repo, query) {
-      if ((await route(repo)) !== "worker") {
+      const target = await route(repo);
+      if (target === "none") {
         throw new CodeGatewayError({
           status: 503,
           code: "code_index_unavailable",
           message: "code index unavailable",
         });
       }
-      switch (query.kind) {
-        case "tree":
-          return rpc.request(repo.id, "/tree", { path: query.path, depth: query.depth });
-        case "search":
-          return rpc.request(repo.id, "/search", {
-            q: query.q,
-            mode: query.mode,
-            lang: query.lang,
-            path_prefix: query.pathPrefix,
-            limit: query.limit,
-          });
-        case "file":
-          return rpc.request(repo.id, "/files", {
-            path: query.path,
-            start_line: query.startLine,
-            end_line: query.endLine,
-          });
-        case "symbol":
-          return rpc.request(repo.id, "/symbols", {
-            name: query.name,
-            path: query.path,
-            kind: query.symbolKind,
-          });
-        case "owners":
-          return rpc.request(repo.id, "/owners", { path: query.path });
-        case "related":
-          return rpc.request(repo.id, "/related", { path: query.path, limit: query.limit });
-        case "changed_scope":
-          return rpc.request(repo.id, "/changed-scope", {
-            limit: query.limit,
-            identifier: query.identifiers,
-            linked_path: query.linkedPaths,
-            path_prefix: query.pathPrefixes,
-          });
-      }
+      return dispatch(repo, target, query);
     },
   };
 }

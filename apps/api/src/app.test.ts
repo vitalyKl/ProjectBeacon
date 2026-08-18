@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
+import { SIDECAR_TUNNEL_PATH } from "./code/tunnel.js";
 
 describe("GET /health", () => {
   it("returns 200 without touching the database", async () => {
@@ -46,5 +47,18 @@ describe("GET /ready", () => {
 
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ status: "unavailable" });
+  });
+});
+
+describe("GET /v1/sidecar", () => {
+  it("does not accept the upgrade when the flag is off", async () => {
+    const app = createApp({
+      checkReady: async () => true,
+      sidecarTunnelEnabled: () => false,
+    });
+    const res = await app.request(SIDECAR_TUNNEL_PATH, {
+      headers: { upgrade: "websocket", connection: "Upgrade" },
+    });
+    expect(res.status).toBe(404);
   });
 });

@@ -46,6 +46,7 @@ services:
       INDEX_RPC_URL: http://worker:7744
       INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
       FF_HOSTED_CLONE: ${FF_HOSTED_CLONE:-false}
+      FF_SIDECAR_TUNNEL: ${FF_SIDECAR_TUNNEL:-false}
     ports:
       - "8080:8080"
     healthcheck:

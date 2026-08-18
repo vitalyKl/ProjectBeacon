@@ -1,13 +1,8 @@
 import { serve } from "@hono/node-server";
+
 import { createApp } from "./app.js";
-import {
-  DETECT_QUEUE,
-  GITHUB_IMPORT_QUEUE,
-  GITHUB_INVALIDATE_QUEUE,
-  MemoryJobQueue,
-  PgBossJobQueue,
-  type JobQueue,
-} from "./jobs/queue.js";
+import { DETECT_QUEUE, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE, MemoryJobQueue, PgBossJobQueue, type JobQueue } from "./jobs/queue.js";
+import { attachSidecarTunnelUpgrade } from "./code/routes.js";
 
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
@@ -34,7 +29,7 @@ async function resolveJobs(): Promise<JobQueue> {
 const jobs = await resolveJobs();
 const app = createApp({ jobs });
 
-serve({ fetch: app.fetch, port, hostname }, (info) => {
+const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(
     JSON.stringify({
       level: "info",
@@ -44,3 +39,5 @@ serve({ fetch: app.fetch, port, hostname }, (info) => {
     }),
   );
 });
+
+attachSidecarTunnelUpgrade(server, app.authDeps, app.sidecarTunnel, app.sidecarTunnelEnabled);

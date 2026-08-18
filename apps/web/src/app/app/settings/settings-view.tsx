@@ -409,6 +409,39 @@ export function SettingsView({
         ) : null}
       </section>
 
+      {sidecarTunnel ? (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Sidecar tunnel</h2>
+            <p className="text-sm text-muted">
+              When a sidecar is connected, remote code tools can read this machine through the
+              control plane.
+            </p>
+          </div>
+          {repos === null || repos.length === 0 ? (
+            <p className="text-sm text-muted">Connect a repository first.</p>
+          ) : (
+            <ul className="space-y-2">
+              {repos.map((repo) => (
+                <li
+                  key={repo.id}
+                  className="space-y-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
+                >
+                  <div className="font-medium">
+                    {repo.remote_url || repo.local_root_hint || "Repository"}
+                  </div>
+                  <p className="text-muted">
+                    {repo.sidecar_connected
+                      ? "Sidecar connected. Code tools may transit file contents."
+                      : "Sidecar offline."}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
       {hostedClone ? (
         <section className="space-y-3">
           <div>
