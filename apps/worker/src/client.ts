@@ -47,6 +47,15 @@ export type WorkerApi = {
     repoId: string,
     body: { last_indexed_sha?: string | null; last_indexed_at?: string | null },
   ): Promise<unknown>;
+  consumeCloneInvalidation(
+    repoId: string,
+  ): Promise<{ consumed: { id: string; sha: string | null; created_at: string } | null }>;
+  listDeletedProjects(): Promise<{ id: string; deleted_at: string | null }[]>;
+  projectClonePurge(projectId: string): Promise<{
+    project_id: string;
+    deleted: boolean;
+    repo_ids: string[];
+  }>;
   importContext(
     projectId: string,
     repoId: string,
@@ -94,6 +103,9 @@ export type RepoView = {
   id: string;
   project_id: string;
   provider: string;
+  remote_url: string | null;
+  default_branch: string;
+  installation_id: string | null;
   local_root_hint: string | null;
   index_mode: string;
   remote_url?: string | null;
@@ -187,6 +199,19 @@ export function createWorkerApi(options: {
     },
     reportIndex(repoId, body) {
       return request("POST", `/v1/repos/${repoId}/index`, { body });
+    },
+    consumeCloneInvalidation(repoId) {
+      return request("POST", `/v1/repos/${repoId}/clone-invalidation/consume`);
+    },
+    async listDeletedProjects() {
+      const page = await request<{ items: { id: string; deleted_at: string | null }[] }>(
+        "GET",
+        "/v1/internal/deleted-projects",
+      );
+      return page.items;
+    },
+    projectClonePurge(projectId) {
+      return request("GET", `/v1/projects/${projectId}/hosted-clone-purge`);
     },
     importContext(projectId, repoId, files) {
       return request("POST", `/v1/projects/${projectId}/context/import?repo_id=${repoId}`, {

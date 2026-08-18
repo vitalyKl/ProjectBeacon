@@ -587,3 +587,20 @@ describe("session ip metadata", () => {
     );
   });
 });
+
+describe("GET /v1/flags", () => {
+  it("reports hosted_clone from the current process env", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapUser(store);
+    delete process.env["ff.hosted_clone"];
+    delete process.env.FF_HOSTED_CLONE;
+    const off = await app.request("/v1/flags", { headers: { cookie: cookieHeader(token!) } });
+    expect(off.status).toBe(200);
+    expect(await off.json()).toEqual({ hosted_clone: false });
+
+    process.env.FF_HOSTED_CLONE = "true";
+    const on = await app.request("/v1/flags", { headers: { cookie: cookieHeader(token!) } });
+    expect(await on.json()).toEqual({ hosted_clone: true });
+    delete process.env.FF_HOSTED_CLONE;
+  });
+});

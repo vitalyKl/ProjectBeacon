@@ -2,7 +2,9 @@ import { uuidv7 } from "@beacon/shared";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context, Hono } from "hono";
 
+import { requireActor } from "./access.js";
 import { errorJson } from "../errors.js";
+import { isHostedCloneEnabled } from "../flags.js";
 import { readObject } from "../http.js";
 import type { Clock } from "./clock.js";
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from "./cookies.js";
@@ -292,6 +294,16 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
     return c.json({
       ...toPublicMe(resolved.user, orgs),
       personal_org: toPublicOrg(personal),
+    });
+  });
+
+  app.get("/v1/flags", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (actor instanceof Response) {
+      return actor;
+    }
+    return c.json({
+      hosted_clone: isHostedCloneEnabled(process.env),
     });
   });
 }

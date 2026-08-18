@@ -1,7 +1,7 @@
 import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
-import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState, sidecarConnections } from "@beacon/db";
+import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState, sidecarConnections, githubCloneInvalidations } from "@beacon/db";
 import { isScope, uuidv7, type Scope } from "@beacon/shared";
-import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or, isNotNull } from "drizzle-orm";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
@@ -2679,6 +2679,65 @@ export class DbAuthStore implements AuthStore {
   async findSidecarConnectionByRepoId(
     repoId: string,
   ): Promise<
+
+  async listDeletedProjects(): Promise<ProjectRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(projects)
+      .where(isNotNull(projects.deletedAt))
+      .orderBy(asc(projects.id));
+    return rows.map(toProject);
+  }
+
+  async updateProjectRepo(
+    id: string,
+    patch: { indexMode?: ProjectRepoRecord["indexMode"] },
+  ): Promise<ProjectRepoRecord | undefined> {
+    const current = await this.findProjectRepoById(id);
+    if (!current) {
+      return undefined;
+    }
+    const [row] = await this.db
+      .update(projectRepos)
+      .set({
+        indexMode: patch.indexMode === undefined ? current.indexMode : patch.indexMode,
+      })
+      .where(eq(projectRepos.id, id))
+      .returning();
+    return row ? toProjectRepo(row) : undefined;
+  }
+
+  async consumeCloneInvalidation(
+    repoId: string,
+    now: Date,
+  ): Promise<{ id: string; repoId: string; sha: string | null; createdAt: Date } | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(githubCloneInvalidations)
+        .where(
+          and(
+            eq(githubCloneInvalidations.repoId, repoId),
+            isNull(githubCloneInvalidations.consumedAt),
+          ),
+        )
+        .orderBy(asc(githubCloneInvalidations.createdAt), asc(githubCloneInvalidations.id))
+        .limit(1);
+      if (!row) {
+        return undefined;
+      }
+      await tx
+        .update(githubCloneInvalidations)
+        .set({ consumedAt: now })
+        .where(eq(githubCloneInvalidations.id, row.id));
+      return {
+        id: row.id,
+        repoId: row.repoId,
+        sha: row.sha,
+        createdAt: row.createdAt,
+      };
+    });
+  }
 }
 
 async function startWorkInTx(

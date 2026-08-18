@@ -32,12 +32,24 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
         id: "repo-1",
         project_id: "proj-1",
         provider: "local",
+        remote_url: null,
+        default_branch: "main",
+        installation_id: null,
         local_root_hint: "demo",
         index_mode: "bind_mount",
       };
     },
     async reportIndex() {
       return {};
+    },
+    async consumeCloneInvalidation() {
+      return { consumed: null };
+    },
+    async listDeletedProjects() {
+      return [];
+    },
+    async projectClonePurge() {
+      return { project_id: "proj-1", deleted: false, repo_ids: [] };
     },
     async importContext(projectId, repoId, files) {
       imports.push({ projectId, repoId, files });

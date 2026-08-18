@@ -8,6 +8,8 @@ import { createWorkerApi, loadWorkerEnv } from "./api.js";
 export { createWorkerApi, loadWorkerEnv } from "./api.js";
 export { EXPIRE_LOCKS_CRON, EXPIRE_LOCKS_QUEUE, RETENTION_CRON, RETENTION_QUEUE, runExpireLocksJob, runRetentionJob, import { runGithubImportJob, runGithubInvalidateJob } from "./github.js";
 import { startWorkerIndexHttp, WorkerIndexRegistry } from "./index-server.js";
+import { DETECT_QUEUE, isDetectJobData } from "./jobs.js";
+import { purgeDeletedProjectClones } from "./purge.js";
 
 export const packageName = "@beacon/worker";
 
@@ -38,6 +40,8 @@ async function main(): Promise<void> {
   const registry = new WorkerIndexRegistry({
     workspace: config.workspace,
     indexDir: config.indexDir,
+    cloneDir: config.cloneDir,
+    githubApp: config.githubApp,
   });
   await startWorkerIndexHttp(config, registry, api);
 
@@ -48,7 +52,12 @@ async function main(): Promise<void> {
       }
       await runDetectJob(job.data, { api, workspace: config.workspace });
       const repo = await api.getRepo(job.data.repo_id);
-      const core = await registry.ensureIndexed(repo);
+      let forceClone = false;
+      if (repo.index_mode === "hosted_clone" || repo.index_mode === "both") {
+        const pending = await api.consumeCloneInvalidation(repo.id);
+        forceClone = Boolean(pending.consumed);
+      }
+      const core = await registry.ensureIndexed(repo, { forceClone });
       if (core) {
         await api.reportIndex(repo.id, {
           last_indexed_at: core.lastIndexedAt()?.toISOString() ?? new Date().toISOString(),
@@ -72,6 +81,20 @@ async function main(): Promise<void> {
       await runGithubInvalidateJob(job.data, { api });
     }
   });
+
+  const sweep = async () => {
+    try {
+      await purgeDeletedProjectClones(api, registry);
+    } catch (error) {
+      console.error(
+        JSON.stringify({ level: "error", msg: "hosted clone purge", error: String(error) }),
+      );
+    }
+  };
+  await sweep();
+  setInterval(() => {
+    void sweep();
+  }, 30_000);
 
   console.log(
     JSON.stringify({

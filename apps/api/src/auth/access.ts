@@ -209,7 +209,10 @@ export async function authorizeProjectActor(
     return errorJson(c, 404, "not_found", "project not found");
   }
   const project = await deps.store.findProjectById(projectId);
-  if (!project || project.deletedAt) {
+  if (!project) {
+    return errorJson(c, 404, "not_found", "project not found");
+  }
+  if (project.deletedAt && actor.kind !== "worker") {
     return errorJson(c, 404, "not_found", "project not found");
   }
 

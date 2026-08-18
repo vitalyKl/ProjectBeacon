@@ -19,6 +19,9 @@ describe("worker /v1 client", () => {
           id: "repo-1",
           project_id: "proj-1",
           provider: "local",
+          remote_url: null,
+          default_branch: "main",
+          installation_id: null,
           local_root_hint: "demo",
           index_mode: "bind_mount",
         });

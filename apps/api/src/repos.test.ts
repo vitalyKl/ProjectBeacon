@@ -400,6 +400,104 @@ describe("project repos", () => {
       error: { code: "not_found", message: "repo not found" },
     });
   });
+
+  it("rejects hosted_clone when the operator flag is off", async () => {
+    const previous = process.env["ff.hosted_clone"];
+    delete process.env["ff.hosted_clone"];
+    delete process.env.FF_HOSTED_CLONE;
+    try {
+      const store = new MemoryAuthStore();
+      const alice = await registerUser(store, "alice");
+      const project = await createProject(alice.app, alice.token, "flag-off");
+      const created = await alice.app.request(`/v1/projects/${project.id}/repos`, {
+        method: "POST",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "github",
+          remote_url: "https://github.com/acme/demo",
+          installation_id: "12",
+          index_mode: "hosted_clone",
+        }),
+      });
+      expect(created.status).toBe(404);
+      expect(await created.json()).toMatchObject({ error: { code: "not_found" } });
+    } finally {
+      if (previous === undefined) {
+        delete process.env["ff.hosted_clone"];
+      } else {
+        process.env["ff.hosted_clone"] = previous;
+      }
+    }
+  });
+
+  it("patches index_mode when hosted clone is enabled and consumes invalidation as worker", async () => {
+    process.env["ff.hosted_clone"] = "true";
+    try {
+      const store = new MemoryAuthStore();
+      const jobs = new MemoryJobQueue();
+      const alice = await registerUser(store, "alice", jobs);
+      const project = await createProject(alice.app, alice.token, "clone-on");
+      const created = await alice.app.request(`/v1/projects/${project.id}/repos`, {
+        method: "POST",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "github",
+          remote_url: "https://github.com/acme/demo",
+          installation_id: "12",
+          index_mode: "sidecar",
+        }),
+      });
+      expect(created.status).toBe(201);
+      const repoId = ((await created.json()) as { id: string }).id;
+
+      const patched = await alice.app.request(`/v1/repos/${repoId}`, {
+        method: "PATCH",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({ index_mode: "hosted_clone" }),
+      });
+      expect(patched.status).toBe(200);
+      expect(await patched.json()).toMatchObject({ index_mode: "hosted_clone" });
+      expect(jobs.detectJobs).toHaveLength(1);
+
+      store.seedCloneInvalidation({
+        id: "01934567-89ab-7cde-89ab-0123456789cc",
+        repoId,
+        sha: "abc",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      });
+      const consumed = await alice.app.request(`/v1/repos/${repoId}/clone-invalidation/consume`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+      });
+      expect(consumed.status).toBe(200);
+      expect(await consumed.json()).toMatchObject({
+        consumed: { sha: "abc" },
+      });
+      const again = await alice.app.request(`/v1/repos/${repoId}/clone-invalidation/consume`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+      });
+      expect(await again.json()).toEqual({ consumed: null });
+
+      await alice.app.request(`/v1/projects/${project.id}`, {
+        method: "DELETE",
+        headers: { cookie: cookieHeader(alice.token) },
+      });
+      const listed = await alice.app.request("/v1/internal/deleted-projects", {
+        headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+      });
+      expect(listed.status).toBe(200);
+      expect(await listed.json()).toMatchObject({
+        items: [{ id: project.id }],
+      });
+      const hidden = await alice.app.request("/v1/internal/deleted-projects", {
+        headers: { cookie: cookieHeader(alice.token) },
+      });
+      expect(hidden.status).toBe(403);
+    } finally {
+      delete process.env["ff.hosted_clone"];
+    }
+  });
 });
 
 describe("POST /v1/repos/:id/detect", () => {

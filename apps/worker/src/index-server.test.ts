@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -12,16 +12,22 @@ function repoApi(repo: {
   provider: string;
   index_mode: string;
   local_root_hint: string | null;
-}): Pick<WorkerApi, "getRepo"> {
+}): Pick<WorkerApi, "getRepo" | "consumeCloneInvalidation"> {
   return {
     async getRepo() {
       return {
         id: repo.id,
         project_id: "proj-1",
         provider: repo.provider,
+        remote_url: null,
+        default_branch: "main",
+        installation_id: null,
         local_root_hint: repo.local_root_hint,
         index_mode: repo.index_mode,
       };
+    },
+    async consumeCloneInvalidation() {
+      return { consumed: null };
     },
   };
 }
@@ -54,5 +60,23 @@ describe("WorkerIndexRegistry", () => {
     expect(reopened).toBeDefined();
     expect(reopened?.getTree({ root: ".", depth: 1 }).some((dir) => dir.path === ".")).toBe(true);
     second.close();
+  });
+
+  it("drops a hosted clone tree and sqlite for a repo id", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "beacon-hosted-drop-"));
+    const indexDir = path.join(root, "index");
+    const cloneDir = path.join(root, "clones");
+    const repoId = "01934567-89ab-7cde-89ab-0123456789bb";
+    await mkdir(path.join(cloneDir, repoId), { recursive: true });
+    await mkdir(indexDir, { recursive: true });
+    await writeFile(path.join(cloneDir, repoId, "hello.ts"), "export const hello = 1;\n");
+    await writeFile(path.join(indexDir, `${repoId}.sqlite`), "sqlite");
+    const registry = new WorkerIndexRegistry({ indexDir, cloneDir });
+    await registry.dropRepo(repoId);
+    await expect(stat(path.join(cloneDir, repoId))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(path.join(indexDir, `${repoId}.sqlite`))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    registry.close();
   });
 });

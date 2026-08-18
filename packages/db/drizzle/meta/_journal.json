@@ -17,6 +17,13 @@
       "when": 1787039724677,
       "tag": "0001_sidecar_connections_repo_id_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787048000000,
+      "tag": "0002_github_clone_invalidations",
+      "breakpoints": true
     }
   ]
 }

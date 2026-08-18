@@ -149,6 +149,20 @@ export const githubSyncState = pgTable("github_sync_state", {
   lastSyncedAt: timestamptz("last_synced_at"),
 });
 
+export const githubCloneInvalidations = pgTable(
+  "github_clone_invalidations",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id, { onDelete: "cascade" }),
+    sha: text("sha"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    consumedAt: timestamptz("consumed_at"),
+  },
+  (t) => [index("github_clone_invalidations_repo_pending").on(t.repoId, t.createdAt)],
+);
+
 export const idempotencyKeys = pgTable(
   "idempotency_keys",
   {

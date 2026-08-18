@@ -258,6 +258,15 @@ export interface AuthStore {
   findSidecarConnectionByRepoId(
     repoId: string,
   ): Promise<
+  listDeletedProjects(): Promise<ProjectRecord[]>;
+  updateProjectRepo(
+    id: string,
+    patch: { indexMode?: ProjectRepoRecord["indexMode"] },
+  ): Promise<ProjectRepoRecord | undefined>;
+  consumeCloneInvalidation(
+    repoId: string,
+    now: Date,
+  ): Promise<{ id: string; repoId: string; sha: string | null; createdAt: Date } | undefined>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -1968,6 +1977,72 @@ export class MemoryAuthStore implements AuthStore {
   async findSidecarConnectionByRepoId(
     repoId: string,
   ): Promise<
+  private readonly cloneInvalidations = new Map<
+
+  async listDeletedProjects(): Promise<ProjectRecord[]> {
+    const result: ProjectRecord[] = [];
+    for (const project of this.projects.values()) {
+      if (project.deletedAt) {
+        result.push(cloneProject(project));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  seedCloneInvalidation(row: {
+    id: string;
+    repoId: string;
+    sha?: string | null;
+    createdAt: Date;
+    consumedAt?: Date | null;
+  }): void {
+    this.cloneInvalidations.set(row.id, {
+      id: row.id,
+      repoId: row.repoId,
+      sha: row.sha ?? null,
+      createdAt: new Date(row.createdAt),
+      consumedAt: row.consumedAt ? new Date(row.consumedAt) : null,
+    });
+  }
+
+  async updateProjectRepo(
+    id: string,
+    patch: { indexMode?: ProjectRepoRecord["indexMode"] },
+  ): Promise<ProjectRepoRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const repo = this.projectRepos.get(id);
+      if (!repo) {
+        return undefined;
+      }
+      if (patch.indexMode !== undefined) {
+        repo.indexMode = patch.indexMode;
+      }
+      return cloneProjectRepo(repo);
+    });
+  }
+
+  async consumeCloneInvalidation(
+    repoId: string,
+    now: Date,
+  ): Promise<{ id: string; repoId: string; sha: string | null; createdAt: Date } | undefined> {
+    return this.enqueueWrite(() => {
+      const pending = [...this.cloneInvalidations.values()]
+        .filter((row) => row.repoId === repoId && row.consumedAt === null)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+      const next = pending[0];
+      if (!next) {
+        return undefined;
+      }
+      next.consumedAt = new Date(now);
+      return {
+        id: next.id,
+        repoId: next.repoId,
+        sha: next.sha,
+        createdAt: new Date(next.createdAt),
+      };
+    });
+  }
     string,
     { response: unknown; createdAt: Date }
   >();

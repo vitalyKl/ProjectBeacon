@@ -45,6 +45,7 @@ services:
       BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
       INDEX_RPC_URL: http://worker:7744
       INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
+      FF_HOSTED_CLONE: ${FF_HOSTED_CLONE:-false}
     ports:
       - "8080:8080"
     healthcheck:
@@ -103,6 +104,9 @@ services:
       INDEX_RPC_PORT: "7744"
       INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
       BEACON_INDEX_DIR: /var/lib/beacon/index
+      BEACON_CLONE_DIR: /var/lib/beacon/clones
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
     # Index HTTP stays on the Compose network (7744). It is not published.
     volumes:
       - ${BEACON_WORKSPACE:-./workspace}:/workspace:ro
@@ -127,6 +131,8 @@ services:
       HOST: "0.0.0.0"
       MCP_URL: http://mcp:8080
           "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+      - workerdata:/var/lib/beacon
 
 volumes:
   pgdata:
+  workerdata:

@@ -1,7 +1,7 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
-import { requireProjectActor } from "../auth/access.js";
+import { requireActor, requireProjectActor } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { loadSession } from "../auth/routes.js";
 import type { UserRecord } from "../auth/store.js";
@@ -430,6 +430,39 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
       return errorJson(c, 404, "not_found", "project not found");
     }
     return c.json(presentProject(deleted));
+  });
+
+  app.get("/v1/internal/deleted-projects", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (actor instanceof Response) {
+      return actor;
+    }
+    if (actor.kind !== "worker") {
+      return errorJson(c, 403, "forbidden", "insufficient token scope");
+    }
+    const projects = await deps.store.listDeletedProjects();
+    return c.json({
+      items: projects.map((project) => ({
+        id: project.id,
+        deleted_at: project.deletedAt?.toISOString() ?? null,
+      })),
+    });
+  });
+
+  app.get("/v1/projects/:id/hosted-clone-purge", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    if (access instanceof Response) {
+      return access;
+    }
+    if (access.actor.kind !== "worker") {
+      return errorJson(c, 403, "forbidden", "insufficient token scope");
+    }
+    const repos = await deps.store.listProjectRepos(access.project.id);
+    return c.json({
+      project_id: access.project.id,
+      deleted: Boolean(access.project.deletedAt),
+      repo_ids: repos.map((repo) => repo.id),
+    });
   });
 
   app.get("/v1/projects/:id/members", async (c) => {

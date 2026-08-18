@@ -1,3 +1,5 @@
+import { loadGithubAppConfig, type GithubAppConfig } from "./github-app.js";
+
 export type WorkerConfig = {
   apiUrl: string;
   workerToken: string;
@@ -7,6 +9,8 @@ export type WorkerConfig = {
   indexRpcPort: number;
   indexRpcToken: string;
   indexDir: string;
+  cloneDir: string;
+  githubApp?: GithubAppConfig;
 };
 
 export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
@@ -18,6 +22,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const indexRpcPort = Number.parseInt(env["INDEX_RPC_PORT"] ?? "7744", 10);
   const indexRpcToken = env["INDEX_RPC_TOKEN"] ?? "";
   const indexDir = env["BEACON_INDEX_DIR"]?.trim() || "/var/lib/beacon/index";
+  const cloneDir = env["BEACON_CLONE_DIR"]?.trim() || "/var/lib/beacon/clones";
   return {
     apiUrl,
     workerToken,
@@ -27,5 +32,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     indexRpcPort: Number.isInteger(indexRpcPort) ? indexRpcPort : 7744,
     indexRpcToken,
     indexDir,
+    cloneDir,
+    githubApp: loadGithubAppConfig(env),
   };
 }

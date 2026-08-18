@@ -8,6 +8,8 @@ import { CodeGatewayError, SIDECAR_SEEN_MS, createCodeGateway, taskChangedScopeQ
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
+import { isHostedCloneEnabled } from "../flags.js";
+import type { JobQueue } from "../jobs/queue.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentProjectRepo } from "./present.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -50,6 +52,18 @@ export function parseBindMountHint(value: unknown): string | undefined {
     return ".";
   }
   return parts.join("/");
+}
+
+function hostedCloneRejected(c: Context, indexMode: IndexMode): Response | undefined {
+  if (
+    (indexMode === "hosted_clone" || indexMode === "both") &&
+    !isHostedCloneEnabled(process.env)
+  ) {
+    return errorJson(c, 404, "not_found", "hosted clone is disabled", {
+      reason: "flag_off",
+    });
+  }
+  return undefined;
 }
 
 function parseOptionalBigInt(value: unknown): bigint | null | undefined {
@@ -270,6 +284,18 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
         reason: "invalid_body",
       });
     }
+    if (
+      (indexMode === "hosted_clone" || indexMode === "both") &&
+      (provider !== "github" || !installationId)
+    ) {
+      return errorJson(c, 400, "unauthorized", "hosted clone requires a GitHub App installation", {
+        reason: "invalid_body",
+      });
+    }
+    const flagged = hostedCloneRejected(c, indexMode);
+    if (flagged) {
+      return flagged;
+    }
 
     const now = deps.clock.now();
     const repo: ProjectRepoRecord = {
@@ -317,6 +343,63 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     return c.json(
       presentProjectRepo(loaded.repo, await repoStatusExtras(deps, loaded.repo, gateway)),
     );
+  });
+
+  app.patch("/v1/repos/:id", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "project:write");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    const body = await readObject(c);
+    if (!body || body["index_mode"] === undefined) {
+      return errorJson(c, 400, "unauthorized", "index_mode is required", {
+        reason: "invalid_body",
+      });
+    }
+    const indexMode = parseIndexMode(body["index_mode"]);
+    if (!indexMode) {
+      return errorJson(c, 400, "unauthorized", "invalid index_mode", { reason: "invalid_body" });
+    }
+    if (
+      (indexMode === "hosted_clone" || indexMode === "both") &&
+      (loaded.repo.provider !== "github" || !loaded.repo.installationId)
+    ) {
+      return errorJson(c, 400, "unauthorized", "hosted clone requires a GitHub App installation", {
+        reason: "invalid_body",
+      });
+    }
+    const flagged = hostedCloneRejected(c, indexMode);
+    if (flagged) {
+      return flagged;
+    }
+    const updated = await deps.store.updateProjectRepo(loaded.repo.id, { indexMode });
+    const repo = updated ?? { ...loaded.repo, indexMode };
+    if (
+      (indexMode === "hosted_clone" || indexMode === "both") &&
+      loaded.repo.indexMode !== indexMode
+    ) {
+      await deps.jobs.enqueueDetect(
+        { repo_id: repo.id, project_id: repo.projectId },
+        { singletonKey: `detect:${repo.id}` },
+      );
+    }
+    return c.json(presentProjectRepo(repo, await repoStatusExtras(deps, repo, gateway)));
+  });
+
+  app.post("/v1/repos/:id/clone-invalidation/consume", async (c) => {
+    const loaded = await loadAuthorizedRepo(c, deps, "project:write");
+    if (isResponse(loaded)) {
+      return loaded;
+    }
+    if (loaded.actor.kind !== "worker") {
+      return errorJson(c, 403, "forbidden", "insufficient token scope");
+    }
+    const consumed = await deps.store.consumeCloneInvalidation(loaded.repo.id, deps.clock.now());
+    return c.json({
+      consumed: consumed
+        ? { id: consumed.id, sha: consumed.sha, created_at: consumed.createdAt.toISOString() }
+        : null,
+    });
   });
 
   app.post("/v1/repos/:id/index", async (c) => {
