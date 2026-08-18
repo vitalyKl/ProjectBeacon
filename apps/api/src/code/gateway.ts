@@ -191,8 +191,12 @@ export function createCodeGateway(options: {
     }
     if (repo.indexMode === "both") {
       const sidecar = await options.store.findSidecarConnectionByRepoId(repo.id);
-      if (sidecar && options.now().getTime() - sidecar.lastSeenAt.getTime() <= SIDECAR_SEEN_MS) {
-        return tunnelLive(repo.id) ? "tunnel" : "none";
+      if (
+        sidecar &&
+        options.now().getTime() - sidecar.lastSeenAt.getTime() <= SIDECAR_SEEN_MS &&
+        tunnelLive(repo.id)
+      ) {
+        return "tunnel";
       }
     }
     if (usesWorkerIndex(repo)) {

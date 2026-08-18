@@ -37,8 +37,19 @@ export type SidecarOptions = {
   now?: () => Date;
   heartbeatMs?: number;
   beaconHost?: string;
+  tunnelEnabled?: boolean;
   tunnelDialer?: SidecarTunnelDialer;
 };
+
+export function sidecarTunnelOptedIn(options: {
+  beaconHost?: string;
+  tunnelEnabled?: boolean;
+}): boolean {
+  if (options.tunnelEnabled === true) {
+    return true;
+  }
+  return Boolean(options.beaconHost?.trim());
+}
 
 export function sidecarPath(home: string): string {
   return path.join(home, SIDECAR_FILE_NAME);
@@ -345,15 +356,17 @@ export async function startSidecar(options: SidecarOptions): Promise<{
       void tick();
     }, options.heartbeatMs ?? HEARTBEAT_MS);
     timer.unref?.();
-    tunnel = startOutboundTunnel({
-      controlUrl: options.url,
-      token: options.token,
-      beaconHost: options.beaconHost,
-      repoIds: () => liveRepoIds,
-      local: { host, port: bound.port, token },
-      fetchImpl,
-      dialer: options.tunnelDialer ?? defaultSidecarTunnelDialer,
-    });
+    if (sidecarTunnelOptedIn(options)) {
+      tunnel = startOutboundTunnel({
+        controlUrl: options.url,
+        token: options.token,
+        beaconHost: options.beaconHost,
+        repoIds: () => liveRepoIds,
+        local: { host, port: bound.port, token },
+        fetchImpl,
+        dialer: options.tunnelDialer ?? defaultSidecarTunnelDialer,
+      });
+    }
   }
 
   return {

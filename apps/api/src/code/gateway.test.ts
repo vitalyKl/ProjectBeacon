@@ -55,7 +55,12 @@ describe("CodeGateway", () => {
     });
   });
 
-  it("prefers a recently seen sidecar in both mode and does not use worker HTTP", async () => {
+  it("falls through to worker HTTP in both mode when a sidecar heartbeat is fresh but the tunnel is not live", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return Response.json({ items: [] });
+    }) as typeof fetch;
     const gateway = createCodeGateway({
       config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
       store: {
@@ -68,16 +73,20 @@ describe("CodeGateway", () => {
         }),
       },
       now: () => new Date("2026-01-01T00:00:40.000Z"),
-      fetchImpl: (async () => {
-        throw new Error("should not fetch");
-      }) as typeof fetch,
+      fetchImpl,
+      tunnel: {
+        isLive: () => false,
+        query: async () => {
+          throw new Error("should not query tunnel");
+        },
+      },
+      tunnelEnabled: () => true,
     });
-    await expect(
-      gateway.query({ ...REPO, indexMode: "both" }, { kind: "tree" }),
-    ).rejects.toMatchObject({
-      status: 503,
-      code: "code_index_unavailable",
+    await expect(gateway.query({ ...REPO, indexMode: "both" }, { kind: "tree" })).resolves.toEqual({
+      items: [],
     });
+    expect(calls[0]).toContain("http://worker:7744/repos/");
+    expect(calls[0]).toContain("/tree");
   });
 
   it("proxies sidecar and both mode over a live tunnel when the flag is on", async () => {

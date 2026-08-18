@@ -38,7 +38,27 @@ describe("sidecar", () => {
     await started.close();
   });
 
-  it("dials the control-plane tunnel with the project token", async () => {
+  it("does not dial the tunnel without an explicit opt-in", async () => {
+    const home = await mkdtemp(join(tmpdir(), "beacon-sidecar-"));
+    const dials: string[] = [];
+    const started = await startSidecar({
+      home,
+      cwd: home,
+      url: "http://127.0.0.1:8080",
+      token: "bcn_" + "A".repeat(43),
+      projectId: "01934567-89ab-7cde-89ab-0123456789ac",
+      host: "127.0.0.1",
+      fetchImpl: (async () => Response.json({ items: [] })) as typeof fetch,
+      tunnelDialer: (url) => {
+        dials.push(url);
+        return { send() {}, close() {}, on() {} };
+      },
+    });
+    expect(dials).toEqual([]);
+    await started.close();
+  });
+
+  it("dials the control-plane tunnel when BEACON_HOST is set", async () => {
     const home = await mkdtemp(join(tmpdir(), "beacon-sidecar-"));
     const dials: { url: string; headers: Record<string, string> }[] = [];
     const token = "bcn_" + "A".repeat(43);
@@ -50,6 +70,7 @@ describe("sidecar", () => {
       token,
       projectId,
       host: "127.0.0.1",
+      beaconHost: "beacon.example",
       fetchImpl: (async () => Response.json({ items: [{ id: projectId }] })) as typeof fetch,
       tunnelDialer: (url, headers) => {
         dials.push({ url, headers });
@@ -61,7 +82,7 @@ describe("sidecar", () => {
       },
     });
     expect(dials).toHaveLength(1);
-    expect(dials[0]?.url).toBe("ws://127.0.0.1:8080/v1/sidecar");
+    expect(dials[0]?.url).toBe("wss://beacon.example/v1/sidecar");
     expect(dials[0]?.headers.authorization).toBe(`Bearer ${token}`);
     await started.close();
   });
