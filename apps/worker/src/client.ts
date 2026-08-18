@@ -64,6 +64,34 @@ export type RepoView = {
   index_mode: string;
 };
 
+const PAGE_LIMIT = 100;
+const MAX_PAGES = 100;
+
+function pagedPath(path: string, cursor: string | null): string {
+  const query = new URLSearchParams({ limit: String(PAGE_LIMIT) });
+  if (cursor) {
+    query.set("cursor", cursor);
+  }
+  return `${path}?${query.toString()}`;
+}
+
+async function listAllPages<T>(
+  fetchPage: (cursor: string | null) => Promise<{ items: T[]; next_cursor?: string | null }>,
+): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const result = await fetchPage(cursor);
+    items.push(...result.items);
+    const next = result.next_cursor ?? null;
+    if (!next || next === cursor) {
+      return items;
+    }
+    cursor = next;
+  }
+  return items;
+}
+
 export function createWorkerApi(options: {
   apiUrl: string;
   token: string;
@@ -126,18 +154,23 @@ export function createWorkerApi(options: {
       });
     },
     async listMilestones(projectId) {
-      const page = await request<{ items: MilestoneView[] }>(
-        "GET",
-        `/v1/projects/${projectId}/milestones`,
+      return listAllPages((cursor) =>
+        request<{ items: MilestoneView[]; next_cursor: string | null }>(
+          "GET",
+          pagedPath(`/v1/projects/${projectId}/milestones`, cursor),
+        ),
       );
-      return page.items;
     },
     createMilestone(projectId, body) {
       return request<{ id: string }>("POST", `/v1/projects/${projectId}/milestones`, { body });
     },
     async listTasks(projectId) {
-      const page = await request<{ items: TaskView[] }>("GET", `/v1/projects/${projectId}/tasks`);
-      return page.items;
+      return listAllPages((cursor) =>
+        request<{ items: TaskView[]; next_cursor: string | null }>(
+          "GET",
+          pagedPath(`/v1/projects/${projectId}/tasks`, cursor),
+        ),
+      );
     },
     createTask(projectId, body, idempotencyKey) {
       return request<{ id: string }>("POST", `/v1/projects/${projectId}/tasks`, {

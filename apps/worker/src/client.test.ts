@@ -26,14 +26,17 @@ describe("worker /v1 client", () => {
       if (url.includes("/context/import")) {
         return Response.json({ nodes: [], code_owners_written: 0 });
       }
-      if (url.endsWith("/milestones") && init?.method === "GET") {
-        return Response.json({ items: [{ id: "ms-1", title: "Detector skeleton" }] });
+      if (url.includes("/milestones") && (init?.method ?? "GET") === "GET") {
+        return Response.json({
+          items: [{ id: "ms-1", title: "Detector skeleton" }],
+          next_cursor: null,
+        });
       }
       if (url.endsWith("/milestones")) {
         return Response.json({ id: "ms-1" }, { status: 201 });
       }
-      if (url.endsWith("/tasks") && init?.method === "GET") {
-        return Response.json({ items: [] });
+      if (url.includes("/tasks") && (init?.method ?? "GET") === "GET") {
+        return Response.json({ items: [], next_cursor: null });
       }
       if (url.endsWith("/tasks")) {
         return Response.json({ id: "task-1" }, { status: 201 });
@@ -66,6 +69,70 @@ describe("worker /v1 client", () => {
     expect(calls[0]?.headers.get("authorization")).toBe("Bearer worker-secret");
     expect(calls[1]?.url).toContain("/v1/projects/proj-1/context/import?repo_id=repo-1");
     expect(calls.at(-1)?.headers.get("idempotency-key")).toBe("detect:repo-1:task:0");
+    expect(calls.some((call) => call.url.includes("/milestones?limit=100"))).toBe(true);
+    expect(calls.some((call) => call.url.includes("/tasks?limit=100"))).toBe(true);
+  });
+
+  it("follows next_cursor when listing milestones and tasks", async () => {
+    const milestoneUrls: string[] = [];
+    const taskUrls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/milestones")) {
+        milestoneUrls.push(url);
+        if (!url.includes("cursor=")) {
+          return Response.json({
+            items: [{ id: "ms-new", title: "Later" }],
+            next_cursor: "cursor-ms",
+          });
+        }
+        return Response.json({
+          items: [{ id: "ms-1", title: "Detector skeleton" }],
+          next_cursor: null,
+        });
+      }
+      if (url.includes("/tasks")) {
+        taskUrls.push(url);
+        if (!url.includes("cursor=")) {
+          return Response.json({
+            items: [{ id: "task-new", title: "Other", milestone_id: null }],
+            next_cursor: "cursor-task",
+          });
+        }
+        return Response.json({
+          items: [
+            {
+              id: "task-1",
+              title: "Review imported project context",
+              milestone_id: "ms-1",
+            },
+          ],
+          next_cursor: null,
+        });
+      }
+      return new Response("missing", { status: 404 });
+    };
+
+    const api = createWorkerApi({
+      apiUrl: "http://api:8080",
+      token: "worker-secret",
+      fetchImpl,
+    });
+    await expect(api.listMilestones("proj-1")).resolves.toEqual([
+      { id: "ms-new", title: "Later" },
+      { id: "ms-1", title: "Detector skeleton" },
+    ]);
+    await expect(api.listTasks("proj-1")).resolves.toEqual([
+      { id: "task-new", title: "Other", milestone_id: null },
+      {
+        id: "task-1",
+        title: "Review imported project context",
+        milestone_id: "ms-1",
+      },
+    ]);
+    expect(milestoneUrls[1]).toContain("cursor=cursor-ms");
+    expect(taskUrls[1]).toContain("cursor=cursor-task");
   });
 
   it("throws WorkerApiError on non-2xx", async () => {
