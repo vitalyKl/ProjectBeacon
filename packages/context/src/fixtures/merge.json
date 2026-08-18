@@ -1,0 +1,15 @@
+{
+  "input": {
+    "project_id": "018f1e2c-3d4e-7000-8000-000000000001",
+    "repo_id": "018f1e2c-3d4e-7000-8000-000000000002",
+    "path": "apps/api",
+    "budget_tokens": 8000
+  },
+  "expected": {
+    "goals_body": "Ship the compile endpoint.",
+    "source_node_ids": [
+      "018f1e2c-3d4e-7000-8000-000000000011",
+      "018f1e2c-3d4e-7000-8000-000000000012"
+    ]
+  }
+}

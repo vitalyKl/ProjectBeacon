@@ -1,6 +1,6 @@
 {
   "name": "@beacon/context",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,11 +11,18 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@beacon/api-spec": "workspace:*",
+    "@beacon/shared": "workspace:*"
   },
   "devDependencies": {
     "@beacon/config": "workspace:*",
+    "@types/node": "^22.18.0",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   }
 }

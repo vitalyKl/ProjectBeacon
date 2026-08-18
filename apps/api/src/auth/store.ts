@@ -1,3 +1,9 @@
+import type {
+  ConstraintRecord,
+  ContextNodeRecord,
+  ContextRevisionRecord,
+  DecisionRecord,
+} from "../context/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import {
   higherOrgRole,
@@ -68,10 +74,13 @@ export {
   OrgSlugTakenError,
   ProjectSlugTakenError,
 } from "../orgs/types.js";
-export {
-  DependencyCycleError,
-  VersionConflictError,
-} from "../roadmap/types.js";
+export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
+export type {
+  ConstraintRecord,
+  ContextNodeRecord,
+  ContextRevisionRecord,
+  DecisionRecord,
+} from "../context/types.js";
 export type {
   ActivityEventRecord,
   MilestoneRecord,
@@ -140,7 +149,11 @@ export interface AuthStore {
   upsertOrgMember(member: OrgMemberRecord): Promise<OrgMemberRecord>;
   createOrgInvite(invite: OrgInviteRecord): Promise<OrgInviteRecord>;
   findOrgInviteById(id: string): Promise<OrgInviteRecord | undefined>;
-  acceptOrgInvite(id: string, userId: string, acceptedAt: Date): Promise<OrgInviteRecord | undefined>;
+  acceptOrgInvite(
+    id: string,
+    userId: string,
+    acceptedAt: Date,
+  ): Promise<OrgInviteRecord | undefined>;
   createProject(project: ProjectRecord, creatorUserId: string): Promise<ProjectRecord>;
   listProjectsForOrg(orgId: string, userId: string): Promise<ProjectRecord[]>;
   findProjectById(id: string): Promise<ProjectRecord | undefined>;
@@ -202,6 +215,11 @@ export interface AuthStore {
     projectId: string,
     filters?: { objectType?: string; objectId?: string },
   ): Promise<ActivityEventRecord[]>;
+  listContextNodes(projectId: string): Promise<ContextNodeRecord[]>;
+  listActiveConstraints(projectId: string): Promise<ConstraintRecord[]>;
+  listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]>;
+  insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord>;
+  listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]>;
   withIdempotency(
     actorType: IdempotencyActorType,
     actorId: string,
@@ -318,6 +336,10 @@ export class MemoryAuthStore implements AuthStore {
   private readonly comments = new Map<string, TaskCommentRecord>();
   private readonly dependencies: TaskDependencyRecord[] = [];
   private readonly activity = new Map<string, ActivityEventRecord>();
+  private readonly contextNodes = new Map<string, ContextNodeRecord>();
+  private readonly constraints = new Map<string, ConstraintRecord>();
+  private readonly decisions = new Map<string, DecisionRecord>();
+  private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
   private readonly idempotency = new Map<
     string,
     { response: unknown; createdAt: Date }
@@ -492,7 +514,9 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneOrg(org));
       }
     }
-    result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    result.sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
     return result;
   }
 
@@ -606,7 +630,9 @@ export class MemoryAuthStore implements AuthStore {
       }
       result.push(cloneProject(project));
     }
-    result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    result.sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
     return result;
   }
 
@@ -627,7 +653,11 @@ export class MemoryAuthStore implements AuthStore {
       }
       if (patch.slug && patch.slug !== project.slug) {
         for (const existing of this.projects.values()) {
-          if (existing.id !== id && existing.orgId === project.orgId && existing.slug === patch.slug) {
+          if (
+            existing.id !== id &&
+            existing.orgId === project.orgId &&
+            existing.slug === patch.slug
+          ) {
             throw new ProjectSlugTakenError();
           }
         }
@@ -674,12 +704,17 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async upsertProjectMember(member: ProjectMemberRecord): Promise<ProjectMemberRecord> {
-    const existing = this.projectMembers.get(this.projectMemberKey(member.projectId, member.userId));
+    const existing = this.projectMembers.get(
+      this.projectMemberKey(member.projectId, member.userId),
+    );
     const next = {
       ...member,
       createdAt: existing?.createdAt ?? member.createdAt,
     };
-    this.projectMembers.set(this.projectMemberKey(member.projectId, member.userId), cloneProjectMember(next));
+    this.projectMembers.set(
+      this.projectMemberKey(member.projectId, member.userId),
+      cloneProjectMember(next),
+    );
     return cloneProjectMember(next);
   }
 
@@ -728,7 +763,10 @@ export class MemoryAuthStore implements AuthStore {
       }
     }
     result.sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+      (a, b) =>
+        a.sortOrder - b.sortOrder ||
+        a.createdAt.getTime() - b.createdAt.getTime() ||
+        a.id.localeCompare(b.id),
     );
     return result;
   }
@@ -887,6 +925,69 @@ export class MemoryAuthStore implements AuthStore {
       }
       result.push(cloneActivity(event));
     }
+    return result;
+  }
+
+  async listContextNodes(projectId: string): Promise<ContextNodeRecord[]> {
+    const result: ContextNodeRecord[] = [];
+    for (const node of this.contextNodes.values()) {
+      if (node.projectId === projectId) {
+        result.push(cloneContextNode(node));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  seedContextNode(node: ContextNodeRecord): void {
+    this.contextNodes.set(node.id, cloneContextNode(node));
+  }
+
+  async listActiveConstraints(projectId: string): Promise<ConstraintRecord[]> {
+    const result: ConstraintRecord[] = [];
+    for (const constraint of this.constraints.values()) {
+      if (constraint.projectId === projectId && constraint.status === "active") {
+        result.push(cloneConstraint(constraint));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  seedConstraint(constraint: ConstraintRecord): void {
+    this.constraints.set(constraint.id, cloneConstraint(constraint));
+  }
+
+  async listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]> {
+    const result: DecisionRecord[] = [];
+    for (const decision of this.decisions.values()) {
+      if (decision.projectId === projectId && decision.status === "accepted") {
+        result.push(cloneDecision(decision));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  seedDecision(decision: DecisionRecord): void {
+    this.decisions.set(decision.id, cloneDecision(decision));
+  }
+
+  async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
+    this.contextRevisions.set(revision.id, cloneContextRevision(revision));
+    return cloneContextRevision(revision);
+  }
+
+  async listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]> {
+    const result: ContextRevisionRecord[] = [];
+    for (const revision of this.contextRevisions.values()) {
+      if (revision.projectId === projectId) {
+        result.push(cloneContextRevision(revision));
+      }
+    }
+    result.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
+    );
     return result;
   }
 
@@ -1082,6 +1183,36 @@ function cloneActivity(event: ActivityEventRecord): ActivityEventRecord {
     ...event,
     payload: { ...event.payload },
     createdAt: new Date(event.createdAt),
+  };
+}
+
+function cloneContextNode(node: ContextNodeRecord): ContextNodeRecord {
+  return {
+    ...node,
+    sections: node.sections.map((section) => ({ ...section })),
+    updatedAt: new Date(node.updatedAt),
+  };
+}
+
+function cloneConstraint(constraint: ConstraintRecord): ConstraintRecord {
+  return { ...constraint, createdAt: new Date(constraint.createdAt) };
+}
+
+function cloneDecision(decision: DecisionRecord): DecisionRecord {
+  return {
+    ...decision,
+    relatedPaths: [...decision.relatedPaths],
+    createdAt: new Date(decision.createdAt),
+  };
+}
+
+function cloneContextRevision(revision: ContextRevisionRecord): ContextRevisionRecord {
+  return {
+    ...revision,
+    target: { ...revision.target },
+    briefJson: structuredClone(revision.briefJson),
+    sourceNodeIds: [...revision.sourceNodeIds],
+    createdAt: new Date(revision.createdAt),
   };
 }
 

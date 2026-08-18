@@ -1,0 +1,188 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { jsLengthDiv4, TOKENIZER_ID } from "@beacon/shared";
+import { describe, expect, it } from "vitest";
+
+import {
+  COMPILER_VERSION,
+  compileSessionBrief,
+  sessionBriefMarkdown,
+  type CompileDocument,
+  type CompileNode,
+} from "./compile.js";
+import {
+  COMPILED_AT,
+  CONSTRAINT_ID,
+  DECISION_ID,
+  PATH_NODE_ID,
+  PROJECT_ID,
+  PROJECT_NODE_ID,
+  REPO_ID,
+  REVISION_ID,
+  TASK_ID,
+} from "./fixtures/ids.js";
+
+const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+
+function loadFixture<T>(name: string): T {
+  return JSON.parse(readFileSync(join(fixturesDir, name), "utf8")) as T;
+}
+
+function section(
+  id: Exclude<CompileNode["sections"][number]["id"], "custom">,
+  body: string,
+  ordinal: number,
+): CompileNode["sections"][number] {
+  return { id, title: id, body_md: body, ordinal };
+}
+
+function projectNode(sections: CompileNode["sections"]): CompileNode {
+  return {
+    id: PROJECT_NODE_ID,
+    project_id: PROJECT_ID,
+    repo_id: null,
+    task_id: null,
+    scope_type: "project",
+    path: "",
+    sections,
+  };
+}
+
+function pathNode(path: string, sections: CompileNode["sections"]): CompileNode {
+  return {
+    id: PATH_NODE_ID,
+    project_id: PROJECT_ID,
+    repo_id: REPO_ID,
+    task_id: null,
+    scope_type: "path",
+    path,
+    sections,
+  };
+}
+
+function document(nodes: CompileNode[], extras?: Partial<CompileDocument>): CompileDocument {
+  return {
+    project: { id: PROJECT_ID, name: "Beacon", slug: "beacon" },
+    nodes,
+    constraints: [
+      {
+        id: CONSTRAINT_ID,
+        kind: "security",
+        body: "Do not exfiltrate secrets.",
+        scope_path: "",
+        status: "active",
+      },
+    ],
+    decisions: [
+      {
+        id: DECISION_ID,
+        title: "Zod is the contract",
+        status: "accepted",
+        decision: "Generate OpenAPI from Zod.",
+        related_paths: ["packages/api-spec"],
+      },
+    ],
+    task: {
+      id: TASK_ID,
+      title: "Compile session briefs",
+      status: "in_progress",
+      type: "task",
+      milestone_id: null,
+      acceptance_md: "Compile succeeds without index extras.",
+      linked_paths: [],
+    },
+    milestone: null,
+    revision_id: REVISION_ID,
+    compiled_at: COMPILED_AT,
+    ...extras,
+  };
+}
+
+describe("compileSessionBrief", () => {
+  it("lets a deeper path overlay replace a project section of the same id", () => {
+    const fixture = loadFixture<{
+      input: { project_id: string; repo_id: string; path: string; budget_tokens: number };
+      expected: { goals_body: string; source_node_ids: string[] };
+    }>("merge.json");
+    const { brief } = compileSessionBrief(
+      fixture.input,
+      document([
+        projectNode([
+          section("goals", "Ship the product.", 0),
+          section("security", "Do not leak tokens.", 1),
+        ]),
+        pathNode("apps/api", [section("goals", "Ship the compile endpoint.", 0)]),
+      ]),
+    );
+    expect(brief.sections.find((item) => item.id === "goals")?.body_md).toBe(
+      fixture.expected.goals_body,
+    );
+    expect(brief.sources.map((source) => source.node_id)).toEqual(fixture.expected.source_node_ids);
+  });
+
+  it("emits never-drop layers and sets overflow when the budget is tiny", () => {
+    const fixture = loadFixture<{
+      input: { project_id: string; budget_tokens: number };
+      expected: { overflow: boolean; kept_section_ids: string[]; dropped: string[] };
+    }>("overflow.json");
+    const { brief } = compileSessionBrief(
+      fixture.input,
+      document([
+        projectNode([
+          section("non_goals", "No embeddings in v1.", 0),
+          section("security", "Do not leak tokens.", 1),
+          section("glossary", "Brief means SessionBrief.", 2),
+        ]),
+      ]),
+    );
+    expect(brief.budget.overflow).toBe(fixture.expected.overflow);
+    expect(brief.sections.map((item) => item.id)).toEqual(fixture.expected.kept_section_ids);
+    expect(brief.budget.dropped).toEqual(fixture.expected.dropped);
+    expect(brief.constraints).toHaveLength(1);
+    expect(brief.task?.title).toBe("Compile session briefs");
+    expect(brief.handoff).toBeNull();
+    expect(brief.changed_scope).toBeNull();
+    expect(brief.tree_capsule).toBeNull();
+  });
+
+  it("succeeds with no index extras and lists changed_scope and tree_capsule in dropped", () => {
+    const fixture = loadFixture<{
+      input: { project_id: string };
+      expected: {
+        overflow: boolean;
+        dropped: string[];
+        changed_scope: null;
+        tree_capsule: null;
+      };
+    }>("missing-extras.json");
+    const { brief } = compileSessionBrief(
+      fixture.input,
+      document([
+        projectNode([
+          section("non_goals", "No embeddings in v1.", 0),
+          section("security", "Do not leak tokens.", 1),
+        ]),
+      ]),
+    );
+    expect(brief.changed_scope).toBe(fixture.expected.changed_scope);
+    expect(brief.tree_capsule).toBe(fixture.expected.tree_capsule);
+    expect(brief.budget.dropped).toEqual(fixture.expected.dropped);
+    expect(brief.budget.overflow).toBe(fixture.expected.overflow);
+    expect(brief.schema_version).toBe("1");
+    expect(brief.compiler_version).toBe(COMPILER_VERSION);
+  });
+
+  it("estimates tokens with js_length_div_4 of the markdown projection", () => {
+    const { brief, markdown } = compileSessionBrief(
+      { project_id: PROJECT_ID },
+      document([projectNode([section("security", "Do not leak tokens.", 0)])]),
+    );
+    expect(brief.budget.tokenizer).toBe(TOKENIZER_ID);
+    expect(markdown).toBe(sessionBriefMarkdown(brief));
+    expect(brief.budget.used_estimate).toBe(jsLengthDiv4(markdown));
+    expect(jsLengthDiv4("abcd")).toBe(1);
+    expect(jsLengthDiv4("😀")).toBe(1);
+  });
+});

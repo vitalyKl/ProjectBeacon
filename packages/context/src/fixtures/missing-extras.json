@@ -1,0 +1,11 @@
+{
+  "input": {
+    "project_id": "018f1e2c-3d4e-7000-8000-000000000001"
+  },
+  "expected": {
+    "overflow": false,
+    "dropped": ["changed_scope", "tree_capsule"],
+    "changed_scope": null,
+    "tree_capsule": null
+  }
+}

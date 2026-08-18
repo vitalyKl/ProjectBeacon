@@ -7,6 +7,7 @@ import { DbAuthStore } from "./auth/db-store.js";
 import { DEFAULT_RATE_LIMITS, type RateLimitConfig } from "./auth/rate-limit.js";
 import { mountAuth } from "./auth/routes.js";
 import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
+import { mountContext } from "./context/routes.js";
 import { checkDatabase } from "./db.js";
 import { mountOrgs } from "./orgs/routes.js";
 import { mountRoadmap } from "./roadmap/routes.js";
@@ -70,6 +71,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   if (options.enableTokenProbe) {
     mountTokenProbe(app, authDeps);
   }
+  mountContext(app, authDeps);
 
   return app;
 }

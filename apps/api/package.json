@@ -17,6 +17,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@beacon/api-spec": "workspace:*",
+    "@beacon/context": "workspace:*",
     "@beacon/db": "workspace:*",
     "@beacon/shared": "workspace:*",
     "@hono/node-server": "^1.19.9",

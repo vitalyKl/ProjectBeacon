@@ -44,6 +44,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@beacon/api-spec':
+        specifier: workspace:*
+        version: link:../../packages/api-spec
+      '@beacon/context':
+        specifier: workspace:*
+        version: link:../../packages/context
       '@beacon/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -203,16 +209,29 @@ importers:
         version: 5.9.3
 
   packages/context:
+    dependencies:
+      '@beacon/api-spec':
+        specifier: workspace:*
+        version: link:../api-spec
+      '@beacon/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@beacon/config':
         specifier: workspace:*
         version: link:../config
+      '@types/node':
+        specifier: ^22.18.0
+        version: 22.20.1
       eslint:
         specifier: 'catalog:'
         version: 9.39.5(jiti@2.7.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
 
   packages/db:
     dependencies:

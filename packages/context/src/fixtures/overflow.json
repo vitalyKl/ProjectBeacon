@@ -1,0 +1,11 @@
+{
+  "input": {
+    "project_id": "018f1e2c-3d4e-7000-8000-000000000001",
+    "budget_tokens": 1
+  },
+  "expected": {
+    "overflow": true,
+    "kept_section_ids": ["non_goals", "security"],
+    "dropped": ["section:glossary", "decisions", "handoff", "changed_scope", "tree_capsule"]
+  }
+}

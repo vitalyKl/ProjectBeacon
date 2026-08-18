@@ -3,6 +3,11 @@ import {
   agentSessions,
   apiTokens,
   approvalRequests,
+  constraints,
+  contextNodes,
+  contextRevisions,
+  decisionPaths,
+  decisions,
   idempotencyKeys,
   milestones,
   orgInvites,
@@ -37,6 +42,19 @@ import {
   type ProjectRecord,
   type ProjectRole,
 } from "../orgs/types.js";
+import type { ContextSection } from "@beacon/api-spec";
+
+import {
+  isConstraintKind,
+  isConstraintStatus,
+  isContextScopeType,
+  isDecisionStatus,
+  type ConstraintRecord,
+  type ContextNodeRecord,
+  type ContextRevisionRecord,
+  type ContextRevisionTarget,
+  type DecisionRecord,
+} from "../context/types.js";
 import {
   BootstrapConsumedError,
   DependencyCycleError,
@@ -308,6 +326,155 @@ function toActivity(row: typeof activityEvents.$inferSelect): ActivityEventRecor
     actorId: row.actorId,
     verb: row.verb,
     payload: asPayload(row.payload),
+    createdAt: row.createdAt,
+  };
+}
+
+function asSections(value: unknown): ContextSection[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const sections: ContextSection[] = [];
+  for (const item of value) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const id = record["id"];
+    const title = record["title"];
+    const body = record["body_md"];
+    const ordinal = record["ordinal"];
+    if (typeof id !== "string" || typeof title !== "string" || typeof body !== "string") {
+      continue;
+    }
+    if (typeof ordinal !== "number" || !Number.isInteger(ordinal)) {
+      continue;
+    }
+    if (id === "custom") {
+      const key = record["key"];
+      if (typeof key !== "string" || key.length === 0) {
+        continue;
+      }
+      sections.push({ id, key, title, body_md: body, ordinal });
+      continue;
+    }
+    if (
+      id === "goals" ||
+      id === "non_goals" ||
+      id === "architecture" ||
+      id === "conventions" ||
+      id === "glossary" ||
+      id === "ownership" ||
+      id === "pitfalls" ||
+      id === "commands" ||
+      id === "stack" ||
+      id === "security" ||
+      id === "style"
+    ) {
+      const key = record["key"];
+      sections.push({
+        id,
+        ...(typeof key === "string" && key.length > 0 ? { key } : {}),
+        title,
+        body_md: body,
+        ordinal,
+      });
+    }
+  }
+  return sections;
+}
+
+function toContextNode(row: typeof contextNodes.$inferSelect): ContextNodeRecord | undefined {
+  if (!isContextScopeType(row.scopeType)) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    repoId: row.repoId,
+    taskId: row.taskId,
+    scopeType: row.scopeType,
+    path: row.path,
+    sections: asSections(row.sections),
+    sectionsText: row.sectionsText,
+    source: row.source,
+    sourcePath: row.sourcePath,
+    reviewState: row.reviewState === "needs_review" ? "needs_review" : "reviewed",
+    updatedByType: row.updatedByType,
+    updatedById: row.updatedById,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | undefined {
+  if (!isConstraintKind(row.kind) || !isConstraintStatus(row.status)) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    kind: row.kind,
+    body: row.body,
+    scopePath: row.scopePath,
+    status: row.status,
+    createdAt: row.createdAt,
+  };
+}
+
+function toDecision(
+  row: typeof decisions.$inferSelect,
+  relatedPaths: string[],
+): DecisionRecord | undefined {
+  if (!isDecisionStatus(row.status)) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    status: row.status,
+    context: row.context,
+    decision: row.decision,
+    consequences: row.consequences,
+    createdByType: row.createdByType,
+    createdById: row.createdById,
+    supersededBy: row.supersededBy,
+    createdAt: row.createdAt,
+    relatedPaths,
+  };
+}
+
+function asRevisionTarget(value: unknown): ContextRevisionTarget {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { repo_id: null, path: "", task_id: null };
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    repo_id: typeof record["repo_id"] === "string" ? record["repo_id"] : null,
+    path: typeof record["path"] === "string" ? record["path"] : "",
+    task_id: typeof record["task_id"] === "string" ? record["task_id"] : null,
+  };
+}
+
+function asBriefJson(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function toContextRevision(row: typeof contextRevisions.$inferSelect): ContextRevisionRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    compiledHash: row.compiledHash,
+    compilerVersion: row.compilerVersion,
+    target: asRevisionTarget(row.target),
+    briefMarkdown: row.briefMarkdown,
+    briefJson: asBriefJson(row.briefJson),
+    tokenEstimate: row.tokenEstimate,
+    sourceNodeIds: row.sourceNodeIds ?? [],
+    sessionId: row.sessionId,
     createdAt: row.createdAt,
   };
 }
@@ -939,7 +1106,9 @@ export class DbAuthStore implements AuthStore {
       const [existing] = await tx
         .select()
         .from(projectMembers)
-        .where(and(eq(projectMembers.projectId, invite.projectId), eq(projectMembers.userId, userId)))
+        .where(
+          and(eq(projectMembers.projectId, invite.projectId), eq(projectMembers.userId, userId)),
+        )
         .limit(1);
       const role = existing
         ? higherProjectRole(existing.role as ProjectRole, invite.role as ProjectRole)
@@ -1248,6 +1417,92 @@ export class DbAuthStore implements AuthStore {
       )
       .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id));
     return rows.map(toActivity);
+  }
+
+  async listContextNodes(projectId: string): Promise<ContextNodeRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(contextNodes)
+      .where(eq(contextNodes.projectId, projectId))
+      .orderBy(asc(contextNodes.id));
+    return rows.flatMap((row) => {
+      const node = toContextNode(row);
+      return node ? [node] : [];
+    });
+  }
+
+  async listActiveConstraints(projectId: string): Promise<ConstraintRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(constraints)
+      .where(and(eq(constraints.projectId, projectId), eq(constraints.status, "active")))
+      .orderBy(asc(constraints.id));
+    return rows.flatMap((row) => {
+      const constraint = toConstraint(row);
+      return constraint ? [constraint] : [];
+    });
+  }
+
+  async listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(decisions)
+      .where(and(eq(decisions.projectId, projectId), eq(decisions.status, "accepted")))
+      .orderBy(asc(decisions.id));
+    if (rows.length === 0) {
+      return [];
+    }
+    const paths = await this.db
+      .select()
+      .from(decisionPaths)
+      .where(
+        inArray(
+          decisionPaths.decisionId,
+          rows.map((row) => row.id),
+        ),
+      );
+    const byDecision = new Map<string, string[]>();
+    for (const path of paths) {
+      const list = byDecision.get(path.decisionId) ?? [];
+      list.push(path.path);
+      byDecision.set(path.decisionId, list);
+    }
+    return rows.flatMap((row) => {
+      const decision = toDecision(row, byDecision.get(row.id) ?? []);
+      return decision ? [decision] : [];
+    });
+  }
+
+  async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
+    const [row] = await this.db
+      .insert(contextRevisions)
+      .values({
+        id: revision.id,
+        projectId: revision.projectId,
+        compiledHash: revision.compiledHash,
+        compilerVersion: revision.compilerVersion,
+        target: revision.target,
+        briefMarkdown: revision.briefMarkdown,
+        briefJson: revision.briefJson,
+        tokenEstimate: revision.tokenEstimate,
+        sourceNodeIds: revision.sourceNodeIds,
+        sessionId: revision.sessionId,
+        createdAt: revision.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert context revision returned no row");
+    }
+    return toContextRevision(row);
+  }
+
+  async listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(contextRevisions)
+      .where(eq(contextRevisions.projectId, projectId))
+      .orderBy(desc(contextRevisions.createdAt), desc(contextRevisions.id));
+    return rows.map(toContextRevision);
   }
 
   async withIdempotency(
