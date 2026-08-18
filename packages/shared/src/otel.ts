@@ -12,7 +12,6 @@ export type Span = {
 
 export type OtelConfig = {
   enabled: boolean;
-  endpoint?: string;
   serviceName: string;
   sampleRatio: number;
 };
@@ -41,14 +40,12 @@ export function loadOtelConfig(
   env: NodeJS.ProcessEnv = process.env,
   serviceName = "beacon",
 ): OtelConfig {
-  const endpoint = env["OTEL_EXPORTER_OTLP_ENDPOINT"]?.trim();
-  const enabled = Boolean(endpoint) || parseBoolEnv(env["OTEL_TRACES_ENABLED"]);
+  const enabled = parseBoolEnv(env["OTEL_TRACES_ENABLED"]);
   const ratioRaw = env["OTEL_TRACES_SAMPLER_ARG"]?.trim();
   const parsed = ratioRaw ? Number.parseFloat(ratioRaw) : 0.1;
   const sampleRatio = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.1;
   return {
     enabled,
-    endpoint: endpoint || undefined,
     serviceName: env["OTEL_SERVICE_NAME"]?.trim() || serviceName,
     sampleRatio,
   };
@@ -64,6 +61,38 @@ export function newSpanId(): string {
 
 export function shouldSampleSuccess(sampleRatio: number, rand = Math.random()): boolean {
   return rand < sampleRatio;
+}
+
+const CODE_HTTP_SUFFIXES = [
+  "/tree",
+  "/files",
+  "/symbols",
+  "/owners",
+  "/related",
+  "/changed-scope",
+] as const;
+
+const CODE_HTTP_SEARCH = /\/repos\/[^/]+\/search(?:\?|$)/;
+const CODE_TOOLS = new Set([
+  "get_tree",
+  "search_code",
+  "get_file",
+  "get_symbol",
+  "get_owners",
+  "get_related_files",
+  "get_changed_scope",
+]);
+
+export function isCodeHttpRoute(route: string): boolean {
+  const path = route.split("?")[0] ?? route;
+  if (CODE_HTTP_SEARCH.test(path)) {
+    return true;
+  }
+  return CODE_HTTP_SUFFIXES.some((suffix) => path.endsWith(suffix));
+}
+
+export function isCodeToolName(tool: string): boolean {
+  return CODE_TOOLS.has(tool);
 }
 
 type ActiveSpan = Span & { sampled: boolean; enabled: boolean };
@@ -93,8 +122,7 @@ function exportSpan(span: ActiveSpan, status: SpanStatus, errorCode?: string): v
     }
     payload[key] = value;
   }
-  const dest = status === "error" ? process.stderr : process.stdout;
-  dest.write(`${JSON.stringify(payload)}\n`);
+  process.stderr.write(`${JSON.stringify(payload)}\n`);
 }
 
 export function startSpan(

@@ -1,4 +1,7 @@
 import { pathToFileURL } from "node:url";
+
+import { endSpan, loadOtelConfig, observeJob, startSpan, writeLog } from "@beacon/shared";
+
 import { createWorkerApi } from "./client.js";
 import { loadWorkerConfig } from "./config.js";
 import { runDetectJob } from "./detect.js";
@@ -30,7 +33,6 @@ async function main(): Promise<void> {
     writeLog({
       level: "info",
       msg: "otel enabled",
-      endpoint: otel.endpoint,
       sample_ratio: otel.sampleRatio,
     });
   }
@@ -58,6 +60,10 @@ async function main(): Promise<void> {
         throw new Error("invalid detect job payload");
       }
       const started = Date.now();
+      const span = startSpan("job.detect", {
+        config: otel,
+        attributes: { queue: DETECT_QUEUE, project_id: job.data.project_id },
+      });
       try {
         await runDetectJob(job.data, { api, workspace: config.workspace });
         const repo = await api.getRepo(job.data.repo_id);
@@ -68,6 +74,7 @@ async function main(): Promise<void> {
           });
         }
         observeJob(DETECT_QUEUE, "ok", Date.now() - started);
+        endSpan(span, "ok");
         writeLog({
           level: "info",
           msg: "job",
@@ -77,6 +84,7 @@ async function main(): Promise<void> {
         });
       } catch (error) {
         observeJob(DETECT_QUEUE, "error", Date.now() - started);
+        endSpan(span, "error");
         writeLog({
           level: "error",
           msg: "job",

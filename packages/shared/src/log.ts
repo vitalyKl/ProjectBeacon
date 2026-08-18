@@ -52,9 +52,8 @@ export function serializeLog(fields: LogFields): string {
 
 export function writeLog(
   fields: LogFields,
-  stream: { write(chunk: string): void } = process.stdout,
+  stream: { write(chunk: string): void } = process.stderr,
 ): void {
   const level = fields.level ?? "info";
-  const dest = level === "error" || level === "warn" ? process.stderr : stream;
-  dest.write(`${serializeLog({ ...fields, level })}\n`);
+  stream.write(`${serializeLog({ ...fields, level })}\n`);
 }

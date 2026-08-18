@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { redactLogValue, serializeLog } from "./log.js";
+import { redactLogValue, serializeLog, writeLog } from "./log.js";
 
 describe("log redaction", () => {
   it("redacts Authorization and file bodies", () => {
@@ -24,5 +24,16 @@ describe("log redaction", () => {
       Authorization: "[redacted]",
       accept: "json",
     });
+  });
+
+  it("writes info lines to stderr by default", () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    writeLog({ level: "info", msg: "listening" });
+    expect(stderr).toHaveBeenCalledOnce();
+    expect(String(stderr.mock.calls[0]?.[0])).toContain('"msg":"listening"');
+    expect(stdout).not.toHaveBeenCalled();
+    stderr.mockRestore();
+    stdout.mockRestore();
   });
 });

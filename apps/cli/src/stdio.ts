@@ -2,7 +2,7 @@ import { createInterface } from "node:readline";
 import { Readable, Writable } from "node:stream";
 
 import { invoke, isToolError, listToolDefinitions, type InvokeContext } from "@beacon/mcp-tools";
-import { observeMcpTool } from "@beacon/shared";
+import { endSpan, isCodeToolName, loadOtelConfig, observeMcpTool, startSpan } from "@beacon/shared";
 
 export const PROTOCOL_VERSION = "2024-11-05";
 export const SERVER_NAME = "beacon";
@@ -224,13 +224,20 @@ export async function handleRpc(
     }
     const args = params?.["arguments"] ?? {};
     const started = Date.now();
+    const span = startSpan("mcp.tool", {
+      config: loadOtelConfig(process.env, "beacon-cli"),
+      forceSample: isCodeToolName(name),
+      attributes: { tool: name },
+    });
     try {
       const result = await invoke(name, args, ctx);
       observeMcpTool(name, "ok", Date.now() - started);
+      endSpan(span, "ok");
       return success(id, textResult(JSON.stringify(result)));
     } catch (error) {
       if (isToolError(error)) {
         observeMcpTool(name, error.code, Date.now() - started);
+        endSpan(span, "error", error.code);
         return success(
           id,
           textResult(
@@ -247,6 +254,7 @@ export async function handleRpc(
         );
       }
       observeMcpTool(name, "error", Date.now() - started);
+      endSpan(span, "error");
       const messageText = error instanceof Error ? error.message : "internal error";
       return failure(id, INTERNAL_ERROR, messageText);
     }

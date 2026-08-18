@@ -53,21 +53,29 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       traceId,
       attributes: { route: c.req.path, method: c.req.method },
     });
-    await next();
-    const durationMs = Date.now() - started;
-    observeHttp(c.req.method, c.req.path, c.res.status, durationMs);
-    if (c.res.status >= 500) {
-      writeLog({
-        level: "error",
-        msg: "http",
-        trace_id: traceId,
-        route: c.req.path,
-        duration_ms: durationMs,
-        project_id: c.req.query("project_id") ?? defaultProjectId,
-        actor_type: "token",
-      });
+    let failed = false;
+    try {
+      await next();
+    } catch (error) {
+      failed = true;
+      throw error;
+    } finally {
+      const durationMs = Date.now() - started;
+      const status = failed ? 500 : c.res.status;
+      observeHttp(c.req.method, c.req.path, status, durationMs);
+      if (failed || status >= 500) {
+        writeLog({
+          level: "error",
+          msg: "http",
+          trace_id: traceId,
+          route: c.req.path,
+          duration_ms: durationMs,
+          project_id: c.req.query("project_id") ?? defaultProjectId,
+          actor_type: "token",
+        });
+      }
+      endSpan(span, failed || status >= 400 ? "error" : "ok");
     }
-    endSpan(span, c.res.status >= 400 ? "error" : "ok");
   });
 
   app.get("/health", (c) => c.json({ status: "ok" }));

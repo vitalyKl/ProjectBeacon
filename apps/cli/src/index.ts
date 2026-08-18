@@ -31,7 +31,6 @@ if (isDirectRun()) {
     writeLog({
       level: "info",
       msg: "otel enabled",
-      endpoint: otel.endpoint,
       sample_ratio: otel.sampleRatio,
     });
   }

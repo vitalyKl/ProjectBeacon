@@ -1,6 +1,7 @@
 import {
   anomalyTracker,
   endSpan,
+  isCodeHttpRoute,
   loadOtelConfig,
   metrics,
   newTraceId,
@@ -107,32 +108,39 @@ export function mountObservability(app: Hono): void {
     const traceId = requestTraceId(c);
     c.header("x-trace-id", traceId);
     const span = startHttpSpan(c, loadOtelConfig(process.env, "beacon-api"), traceId);
-    await next();
-    const durationMs = Date.now() - started;
-    const route = routeTemplate(c.req.path);
-    const status = c.res.status;
-    observeHttp(c.req.method, route, status, durationMs);
-    let errorCode: string | undefined;
-    if (status >= 400) {
-      try {
-        errorCode = errorCodeOf(await c.res.clone().json());
-      } catch {
-        errorCode = undefined;
+    let failed = false;
+    try {
+      await next();
+    } catch (error) {
+      failed = true;
+      throw error;
+    } finally {
+      const durationMs = Date.now() - started;
+      const route = routeTemplate(c.req.path);
+      const status = failed ? 500 : c.res.status;
+      observeHttp(c.req.method, route, status, durationMs);
+      let errorCode: string | undefined;
+      if (!failed && status >= 400) {
+        try {
+          errorCode = errorCodeOf(await c.res.clone().json());
+        } catch {
+          errorCode = undefined;
+        }
       }
+      if (failed || status >= 500) {
+        writeLog({
+          level: "error",
+          msg: "http",
+          trace_id: traceId,
+          route,
+          duration_ms: durationMs,
+          status,
+          method: c.req.method,
+          ...(errorCode ? { error: { code: errorCode } } : {}),
+        });
+      }
+      endSpan(span, failed || status >= 400 ? "error" : "ok", errorCode);
     }
-    if (status >= 500) {
-      writeLog({
-        level: "error",
-        msg: "http",
-        trace_id: traceId,
-        route,
-        duration_ms: durationMs,
-        status,
-        method: c.req.method,
-        ...(errorCode ? { error: { code: errorCode } } : {}),
-      });
-    }
-    endSpan(span, status >= 400 ? "error" : "ok", errorCode);
   });
 
   app.get("/metrics", (c) => {
@@ -147,12 +155,10 @@ export function mountObservability(app: Hono): void {
 
 function startHttpSpan(c: Context, config: OtelConfig, traceId: string): Span {
   const route = routeTemplate(c.req.path);
-  const forceSample =
-    route.includes("/files") || route.includes("/tree") || route.includes("/search");
   return startSpan("http.request", {
     config,
     traceId,
-    forceSample,
+    forceSample: isCodeHttpRoute(route),
     attributes: { route, method: c.req.method },
   });
 }

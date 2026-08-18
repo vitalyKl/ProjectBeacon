@@ -1,5 +1,5 @@
 import { invoke, isToolError, listToolDefinitions, type InvokeContext } from "@beacon/mcp-tools";
-import { observeMcpTool } from "@beacon/shared";
+import { endSpan, isCodeToolName, loadOtelConfig, observeMcpTool, startSpan } from "@beacon/shared";
 
 import {
   extractJsonRpcId,
@@ -102,18 +102,26 @@ async function handleToolsCall(id: JsonRpcId, params: unknown, session: SessionC
   };
 
   const started = Date.now();
+  const span = startSpan("mcp.tool", {
+    config: loadOtelConfig(process.env, "beacon-mcp"),
+    forceSample: isCodeToolName(call.name),
+    attributes: { tool: call.name, project_id: session.projectId },
+  });
   try {
     const value = await invoke(call.name, call.args, ctx);
     observeMcpTool(call.name, "ok", Date.now() - started);
+    endSpan(span, "ok");
     return result(id, {
       content: [{ type: "text", text: JSON.stringify(value) }],
     });
   } catch (error) {
     if (!isToolError(error)) {
       observeMcpTool(call.name, "error", Date.now() - started);
+      endSpan(span, "error");
       return jsonRpcError(id, -32603, "internal error");
     }
     observeMcpTool(call.name, error.code, Date.now() - started);
+    endSpan(span, "error", error.code);
     return result(id, {
       content: [
         {

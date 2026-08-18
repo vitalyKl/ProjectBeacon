@@ -46,6 +46,8 @@ export {
 } from "./metrics.js";
 export {
   endSpan,
+  isCodeHttpRoute,
+  isCodeToolName,
   loadOtelConfig,
   newSpanId,
   newTraceId,
