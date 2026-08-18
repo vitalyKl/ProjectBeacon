@@ -20,7 +20,8 @@
     "@beacon/context": "workspace:*",
     "pg-boss": "^10.3.3",
     "tsx": "^4.21.0",
-    "@beacon/index-core": "workspace:*"
+    "@beacon/index-core": "workspace:*",
+    "@beacon/shared": "workspace:*"
   },
   "devDependencies": {
     "@beacon/config": "workspace:*",

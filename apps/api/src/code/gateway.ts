@@ -1,5 +1,6 @@
 import type { ChangedScope, TreeCapsule } from "@beacon/api-spec";
 import { extractIdentifiers } from "@beacon/index-core";
+import { observeIndex } from "@beacon/shared";
 
 import type { AuthConfig } from "../auth/config.js";
 import type { AuthStore } from "../auth/store.js";
@@ -111,10 +112,13 @@ export function createIndexRpcClient(options: {
       }
     },
     async query(repoId, path, query) {
+    async request(repoId, path, query) {
+      const started = Date.now();
       let response: Response;
       try {
         response = await requestRaw(`/repos/${repoId}${path}`, query);
       } catch {
+        observeIndex(path, "error", Date.now() - started);
         throw new CodeGatewayError({
           status: 503,
           code: "code_index_unavailable",
@@ -131,6 +135,7 @@ export function createIndexRpcClient(options: {
         }
       }
       if (!response.ok) {
+        observeIndex(path, "error", Date.now() - started);
         const err =
           parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
             ? (
@@ -146,6 +151,7 @@ export function createIndexRpcClient(options: {
           details: err?.details ?? {},
         });
       }
+      observeIndex(path, "ok", Date.now() - started);
       return parsed;
     },
   };

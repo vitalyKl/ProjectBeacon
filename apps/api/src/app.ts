@@ -21,6 +21,7 @@ import { createCodeGateway, type CodeGateway } from "./code/gateway.js";
 import { isSidecarTunnelEnabled } from "./code/flags.js";
 import { createSidecarTunnelHub, type SidecarTunnelHub } from "./code/tunnel.js";
 import { errorJson } from "./errors.js";
+import { mountObservability } from "./observability.js";
 
 export const packageName = "@beacon/api";
 
@@ -53,11 +54,10 @@ function resolveStore(options: CreateAppOptions): AuthStore {
   return new MemoryAuthStore();
 }
 
-export function createApp(options: CreateAppOptions = {}): CreatedApp {
+export function createApp(options: CreateAppOptions = {}): Hono {
   const checkReady = options.checkReady ?? (() => checkDatabase(process.env.DATABASE_URL));
-  const app = new Hono() as CreatedApp;
-  const sidecarTunnel = options.sidecarTunnel ?? createSidecarTunnelHub();
-  const sidecarTunnelEnabled = options.sidecarTunnelEnabled ?? (() => isSidecarTunnelEnabled());
+  const app = new Hono();
+  mountObservability(app);
 
   app.get("/health", (c) => c.json({ status: "ok" }));
 
@@ -86,8 +86,6 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
       config: authDeps.config,
       store: authDeps.store,
       now: () => authDeps.clock.now(),
-      tunnel: sidecarTunnel,
-      tunnelEnabled: sidecarTunnelEnabled,
     });
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);
@@ -101,16 +99,6 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
     mountTokenProbe(app, authDeps);
   }
 
-  app.get("/v1/sidecar", (c) => {
-    if (!sidecarTunnelEnabled()) {
-      return errorJson(c, 404, "not_found", "not found");
-    }
-    return errorJson(c, 400, "unauthorized", "websocket upgrade required");
-  });
-
-  app.sidecarTunnel = sidecarTunnel;
-  app.sidecarTunnelEnabled = sidecarTunnelEnabled;
-  app.authDeps = authDeps;
   return app;
 }
 

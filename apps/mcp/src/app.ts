@@ -1,3 +1,11 @@
+import {
+  endSpan,
+  loadOtelConfig,
+  newTraceId,
+  observeHttp,
+  startSpan,
+  writeLog,
+} from "@beacon/shared";
 import { Hono } from "hono";
 
 import {
@@ -36,6 +44,31 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const defaultProjectId = options.projectId ?? process.env.BEACON_PROJECT_ID;
   const fetchImpl = options.fetch ?? fetch;
   const app = new Hono();
+
+  app.use("*", async (c, next) => {
+    const started = Date.now();
+    const traceId = c.req.header("x-trace-id")?.trim() || newTraceId();
+    const span = startSpan("http.request", {
+      config: loadOtelConfig(process.env, "beacon-mcp"),
+      traceId,
+      attributes: { route: c.req.path, method: c.req.method },
+    });
+    await next();
+    const durationMs = Date.now() - started;
+    observeHttp(c.req.method, c.req.path, c.res.status, durationMs);
+    if (c.res.status >= 500) {
+      writeLog({
+        level: "error",
+        msg: "http",
+        trace_id: traceId,
+        route: c.req.path,
+        duration_ms: durationMs,
+        project_id: c.req.query("project_id") ?? defaultProjectId,
+        actor_type: "token",
+      });
+    }
+    endSpan(span, c.res.status >= 400 ? "error" : "ok");
+  });
 
   app.get("/health", (c) => c.json({ status: "ok" }));
 

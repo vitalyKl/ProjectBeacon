@@ -1,4 +1,5 @@
 import { invoke, isToolError, listToolDefinitions, type InvokeContext } from "@beacon/mcp-tools";
+import { observeMcpTool } from "@beacon/shared";
 
 import {
   extractJsonRpcId,
@@ -100,15 +101,19 @@ async function handleToolsCall(id: JsonRpcId, params: unknown, session: SessionC
     fetch: session.fetch,
   };
 
+  const started = Date.now();
   try {
     const value = await invoke(call.name, call.args, ctx);
+    observeMcpTool(call.name, "ok", Date.now() - started);
     return result(id, {
       content: [{ type: "text", text: JSON.stringify(value) }],
     });
   } catch (error) {
     if (!isToolError(error)) {
+      observeMcpTool(call.name, "error", Date.now() - started);
       return jsonRpcError(id, -32603, "internal error");
     }
+    observeMcpTool(call.name, error.code, Date.now() - started);
     return result(id, {
       content: [
         {

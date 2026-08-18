@@ -1,4 +1,4 @@
-import { uuidv7 } from "@beacon/shared";
+import { observeJob, uuidv7 } from "@beacon/shared";
 
 export const DETECT_QUEUE = "detect";
 export const GITHUB_IMPORT_QUEUE = "github_import";
@@ -65,13 +65,20 @@ export class MemoryJobQueue implements JobQueue {
     options?: { singletonKey?: string },
   ): Promise<string> {
     return enqueueMemory(this.githubImportJobs, data, options);
-  }
-
   async enqueueGithubInvalidate(
     data: GithubInvalidateJobData,
-    options?: { singletonKey?: string },
-  ): Promise<string> {
     return enqueueMemory(this.githubInvalidateJobs, data, options);
+    if (options?.singletonKey) {
+      const existing = this.detectJobs.find((job) => job.id === options.singletonKey);
+      if (existing) {
+        observeJob(DETECT_QUEUE, "duplicate", 0);
+        return existing.id;
+      }
+    }
+    const id = options?.singletonKey ?? uuidv7();
+    this.detectJobs.push({ id, data });
+    observeJob(DETECT_QUEUE, "enqueued", 0);
+    return id;
   }
 }
 
@@ -86,6 +93,7 @@ export class PgBossJobQueue implements JobQueue {
 
   async enqueueDetect(data: DetectJobData, options?: { singletonKey?: string }): Promise<string> {
     const id = await this.send(DETECT_QUEUE, data, options);
+    observeJob(DETECT_QUEUE, id ? "enqueued" : "duplicate", 0);
     return id ?? options?.singletonKey ?? uuidv7();
   }
 

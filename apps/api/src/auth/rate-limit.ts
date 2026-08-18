@@ -1,3 +1,4 @@
+import { incRateLimited } from "@beacon/shared";
 import type { Context } from "hono";
 
 import { errorJson } from "../errors.js";
@@ -124,6 +125,7 @@ export async function enforceRateLimit(
   if (result.ok) {
     return undefined;
   }
+  incRateLimited(name);
   c.header("Retry-After", String(result.retryAfter));
   return errorJson(c, 429, "rate_limited", "rate limit exceeded");
 }

@@ -1,6 +1,6 @@
 import { CompileInputSchema, ContextSectionSchema, type ContextSection } from "@beacon/api-spec";
 import { compileSessionBrief, exportAgentsMd, mergeSections, parseImportFiles, selectNodes, type ImportFile } from "@beacon/context";
-import { isUuid, uuidv7, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT } from "@beacon/shared";
+import { isUuid, uuidv7, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT, observeCompile } from "@beacon/shared";
 import type { Hono } from "hono";
 import type { AuthDeps } from "../auth/routes.js";
 import { errorJson } from "../errors.js";
@@ -329,6 +329,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
     }
 
     const now = deps.clock.now();
+    const started = Date.now();
     const compiled = await compileProjectBrief(
       deps.store,
       access.project,
@@ -337,8 +338,10 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
       deps.codeGateway,
     );
     if (!compiled.ok) {
+      observeCompile("not_found", Date.now() - started);
       return errorJson(c, 404, "not_found", "task not found");
     }
+    observeCompile("ok", Date.now() - started);
 
     const brief = compiled.compiled.brief;
     await deps.store.insertContextRevision({
@@ -524,5 +527,6 @@ function nodeMatchesQuery(
 }
 
 export type ContextDeps = AuthDeps & {
+
   codeGateway?: CodeGateway;
 };

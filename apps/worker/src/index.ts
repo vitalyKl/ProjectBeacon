@@ -1,15 +1,15 @@
 import { pathToFileURL } from "node:url";
-
 import { createWorkerApi } from "./client.js";
 import { loadWorkerConfig } from "./config.js";
 import { runDetectJob } from "./detect.js";
-import { DETECT_QUEUE, isDetectJobData, EXPIRE_LOCKS_CRON, EXPIRE_LOCKS_QUEUE, RETENTION_CRON, RETENTION_QUEUE, runExpireLocksJob, runRetentionJob, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE, isGithubImportJobData, isGithubInvalidateJobData } from "./jobs.js";
+import { DETECT_QUEUE, isDetectJobData } from "./jobs.js";
 import { createWorkerApi, loadWorkerEnv } from "./api.js";
 export { createWorkerApi, loadWorkerEnv } from "./api.js";
 export { EXPIRE_LOCKS_CRON, EXPIRE_LOCKS_QUEUE, RETENTION_CRON, RETENTION_QUEUE, runExpireLocksJob, runRetentionJob, import { runGithubImportJob, runGithubInvalidateJob } from "./github.js";
 import { startWorkerIndexHttp, WorkerIndexRegistry } from "./index-server.js";
-import { DETECT_QUEUE, isDetectJobData } from "./jobs.js";
 import { purgeDeletedProjectClones } from "./purge.js";
+
+import { loadOtelConfig, observeJob, writeLog } from "@beacon/shared";
 
 export const packageName = "@beacon/worker";
 
@@ -25,86 +25,77 @@ async function main(): Promise<void> {
     throw new Error("INDEX_RPC_TOKEN is required");
   }
 
+  const otel = loadOtelConfig(process.env, "beacon-worker");
+  if (otel.enabled) {
+    writeLog({
+      level: "info",
+      msg: "otel enabled",
+      endpoint: otel.endpoint,
+      sample_ratio: otel.sampleRatio,
+    });
+  }
+
   const { default: PgBoss } = await import("pg-boss");
   const boss = new PgBoss({ connectionString: config.databaseUrl, schema: "pgboss" });
   boss.on("error", (error) => {
-    console.error(JSON.stringify({ level: "error", msg: "pg-boss", error: String(error) }));
+    writeLog({ level: "error", msg: "pg-boss", error: { message: String(error) } });
   });
 
   await boss.start();
   await boss.createQueue(DETECT_QUEUE);
-  await boss.createQueue(GITHUB_IMPORT_QUEUE);
-  await boss.createQueue(GITHUB_INVALIDATE_QUEUE);
 
   const api = createWorkerApi({ apiUrl: config.apiUrl, token: config.workerToken });
   const registry = new WorkerIndexRegistry({
     workspace: config.workspace,
     indexDir: config.indexDir,
-    cloneDir: config.cloneDir,
-    githubApp: config.githubApp,
   });
   await startWorkerIndexHttp(config, registry, api);
 
   await boss.work(DETECT_QUEUE, async (jobs) => {
     for (const job of jobs) {
       if (!isDetectJobData(job.data)) {
+        observeJob(DETECT_QUEUE, "invalid", 0);
         throw new Error("invalid detect job payload");
       }
-      await runDetectJob(job.data, { api, workspace: config.workspace });
-      const repo = await api.getRepo(job.data.repo_id);
-      let forceClone = false;
-      if (repo.index_mode === "hosted_clone" || repo.index_mode === "both") {
-        const pending = await api.consumeCloneInvalidation(repo.id);
-        forceClone = Boolean(pending.consumed);
-      }
-      const core = await registry.ensureIndexed(repo, { forceClone });
-      if (core) {
-        await api.reportIndex(repo.id, {
-          last_indexed_at: core.lastIndexedAt()?.toISOString() ?? new Date().toISOString(),
+      const started = Date.now();
+      try {
+        await runDetectJob(job.data, { api, workspace: config.workspace });
+        const repo = await api.getRepo(job.data.repo_id);
+        const core = await registry.ensureIndexed(repo);
+        if (core) {
+          await api.reportIndex(repo.id, {
+            last_indexed_at: core.lastIndexedAt()?.toISOString() ?? new Date().toISOString(),
+          });
+        }
+        observeJob(DETECT_QUEUE, "ok", Date.now() - started);
+        writeLog({
+          level: "info",
+          msg: "job",
+          route: DETECT_QUEUE,
+          project_id: job.data.project_id,
+          duration_ms: Date.now() - started,
         });
+      } catch (error) {
+        observeJob(DETECT_QUEUE, "error", Date.now() - started);
+        writeLog({
+          level: "error",
+          msg: "job",
+          route: DETECT_QUEUE,
+          project_id: job.data.project_id,
+          duration_ms: Date.now() - started,
+          error: { message: error instanceof Error ? error.message : String(error) },
+        });
+        throw error;
       }
-    }
-  });
-  await boss.work(GITHUB_IMPORT_QUEUE, async (jobs) => {
-    for (const job of jobs) {
-      if (!isGithubImportJobData(job.data)) {
-        throw new Error("invalid github import job payload");
-      }
-      await runGithubImportJob(job.data, { api });
-    }
-  });
-  await boss.work(GITHUB_INVALIDATE_QUEUE, async (jobs) => {
-    for (const job of jobs) {
-      if (!isGithubInvalidateJobData(job.data)) {
-        throw new Error("invalid github invalidate job payload");
-      }
-      await runGithubInvalidateJob(job.data, { api });
     }
   });
 
-  const sweep = async () => {
-    try {
-      await purgeDeletedProjectClones(api, registry);
-    } catch (error) {
-      console.error(
-        JSON.stringify({ level: "error", msg: "hosted clone purge", error: String(error) }),
-      );
-    }
-  };
-  await sweep();
-  setInterval(() => {
-    void sweep();
-  }, 30_000);
-
-  console.log(
-    JSON.stringify({
-      level: "info",
-      msg: "worker listening",
-      queues: [DETECT_QUEUE, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE],
-      queue: DETECT_QUEUE,
-      index_rpc: `${config.indexRpcHost}:${config.indexRpcPort}`,
-    }),
-  );
+  writeLog({
+    level: "info",
+    msg: "worker listening",
+    queue: DETECT_QUEUE,
+    index_rpc: `${config.indexRpcHost}:${config.indexRpcPort}`,
+  });
 }
 
 const launchedDirectly =

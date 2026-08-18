@@ -267,6 +267,10 @@ export interface AuthStore {
     repoId: string,
     now: Date,
   ): Promise<{ id: string; repoId: string; sha: string | null; createdAt: Date } | undefined>;
+  listSidecarConnections(): Promise<
+    Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
+  countPendingApprovals(): Promise<number>;
+  githubSyncLagSeconds(now: Date): Promise<number>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -2042,6 +2046,24 @@ export class MemoryAuthStore implements AuthStore {
         createdAt: new Date(next.createdAt),
       };
     });
+  }
+
+  async listSidecarConnections(): Promise<
+    Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
+
+  async countPendingApprovals(): Promise<number> {
+    let count = 0;
+    for (const approval of this.approvals.values()) {
+      if (approval.status === "pending") {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  async githubSyncLagSeconds(now: Date): Promise<number> {
+    void now;
+    return 0;
   }
     string,
     { response: unknown; createdAt: Date }

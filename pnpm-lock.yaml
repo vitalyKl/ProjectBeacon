@@ -145,6 +145,9 @@ importers:
       '@beacon/mcp-tools':
         specifier: workspace:*
         version: link:../../packages/mcp-tools
+      '@beacon/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.17(hono@4.13.2)
@@ -228,6 +231,9 @@ importers:
       '@beacon/index-core':
         specifier: workspace:*
         version: link:../../packages/index-core
+      '@beacon/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       pg-boss:
         specifier: ^10.4.2
         version: 10.4.2

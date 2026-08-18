@@ -1,6 +1,7 @@
-import { isUuid, uuidv7 } from "@beacon/shared";
+import { isUuid, uuidv7, addGetFileBytes } from "@beacon/shared";
 import type { Hono, Context } from "hono";
 import { authorizeProjectActor, isAdminActor, requireActor, requireProjectActor, actorHasCapability } from "../auth/access.js";
+import { enforceRateLimit } from "../auth/rate-limit.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { ProjectNotFoundError, UniqueViolationError } from "../auth/store.js";
 import { enforceRateLimit } from "../auth/rate-limit.js";
@@ -11,6 +12,8 @@ import { parseOptionalString, readObject } from "../http.js";
 import { isHostedCloneEnabled } from "../flags.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import { fileLineCount, recordCodeAnomaly, recordGetFileAnomaly } from "../observability.js";
+import { parseLocalRootHint } from "./local-root.js";
 import { presentProjectRepo } from "./present.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { parseLocalRootHint } from "./local-root.js";
@@ -170,6 +173,7 @@ async function runCodeQuery(
   if (limited) {
     return limited;
   }
+  recordCodeAnomaly(actor.id, now);
   try {
     const result = await gateway.query(repo, query);
     if (query.kind === "file") {
@@ -177,6 +181,8 @@ async function runCodeQuery(
         result !== null && typeof result === "object" && "bytes" in result
           ? Number((result as { bytes?: unknown }).bytes ?? 0)
           : 0;
+      addGetFileBytes(Number.isFinite(bytes) ? bytes : 0);
+      recordGetFileAnomaly(actor.id, fileLineCount(result), now);
       const byteLimit = await enforceRateLimit(
         c,
         deps.store,

@@ -1,8 +1,9 @@
 import { serve } from "@hono/node-server";
-
 import { createApp } from "./app.js";
 import { DETECT_QUEUE, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE, MemoryJobQueue, PgBossJobQueue, type JobQueue } from "./jobs/queue.js";
 import { attachSidecarTunnelUpgrade } from "./code/routes.js";
+import { loadOtelConfig, writeLog } from "@beacon/shared";
+import { refreshObservabilityGauges } from "./observability.js";
 
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
@@ -28,6 +29,15 @@ async function resolveJobs(): Promise<JobQueue> {
 
 const jobs = await resolveJobs();
 const app = createApp({ jobs });
+const otel = loadOtelConfig(process.env, "beacon-api");
+if (otel.enabled) {
+  writeLog({
+    level: "info",
+    msg: "otel enabled",
+    endpoint: otel.endpoint,
+    sample_ratio: otel.sampleRatio,
+  });
+}
 
 const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
   console.log(
@@ -41,3 +51,21 @@ const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
 });
 
 attachSidecarTunnelUpgrade(server, app.authDeps, app.sidecarTunnel, app.sidecarTunnelEnabled);
+serve({ fetch: app.fetch, port, hostname }, (info) => {
+  writeLog({
+    level: "info",
+    msg: "listening",
+    port: info.port,
+    hostname,
+  });
+const databaseUrl = process.env.DATABASE_URL;
+if (databaseUrl) {
+  const { createDb } = await import("@beacon/db");
+  const { DbAuthStore } = await import("./auth/db-store.js");
+  const gauges = new DbAuthStore(createDb(databaseUrl));
+  const tick = () => {
+    void refreshObservabilityGauges(gauges).catch(() => undefined);
+  };
+  tick();
+  setInterval(tick, 30_000).unref();
+}

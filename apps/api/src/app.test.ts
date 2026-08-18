@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { metrics } from "@beacon/shared";
+
 import { createApp } from "./app.js";
 import { SIDECAR_TUNNEL_PATH } from "./code/tunnel.js";
 
@@ -14,6 +16,30 @@ describe("GET /health", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "ok" });
+  });
+});
+
+describe("GET /metrics", () => {
+  afterEach(() => {
+    delete process.env.BEACON_METRICS;
+    metrics.reset();
+  });
+
+  it("is off unless BEACON_METRICS is set", async () => {
+    const app = createApp({ checkReady: async () => true });
+    const res = await app.request("/metrics");
+    expect(res.status).toBe(404);
+  });
+
+  it("exposes Prometheus text when enabled", async () => {
+    process.env.BEACON_METRICS = "true";
+    const app = createApp({ checkReady: async () => true });
+    await app.request("/health");
+    const res = await app.request("/metrics");
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("beacon_http_requests_total");
+    expect(body).toContain('route="/health"');
   });
 });
 

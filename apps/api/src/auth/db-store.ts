@@ -2738,6 +2738,29 @@ export class DbAuthStore implements AuthStore {
       };
     });
   }
+
+  async listSidecarConnections(): Promise<
+    Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
+
+  async countPendingApprovals(): Promise<number> {
+    const [row] = await this.db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(approvalRequests)
+      .where(eq(approvalRequests.status, "pending"));
+    return row?.value ?? 0;
+  }
+
+  async githubSyncLagSeconds(now: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ lastSyncedAt: githubSyncState.lastSyncedAt })
+      .from(githubSyncState)
+      .orderBy(asc(githubSyncState.lastSyncedAt))
+      .limit(1);
+    if (!row?.lastSyncedAt) {
+      return 0;
+    }
+    return Math.max(0, Math.floor((now.getTime() - row.lastSyncedAt.getTime()) / 1000));
+  }
 }
 
 async function startWorkInTx(

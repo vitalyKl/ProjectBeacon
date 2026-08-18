@@ -2,6 +2,8 @@
 
 import { pathToFileURL } from "node:url";
 
+import { loadOtelConfig, writeLog } from "@beacon/shared";
+
 import { runCli } from "./cli.js";
 
 export const packageName = "@beacon/cli";
@@ -24,6 +26,15 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
+  const otel = loadOtelConfig(process.env, "beacon-cli");
+  if (otel.enabled) {
+    writeLog({
+      level: "info",
+      msg: "otel enabled",
+      endpoint: otel.endpoint,
+      sample_ratio: otel.sampleRatio,
+    });
+  }
   runCli()
     .then((code) => {
       process.exitCode = code;
