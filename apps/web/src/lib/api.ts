@@ -485,3 +485,252 @@ export async function updateRepoIndexMode(
   }
   return parseJson<PublicRepo>(res);
 }
+
+export function newIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
+
+export type ActorRef = {
+  type: string;
+  id: string;
+  display: string;
+};
+
+export type ContextSectionId =
+  | "goals"
+  | "non_goals"
+  | "architecture"
+  | "conventions"
+  | "glossary"
+  | "ownership"
+  | "pitfalls"
+  | "commands"
+  | "stack"
+  | "security"
+  | "style"
+  | "custom";
+
+export type ContextSection = {
+  id: ContextSectionId;
+  key?: string;
+  title: string;
+  body_md: string;
+  ordinal: number;
+};
+
+export type ContextNode = {
+  id: string;
+  project_id: string;
+  repo_id: string | null;
+  task_id: string | null;
+  scope_type: "project" | "repo" | "path" | "task";
+  path: string;
+  sections: ContextSection[];
+  source: string;
+  source_path: string | null;
+  review_state: "reviewed" | "needs_review";
+  updated_at: string;
+  updated_by: ActorRef;
+};
+
+export type ContextRevisionSummary = {
+  id: string;
+  project_id: string;
+  compiled_hash: string;
+  compiler_version: string;
+  target: { repo_id: string | null; path: string; task_id: string | null };
+  token_estimate: number;
+  source_node_ids: string[];
+  session_id: string | null;
+  created_at: string;
+};
+
+export type SessionBrief = {
+  schema_version: string;
+  compiler_version: string;
+  project: { id: string; name: string; slug: string };
+  compiled_at: string;
+  revision_id: string;
+  compiled_hash: string;
+  target: { repo_id: string | null; path: string; task_id: string | null };
+  milestone: { id: string; title: string; status: string } | null;
+  task: { id: string; title: string } | null;
+  sections: ContextSection[];
+  constraints: { id: string; kind: string; body: string; scope_path: string; status: string }[];
+  decisions_relevant: { id: string; title: string; status: string; decision: string }[];
+  budget: {
+    requested: number;
+    used_estimate: number;
+    tokenizer: string;
+    overflow: boolean;
+    dropped: string[];
+  };
+  sources: { node_id: string; scope_type: string; path: string }[];
+};
+
+export type ContextRevision = ContextRevisionSummary & {
+  brief_markdown: string;
+  brief: SessionBrief;
+};
+
+export type ContextImportResult = {
+  nodes: ContextNode[];
+  code_owners_written: number;
+};
+
+export async function fetchContextNodes(projectId: string): Promise<ContextNode[]> {
+  return fetchAllPages<ContextNode>(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/nodes`,
+    "failed to load context",
+  );
+}
+
+export async function putContextNode(
+  projectId: string,
+  nodeId: string,
+  body: Record<string, unknown>,
+): Promise<ContextNode> {
+  const res = await apiFetch(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/nodes/${encodeURIComponent(nodeId)}`,
+    { method: "PUT", body: JSON.stringify(body) },
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to save context");
+  }
+  return parseJson<ContextNode>(res);
+}
+
+export async function importContextFiles(
+  projectId: string,
+  files: { path: string; content: string }[],
+): Promise<ContextImportResult> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/import`, {
+    method: "POST",
+    body: JSON.stringify({ files }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to import files");
+  }
+  return parseJson<ContextImportResult>(res);
+}
+
+export async function exportAgentsMd(projectId: string): Promise<string> {
+  const res = await apiFetch(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/export/agents-md`,
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to export");
+  }
+  return res.text();
+}
+
+export async function compileContext(projectId: string): Promise<SessionBrief> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/compile`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to compile preview");
+  }
+  return parseJson<SessionBrief>(res);
+}
+
+export async function fetchContextRevisions(projectId: string): Promise<ContextRevisionSummary[]> {
+  return fetchAllPages<ContextRevisionSummary>(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/revisions`,
+    "failed to load revisions",
+  );
+}
+
+export async function fetchContextRevision(
+  projectId: string,
+  revisionId: string,
+): Promise<ContextRevision> {
+  const res = await apiFetch(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/revisions/${encodeURIComponent(revisionId)}`,
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load revision");
+  }
+  return parseJson<ContextRevision>(res);
+}
+
+export async function createProjectRepo(
+  projectId: string,
+  input: {
+    provider: "github" | "local";
+    index_mode: IndexMode;
+    local_root_hint?: string;
+  },
+): Promise<PublicRepo> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/repos`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to connect code");
+  }
+  return parseJson<PublicRepo>(res);
+}
+
+export async function mintProjectToken(projectId: string, name: string): Promise<PublicToken> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/tokens`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to mint token");
+  }
+  return parseJson<PublicToken>(res);
+}
+
+export async function requestRepoDetect(repoId: string): Promise<"started" | "later"> {
+  const res = await apiFetch(`/v1/repos/${encodeURIComponent(repoId)}/detect`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  if (res.ok || res.status === 202) {
+    return "started";
+  }
+  if (res.status === 404 || res.status === 405 || res.status === 501) {
+    return "later";
+  }
+  throw await readApiError(res, "failed to start detect");
+}
+
+export async function saveProjectBrief(
+  projectId: string,
+  sections: ContextSection[],
+): Promise<ContextNode> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`, {
+    method: "POST",
+    body: JSON.stringify({ sections }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to save brief");
+  }
+  return parseJson<ContextNode>(res);
+}
+
+export { fetchProjectMilestones, fetchProjectTasks } from "./roadmap";
+
+import {
+  createMilestone as createRoadmapMilestone,
+  createTask as createRoadmapTask,
+  type PublicMilestone,
+  type PublicTask,
+} from "./roadmap";
+
+export async function createMilestone(
+  projectId: string,
+  input: { title: string; description?: string },
+): Promise<PublicMilestone> {
+  return createRoadmapMilestone(projectId, input.title, input.description ?? "");
+}
+
+export async function createTask(
+  projectId: string,
+  input: { title: string; description?: string; milestone_id?: string | null },
+): Promise<PublicTask> {
+  return createRoadmapTask(projectId, input, newIdempotencyKey());
+}
