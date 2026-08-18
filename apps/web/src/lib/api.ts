@@ -1,5 +1,4 @@
 export type PublicUser = {
-
   id: string;
   login: string;
   email: string | null;
@@ -8,7 +7,6 @@ export type PublicUser = {
 };
 
 export type PublicOrg = {
-
   id: string;
   slug: string;
   name: string;
@@ -16,13 +14,11 @@ export type PublicOrg = {
 };
 
 export type PublicMe = PublicUser & {
-
   personal_org: PublicOrg | null;
   orgs: PublicOrg[];
 };
 
 export type PublicProject = {
-
   id: string;
   org_id: string;
   slug: string;
@@ -33,7 +29,6 @@ export type PublicProject = {
 };
 
 export type PublicRepo = {
-
   id: string;
   project_id?: string;
   provider?: string;
@@ -64,24 +59,7 @@ export type PublicContextNode = {
   sections: { id: string; key?: string; title: string; body_md: string; ordinal: number }[];
 };
 
-export type PublicMilestone = {
-  id: string;
-  project_id: string;
-  title: string;
-  description: string;
-  status: string;
-};
-
-export type PublicTask = {
-  id: string;
-  project_id: string;
-  milestone_id: string | null;
-  title: string;
-  status: string;
-};
-
 export type ApiErrorBody = {
-
   error?: {
     code?: string;
     message?: string;
@@ -90,16 +68,21 @@ export type ApiErrorBody = {
 };
 
 export class ApiError extends Error {
-
   readonly status: number;
   readonly code: string;
   readonly details: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -137,6 +120,7 @@ export async function readApiError(res: Response, fallback: string): Promise<Api
     res.status,
     body?.error?.code ?? "unauthorized",
     messageFromBody(body, fallback),
+    body?.error?.details ?? {},
   );
 }
 
@@ -717,9 +701,8 @@ export { fetchProjectMilestones, fetchProjectTasks } from "./roadmap";
 import {
   createMilestone as createRoadmapMilestone,
   createTask as createRoadmapTask,
-  type PublicMilestone,
-  type PublicTask,
 } from "./roadmap";
+import type { PublicMilestone, PublicTask } from "./roadmap";
 
 export async function createMilestone(
   projectId: string,

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LOGIN_PATH } from "@/lib/nav";
+
 import { BootstrapForm } from "./bootstrap-form";
 
 export default function BootstrapPage() {
@@ -17,7 +19,7 @@ export default function BootstrapPage() {
         <BootstrapForm />
       </div>
       <div className="flex flex-col gap-2 text-sm text-muted">
-        <Link className="underline" href="/login">
+        <Link className="underline" href={LOGIN_PATH}>
           Already bootstrapped? Local login
         </Link>
         <Link className="underline" href="/">

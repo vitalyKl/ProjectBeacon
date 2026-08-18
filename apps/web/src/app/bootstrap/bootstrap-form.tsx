@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { ApiError, bootstrapLocal } from "@/lib/api";
+import { POST_LOGIN_PATH } from "@/lib/nav";
 
 export function BootstrapForm() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export function BootstrapForm() {
     const password = String(form.get("password") ?? "");
     try {
       await bootstrapLocal(token, login, password);
-      router.replace("/app");
+      router.replace(POST_LOGIN_PATH);
       router.refresh();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "bootstrap failed");

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { githubAuthorizeUrl } from "@/lib/api";
 import { githubCallbackUrl, publicAuthConfig } from "@/lib/auth-config";
+import { LOGIN_PATH } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export default async function LandingPage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link
               className="inline-flex h-11 flex-1 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
-              href="/login"
+              href={LOGIN_PATH}
             >
               Local login
             </Link>

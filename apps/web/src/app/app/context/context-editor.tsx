@@ -163,7 +163,7 @@ function downloadText(filename: string, content: string, type: string): void {
 }
 
 export function ContextEditor() {
-  const project = useSelectedProject();
+  const { project } = useSelectedProject();
   const [nodes, setNodes] = useState<ContextNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<DraftSection[]>(emptyDraftsFromNode(null));

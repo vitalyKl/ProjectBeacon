@@ -1,32 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ApiError, fetchMe, fetchOrgProjects, logoutSession, type PublicMe, type PublicOrg, type PublicProject } from "@/lib/api";
-import { APP_NAV } from "@/lib/nav";
+
+import {
+  ApiError,
+  fetchMe,
+  fetchOrgProjects,
+  logoutSession,
+  type PublicMe,
+  type PublicOrg,
+  type PublicProject,
+} from "@/lib/api";
+import { APP_NAV, LOGIN_PATH, POST_LOGIN_PATH } from "@/lib/nav";
+
 import { AppSelectionProvider, ProjectProvider } from "./project-context";
-import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "./selection";
+import {
+  ORG_STORAGE_KEY,
+  PROJECT_STORAGE_KEY,
+  pickOrg,
+  pickProject,
+  readStoredId,
+  writeStoredId,
+} from "./selection";
 import { ToastProvider } from "./toast";
-
-function pickOrg(me: PublicMe, storedId: string | null): PublicOrg | null {
-  if (storedId) {
-    const stored = me.orgs.find((org) => org.id === storedId);
-    if (stored) {
-      return stored;
-    }
-  }
-  return me.personal_org ?? me.orgs[0] ?? null;
-}
-
-function pickProject(projects: PublicProject[], storedId: string | null): PublicProject | null {
-  if (storedId) {
-    const stored = projects.find((project) => project.id === storedId);
-    if (stored) {
-      return stored;
-    }
-  }
-  return projects[0] ?? null;
-}
 
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   const router = useRouter();
@@ -55,7 +53,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
           return;
         }
         if (!session) {
-          router.replace("/login");
+          router.replace(LOGIN_PATH);
           return;
         }
         setMe(session);
@@ -135,92 +133,96 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
   }
 
   return (
-    <AppSelectionProvider value={{ me, org, project, projects, replaceProject }}>
-      <ProjectProvider
-        value={{
-          org,
-          project,
-          projects,
-          loading,
-          setProjectId: onProjectChange,
-          reloadProjects: async () => {
-            if (org) {
-              await loadProjects(org);
-            }
-          },
-        }}
-      >
-      <div className="flex min-h-full flex-col">
-        <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
-          <Link className="font-semibold tracking-tight" href="/app">
-            Beacon
-          </Link>
-          <select
-            className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-            aria-label="Org"
-            value={org?.id ?? ""}
-            onChange={(event) => void onOrgChange(event.target.value)}
-          >
-            {me.orgs.length === 0 ? <option value="">Org</option> : null}
-            {me.orgs.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-            aria-label="Project"
-            value={project?.id ?? ""}
-            onChange={(event) => onProjectChange(event.target.value)}
-            disabled={!org}
-          >
-            {projects.length === 0 ? <option value="">Project</option> : null}
-            {projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="text-muted">{me.login}</span>
-            <button
-              className="rounded-md border border-border px-3 py-1.5"
-              type="button"
-              onClick={() => void onLogout()}
-            >
-              Log out
-            </button>
+    <ToastProvider>
+      <AppSelectionProvider value={{ me, org, project, projects, replaceProject }}>
+        <ProjectProvider
+          value={{
+            org,
+            project,
+            projects,
+            loading,
+            setProjectId: onProjectChange,
+            reloadProjects: async () => {
+              if (org) {
+                await loadProjects(org);
+              }
+            },
+          }}
+        >
+          <div className="flex min-h-full flex-col">
+            <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
+              <Link className="font-semibold tracking-tight" href={POST_LOGIN_PATH}>
+                Beacon
+              </Link>
+              <select
+                className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
+                aria-label="Org"
+                value={org?.id ?? ""}
+                onChange={(event) => void onOrgChange(event.target.value)}
+              >
+                {me.orgs.length === 0 ? <option value="">Org</option> : null}
+                {me.orgs.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
+                aria-label="Project"
+                value={project?.id ?? ""}
+                onChange={(event) => onProjectChange(event.target.value)}
+                disabled={!org}
+              >
+                {projects.length === 0 ? <option value="">Project</option> : null}
+                {projects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <div className="ml-auto flex items-center gap-3 text-sm">
+                <span className="text-muted">{me.login}</span>
+                <button
+                  className="rounded-md border border-border px-3 py-1.5"
+                  type="button"
+                  onClick={() => void onLogout()}
+                >
+                  Log out
+                </button>
+              </div>
+            </header>
+            {banner}
+            <div className="flex min-h-0 flex-1">
+              <nav className="w-52 shrink-0 border-r border-border bg-surface px-3 py-4">
+                <ul className="flex flex-col gap-1">
+                  {APP_NAV.map((item) => {
+                    const active = pathname === item.href;
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          className={`block rounded-md px-3 py-2 text-sm ${
+                            active
+                              ? "bg-background font-medium"
+                              : "text-muted hover:text-foreground"
+                          }`}
+                          href={item.href}
+                        >
+                          {item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+              <main className="min-w-0 flex-1 px-6 py-6">
+                {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+                {children}
+              </main>
+            </div>
           </div>
-        </header>
-        {banner}
-        <div className="flex min-h-0 flex-1">
-          <nav className="w-52 shrink-0 border-r border-border bg-surface px-3 py-4">
-            <ul className="flex flex-col gap-1">
-              {APP_NAV.map((item) => {
-                const active = pathname === item.href;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      className={`block rounded-md px-3 py-2 text-sm ${
-                        active ? "bg-background font-medium" : "text-muted hover:text-foreground"
-                      }`}
-                      href={item.href}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-          <main className="min-w-0 flex-1 px-6 py-6">
-            {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
-            {children}
-          </main>
-        </div>
-      </div>
-      </ProjectProvider>
-    </AppSelectionProvider>
+        </ProjectProvider>
+      </AppSelectionProvider>
+    </ToastProvider>
   );
 }

@@ -1,5 +1,8 @@
+export const LOGIN_PATH = "/login";
+export const POST_LOGIN_PATH = "/app";
+
 export const APP_NAV = [
-  { href: "/app", label: "Home" },
+  { href: POST_LOGIN_PATH, label: "Home" },
   { href: "/app/board", label: "Board" },
   { href: "/app/backlog", label: "Backlog" },
   { href: "/app/roadmap", label: "Roadmap" },

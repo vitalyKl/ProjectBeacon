@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, fetchAllPages, parseJson, readApiError, type Page } from "./api";
+import { ApiError, apiFetch, fetchAllPages, parseJson, readApiError } from "./api";
 
 export const TASK_STATUSES = [
   "backlog",
@@ -118,47 +118,24 @@ export type TaskPatchInput = {
   agent_brief?: string;
 };
 
-function pageQuery(cursor: string | null): string {
-  const params = new URLSearchParams();
-  params.set("limit", "100");
-  if (cursor) {
-    params.set("cursor", cursor);
-  }
-  return params.toString();
-}
-
-async function fetchPage<T>(path: string, fallback: string): Promise<Page<T>> {
-  const res = await apiFetch(path);
-  if (!res.ok) {
-    throw await readApiError(res, fallback);
-  }
-  return parseJson<Page<T>>(res);
-}
-
 export async function fetchProjectMilestones(projectId: string): Promise<PublicMilestone[]> {
-  return fetchAllPages((cursor) =>
-    fetchPage<PublicMilestone>(
-      `/v1/projects/${encodeURIComponent(projectId)}/milestones?${pageQuery(cursor)}`,
-      "failed to load milestones",
-    ),
+  return fetchAllPages<PublicMilestone>(
+    `/v1/projects/${encodeURIComponent(projectId)}/milestones`,
+    "failed to load milestones",
   );
 }
 
 export async function fetchProjectTasks(projectId: string): Promise<PublicTask[]> {
-  return fetchAllPages((cursor) =>
-    fetchPage<PublicTask>(
-      `/v1/projects/${encodeURIComponent(projectId)}/tasks?${pageQuery(cursor)}`,
-      "failed to load tasks",
-    ),
+  return fetchAllPages<PublicTask>(
+    `/v1/projects/${encodeURIComponent(projectId)}/tasks`,
+    "failed to load tasks",
   );
 }
 
 export async function fetchProjectDependencies(projectId: string): Promise<PublicDependency[]> {
-  return fetchAllPages((cursor) =>
-    fetchPage<PublicDependency>(
-      `/v1/projects/${encodeURIComponent(projectId)}/dependencies?${pageQuery(cursor)}`,
-      "failed to load dependencies",
-    ),
+  return fetchAllPages<PublicDependency>(
+    `/v1/projects/${encodeURIComponent(projectId)}/dependencies`,
+    "failed to load dependencies",
   );
 }
 
@@ -171,11 +148,9 @@ export async function fetchTask(taskId: string): Promise<PublicTask> {
 }
 
 export async function fetchTaskComments(taskId: string): Promise<PublicComment[]> {
-  return fetchAllPages((cursor) =>
-    fetchPage<PublicComment>(
-      `/v1/tasks/${encodeURIComponent(taskId)}/comments?${pageQuery(cursor)}`,
-      "failed to load comments",
-    ),
+  return fetchAllPages<PublicComment>(
+    `/v1/tasks/${encodeURIComponent(taskId)}/comments`,
+    "failed to load comments",
   );
 }
 
@@ -183,11 +158,9 @@ export async function fetchTaskActivity(
   projectId: string,
   taskId: string,
 ): Promise<PublicActivity[]> {
-  return fetchAllPages((cursor) =>
-    fetchPage<PublicActivity>(
-      `/v1/projects/${encodeURIComponent(projectId)}/activity?object_id=${encodeURIComponent(taskId)}&${pageQuery(cursor)}`,
-      "failed to load activity",
-    ),
+  return fetchAllPages<PublicActivity>(
+    `/v1/projects/${encodeURIComponent(projectId)}/activity?object_id=${encodeURIComponent(taskId)}`,
+    "failed to load activity",
   );
 }
 

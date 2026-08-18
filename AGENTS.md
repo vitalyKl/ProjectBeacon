@@ -49,6 +49,7 @@ TypeScript monorepo (pnpm workspaces + Turborepo).
 - Bind-mount code queries go API → worker loopback index HTTP. The worker is the SQLite writer.
 - Comments explain a non-obvious constraint. Do not narrate implementation history.
 - Do not edit `docs/design.md` unless the task says to.
+- A change is not done until the Definition of Done below is met.
 
 ## Style
 
@@ -86,3 +87,36 @@ To load this brief into a fresh local project: open Context, import this `AGENTS
 - Hosted clone and WSS tunnel are not shipped. Do not describe them as available.
 - Importing this file attaches as repo scope. Export without a repo still writes `scope: project`. Create a project-scope brief in the Context editor if you need a native project node.
 - Web Board, Backlog, Agents, Decisions, and Settings are navigation stubs. Context editor, compile preview, and local code tools are available.
+
+## Definition of Done
+
+A task succeeds only when every item below is true. If any item fails, the task is not done.
+
+### Hard gates
+
+- No compilation errors in changed packages (`pnpm --filter <pkg> typecheck`, or `pnpm typecheck` when the change crosses packages).
+- No leftover lint errors introduced by the change (`pnpm --filter <pkg> lint`).
+- No runtime errors on the paths the change can reach (ReferenceError, TypeError, uncaught promise rejection, failed module load). A task cannot be marked successful while any of these remain.
+- Automated tests for the change are green (`pnpm --filter <pkg> test`, or `pnpm test` for a cross-package change).
+
+### Tests
+
+- If the behavior can be covered by a unit test, add or update one. Do not leave extractable logic (parsers, pickers, codecs, error mapping, pagination, path constants) covered only by a manual click.
+- Put tests next to the code in the same package (`*.test.ts`), using that package's Vitest setup. Do not invent a new test runner or app.
+- `apps/web` now has Vitest. Use it for client helpers and for regressions that would crash a route (missing imports, wrong post-login path).
+- API, CLI, worker, and package changes extend the existing `*.test.ts` files in those packages.
+
+### Route and UI check
+
+- If code that can break a screen changed, open the required path and confirm it renders. After login or bootstrap that path is `/app` (`POST_LOGIN_PATH`). Side nav targets are `/app`, `/app/board`, `/app/backlog`, `/app/roadmap`, `/app/context`, `/app/agents`, `/app/decisions`, `/app/settings`.
+- Check the empty, loading, and error states the change can hit, not only the happy path.
+- If shared client state changed (session, org, project, toast, work lists), visit the other `/app/*` screens that read it.
+- Stub screens (Board, Backlog, Agents, Decisions, Settings) must still open without a runtime error even when their product surface is incomplete.
+- Browser tools: exercise the flow end to end. A single screenshot is not enough. If no browser tools are available, use the closest substitute (tests, curl against the running API/web) and say what was not verified.
+
+### Scope and product truth
+
+- Stay inside the existing app or package. `apps/api` is the only domain writer.
+- Do not describe hosted clone, outbound WSS tunnel, `write_handoff`, or live HTTP MCP as available.
+- Do not commit or print `.env` values or project tokens (`bcn_`).
+- `compile`, `get_context_pack`, `get_task_brief`, and `start_work` must keep working without the code index.

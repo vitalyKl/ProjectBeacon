@@ -19,6 +19,8 @@ import {
   type PublicRepo,
   type PublicToken,
 } from "@/lib/api";
+import { POST_LOGIN_PATH } from "@/lib/nav";
+
 import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "../../selection";
 
 const STEPS = [
@@ -249,7 +251,7 @@ export function ProjectWizard({
     if (project) {
       writeStoredId(PROJECT_STORAGE_KEY, project.id);
     }
-    router.replace("/app");
+    router.replace(POST_LOGIN_PATH);
     router.refresh();
   }
 

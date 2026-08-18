@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { ApiError, loginLocal } from "@/lib/api";
+import { POST_LOGIN_PATH } from "@/lib/nav";
 
 export function LoginForm() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export function LoginForm() {
     const password = String(form.get("password") ?? "");
     try {
       await loginLocal(login, password);
-      router.replace("/app");
+      router.replace(POST_LOGIN_PATH);
       router.refresh();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "invalid login or password");
