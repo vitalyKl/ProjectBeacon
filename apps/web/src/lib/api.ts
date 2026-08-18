@@ -270,6 +270,20 @@ export async function fetchOrgProjects(orgId: string): Promise<PublicProject[]> 
   return body.items;
 }
 
+export async function createOrgProject(
+  orgId: string,
+  input: { slug: string; name: string; description?: string },
+): Promise<PublicProject> {
+  const res = await apiFetch(`/v1/orgs/${encodeURIComponent(orgId)}/projects`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to create project");
+  }
+  return parseJson<PublicProject>(res);
+}
+
 export async function loginLocal(login: string, password: string): Promise<PublicUser> {
   const res = await apiFetch("/v1/auth/login", {
     method: "POST",

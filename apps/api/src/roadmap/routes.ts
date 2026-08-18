@@ -873,10 +873,6 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
   });
 }
 
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
-
 function writeActorActivity(
   writer: { writeActivity: AuthDeps["store"]["writeActivity"] },
   actor: AuthActor,

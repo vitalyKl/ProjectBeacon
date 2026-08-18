@@ -57,17 +57,6 @@ export class MemoryJobQueue implements JobQueue {
   readonly githubInvalidateJobs: Array<{ id: string; data: GithubInvalidateJobData }> = [];
 
   async enqueueDetect(data: DetectJobData, options?: { singletonKey?: string }): Promise<string> {
-    return enqueueMemory(this.detectJobs, data, options);
-  }
-
-  async enqueueGithubImport(
-    data: GithubImportJobData,
-    options?: { singletonKey?: string },
-  ): Promise<string> {
-    return enqueueMemory(this.githubImportJobs, data, options);
-  async enqueueGithubInvalidate(
-    data: GithubInvalidateJobData,
-    return enqueueMemory(this.githubInvalidateJobs, data, options);
     if (options?.singletonKey) {
       const existing = this.detectJobs.find((job) => job.id === options.singletonKey);
       if (existing) {
@@ -75,10 +64,23 @@ export class MemoryJobQueue implements JobQueue {
         return existing.id;
       }
     }
-    const id = options?.singletonKey ?? uuidv7();
-    this.detectJobs.push({ id, data });
+    const id = enqueueMemory(this.detectJobs, data, options);
     observeJob(DETECT_QUEUE, "enqueued", 0);
     return id;
+  }
+
+  async enqueueGithubImport(
+    data: GithubImportJobData,
+    options?: { singletonKey?: string },
+  ): Promise<string> {
+    return enqueueMemory(this.githubImportJobs, data, options);
+  }
+
+  async enqueueGithubInvalidate(
+    data: GithubInvalidateJobData,
+    options?: { singletonKey?: string },
+  ): Promise<string> {
+    return enqueueMemory(this.githubInvalidateJobs, data, options);
   }
 }
 

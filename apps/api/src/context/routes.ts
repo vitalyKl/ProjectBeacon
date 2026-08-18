@@ -5,7 +5,7 @@ import type { Hono } from "hono";
 import type { AuthDeps } from "../auth/routes.js";
 import { errorJson } from "../errors.js";
 import { readJson, readObject, parseOptionalString } from "../http.js";
-import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
+import { isResponse } from "../orgs/routes.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentConstraint, presentContextNode, presentDecision, presentMilestoneBrief, presentTaskSummary, sectionsText, toCompileNode, presentContextRevision, presentContextRevisionSummary } from "./present.js";
 import { compileProjectBrief } from "./compile-brief.js";
@@ -671,9 +671,6 @@ function parseNativeSections(value: unknown): ContextNodeRecord["sections"] | un
   return sections;
 }
 
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
 const NATIVE_CREATE_SCOPES = new Set<ContextScopeType>(["project", "repo", "path"]);
 const NATIVE_SOURCE = "native";
 

@@ -1,21 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+
 import { ApiError, createOrgProject } from "@/lib/api";
 import {
   fetchProjectMilestones,
   fetchProjectTasks,
-  isTaskLocked,
   statusLabel,
   type PublicMilestone,
   type PublicTask,
 } from "@/lib/roadmap";
 import { ensureBeaconSeed } from "@/lib/seed";
 import { useInterval } from "@/lib/use-interval";
-import { useNow } from "@/lib/use-now";
+
 import { LockBadge } from "./lock-badge";
 import { useSelectedProject } from "./project-context";
+
 const HOME_POLL_MS = 5000;
 
 export default function AppHomePage() {
@@ -25,38 +26,24 @@ export default function AppHomePage() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const projectId = project?.id ?? null;
-  const requestSeq = useRef(0);
-  const now = useNow(1000);
 
   const reload = useCallback(async () => {
     if (!projectId) {
       return;
     }
-    const seq = ++requestSeq.current;
-    const selectedId = projectId;
     try {
-      await ensureBeaconSeed(selectedId);
-      if (seq !== requestSeq.current) {
-        return;
-      }
+      await ensureBeaconSeed(projectId);
       const [nextMilestones, nextTasks] = await Promise.all([
-        fetchProjectMilestones(selectedId),
-        fetchProjectTasks(selectedId),
+        fetchProjectMilestones(projectId),
+        fetchProjectTasks(projectId),
       ]);
-      if (seq !== requestSeq.current) {
-        return;
-      }
       setMilestones(nextMilestones);
       setTasks(nextTasks);
       setError(null);
     } catch (caught) {
-      if (seq === requestSeq.current) {
-        setError(caught instanceof ApiError ? caught.message : "failed to load home");
-      }
+      setError(caught instanceof ApiError ? caught.message : "failed to load home");
     } finally {
-      if (seq === requestSeq.current) {
-        setReady(true);
-      }
+      setReady(true);
     }
   }, [projectId]);
 
@@ -69,14 +56,39 @@ export default function AppHomePage() {
       }, 0);
       return () => window.clearTimeout(id);
     }
-    const id = window.setTimeout(() => {
-      void reload();
-    }, 0);
+    const selectedId = projectId;
+    let cancelled = false;
+    async function load() {
+      try {
+        await ensureBeaconSeed(selectedId);
+        if (cancelled) {
+          return;
+        }
+        const [nextMilestones, nextTasks] = await Promise.all([
+          fetchProjectMilestones(selectedId),
+          fetchProjectTasks(selectedId),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setMilestones(nextMilestones);
+        setTasks(nextTasks);
+        setError(null);
+      } catch (caught) {
+        if (!cancelled) {
+          setError(caught instanceof ApiError ? caught.message : "failed to load home");
+        }
+      } finally {
+        if (!cancelled) {
+          setReady(true);
+        }
+      }
+    }
+    void load();
     return () => {
-      window.clearTimeout(id);
-      requestSeq.current += 1;
+      cancelled = true;
     };
-  }, [projectId, reload]);
+  }, [projectId]);
 
   useInterval(
     () => {
@@ -103,7 +115,7 @@ export default function AppHomePage() {
   }
 
   const openMilestones = milestones.filter((item) => item.status === "open");
-  const locked = tasks.filter((task) => isTaskLocked(task, now));
+  const locked = tasks.filter((task) => Boolean(task.locked_by_session_id && task.lock_expires_at));
   const inFlight = tasks.filter(
     (task) => task.status === "in_progress" || task.status === "in_review",
   );
@@ -135,6 +147,8 @@ export default function AppHomePage() {
             </ul>
           )}
         </article>
+
+        <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
           <h2 className="text-sm font-semibold tracking-wide uppercase">Index</h2>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="text-muted">Mode</dt>
@@ -142,10 +156,13 @@ export default function AppHomePage() {
             <dt className="text-muted">Sidecar</dt>
             <dd>Offline</dd>
             <dt className="text-muted">Worker</dt>
+            <dd>Offline</dd>
             <dt className="text-muted">Last indexed</dt>
             <dd>—</dd>
           </dl>
+        </article>
       </div>
+
       <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-wide uppercase">In flight</h2>
@@ -182,11 +199,13 @@ export default function AppHomePage() {
     </section>
   );
 }
+
 function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () => Promise<void> }) {
   const [name, setName] = useState("Beacon");
   const [slug, setSlug] = useState("beacon");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -200,12 +219,16 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
       setPending(false);
     }
   }
+
   return (
     <section className="space-y-4">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
         <p className="max-w-xl text-sm leading-6 text-muted">
           Create a project to start the board. Beacon will add a first milestone and a few starter
           tasks.
         </p>
+      </header>
       <form className="flex max-w-md flex-col gap-3" onSubmit={onSubmit}>
         <label className="flex flex-col gap-1 text-sm">
           Name
@@ -217,11 +240,16 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
             maxLength={120}
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
           Slug
+          <input
             className="h-9 rounded-md border border-border bg-background px-2 font-mono"
             value={slug}
             onChange={(event) => setSlug(event.target.value)}
+            required
             maxLength={64}
+          />
+        </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <button
           className="h-10 rounded-md bg-accent text-sm font-medium text-accent-fg disabled:opacity-60"
@@ -231,20 +259,6 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
           {pending ? "Creating…" : "Create project"}
         </button>
       </form>
-      <div className="space-y-2">
-          Create a project, connect code, and hand a local agent the first brief.
-      <Link
-        className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
-        href="/app/projects/new"
-      >
-        New project
-      </Link>
-    <section className="space-y-2">
-      <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
-      <p className="max-w-xl text-sm leading-6 text-muted">
-        Project home. Open Context to edit or export the brief. Board, backlog, and token settings
-        are still stubs.
-      </p>
     </section>
   );
 }

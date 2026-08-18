@@ -1927,6 +1927,7 @@ export class DbAuthStore implements AuthStore {
     countDelta: number;
     bytesDelta: number;
   }): Promise<RateBucketRecord> {
+    const windowStartIso = input.windowStart.toISOString();
     const [row] = await this.db
       .insert(rateBuckets)
       .values({
@@ -1938,9 +1939,9 @@ export class DbAuthStore implements AuthStore {
       .onConflictDoUpdate({
         target: rateBuckets.bucketKey,
         set: {
-          windowStart: sql`case when ${rateBuckets.windowStart} = ${input.windowStart} then ${rateBuckets.windowStart} else ${input.windowStart} end`,
-          count: sql`case when ${rateBuckets.windowStart} = ${input.windowStart} then ${rateBuckets.count} + ${input.countDelta} else ${input.countDelta} end`,
-          bytes: sql`case when ${rateBuckets.windowStart} = ${input.windowStart} then ${rateBuckets.bytes} + ${input.bytesDelta} else ${input.bytesDelta} end`,
+          windowStart: sql`case when ${rateBuckets.windowStart} = ${windowStartIso}::timestamptz then ${rateBuckets.windowStart} else ${windowStartIso}::timestamptz end`,
+          count: sql`case when ${rateBuckets.windowStart} = ${windowStartIso}::timestamptz then ${rateBuckets.count} + ${input.countDelta} else ${input.countDelta} end`,
+          bytes: sql`case when ${rateBuckets.windowStart} = ${windowStartIso}::timestamptz then ${rateBuckets.bytes} + ${input.bytesDelta} else ${input.bytesDelta} end`,
         },
       })
       .returning();
