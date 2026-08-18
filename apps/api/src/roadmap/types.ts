@@ -20,6 +20,8 @@ export const COMMENT_AUTHOR_TYPES = ["user", "agent", "system"] as const;
 
 export const IDEMPOTENCY_ACTOR_TYPES = ["token", "user"] as const;
 
+export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskType = (typeof TASK_TYPES)[number];
 export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number];

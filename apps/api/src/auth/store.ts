@@ -14,6 +14,7 @@ import {
 import { wouldCreateCycle } from "../roadmap/cycle.js";
 import {
   DependencyCycleError,
+  IDEMPOTENCY_TTL_MS,
   VersionConflictError,
   type ActivityEventRecord,
   type IdempotencyActorType,
@@ -73,6 +74,12 @@ export type {
   TaskPatch,
   TaskRecord,
 } from "../roadmap/types.js";
+
+export type IdempotentWrites = {
+  createTask(task: TaskRecord): Promise<TaskRecord>;
+  createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
+  writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
+};
 
 export class LoginTakenError extends Error {
   override readonly name = "LoginTakenError";
@@ -162,19 +169,13 @@ export interface AuthStore {
     projectId: string,
     filters?: { objectType?: string; objectId?: string },
   ): Promise<ActivityEventRecord[]>;
-  findIdempotency(
+  withIdempotency(
     actorType: IdempotencyActorType,
     actorId: string,
     key: string,
     now: Date,
-  ): Promise<unknown | undefined>;
-  saveIdempotency(
-    actorType: IdempotencyActorType,
-    actorId: string,
-    key: string,
-    response: unknown,
-    createdAt: Date,
-  ): Promise<void>;
+    produce: (writes: IdempotentWrites) => Promise<unknown>,
+  ): Promise<unknown>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -237,8 +238,6 @@ function emailsEqual(left: string | null | undefined, right: string | null | und
   return left.toLowerCase() === right.toLowerCase();
 }
 
-const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-
 export class MemoryAuthStore implements AuthStore {
   private readonly users = new Map<string, UserRecord>();
   private readonly sessions = new Map<string, SessionRecord>();
@@ -267,7 +266,7 @@ export class MemoryAuthStore implements AuthStore {
     return `${projectId}:${userId}`;
   }
 
-  private enqueueWrite<T>(fn: () => T): Promise<T> {
+  private enqueueWrite<T>(fn: () => T | Promise<T>): Promise<T> {
     const run = this.writeTail.then(fn);
     this.writeTail = run.then(
       () => undefined,
@@ -673,8 +672,7 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async createTask(task: TaskRecord): Promise<TaskRecord> {
-    this.tasks.set(task.id, cloneTask(task));
-    return cloneTask(task);
+    return this.enqueueWrite(() => this.insertTaskUnlocked(task));
   }
 
   async listTasks(projectId: string): Promise<TaskRecord[]> {
@@ -763,12 +761,14 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord> {
-    this.comments.set(comment.id, cloneComment(comment));
-    return cloneComment(comment);
+    return this.enqueueWrite(() => this.insertCommentUnlocked(comment));
   }
 
   async addDependency(dependency: TaskDependencyRecord): Promise<TaskDependencyRecord> {
     return this.enqueueWrite(() => {
+      if (dependency.fromTaskId === dependency.toTaskId) {
+        throw new DependencyCycleError();
+      }
       const existing = this.dependencies.find(
         (row) =>
           row.fromTaskId === dependency.fromTaskId &&
@@ -779,7 +779,17 @@ export class MemoryAuthStore implements AuthStore {
         return { ...existing };
       }
       if (dependency.type === "blocks") {
-        const blockEdges = this.dependencies.filter((row) => row.type === "blocks");
+        const from = this.tasks.get(dependency.fromTaskId);
+        const blockEdges = this.dependencies.filter((row) => {
+          if (row.type !== "blocks") {
+            return false;
+          }
+          if (!from) {
+            return true;
+          }
+          const edgeFrom = this.tasks.get(row.fromTaskId);
+          return !edgeFrom || edgeFrom.projectId === from.projectId;
+        });
         if (wouldCreateCycle(blockEdges, dependency.fromTaskId, dependency.toTaskId)) {
           throw new DependencyCycleError();
         }
@@ -790,8 +800,7 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord> {
-    this.activity.set(event.id, cloneActivity(event));
-    return cloneActivity(event);
+    return this.enqueueWrite(() => this.insertActivityUnlocked(event));
   }
 
   async listActivity(
@@ -814,34 +823,47 @@ export class MemoryAuthStore implements AuthStore {
     return result;
   }
 
-  async findIdempotency(
+  async withIdempotency(
     actorType: IdempotencyActorType,
     actorId: string,
     key: string,
     now: Date,
-  ): Promise<unknown | undefined> {
-    const stored = this.idempotency.get(idempotencyKey(actorType, actorId, key));
-    if (!stored) {
-      return undefined;
-    }
-    if (now.getTime() - stored.createdAt.getTime() > IDEMPOTENCY_TTL_MS) {
-      this.idempotency.delete(idempotencyKey(actorType, actorId, key));
-      return undefined;
-    }
-    return structuredClone(stored.response);
+    produce: (writes: IdempotentWrites) => Promise<unknown>,
+  ): Promise<unknown> {
+    return this.enqueueWrite(async () => {
+      const slot = idempotencyKey(actorType, actorId, key);
+      const stored = this.idempotency.get(slot);
+      if (stored && now.getTime() - stored.createdAt.getTime() <= IDEMPOTENCY_TTL_MS) {
+        return structuredClone(stored.response);
+      }
+      this.idempotency.delete(slot);
+      const writes: IdempotentWrites = {
+        createTask: async (task) => this.insertTaskUnlocked(task),
+        createComment: async (comment) => this.insertCommentUnlocked(comment),
+        writeActivity: async (event) => this.insertActivityUnlocked(event),
+      };
+      const response = await produce(writes);
+      this.idempotency.set(slot, {
+        response: structuredClone(response),
+        createdAt: new Date(now),
+      });
+      return structuredClone(response);
+    });
   }
 
-  async saveIdempotency(
-    actorType: IdempotencyActorType,
-    actorId: string,
-    key: string,
-    response: unknown,
-    createdAt: Date,
-  ): Promise<void> {
-    this.idempotency.set(idempotencyKey(actorType, actorId, key), {
-      response: structuredClone(response),
-      createdAt: new Date(createdAt),
-    });
+  private insertTaskUnlocked(task: TaskRecord): TaskRecord {
+    this.tasks.set(task.id, cloneTask(task));
+    return cloneTask(task);
+  }
+
+  private insertCommentUnlocked(comment: TaskCommentRecord): TaskCommentRecord {
+    this.comments.set(comment.id, cloneComment(comment));
+    return cloneComment(comment);
+  }
+
+  private insertActivityUnlocked(event: ActivityEventRecord): ActivityEventRecord {
+    this.activity.set(event.id, cloneActivity(event));
+    return cloneActivity(event);
   }
 }
 

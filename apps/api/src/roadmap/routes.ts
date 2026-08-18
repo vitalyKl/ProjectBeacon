@@ -7,7 +7,7 @@ import { DependencyCycleError, VersionConflictError } from "../auth/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
-import type { ProjectRecord, ProjectRole } from "../orgs/types.js";
+import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import { parsePageQuery, paginateRecords } from "./page.js";
 import {
   presentActivity,
@@ -137,15 +137,22 @@ async function requireTaskAccess(
   if (!task || task.deletedAt) {
     return errorJson(c, 404, "not_found", "task not found");
   }
-  const access = await requireProjectAccess(c, deps, user, task.projectId, needed);
-  if (access instanceof Response) {
-    return access;
+  const project = await deps.store.findProjectById(task.projectId);
+  if (!project || project.deletedAt) {
+    return errorJson(c, 404, "not_found", "task not found");
   }
-  return { task, project: access.project, role: access.role };
+  const member = await deps.store.findProjectMember(project.id, user.id);
+  if (!member) {
+    return errorJson(c, 404, "not_found", "task not found");
+  }
+  if (!projectRoleAtLeast(member.role, needed)) {
+    return errorJson(c, 403, "forbidden", "insufficient project role");
+  }
+  return { task, project, role: member.role };
 }
 
 async function writeActivity(
-  deps: AuthDeps,
+  writer: { writeActivity: AuthDeps["store"]["writeActivity"] },
   input: {
     projectId: string;
     objectType: string;
@@ -156,7 +163,7 @@ async function writeActivity(
     now: Date;
   },
 ): Promise<void> {
-  await deps.store.writeActivity({
+  await writer.writeActivity({
     id: uuidv7(input.now.getTime()),
     projectId: input.projectId,
     objectType: input.objectType,
@@ -167,6 +174,28 @@ async function writeActivity(
     payload: input.payload ?? {},
     createdAt: input.now,
   });
+}
+
+async function requireAssignee(
+  c: Context,
+  deps: AuthDeps,
+  projectId: string,
+  userId: string | null,
+): Promise<Response | undefined> {
+  if (!userId) {
+    return undefined;
+  }
+  const user = await deps.store.findUserById(userId);
+  if (!user) {
+    return errorJson(c, 400, "unauthorized", "invalid assignee_user_id", { reason: "invalid_body" });
+  }
+  const member = await deps.store.findProjectMember(projectId, userId);
+  if (!member) {
+    return errorJson(c, 400, "unauthorized", "assignee is not a project member", {
+      reason: "invalid_assignee",
+    });
+  }
+  return undefined;
 }
 
 export function mountRoadmap(app: Hono, deps: AuthDeps): void {
@@ -233,7 +262,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       sortOrder,
       createdAt: now,
     });
-    await writeActivity(deps, {
+    await writeActivity(deps.store, {
       projectId: access.project.id,
       objectType: "milestone",
       objectId: milestone.id,
@@ -282,11 +311,6 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       });
     }
     const now = deps.clock.now();
-    const replayed = await deps.store.findIdempotency("user", session.user.id, idempotencyKey, now);
-    if (replayed !== undefined) {
-      return c.json(replayed, 201);
-    }
-
     const body = await readObject(c);
     const title = parseOptionalString(body?.["title"], 200);
     const description =
@@ -342,42 +366,53 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         return errorJson(c, 400, "unauthorized", "invalid parent_id", { reason: "invalid_body" });
       }
     }
+    const assigneeError = await requireAssignee(c, deps, access.project.id, assigneeUserId);
+    if (assigneeError) {
+      return assigneeError;
+    }
 
     const status: TaskStatus = statusRaw;
     const type: TaskType = typeRaw;
-    const task = await deps.store.createTask({
-      id: uuidv7(now.getTime()),
-      projectId: access.project.id,
-      milestoneId,
-      parentId,
-      title,
-      description,
-      status,
-      priority,
-      type,
-      version: 1,
-      assigneeUserId,
-      assigneeAgentName,
-      agentBrief,
-      linkedPaths: linkedPaths.paths,
-      githubIssueId: null,
-      lockedBySessionId: null,
-      lockExpiresAt: null,
-      deletedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await writeActivity(deps, {
-      projectId: access.project.id,
-      objectType: "task",
-      objectId: task.id,
-      actorId: session.user.id,
-      verb: "create",
-      payload: { status: task.status, type: task.type },
+    const presented = await deps.store.withIdempotency(
+      "user",
+      session.user.id,
+      idempotencyKey,
       now,
-    });
-    const presented = presentTask(task);
-    await deps.store.saveIdempotency("user", session.user.id, idempotencyKey, presented, now);
+      async (writes) => {
+        const task = await writes.createTask({
+          id: uuidv7(now.getTime()),
+          projectId: access.project.id,
+          milestoneId,
+          parentId,
+          title,
+          description,
+          status,
+          priority,
+          type,
+          version: 1,
+          assigneeUserId,
+          assigneeAgentName,
+          agentBrief,
+          linkedPaths: linkedPaths.paths,
+          githubIssueId: null,
+          lockedBySessionId: null,
+          lockExpiresAt: null,
+          deletedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await writeActivity(writes, {
+          projectId: access.project.id,
+          objectType: "task",
+          objectId: task.id,
+          actorId: session.user.id,
+          verb: "create",
+          payload: { status: task.status, type: task.type },
+          now,
+        });
+        return presentTask(task);
+      },
+    );
     return c.json(presented, 201);
   });
 
@@ -481,6 +516,10 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           reason: "invalid_body",
         });
       }
+      const assigneeError = await requireAssignee(c, deps, access.task.projectId, assigneeUserId);
+      if (assigneeError) {
+        return assigneeError;
+      }
       patch.assigneeUserId = assigneeUserId;
     }
     if (body["assignee_agent_name"] !== undefined) {
@@ -522,7 +561,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
       }
-      await writeActivity(deps, {
+      await writeActivity(deps.store, {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
@@ -532,7 +571,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         now,
       });
       if (updated.lockReleased) {
-        await writeActivity(deps, {
+        await writeActivity(deps.store, {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
@@ -564,7 +603,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (!deleted) {
       return errorJson(c, 404, "not_found", "task not found");
     }
-    await writeActivity(deps, {
+    await writeActivity(deps.store, {
       projectId: access.task.projectId,
       objectType: "task",
       objectId: deleted.id,
@@ -592,35 +631,37 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       });
     }
     const now = deps.clock.now();
-    const replayed = await deps.store.findIdempotency("user", session.user.id, idempotencyKey, now);
-    if (replayed !== undefined) {
-      return c.json(replayed, 201);
-    }
-
     const body = await readObject(c);
     const commentBody = parseText(body?.["body"], 8000);
     if (!commentBody) {
       return errorJson(c, 400, "unauthorized", "body is required", { reason: "invalid_body" });
     }
-    const comment = await deps.store.createComment({
-      id: uuidv7(now.getTime()),
-      taskId: access.task.id,
-      authorType: "user",
-      authorId: session.user.id,
-      body: commentBody,
-      createdAt: now,
-    });
-    await writeActivity(deps, {
-      projectId: access.task.projectId,
-      objectType: "task",
-      objectId: access.task.id,
-      actorId: session.user.id,
-      verb: "comment",
-      payload: { comment_id: comment.id },
+    const presented = await deps.store.withIdempotency(
+      "user",
+      session.user.id,
+      idempotencyKey,
       now,
-    });
-    const presented = presentComment(comment);
-    await deps.store.saveIdempotency("user", session.user.id, idempotencyKey, presented, now);
+      async (writes) => {
+        const comment = await writes.createComment({
+          id: uuidv7(now.getTime()),
+          taskId: access.task.id,
+          authorType: "user",
+          authorId: session.user.id,
+          body: commentBody,
+          createdAt: now,
+        });
+        await writeActivity(writes, {
+          projectId: access.task.projectId,
+          objectType: "task",
+          objectId: access.task.id,
+          actorId: session.user.id,
+          verb: "comment",
+          payload: { comment_id: comment.id },
+          now,
+        });
+        return presentComment(comment);
+      },
+    );
     return c.json(presented, 201);
   });
 
@@ -655,7 +696,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
       }
-      await writeActivity(deps, {
+      await writeActivity(deps.store, {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: updated.task.id,
@@ -665,7 +706,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         now,
       });
       if (updated.lockReleased) {
-        await writeActivity(deps, {
+        await writeActivity(deps.store, {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: updated.task.id,
@@ -702,9 +743,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       });
     }
     if (toTaskId === access.task.id) {
-      return errorJson(c, 400, "unauthorized", "a task cannot depend on itself", {
-        reason: "invalid_body",
-      });
+      return errorJson(c, 409, "dependency_cycle", "dependency would create a cycle");
     }
     const target = await deps.store.findTaskById(toTaskId);
     if (!target || target.deletedAt || target.projectId !== access.task.projectId) {
@@ -718,7 +757,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         toTaskId,
         type,
       });
-      await writeActivity(deps, {
+      await writeActivity(deps.store, {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: access.task.id,

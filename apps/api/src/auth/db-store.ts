@@ -15,7 +15,7 @@ import {
   users,
   type Db,
 } from "@beacon/db";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import {
@@ -42,6 +42,7 @@ import {
   VersionConflictError,
   type ActivityEventRecord,
   type AuthStore,
+  type IdempotentWrites,
   type MilestoneRecord,
   type SessionRecord,
   type TaskCommentRecord,
@@ -51,17 +52,20 @@ import {
   type UserRecord,
 } from "./store.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
-import type {
-  CommentAuthorType,
-  DependencyType,
-  IdempotencyActorType,
-  LinkedPath,
-  MilestoneStatus,
-  TaskStatus,
-  TaskType,
+import {
+  IDEMPOTENCY_TTL_MS,
+  type CommentAuthorType,
+  type DependencyType,
+  type IdempotencyActorType,
+  type LinkedPath,
+  type MilestoneStatus,
+  type TaskStatus,
+  type TaskType,
 } from "../roadmap/types.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
+const IDEMPOTENCY_LOCK_NS = 8_811_202;
+const DEPENDENCY_LOCK_NS = 8_811_203;
 
 type UniqueConstraint = "login" | "github_id" | "org_slug" | "project_slug" | "unknown";
 
@@ -1043,7 +1047,30 @@ export class DbAuthStore implements AuthStore {
   }
 
   async addDependency(dependency: TaskDependencyRecord): Promise<TaskDependencyRecord> {
+    if (dependency.fromTaskId === dependency.toTaskId) {
+      throw new DependencyCycleError();
+    }
     return this.db.transaction(async (tx) => {
+      const [fromTask] = await tx
+        .select({ projectId: tasks.projectId })
+        .from(tasks)
+        .where(eq(tasks.id, dependency.fromTaskId))
+        .limit(1);
+      if (!fromTask) {
+        throw new Error("task not found");
+      }
+      // Serialize writers for this project so opposite blocks edges cannot both commit.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(${DEPENDENCY_LOCK_NS}, hashtext(${fromTask.projectId}))`,
+      );
+      const endpointIds = [dependency.fromTaskId, dependency.toTaskId].sort();
+      await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(inArray(tasks.id, endpointIds))
+        .orderBy(asc(tasks.id))
+        .for("update");
+
       const [existing] = await tx
         .select()
         .from(taskDependencies)
@@ -1060,25 +1087,50 @@ export class DbAuthStore implements AuthStore {
       }
       if (dependency.type === "blocks") {
         const edges = await tx
-          .select()
+          .select({
+            fromTaskId: taskDependencies.fromTaskId,
+            toTaskId: taskDependencies.toTaskId,
+            type: taskDependencies.type,
+          })
           .from(taskDependencies)
-          .where(eq(taskDependencies.type, "blocks"));
-        if (wouldCreateCycle(edges.map(toDependency), dependency.fromTaskId, dependency.toTaskId)) {
+          .innerJoin(tasks, eq(tasks.id, taskDependencies.fromTaskId))
+          .where(and(eq(taskDependencies.type, "blocks"), eq(tasks.projectId, fromTask.projectId)));
+        if (wouldCreateCycle(edges, dependency.fromTaskId, dependency.toTaskId)) {
           throw new DependencyCycleError();
         }
       }
-      const [row] = await tx
-        .insert(taskDependencies)
-        .values({
-          fromTaskId: dependency.fromTaskId,
-          toTaskId: dependency.toTaskId,
-          type: dependency.type,
-        })
-        .returning();
-      if (!row) {
-        throw new Error("insert dependency returned no row");
+      try {
+        const [row] = await tx
+          .insert(taskDependencies)
+          .values({
+            fromTaskId: dependency.fromTaskId,
+            toTaskId: dependency.toTaskId,
+            type: dependency.type,
+          })
+          .returning();
+        if (!row) {
+          throw new Error("insert dependency returned no row");
+        }
+        return toDependency(row);
+      } catch (error) {
+        if (uniqueConstraint(error)) {
+          const [row] = await tx
+            .select()
+            .from(taskDependencies)
+            .where(
+              and(
+                eq(taskDependencies.fromTaskId, dependency.fromTaskId),
+                eq(taskDependencies.toTaskId, dependency.toTaskId),
+                eq(taskDependencies.type, dependency.type),
+              ),
+            )
+            .limit(1);
+          if (row) {
+            return toDependency(row);
+          }
+        }
+        throw error;
       }
-      return toDependency(row);
     });
   }
 
@@ -1121,50 +1173,110 @@ export class DbAuthStore implements AuthStore {
     return rows.map(toActivity);
   }
 
-  async findIdempotency(
+  async withIdempotency(
     actorType: IdempotencyActorType,
     actorId: string,
     key: string,
     now: Date,
-  ): Promise<unknown | undefined> {
-    const [row] = await this.db
-      .select()
-      .from(idempotencyKeys)
-      .where(
-        and(
-          eq(idempotencyKeys.actorType, actorType),
-          eq(idempotencyKeys.actorId, actorId),
-          eq(idempotencyKeys.key, key),
-        ),
-      )
-      .limit(1);
-    if (!row) {
-      return undefined;
-    }
-    if (now.getTime() - row.createdAt.getTime() > 24 * 60 * 60 * 1000) {
-      return undefined;
-    }
-    return row.response;
-  }
+    produce: (writes: IdempotentWrites) => Promise<unknown>,
+  ): Promise<unknown> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(${IDEMPOTENCY_LOCK_NS}, hashtext(${`${actorType}:${actorId}:${key}`}))`,
+      );
+      const keyMatch = and(
+        eq(idempotencyKeys.actorType, actorType),
+        eq(idempotencyKeys.actorId, actorId),
+        eq(idempotencyKeys.key, key),
+      );
+      const [existing] = await tx.select().from(idempotencyKeys).where(keyMatch).limit(1);
+      if (existing && now.getTime() - existing.createdAt.getTime() <= IDEMPOTENCY_TTL_MS) {
+        return existing.response;
+      }
+      if (existing) {
+        await tx.delete(idempotencyKeys).where(keyMatch);
+      }
 
-  async saveIdempotency(
-    actorType: IdempotencyActorType,
-    actorId: string,
-    key: string,
-    response: unknown,
-    createdAt: Date,
-  ): Promise<void> {
-    await this.db
-      .insert(idempotencyKeys)
-      .values({
+      const writes: IdempotentWrites = {
+        createTask: async (task) => {
+          const [row] = await tx
+            .insert(tasks)
+            .values({
+              id: task.id,
+              projectId: task.projectId,
+              milestoneId: task.milestoneId,
+              parentId: task.parentId,
+              title: task.title,
+              description: task.description,
+              status: task.status,
+              priority: task.priority,
+              type: task.type,
+              version: task.version,
+              assigneeUserId: task.assigneeUserId,
+              assigneeAgentName: task.assigneeAgentName,
+              agentBrief: task.agentBrief,
+              linkedPaths: task.linkedPaths,
+              githubIssueId: task.githubIssueId,
+              lockedBySessionId: task.lockedBySessionId,
+              lockExpiresAt: task.lockExpiresAt,
+              deletedAt: task.deletedAt,
+              createdAt: task.createdAt,
+              updatedAt: task.updatedAt,
+            })
+            .returning();
+          if (!row) {
+            throw new Error("insert task returned no row");
+          }
+          return toTask(row);
+        },
+        createComment: async (comment) => {
+          const [row] = await tx
+            .insert(taskComments)
+            .values({
+              id: comment.id,
+              taskId: comment.taskId,
+              authorType: comment.authorType,
+              authorId: comment.authorId,
+              body: comment.body,
+              createdAt: comment.createdAt,
+            })
+            .returning();
+          if (!row) {
+            throw new Error("insert comment returned no row");
+          }
+          return toComment(row);
+        },
+        writeActivity: async (event) => {
+          const [row] = await tx
+            .insert(activityEvents)
+            .values({
+              id: event.id,
+              projectId: event.projectId,
+              objectType: event.objectType,
+              objectId: event.objectId,
+              actorType: event.actorType,
+              actorId: event.actorId,
+              verb: event.verb,
+              payload: event.payload,
+              createdAt: event.createdAt,
+            })
+            .returning();
+          if (!row) {
+            throw new Error("insert activity returned no row");
+          }
+          return toActivity(row);
+        },
+      };
+
+      const response = await produce(writes);
+      await tx.insert(idempotencyKeys).values({
         actorType,
         actorId,
         key,
         response,
-        createdAt,
-      })
-      .onConflictDoNothing({
-        target: [idempotencyKeys.actorType, idempotencyKeys.actorId, idempotencyKeys.key],
+        createdAt: now,
       });
+      return response;
+    });
   }
 }

@@ -219,7 +219,9 @@ describe("milestones and tasks", () => {
       headers: { cookie: cookieHeader(bob.token) },
     });
     expect(get.status).toBe(404);
-    expect(await get.json()).toMatchObject({ error: { code: "not_found" } });
+    expect(await get.json()).toMatchObject({
+      error: { code: "not_found", message: "task not found" },
+    });
 
     const patch = await bob.app.request(`/v1/tasks/${task.id}`, {
       method: "PATCH",
@@ -416,5 +418,183 @@ describe("milestones and tasks", () => {
     );
     const body = (await activity.json()) as { items: { verb: string }[] };
     expect(body.items.map((item) => item.verb)).toEqual(expect.arrayContaining(["status", "lock_released"]));
+  });
+
+  it("releases an agent lock on a human PATCH", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "patch-locks");
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    const locked = await store.createTask({
+      id: "018f1e2c-3d4e-7000-8000-0000000000cc",
+      projectId: project.id,
+      milestoneId: null,
+      parentId: null,
+      title: "Locked",
+      description: "",
+      status: "in_progress",
+      priority: 0,
+      type: "task",
+      version: 1,
+      assigneeUserId: null,
+      assigneeAgentName: "codex",
+      agentBrief: "",
+      linkedPaths: [],
+      githubIssueId: null,
+      lockedBySessionId: "018f1e2c-3d4e-7000-8000-0000000000dd",
+      lockExpiresAt: new Date("2026-01-01T04:00:00.000Z"),
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const patched = await alice.app.request(`/v1/tasks/${locked.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ description: "edited", expected_version: 1 }),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      description: "edited",
+      locked_by_session_id: null,
+      version: 2,
+    });
+
+    const activity = await alice.app.request(
+      `/v1/projects/${project.id}/activity?object_id=${locked.id}`,
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    const body = (await activity.json()) as { items: { verb: string }[] };
+    expect(body.items.map((item) => item.verb)).toEqual(
+      expect.arrayContaining(["update", "lock_released"]),
+    );
+  });
+
+  it("requires Idempotency-Key on create and comment", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "need-key");
+    const created = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ title: "No key" }),
+    });
+    expect(created.status).toBe(400);
+    expect(await created.json()).toMatchObject({
+      error: { code: "unauthorized", details: { reason: "missing_idempotency_key" } },
+    });
+
+    const taskRes = await createTask(alice.app, alice.token, project.id, { title: "Has key" }, "has-key");
+    const task = (await taskRes.json()) as TaskBody;
+    const comment = await alice.app.request(`/v1/tasks/${task.id}/comments`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ body: "no key" }),
+    });
+    expect(comment.status).toBe(400);
+    expect(await comment.json()).toMatchObject({
+      error: { code: "unauthorized", details: { reason: "missing_idempotency_key" } },
+    });
+  });
+
+  it("returns 409 dependency_cycle for a self-edge and allows a relates pair", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "relates");
+    const aRes = await createTask(alice.app, alice.token, project.id, { title: "A" }, "rel-a");
+    const bRes = await createTask(alice.app, alice.token, project.id, { title: "B" }, "rel-b");
+    const a = (await aRes.json()) as TaskBody;
+    const b = (await bRes.json()) as TaskBody;
+
+    const selfEdge = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: a.id, type: "blocks" }),
+    });
+    expect(selfEdge.status).toBe(409);
+    expect(await selfEdge.json()).toMatchObject({ error: { code: "dependency_cycle" } });
+
+    const first = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: b.id, type: "relates" }),
+    });
+    expect(first.status).toBe(201);
+    const reverse = await alice.app.request(`/v1/tasks/${b.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: a.id, type: "relates" }),
+    });
+    expect(reverse.status).toBe(201);
+  });
+
+  it("rejects an unknown or non-member assignee", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const project = await createProject(alice.app, alice.token, "assignees");
+
+    const missing = await createTask(
+      alice.app,
+      alice.token,
+      project.id,
+      { title: "Ghost", assignee_user_id: "018f1e2c-3d4e-7000-8000-0000000000ee" },
+      "ghost-assignee",
+    );
+    expect(missing.status).toBe(400);
+
+    const outsider = await createTask(
+      alice.app,
+      alice.token,
+      project.id,
+      { title: "Outsider", assignee_user_id: bob.user.id },
+      "outsider-assignee",
+    );
+    expect(outsider.status).toBe(400);
+    expect(await outsider.json()).toMatchObject({
+      error: { details: { reason: "invalid_assignee" } },
+    });
+  });
+
+  it("serializes concurrent same-key creates and reuses an expired key", async () => {
+    const store = new MemoryAuthStore();
+    let now = new Date("2026-01-01T00:00:00.000Z");
+    const clock = { now: () => now };
+    const app = createApp({
+      store,
+      config: testConfig(),
+      clock,
+      checkReady: async () => true,
+    });
+    const register = await app.request("/v1/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: "alice", password: STRONG_PASSWORD }),
+    });
+    const token = sessionCookie(register)!;
+    const project = await createProject(app, token, "race-key");
+
+    const [first, second] = await Promise.all([
+      createTask(app, token, project.id, { title: "Once" }, "race"),
+      createTask(app, token, project.id, { title: "Once" }, "race"),
+    ]);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    const a = (await first.json()) as TaskBody;
+    const b = (await second.json()) as TaskBody;
+    expect(b.id).toBe(a.id);
+
+    now = new Date("2026-01-02T00:00:01.000Z");
+    const reused = await createTask(app, token, project.id, { title: "Again" }, "race");
+    expect(reused.status).toBe(201);
+    const next = (await reused.json()) as TaskBody;
+    expect(next.id).not.toBe(a.id);
+    expect(next.title).toBe("Again");
+
+    const listed = await app.request(`/v1/projects/${project.id}/tasks`, {
+      headers: { cookie: cookieHeader(token) },
+    });
+    const page = (await listed.json()) as { items: TaskBody[] };
+    expect(page.items).toHaveLength(2);
   });
 });
