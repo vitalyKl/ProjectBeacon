@@ -64,9 +64,18 @@ export default function TaskDetailPage() {
   }, [applyServerText]);
 
   const mergePolledTask = useCallback(
-    (next: PublicTask) => {
+    (next: PublicTask, expectedId: string) => {
+      if (next.id !== expectedId) {
+        return;
+      }
       setTask((current) => {
-        if (!current || current.id !== next.id) {
+        if (current && current.id !== next.id) {
+          return current;
+        }
+        if (current && next.version < current.version) {
+          return current;
+        }
+        if (!current) {
           applyServerText(next);
           return next;
         }
@@ -91,22 +100,23 @@ export default function TaskDetailPage() {
     if (!taskId || Array.isArray(taskId)) {
       return;
     }
+    const selectedId = taskId;
     const seq = ++requestSeq.current;
     try {
-      const next = await fetchTask(taskId);
-      if (seq !== requestSeq.current) {
+      const next = await fetchTask(selectedId);
+      if (seq !== requestSeq.current || next.id !== selectedId) {
         return;
       }
-      mergePolledTask(next);
+      mergePolledTask(next, selectedId);
       const [nextComments, nextActivity] = await Promise.all([
         fetchTaskComments(next.id),
         fetchTaskActivity(next.project_id, next.id),
       ]);
-      if (seq !== requestSeq.current) {
+      if (seq !== requestSeq.current || next.id !== selectedId) {
         return;
       }
       setComments(nextComments);
-      setActivity(nextActivity.filter((item) => item.object_id === next.id));
+      setActivity(nextActivity.filter((item) => item.object_id === selectedId));
       setError(null);
     } catch (caught) {
       if (seq === requestSeq.current) {
@@ -155,6 +165,7 @@ export default function TaskDetailPage() {
     void load();
     return () => {
       cancelled = true;
+      requestSeq.current += 1;
     };
   }, [applyTaskMeta, taskId]);
 
@@ -199,11 +210,13 @@ export default function TaskDetailPage() {
     if (error instanceof ApiError && error.code === "version_conflict") {
       const server = taskFromConflict(error);
       if (server) {
+        requestSeq.current += 1;
         applyTaskMeta(server, { text: true });
         toast("Updated elsewhere — reapplied.");
         return true;
       }
     }
+    requestSeq.current += 1;
     applyTaskMeta(fallback, { text: true });
     toast(error instanceof ApiError ? error.message : "failed to update task");
     return false;
@@ -224,6 +237,7 @@ export default function TaskDetailPage() {
         title: optimistic.title,
         description: optimistic.description,
       });
+      requestSeq.current += 1;
       applyTaskMeta(updated, { text: true });
     } catch (caught) {
       await handleConflict(caught, previous);
@@ -240,6 +254,7 @@ export default function TaskDetailPage() {
     applyTaskMeta({ ...task, status });
     try {
       const updated = await setTaskStatus(task.id, status, task.version);
+      requestSeq.current += 1;
       applyTaskMeta(updated);
     } catch (caught) {
       await handleConflict(caught, previous);

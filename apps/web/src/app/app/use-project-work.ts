@@ -32,13 +32,17 @@ export function useProjectWork(pollMs: number) {
   const applyList = useCallback((nextTasks: PublicTask[], nextMilestones: PublicMilestone[]) => {
     setMilestones(nextMilestones);
     setTasks((current) => {
-      if (pendingMoves.current.size === 0) {
-        return nextTasks;
-      }
       const byId = new Map(current.map((item) => [item.id, item]));
-      return nextTasks.map((item) =>
-        pendingMoves.current.has(item.id) ? (byId.get(item.id) ?? item) : item,
-      );
+      return nextTasks.map((item) => {
+        const local = byId.get(item.id);
+        if (!local) {
+          return item;
+        }
+        if (pendingMoves.current.has(item.id) || item.version < local.version) {
+          return local;
+        }
+        return item;
+      });
     });
   }, []);
 
@@ -113,16 +117,19 @@ export function useProjectWork(pollMs: number) {
       setTasks((items) => items.map((item) => (item.id === taskId ? optimistic : item)));
       try {
         const updated = await setTaskStatus(taskId, status, current.version);
+        requestSeq.current += 1;
         setTasks((items) => items.map((item) => (item.id === taskId ? updated : item)));
       } catch (caught) {
         if (caught instanceof ApiError && caught.code === "version_conflict") {
           const server = taskFromConflict(caught);
           if (server) {
+            requestSeq.current += 1;
             setTasks((items) => items.map((item) => (item.id === taskId ? server : item)));
             toast("Updated elsewhere — reapplied.");
             return;
           }
         }
+        requestSeq.current += 1;
         setTasks((items) => items.map((item) => (item.id === taskId ? current : item)));
         toast(caught instanceof ApiError ? caught.message : "failed to update status");
       } finally {
