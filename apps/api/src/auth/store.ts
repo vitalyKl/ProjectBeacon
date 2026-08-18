@@ -258,6 +258,8 @@ export interface AuthStore {
   findSidecarConnectionByRepoId(
     repoId: string,
   ): Promise<
+    { id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date } | undefined
+  >;
   listDeletedProjects(): Promise<ProjectRecord[]>;
   updateProjectRepo(
     id: string,
@@ -269,6 +271,7 @@ export interface AuthStore {
   ): Promise<{ id: string; repoId: string; sha: string | null; createdAt: Date } | undefined>;
   listSidecarConnections(): Promise<
     Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
+  >;
   countPendingApprovals(): Promise<number>;
   githubSyncLagSeconds(now: Date): Promise<number>;
 }
@@ -1921,6 +1924,13 @@ export class MemoryAuthStore implements AuthStore {
     return result;
   }
   private readonly sidecarConnections = new Map<
+    string,
+    { id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }
+  >();
+  private readonly cloneInvalidations = new Map<
+    string,
+    { id: string; repoId: string; sha: string | null; createdAt: Date; consumedAt: Date | null }
+  >();
 
   async updateProjectRepoIndex(
     id: string,
@@ -1977,7 +1987,15 @@ export class MemoryAuthStore implements AuthStore {
   async findSidecarConnectionByRepoId(
     repoId: string,
   ): Promise<
-  private readonly cloneInvalidations = new Map<
+    { id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date } | undefined
+  > {
+    for (const row of this.sidecarConnections.values()) {
+      if (row.repoId === repoId) {
+        return cloneSidecar(row);
+      }
+    }
+    return undefined;
+  }
 
   async listDeletedProjects(): Promise<ProjectRecord[]> {
     const result: ProjectRecord[] = [];
@@ -2046,6 +2064,13 @@ export class MemoryAuthStore implements AuthStore {
 
   async listSidecarConnections(): Promise<
     Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
+  > {
+    return [...this.sidecarConnections.values()].map((row) => ({
+      ...row,
+      connectedAt: new Date(row.connectedAt),
+      lastSeenAt: new Date(row.lastSeenAt),
+    }));
+  }
 
   async countPendingApprovals(): Promise<number> {
     let count = 0;
@@ -2061,9 +2086,6 @@ export class MemoryAuthStore implements AuthStore {
     void now;
     return 0;
   }
-    string,
-    { response: unknown; createdAt: Date }
-  >();
 }
 
 function cloneMilestone(milestone: MilestoneRecord): MilestoneRecord {

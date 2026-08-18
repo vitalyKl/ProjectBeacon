@@ -2679,6 +2679,16 @@ export class DbAuthStore implements AuthStore {
   async findSidecarConnectionByRepoId(
     repoId: string,
   ): Promise<
+    { id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date } | undefined
+  > {
+    const [row] = await this.db
+      .select()
+      .from(sidecarConnections)
+      .where(eq(sidecarConnections.repoId, repoId))
+      .orderBy(desc(sidecarConnections.lastSeenAt))
+      .limit(1);
+    return row ? toSidecar(row) : undefined;
+  }
 
   async listDeletedProjects(): Promise<ProjectRecord[]> {
     const rows = await this.db
@@ -2741,6 +2751,16 @@ export class DbAuthStore implements AuthStore {
 
   async listSidecarConnections(): Promise<
     Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
+  > {
+    const rows = await this.db.select().from(sidecarConnections);
+    return rows.map((row) => ({
+      id: row.id,
+      repoId: row.repoId,
+      tokenId: row.tokenId,
+      connectedAt: row.connectedAt,
+      lastSeenAt: row.lastSeenAt,
+    }));
+  }
 
   async countPendingApprovals(): Promise<number> {
     const [row] = await this.db
