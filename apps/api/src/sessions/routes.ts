@@ -10,7 +10,7 @@ import {
   type AuthActor,
 } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
-import { InvalidReferenceError, TaskLockedError } from "../auth/store.js";
+import { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../auth/store.js";
 import { compileProjectBrief } from "../context/compile-brief.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -413,16 +413,29 @@ export function mountSessions(app: Hono, deps: AuthDeps): void {
 
     const now = deps.clock.now();
     const actorIds = actorRef(access.actor);
-    const finished = await deps.store.finishWork({
-      sessionId: session.id,
-      handoffId: uuidv7(now.getTime()),
-      summary,
-      nextSteps: nextSteps ?? "",
-      filesTouched: filesTouched.paths,
-      openQuestions,
-      taskStatus,
-      now,
-    });
+    let finished;
+    try {
+      finished = await deps.store.finishWork({
+        sessionId: session.id,
+        handoffId: uuidv7(now.getTime()),
+        summary,
+        nextSteps: nextSteps ?? "",
+        filesTouched: filesTouched.paths,
+        openQuestions,
+        taskStatus,
+        now,
+      });
+    } catch (error) {
+      if (error instanceof SessionNotActiveError) {
+        return errorJson(c, 409, "version_conflict", "session is not active", {
+          reason: "session_inactive",
+        });
+      }
+      if (error instanceof TaskLockedError) {
+        return taskLocked(c, error.task);
+      }
+      throw error;
+    }
     if (!finished) {
       return errorJson(c, 404, "not_found", "session not found");
     }

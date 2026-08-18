@@ -89,6 +89,16 @@ export class InvalidReferenceError extends Error {
   }
 }
 
+export class SessionNotActiveError extends Error {
+  override readonly name = "SessionNotActiveError";
+  readonly session: AgentSessionRecord;
+
+  constructor(session: AgentSessionRecord) {
+    super("session is not active");
+    this.session = session;
+  }
+}
+
 export function isAgentSessionStatus(value: string): value is AgentSessionStatus {
   return (AGENT_SESSION_STATUSES as readonly string[]).includes(value);
 }

@@ -35,9 +35,14 @@ function cookieHeader(token: string): string {
   return `beacon_session=${token}`;
 }
 
-async function bootstrapWithProject() {
+async function bootstrapWithProject(options: { clock?: { now: () => Date } } = {}) {
   const store = new MemoryAuthStore();
-  const app = createApp({ store, config: testConfig(), checkReady: async () => true });
+  const app = createApp({
+    store,
+    config: testConfig(),
+    checkReady: async () => true,
+    clock: options.clock,
+  });
   const boot = await app.request("/v1/auth/bootstrap", {
     method: "POST",
     headers: {
@@ -237,6 +242,112 @@ describe("agent sessions", () => {
     const moved = await app.request(`/v1/tasks/${task.id}/status`, {
       method: "POST",
       headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ status: "done", expected_version: 1 }),
+    });
+    expect(moved.status).toBe(200);
+    expect(await moved.json()).toMatchObject({
+      status: "done",
+      locked_by_session_id: null,
+    });
+  });
+
+  it("abandons an expired lock holder and rejects that session's finish", async () => {
+    let now = new Date("2026-01-01T00:00:00.000Z");
+    const clock = { now: () => now };
+    const { app, store, cookie, projectId, task } = await bootstrapWithProject({ clock });
+    const first = await mintToken(app, cookie, projectId);
+    const second = await mintToken(app, cookie, projectId);
+
+    const started = await app.request(`/v1/projects/${projectId}/sessions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${first}`,
+        "content-type": "application/json",
+        "idempotency-key": "start-expire",
+      },
+      body: JSON.stringify({ task_id: task.id }),
+    });
+    const holder = ((await started.json()) as { session: { id: string } }).session;
+
+    now = new Date("2026-01-01T05:00:00.000Z");
+    const takeover = await app.request(`/v1/projects/${projectId}/sessions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${second}`,
+        "content-type": "application/json",
+        "idempotency-key": "start-takeover",
+      },
+      body: JSON.stringify({ task_id: task.id }),
+    });
+    expect(takeover.status).toBe(200);
+    const next = ((await takeover.json()) as { session: { id: string } }).session;
+
+    const abandoned = await store.findAgentSessionById(holder.id);
+    expect(abandoned?.status).toBe("abandoned");
+    const locked = await store.findTaskById(task.id);
+    expect(locked?.lockedBySessionId).toBe(next.id);
+
+    const finish = await app.request(`/v1/sessions/${holder.id}/finish`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${first}`, "content-type": "application/json" },
+      body: JSON.stringify({ summary: SUMMARY }),
+    });
+    expect(finish.status).toBe(409);
+    expect(await finish.json()).toMatchObject({
+      error: { code: "version_conflict", details: { reason: "session_inactive" } },
+    });
+    expect((await store.findTaskById(task.id))?.status).toBe("backlog");
+  });
+
+  it("rejects a second finish on an already finished session", async () => {
+    const { app, store, cookie, projectId, task } = await bootstrapWithProject();
+    const secret = await mintToken(app, cookie, projectId);
+    const started = await app.request(`/v1/projects/${projectId}/sessions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/json",
+        "idempotency-key": "start-once",
+      },
+      body: JSON.stringify({ task_id: task.id }),
+    });
+    const session = ((await started.json()) as { session: { id: string } }).session;
+
+    const first = await app.request(`/v1/sessions/${session.id}/finish`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      body: JSON.stringify({ summary: SUMMARY }),
+    });
+    expect(first.status).toBe(200);
+    const version = (await store.findTaskById(task.id))?.version;
+
+    const second = await app.request(`/v1/sessions/${session.id}/finish`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+      body: JSON.stringify({ summary: "A second finish must not rewrite the task status now." }),
+    });
+    expect(second.status).toBe(409);
+    expect((await store.findTaskById(task.id))?.version).toBe(version);
+  });
+
+  it("releases the lock when an admin token sets a terminal status", async () => {
+    const { app, cookie, projectId, task } = await bootstrapWithProject();
+    const agent = await mintToken(app, cookie, projectId);
+    const admin = await mintToken(app, cookie, projectId, ["admin"]);
+    const started = await app.request(`/v1/projects/${projectId}/sessions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${agent}`,
+        "content-type": "application/json",
+        "idempotency-key": "start-admin",
+      },
+      body: JSON.stringify({ task_id: task.id }),
+    });
+    expect(started.status).toBe(200);
+
+    const moved = await app.request(`/v1/tasks/${task.id}/status`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${admin}`, "content-type": "application/json" },
       body: JSON.stringify({ status: "done", expected_version: 1 }),
     });
     expect(moved.status).toBe(200);

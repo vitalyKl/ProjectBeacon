@@ -43,6 +43,7 @@ import {
   InvalidReferenceError,
   isLockActive,
   LOCK_TTL_MS,
+  SessionNotActiveError,
   TaskLockedError,
   type AgentSessionRecord,
   type FinishWorkInput,
@@ -117,7 +118,11 @@ export type {
   FinishWorkResult,
   HandoffRecord,
 } from "../sessions/types.js";
-export { InvalidReferenceError, TaskLockedError } from "../sessions/types.js";
+export {
+  InvalidReferenceError,
+  SessionNotActiveError,
+  TaskLockedError,
+} from "../sessions/types.js";
 export type {
   AgentSessionRef,
   ApprovalRecord,
@@ -1383,7 +1388,7 @@ function cloneTask(task: TaskRecord): TaskRecord {
     return cloneRateBucket(existing);
   }
 
-  /** Test helper until agent-session create exists. */
+  /** Test helper to seed an agent session. */
   putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
     if ("agentName" in session) {
       this.agentSessions.set(session.id, cloneAgentSession(session));
@@ -1486,8 +1491,8 @@ function cloneTask(task: TaskRecord): TaskRecord {
       if (!task || task.deletedAt || task.projectId !== input.session.projectId) {
         throw new InvalidReferenceError("task");
       }
-      if (isLockActive(task, input.now) && task.lockedBySessionId !== input.session.id) {
-        if (!input.steal) {
+      if (task.lockedBySessionId && task.lockedBySessionId !== input.session.id) {
+        if (isLockActive(task, input.now) && !input.steal) {
           throw new TaskLockedError(cloneTask(task));
         }
         stolenFrom = task.lockedBySessionId;
@@ -1523,8 +1528,37 @@ function cloneTask(task: TaskRecord): TaskRecord {
     if (!session) {
       return undefined;
     }
+    if (session.status !== "active") {
+      throw new SessionNotActiveError(cloneAgentSession(session));
+    }
     if (this.handoffs.has(input.handoffId)) {
       throw new UniqueViolationError("handoffs_pkey");
+    }
+
+    let task: TaskRecord | null = null;
+    let lockReleased = false;
+    let previousStatus: TaskRecord["status"] | null = null;
+    if (session.taskId) {
+      const current = this.tasks.get(session.taskId);
+      if (current && !current.deletedAt) {
+        if (
+          current.lockedBySessionId &&
+          current.lockedBySessionId !== session.id &&
+          isLockActive(current, input.now)
+        ) {
+          throw new TaskLockedError(cloneTask(current));
+        }
+        previousStatus = current.status;
+        current.status = input.taskStatus;
+        lockReleased = current.lockedBySessionId === session.id;
+        if (lockReleased) {
+          current.lockedBySessionId = null;
+          current.lockExpiresAt = null;
+        }
+        current.version += 1;
+        current.updatedAt = new Date(input.now);
+        task = cloneTask(current);
+      }
     }
 
     const handoff: HandoffRecord = {
@@ -1542,24 +1576,6 @@ function cloneTask(task: TaskRecord): TaskRecord {
     session.status = "finished";
     session.finishedAt = new Date(input.now);
 
-    let task: TaskRecord | null = null;
-    let lockReleased = false;
-    let previousStatus: TaskRecord["status"] | null = null;
-    if (session.taskId) {
-      const current = this.tasks.get(session.taskId);
-      if (current && !current.deletedAt) {
-        previousStatus = current.status;
-        current.status = input.taskStatus;
-        lockReleased = current.lockedBySessionId === session.id;
-        if (lockReleased) {
-          current.lockedBySessionId = null;
-          current.lockExpiresAt = null;
-        }
-        current.version += 1;
-        current.updatedAt = new Date(input.now);
-        task = cloneTask(current);
-      }
-    }
     return {
       session: cloneAgentSession(session),
       handoff: cloneHandoff(handoff),

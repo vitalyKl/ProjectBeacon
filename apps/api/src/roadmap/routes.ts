@@ -1,7 +1,12 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
-import { authorizeProjectActor, requireActor, type AuthActor } from "../auth/access.js";
+import {
+  authorizeProjectActor,
+  isAdminActor,
+  requireActor,
+  type AuthActor,
+} from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { DependencyCycleError, VersionConflictError, type UserRecord } from "../auth/store.js";
 import { errorJson } from "../errors.js";
@@ -9,6 +14,7 @@ import { parseOptionalString, readObject } from "../http.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
 import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import { rejectAgentTerminalStatus } from "../sessions/routes.js";
+import { isTerminalTaskStatus } from "../sessions/types.js";
 import { parsePageQuery, paginateRecords } from "./page.js";
 import {
   presentActivity,
@@ -184,6 +190,17 @@ function actorActivity(actor: AuthActor): { actorType: string; actorId: string }
     return { actorType: "token", actorId: actor.token.id };
   }
   return { actorType: "user", actorId: actor.user.id };
+}
+
+function shouldReleaseLockOnTaskWrite(
+  actor: AuthActor,
+  role: ProjectRole | null,
+  nextStatus?: TaskStatus,
+): boolean {
+  if (actor.kind === "user") {
+    return true;
+  }
+  return Boolean(nextStatus && isTerminalTaskStatus(nextStatus) && isAdminActor(actor, role));
 }
 
 async function writeActivity(
@@ -593,7 +610,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     const actor = actorActivity(access.actor);
     try {
       const updated = await deps.store.updateTask(access.task.id, expectedVersion, patch, now, {
-        releaseLock: access.actor.kind === "user",
+        releaseLock: shouldReleaseLockOnTaskWrite(access.actor, access.role, patch.status),
       });
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");
@@ -731,7 +748,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         expectedVersion,
         { status: statusRaw },
         now,
-        { releaseLock: access.actor.kind === "user" },
+        { releaseLock: shouldReleaseLockOnTaskWrite(access.actor, access.role, statusRaw) },
       );
       if (!updated) {
         return errorJson(c, 404, "not_found", "task not found");

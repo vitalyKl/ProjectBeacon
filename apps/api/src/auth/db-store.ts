@@ -107,6 +107,7 @@ import {
   isAgentSessionStatus,
   isLockActive,
   LOCK_TTL_MS,
+  SessionNotActiveError,
   TaskLockedError,
   type AgentSessionRecord,
   type FinishWorkInput,
@@ -2137,6 +2138,46 @@ export class DbAuthStore implements AuthStore {
       if (!session) {
         return undefined;
       }
+      if (session.status !== "active") {
+        throw new SessionNotActiveError(session);
+      }
+
+      let task: TaskRecord | null = null;
+      let lockReleased = false;
+      let previousStatus: TaskStatus | null = null;
+      if (session.taskId) {
+        const [current] = await tx
+          .select()
+          .from(tasks)
+          .where(eq(tasks.id, session.taskId))
+          .limit(1)
+          .for("update");
+        if (current && !current.deletedAt) {
+          const mapped = toTask(current);
+          if (
+            current.lockedBySessionId &&
+            current.lockedBySessionId !== session.id &&
+            isLockActive(mapped, input.now)
+          ) {
+            throw new TaskLockedError(mapped);
+          }
+          previousStatus = current.status as TaskStatus;
+          lockReleased = current.lockedBySessionId === session.id;
+          const [updated] = await tx
+            .update(tasks)
+            .set({
+              status: input.taskStatus,
+              version: current.version + 1,
+              updatedAt: input.now,
+              ...(lockReleased ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
+            })
+            .where(eq(tasks.id, current.id))
+            .returning();
+          if (updated) {
+            task = toTask(updated);
+          }
+        }
+      }
 
       const [handoffRow] = await tx
         .insert(handoffs)
@@ -2161,40 +2202,11 @@ export class DbAuthStore implements AuthStore {
           status: "finished",
           finishedAt: input.now,
         })
-        .where(eq(agentSessions.id, session.id))
+        .where(and(eq(agentSessions.id, session.id), eq(agentSessions.status, "active")))
         .returning();
-      const finished = finishedRow ? toAgentSession(finishedRow) : session;
+      const finished = finishedRow ? toAgentSession(finishedRow) : undefined;
       if (!finished) {
-        throw new Error("finish session returned no row");
-      }
-
-      let task: TaskRecord | null = null;
-      let lockReleased = false;
-      let previousStatus: TaskStatus | null = null;
-      if (session.taskId) {
-        const [current] = await tx
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, session.taskId))
-          .limit(1)
-          .for("update");
-        if (current && !current.deletedAt) {
-          previousStatus = current.status as TaskStatus;
-          lockReleased = current.lockedBySessionId === session.id;
-          const [updated] = await tx
-            .update(tasks)
-            .set({
-              status: input.taskStatus,
-              version: current.version + 1,
-              updatedAt: input.now,
-              ...(lockReleased ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
-            })
-            .where(eq(tasks.id, current.id))
-            .returning();
-          if (updated) {
-            task = toTask(updated);
-          }
-        }
+        throw new SessionNotActiveError(session);
       }
 
       return {
@@ -2245,8 +2257,8 @@ async function startWorkInTx(
       throw new InvalidReferenceError("task");
     }
     const mapped = toTask(task);
-    if (isLockActive(mapped, input.now) && task.lockedBySessionId !== input.session.id) {
-      if (!input.steal) {
+    if (task.lockedBySessionId && task.lockedBySessionId !== input.session.id) {
+      if (isLockActive(mapped, input.now) && !input.steal) {
         throw new TaskLockedError(mapped);
       }
       stolenFrom = task.lockedBySessionId;
