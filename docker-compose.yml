@@ -73,6 +73,8 @@ services:
       BEACON_WORKSPACE: ${BEACON_WORKSPACE:-/workspace}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      FF_HOSTED_CLONE: ${FF_HOSTED_CLONE:-false}
+      FF_SIDECAR_TUNNEL: ${FF_SIDECAR_TUNNEL:-false}
     ports:
       - "3000:3000"
   worker:

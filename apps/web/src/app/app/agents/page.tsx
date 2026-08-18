@@ -1,5 +1,11 @@
-import { Placeholder } from "../placeholder";
+"use client";
+
+import { useAppSelection } from "../project-context";
+
+import { AgentsView } from "./agents-view";
 
 export default function AgentsPage() {
-  return <Placeholder title="Agents" />;
+  const selection = useAppSelection();
+  const project = selection?.project ?? null;
+  return <AgentsView key={project?.id ?? "none"} project={project} />;
 }
