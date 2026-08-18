@@ -1,6 +1,6 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
-import { authorizeProjectActor, isAdminActor, requireActor, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor } from "../auth/access.js";
+import { authorizeProjectActor, isAdminActor, requireActor, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor, taskStatusOnCreate } from "../auth/access.js";
 import type { AuthDeps } from "../auth/routes.js";
 import { DependencyCycleError, VersionConflictError, UserRecord } from "../auth/store.js";
 import { errorJson } from "../errors.js";
@@ -394,7 +394,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       return assigneeError;
     }
 
-    const status: TaskStatus = statusRaw;
+    const status = taskStatusOnCreate(access.actor, statusRaw) as TaskStatus;
     const type: TaskType = typeRaw;
     const idempotency = actorIdempotencyRef(access.actor);
     const presented = await deps.store.withIdempotency(

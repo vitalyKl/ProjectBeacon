@@ -26,8 +26,14 @@ describe("worker /v1 client", () => {
       if (url.includes("/context/import")) {
         return Response.json({ nodes: [], code_owners_written: 0 });
       }
+      if (url.endsWith("/milestones") && init?.method === "GET") {
+        return Response.json({ items: [{ id: "ms-1", title: "Detector skeleton" }] });
+      }
       if (url.endsWith("/milestones")) {
         return Response.json({ id: "ms-1" }, { status: 201 });
+      }
+      if (url.endsWith("/tasks") && init?.method === "GET") {
+        return Response.json({ items: [] });
       }
       if (url.endsWith("/tasks")) {
         return Response.json({ id: "task-1" }, { status: 201 });
@@ -46,7 +52,11 @@ describe("worker /v1 client", () => {
       project_id: "proj-1",
     });
     await api.importContext("proj-1", "repo-1", [{ path: "AGENTS.md", content: "# hi" }]);
+    await expect(api.listMilestones("proj-1")).resolves.toEqual([
+      { id: "ms-1", title: "Detector skeleton" },
+    ]);
     await api.createMilestone("proj-1", { title: "Detector skeleton" });
+    await expect(api.listTasks("proj-1")).resolves.toEqual([]);
     await api.createTask(
       "proj-1",
       { title: "Review imported project context" },
@@ -55,7 +65,7 @@ describe("worker /v1 client", () => {
 
     expect(calls[0]?.headers.get("authorization")).toBe("Bearer worker-secret");
     expect(calls[1]?.url).toContain("/v1/projects/proj-1/context/import?repo_id=repo-1");
-    expect(calls[3]?.headers.get("idempotency-key")).toBe("detect:repo-1:task:0");
+    expect(calls.at(-1)?.headers.get("idempotency-key")).toBe("detect:repo-1:task:0");
   });
 
   it("throws WorkerApiError on non-2xx", async () => {

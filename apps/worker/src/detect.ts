@@ -5,6 +5,8 @@ import type { WorkerApi } from "./client.js";
 import type { DetectJobData } from "./jobs.js";
 import { scanDetectFiles } from "./scan.js";
 
+export const DETECTOR_MILESTONE_TITLE = "Detector skeleton";
+
 export async function runDetectJob(
   data: DetectJobData,
   options: { api: WorkerApi; workspace?: string },
@@ -23,10 +25,22 @@ export async function runDetectJob(
     await options.api.importContext(repo.project_id, repo.id, files);
   }
 
-  const milestone = await options.api.createMilestone(repo.project_id, {
-    title: "Detector skeleton",
-    description: "Proposed first milestone from layout detect.",
-  });
+  const existingMilestones = await options.api.listMilestones(repo.project_id);
+  const existingMilestone = existingMilestones.find(
+    (milestone) => milestone.title === DETECTOR_MILESTONE_TITLE,
+  );
+  const milestone =
+    existingMilestone ??
+    (await options.api.createMilestone(repo.project_id, {
+      title: DETECTOR_MILESTONE_TITLE,
+      description: "Proposed first milestone from layout detect.",
+    }));
+
+  const existingTitles = new Set(
+    (await options.api.listTasks(repo.project_id))
+      .filter((task) => task.milestone_id === milestone.id)
+      .map((task) => task.title),
+  );
 
   const tasks = detectorTasks(
     repo.id,
@@ -34,6 +48,9 @@ export async function runDetectJob(
   );
   let created = 0;
   for (const [index, task] of tasks.entries()) {
+    if (existingTitles.has(task.title)) {
+      continue;
+    }
     await options.api.createTask(
       repo.project_id,
       {
@@ -43,8 +60,9 @@ export async function runDetectJob(
         type: "task",
         linked_paths: task.path ? [{ repo_id: repo.id, path: task.path }] : [],
       },
-      `detect:${repo.id}:task:${index}`,
+      `detect:${repo.id}:task:${index}:${task.title}`,
     );
+    existingTitles.add(task.title);
     created += 1;
   }
 

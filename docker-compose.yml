@@ -1,6 +1,7 @@
 # worker and mcp are not in this compose yet.
 # Later PRs may unpublish API :8080; both stay published for now so API /health still works.
 # mcp is still later. web is not in this compose yet.
+# postgres + api + worker. web and mcp are omitted.
 # API :8080 is published so host liveness (/health) works.
 # Worker ports are not published.
 

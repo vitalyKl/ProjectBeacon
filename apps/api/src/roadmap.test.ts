@@ -621,6 +621,30 @@ describe("milestones and tasks", () => {
     });
   });
 
+  it("forces non-admin tokens to create tasks in backlog", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "token-status");
+    const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ name: "agent" }),
+    });
+    const secret = ((await minted.json()) as { token: string }).token;
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/json",
+        "idempotency-key": "token-in-progress",
+      },
+      body: JSON.stringify({ title: "Agent work", status: "in_progress" }),
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ title: "Agent work", status: "backlog" });
+  });
+
   it("serializes concurrent same-key creates and reuses an expired key", async () => {
     const store = new MemoryAuthStore();
     let now = new Date("2026-01-01T00:00:00.000Z");

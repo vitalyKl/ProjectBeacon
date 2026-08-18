@@ -17,12 +17,16 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
     repoId: string;
     files: { path: string; content: string }[];
   }[] = [];
-  const milestones: string[] = [];
-  const tasks: string[] = [];
+  const milestones: { id: string; title: string }[] = [];
+  const tasks: { id: string; title: string; milestone_id: string | null }[] = [];
   return {
     imports,
-    milestones,
-    tasks,
+    get milestones() {
+      return milestones.map((row) => row.title);
+    },
+    get tasks() {
+      return tasks.map((row) => row.title);
+    },
     async getRepo() {
       return {
         id: "repo-1",
@@ -36,13 +40,25 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
       imports.push({ projectId, repoId, files });
       return {};
     },
+    async listMilestones() {
+      return milestones.map((row) => ({ ...row }));
+    },
     async createMilestone(_projectId, body) {
-      milestones.push(body.title);
-      return { id: "ms-1" };
+      const created = { id: `ms-${milestones.length + 1}`, title: body.title };
+      milestones.push(created);
+      return created;
+    },
+    async listTasks() {
+      return tasks.map((row) => ({ ...row }));
     },
     async createTask(_projectId, body) {
-      tasks.push(body.title);
-      return { id: `task-${tasks.length}` };
+      const created = {
+        id: `task-${tasks.length + 1}`,
+        title: body.title,
+        milestone_id: body.milestone_id ?? null,
+      };
+      tasks.push(created);
+      return created;
     },
     ...overrides,
   };
@@ -86,5 +102,15 @@ describe("runDetectJob", () => {
     expect(api.imports).toHaveLength(0);
     expect(api.milestones).toHaveLength(1);
     expect(api.tasks.length).toBeGreaterThan(0);
+  });
+
+  it("reuses the detector milestone and does not duplicate tasks on retry", async () => {
+    const api = mockApi();
+    const first = await runDetectJob({ repo_id: "repo-1", project_id: "proj-1" }, { api });
+    const second = await runDetectJob({ repo_id: "repo-1", project_id: "proj-1" }, { api });
+    expect(first.milestone_id).toBe(second.milestone_id);
+    expect(api.milestones).toEqual(["Detector skeleton"]);
+    expect(second.tasks).toBe(0);
+    expect(api.tasks).toEqual(["Review imported project context"]);
   });
 });

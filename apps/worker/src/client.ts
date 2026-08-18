@@ -19,6 +19,17 @@ export class WorkerApiError extends Error {
   }
 }
 
+export type MilestoneView = {
+  id: string;
+  title: string;
+};
+
+export type TaskView = {
+  id: string;
+  title: string;
+  milestone_id: string | null;
+};
+
 export type WorkerApi = {
   getRepo(repoId: string): Promise<RepoView>;
   importContext(
@@ -26,10 +37,12 @@ export type WorkerApi = {
     repoId: string,
     files: { path: string; content: string }[],
   ): Promise<unknown>;
+  listMilestones(projectId: string): Promise<MilestoneView[]>;
   createMilestone(
     projectId: string,
     body: { title: string; description?: string },
   ): Promise<{ id: string }>;
+  listTasks(projectId: string): Promise<TaskView[]>;
   createTask(
     projectId: string,
     body: {
@@ -112,8 +125,19 @@ export function createWorkerApi(options: {
         body: { files },
       });
     },
+    async listMilestones(projectId) {
+      const page = await request<{ items: MilestoneView[] }>(
+        "GET",
+        `/v1/projects/${projectId}/milestones`,
+      );
+      return page.items;
+    },
     createMilestone(projectId, body) {
       return request<{ id: string }>("POST", `/v1/projects/${projectId}/milestones`, { body });
+    },
+    async listTasks(projectId) {
+      const page = await request<{ items: TaskView[] }>("GET", `/v1/projects/${projectId}/tasks`);
+      return page.items;
     },
     createTask(projectId, body, idempotencyKey) {
       return request<{ id: string }>("POST", `/v1/projects/${projectId}/tasks`, {
