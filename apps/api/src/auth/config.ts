@@ -1,11 +1,15 @@
 export type AuthConfig = {
   bootstrapAdminToken: string | undefined;
-  workerToken: string | undefined;
+  workerToken?: string;
   authLocal: boolean;
   authLocalInviteOnly: boolean;
   authGithub: boolean;
   githubClientId: string | undefined;
   githubClientSecret: string | undefined;
+  githubAppId?: string;
+  githubAppPrivateKey?: string;
+  githubAppWebhookSecret?: string;
+  githubTwoWay?: boolean;
   secureCookies: boolean;
   trustProxy: boolean;
   workerToken: string | undefined;
@@ -20,10 +24,18 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     authGithub: env["AUTH_GITHUB"] === "true",
     githubClientId: env["GITHUB_OAUTH_CLIENT_ID"],
     githubClientSecret: env["GITHUB_OAUTH_CLIENT_SECRET"],
+    githubAppId: env["GITHUB_APP_ID"],
+    githubAppPrivateKey: env["GITHUB_APP_PRIVATE_KEY"],
+    githubAppWebhookSecret: env["GITHUB_APP_WEBHOOK_SECRET"],
+    githubTwoWay: env["FF_GITHUB_TWO_WAY"] === "true",
     secureCookies: env["NODE_ENV"] === "production",
     trustProxy: env["TRUST_PROXY"] === "true",
     workerToken: env["BEACON_WORKER_TOKEN"],
   };
+}
+
+export function isGithubAppConfigured(config: AuthConfig): boolean {
+  return Boolean(config.githubAppId && config.githubAppPrivateKey);
 }
 
 export function isGithubOAuthEnabled(config: AuthConfig): boolean {

@@ -1,6 +1,13 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
-import { DETECT_QUEUE, MemoryJobQueue, PgBossJobQueue, type JobQueue } from "./jobs/queue.js";
+import {
+  DETECT_QUEUE,
+  GITHUB_IMPORT_QUEUE,
+  GITHUB_INVALIDATE_QUEUE,
+  MemoryJobQueue,
+  PgBossJobQueue,
+  type JobQueue,
+} from "./jobs/queue.js";
 
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
 const hostname = process.env.HOST ?? "0.0.0.0";
@@ -17,6 +24,8 @@ async function resolveJobs(): Promise<JobQueue> {
   });
   await boss.start();
   await boss.createQueue(DETECT_QUEUE);
+  await boss.createQueue(GITHUB_IMPORT_QUEUE);
+  await boss.createQueue(GITHUB_INVALIDATE_QUEUE);
   return new PgBossJobQueue((name, data, options) =>
     options ? boss.send(name, data, options) : boss.send(name, data),
   );

@@ -60,6 +60,18 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
       tasks.push(created);
       return created;
     },
+    async listGithubIssues() {
+      return [];
+    },
+    async getGithubIssue() {
+      return undefined;
+    },
+    async upsertImportedIssues() {
+      return { count: 0 };
+    },
+    async recordGithubInvalidation() {
+      return { recorded: true };
+    },
     ...overrides,
   };
 }

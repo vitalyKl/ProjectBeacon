@@ -1,5 +1,5 @@
 import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
-import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks } from "@beacon/db";
+import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState } from "@beacon/db";
 import { isScope, uuidv7, type Scope } from "@beacon/shared";
 import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or } from "drizzle-orm";
 import { slugCandidate, slugFromLogin } from "../slug.js";
@@ -21,12 +21,20 @@ import {
   type ExpireLocksCounts,
   type RetentionCounts,
 } from "../jobs/policy.js";
+import type { GithubInstallationRecord, GithubSyncStateRecord } from "../github/types.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
-type UniqueConstraint = "login" | "github_id" | "org_slug" | "project_slug" | "unknown";
+type UniqueConstraint =
+  | "login"
+  | "github_id"
+  | "org_slug"
+  | "project_slug"
+  | "project_repo"
+  | "context_node_scope"
+  | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
@@ -51,6 +59,12 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("projects_org_id_slug")) {
           return "project_slug";
+        }
+        if (constraint.includes("project_repos")) {
+          return "project_repo";
+        }
+        if (constraint.includes("context_nodes")) {
+          return "context_node_scope";
         }
         return "unknown";
       }
@@ -137,6 +151,7 @@ function toProject(row: typeof projects.$inferSelect): ProjectRecord {
     name: row.name,
     description: row.description,
     visibility: "private",
+    defaultRepoId: row.defaultRepoId,
     settings: asSettings(row.settings),
     deletedAt: row.deletedAt,
     createdAt: row.createdAt,
@@ -429,7 +444,8 @@ function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | 
 
 function toDecision(
   row: typeof decisions.$inferSelect,
-  relatedPaths: string[],
+  relatedPaths: DecisionPathLink[],
+  relatedTaskIds: string[],
 ): DecisionRecord | undefined {
   if (!isDecisionStatus(row.status)) {
     return undefined;
@@ -447,6 +463,7 @@ function toDecision(
     supersededBy: row.supersededBy,
     createdAt: row.createdAt,
     relatedPaths,
+    relatedTaskIds,
   };
 }
 
@@ -1259,6 +1276,7 @@ export class DbAuthStore implements AuthStore {
             : {}),
           ...(patch.agentBrief !== undefined ? { agentBrief: patch.agentBrief } : {}),
           ...(patch.linkedPaths !== undefined ? { linkedPaths: patch.linkedPaths } : {}),
+          ...(patch.githubIssueId !== undefined ? { githubIssueId: patch.githubIssueId } : {}),
           ...(options?.releaseLock ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
           version: current.version + 1,
           updatedAt,
@@ -1536,7 +1554,7 @@ export class DbAuthStore implements AuthStore {
       .select()
       .from(constraints)
       .where(eq(constraints.projectId, projectId))
-      .orderBy(asc(constraints.id));
+      .orderBy(desc(constraints.createdAt), desc(constraints.id));
     return rows.flatMap((row) => {
       const constraint = toConstraint(row);
       return constraint ? [constraint] : [];
@@ -1544,26 +1562,7 @@ export class DbAuthStore implements AuthStore {
   }
 
   async insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
-    const [row] = await this.db
-      .insert(constraints)
-      .values({
-        id: constraint.id,
-        projectId: constraint.projectId,
-        kind: constraint.kind,
-        body: constraint.body,
-        scopePath: constraint.scopePath,
-        status: constraint.status,
-        createdAt: constraint.createdAt,
-      })
-      .returning();
-    if (!row) {
-      throw new Error("insert constraint returned no row");
-    }
-    const stored = toConstraint(row);
-    if (!stored) {
-      throw new Error("insert constraint returned invalid row");
-    }
-    return stored;
+    return insertConstraintTx(this.db, constraint);
   }
 
   async listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]> {
@@ -1624,28 +1623,7 @@ export class DbAuthStore implements AuthStore {
       .from(decisions)
       .where(and(eq(decisions.projectId, projectId), eq(decisions.status, "accepted")))
       .orderBy(asc(decisions.id));
-    if (rows.length === 0) {
-      return [];
-    }
-    const paths = await this.db
-      .select()
-      .from(decisionPaths)
-      .where(
-        inArray(
-          decisionPaths.decisionId,
-          rows.map((row) => row.id),
-        ),
-      );
-    const byDecision = new Map<string, string[]>();
-    for (const path of paths) {
-      const list = byDecision.get(path.decisionId) ?? [];
-      list.push(path.path);
-      byDecision.set(path.decisionId, list);
-    }
-    return rows.flatMap((row) => {
-      const decision = toDecision(row, byDecision.get(row.id) ?? []);
-      return decision ? [decision] : [];
-    });
+    return this.attachDecisionLinks(rows);
   }
 
   async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
@@ -1753,6 +1731,8 @@ export class DbAuthStore implements AuthStore {
           }
           return toComment(row);
         },
+        createDecision: async (decision) => insertDecisionTx(tx, decision),
+        createConstraint: async (constraint) => insertConstraintTx(tx, constraint),
         writeActivity: async (event) => {
           const [row] = await tx
             .insert(activityEvents)
@@ -2110,26 +2090,7 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
-    const [row] = await this.db
-      .insert(constraints)
-      .values({
-        id: constraint.id,
-        projectId: constraint.projectId,
-        kind: constraint.kind,
-        body: constraint.body,
-        scopePath: constraint.scopePath,
-        status: constraint.status,
-        createdAt: constraint.createdAt,
-      })
-      .returning();
-    if (!row) {
-      throw new Error("insert constraint returned no row");
-    }
-    const created = toConstraint(row);
-    if (!created) {
-      throw new Error("insert constraint returned invalid row");
-    }
-    return created;
+    return this.insertConstraint(constraint);
   }
 
   async applyConstraint(id: string, appliedAt: Date): Promise<ConstraintRecord | undefined> {
@@ -2165,12 +2126,8 @@ export class DbAuthStore implements AuthStore {
   }
 
   async findProjectRepo(id: string): Promise<ProjectRepoRef | undefined> {
-    const [row] = await this.db
-      .select({ id: projectRepos.id, projectId: projectRepos.projectId })
-      .from(projectRepos)
-      .where(eq(projectRepos.id, id))
-      .limit(1);
-    return row ?? undefined;
+    const repo = await this.findProjectRepoById(id);
+    return repo ? { id: repo.id, projectId: repo.projectId } : undefined;
   }
 
   private async attachDecisionLinks(
@@ -2517,6 +2474,114 @@ export class DbAuthStore implements AuthStore {
       return { locksReleased, sessionsAbandoned };
     });
   }
+
+  async findProjectRepoByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord | undefined> {
+    const [repo] = await this.listProjectReposByGithubRepoId(githubRepoId);
+    return repo;
+  }
+
+  async listProjectReposByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(projectRepos)
+      .where(eq(projectRepos.githubRepoId, githubRepoId))
+      .orderBy(asc(projectRepos.id));
+    return rows.flatMap((row) => {
+      const repo = toProjectRepo(row);
+      return repo ? [repo] : [];
+    });
+  }
+
+  async findTaskByGithubIssueId(
+    projectId: string,
+    githubIssueId: bigint,
+  ): Promise<TaskRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.projectId, projectId),
+          eq(tasks.githubIssueId, githubIssueId),
+          isNull(tasks.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row ? toTask(row) : undefined;
+  }
+
+  async findGithubInstallationByInstallationId(
+    installationId: bigint,
+  ): Promise<GithubInstallationRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(githubInstallations)
+      .where(eq(githubInstallations.installationId, installationId))
+      .limit(1);
+    return row ? toGithubInstallation(row) : undefined;
+  }
+
+  async upsertGithubInstallation(row: GithubInstallationRecord): Promise<GithubInstallationRecord> {
+    const [stored] = await this.db
+      .insert(githubInstallations)
+      .values({
+        id: row.id,
+        orgId: row.orgId,
+        installationId: row.installationId,
+        accountLogin: row.accountLogin,
+        createdAt: row.createdAt,
+      })
+      .onConflictDoUpdate({
+        target: githubInstallations.installationId,
+        set: { orgId: row.orgId, accountLogin: row.accountLogin },
+      })
+      .returning();
+    if (!stored) {
+      throw new Error("upsert github installation returned no row");
+    }
+    return toGithubInstallation(stored);
+  }
+
+  async findGithubSyncState(repoId: string): Promise<GithubSyncStateRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(githubSyncState)
+      .where(eq(githubSyncState.repoId, repoId))
+      .limit(1);
+    return row ? toGithubSyncState(row) : undefined;
+  }
+
+  async upsertGithubSyncState(row: GithubSyncStateRecord): Promise<GithubSyncStateRecord> {
+    const [stored] = await this.db
+      .insert(githubSyncState)
+      .values({
+        repoId: row.repoId,
+        lastCursor: row.lastCursor,
+        lastSyncedAt: row.lastSyncedAt,
+      })
+      .onConflictDoUpdate({
+        target: githubSyncState.repoId,
+        set: { lastCursor: row.lastCursor, lastSyncedAt: row.lastSyncedAt },
+      })
+      .returning();
+    if (!stored) {
+      throw new Error("upsert github sync state returned no row");
+    }
+    return toGithubSyncState(stored);
+  }
+
+  async updateProjectSettings(
+    id: string,
+    settings: Record<string, unknown>,
+    updatedAt: Date,
+  ): Promise<ProjectRecord | undefined> {
+    const [row] = await this.db
+      .update(projects)
+      .set({ settings, updatedAt })
+      .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
+      .returning();
+    return row ? toProject(row) : undefined;
+  }
 }
 
 async function startWorkInTx(
@@ -2688,4 +2753,22 @@ async function insertDecisionTx(tx: WriteTx, decision: DecisionRecord): Promise<
     throw new Error("insert decision returned invalid row");
   }
   return created;
+}
+
+function toGithubInstallation(row: typeof githubInstallations.$inferSelect): GithubInstallationRecord {
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    installationId: row.installationId,
+    accountLogin: row.accountLogin,
+    createdAt: row.createdAt,
+  };
+}
+
+function toGithubSyncState(row: typeof githubSyncState.$inferSelect): GithubSyncStateRecord {
+  return {
+    repoId: row.repoId,
+    lastCursor: row.lastCursor,
+    lastSyncedAt: row.lastSyncedAt,
+  };
 }

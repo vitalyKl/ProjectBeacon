@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { isToolError } from "./errors.js";
 import { invoke } from "./invoke.js";
 import { IDEMPOTENT_TOOLS, TOOL_NAMES, type ToolName } from "./tools.js";
 import type { InvokeContext } from "./types.js";
@@ -49,7 +48,9 @@ function mockFetch(
 ) {
   const calls: RecordedCall[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    const url = new URL(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+    );
     const call: RecordedCall = {
       method: (init?.method ?? "GET").toUpperCase(),
       url,
@@ -69,10 +70,7 @@ function mockFetch(
   return { fetchImpl, calls };
 }
 
-function ctx(
-  fetchImpl: typeof fetch,
-  extra: Partial<InvokeContext> = {},
-): InvokeContext {
+function ctx(fetchImpl: typeof fetch, extra: Partial<InvokeContext> = {}): InvokeContext {
   return {
     baseUrl: "https://beacon.test",
     token: "tok_test",
@@ -191,7 +189,9 @@ describe("invoke routing", () => {
       expect(write, tool).toBeDefined();
       expect(write?.headers["authorization"]).toBe("Bearer tok_test");
       expect(write?.headers["idempotency-key"]).toMatch(/^idemp-/);
-      expect(write?.body).toEqual(expect.not.objectContaining({ idempotency_key: expect.anything() }));
+      expect(write?.body).toEqual(
+        expect.not.objectContaining({ idempotency_key: expect.anything() }),
+      );
     }
   });
 
@@ -235,12 +235,16 @@ describe("invoke routing", () => {
       body: { error: { code: "code_index_unavailable", message: "no index" } },
     }));
 
-    await expect(
-      invoke("get_tree", { repo_id: REPO_ID }, ctx(fetchImpl)),
-    ).rejects.toMatchObject({ code: "code_index_unavailable", status: 503 });
+    await expect(invoke("get_tree", { repo_id: REPO_ID }, ctx(fetchImpl))).rejects.toMatchObject({
+      code: "code_index_unavailable",
+      status: 503,
+    });
     expectRoute(calls[0], "GET", `/v1/repos/${REPO_ID}/tree`);
 
-    const missing = mockFetch(() => ({ status: 404, body: { error: { code: "not_found", message: "nope" } } }));
+    const missing = mockFetch(() => ({
+      status: 404,
+      body: { error: { code: "not_found", message: "nope" } },
+    }));
     await expect(
       invoke("search_code", { q: "compile", repo_id: REPO_ID }, ctx(missing.fetchImpl)),
     ).rejects.toMatchObject({ code: "code_index_unavailable", status: 503 });
@@ -256,7 +260,9 @@ describe("invoke routing", () => {
     ).rejects.toMatchObject({ code: "code_index_unavailable" });
     expect(calls[0]?.url.pathname).toBe(`/v1/repos/${REPO_ID}/files`);
 
-    await expect(invoke("get_owners", { path: "src/index.ts" }, ctx(fetchImpl))).rejects.toMatchObject({
+    await expect(
+      invoke("get_owners", { path: "src/index.ts" }, ctx(fetchImpl)),
+    ).rejects.toMatchObject({
       code: "repo_ambiguous",
       status: 400,
     });
@@ -264,18 +270,22 @@ describe("invoke routing", () => {
 
   it("lets a custom CodeSource short-circuit HTTP", async () => {
     const { fetchImpl, calls } = mockFetch(() => ({ body: { unexpected: true } }));
-    const result = await invoke("get_symbol", { name: "invoke", repo_id: REPO_ID }, {
-      ...ctx(fetchImpl),
-      codeSource: {
-        getTree: async () => ({ entries: [] }),
-        searchCode: async () => ({ items: [] }),
-        getFile: async () => ({ body: "" }),
-        getSymbol: async () => ({ name: "invoke" }),
-        getOwners: async () => ({ owners: [] }),
-        getRelatedFiles: async () => ({ paths: [] }),
-        getChangedScope: async () => ({ paths: [] }),
+    const result = await invoke(
+      "get_symbol",
+      { name: "invoke", repo_id: REPO_ID },
+      {
+        ...ctx(fetchImpl),
+        codeSource: {
+          getTree: async () => ({ entries: [] }),
+          searchCode: async () => ({ items: [] }),
+          getFile: async () => ({ body: "" }),
+          getSymbol: async () => ({ name: "invoke" }),
+          getOwners: async () => ({ owners: [] }),
+          getRelatedFiles: async () => ({ paths: [] }),
+          getChangedScope: async () => ({ paths: [] }),
+        },
       },
-    });
+    );
     expect(result).toEqual({ name: "invoke" });
     expect(calls).toHaveLength(0);
   });
@@ -303,22 +313,35 @@ describe("invoke routing", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("returns integration_unavailable for github_* tools", async () => {
-    const { fetchImpl, calls } = mockFetch(() => ({ body: { unexpected: true } }));
-    for (const tool of ["github_list_prs", "github_list_issues", "github_link_issue", "github_sync_now"]) {
-      try {
-        await invoke(
-          tool,
-          tool === "github_link_issue" ? { task_id: TASK_ID, issue_number: 12 } : {},
-          ctx(fetchImpl),
-        );
-        throw new Error(`${tool} should have failed`);
-      } catch (error) {
-        expect(isToolError(error)).toBe(true);
-        expect(error).toMatchObject({ code: "integration_unavailable", status: 503 });
-      }
-    }
-    expect(calls).toHaveLength(0);
+  it("maps github_* tools to /v1 and requires repo_id when default is missing", async () => {
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { items: [] } }));
+    await invoke(
+      "github_list_issues",
+      { repo_id: REPO_ID, state: "open", q: "lock" },
+      ctx(fetchImpl),
+    );
+    expectRoute(calls[0], "GET", `/v1/repos/${REPO_ID}/github/issues`);
+    expect(calls[0]?.url.searchParams.get("state")).toBe("open");
+    expect(calls[0]?.url.searchParams.get("q")).toBe("lock");
+
+    await invoke("github_list_prs", { state: "open" }, ctx(fetchImpl, { defaultRepoId: REPO_ID }));
+    expectRoute(calls[1], "GET", `/v1/repos/${REPO_ID}/github/pulls`);
+
+    await invoke(
+      "github_link_issue",
+      { task_id: TASK_ID, issue_number: 12, repo_id: REPO_ID },
+      ctx(fetchImpl),
+    );
+    expectRoute(calls[2], "POST", `/v1/tasks/${TASK_ID}/github-issue`);
+    expect(calls[2]?.body).toEqual({ issue_number: 12, repo_id: REPO_ID });
+
+    await invoke("github_sync_now", {}, ctx(fetchImpl, { defaultRepoId: REPO_ID }));
+    expectRoute(calls[3], "POST", `/v1/repos/${REPO_ID}/github/sync`);
+
+    await expect(invoke("github_list_issues", {}, ctx(fetchImpl))).rejects.toMatchObject({
+      code: "repo_ambiguous",
+      status: 400,
+    });
   });
 
   it("does not invent run_shell", () => {

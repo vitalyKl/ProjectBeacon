@@ -16,6 +16,7 @@ import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError
 export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../sessions/types.js";
 export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
 import { ACTIVITY_RETENTION_MS, BRIEF_RETENTION_PER_PROJECT, IDEMPOTENCY_RETENTION_MS, idsOlderThanKeep, isUserSessionPastRetention, type ExpireLocksCounts, type RetentionCounts, decideExpiredLocks } from "../jobs/policy.js";
+import type { GithubInstallationRecord, GithubSyncStateRecord } from "../github/types.js";
 
 export type UserRecord = {
 
@@ -226,6 +227,23 @@ export interface AuthStore {
   setDefaultRepoIfEmpty(projectId: string, repoId: string, updatedAt: Date): Promise<ProjectRecord>;
   runRetention(now: Date): Promise<RetentionCounts>;
   expireLocks(now: Date): Promise<ExpireLocksCounts>;
+  findProjectRepoByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord | undefined>;
+  listProjectReposByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord[]>;
+  findTaskByGithubIssueId(
+    projectId: string,
+    githubIssueId: bigint,
+  ): Promise<TaskRecord | undefined>;
+  findGithubInstallationByInstallationId(
+    installationId: bigint,
+  ): Promise<GithubInstallationRecord | undefined>;
+  upsertGithubInstallation(row: GithubInstallationRecord): Promise<GithubInstallationRecord>;
+  findGithubSyncState(repoId: string): Promise<GithubSyncStateRecord | undefined>;
+  upsertGithubSyncState(row: GithubSyncStateRecord): Promise<GithubSyncStateRecord>;
+  updateProjectSettings(
+    id: string,
+    settings: Record<string, unknown>,
+    updatedAt: Date,
+  ): Promise<ProjectRecord | undefined>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -339,7 +357,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly constraints = new Map<string, ConstraintRecord>();
   private readonly decisions = new Map<string, DecisionRecord>();
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
-  private readonly projectRepos = new Map<string, ProjectRepoRef>();
+  private readonly projectRepos = new Map<string, ProjectRepoRecord>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
   private readonly agentSessions = new Map<string, AgentSessionRecord>();
@@ -841,6 +859,9 @@ export class MemoryAuthStore implements AuthStore {
       if (patch.linkedPaths !== undefined) {
         task.linkedPaths = patch.linkedPaths.map((path) => ({ ...path }));
       }
+      if (patch.githubIssueId !== undefined) {
+        task.githubIssueId = patch.githubIssueId;
+      }
       const lockReleased = Boolean(options?.releaseLock && task.lockedBySessionId);
       if (options?.releaseLock) {
         task.lockedBySessionId = null;
@@ -942,28 +963,32 @@ export class MemoryAuthStore implements AuthStore {
     return node ? cloneContextNode(node) : undefined;
   }
 
-  async findContextNodeByScope(scope: {
-    projectId: string;
-    scopeType: ContextNodeRecord["scopeType"];
-    repoId: string | null;
-    path: string;
-    taskId: string | null;
-  }): Promise<ContextNodeRecord | undefined> {
-    const node = this.matchContextNodeByScope(scope);
-    return node ? cloneContextNode(node) : undefined;
+  private findContextNodeByScope(node: ContextNodeRecord): ContextNodeRecord | undefined {
+    for (const existing of this.contextNodes.values()) {
+      if (
+        existing.projectId === node.projectId &&
+        existing.scopeType === node.scopeType &&
+        existing.repoId === node.repoId &&
+        existing.path === node.path &&
+        existing.taskId === node.taskId
+      ) {
+        return existing;
+      }
+    }
+    return undefined;
   }
 
   seedContextNode(node: ContextNodeRecord): void {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
 
-  seedProjectRepo(repo: ProjectRepoRef): void {
-    this.projectRepos.set(repo.id, { ...repo });
+  seedProjectRepo(repo: ProjectRepoRecord): void {
+    this.projectRepos.set(repo.id, cloneProjectRepo(repo));
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
     return this.enqueueWrite(() => {
-      const existing = this.matchContextNodeByScope(node);
+      const existing = this.findContextNodeByScope(node);
       if (existing) {
         existing.sections = node.sections.map((section) => ({ ...section }));
         existing.sectionsText = node.sectionsText;
@@ -1037,13 +1062,7 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
-    return this.enqueueWrite(() => {
-      if (this.constraints.has(constraint.id)) {
-        throw new UniqueViolationError("constraints_pkey");
-      }
-      this.constraints.set(constraint.id, cloneConstraint(constraint));
-      return cloneConstraint(constraint);
-    });
+    return this.createConstraint(constraint);
   }
 
   seedConstraint(constraint: ConstraintRecord): void {
@@ -1229,9 +1248,7 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneToken(token));
       }
     }
-    result.sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
-    );
+    result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
     return result;
   }
 
@@ -1573,8 +1590,8 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async findProjectRepo(id: string): Promise<ProjectRepoRef | undefined> {
-    const repo = this.projectRepos.get(id);
-    return repo ? { ...repo } : undefined;
+    const repo = await this.findProjectRepoById(id);
+    return repo ? { id: repo.id, projectId: repo.projectId } : undefined;
   }
 
   private insertConstraintUnlocked(constraint: ConstraintRecord): ConstraintRecord {
@@ -1776,6 +1793,89 @@ export class MemoryAuthStore implements AuthStore {
       sessionsAbandoned: decided.sessionIds.length,
     };
   }
+  private readonly githubInstallations = new Map<string, GithubInstallationRecord>();
+  private readonly githubSyncState = new Map<string, GithubSyncStateRecord>();
+
+  async findProjectRepoByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord | undefined> {
+    const [repo] = await this.listProjectReposByGithubRepoId(githubRepoId);
+    return repo;
+  }
+
+  async listProjectReposByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord[]> {
+    const result: ProjectRepoRecord[] = [];
+    for (const repo of this.projectRepos.values()) {
+      if (repo.githubRepoId === githubRepoId) {
+        result.push(cloneProjectRepo(repo));
+      }
+    }
+    result.sort((a, b) => a.id.localeCompare(b.id));
+    return result;
+  }
+
+  async findTaskByGithubIssueId(
+    projectId: string,
+    githubIssueId: bigint,
+  ): Promise<TaskRecord | undefined> {
+    for (const task of this.tasks.values()) {
+      if (task.projectId === projectId && !task.deletedAt && task.githubIssueId === githubIssueId) {
+        return cloneTask(task);
+      }
+    }
+    return undefined;
+  }
+
+  async findGithubInstallationByInstallationId(
+    installationId: bigint,
+  ): Promise<GithubInstallationRecord | undefined> {
+    for (const row of this.githubInstallations.values()) {
+      if (row.installationId === installationId) {
+        return cloneGithubInstallation(row);
+      }
+    }
+    return undefined;
+  }
+
+  async upsertGithubInstallation(row: GithubInstallationRecord): Promise<GithubInstallationRecord> {
+    return this.enqueueWrite(() => {
+      for (const existing of this.githubInstallations.values()) {
+        if (existing.installationId === row.installationId) {
+          existing.orgId = row.orgId;
+          existing.accountLogin = row.accountLogin;
+          return cloneGithubInstallation(existing);
+        }
+      }
+      this.githubInstallations.set(row.id, cloneGithubInstallation(row));
+      return cloneGithubInstallation(row);
+    });
+  }
+
+  async findGithubSyncState(repoId: string): Promise<GithubSyncStateRecord | undefined> {
+    const row = this.githubSyncState.get(repoId);
+    return row ? cloneGithubSyncState(row) : undefined;
+  }
+
+  async upsertGithubSyncState(row: GithubSyncStateRecord): Promise<GithubSyncStateRecord> {
+    return this.enqueueWrite(() => {
+      this.githubSyncState.set(row.repoId, cloneGithubSyncState(row));
+      return cloneGithubSyncState(row);
+    });
+  }
+
+  async updateProjectSettings(
+    id: string,
+    settings: Record<string, unknown>,
+    updatedAt: Date,
+  ): Promise<ProjectRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const project = this.projects.get(id);
+      if (!project || project.deletedAt) {
+        return undefined;
+      }
+      project.settings = { ...settings };
+      project.updatedAt = new Date(updatedAt);
+      return cloneProject(project);
+    });
+  }
     string,
     { response: unknown; createdAt: Date }
   >();
@@ -1885,4 +1985,15 @@ export class ProjectNotFoundError extends Error {
   constructor() {
     super("project not found");
   }
+}
+
+function cloneGithubInstallation(row: GithubInstallationRecord): GithubInstallationRecord {
+  return { ...row, createdAt: new Date(row.createdAt) };
+}
+
+function cloneGithubSyncState(row: GithubSyncStateRecord): GithubSyncStateRecord {
+  return {
+    ...row,
+    lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt) : null,
+  };
 }

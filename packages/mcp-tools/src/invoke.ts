@@ -1,14 +1,8 @@
 import { createHttpCodeSource } from "./code-source.js";
-import { handoffWriteUnavailable, integrationUnavailable, invalidArguments } from "./errors.js";
+import { handoffWriteUnavailable, invalidArguments, repoAmbiguous } from "./errors.js";
 import { apiRequest, requireProjectId } from "./http.js";
 import type { InvokeContext, JsonObject } from "./types.js";
-import {
-  isGithubTool,
-  isToolName,
-  parseToolArgs,
-  type ToolArgs,
-  type ToolName,
-} from "./tools.js";
+import { isToolName, parseToolArgs, type ToolArgs, type ToolName } from "./tools.js";
 
 function omitUndefined(value: JsonObject): JsonObject {
   const out: JsonObject = {};
@@ -50,6 +44,14 @@ function argsOf<T extends ToolName>(tool: T, args: unknown): ToolArgs<T> {
   return parsed.data;
 }
 
+function resolveRepoId(repoId: string | undefined, ctx: InvokeContext): string {
+  const resolved = repoId ?? ctx.defaultRepoId;
+  if (!resolved) {
+    throw repoAmbiguous();
+  }
+  return resolved;
+}
+
 async function projectIdOfTask(taskId: string, ctx: InvokeContext): Promise<string> {
   const task = (await apiRequest(ctx, {
     method: "GET",
@@ -62,14 +64,47 @@ async function projectIdOfTask(taskId: string, ctx: InvokeContext): Promise<stri
 }
 
 async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): Promise<unknown> {
-  if (isGithubTool(tool)) {
-    if (!parseToolArgs(tool, args).ok) {
-      throw invalidArguments();
-    }
-    throw integrationUnavailable();
-  }
-
   switch (tool) {
+    case "github_list_prs": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "GET",
+        path: `/v1/repos/${resolveRepoId(data.repo_id, ctx)}/github/pulls`,
+        query: {
+          state: data.state,
+          task_id: data.task_id,
+        },
+      });
+    }
+    case "github_list_issues": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "GET",
+        path: `/v1/repos/${resolveRepoId(data.repo_id, ctx)}/github/issues`,
+        query: {
+          state: data.state,
+          q: data.q,
+        },
+      });
+    }
+    case "github_link_issue": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "POST",
+        path: `/v1/tasks/${data.task_id}/github-issue`,
+        body: omitUndefined({
+          issue_number: data.issue_number,
+          repo_id: data.repo_id ?? ctx.defaultRepoId,
+        }),
+      });
+    }
+    case "github_sync_now": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "POST",
+        path: `/v1/repos/${resolveRepoId(data.repo_id, ctx)}/github/sync`,
+      });
+    }
     case "get_project":
       return apiRequest(ctx, {
         method: "GET",
@@ -304,11 +339,7 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
   }
 }
 
-export async function invoke(
-  tool: string,
-  args: unknown,
-  ctx: InvokeContext,
-): Promise<unknown> {
+export async function invoke(tool: string, args: unknown, ctx: InvokeContext): Promise<unknown> {
   if (!isToolName(tool)) {
     throw invalidArguments(`unknown tool: ${tool}`);
   }

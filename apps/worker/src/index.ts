@@ -15,6 +15,14 @@ export {
   RETENTION_QUEUE,
   runExpireLocksJob,
   runRetentionJob,
+import { runGithubImportJob, runGithubInvalidateJob } from "./github.js";
+import {
+  DETECT_QUEUE,
+  GITHUB_IMPORT_QUEUE,
+  GITHUB_INVALIDATE_QUEUE,
+  isDetectJobData,
+  isGithubImportJobData,
+  isGithubInvalidateJobData,
 } from "./jobs.js";
 
 export const packageName = "@beacon/worker";
@@ -36,6 +44,8 @@ async function main(): Promise<void> {
 
   await boss.start();
   await boss.createQueue(DETECT_QUEUE);
+  await boss.createQueue(GITHUB_IMPORT_QUEUE);
+  await boss.createQueue(GITHUB_INVALIDATE_QUEUE);
 
   const api = createWorkerApi({ apiUrl: config.apiUrl, token: config.workerToken });
 
@@ -47,8 +57,30 @@ async function main(): Promise<void> {
       await runDetectJob(job.data, { api, workspace: config.workspace });
     }
   });
+  await boss.work(GITHUB_IMPORT_QUEUE, async (jobs) => {
+    for (const job of jobs) {
+      if (!isGithubImportJobData(job.data)) {
+        throw new Error("invalid github import job payload");
+      }
+      await runGithubImportJob(job.data, { api });
+    }
+  });
+  await boss.work(GITHUB_INVALIDATE_QUEUE, async (jobs) => {
+    for (const job of jobs) {
+      if (!isGithubInvalidateJobData(job.data)) {
+        throw new Error("invalid github invalidate job payload");
+      }
+      await runGithubInvalidateJob(job.data, { api });
+    }
+  });
 
-  console.log(JSON.stringify({ level: "info", msg: "worker listening", queue: DETECT_QUEUE }));
+  console.log(
+    JSON.stringify({
+      level: "info",
+      msg: "worker listening",
+      queues: [DETECT_QUEUE, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE],
+    }),
+  );
 }
 
 const launchedDirectly =

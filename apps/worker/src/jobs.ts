@@ -1,11 +1,32 @@
 export const DETECT_QUEUE = "detect";
+export const GITHUB_IMPORT_QUEUE = "github_import";
+export const GITHUB_INVALIDATE_QUEUE = "github_invalidate";
 
 export type DetectJobData = {
   repo_id: string;
   project_id: string;
 };
+
+export type GithubImportJobData = {
+  repo_id: string;
+  project_id: string;
+  issue_number?: number;
+};
+
+export type GithubInvalidateJobData = {
+  repo_id: string;
+  project_id: string;
+  ref?: string;
+  before?: string;
+  after?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export function isDetectJobData(value: unknown): value is DetectJobData {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return false;
   }
   const record = value as Record<string, unknown>;
@@ -20,4 +41,18 @@ export async function runRetentionJob(api: WorkerApi): Promise<RetentionResult> 
 }
 export async function runExpireLocksJob(api: WorkerApi): Promise<ExpireLocksResult> {
   return api.expireLocks();
+  return typeof value["repo_id"] === "string" && typeof value["project_id"] === "string";
+
+export function isGithubImportJobData(value: unknown): value is GithubImportJobData {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (typeof value["repo_id"] !== "string" || typeof value["project_id"] !== "string") {
+  const issueNumber = value["issue_number"];
+  return (
+    issueNumber === undefined ||
+    (typeof issueNumber === "number" && Number.isInteger(issueNumber) && issueNumber > 0)
+  );
+export function isGithubInvalidateJobData(value: unknown): value is GithubInvalidateJobData {
+  return isDetectJobData(value);
 }

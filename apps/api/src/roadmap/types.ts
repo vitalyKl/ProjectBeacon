@@ -85,6 +85,7 @@ export type TaskPatch = {
   assigneeAgentName?: string | null;
   agentBrief?: string;
   linkedPaths?: LinkedPath[];
+  githubIssueId?: bigint | null;
 };
 
 export type TaskCommentRecord = {

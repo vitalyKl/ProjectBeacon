@@ -73,6 +73,44 @@ describe("worker /v1 client", () => {
     expect(calls.some((call) => call.url.includes("/tasks?limit=100"))).toBe(true);
   });
 
+  it("imports issues and records invalidation through /v1", async () => {
+    const calls: string[] = [];
+    const api = createWorkerApi({
+      apiUrl: "http://api:8080",
+      token: "worker-secret",
+      fetchImpl: async (input, init) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        calls.push(`${init?.method ?? "GET"} ${url}`);
+        if (url.includes("/github/issues")) {
+          return Response.json({
+            items: [
+              {
+                id: "9001",
+                number: 12,
+                title: "Broken login",
+                body: "",
+                state: "open",
+                html_url: "https://github.com/acme/demo/issues/12",
+              },
+            ],
+          });
+        }
+        return Response.json({ ok: true }, { status: 202 });
+      },
+    });
+    await api.listGithubIssues("repo-1", { state: "all" });
+    await api.upsertImportedIssues(
+      "repo-1",
+      [{ github_issue_id: "9001", number: 12, title: "Broken login", body: "" }],
+      "cursor-1",
+    );
+    await api.recordGithubInvalidation("repo-1", { ref: "refs/heads/main" });
+    expect(calls[0]).toContain("/v1/repos/repo-1/github/issues");
+    expect(calls[1]).toContain("/v1/repos/repo-1/github/imported-issues");
+    expect(calls[2]).toContain("/v1/repos/repo-1/github/invalidations");
+  });
+
   it("follows next_cursor when listing milestones and tasks", async () => {
     const milestoneUrls: string[] = [];
     const taskUrls: string[] = [];

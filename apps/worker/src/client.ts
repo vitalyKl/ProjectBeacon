@@ -28,6 +28,17 @@ export type TaskView = {
   id: string;
   title: string;
   milestone_id: string | null;
+  github_issue_id?: string | null;
+  version?: number;
+};
+
+export type GithubIssueView = {
+  id: string;
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  html_url: string;
 };
 
 export type WorkerApi = {
@@ -54,6 +65,25 @@ export type WorkerApi = {
     },
     idempotencyKey: string,
   ): Promise<{ id: string }>;
+  listGithubIssues(
+    repoId: string,
+    query?: { state?: string; q?: string },
+  ): Promise<GithubIssueView[]>;
+  getGithubIssue(repoId: string, issueNumber: number): Promise<GithubIssueView | undefined>;
+  upsertImportedIssues(
+    repoId: string,
+    issues: Array<{
+      github_issue_id: string;
+      number: number;
+      title: string;
+      body: string;
+    }>,
+    cursor?: string | null,
+  ): Promise<unknown>;
+  recordGithubInvalidation(
+    repoId: string,
+    body: { ref?: string; before?: string; after?: string },
+  ): Promise<unknown>;
 };
 
 export type RepoView = {
@@ -62,6 +92,9 @@ export type RepoView = {
   provider: string;
   local_root_hint: string | null;
   index_mode: string;
+  remote_url?: string | null;
+  github_repo_id?: string | null;
+  installation_id?: string | null;
 };
 
 const PAGE_LIMIT = 100;
@@ -177,6 +210,32 @@ export function createWorkerApi(options: {
         body,
         idempotencyKey,
       });
+    },
+    async listGithubIssues(repoId, query) {
+      const params = new URLSearchParams({ limit: String(PAGE_LIMIT) });
+      if (query?.state) {
+        params.set("state", query.state);
+      }
+      if (query?.q) {
+        params.set("q", query.q);
+      }
+      const page = await request<{ items: GithubIssueView[] }>(
+        "GET",
+        `/v1/repos/${repoId}/github/issues?${params.toString()}`,
+      );
+      return page.items;
+    },
+    async getGithubIssue(repoId, issueNumber) {
+      const items = await this.listGithubIssues(repoId, { state: "all" });
+      return items.find((item) => item.number === issueNumber);
+    },
+    upsertImportedIssues(repoId, issues, cursor) {
+      return request("POST", `/v1/repos/${repoId}/github/imported-issues`, {
+        body: { issues, cursor: cursor ?? null },
+      });
+    },
+    recordGithubInvalidation(repoId, body) {
+      return request("POST", `/v1/repos/${repoId}/github/invalidations`, { body });
     },
   };
 }
