@@ -339,6 +339,24 @@ export async function saveProjectBrief(
   return parseJson<PublicContextNode>(res);
 }
 
+export async function fetchProjectMilestones(projectId: string): Promise<PublicMilestone[]> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/milestones`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load milestones");
+  }
+  const body = await parseJson<{ items: PublicMilestone[] }>(res);
+  return body.items;
+}
+
+export async function fetchProjectTasks(projectId: string): Promise<PublicTask[]> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/tasks`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load tasks");
+  }
+  const body = await parseJson<{ items: PublicTask[] }>(res);
+  return body.items;
+}
+
 export async function createMilestone(
   projectId: string,
   input: { title: string; description?: string },

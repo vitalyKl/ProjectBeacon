@@ -45,8 +45,11 @@ export function parseBindMountHint(value: unknown): string | undefined {
     return undefined;
   }
   const parts = trimmed.split("/").filter((part) => part.length > 0 && part !== ".");
-  if (parts.length === 0 || parts.some((part) => part === ".." || part.includes("\0"))) {
+  if (parts.some((part) => part === ".." || part.includes("\0"))) {
     return undefined;
+  }
+  if (parts.length === 0) {
+    return ".";
   }
   return parts.join("/");
 }
@@ -193,7 +196,7 @@ export function mountRepos(app: Hono, deps: AuthDeps): void {
     }
     const access = await authorizeProjectActor(c, deps, actor, repo.projectId, "project:read");
     if (isResponse(access)) {
-      return access;
+      return errorJson(c, 404, "not_found", "repo not found");
     }
     return c.json(presentProjectRepo(repo));
   });

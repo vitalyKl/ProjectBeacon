@@ -10,6 +10,8 @@ import {
   createProjectRepo,
   createTask,
   fetchMe,
+  fetchProjectMilestones,
+  fetchProjectTasks,
   mintProjectToken,
   saveProjectBrief,
   requestRepoDetect,
@@ -70,6 +72,8 @@ export function ProjectWizard({
   const [nonGoals, setNonGoals] = useState("Do not invent extra scope before the first milestone.");
   const [milestoneTitle, setMilestoneTitle] = useState("First slice");
   const [taskTitle, setTaskTitle] = useState("Confirm repo layout and fill the first brief");
+  const [milestoneId, setMilestoneId] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const [briefSaved, setBriefSaved] = useState(false);
 
   const [agentTab, setAgentTab] = useState<AgentTab>("stdio");
@@ -202,12 +206,36 @@ export function ProjectWizard({
         { id: "goals", title: "Goals", body_md: goals, ordinal: 0 },
         { id: "non_goals", title: "Non-goals", body_md: nonGoals, ordinal: 1 },
       ]);
-      const milestone = await createMilestone(project.id, { title: milestoneTitle.trim() });
-      await createTask(project.id, {
-        title: taskTitle.trim(),
-        milestone_id: milestone.id,
-        description: "Proposed first task from the new-project wizard.",
-      });
+      const wantedMilestone = milestoneTitle.trim();
+      const wantedTask = taskTitle.trim();
+      let nextMilestoneId = milestoneId;
+      if (!nextMilestoneId) {
+        const existingMilestone = (await fetchProjectMilestones(project.id)).find(
+          (item) => item.title === wantedMilestone,
+        );
+        if (existingMilestone) {
+          nextMilestoneId = existingMilestone.id;
+        } else {
+          const created = await createMilestone(project.id, { title: wantedMilestone });
+          nextMilestoneId = created.id;
+        }
+        setMilestoneId(nextMilestoneId);
+      }
+      if (!taskId) {
+        const existingTask = (await fetchProjectTasks(project.id)).find(
+          (item) => item.title === wantedTask && item.milestone_id === nextMilestoneId,
+        );
+        if (existingTask) {
+          setTaskId(existingTask.id);
+        } else {
+          const created = await createTask(project.id, {
+            title: wantedTask,
+            milestone_id: nextMilestoneId,
+            description: "Proposed first task from the new-project wizard.",
+          });
+          setTaskId(created.id);
+        }
+      }
       setBriefSaved(true);
       setStep(4);
     } catch (caught) {

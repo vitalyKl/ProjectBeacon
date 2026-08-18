@@ -62,6 +62,8 @@ describe("parseBindMountHint", () => {
   it("accepts a relative POSIX path and rejects traversal or absolute paths", () => {
     expect(parseBindMountHint("apps/web")).toBe("apps/web");
     expect(parseBindMountHint("./apps/web")).toBe("apps/web");
+    expect(parseBindMountHint(".")).toBe(".");
+    expect(parseBindMountHint("./")).toBe(".");
     expect(parseBindMountHint("/workspace/apps")).toBeUndefined();
     expect(parseBindMountHint("../secret")).toBeUndefined();
     expect(parseBindMountHint("C:/Windows")).toBeUndefined();
@@ -137,6 +139,23 @@ describe("project repos", () => {
     expect(created.status).toBe(400);
   });
 
+  it("accepts the workspace root as a bind-mount hint", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "root");
+    const created = await alice.app.request(`/v1/projects/${project.id}/repos`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "local",
+        index_mode: "bind_mount",
+        local_root_hint: ".",
+      }),
+    });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ local_root_hint: "." });
+  });
+
   it("maps a duplicate local root to 409", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");
@@ -187,6 +206,8 @@ describe("project repos", () => {
       headers: { cookie: cookieHeader(bob.token) },
     });
     expect(got.status).toBe(404);
-    expect(await got.json()).toMatchObject({ error: { code: "not_found" } });
+    expect(await got.json()).toMatchObject({
+      error: { code: "not_found", message: "repo not found" },
+    });
   });
 });
