@@ -172,6 +172,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             </option>
           ))}
         </select>
+        <Link
+          className="rounded-md border border-border px-3 py-1.5 text-sm"
+          href="/app/projects/new"
+        >
+          New project
+        </Link>
         <div className="ml-auto flex items-center gap-3 text-sm">
           <span className="text-muted">{me.login}</span>
           <button

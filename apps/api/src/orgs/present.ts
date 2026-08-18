@@ -49,6 +49,7 @@ export function presentProject(project: ProjectRecord) {
     name: project.name,
     description: project.description,
     visibility: project.visibility,
+    default_repo_id: project.defaultRepoId,
     deleted_at: project.deletedAt ? project.deletedAt.toISOString() : null,
     created_at: project.createdAt.toISOString(),
     updated_at: project.updatedAt.toISOString(),

@@ -35,6 +35,7 @@ export type ProjectRecord = {
   name: string;
   description: string;
   visibility: ProjectVisibility;
+  defaultRepoId: string | null;
   settings: Record<string, unknown>;
   deletedAt: Date | null;
   createdAt: Date;

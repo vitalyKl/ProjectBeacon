@@ -1,15 +1,7 @@
 import { CompileInputSchema } from "@beacon/api-spec";
-import {
-  compileSessionBrief,
-  exportAgentsMd,
-  mergeSections,
-  parseImportFiles,
-  selectNodes,
-  type ImportFile,
-} from "@beacon/context";
+import { compileSessionBrief, exportAgentsMd, mergeSections, parseImportFiles, selectNodes, type ImportFile } from "@beacon/context";
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Hono } from "hono";
-
 import type { AuthDeps } from "../auth/routes.js";
 import { errorJson } from "../errors.js";
 import { readJson, readObject } from "../http.js";
@@ -17,6 +9,7 @@ import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentConstraint, presentContextNode, presentDecision, presentMilestoneBrief, presentTaskSummary, sectionsText, toCompileNode } from "./present.js";
 import { compileProjectBrief } from "./compile-brief.js";
+import type { ContextNodeRecord } from "./types.js";
 
 const MAX_IMPORT_FILES = 200;
 const MAX_IMPORT_PATH = 1024;
@@ -97,11 +90,100 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       result.items.map(async (node) =>
         presentContextNode(
           node,
-          node.updatedByType === "user" ? await deps.store.findUserById(node.updatedById) : undefined,
+          node.updatedByType === "user"
+            ? await deps.store.findUserById(node.updatedById)
+            : undefined,
         ),
       ),
     );
     return c.json({ items, next_cursor: result.next_cursor });
+  });
+
+  app.post("/v1/projects/:id/context/nodes", async (c) => {
+    const session = await requireSession(c, deps);
+    if (isResponse(session)) {
+      return session;
+    }
+    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
+    if (access instanceof Response) {
+      return access;
+    }
+    const body = await readObject(c);
+    const sections = parseNativeSections(body?.["sections"]);
+    if (!sections) {
+      return errorJson(c, 400, "unauthorized", "sections are required", { reason: "invalid_body" });
+    }
+    const existing = (await deps.store.listContextNodes(access.project.id)).find(
+      (node) =>
+        node.scopeType === "project" &&
+        node.path === "" &&
+        node.taskId === null &&
+        node.repoId === null,
+    );
+    const now = deps.clock.now();
+    const stored = await deps.store.upsertContextNode({
+      id: existing?.id ?? uuidv7(now.getTime()),
+      projectId: access.project.id,
+      repoId: null,
+      taskId: null,
+      scopeType: "project",
+      path: "",
+      sections,
+      sectionsText: sectionsText(sections),
+      source: existing?.source ?? "native",
+      sourcePath: existing?.sourcePath ?? null,
+      reviewState: "reviewed",
+      updatedByType: "user",
+      updatedById: session.user.id,
+      updatedAt: now,
+    });
+    return c.json(presentContextNode(stored, session.user), existing ? 200 : 201);
+  });
+
+  app.put("/v1/projects/:id/context/nodes/:nodeId", async (c) => {
+    const session = await requireSession(c, deps);
+    if (isResponse(session)) {
+      return session;
+    }
+    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "write");
+    if (access instanceof Response) {
+      return access;
+    }
+    const nodeId = c.req.param("nodeId");
+    if (!isUuid(nodeId)) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+
+    const body = await readObject(c);
+    const sections = parseNativeSections(body?.["sections"]);
+    if (!sections) {
+      return errorJson(c, 400, "unauthorized", "sections are required", { reason: "invalid_body" });
+    }
+
+    const existing = (await deps.store.listContextNodes(access.project.id)).find(
+      (node) => node.id === nodeId,
+    );
+    if (!existing) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+    const now = deps.clock.now();
+    const stored = await deps.store.upsertContextNode({
+      id: existing.id,
+      projectId: access.project.id,
+      repoId: existing.repoId,
+      taskId: existing.taskId,
+      scopeType: existing.scopeType,
+      path: existing.path,
+      sections,
+      sectionsText: sectionsText(sections),
+      source: existing.source,
+      sourcePath: existing.sourcePath,
+      reviewState: "reviewed",
+      updatedByType: "user",
+      updatedById: session.user.id,
+      updatedAt: now,
+    });
+    return c.json(presentContextNode(stored, session.user));
   });
 
   app.post("/v1/projects/:id/context/import", async (c) => {
@@ -123,7 +205,12 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     const resolved = await resolveRepoId(deps, access.project.id, repoQuery);
     if (!resolved.ok) {
       if (resolved.reason === "ambiguous") {
-        return errorJson(c, 400, "repo_ambiguous", "repo_id is required when the project has multiple repos");
+        return errorJson(
+          c,
+          400,
+          "repo_ambiguous",
+          "repo_id is required when the project has multiple repos",
+        );
       }
       return errorJson(c, 404, "not_found", "repo not found");
     }
@@ -135,12 +222,31 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       const key = `${incoming.scope_type}:${repoId ?? ""}:${incoming.path}`;
       const existing = mergedIncoming.get(key);
       if (!existing) {
-        mergedIncoming.set(key, { ...incoming, sections: incoming.sections.map((section) => ({ ...section })) });
+        mergedIncoming.set(key, {
+          ...incoming,
+          sections: incoming.sections.map((section) => ({ ...section })),
+        });
         continue;
       }
       existing.sections = mergeSections([
-        { id: "existing", project_id: access.project.id, repo_id: repoId, task_id: null, scope_type: incoming.scope_type, path: incoming.path, sections: existing.sections },
-        { id: "incoming", project_id: access.project.id, repo_id: repoId, task_id: null, scope_type: incoming.scope_type, path: incoming.path, sections: incoming.sections },
+        {
+          id: "existing",
+          project_id: access.project.id,
+          repo_id: repoId,
+          task_id: null,
+          scope_type: incoming.scope_type,
+          path: incoming.path,
+          sections: existing.sections,
+        },
+        {
+          id: "incoming",
+          project_id: access.project.id,
+          repo_id: repoId,
+          task_id: null,
+          scope_type: incoming.scope_type,
+          path: incoming.path,
+          sections: incoming.sections,
+        },
       ]);
       existing.source_path = incoming.source_path;
       existing.source = incoming.source;
@@ -217,9 +323,7 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     }
 
     return c.json({
-      nodes: await Promise.all(
-        nodes.map(async (node) => presentContextNode(node, session.user)),
-      ),
+      nodes: await Promise.all(nodes.map(async (node) => presentContextNode(node, session.user))),
       code_owners_written: ownersWritten,
     });
   });
@@ -241,7 +345,12 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     const resolved = await resolveRepoId(deps, access.project.id, c.req.query("repo_id"));
     if (!resolved.ok) {
       if (resolved.reason === "ambiguous") {
-        return errorJson(c, 400, "repo_ambiguous", "repo_id is required when the project has multiple repos");
+        return errorJson(
+          c,
+          400,
+          "repo_ambiguous",
+          "repo_id is required when the project has multiple repos",
+        );
       }
       return errorJson(c, 404, "not_found", "repo not found");
     }
@@ -309,27 +418,109 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       });
     }
 
-    const now = deps.clock.now();
-    const compiled = await compileProjectBrief(deps.store, access.project, input, now);
-    if (!compiled.ok) {
-      return errorJson(c, 404, "not_found", "task not found");
+    let taskSummary = null;
+    let milestone = null;
+    if (input.task_id) {
+      const task = await deps.store.findTaskById(input.task_id);
+      if (!task || task.deletedAt || task.projectId !== access.project.id) {
+        return errorJson(c, 404, "not_found", "task not found");
+      }
+      taskSummary = presentTaskSummary(task);
+      if (task.milestoneId) {
+        const row = await deps.store.findMilestoneById(task.milestoneId);
+        if (row && row.projectId === access.project.id) {
+          milestone = presentMilestoneBrief(row);
+        }
+      }
     }
-    const { compiled: result } = compiled;
+
+    const now = deps.clock.now();
+    const [nodes, constraints, decisions] = await Promise.all([
+      deps.store.listContextNodes(access.project.id),
+      deps.store.listActiveConstraints(access.project.id),
+      deps.store.listAcceptedDecisions(access.project.id),
+    ]);
+
+    const compiled = compileSessionBrief(input, {
+      project: {
+        id: access.project.id,
+        name: access.project.name,
+        slug: access.project.slug,
+      },
+      nodes: nodes.map(toCompileNode),
+      constraints: constraints.map(presentConstraint),
+      decisions: decisions.map(presentDecision),
+      task: taskSummary,
+      milestone,
+      revision_id: uuidv7(now.getTime()),
+      compiled_at: now.toISOString(),
+    });
 
     await deps.store.insertContextRevision({
-      id: result.brief.revision_id,
+      id: compiled.brief.revision_id,
       projectId: access.project.id,
-      compiledHash: result.brief.compiled_hash,
-      compilerVersion: result.brief.compiler_version,
-      target: result.brief.target,
-      briefMarkdown: result.markdown,
-      briefJson: result.brief as unknown as Record<string, unknown>,
-      tokenEstimate: result.brief.budget.used_estimate,
-      sourceNodeIds: result.brief.sources.map((source) => source.node_id),
+      compiledHash: compiled.brief.compiled_hash,
+      compilerVersion: compiled.brief.compiler_version,
+      target: compiled.brief.target,
+      briefMarkdown: compiled.markdown,
+      briefJson: compiled.brief as unknown as Record<string, unknown>,
+      tokenEstimate: compiled.brief.budget.used_estimate,
+      sourceNodeIds: compiled.brief.sources.map((source) => source.node_id),
       sessionId: null,
       createdAt: now,
     });
 
-    return c.json(result.brief);
+    return c.json(compiled.brief);
   });
+}
+
+const KNOWN_SECTION_IDS = [
+  "goals",
+  "non_goals",
+  "architecture",
+  "conventions",
+  "glossary",
+  "ownership",
+  "pitfalls",
+  "commands",
+  "stack",
+  "security",
+  "style",
+] as const;
+
+function parseNativeSections(value: unknown): ContextNodeRecord["sections"] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const sections: ContextNodeRecord["sections"] = [];
+  for (const [index, item] of value.entries()) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      return undefined;
+    }
+    const record = item as Record<string, unknown>;
+    const title = typeof record["title"] === "string" ? record["title"].trim() : "";
+    const bodyMd = typeof record["body_md"] === "string" ? record["body_md"] : "";
+    const id = typeof record["id"] === "string" ? record["id"] : "custom";
+    if (!title) {
+      return undefined;
+    }
+    if (id === "custom") {
+      const key =
+        typeof record["key"] === "string" && record["key"].trim().length > 0
+          ? record["key"].trim()
+          : `section-${index + 1}`;
+      sections.push({ id: "custom", key, title, body_md: bodyMd, ordinal: index });
+      continue;
+    }
+    if (!(KNOWN_SECTION_IDS as readonly string[]).includes(id)) {
+      return undefined;
+    }
+    sections.push({
+      id: id as (typeof KNOWN_SECTION_IDS)[number],
+      title,
+      body_md: bodyMd,
+      ordinal: index,
+    });
+  }
+  return sections;
 }

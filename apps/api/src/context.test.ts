@@ -109,6 +109,46 @@ describe("GET /v1/projects/:id/context/nodes", () => {
   });
 });
 
+describe("PUT /v1/projects/:id/context/nodes/:nodeId", () => {
+  it("creates a project-scope native brief via POST and updates it by id", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "brief");
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        sections: [
+          { id: "goals", title: "Goals", body_md: "Ship.", ordinal: 0 },
+          { id: "non_goals", title: "Non-goals", body_md: "Scope creep.", ordinal: 1 },
+        ],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const node = (await created.json()) as {
+      id: string;
+      scope_type: string;
+      sections: { id: string }[];
+    };
+    expect(node.scope_type).toBe("project");
+    expect(node.sections.map((section) => section.id)).toEqual(["goals", "non_goals"]);
+
+    const updated = await alice.app.request(`/v1/projects/${project.id}/context/nodes/${node.id}`, {
+      method: "PUT",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        sections: [{ id: "goals", title: "Goals", body_md: "Ship the first slice.", ordinal: 0 }],
+      }),
+    });
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      id: node.id,
+      sections: [expect.objectContaining({ body_md: "Ship the first slice." })],
+    });
+  });
+});
+
 describe("POST /v1/projects/:id/context/import", () => {
   it("parses files, upserts nodes as needs_review, and writes CODEOWNERS", async () => {
     const store = new MemoryAuthStore();
@@ -136,7 +176,10 @@ describe("POST /v1/projects/:id/context/import", () => {
         headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
         body: JSON.stringify({
           files: [
-            { path: "AGENTS.md", content: "## Goals\nShip the compiler.\n\n## Security\nNo tokens.\n" },
+            {
+              path: "AGENTS.md",
+              content: "## Goals\nShip the compiler.\n\n## Security\nNo tokens.\n",
+            },
             { path: "CONVENTIONS.md", content: "## Conventions\nMatch existing routes.\n" },
             {
               path: "CODEOWNERS",

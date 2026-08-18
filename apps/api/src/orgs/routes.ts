@@ -56,9 +56,9 @@ async function resolveOrg(deps: AuthDeps, ref: string): Promise<OrgRecord | unde
   return deps.store.findOrgBySlug(ref.toLowerCase());
 }
 
-function parseInviteTarget(body: Record<string, unknown> | undefined):
-  | { email: string | null; githubLogin: string | null }
-  | undefined {
+function parseInviteTarget(
+  body: Record<string, unknown> | undefined,
+): { email: string | null; githubLogin: string | null } | undefined {
   if (!body) {
     return undefined;
   }
@@ -213,9 +213,15 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
     const target = parseInviteTarget(body);
     const roleRaw = typeof body?.["role"] === "string" ? body["role"] : "member";
     if (!target || !isOrgInviteRole(roleRaw)) {
-      return errorJson(c, 400, "unauthorized", "email or github_login and a valid role are required", {
-        reason: "invalid_body",
-      });
+      return errorJson(
+        c,
+        400,
+        "unauthorized",
+        "email or github_login and a valid role are required",
+        {
+          reason: "invalid_body",
+        },
+      );
     }
     const role: OrgInviteRole = roleRaw;
     const now = deps.clock.now();
@@ -310,6 +316,7 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
           name,
           description,
           visibility: "private",
+          defaultRepoId: null,
           settings: {},
           deletedAt: null,
           createdAt: now,
@@ -496,9 +503,15 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
     const target = parseInviteTarget(body);
     const roleRaw = typeof body?.["role"] === "string" ? body["role"] : "read";
     if (!target || !isProjectRole(roleRaw)) {
-      return errorJson(c, 400, "unauthorized", "email or github_login and a valid role are required", {
-        reason: "invalid_body",
-      });
+      return errorJson(
+        c,
+        400,
+        "unauthorized",
+        "email or github_login and a valid role are required",
+        {
+          reason: "invalid_body",
+        },
+      );
     }
     const now = deps.clock.now();
     const invite = await deps.store.createProjectInvite({

@@ -1,8 +1,4 @@
-import {
-  DEFAULT_SECURITY_CONSTRAINTS,
-  DEFAULT_SECURITY_CONSTRAINT_KIND,
-  DEFAULT_SECURITY_CONSTRAINT_STATUS,
-} from "@beacon/context";
+import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
 import { uuidv7 } from "@beacon/shared";
 import type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
@@ -127,7 +123,7 @@ export interface AuthStore {
   findProjectById(id: string): Promise<ProjectRecord | undefined>;
   updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string },
+    patch: { name?: string; description?: string; slug?: string; defaultRepoId?: string | null },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined>;
   softDeleteProject(id: string, deletedAt: Date): Promise<ProjectRecord | undefined>;
@@ -202,7 +198,7 @@ export interface AuthStore {
     now: Date,
     produce: (writes: IdempotentWrites) => Promise<unknown>,
   ): Promise<unknown>;
-  findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined>;
+  findAgentSessionById(id: string): Promise<AgentSessionRef | undefined>;
   listAgentSessions(projectId: string): Promise<AgentSessionRecord[]>;
   heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
   finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
@@ -215,6 +211,7 @@ export interface AuthStore {
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
   findProjectRepo(id: string): Promise<ProjectRepoRef | undefined>;
   listComments(taskId: string): Promise<TaskCommentRecord[]>;
+  createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -251,6 +248,7 @@ function cloneOrgInvite(invite: OrgInviteRecord): OrgInviteRecord {
 function cloneProject(project: ProjectRecord): ProjectRecord {
   return {
     ...project,
+    defaultRepoId: project.defaultRepoId,
     settings: { ...project.settings },
     createdAt: new Date(project.createdAt),
     updatedAt: new Date(project.updatedAt),
@@ -328,10 +326,10 @@ export class MemoryAuthStore implements AuthStore {
   private readonly constraints = new Map<string, ConstraintRecord>();
   private readonly decisions = new Map<string, DecisionRecord>();
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
-  private readonly projectRepos = new Map<string, ProjectRepoRef>();
+  private readonly projectRepos = new Map<string, ProjectRepoRecord>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
-  private readonly agentSessions = new Map<string, AgentSessionRecord>();
+  private readonly agentSessions = new Map<string, AgentSessionRef>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -602,6 +600,7 @@ export class MemoryAuthStore implements AuthStore {
         role: "admin",
         createdAt: project.createdAt,
       });
+      this.seedDefaultSecurityConstraints(project.id, project.createdAt);
       return cloneProject(project);
     });
   }
@@ -630,7 +629,7 @@ export class MemoryAuthStore implements AuthStore {
 
   async updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string },
+    patch: { name?: string; description?: string; slug?: string; defaultRepoId?: string | null },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined> {
     return this.enqueueWrite(() => {
@@ -655,6 +654,9 @@ export class MemoryAuthStore implements AuthStore {
       }
       if (patch.description !== undefined) {
         project.description = patch.description;
+      }
+      if (patch.defaultRepoId !== undefined) {
+        project.defaultRepoId = patch.defaultRepoId;
       }
       project.updatedAt = new Date(updatedAt);
       return cloneProject(project);
@@ -930,8 +932,8 @@ export class MemoryAuthStore implements AuthStore {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
 
-  seedProjectRepo(repo: ProjectRepoRef): void {
-    this.projectRepos.set(repo.id, { ...repo });
+  seedProjectRepo(repo: ProjectRepoRecord): void {
+    this.projectRepos.set(repo.id, cloneProjectRepo(repo));
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
@@ -986,9 +988,7 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneConstraint(constraint));
       }
     }
-    result.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
-    );
+    result.sort((a, b) => a.id.localeCompare(b.id));
     return result;
   }
 
@@ -1077,7 +1077,9 @@ export class MemoryAuthStore implements AuthStore {
         this.codeOwners.set(stored.id, stored);
         written.push(cloneCodeOwner(stored));
       }
-      written.sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
+      written.sort(
+        (a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id),
+      );
       return written;
     });
   }
@@ -1138,11 +1140,6 @@ export class MemoryAuthStore implements AuthStore {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
-        startWork: async (input) => this.startWorkUnlocked(input),
-        createMilestone: async (milestone) => {
-          this.milestones.set(milestone.id, cloneMilestone(milestone));
-          return cloneMilestone(milestone);
-        },
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1284,34 +1281,13 @@ export class MemoryAuthStore implements AuthStore {
     existing.bytes += BigInt(input.bytesDelta);
     return cloneRateBucket(existing);
   }
-  putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
-    if ("agentName" in session) {
-      this.agentSessions.set(session.id, cloneAgentSession(session));
-      return;
-    }
-    const now = new Date();
-    this.agentSessions.set(
-      session.id,
-      cloneAgentSession({
-        id: session.id,
-        projectId: session.projectId,
-        taskId: null,
-        tokenId: null,
-        agentName: "test",
-        agentHost: "custom",
-        status: "active",
-        contextRevisionId: null,
-        startedAt: now,
-        finishedAt: null,
-        lockExpiresAt: null,
-        lastHeartbeatAt: now,
-      }),
-    );
+  putAgentSession(session: AgentSessionRef): void {
+    this.agentSessions.set(session.id, { ...session });
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
     const session = this.agentSessions.get(id);
-    return session ? cloneAgentSession(session) : undefined;
+    return session ? { ...session } : undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -1571,6 +1547,42 @@ export class MemoryAuthStore implements AuthStore {
     );
     return result;
   }
+
+  async createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord> {
+    return this.enqueueWrite(() => {
+      const project = this.projects.get(repo.projectId);
+      if (!project || project.deletedAt) {
+        throw new ProjectNotFoundError();
+      }
+      for (const existing of this.projectRepos.values()) {
+        if (existing.id === repo.id) {
+          throw new UniqueViolationError("project_repos_pkey");
+        }
+        if (
+          repo.githubRepoId !== null &&
+          existing.projectId === repo.projectId &&
+          existing.githubRepoId === repo.githubRepoId
+        ) {
+          throw new UniqueViolationError("project_repos_project_id_github_repo_id_unique");
+        }
+        if (
+          repo.provider === "local" &&
+          repo.localRootHint !== null &&
+          existing.projectId === repo.projectId &&
+          existing.provider === "local" &&
+          existing.localRootHint === repo.localRootHint
+        ) {
+          throw new UniqueViolationError("project_repos_local_root");
+        }
+      }
+      this.projectRepos.set(repo.id, cloneProjectRepo(repo));
+      if (!project.defaultRepoId) {
+        project.defaultRepoId = repo.id;
+        project.updatedAt = new Date();
+      }
+      return cloneProjectRepo(repo);
+    });
+  }
     string,
     { response: unknown; createdAt: Date }
   >();
@@ -1671,3 +1683,11 @@ export type ProjectRepoRef = {
   id: string;
   projectId: string;
 };
+
+export class ProjectNotFoundError extends Error {
+  override readonly name = "ProjectNotFoundError";
+
+  constructor() {
+    super("project not found");
+  }
+}

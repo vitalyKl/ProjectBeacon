@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-
 import { ApiError, createOrgProject } from "@/lib/api";
 import {
   fetchProjectMilestones,
@@ -15,10 +14,8 @@ import {
 import { ensureBeaconSeed } from "@/lib/seed";
 import { useInterval } from "@/lib/use-interval";
 import { useNow } from "@/lib/use-now";
-
 import { LockBadge } from "./lock-badge";
 import { useSelectedProject } from "./project-context";
-
 const HOME_POLL_MS = 5000;
 
 export default function AppHomePage() {
@@ -138,8 +135,6 @@ export default function AppHomePage() {
             </ul>
           )}
         </article>
-
-        <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
           <h2 className="text-sm font-semibold tracking-wide uppercase">Index</h2>
           <dl className="grid grid-cols-2 gap-2 text-sm">
             <dt className="text-muted">Mode</dt>
@@ -147,13 +142,10 @@ export default function AppHomePage() {
             <dt className="text-muted">Sidecar</dt>
             <dd>Offline</dd>
             <dt className="text-muted">Worker</dt>
-            <dd>Offline</dd>
             <dt className="text-muted">Last indexed</dt>
             <dd>—</dd>
           </dl>
-        </article>
       </div>
-
       <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-wide uppercase">In flight</h2>
@@ -190,13 +182,11 @@ export default function AppHomePage() {
     </section>
   );
 }
-
 function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () => Promise<void> }) {
   const [name, setName] = useState("Beacon");
   const [slug, setSlug] = useState("beacon");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -210,16 +200,12 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
       setPending(false);
     }
   }
-
   return (
     <section className="space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
         <p className="max-w-xl text-sm leading-6 text-muted">
           Create a project to start the board. Beacon will add a first milestone and a few starter
           tasks.
         </p>
-      </header>
       <form className="flex max-w-md flex-col gap-3" onSubmit={onSubmit}>
         <label className="flex flex-col gap-1 text-sm">
           Name
@@ -231,16 +217,11 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
             maxLength={120}
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
           Slug
-          <input
             className="h-9 rounded-md border border-border bg-background px-2 font-mono"
             value={slug}
             onChange={(event) => setSlug(event.target.value)}
-            required
             maxLength={64}
-          />
-        </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <button
           className="h-10 rounded-md bg-accent text-sm font-medium text-accent-fg disabled:opacity-60"
@@ -250,6 +231,14 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
           {pending ? "Creating…" : "Create project"}
         </button>
       </form>
+      <div className="space-y-2">
+          Create a project, connect code, and hand a local agent the first brief.
+      <Link
+        className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
+        href="/app/projects/new"
+      >
+        New project
+      </Link>
     </section>
   );
 }

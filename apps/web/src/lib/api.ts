@@ -25,6 +25,54 @@ export type PublicProject = {
   name: string;
   description: string;
   visibility: "private";
+  default_repo_id: string | null;
+};
+
+export type PublicRepo = {
+  id: string;
+  project_id: string;
+  provider: "github" | "local";
+  remote_url: string | null;
+  default_branch: string;
+  local_root_hint: string | null;
+  index_mode: "sidecar" | "bind_mount" | "hosted_clone" | "both";
+  sidecar_connected: boolean;
+  worker_index_connected: boolean;
+  last_indexed_at: string | null;
+  last_indexed_sha: string | null;
+};
+
+export type PublicToken = {
+  id: string;
+  project_id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  token?: string;
+};
+
+export type PublicContextNode = {
+  id: string;
+  project_id: string;
+  scope_type: string;
+  path: string;
+  sections: { id: string; key?: string; title: string; body_md: string; ordinal: number }[];
+};
+
+export type PublicMilestone = {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  status: string;
+};
+
+export type PublicTask = {
+  id: string;
+  project_id: string;
+  milestone_id: string | null;
+  title: string;
+  status: string;
 };
 
 export type ApiErrorBody = {
@@ -96,7 +144,6 @@ export type Page<T> = {
   items: T[];
   next_cursor: string | null;
 };
-
 export async function fetchAllPages<T>(
   load: (cursor: string | null) => Promise<Page<T>>,
 ): Promise<T[]> {
@@ -113,8 +160,6 @@ export async function fetchAllPages<T>(
     seen.add(next);
     cursor = next;
   }
-}
-
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
@@ -195,4 +240,130 @@ export function githubAuthorizeUrl(clientId: string, redirectTo: string): string
   url.searchParams.set("redirect_uri", redirectTo);
   url.searchParams.set("scope", "read:user user:email");
   return url.toString();
+}
+
+export async function createOrgProject(
+  orgId: string,
+  input: { name: string; slug: string },
+): Promise<PublicProject> {
+  const res = await apiFetch(`/v1/orgs/${encodeURIComponent(orgId)}/projects`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to create project");
+  }
+  return parseJson<PublicProject>(res);
+}
+
+export async function createProjectRepo(
+  projectId: string,
+  input: {
+    provider: "github" | "local";
+    index_mode: PublicRepo["index_mode"];
+    local_root_hint?: string;
+  },
+): Promise<PublicRepo> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/repos`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to connect code");
+  }
+  return parseJson<PublicRepo>(res);
+}
+
+export async function fetchProjectRepos(projectId: string): Promise<PublicRepo[]> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/repos`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load repos");
+  }
+  const body = await parseJson<{ items: PublicRepo[] }>(res);
+  return body.items;
+}
+
+export async function fetchRepo(repoId: string): Promise<PublicRepo> {
+  const res = await apiFetch(`/v1/repos/${encodeURIComponent(repoId)}`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load repo");
+  }
+  return parseJson<PublicRepo>(res);
+}
+
+export async function mintProjectToken(projectId: string, name: string): Promise<PublicToken> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/tokens`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to mint token");
+  }
+  return parseJson<PublicToken>(res);
+}
+
+export async function requestRepoDetect(repoId: string): Promise<"started" | "later"> {
+  const res = await apiFetch(`/v1/repos/${encodeURIComponent(repoId)}/detect`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  if (res.ok || res.status === 202) {
+    return "started";
+  }
+  if (res.status === 404 || res.status === 405 || res.status === 501) {
+    return "later";
+  }
+  throw await readApiError(res, "failed to start detect");
+}
+
+export async function fetchContextNodes(projectId: string): Promise<PublicContextNode[]> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load context");
+  }
+  const body = await parseJson<{ items: PublicContextNode[] }>(res);
+  return body.items;
+}
+
+export async function saveProjectBrief(
+  projectId: string,
+  sections: PublicContextNode["sections"],
+): Promise<PublicContextNode> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`, {
+    method: "POST",
+    body: JSON.stringify({ sections }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to save brief");
+  }
+  return parseJson<PublicContextNode>(res);
+}
+
+export async function createMilestone(
+  projectId: string,
+  input: { title: string; description?: string },
+): Promise<PublicMilestone> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/milestones`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to create milestone");
+  }
+  return parseJson<PublicMilestone>(res);
+}
+
+export async function createTask(
+  projectId: string,
+  input: { title: string; description?: string; milestone_id?: string | null },
+): Promise<PublicTask> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/tasks`, {
+    method: "POST",
+    headers: { "idempotency-key": crypto.randomUUID() },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to create task");
+  }
+  return parseJson<PublicTask>(res);
 }
