@@ -240,8 +240,22 @@ export type ActorRef = {
   display: string;
 };
 
+export type ContextSectionId =
+  | "goals"
+  | "non_goals"
+  | "architecture"
+  | "conventions"
+  | "glossary"
+  | "ownership"
+  | "pitfalls"
+  | "commands"
+  | "stack"
+  | "security"
+  | "style"
+  | "custom";
+
 export type ContextSection = {
-  id: string;
+  id: ContextSectionId;
   key?: string;
   title: string;
   body_md: string;
@@ -308,13 +322,37 @@ export type ContextImportResult = {
   code_owners_written: number;
 };
 
-export async function fetchContextNodes(projectId: string): Promise<ContextNode[]> {
-  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`);
-  if (!res.ok) {
-    throw await readApiError(res, "failed to load context");
+const PAGE_LIMIT = 100;
+const MAX_LIST_PAGES = 50;
+
+async function fetchAllPages<T>(path: string, fallback: string): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
+    const url = new URL(path, "http://beacon.local");
+    url.searchParams.set("limit", String(PAGE_LIMIT));
+    if (cursor) {
+      url.searchParams.set("cursor", cursor);
+    }
+    const res = await apiFetch(`${url.pathname}${url.search}`);
+    if (!res.ok) {
+      throw await readApiError(res, fallback);
+    }
+    const body = await parseJson<{ items: T[]; next_cursor: string | null }>(res);
+    items.push(...body.items);
+    if (!body.next_cursor) {
+      return items;
+    }
+    cursor = body.next_cursor;
   }
-  const body = await parseJson<{ items: ContextNode[] }>(res);
-  return body.items;
+  return items;
+}
+
+export async function fetchContextNodes(projectId: string): Promise<ContextNode[]> {
+  return fetchAllPages<ContextNode>(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/nodes`,
+    "failed to load context",
+  );
 }
 
 export async function putContextNode(
@@ -368,12 +406,10 @@ export async function compileContext(projectId: string): Promise<SessionBrief> {
 }
 
 export async function fetchContextRevisions(projectId: string): Promise<ContextRevisionSummary[]> {
-  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/revisions`);
-  if (!res.ok) {
-    throw await readApiError(res, "failed to load revisions");
-  }
-  const body = await parseJson<{ items: ContextRevisionSummary[] }>(res);
-  return body.items;
+  return fetchAllPages<ContextRevisionSummary>(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/revisions`,
+    "failed to load revisions",
+  );
 }
 
 export async function fetchContextRevision(

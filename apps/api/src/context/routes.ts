@@ -157,6 +157,9 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
         updatedAt: now,
       };
     } else {
+      if (body["scope_type"] === undefined) {
+        return errorJson(c, 404, "not_found", "node not found");
+      }
       const scopeRaw = body["scope_type"];
       if (typeof scopeRaw !== "string" || !isContextScopeType(scopeRaw)) {
         return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
@@ -258,8 +261,20 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       };
     }
 
+    const prior =
+      existing ??
+      (await deps.store.listContextNodes(access.project.id)).find(
+        (node) =>
+          node.scopeType === next.scopeType &&
+          node.repoId === next.repoId &&
+          node.path === next.path &&
+          node.taskId === next.taskId,
+      );
     const stored = await deps.store.upsertContextNode(next);
     if (!existing && stored.id !== nodeId) {
+      if (prior) {
+        await deps.store.upsertContextNode(prior);
+      }
       return errorJson(c, 404, "not_found", "node not found");
     }
     return c.json(presentContextNode(stored, session.user));

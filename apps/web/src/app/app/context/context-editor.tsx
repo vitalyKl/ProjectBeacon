@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import {
   ApiError,
@@ -20,7 +20,9 @@ import {
 
 import { useSelectedProject } from "../project-context";
 
-const KNOWN_SECTIONS: { id: Exclude<string, "custom">; title: string }[] = [
+type KnownSectionId = Exclude<ContextSection["id"], "custom">;
+
+const KNOWN_SECTIONS: { id: KnownSectionId; title: string }[] = [
   { id: "goals", title: "Goals" },
   { id: "non_goals", title: "Non-goals" },
   { id: "architecture", title: "Architecture" },
@@ -33,8 +35,6 @@ const KNOWN_SECTIONS: { id: Exclude<string, "custom">; title: string }[] = [
   { id: "ownership", title: "Ownership" },
   { id: "stack", title: "Stack" },
 ];
-
-const NEW_NODE_ID = "new";
 
 function randomUuidV7(): string {
   const bytes = new Uint8Array(16);
@@ -53,11 +53,13 @@ function randomUuidV7(): string {
 }
 
 type DraftSection = {
-  id: string;
+  id: ContextSection["id"];
   key?: string;
   title: string;
   body_md: string;
 };
+
+type CreateScope = "project" | "repo" | "path";
 
 type EditorTab = "edit" | "preview" | "revisions";
 
@@ -179,20 +181,30 @@ export function ContextEditor() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pastePath, setPastePath] = useState("AGENTS.md");
   const [pasteBody, setPasteBody] = useState("");
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const [createScope, setCreateScope] = useState<CreateScope>("project");
+  const [createPath, setCreatePath] = useState("");
+  const [createRepoId, setCreateRepoId] = useState("");
 
   const selected = useMemo(
-    () => nodes.find((node) => node.id === selectedId) ?? null,
-    [nodes, selectedId],
+    () => (creating ? null : (nodes.find((node) => node.id === selectedId) ?? null)),
+    [creating, nodes, selectedId],
   );
 
   const applyNodes = useCallback((items: ContextNode[], preferId?: string | null) => {
     setNodes(items);
+    if (creatingRef.current && !preferId) {
+      return;
+    }
+    if (preferId) {
+      creatingRef.current = false;
+      setCreating(false);
+    }
     setSelectedId((current) => {
       const nextId =
         (preferId && items.some((item) => item.id === preferId) ? preferId : null) ??
-        (current && current !== NEW_NODE_ID && items.some((item) => item.id === current)
-          ? current
-          : null) ??
+        (current && items.some((item) => item.id === current) ? current : null) ??
         items[0]?.id ??
         null;
       setDrafts(emptyDraftsFromNode(items.find((item) => item.id === nextId) ?? null));
@@ -267,13 +279,23 @@ export function ContextEditor() {
     };
   }, [project, tab]);
 
+  function beginCreate() {
+    creatingRef.current = true;
+    setCreating(true);
+    setSelectedId(null);
+    setNotice(null);
+    setCreateScope("project");
+    setCreatePath("");
+    setCreateRepoId("");
+    setDrafts(emptyDraftsFromNode(null));
+    setTab("edit");
+  }
+
   function selectNode(nodeId: string) {
+    creatingRef.current = false;
+    setCreating(false);
     setSelectedId(nodeId);
     setNotice(null);
-    if (nodeId === NEW_NODE_ID) {
-      setDrafts(emptyDraftsFromNode(null));
-      return;
-    }
     const node = nodes.find((item) => item.id === nodeId) ?? null;
     setDrafts(emptyDraftsFromNode(node));
   }
@@ -288,20 +310,36 @@ export function ContextEditor() {
     if (!project) {
       return;
     }
+    if (creating) {
+      if (createScope === "path" && createPath.trim().length === 0) {
+        setError("path is required for path scope");
+        return;
+      }
+      if (createScope !== "project" && createRepoId.trim().length === 0) {
+        setError("repo id is required for this scope");
+        return;
+      }
+    } else if (!selected) {
+      setError("select a node or start a new brief");
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const nodeId = selected?.id ?? randomUuidV7();
+      const nodeId = creating || !selected ? randomUuidV7() : selected.id;
       const body: Record<string, unknown> = {
         sections: draftsToSections(drafts),
       };
       if (reviewState) {
         body.review_state = reviewState;
       }
-      if (!selected) {
-        body.scope_type = "project";
-        body.path = "";
+      if (creating || !selected) {
+        body.scope_type = createScope;
+        body.path = createScope === "path" ? createPath.trim() : "";
+        if (createScope !== "project") {
+          body.repo_id = createRepoId.trim();
+        }
       }
       const saved = await putContextNode(project.id, nodeId, body);
       setNotice(reviewState === "reviewed" ? "Marked reviewed." : "Saved.");
@@ -497,19 +535,27 @@ export function ContextEditor() {
             <button
               className="text-sm text-muted hover:text-foreground"
               type="button"
-              onClick={() => selectNode(NEW_NODE_ID)}
+              onClick={beginCreate}
             >
               New brief
             </button>
           </div>
-          {nodes.length === 0 ? (
+          {nodes.length === 0 && !creating ? (
             <p className="px-3 py-3 text-sm leading-6 text-muted">
               No brief yet. Write one here, or import an AGENTS.md / CLAUDE.md / conventions file.
             </p>
           ) : (
             <ul className="flex flex-col">
+              {creating ? (
+                <li>
+                  <div className="flex w-full flex-col items-start gap-1 bg-background px-3 py-2 text-left text-sm">
+                    <span className="font-medium">New brief</span>
+                    <span className="text-xs text-muted">{createScope}</span>
+                  </div>
+                </li>
+              ) : null}
               {nodes.map((node) => {
-                const active = node.id === selectedId;
+                const active = !creating && node.id === selectedId;
                 return (
                   <li key={node.id}>
                     <button
@@ -569,7 +615,43 @@ export function ContextEditor() {
                   ) : null}
                 </div>
               ) : (
-                <p className="text-sm text-muted">New project brief. Save to create it.</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted">New brief. Save to create it.</p>
+                  <div className="flex flex-wrap gap-3">
+                    <label className="flex flex-col gap-1 text-sm">
+                      Scope
+                      <select
+                        className="h-9 rounded-md border border-border bg-background px-2"
+                        value={createScope}
+                        onChange={(event) => setCreateScope(event.target.value as CreateScope)}
+                      >
+                        <option value="project">project</option>
+                        <option value="repo">repo</option>
+                        <option value="path">path</option>
+                      </select>
+                    </label>
+                    {createScope !== "project" ? (
+                      <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
+                        Repo id
+                        <input
+                          className="h-9 rounded-md border border-border bg-background px-2 font-mono"
+                          value={createRepoId}
+                          onChange={(event) => setCreateRepoId(event.target.value)}
+                        />
+                      </label>
+                    ) : null}
+                    {createScope === "path" ? (
+                      <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
+                        Path
+                        <input
+                          className="h-9 rounded-md border border-border bg-background px-2 font-mono"
+                          value={createPath}
+                          onChange={(event) => setCreatePath(event.target.value)}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
               )}
 
               {drafts.map((draft, index) => (
@@ -621,7 +703,7 @@ export function ContextEditor() {
                   {previewing ? "Compiling…" : "Compile preview"}
                 </button>
                 <p className="text-sm text-muted">
-                  The preview still works if the code index is unavailable. Omitted parts are listed
+                  The preview still works if some extras are unavailable. Omitted parts are listed
                   below.
                 </p>
               </div>

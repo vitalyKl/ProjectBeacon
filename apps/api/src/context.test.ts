@@ -232,6 +232,182 @@ describe("PUT /v1/projects/:id/context/nodes/:nodeId", () => {
     expect(crossProject.status).toBe(404);
     expect(await crossProject.json()).toMatchObject({ error: { code: "not_found" } });
   });
+
+  it("returns 404 when an unknown id is updated without create fields", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "missing-update");
+    const res = await alice.app.request(`/v1/projects/${project.id}/context/nodes/${uuidv7()}`, {
+      method: "PUT",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ review_state: "reviewed" }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({
+      error: { code: "not_found", message: "node not found" },
+    });
+  });
+
+  it("returns 404 for an unknown or foreign repo_id on native create", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const aliceProject = await createProject(alice.app, alice.token, "alice-repo");
+    const bobProject = await createProject(bob.app, bob.token, "bob-repo");
+    const foreignRepo = uuidv7();
+    store.seedProjectRepo({
+      id: foreignRepo,
+      projectId: bobProject.id,
+      provider: "local",
+      remoteUrl: null,
+      defaultBranch: "main",
+      githubRepoId: null,
+      installationId: null,
+      localRootHint: "/tmp/beacon",
+      indexMode: "sidecar",
+      lastIndexedSha: null,
+      lastIndexedAt: null,
+    });
+
+    const unknown = await alice.app.request(
+      `/v1/projects/${aliceProject.id}/context/nodes/${uuidv7()}`,
+      {
+        method: "PUT",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({
+          scope_type: "repo",
+          repo_id: uuidv7(),
+          sections: [{ id: "goals", title: "Goals", body_md: "Nope.", ordinal: 0 }],
+        }),
+      },
+    );
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({
+      error: { code: "not_found", message: "repo not found" },
+    });
+
+    const foreign = await alice.app.request(
+      `/v1/projects/${aliceProject.id}/context/nodes/${uuidv7()}`,
+      {
+        method: "PUT",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({
+          scope_type: "repo",
+          repo_id: foreignRepo,
+          sections: [{ id: "goals", title: "Goals", body_md: "Nope.", ordinal: 0 }],
+        }),
+      },
+    );
+    expect(foreign.status).toBe(404);
+    expect(await foreign.json()).toMatchObject({
+      error: { code: "not_found", message: "repo not found" },
+    });
+  });
+
+  it("returns 404 when creating onto an existing project scope with a new id", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "same-scope");
+    const first = uuidv7();
+    const created = await alice.app.request(`/v1/projects/${project.id}/context/nodes/${first}`, {
+      method: "PUT",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        scope_type: "project",
+        sections: [{ id: "goals", title: "Goals", body_md: "First.", ordinal: 0 }],
+      }),
+    });
+    expect(created.status).toBe(200);
+
+    const raced = await alice.app.request(`/v1/projects/${project.id}/context/nodes/${uuidv7()}`, {
+      method: "PUT",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        scope_type: "project",
+        sections: [{ id: "goals", title: "Goals", body_md: "Second.", ordinal: 0 }],
+      }),
+    });
+    expect(raced.status).toBe(404);
+    expect(await raced.json()).toMatchObject({
+      error: { code: "not_found", message: "node not found" },
+    });
+    const stored = await store.listContextNodes(project.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.id).toBe(first);
+    expect(stored[0]?.sections[0]).toMatchObject({ body_md: "First." });
+  });
+});
+
+describe("GET /v1/projects/:id/context/revisions/:revId", () => {
+  it("returns a stored compile revision for a project member", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "revs");
+
+    const compiled = await alice.app.request(`/v1/projects/${project.id}/context/compile`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(compiled.status).toBe(200);
+    const brief = (await compiled.json()) as { revision_id: string; sections: unknown[] };
+
+    const listed = await alice.app.request(`/v1/projects/${project.id}/context/revisions`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(listed.status).toBe(200);
+    const page = (await listed.json()) as { items: { id: string }[] };
+    expect(page.items[0]?.id).toBe(brief.revision_id);
+
+    const res = await alice.app.request(
+      `/v1/projects/${project.id}/context/revisions/${brief.revision_id}`,
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    expect(res.status).toBe(200);
+    const revision = (await res.json()) as {
+      id: string;
+      brief: { revision_id: string };
+      brief_markdown: string;
+    };
+    expect(revision.id).toBe(brief.revision_id);
+    expect(revision.brief.revision_id).toBe(brief.revision_id);
+    expect(revision.brief_markdown.length).toBeGreaterThan(0);
+  });
+
+  it("returns 404 for a non-member or foreign revision", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const aliceProject = await createProject(alice.app, alice.token, "alice-rev");
+    const bobProject = await createProject(bob.app, bob.token, "bob-rev");
+
+    const compiled = await alice.app.request(`/v1/projects/${aliceProject.id}/context/compile`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const brief = (await compiled.json()) as { revision_id: string };
+
+    const outsider = await bob.app.request(
+      `/v1/projects/${aliceProject.id}/context/revisions/${brief.revision_id}`,
+      { headers: { cookie: cookieHeader(bob.token) } },
+    );
+    expect(outsider.status).toBe(404);
+    expect(await outsider.json()).toMatchObject({ error: { code: "not_found" } });
+
+    const foreign = await bob.app.request(
+      `/v1/projects/${bobProject.id}/context/revisions/${brief.revision_id}`,
+      { headers: { cookie: cookieHeader(bob.token) } },
+    );
+    expect(foreign.status).toBe(404);
+    expect(await foreign.json()).toMatchObject({ error: { code: "not_found" } });
+
+    const listed = await bob.app.request(`/v1/projects/${aliceProject.id}/context/revisions`, {
+      headers: { cookie: cookieHeader(bob.token) },
+    });
+    expect(listed.status).toBe(404);
+    expect(await listed.json()).toMatchObject({ error: { code: "not_found" } });
+  });
 });
 
 describe("POST /v1/projects/:id/context/import", () => {
