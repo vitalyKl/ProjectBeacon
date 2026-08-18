@@ -407,13 +407,8 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async upsertOrgMember(member: OrgMemberRecord): Promise<OrgMemberRecord> {
-    const existing = this.orgMembers.get(this.orgMemberKey(member.orgId, member.userId));
-    const next = {
-      ...member,
-      role: existing ? higherOrgRole(existing.role, member.role) : member.role,
-    };
-    this.orgMembers.set(this.orgMemberKey(member.orgId, member.userId), cloneOrgMember(next));
-    return cloneOrgMember(next);
+    this.orgMembers.set(this.orgMemberKey(member.orgId, member.userId), cloneOrgMember(member));
+    return cloneOrgMember(member);
   }
 
   async createOrgInvite(invite: OrgInviteRecord): Promise<OrgInviteRecord> {
@@ -547,7 +542,6 @@ export class MemoryAuthStore implements AuthStore {
     const existing = this.projectMembers.get(this.projectMemberKey(member.projectId, member.userId));
     const next = {
       ...member,
-      role: existing ? higherProjectRole(existing.role, member.role) : member.role,
       createdAt: existing?.createdAt ?? member.createdAt,
     };
     this.projectMembers.set(this.projectMemberKey(member.projectId, member.userId), cloneProjectMember(next));

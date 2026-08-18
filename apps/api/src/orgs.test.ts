@@ -261,6 +261,37 @@ describe("orgs and projects", () => {
     expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "admin" });
   });
 
+  it("lets a project admin set a lower role via POST /members", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const alice = await registerUser(store, "alice");
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "set-role", name: "Set role" }),
+    });
+    const project = (await created.json()) as { id: string };
+
+    const add = await app.request(`/v1/projects/${project.id}/members`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ user_id: alice.user.id, role: "admin" }),
+    });
+    expect(add.status).toBe(201);
+    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "admin" });
+
+    const demote = await app.request(`/v1/projects/${project.id}/members`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ user_id: alice.user.id, role: "read" }),
+    });
+    expect(demote.status).toBe(201);
+    expect(await demote.json()).toMatchObject({ user_id: alice.user.id, role: "read" });
+    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "read" });
+  });
+
   it("preserves org owner when accepting a lower org invite", async () => {
     const store = new MemoryAuthStore();
     const owner = await registerUser(store, "owner");
