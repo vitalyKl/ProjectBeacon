@@ -3,6 +3,7 @@ import { invoke, isToolError, listToolDefinitions, type InvokeContext } from "@b
 import {
   extractJsonRpcId,
   forbiddenRpc,
+  internalRpc,
   jsonRpcError,
   unauthorizedRpc,
   type JsonRpcId,
@@ -58,9 +59,15 @@ async function handleInitialize(id: JsonRpcId, params: unknown, session: Session
       if (error.code === "unauthorized") {
         return unauthorizedRpc(id, error.message);
       }
-      return forbiddenRpc(id);
+      if (error.code === "forbidden") {
+        return forbiddenRpc(id);
+      }
+      if (error.code === "not_found") {
+        return forbiddenRpc(id, "project not available");
+      }
+      return internalRpc(id);
     }
-    throw error;
+    return internalRpc(id);
   }
 
   return result(id, {

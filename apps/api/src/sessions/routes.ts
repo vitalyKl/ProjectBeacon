@@ -211,8 +211,7 @@ export function mountSessions(app: Hono, deps: AuthDeps): void {
     if (budgetTokens === "invalid") {
       return errorJson(c, 400, "unauthorized", "invalid budget_tokens", { reason: "invalid_body" });
     }
-    const path =
-      body?.["path"] === undefined ? undefined : parseOptionalString(body["path"], 1024);
+    const path = body?.["path"] === undefined ? undefined : parseOptionalString(body["path"], 1024);
     if (body?.["path"] !== undefined && path === undefined) {
       return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
     }
@@ -403,7 +402,9 @@ export function mountSessions(app: Hono, deps: AuthDeps): void {
     }
     const openQuestions = parseOpenQuestions(body?.["open_questions"]);
     if (openQuestions === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid open_questions", { reason: "invalid_body" });
+      return errorJson(c, 400, "unauthorized", "invalid open_questions", {
+        reason: "invalid_body",
+      });
     }
     const statusRaw = body?.["status"] === undefined ? "done" : body["status"];
     if (typeof statusRaw !== "string" || !isFinishWorkStatus(statusRaw)) {
@@ -450,7 +451,11 @@ export function mountSessions(app: Hono, deps: AuthDeps): void {
       payload: { task_id: session.taskId, status: taskStatus },
       createdAt: now,
     });
-    if (finished.task && finished.previousStatus && finished.previousStatus !== finished.task.status) {
+    if (
+      finished.task &&
+      finished.previousStatus &&
+      finished.previousStatus !== finished.task.status
+    ) {
       await deps.store.writeActivity({
         id: uuidv7(now.getTime()),
         projectId: session.projectId,
@@ -498,6 +503,9 @@ export function mountSessions(app: Hono, deps: AuthDeps): void {
     }
     const access = await authorizeProjectActor(c, deps, actor, task.projectId, "tasks:read");
     if (isResponse(access)) {
+      if (access.status === 404) {
+        return errorJson(c, 404, "not_found", "task not found");
+      }
       return access;
     }
     const handoff = await deps.store.findLatestHandoffByTaskId(task.id);
@@ -518,5 +526,3 @@ export function rejectAgentTerminalStatus(
   }
   return undefined;
 }
-
-

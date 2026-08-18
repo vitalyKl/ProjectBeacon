@@ -2,10 +2,12 @@
 # Later PRs may unpublish API :8080; both stay published for now so API /health still works.
 # mcp is still later. web is not in this compose yet.
 # postgres + api + worker. web and mcp are omitted.
+# postgres, api, mcp, and web. Worker is not in this compose.
 # API :8080 is published so host liveness (/health) works.
 # Worker ports are not published.
 # postgres, api, mcp, and web. worker is not in this compose yet.
 # Web :3000 reverse-proxies /mcp to the mcp service.
+# Compose does not terminate TLS; put Caddy/nginx in front for anything beyond localhost, and do not expose /mcp without TLS and bearer token discipline.
 
 services:
   postgres:

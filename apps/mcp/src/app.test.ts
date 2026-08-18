@@ -124,6 +124,43 @@ describe("POST /mcp", () => {
     expect(calls[0]?.headers.authorization).toBe(`Bearer ${TOKEN}`);
   });
 
+  it("hides a missing project and surfaces API 5xx as an internal error", async () => {
+    const missing = mockFetch(() => ({
+      status: 404,
+      body: { error: { code: "not_found", message: "project not found" } },
+    }));
+    const missingRes = await rpc(appWith(missing.fetchImpl), "initialize", {
+      protocolVersion: "2025-03-26",
+    });
+    expect(missingRes.status).toBe(403);
+    expect(await missingRes.json()).toMatchObject({
+      jsonrpc: "2.0",
+      error: { message: "project not available", data: { code: "forbidden" } },
+    });
+
+    const down = mockFetch(() => ({ status: 503, body: { error: { message: "unavailable" } } }));
+    const downRes = await rpc(appWith(down.fetchImpl), "initialize", {
+      protocolVersion: "2025-03-26",
+    });
+    expect(downRes.status).toBe(200);
+    expect(await downRes.json()).toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32603, data: { code: "internal_error" } },
+    });
+  });
+
+  it("rejects a missing project_id as validation, not unauthorized", async () => {
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { unexpected: true } }));
+    const app = createApp({ apiUrl: "https://beacon.test", fetch: fetchImpl });
+    const res = await rpc(app, "initialize", { protocolVersion: "2025-03-26" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32602, message: "project_id is required", data: { code: "invalid_request" } },
+    });
+    expect(calls).toHaveLength(0);
+  });
+
   it("initializes with control-plane instructions", async () => {
     const { fetchImpl } = mockFetch((call) => {
       if (call.url.pathname === `/v1/projects/${PROJECT_ID}/sessions`) {
@@ -159,21 +196,22 @@ describe("POST /mcp", () => {
 
   it("forwards tools/call through invoke and leaves write_handoff closed", async () => {
     const { fetchImpl, calls } = mockFetch((call) => {
-      if (call.url.pathname === `/v1/projects/${PROJECT_ID}`) {
-        return { body: { id: PROJECT_ID, name: "Beacon" } };
+      if (call.url.pathname === `/v1/projects/${PROJECT_ID}/decisions`) {
+        return { body: { items: [], next_cursor: null } };
       }
       return { status: 500, body: { error: { code: "unauthorized", message: "unexpected" } } };
     });
     const app = appWith(fetchImpl);
 
-    const project = await rpc(app, "tools/call", { name: "get_project", arguments: {} });
-    expect(project.status).toBe(200);
-    const projectBody = (await project.json()) as { result: { content: Array<{ text: string }> } };
-    expect(JSON.parse(projectBody.result.content[0]?.text ?? "{}")).toEqual({
-      id: PROJECT_ID,
-      name: "Beacon",
+    const listed = await rpc(app, "tools/call", { name: "list_decisions", arguments: {} });
+    expect(listed.status).toBe(200);
+    const listedBody = (await listed.json()) as { result: { content: Array<{ text: string }> } };
+    expect(JSON.parse(listedBody.result.content[0]?.text ?? "{}")).toEqual({
+      items: [],
+      next_cursor: null,
     });
     expect(calls[0]?.headers.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(calls[0]?.url.pathname).toBe(`/v1/projects/${PROJECT_ID}/decisions`);
 
     const handoff = await rpc(app, "tools/call", {
       name: "write_handoff",

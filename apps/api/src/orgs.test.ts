@@ -611,4 +611,43 @@ describe("IDOR", () => {
     });
     expect(again.status).toBe(404);
   });
+
+  it("lets a project token GET the project and hides other projects", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "token-get", name: "Token get" }),
+    });
+    const project = (await created.json()) as { id: string; name: string };
+    const other = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "other", name: "Other" }),
+    });
+    const otherProject = (await other.json()) as { id: string };
+    const minted = await app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ name: "mcp" }),
+    });
+    const secret = ((await minted.json()) as { token: string }).token;
+
+    const got = await app.request(`/v1/projects/${project.id}`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(got.status).toBe(200);
+    expect(await got.json()).toMatchObject({ id: project.id, name: "Token get" });
+
+    const hidden = await app.request(`/v1/projects/${otherProject.id}`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(hidden.status).toBe(404);
+    expect(await hidden.json()).toMatchObject({
+      error: { code: "not_found", message: "project not found" },
+    });
+  });
 });

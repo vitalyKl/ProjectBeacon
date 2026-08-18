@@ -122,33 +122,16 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     if (isResponse(access)) {
       return access;
     }
-
     const q = c.req.query("q")?.trim() ?? "";
-    if (!q) {
+    if (q.length === 0) {
       return errorJson(c, 400, "unauthorized", "q is required", { reason: "invalid_query" });
     }
-    const limitRaw = c.req.query("limit");
-    let limit = PAGINATION_DEFAULT_LIMIT;
-    if (limitRaw !== undefined) {
-      if (!/^[0-9]+$/.test(limitRaw)) {
-        return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
-      }
-      const parsed = Number(limitRaw);
-      if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
-        return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
-      }
-      limit = parsed;
+    const limit = parseSearchLimit(c.req.query("limit"));
+    if (limit === undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
     }
-
-    const needle = q.toLowerCase();
     const nodes = await deps.store.listContextNodes(access.project.id);
-    const items = nodes
-      .filter((node) => {
-        const haystack = `${node.path}\n${node.sectionsText}`.toLowerCase();
-        return haystack.includes(needle);
-      })
-      .slice(0, limit)
-      .map(presentContextNode);
+    const items = nodes.filter((node) => nodeMatchesQuery(node, q)).slice(0, limit).map(toCompileNode);
     return c.json({ items, next_cursor: null });
   });
 }
@@ -244,4 +227,40 @@ function normalizeNodePath(value: string): string | undefined {
     return undefined;
   }
   return path;
+}
+
+function parseSearchLimit(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === "") {
+    return PAGINATION_DEFAULT_LIMIT;
+  }
+  if (!/^[0-9]+$/.test(raw)) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
+    return undefined;
+  }
+  return parsed;
+}
+
+function nodeMatchesQuery(
+  node: {
+    path: string;
+    sectionsText: string;
+    sections: { title: string; body_md: string }[];
+  },
+  query: string,
+): boolean {
+  const needle = query.toLowerCase();
+  if (
+    node.path.toLowerCase().includes(needle) ||
+    node.sectionsText.toLowerCase().includes(needle)
+  ) {
+    return true;
+  }
+  return node.sections.some(
+    (section) =>
+      section.title.toLowerCase().includes(needle) ||
+      section.body_md.toLowerCase().includes(needle),
+  );
 }

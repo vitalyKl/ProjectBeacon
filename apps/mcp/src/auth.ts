@@ -36,8 +36,19 @@ export function unauthorizedRpc(id: JsonRpcId = null, message = "unauthorized"):
   return jsonRpcError(id, -32001, message, { code: "unauthorized" });
 }
 
-export function forbiddenRpc(id: JsonRpcId = null): JsonRpcErrorBody {
-  return jsonRpcError(id, -32003, "initialize requires project:read", { code: "forbidden" });
+export function forbiddenRpc(
+  id: JsonRpcId = null,
+  message = "initialize requires project:read",
+): JsonRpcErrorBody {
+  return jsonRpcError(id, -32003, message, { code: "forbidden" });
+}
+
+export function invalidRequestRpc(id: JsonRpcId = null, message: string): JsonRpcErrorBody {
+  return jsonRpcError(id, -32602, message, { code: "invalid_request" });
+}
+
+export function internalRpc(id: JsonRpcId = null, message = "internal error"): JsonRpcErrorBody {
+  return jsonRpcError(id, -32603, message, { code: "internal_error" });
 }
 
 export function extractJsonRpcId(body: unknown): JsonRpcId {

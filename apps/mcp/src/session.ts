@@ -50,5 +50,12 @@ export async function assertProjectRead(ctx: SessionContext): Promise<void> {
   if (response.status === 403 || body?.code === "forbidden") {
     throw toolError("forbidden", 403, "initialize requires project:read");
   }
-  throw toolError("forbidden", 403, "initialize requires project:read");
+  if (response.status === 404 || body?.code === "not_found") {
+    throw toolError("not_found", 404, "project not available");
+  }
+  throw toolError(
+    "code_index_unavailable",
+    response.status >= 500 ? response.status : 500,
+    "internal error",
+  );
 }

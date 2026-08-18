@@ -407,10 +407,9 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
 
     const status: TaskStatus = statusRaw;
     const type: TaskType = typeRaw;
-    const actor = actorActivity(access.actor);
     const presented = await deps.store.withIdempotency(
-      actor.actorType === "token" ? "token" : "user",
-      actor.actorId,
+      idempotencyActor(access.actor).type,
+      idempotencyActor(access.actor).id,
       idempotencyKey,
       now,
       async (writes) => {
@@ -436,12 +435,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           createdAt: now,
           updatedAt: now,
         });
+        const actor = actorRef(access.actor);
         await writeActivity(writes, {
           projectId: access.project.id,
           objectType: "task",
           objectId: task.id,
-          actorId: actor.actorId,
-          actorType: actor.actorType,
+          actorId: actor.id,
+          actorType: actor.type,
           verb: "create",
           payload: { status: task.status, type: task.type },
           now,
@@ -673,18 +673,18 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (!commentBody) {
       return errorJson(c, 400, "unauthorized", "body is required", { reason: "invalid_body" });
     }
-    const actor = actorActivity(access.actor);
+    const actor = actorRef(access.actor);
     const presented = await deps.store.withIdempotency(
-      actor.actorType === "token" ? "token" : "user",
-      actor.actorId,
+      idempotencyActor(access.actor).type,
+      idempotencyActor(access.actor).id,
       idempotencyKey,
       now,
       async (writes) => {
         const comment = await writes.createComment({
           id: uuidv7(now.getTime()),
           taskId: access.task.id,
-          authorType: actor.actorType === "token" ? "agent" : "user",
-          authorId: actor.actorId,
+          authorType: actor.type === "agent" ? "agent" : "user",
+          authorId: actor.id,
           body: commentBody,
           createdAt: now,
         });
@@ -692,8 +692,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: access.task.id,
-          actorId: actor.actorId,
-          actorType: actor.actorType,
+          actorId: actor.id,
+          actorType: actor.type,
           verb: "comment",
           payload: { comment_id: comment.id },
           now,
@@ -804,13 +804,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         toTaskId,
         type,
       });
-      const actor = actorActivity(access.actor);
+      const actor = actorRef(access.actor);
       await writeActivity(deps.store, {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: access.task.id,
-        actorId: actor.actorId,
-        actorType: actor.actorType,
+        actorId: actor.id,
+        actorType: actor.type,
         verb: "update",
         payload: { dependency: presentDependency(dependency) },
         now: deps.clock.now(),
@@ -869,4 +869,18 @@ function writeActorActivity(
 ): Promise<void> {
   const ref = actorActivityRef(actor);
   return writeActivity(writer, { ...input, actorId: ref.id, actorType: ref.type });
+}
+
+function actorRef(actor: AuthActor): { type: string; id: string } {
+  if (actor.kind === "token") {
+    return { type: "agent", id: actor.token.id };
+  }
+  return { type: "user", id: actor.user.id };
+}
+
+function idempotencyActor(actor: AuthActor): { type: "token" | "user"; id: string } {
+  if (actor.kind === "token") {
+    return { type: "token", id: actor.token.id };
+  }
+  return { type: "user", id: actor.user.id };
 }

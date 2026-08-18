@@ -2,6 +2,7 @@ import { Hono } from "hono";
 
 import {
   extractJsonRpcId,
+  invalidRequestRpc,
   isJsonRpcNotification,
   jsonRpcError,
   parseBearer,
@@ -63,7 +64,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       if (isJsonRpcNotification(body)) {
         return c.body(null, 202);
       }
-      return c.json(unauthorizedRpc(id, "project_id is required"), 401);
+      return c.json(invalidRequestRpc(id, "project_id is required"), 400);
     }
 
     const session: SessionContext = {
@@ -84,6 +85,9 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     }
     if (code === "forbidden") {
       return c.json(result.body, 403);
+    }
+    if (code === "invalid_request") {
+      return c.json(result.body, 400);
     }
     return c.json(result.body, result.status as 200);
   });

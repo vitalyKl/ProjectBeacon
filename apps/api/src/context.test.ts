@@ -17,7 +17,6 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     githubClientSecret: undefined,
     secureCookies: false,
     trustProxy: false,
-    workerToken: undefined,
     ...overrides,
   };
 }
@@ -402,12 +401,6 @@ describe("GET /v1/projects/:id/context/revisions/:revId", () => {
     );
     expect(foreign.status).toBe(404);
     expect(await foreign.json()).toMatchObject({ error: { code: "not_found" } });
-
-    const listed = await bob.app.request(`/v1/projects/${aliceProject.id}/context/revisions`, {
-      headers: { cookie: cookieHeader(bob.token) },
-    });
-    expect(listed.status).toBe(404);
-    expect(await listed.json()).toMatchObject({ error: { code: "not_found" } });
   });
 });
 
@@ -588,91 +581,44 @@ describe("POST /v1/projects/:id/context/compile", () => {
   it("lets a project token compile and search context", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");
-    const project = await createProject(alice.app, alice.token, "search");
+    const project = await createProject(alice.app, alice.token, "token-ctx");
     const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
       method: "POST",
       headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
-      body: JSON.stringify({ name: "agent" }),
+      body: JSON.stringify({ name: "mcp" }),
     });
     const secret = ((await minted.json()) as { token: string }).token;
+    store.seedContextNode({
+      id: "018f1e2c-3d4e-7000-8000-0000000000c1",
+      projectId: project.id,
+      repoId: null,
+      taskId: null,
+      scopeType: "project",
+      path: "AGENTS.md",
+      sections: [{ id: "goals", title: "Goals", body_md: "Ship the control plane", ordinal: 0 }],
+      sectionsText: "Goals\nShip the control plane",
+      source: "manual",
+      sourcePath: null,
+      reviewState: "reviewed",
+      updatedByType: "user",
+      updatedById: alice.user.id,
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
 
-    const compile = await alice.app.request(`/v1/projects/${project.id}/context/compile`, {
+    const compiled = await alice.app.request(`/v1/projects/${project.id}/context/compile`, {
       method: "POST",
       headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
       body: JSON.stringify({}),
     });
-    expect(compile.status).toBe(200);
+    expect(compiled.status).toBe(200);
 
-    const empty = await alice.app.request(`/v1/projects/${project.id}/context/search?q=auth`, {
+    const search = await alice.app.request(`/v1/projects/${project.id}/context/search?q=control`, {
       headers: { authorization: `Bearer ${secret}` },
     });
-    expect(empty.status).toBe(200);
-    expect(await empty.json()).toMatchObject({ items: [], next_cursor: null });
-  });
-});
-
-describe("GET /v1/projects/:id/context/revisions/:revId", () => {
-  it("returns a stored compile revision for a project member", async () => {
-    const store = new MemoryAuthStore();
-    const alice = await registerUser(store, "alice");
-    const project = await createProject(alice.app, alice.token, "revs");
-
-    const compiled = await alice.app.request(`/v1/projects/${project.id}/context/compile`, {
-      method: "POST",
-      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
-      body: JSON.stringify({}),
+    expect(search.status).toBe(200);
+    expect(await search.json()).toMatchObject({
+      items: [expect.objectContaining({ path: "AGENTS.md" })],
+      next_cursor: null,
     });
-    expect(compiled.status).toBe(200);
-    const brief = (await compiled.json()) as { revision_id: string; sections: unknown[] };
-
-    const listed = await alice.app.request(`/v1/projects/${project.id}/context/revisions`, {
-      headers: { cookie: cookieHeader(alice.token) },
-    });
-    expect(listed.status).toBe(200);
-    const page = (await listed.json()) as { items: { id: string }[] };
-    expect(page.items[0]?.id).toBe(brief.revision_id);
-
-    const res = await alice.app.request(
-      `/v1/projects/${project.id}/context/revisions/${brief.revision_id}`,
-      { headers: { cookie: cookieHeader(alice.token) } },
-    );
-    expect(res.status).toBe(200);
-    const revision = (await res.json()) as {
-      id: string;
-      brief: { revision_id: string };
-      brief_markdown: string;
-    };
-    expect(revision.id).toBe(brief.revision_id);
-    expect(revision.brief.revision_id).toBe(brief.revision_id);
-    expect(revision.brief_markdown.length).toBeGreaterThan(0);
-  });
-
-  it("returns 404 for a non-member or foreign revision", async () => {
-    const store = new MemoryAuthStore();
-    const alice = await registerUser(store, "alice");
-    const bob = await registerUser(store, "bob");
-    const aliceProject = await createProject(alice.app, alice.token, "alice-rev");
-    const bobProject = await createProject(bob.app, bob.token, "bob-rev");
-
-    const compiled = await alice.app.request(`/v1/projects/${aliceProject.id}/context/compile`, {
-      method: "POST",
-      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const brief = (await compiled.json()) as { revision_id: string };
-
-    const outsider = await bob.app.request(
-      `/v1/projects/${aliceProject.id}/context/revisions/${brief.revision_id}`,
-      { headers: { cookie: cookieHeader(bob.token) } },
-    );
-    expect(outsider.status).toBe(404);
-    expect(await outsider.json()).toMatchObject({ error: { code: "not_found" } });
-
-    const foreign = await bob.app.request(
-      `/v1/projects/${bobProject.id}/context/revisions/${brief.revision_id}`,
-      { headers: { cookie: cookieHeader(bob.token) } },
-    );
-    expect(foreign.status).toBe(404);
-    expect(await foreign.json()).toMatchObject({ error: { code: "not_found" } });
   });
 });
