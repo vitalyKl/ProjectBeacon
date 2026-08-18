@@ -677,6 +677,15 @@ describe("milestones and tasks", () => {
     expect(comment.status).toBe(201);
     expect(await comment.json()).toMatchObject({ author_type: "agent", body: "from the token" });
 
+    const activity = await alice.app.request(
+      `/v1/projects/${project.id}/activity?object_id=${task.id}`,
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    expect(activity.status).toBe(200);
+    const events = (await activity.json()) as { items: { verb: string; actor_type: string }[] };
+    expect(events.items.map((item) => item.verb).sort()).toEqual(["comment", "create"]);
+    expect(events.items.every((item) => item.actor_type === "token")).toBe(true);
+
     const other = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
       method: "POST",
       headers: { ...auth, "idempotency-key": "token-other" },

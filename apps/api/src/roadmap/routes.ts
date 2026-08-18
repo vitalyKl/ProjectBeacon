@@ -435,13 +435,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           createdAt: now,
           updatedAt: now,
         });
-        const actor = actorRef(access.actor);
+        const actor = actorActivity(access.actor);
         await writeActivity(writes, {
           projectId: access.project.id,
           objectType: "task",
           objectId: task.id,
-          actorId: actor.id,
-          actorType: actor.type,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "create",
           payload: { status: task.status, type: task.type },
           now,
@@ -673,7 +673,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (!commentBody) {
       return errorJson(c, 400, "unauthorized", "body is required", { reason: "invalid_body" });
     }
-    const actor = actorRef(access.actor);
+    const author = actorRef(access.actor);
+    const actor = actorActivity(access.actor);
     const presented = await deps.store.withIdempotency(
       idempotencyActor(access.actor).type,
       idempotencyActor(access.actor).id,
@@ -683,8 +684,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         const comment = await writes.createComment({
           id: uuidv7(now.getTime()),
           taskId: access.task.id,
-          authorType: actor.type === "agent" ? "agent" : "user",
-          authorId: actor.id,
+          authorType: author.type === "agent" ? "agent" : "user",
+          authorId: author.id,
           body: commentBody,
           createdAt: now,
         });
@@ -692,8 +693,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: access.task.id,
-          actorId: actor.id,
-          actorType: actor.type,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
           verb: "comment",
           payload: { comment_id: comment.id },
           now,
@@ -804,13 +805,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         toTaskId,
         type,
       });
-      const actor = actorRef(access.actor);
+      const actor = actorActivity(access.actor);
       await writeActivity(deps.store, {
         projectId: access.task.projectId,
         objectType: "task",
         objectId: access.task.id,
-        actorId: actor.id,
-        actorType: actor.type,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
         verb: "update",
         payload: { dependency: presentDependency(dependency) },
         now: deps.clock.now(),
