@@ -10,9 +10,9 @@ function envEnabled(...names: string[]): boolean {
 }
 
 export async function publicFlags(): Promise<PublicFlags> {
-  // Request-time: compose / host set operator flags at runtime.
   await connection();
   return {
+    // FF_* is the Compose-safe alias; ff.* matches the operator flag name.
     hostedClone: envEnabled("ff.hosted_clone", "FF_HOSTED_CLONE"),
     sidecarTunnel: envEnabled("ff.sidecar_tunnel", "FF_SIDECAR_TUNNEL"),
   };

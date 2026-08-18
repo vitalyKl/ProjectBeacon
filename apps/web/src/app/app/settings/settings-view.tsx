@@ -53,11 +53,13 @@ export function SettingsView({
   project,
   me,
   hostedClone,
+  sidecarTunnel,
   onProjectSaved,
 }: {
   project: PublicProject | null;
   me: PublicMe | null;
   hostedClone: boolean;
+  sidecarTunnel: boolean;
   onProjectSaved?: (project: PublicProject) => void;
 }) {
   const [name, setName] = useState(project?.name ?? "");
@@ -241,7 +243,7 @@ export function SettingsView({
   }
 
   return (
-    <section className="space-y-8">
+    <section className="space-y-8" data-sidecar-tunnel={sidecarTunnel ? "on" : "off"}>
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted">Project members and settings for {project.name}.</p>
@@ -289,9 +291,7 @@ export function SettingsView({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Members</h2>
-            <p className="text-sm text-muted">
-              Project access only. Org roles are under Org settings.
-            </p>
+            <p className="text-sm text-muted">These roles apply only to this project.</p>
           </div>
           {isAdmin ? (
             <button
