@@ -38,12 +38,19 @@ export type ApiErrorBody = {
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly details: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -77,7 +84,39 @@ export async function readApiError(res: Response, fallback: string): Promise<Api
   } catch {
     body = undefined;
   }
-  return new ApiError(res.status, body?.error?.code ?? "unauthorized", messageFromBody(body, fallback));
+  return new ApiError(
+    res.status,
+    body?.error?.code ?? "unauthorized",
+    messageFromBody(body, fallback),
+    body?.error?.details ?? {},
+  );
+}
+
+export type Page<T> = {
+  items: T[];
+  next_cursor: string | null;
+};
+
+export async function fetchAllPages<T>(
+  load: (cursor: string | null) => Promise<Page<T>>,
+): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  const seen = new Set<string>();
+  for (;;) {
+    const page = await load(cursor);
+    items.push(...page.items);
+    const next = page.next_cursor;
+    if (!next || seen.has(next)) {
+      return items;
+    }
+    seen.add(next);
+    cursor = next;
+  }
+}
+
+export function newIdempotencyKey(): string {
+  return crypto.randomUUID();
 }
 
 export async function fetchMe(): Promise<PublicMe | null> {
@@ -98,6 +137,20 @@ export async function fetchOrgProjects(orgId: string): Promise<PublicProject[]> 
   }
   const body = await parseJson<{ items: PublicProject[] }>(res);
   return body.items;
+}
+
+export async function createOrgProject(
+  orgId: string,
+  input: { slug: string; name: string; description?: string },
+): Promise<PublicProject> {
+  const res = await apiFetch(`/v1/orgs/${encodeURIComponent(orgId)}/projects`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to create project");
+  }
+  return parseJson<PublicProject>(res);
 }
 
 export async function loginLocal(login: string, password: string): Promise<PublicUser> {

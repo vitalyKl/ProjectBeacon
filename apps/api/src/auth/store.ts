@@ -16,30 +16,9 @@ export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js"
 export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord, DecisionPathLink } from "../context/types.js";
 export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
 export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
-import {
-  InvalidReferenceError,
-  isLockActive,
-  LOCK_TTL_MS,
-  SessionNotActiveError,
-  TaskLockedError,
-  type AgentSessionRecord,
-  type FinishWorkInput,
-  type FinishWorkResult,
-  type HandoffRecord,
-  type StartWorkInput,
-  type StartWorkWriteResult,
-} from "../sessions/types.js";
-
-export type {
-  AgentSessionRecord,
-  FinishWorkResult,
-  HandoffRecord,
-} from "../sessions/types.js";
-export {
-  InvalidReferenceError,
-  SessionNotActiveError,
-  TaskLockedError,
-} from "../sessions/types.js";
+import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
+export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../sessions/types.js";
+export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
 
 export type UserRecord = {
 
@@ -222,7 +201,7 @@ export interface AuthStore {
     now: Date,
     produce: (writes: IdempotentWrites) => Promise<unknown>,
   ): Promise<unknown>;
-  findAgentSessionById(id: string): Promise<AgentSessionRef | undefined>;
+  findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined>;
   listAgentSessions(projectId: string): Promise<AgentSessionRecord[]>;
   heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
   finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
@@ -234,6 +213,7 @@ export interface AuthStore {
   findDecisionById(id: string): Promise<DecisionRecord | undefined>;
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
   findProjectRepo(id: string): Promise<ProjectRepoRef | undefined>;
+  listComments(taskId: string): Promise<TaskCommentRecord[]>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -288,7 +268,6 @@ function cloneProjectInvite(invite: ProjectInviteRecord): ProjectInviteRecord {
     acceptedAt: invite.acceptedAt ? new Date(invite.acceptedAt) : null,
   };
 }
-
 
 function cloneToken(token: TokenRecord): TokenRecord {
   return {
@@ -351,7 +330,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly projectRepos = new Map<string, ProjectRepoRef>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
-  private readonly agentSessions = new Map<string, AgentSessionRef>();
+  private readonly agentSessions = new Map<string, AgentSessionRecord>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -1157,9 +1136,8 @@ export class MemoryAuthStore implements AuthStore {
       const writes: IdempotentWrites = {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
-        createDecision: async (decision) => this.insertDecisionUnlocked(decision),
-        createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
+        startWork: async (input) => this.startWorkUnlocked(input),
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1197,7 +1175,9 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneToken(token));
       }
     }
-    result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    result.sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
     return result;
   }
 
@@ -1299,13 +1279,34 @@ export class MemoryAuthStore implements AuthStore {
     existing.bytes += BigInt(input.bytesDelta);
     return cloneRateBucket(existing);
   }
-  putAgentSession(session: AgentSessionRef): void {
-    this.agentSessions.set(session.id, { ...session });
+  putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
+    if ("agentName" in session) {
+      this.agentSessions.set(session.id, cloneAgentSession(session));
+      return;
+    }
+    const now = new Date();
+    this.agentSessions.set(
+      session.id,
+      cloneAgentSession({
+        id: session.id,
+        projectId: session.projectId,
+        taskId: null,
+        tokenId: null,
+        agentName: "test",
+        agentHost: "custom",
+        status: "active",
+        contextRevisionId: null,
+        startedAt: now,
+        finishedAt: null,
+        lockExpiresAt: null,
+        lastHeartbeatAt: now,
+      }),
+    );
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
     const session = this.agentSessions.get(id);
-    return session ? { ...session } : undefined;
+    return session ? cloneAgentSession(session) : undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -1552,6 +1553,19 @@ export class MemoryAuthStore implements AuthStore {
     this.decisions.set(decision.id, cloneDecision(decision));
     return cloneDecision(decision);
   }
+
+  async listComments(taskId: string): Promise<TaskCommentRecord[]> {
+    const result: TaskCommentRecord[] = [];
+    for (const comment of this.comments.values()) {
+      if (comment.taskId === taskId) {
+        result.push(cloneComment(comment));
+      }
+    }
+    result.sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+    return result;
+  }
     string,
     { response: unknown; createdAt: Date }
   >();
@@ -1599,8 +1613,7 @@ function cloneConstraint(constraint: ConstraintRecord): ConstraintRecord {
 function cloneDecision(decision: DecisionRecord): DecisionRecord {
   return {
     ...decision,
-    relatedPaths: decision.relatedPaths.map((path) => ({ ...path })),
-    relatedTaskIds: [...decision.relatedTaskIds],
+    relatedPaths: [...decision.relatedPaths],
     createdAt: new Date(decision.createdAt),
   };
 }

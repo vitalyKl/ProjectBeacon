@@ -15,7 +15,9 @@ import {
 } from "@/lib/api";
 import { APP_NAV } from "@/lib/nav";
 
+import { ProjectProvider } from "./project-context";
 import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "./selection";
+import { ToastProvider } from "./toast";
 
 function pickOrg(me: PublicMe, storedId: string | null): PublicOrg | null {
   if (storedId) {
@@ -172,7 +174,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </select>
         <div className="ml-auto flex items-center gap-3 text-sm">
           <span className="text-muted">{me.login}</span>
-          <button className="rounded-md border border-border px-3 py-1.5" type="button" onClick={() => void onLogout()}>
+          <button
+            className="rounded-md border border-border px-3 py-1.5"
+            type="button"
+            onClick={() => void onLogout()}
+          >
             Log out
           </button>
         </div>
@@ -199,7 +205,24 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <main className="min-w-0 flex-1 px-6 py-6">
           {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
-          {children}
+          <ToastProvider>
+            <ProjectProvider
+              value={{
+                org,
+                project,
+                projects,
+                loading: false,
+                setProjectId: onProjectChange,
+                reloadProjects: async () => {
+                  if (org) {
+                    await loadProjects(org);
+                  }
+                },
+              }}
+            >
+              {children}
+            </ProjectProvider>
+          </ToastProvider>
         </main>
       </div>
     </div>

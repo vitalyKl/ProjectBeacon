@@ -14,26 +14,11 @@ import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, Login
 import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
 import { IDEMPOTENCY_TTL_MS, type CommentAuthorType, type DependencyType, type IdempotencyActorType, type LinkedPath, type MilestoneStatus, type TaskStatus, type TaskType } from "../roadmap/types.js";
-import {
-  InvalidReferenceError,
-  isAgentHost,
-  isAgentSessionStatus,
-  isLockActive,
-  LOCK_TTL_MS,
-  SessionNotActiveError,
-  TaskLockedError,
-  type AgentSessionRecord,
-  type FinishWorkInput,
-  type FinishWorkResult,
-  type HandoffRecord,
-  type StartWorkInput,
-  type StartWorkWriteResult,
-} from "../sessions/types.js";
+import { InvalidReferenceError, isAgentHost, isAgentSessionStatus, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
-
 
 type UniqueConstraint = "login" | "github_id" | "org_slug" | "project_slug" | "unknown";
 
@@ -438,8 +423,7 @@ function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | 
 
 function toDecision(
   row: typeof decisions.$inferSelect,
-  relatedPaths: DecisionPathLink[],
-  relatedTaskIds: string[],
+  relatedPaths: string[],
 ): DecisionRecord | undefined {
   if (!isDecisionStatus(row.status)) {
     return undefined;
@@ -457,7 +441,6 @@ function toDecision(
     supersededBy: row.supersededBy,
     createdAt: row.createdAt,
     relatedPaths,
-    relatedTaskIds,
   };
 }
 
@@ -1635,7 +1618,28 @@ export class DbAuthStore implements AuthStore {
       .from(decisions)
       .where(and(eq(decisions.projectId, projectId), eq(decisions.status, "accepted")))
       .orderBy(asc(decisions.id));
-    return this.attachDecisionLinks(rows);
+    if (rows.length === 0) {
+      return [];
+    }
+    const paths = await this.db
+      .select()
+      .from(decisionPaths)
+      .where(
+        inArray(
+          decisionPaths.decisionId,
+          rows.map((row) => row.id),
+        ),
+      );
+    const byDecision = new Map<string, string[]>();
+    for (const path of paths) {
+      const list = byDecision.get(path.decisionId) ?? [];
+      list.push(path.path);
+      byDecision.set(path.decisionId, list);
+    }
+    return rows.flatMap((row) => {
+      const decision = toDecision(row, byDecision.get(row.id) ?? []);
+      return decision ? [decision] : [];
+    });
   }
 
   async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
@@ -1743,8 +1747,6 @@ export class DbAuthStore implements AuthStore {
           }
           return toComment(row);
         },
-        createDecision: async (decision) => insertDecisionTx(tx, decision),
-        createConstraint: async (constraint) => insertConstraintTx(tx, constraint),
         writeActivity: async (event) => {
           const [row] = await tx
             .insert(activityEvents)
@@ -1765,6 +1767,7 @@ export class DbAuthStore implements AuthStore {
           }
           return toActivity(row);
         },
+        startWork: async (input) => startWorkInTx(tx, input),
       };
 
       const response = await produce(writes);
@@ -1934,13 +1937,13 @@ export class DbAuthStore implements AuthStore {
     return toRateBucket(row);
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
     const [row] = await this.db
-      .select({ id: agentSessions.id, projectId: agentSessions.projectId })
+      .select()
       .from(agentSessions)
       .where(eq(agentSessions.id, id))
       .limit(1);
-    return row ?? undefined;
+    return row ? toAgentSession(row) : undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -2195,6 +2198,15 @@ export class DbAuthStore implements AuthStore {
       );
       return decision ? [decision] : [];
     });
+  }
+
+  async listComments(taskId: string): Promise<TaskCommentRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(taskComments)
+      .where(eq(taskComments.taskId, taskId))
+      .orderBy(asc(taskComments.createdAt), asc(taskComments.id));
+    return rows.map(toComment);
   }
 }
 

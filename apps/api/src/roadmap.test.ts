@@ -271,8 +271,20 @@ describe("milestones and tasks", () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");
     const project = await createProject(alice.app, alice.token, "notes");
-    const first = await createTask(alice.app, alice.token, project.id, { title: "One" }, "task-one");
-    const second = await createTask(alice.app, alice.token, project.id, { title: "Two" }, "task-two");
+    const first = await createTask(
+      alice.app,
+      alice.token,
+      project.id,
+      { title: "One" },
+      "task-one",
+    );
+    const second = await createTask(
+      alice.app,
+      alice.token,
+      project.id,
+      { title: "Two" },
+      "task-two",
+    );
     const task = (await first.json()) as TaskBody;
     const other = (await second.json()) as TaskBody;
 
@@ -299,8 +311,19 @@ describe("milestones and tasks", () => {
     expect(activity.status).toBe(200);
     const body = (await activity.json()) as { items: { verb: string; object_id: string }[] };
     expect(body.items.every((item) => item.object_id === task.id)).toBe(true);
-    expect(body.items.map((item) => item.verb)).toEqual(expect.arrayContaining(["create", "comment"]));
+    expect(body.items.map((item) => item.verb)).toEqual(
+      expect.arrayContaining(["create", "comment"]),
+    );
     expect(body.items.some((item) => item.object_id === other.id)).toBe(false);
+
+    const comments = await alice.app.request(`/v1/tasks/${task.id}/comments`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(comments.status).toBe(200);
+    expect(await comments.json()).toMatchObject({
+      items: [expect.objectContaining({ task_id: task.id, body: "looks good" })],
+      next_cursor: null,
+    });
   });
 
   it("returns the same task for a repeated Idempotency-Key", async () => {
@@ -417,7 +440,9 @@ describe("milestones and tasks", () => {
       { headers: { cookie: cookieHeader(alice.token) } },
     );
     const body = (await activity.json()) as { items: { verb: string }[] };
-    expect(body.items.map((item) => item.verb)).toEqual(expect.arrayContaining(["status", "lock_released"]));
+    expect(body.items.map((item) => item.verb)).toEqual(
+      expect.arrayContaining(["status", "lock_released"]),
+    );
   });
 
   it("releases an agent lock on a human PATCH", async () => {
@@ -484,7 +509,13 @@ describe("milestones and tasks", () => {
       error: { code: "unauthorized", details: { reason: "missing_idempotency_key" } },
     });
 
-    const taskRes = await createTask(alice.app, alice.token, project.id, { title: "Has key" }, "has-key");
+    const taskRes = await createTask(
+      alice.app,
+      alice.token,
+      project.id,
+      { title: "Has key" },
+      "has-key",
+    );
     const task = (await taskRes.json()) as TaskBody;
     const comment = await alice.app.request(`/v1/tasks/${task.id}/comments`, {
       method: "POST",
