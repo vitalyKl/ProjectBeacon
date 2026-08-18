@@ -210,4 +210,32 @@ describe("project repos", () => {
       error: { code: "not_found", message: "repo not found" },
     });
   });
+
+  it("keeps 403 when a same-project token lacks project:read", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "scoped");
+    const created = await alice.app.request(`/v1/projects/${project.id}/repos`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "local",
+        index_mode: "sidecar",
+      }),
+    });
+    const repo = (await created.json()) as { id: string };
+    const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ name: "tasks-only", scopes: ["tasks:read"] }),
+    });
+    expect(minted.status).toBe(201);
+    const secret = ((await minted.json()) as { token: string }).token;
+
+    const got = await alice.app.request(`/v1/repos/${repo.id}`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(got.status).toBe(403);
+    expect(await got.json()).toMatchObject({ error: { code: "forbidden" } });
+  });
 });

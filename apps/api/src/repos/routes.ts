@@ -196,7 +196,10 @@ export function mountRepos(app: Hono, deps: AuthDeps): void {
     }
     const access = await authorizeProjectActor(c, deps, actor, repo.projectId, "project:read");
     if (isResponse(access)) {
-      return errorJson(c, 404, "not_found", "repo not found");
+      if (access.status === 404) {
+        return errorJson(c, 404, "not_found", "repo not found");
+      }
+      return access;
     }
     return c.json(presentProjectRepo(repo));
   });
