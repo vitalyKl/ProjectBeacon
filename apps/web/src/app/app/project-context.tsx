@@ -2,7 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
-import type { PublicOrg, PublicProject } from "@/lib/api";
+import type { PublicMe, PublicOrg, PublicProject } from "@/lib/api";
 
 export type ProjectContextValue = {
   org: PublicOrg | null;
@@ -12,6 +12,7 @@ export type ProjectContextValue = {
   setProjectId: (projectId: string) => void;
   reloadProjects: () => Promise<void>;
 };
+
 const ProjectContext = createContext<ProjectContextValue>({
   org: null,
   project: null,
@@ -20,6 +21,7 @@ const ProjectContext = createContext<ProjectContextValue>({
   setProjectId: () => undefined,
   reloadProjects: async () => undefined,
 });
+
 export function ProjectProvider({
   value,
   children,
@@ -29,16 +31,35 @@ export function ProjectProvider({
 }) {
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 }
+
 export function useSelectedProject(): ProjectContextValue {
   return useContext(ProjectContext);
-import type { PublicMe, PublicOrg, PublicProject } from "@/lib/api";
+}
+
+export const ProjectSelectionContext = createContext<{ project: PublicProject | null }>({
+  project: null,
+});
+
 export type AppSelection = {
   me: PublicMe;
+  org: PublicOrg | null;
+  project: PublicProject | null;
+  projects: PublicProject[];
   replaceProject: (project: PublicProject) => void;
+};
+
 const AppSelectionContext = createContext<AppSelection | null>(null);
+
 export function AppSelectionProvider({
+  value,
+  children,
+}: {
   value: AppSelection;
+  children: ReactNode;
+}) {
   return <AppSelectionContext.Provider value={value}>{children}</AppSelectionContext.Provider>;
+}
+
 export function useAppSelection(): AppSelection | null {
   return useContext(AppSelectionContext);
 }

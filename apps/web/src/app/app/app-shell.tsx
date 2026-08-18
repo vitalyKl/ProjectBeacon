@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ApiError, fetchMe, fetchOrgProjects, logoutSession, type PublicMe, type PublicOrg, type PublicProject } from "@/lib/api";
 import { APP_NAV } from "@/lib/nav";
-import { ProjectProvider, ProjectSelectionContext, AppSelectionProvider } from "./project-context";
+import { AppSelectionProvider, ProjectProvider } from "./project-context";
 import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "./selection";
 import { ToastProvider } from "./toast";
 
@@ -136,6 +136,20 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
 
   return (
     <AppSelectionProvider value={{ me, org, project, projects, replaceProject }}>
+      <ProjectProvider
+        value={{
+          org,
+          project,
+          projects,
+          loading,
+          setProjectId: onProjectChange,
+          reloadProjects: async () => {
+            if (org) {
+              await loadProjects(org);
+            }
+          },
+        }}
+      >
       <div className="flex min-h-full flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
           <Link className="font-semibold tracking-tight" href="/app">
@@ -206,6 +220,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
           </main>
         </div>
       </div>
+      </ProjectProvider>
     </AppSelectionProvider>
   );
 }

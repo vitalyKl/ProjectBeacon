@@ -1,11 +1,23 @@
-import { isUuid, uuidv7, addGetFileBytes } from "@beacon/shared";
-import type { Hono, Context } from "hono";
-import { authorizeProjectActor, isAdminActor, requireActor, requireProjectActor, actorHasCapability } from "../auth/access.js";
+import { addGetFileBytes, isUuid, uuidv7 } from "@beacon/shared";
+import type { Context, Hono } from "hono";
+
+import {
+  actorHasCapability,
+  authorizeProjectActor,
+  requireActor,
+  requireProjectActor,
+} from "../auth/access.js";
 import { enforceRateLimit } from "../auth/rate-limit.js";
 import type { AuthDeps } from "../auth/routes.js";
-import { ProjectNotFoundError, UniqueViolationError } from "../auth/store.js";
-import { enforceRateLimit } from "../auth/rate-limit.js";
-import { CodeGatewayError, SIDECAR_SEEN_MS, createCodeGateway, taskChangedScopeQuery, type CodeGateway, type CodeQuery } from "../code/gateway.js";
+import { UniqueViolationError } from "../auth/store.js";
+import {
+  CodeGatewayError,
+  SIDECAR_SEEN_MS,
+  createCodeGateway,
+  taskChangedScopeQuery,
+  type CodeGateway,
+  type CodeQuery,
+} from "../code/gateway.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -15,8 +27,6 @@ import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { fileLineCount, recordCodeAnomaly, recordGetFileAnomaly } from "../observability.js";
 import { parseLocalRootHint } from "./local-root.js";
 import { presentProjectRepo } from "./present.js";
-import type { JobQueue } from "../jobs/queue.js";
-import { parseLocalRootHint } from "./local-root.js";
 
 const INDEX_MODES = ["sidecar", "bind_mount", "hosted_clone", "both"] as const;
 const PROVIDERS = ["github", "local"] as const;
@@ -28,41 +38,27 @@ function isResponse<T>(value: T | Response): value is Response {
   return value instanceof Response;
 }
 
-function isIndexMode(value: string): value is IndexMode {
-  return (INDEX_MODES as readonly string[]).includes(value);
+function parseIdempotencyKey(c: Context): string | undefined {
+  const header = c.req.header("idempotency-key")?.trim();
+  if (!header || header.length > 256) {
+    return undefined;
+  }
+  return header;
 }
 
-function isProvider(value: string): value is Provider {
-  return (PROVIDERS as readonly string[]).includes(value);
-}
-
-export function parseBindMountHint(value: unknown): string | undefined {
+function parseProvider(value: unknown): Provider | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
-  const trimmed = value.trim().replaceAll("\\", "/");
-  if (trimmed.length === 0 || trimmed.length > 512) {
-    return undefined;
-  }
-  if (trimmed.startsWith("/") || /^[A-Za-z]:\//.test(trimmed)) {
-    return undefined;
-  }
-  const parts = trimmed.split("/").filter((part) => part.length > 0 && part !== ".");
-  if (parts.some((part) => part === ".." || part.includes("\0"))) {
-  if (parts.length === 0) {
-    return ".";
-  return parts.join("/");
+  return (PROVIDERS as readonly string[]).includes(value) ? (value as Provider) : undefined;
 }
 
-function hostedCloneRejected(c: Context, indexMode: IndexMode): Response | undefined {
-  if (
-    (indexMode === "hosted_clone" || indexMode === "both") &&
-    !isHostedCloneEnabled(process.env)
-  ) {
-    return errorJson(c, 404, "not_found", "hosted clone is disabled", {
-      reason: "flag_off",
-    });
+function parseIndexMode(value: unknown): IndexMode | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
   if (!(INDEX_MODES as readonly string[]).includes(value)) {
+    return undefined;
   }
   const mode = value as IndexMode;
   if ((mode === "hosted_clone" || mode === "both") && !isHostedCloneEnabled(process.env)) {
@@ -328,16 +324,6 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
         return errorJson(c, 409, "login_taken", "repo already exists", { reason: "unique" });
       }
       throw error;
-    }
-    if (provider === "github" && installationId !== null) {
-      const existing = await deps.store.findGithubInstallationByInstallationId(installationId);
-      await deps.store.upsertGithubInstallation({
-        id: existing?.id ?? uuidv7(now.getTime()),
-        orgId: access.project.orgId,
-        installationId,
-        accountLogin: existing?.accountLogin ?? "unknown",
-        createdAt: existing?.createdAt ?? now,
-      });
     }
     const project = await deps.store.setDefaultRepoIfEmpty(access.project.id, created.id, now);
     return c.json(presentProjectRepo({ ...created, projectId: project.id }), 201);
@@ -708,42 +694,3 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     return c.json(presented, 202);
   });
 }
-
-function parseIdempotencyKey(c: Context): string | undefined {
-  const header = c.req.header("idempotency-key")?.trim();
-  if (!header || header.length > 256) {
-    return undefined;
-  }
-  return header;
-}
-
-function parseProvider(value: unknown): Provider | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  return (PROVIDERS as readonly string[]).includes(value) ? (value as Provider) : undefined;
-}
-
-function parseIndexMode(value: unknown): IndexMode | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  return (INDEX_MODES as readonly string[]).includes(value) ? (value as IndexMode) : undefined;
-}
-
-function parseOptionalBigInt(value: unknown): bigint | null | undefined {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
-    return BigInt(value);
-  }
-  if (typeof value === "string" && /^[0-9]+$/.test(value)) {
-    return BigInt(value);
-  }
-  return undefined;
-}
-
-export type RepoDeps = AuthDeps & {
-  jobs: JobQueue;
-};

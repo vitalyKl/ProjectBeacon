@@ -112,7 +112,6 @@ export function createIndexRpcClient(options: {
       }
     },
     async query(repoId, path, query) {
-    async request(repoId, path, query) {
       const started = Date.now();
       let response: Response;
       try {

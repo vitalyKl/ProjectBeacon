@@ -1,8 +1,16 @@
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
-import { DETECT_QUEUE, GITHUB_IMPORT_QUEUE, GITHUB_INVALIDATE_QUEUE, MemoryJobQueue, PgBossJobQueue, type JobQueue } from "./jobs/queue.js";
-import { attachSidecarTunnelUpgrade } from "./code/routes.js";
 import { loadOtelConfig, writeLog } from "@beacon/shared";
+
+import { createApp } from "./app.js";
+import { attachSidecarTunnelUpgrade } from "./code/routes.js";
+import {
+  DETECT_QUEUE,
+  GITHUB_IMPORT_QUEUE,
+  GITHUB_INVALIDATE_QUEUE,
+  MemoryJobQueue,
+  PgBossJobQueue,
+  type JobQueue,
+} from "./jobs/queue.js";
 import { refreshObservabilityGauges } from "./observability.js";
 
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
@@ -39,24 +47,16 @@ if (otel.enabled) {
 }
 
 const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
-  console.log(
-    JSON.stringify({
-      level: "info",
-      msg: "listening",
-      port: info.port,
-      hostname,
-    }),
-  );
-});
-
-attachSidecarTunnelUpgrade(server, app.authDeps, app.sidecarTunnel, app.sidecarTunnelEnabled);
-serve({ fetch: app.fetch, port, hostname }, (info) => {
   writeLog({
     level: "info",
     msg: "listening",
     port: info.port,
     hostname,
   });
+});
+
+attachSidecarTunnelUpgrade(server, app.authDeps, app.sidecarTunnel, app.sidecarTunnelEnabled);
+
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl) {
   const { createDb } = await import("@beacon/db");
