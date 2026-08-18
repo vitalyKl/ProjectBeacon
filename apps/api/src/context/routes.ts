@@ -1,6 +1,6 @@
 import { CompileInputSchema } from "@beacon/api-spec";
 import { compileSessionBrief } from "@beacon/context";
-import { isUuid, uuidv7 } from "@beacon/shared";
+import { uuidv7 } from "@beacon/shared";
 import type { Hono } from "hono";
 
 import type { AuthDeps } from "../auth/routes.js";
@@ -39,9 +39,6 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       return errorJson(c, 400, "unauthorized", "project_id does not match path", {
         reason: "invalid_body",
       });
-    }
-    if (input.task_id && !isUuid(input.task_id)) {
-      return errorJson(c, 404, "not_found", "task not found");
     }
 
     let taskSummary = null;

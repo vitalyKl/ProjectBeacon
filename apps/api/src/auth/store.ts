@@ -126,6 +126,14 @@ export class GithubIdTakenError extends Error {
   }
 }
 
+export class UniqueViolationError extends Error {
+  override readonly name = "UniqueViolationError";
+
+  constructor(constraint: string) {
+    super(`unique constraint violated: ${constraint}`);
+  }
+}
+
 export interface AuthStore {
   hasAnyUser(): Promise<boolean>;
   findUserById(id: string): Promise<UserRecord | undefined>;
@@ -974,8 +982,13 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
-    this.contextRevisions.set(revision.id, cloneContextRevision(revision));
-    return cloneContextRevision(revision);
+    return this.enqueueWrite(() => {
+      if (this.contextRevisions.has(revision.id)) {
+        throw new UniqueViolationError("context_revisions_pkey");
+      }
+      this.contextRevisions.set(revision.id, cloneContextRevision(revision));
+      return cloneContextRevision(revision);
+    });
   }
 
   async listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]> {

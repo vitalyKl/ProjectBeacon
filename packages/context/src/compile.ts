@@ -403,7 +403,6 @@ export function compileSessionBrief(input: CompileInput, document: CompileDocume
     compiled_hash: "",
   });
   const neverDropCost = estimate(neverDropBrief);
-  // Never-drop layers still emit when they exceed the budget.
   const overflow = neverDropCost > budgetTokens;
 
   if (overflow) {
