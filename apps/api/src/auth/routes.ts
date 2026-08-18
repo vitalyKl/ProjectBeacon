@@ -9,7 +9,14 @@ import { clearSessionCookie, readSessionCookie, writeSessionCookie } from "./coo
 import { isGithubOAuthEnabled, type AuthConfig } from "./config.js";
 import { exchangeGithubCode } from "./github.js";
 import { hashPassword, isPasswordPolicyOk, verifyPassword } from "./password.js";
-import { issueSession, lookupValidSession, resolveSession, toPublicMe, toPublicUser } from "./session.js";
+import {
+  issueSession,
+  lookupValidSession,
+  resolveSession,
+  toPublicMe,
+  toPublicOrg,
+  toPublicUser,
+} from "./session.js";
 import {
   BootstrapConsumedError,
   GithubIdTakenError,
@@ -276,6 +283,9 @@ export function mountAuth(app: Hono, deps: AuthDeps): void {
     if (!orgs.some((org) => org.id === personal.id)) {
       orgs.unshift(personal);
     }
-    return c.json(toPublicMe(resolved.user, orgs));
+    return c.json({
+      ...toPublicMe(resolved.user, orgs),
+      personal_org: toPublicOrg(personal),
+    });
   });
 }

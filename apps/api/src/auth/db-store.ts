@@ -12,17 +12,19 @@ import {
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { slugCandidate, slugFromLogin } from "../slug.js";
-import type {
-  OrgInviteRecord,
-  OrgInviteRole,
-  OrgKind,
-  OrgMemberRecord,
-  OrgRecord,
-  OrgRole,
-  ProjectInviteRecord,
-  ProjectMemberRecord,
-  ProjectRecord,
-  ProjectRole,
+import {
+  higherOrgRole,
+  higherProjectRole,
+  type OrgInviteRecord,
+  type OrgInviteRole,
+  type OrgKind,
+  type OrgMemberRecord,
+  type OrgRecord,
+  type OrgRole,
+  type ProjectInviteRecord,
+  type ProjectMemberRecord,
+  type ProjectRecord,
+  type ProjectRole,
 } from "../orgs/types.js";
 import {
   BootstrapConsumedError,
@@ -327,15 +329,23 @@ export class DbAuthStore implements AuthStore {
       .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)));
   }
 
-  async ensurePersonalOrg(user: UserRecord, now: Date): Promise<OrgRecord> {
-    const existing = await this.db
-      .select({ org: orgs })
-      .from(orgMembers)
-      .innerJoin(orgs, eq(orgs.id, orgMembers.orgId))
-      .where(and(eq(orgMembers.userId, user.id), eq(orgs.kind, "personal")))
+  private async findOwnedPersonalOrg(
+    db: Pick<Db, "select">,
+    userId: string,
+  ): Promise<OrgRecord | undefined> {
+    const [row] = await db
+      .select()
+      .from(orgs)
+      .where(and(eq(orgs.id, userId), eq(orgs.kind, "personal")))
       .limit(1);
-    if (existing[0]) {
-      return toOrg(existing[0].org);
+    return row ? toOrg(row) : undefined;
+  }
+
+  async ensurePersonalOrg(user: UserRecord, now: Date): Promise<OrgRecord> {
+    const existing = await this.findOwnedPersonalOrg(this.db, user.id);
+    if (existing) {
+      await this.upsertOrgMember({ orgId: existing.id, userId: user.id, role: "owner" });
+      return existing;
     }
 
     const base = slugFromLogin(user.login);
@@ -343,14 +353,16 @@ export class DbAuthStore implements AuthStore {
       const slug = slugCandidate(base, attempt);
       try {
         return await this.db.transaction(async (tx) => {
-          const raced = await tx
-            .select({ org: orgs })
-            .from(orgMembers)
-            .innerJoin(orgs, eq(orgs.id, orgMembers.orgId))
-            .where(and(eq(orgMembers.userId, user.id), eq(orgs.kind, "personal")))
-            .limit(1);
-          if (raced[0]) {
-            return toOrg(raced[0].org);
+          const raced = await this.findOwnedPersonalOrg(tx, user.id);
+          if (raced) {
+            await tx
+              .insert(orgMembers)
+              .values({ orgId: raced.id, userId: user.id, role: "owner" })
+              .onConflictDoUpdate({
+                target: [orgMembers.orgId, orgMembers.userId],
+                set: { role: "owner" },
+              });
+            return raced;
           }
           const [org] = await tx
             .insert(orgs)
@@ -373,8 +385,15 @@ export class DbAuthStore implements AuthStore {
           return toOrg(org);
         });
       } catch (error) {
-        const constraint = uniqueConstraint(error);
-        if (constraint === "org_slug") {
+        if (!uniqueConstraint(error)) {
+          throw error;
+        }
+        const recovered = await this.findOwnedPersonalOrg(this.db, user.id);
+        if (recovered) {
+          await this.upsertOrgMember({ orgId: recovered.id, userId: user.id, role: "owner" });
+          return recovered;
+        }
+        if (uniqueConstraint(error) === "org_slug") {
           continue;
         }
         throw error;
@@ -513,16 +532,24 @@ export class DbAuthStore implements AuthStore {
       if (!updated) {
         return undefined;
       }
+      const [existing] = await tx
+        .select()
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, invite.orgId), eq(orgMembers.userId, userId)))
+        .limit(1);
+      const role = existing
+        ? higherOrgRole(existing.role as OrgRole, invite.role as OrgInviteRole)
+        : invite.role;
       await tx
         .insert(orgMembers)
         .values({
           orgId: invite.orgId,
           userId,
-          role: invite.role,
+          role,
         })
         .onConflictDoUpdate({
           target: [orgMembers.orgId, orgMembers.userId],
-          set: { role: invite.role },
+          set: { role },
         });
       return toOrgInvite(updated);
     });
@@ -709,17 +736,25 @@ export class DbAuthStore implements AuthStore {
       if (!updated) {
         return undefined;
       }
+      const [existing] = await tx
+        .select()
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, invite.projectId), eq(projectMembers.userId, userId)))
+        .limit(1);
+      const role = existing
+        ? higherProjectRole(existing.role as ProjectRole, invite.role as ProjectRole)
+        : invite.role;
       await tx
         .insert(projectMembers)
         .values({
           projectId: invite.projectId,
           userId,
-          role: invite.role,
-          createdAt: acceptedAt,
+          role,
+          createdAt: existing?.createdAt ?? acceptedAt,
         })
         .onConflictDoUpdate({
           target: [projectMembers.projectId, projectMembers.userId],
-          set: { role: invite.role },
+          set: { role },
         });
       return toProjectInvite(updated);
     });

@@ -93,6 +93,57 @@ describe("personal org on first login", () => {
     expect(body.personal_org).toMatchObject({ slug: "admin", kind: "personal" });
     expect(body.orgs).toEqual(expect.arrayContaining([expect.objectContaining({ slug: "admin" })]));
   });
+
+  it("keeps the owned personal org after joining another user's older personal-kind membership", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const aliceUser = (await store.findUserById(alice.user.id))!;
+    const bobUser = (await store.findUserById(bob.user.id))!;
+    const aliceOrg = await store.ensurePersonalOrg(aliceUser, new Date("2026-01-01T00:00:00.000Z"));
+    const bobOrg = await store.ensurePersonalOrg(bobUser, new Date("2026-01-02T00:00:00.000Z"));
+
+    await store.upsertOrgMember({ orgId: aliceOrg.id, userId: bob.user.id, role: "member" });
+
+    const me = await bob.app.request("/v1/me", { headers: { cookie: cookieHeader(bob.token!) } });
+    const body = (await me.json()) as { personal_org: { id: string; slug: string } };
+    expect(body.personal_org.id).toBe(bobOrg.id);
+    expect(body.personal_org.id).not.toBe(aliceOrg.id);
+    expect((await store.findOrgMember(bobOrg.id, bob.user.id))?.role).toBe("owner");
+  });
+
+  it("suffixes the personal org slug when the login slug is already taken", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    await alice.app.request("/v1/orgs", {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "bob", name: "Taken" }),
+    });
+    const bob = await registerUser(store, "bob");
+    const personal = await store.ensurePersonalOrg(
+      (await store.findUserById(bob.user.id))!,
+      new Date("2026-01-01T00:00:00.000Z"),
+    );
+    expect(personal.slug).toBe("bob-2");
+    expect(personal.id).toBe(bob.user.id);
+    expect((await store.findOrgMember(personal.id, bob.user.id))?.role).toBe("owner");
+  });
+
+  it("does not create a second personal org on later login", async () => {
+    const store = new MemoryAuthStore();
+    const { app } = await bootstrapAdmin(store);
+    const login = await app.request("/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: "admin", password: STRONG_PASSWORD }),
+    });
+    expect(login.status).toBe(200);
+    const admin = (await store.findUserByLogin("admin"))!;
+    const orgs = (await store.listOrgsForUser(admin.id)).filter((org) => org.kind === "personal");
+    expect(orgs).toHaveLength(1);
+    expect(orgs[0]?.id).toBe(admin.id);
+  });
 });
 
 describe("orgs and projects", () => {
@@ -174,6 +225,205 @@ describe("orgs and projects", () => {
       headers: { cookie: cookieHeader(alice.token!) },
     });
     expect(asAlice.status).toBe(200);
+  });
+
+  it("preserves a higher project role when accepting a lower invite", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const alice = await registerUser(store, "alice");
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "keep-admin", name: "Keep admin" }),
+    });
+    const project = (await created.json()) as { id: string };
+
+    await store.upsertProjectMember({
+      projectId: project.id,
+      userId: alice.user.id,
+      role: "admin",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+
+    const inviteRes = await app.request(`/v1/projects/${project.id}/invites`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ github_login: "alice", role: "read" }),
+    });
+    const invite = (await inviteRes.json()) as { id: string };
+    const accept = await app.request(`/v1/project-invites/${invite.id}/accept`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token!) },
+    });
+    expect(accept.status).toBe(200);
+    expect(await store.findProjectMember(project.id, alice.user.id)).toMatchObject({ role: "admin" });
+  });
+
+  it("preserves org owner when accepting a lower org invite", async () => {
+    const store = new MemoryAuthStore();
+    const owner = await registerUser(store, "owner");
+    const admin = await registerUser(store, "admin-user");
+
+    const orgRes = await owner.app.request("/v1/orgs", {
+      method: "POST",
+      headers: { cookie: cookieHeader(owner.token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "keep-owner", name: "Keep owner" }),
+    });
+    const org = (await orgRes.json()) as { id: string };
+
+    await store.upsertOrgMember({ orgId: org.id, userId: admin.user.id, role: "admin" });
+    const inviteRes = await owner.app.request(`/v1/orgs/${org.id}/invites`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(owner.token!), "content-type": "application/json" },
+      body: JSON.stringify({ github_login: "owner", role: "member" }),
+    });
+    const invite = (await inviteRes.json()) as { id: string };
+    const accept = await owner.app.request(`/v1/org-invites/${invite.id}/accept`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(owner.token!) },
+    });
+    expect(accept.status).toBe(200);
+    expect(await store.findOrgMember(org.id, owner.user.id)).toMatchObject({ role: "owner" });
+  });
+
+  it("rejects expired and already-accepted project invites", async () => {
+    const store = new MemoryAuthStore();
+    let now = new Date("2026-01-01T00:00:00.000Z");
+    const clock = { now: () => now };
+    const config = testConfig();
+    const app = createApp({ store, config, clock, checkReady: async () => true });
+    const boot = await app.request("/v1/auth/bootstrap", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${BOOTSTRAP_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ login: "admin", password: STRONG_PASSWORD }),
+    });
+    const token = sessionCookie(boot);
+    const aliceApp = createApp({ store, config, clock, checkReady: async () => true });
+    const aliceRes = await aliceApp.request("/v1/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: "alice", password: STRONG_PASSWORD }),
+    });
+    const aliceToken = sessionCookie(aliceRes);
+
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "expiry", name: "Expiry" }),
+    });
+    const project = (await created.json()) as { id: string };
+    const inviteRes = await app.request(`/v1/projects/${project.id}/invites`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ github_login: "alice", role: "read" }),
+    });
+    const invite = (await inviteRes.json()) as { id: string };
+
+    const first = await app.request(`/v1/project-invites/${invite.id}/accept`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(aliceToken!) },
+    });
+    expect(first.status).toBe(200);
+    const second = await app.request(`/v1/project-invites/${invite.id}/accept`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(aliceToken!) },
+    });
+    expect(second.status).toBe(404);
+
+    const expiredInvite = await app.request(`/v1/projects/${project.id}/invites`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ github_login: "alice", role: "write" }),
+    });
+    const later = (await expiredInvite.json()) as { id: string };
+    now = new Date("2026-01-09T00:00:00.000Z");
+    const expired = await app.request(`/v1/project-invites/${later.id}/accept`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(aliceToken!) },
+    });
+    expect(expired.status).toBe(404);
+    expect((await store.findProjectMember(project.id, (await store.findUserByLogin("alice"))!.id))?.role).toBe(
+      "read",
+    );
+  });
+
+  it("does not accept an invite for a soft-deleted project", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const alice = await registerUser(store, "alice");
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "gone", name: "Gone" }),
+    });
+    const project = (await created.json()) as { id: string };
+    const inviteRes = await app.request(`/v1/projects/${project.id}/invites`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ github_login: "alice", role: "read" }),
+    });
+    const invite = (await inviteRes.json()) as { id: string };
+    const del = await app.request(`/v1/projects/${project.id}`, {
+      method: "DELETE",
+      headers: { cookie: cookieHeader(token!) },
+    });
+    expect(del.status).toBe(200);
+
+    const accept = await app.request(`/v1/project-invites/${invite.id}/accept`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token!) },
+    });
+    expect(accept.status).toBe(404);
+    expect(await store.findProjectMember(project.id, alice.user.id)).toBeUndefined();
+  });
+
+  it("treats mixed-case org slugs as the stored lowercase slug", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    await app.request("/v1/orgs", {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "acme", name: "Acme" }),
+    });
+    const listed = await app.request("/v1/orgs/Acme/members", {
+      headers: { cookie: cookieHeader(token!) },
+    });
+    expect(listed.status).toBe(200);
+  });
+
+  it("conflicts on a slug reused after soft-delete", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "reuse", name: "Reuse" }),
+    });
+    const project = (await created.json()) as { id: string };
+    await app.request(`/v1/projects/${project.id}`, {
+      method: "DELETE",
+      headers: { cookie: cookieHeader(token!) },
+    });
+    const again = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "reuse", name: "Reuse again" }),
+    });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({
+      error: { code: "login_taken", details: { field: "slug" } },
+    });
   });
 });
 
@@ -262,5 +512,39 @@ describe("IDOR", () => {
     });
     expect(get.status).toBe(404);
     expect(await get.json()).toMatchObject({ error: { code: "not_found" } });
+  });
+
+  it("returns 404 for GET/PATCH/DELETE of a soft-deleted project even for a former admin", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "tombstone", name: "Tombstone" }),
+    });
+    const project = (await created.json()) as { id: string };
+    const del = await app.request(`/v1/projects/${project.id}`, {
+      method: "DELETE",
+      headers: { cookie: cookieHeader(token!) },
+    });
+    expect(del.status).toBe(200);
+
+    const get = await app.request(`/v1/projects/${project.id}`, {
+      headers: { cookie: cookieHeader(token!) },
+    });
+    expect(get.status).toBe(404);
+    const patch = await app.request(`/v1/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ name: "Still gone" }),
+    });
+    expect(patch.status).toBe(404);
+    const again = await app.request(`/v1/projects/${project.id}`, {
+      method: "DELETE",
+      headers: { cookie: cookieHeader(token!) },
+    });
+    expect(again.status).toBe(404);
   });
 });

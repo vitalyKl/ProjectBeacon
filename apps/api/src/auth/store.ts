@@ -1,5 +1,7 @@
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import {
+  higherOrgRole,
+  higherProjectRole,
   OrgSlugTakenError,
   ProjectSlugTakenError,
   type OrgInviteRecord,
@@ -308,14 +310,14 @@ export class MemoryAuthStore implements AuthStore {
 
   async ensurePersonalOrg(user: UserRecord, now: Date): Promise<OrgRecord> {
     return this.enqueueWrite(() => {
-      for (const member of this.orgMembers.values()) {
-        if (member.userId !== user.id) {
-          continue;
-        }
-        const org = this.orgs.get(member.orgId);
-        if (org?.kind === "personal") {
-          return cloneOrg(org);
-        }
+      const owned = this.orgs.get(user.id);
+      if (owned?.kind === "personal") {
+        this.orgMembers.set(this.orgMemberKey(owned.id, user.id), {
+          orgId: owned.id,
+          userId: user.id,
+          role: "owner",
+        });
+        return cloneOrg(owned);
       }
 
       const base = slugFromLogin(user.login);
@@ -405,8 +407,13 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async upsertOrgMember(member: OrgMemberRecord): Promise<OrgMemberRecord> {
-    this.orgMembers.set(this.orgMemberKey(member.orgId, member.userId), cloneOrgMember(member));
-    return cloneOrgMember(member);
+    const existing = this.orgMembers.get(this.orgMemberKey(member.orgId, member.userId));
+    const next = {
+      ...member,
+      role: existing ? higherOrgRole(existing.role, member.role) : member.role,
+    };
+    this.orgMembers.set(this.orgMemberKey(member.orgId, member.userId), cloneOrgMember(next));
+    return cloneOrgMember(next);
   }
 
   async createOrgInvite(invite: OrgInviteRecord): Promise<OrgInviteRecord> {
@@ -430,10 +437,11 @@ export class MemoryAuthStore implements AuthStore {
         return undefined;
       }
       invite.acceptedAt = new Date(acceptedAt);
+      const existing = this.orgMembers.get(this.orgMemberKey(invite.orgId, userId));
       this.orgMembers.set(this.orgMemberKey(invite.orgId, userId), {
         orgId: invite.orgId,
         userId,
-        role: invite.role,
+        role: existing ? higherOrgRole(existing.role, invite.role) : invite.role,
       });
       return cloneOrgInvite(invite);
     });
@@ -442,11 +450,7 @@ export class MemoryAuthStore implements AuthStore {
   async createProject(project: ProjectRecord, creatorUserId: string): Promise<ProjectRecord> {
     return this.enqueueWrite(() => {
       for (const existing of this.projects.values()) {
-        if (
-          existing.orgId === project.orgId &&
-          existing.slug === project.slug &&
-          existing.deletedAt === null
-        ) {
+        if (existing.orgId === project.orgId && existing.slug === project.slug) {
           throw new ProjectSlugTakenError();
         }
       }
@@ -493,12 +497,7 @@ export class MemoryAuthStore implements AuthStore {
       }
       if (patch.slug && patch.slug !== project.slug) {
         for (const existing of this.projects.values()) {
-          if (
-            existing.id !== id &&
-            existing.orgId === project.orgId &&
-            existing.slug === patch.slug &&
-            existing.deletedAt === null
-          ) {
+          if (existing.id !== id && existing.orgId === project.orgId && existing.slug === patch.slug) {
             throw new ProjectSlugTakenError();
           }
         }
@@ -548,6 +547,7 @@ export class MemoryAuthStore implements AuthStore {
     const existing = this.projectMembers.get(this.projectMemberKey(member.projectId, member.userId));
     const next = {
       ...member,
+      role: existing ? higherProjectRole(existing.role, member.role) : member.role,
       createdAt: existing?.createdAt ?? member.createdAt,
     };
     this.projectMembers.set(this.projectMemberKey(member.projectId, member.userId), cloneProjectMember(next));
@@ -579,7 +579,7 @@ export class MemoryAuthStore implements AuthStore {
       this.projectMembers.set(this.projectMemberKey(invite.projectId, userId), {
         projectId: invite.projectId,
         userId,
-        role: invite.role,
+        role: existing ? higherProjectRole(existing.role, invite.role) : invite.role,
         createdAt: existing?.createdAt ?? acceptedAt,
       });
       return cloneProjectInvite(invite);

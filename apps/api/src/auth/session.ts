@@ -49,7 +49,7 @@ export function toPublicOrg(org: OrgRecord): PublicOrg {
 }
 
 export function toPublicMe(user: UserRecord, orgs: OrgRecord[]): PublicMe {
-  const personal = orgs.find((org) => org.kind === "personal") ?? null;
+  const personal = orgs.find((org) => org.kind === "personal" && org.id === user.id) ?? null;
   return {
     ...toPublicUser(user),
     personal_org: personal ? toPublicOrg(personal) : null,

@@ -99,14 +99,21 @@ export function isProjectRole(value: string): value is ProjectRole {
   return (PROJECT_ROLES as readonly string[]).includes(value);
 }
 
+const ORG_ROLE_RANK: Record<OrgRole, number> = { member: 1, admin: 2, owner: 3 };
+const PROJECT_ROLE_RANK: Record<ProjectRole, number> = { read: 1, write: 2, admin: 3 };
+
 export function orgRoleAtLeast(role: OrgRole, needed: "owner" | "admin"): boolean {
-  if (needed === "owner") {
-    return role === "owner";
-  }
-  return role === "owner" || role === "admin";
+  return ORG_ROLE_RANK[role] >= ORG_ROLE_RANK[needed];
 }
 
 export function projectRoleAtLeast(role: ProjectRole, needed: ProjectRole): boolean {
-  const rank = { read: 1, write: 2, admin: 3 } as const;
-  return rank[role] >= rank[needed];
+  return PROJECT_ROLE_RANK[role] >= PROJECT_ROLE_RANK[needed];
+}
+
+export function higherOrgRole(current: OrgRole, incoming: OrgRole): OrgRole {
+  return ORG_ROLE_RANK[current] >= ORG_ROLE_RANK[incoming] ? current : incoming;
+}
+
+export function higherProjectRole(current: ProjectRole, incoming: ProjectRole): ProjectRole {
+  return PROJECT_ROLE_RANK[current] >= PROJECT_ROLE_RANK[incoming] ? current : incoming;
 }

@@ -53,7 +53,7 @@ async function resolveOrg(deps: AuthDeps, ref: string): Promise<OrgRecord | unde
       return byId;
     }
   }
-  return deps.store.findOrgBySlug(ref);
+  return deps.store.findOrgBySlug(ref.toLowerCase());
 }
 
 function parseInviteTarget(body: Record<string, unknown> | undefined):
@@ -205,6 +205,9 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
     if (access instanceof Response) {
       return access;
     }
+    if (access.org.kind === "personal") {
+      return errorJson(c, 403, "forbidden", "personal orgs cannot be invited to");
+    }
 
     const body = await readObject(c);
     const target = parseInviteTarget(body);
@@ -240,6 +243,10 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
     const invite = await deps.store.findOrgInviteById(id);
     const now = deps.clock.now();
     if (!invite || invite.acceptedAt || invite.expiresAt.getTime() <= now.getTime()) {
+      return errorJson(c, 404, "not_found", "invite not found");
+    }
+    const org = await deps.store.findOrgById(invite.orgId);
+    if (!org || org.kind === "personal") {
       return errorJson(c, 404, "not_found", "invite not found");
     }
     if (!inviteMatchesUser(invite, session.user)) {
@@ -519,6 +526,10 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
     const invite = await deps.store.findProjectInviteById(id);
     const now = deps.clock.now();
     if (!invite || invite.acceptedAt || invite.expiresAt.getTime() <= now.getTime()) {
+      return errorJson(c, 404, "not_found", "invite not found");
+    }
+    const project = await deps.store.findProjectById(invite.projectId);
+    if (!project || project.deletedAt) {
       return errorJson(c, 404, "not_found", "invite not found");
     }
     if (!inviteMatchesUser(invite, session.user)) {
