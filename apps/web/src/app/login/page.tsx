@@ -5,11 +5,13 @@ import { githubCallbackUrl, publicAuthConfig } from "@/lib/auth-config";
 
 import { LoginForm } from "./login-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
-  const auth = publicAuthConfig();
+  const auth = await publicAuthConfig();
   const githubHref =
     auth.githubEnabled && auth.githubClientId
-      ? githubAuthorizeUrl(auth.githubClientId, githubCallbackUrl())
+      ? githubAuthorizeUrl(auth.githubClientId, await githubCallbackUrl())
       : null;
 
   return (

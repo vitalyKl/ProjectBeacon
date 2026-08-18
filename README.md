@@ -2,7 +2,7 @@
 
 Project operating system for mixed human + AI-agent development.
 
-TypeScript monorepo (pnpm workspaces + Turborepo). Application logic is not implemented yet — this is the layout and tooling bootstrap. See [docs/design.md](docs/design.md).
+TypeScript monorepo (pnpm workspaces + Turborepo). The web shell (`apps/web`) is a Next.js App Router app with auth pages and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md).
 
 ## Prerequisites
 

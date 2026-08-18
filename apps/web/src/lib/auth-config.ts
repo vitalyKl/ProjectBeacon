@@ -1,18 +1,23 @@
+import { connection } from "next/server";
+
 export type PublicAuthConfig = {
   githubEnabled: boolean;
   githubClientId: string | null;
 };
 
-export function publicAuthConfig(): PublicAuthConfig {
+export async function publicAuthConfig(): Promise<PublicAuthConfig> {
+  // Request-time: compose sets AUTH_GITHUB / client id / public URL at runtime.
+  await connection();
   const clientId = process.env.GITHUB_OAUTH_CLIENT_ID?.trim() || null;
   const githubEnabled = process.env.AUTH_GITHUB === "true" && Boolean(clientId);
   return { githubEnabled, githubClientId: githubEnabled ? clientId : null };
 }
 
-export function publicOrigin(): string {
+export async function publicOrigin(): Promise<string> {
+  await connection();
   return (process.env.BEACON_PUBLIC_URL ?? "http://localhost:3000").replace(/\/$/, "");
 }
 
-export function githubCallbackUrl(origin = publicOrigin()): string {
-  return `${origin}/login/github`;
+export async function githubCallbackUrl(): Promise<string> {
+  return `${await publicOrigin()}/login/github`;
 }

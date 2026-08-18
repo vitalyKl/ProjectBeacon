@@ -129,17 +129,6 @@ export async function bootstrapLocal(
   return parseJson<PublicUser>(res);
 }
 
-export async function loginGithub(code: string): Promise<PublicUser> {
-  const res = await apiFetch("/v1/auth/github", {
-    method: "POST",
-    body: JSON.stringify({ code }),
-  });
-  if (!res.ok) {
-    throw await readApiError(res, "GitHub sign-in failed");
-  }
-  return parseJson<PublicUser>(res);
-}
-
 export async function logoutSession(): Promise<void> {
   const res = await apiFetch("/v1/auth/logout", { method: "POST" });
   if (!res.ok) {

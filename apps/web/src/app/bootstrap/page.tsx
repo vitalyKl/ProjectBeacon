@@ -9,8 +9,8 @@ export default function BootstrapPage() {
         <p className="text-sm font-medium text-muted">Self-host</p>
         <h1 className="text-3xl font-semibold tracking-tight">First-user bootstrap</h1>
         <p className="text-sm leading-6 text-muted">
-          Use the operator <code>BOOTSTRAP_ADMIN_TOKEN</code> once. After a user exists, this path
-          returns <code>409 bootstrap_consumed</code>.
+          Create the first user with the operator bootstrap token. This works once; after that, use
+          local login.
         </p>
       </div>
       <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">

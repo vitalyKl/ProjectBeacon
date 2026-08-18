@@ -3,11 +3,13 @@ import Link from "next/link";
 import { githubAuthorizeUrl } from "@/lib/api";
 import { githubCallbackUrl, publicAuthConfig } from "@/lib/auth-config";
 
+export const dynamic = "force-dynamic";
+
 export default async function LandingPage() {
-  const auth = publicAuthConfig();
+  const auth = await publicAuthConfig();
   const githubHref =
     auth.githubEnabled && auth.githubClientId
-      ? githubAuthorizeUrl(auth.githubClientId, githubCallbackUrl())
+      ? githubAuthorizeUrl(auth.githubClientId, await githubCallbackUrl())
       : null;
 
   return (
@@ -18,8 +20,7 @@ export default async function LandingPage() {
           Hosted and self-host are equal paths.
         </h1>
         <p className="max-w-2xl text-base leading-7 text-muted">
-          Sign in on the control plane you already run. The browser talks only to this origin; the
-          API cookie stays host-only behind the same-origin <code>/v1</code> rewrite.
+          Sign in on this instance. Hosted GitHub and self-host login are equal first steps.
         </p>
       </header>
 
@@ -40,8 +41,7 @@ export default async function LandingPage() {
             </a>
           ) : (
             <p className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted">
-              GitHub OAuth is not configured on this instance. Use self-host login, or set{" "}
-              <code>AUTH_GITHUB=true</code> and a client id.
+              GitHub sign-in is not enabled on this instance. Use self-host login or bootstrap.
             </p>
           )}
         </article>

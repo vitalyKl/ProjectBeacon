@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
   ApiError,
@@ -115,17 +115,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   async function onLogout() {
-    await logoutSession();
+    try {
+      await logoutSession();
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "logout failed");
+      return;
+    }
     writeStoredId(ORG_STORAGE_KEY, null);
     writeStoredId(PROJECT_STORAGE_KEY, null);
     router.replace("/");
     router.refresh();
   }
-
-  const sectionHint = useMemo(() => {
-    const match = APP_NAV.find((item) => item.href === pathname);
-    return match?.label ?? "Home";
-  }, [pathname]);
 
   if (loading) {
     return (
@@ -199,14 +199,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <main className="min-w-0 flex-1 px-6 py-6">
           {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
-          {children ?? (
-            <section className="space-y-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{sectionHint}</h1>
-              <p className="text-sm text-muted">
-                {org ? `${org.name} · ${project?.name ?? "no project yet"}` : "Select an org to continue."}
-              </p>
-            </section>
-          )}
+          {children}
         </main>
       </div>
     </div>
