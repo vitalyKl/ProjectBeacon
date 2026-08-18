@@ -11,6 +11,18 @@ import {
   type ProjectMemberRecord,
   type ProjectRecord,
 } from "../orgs/types.js";
+import { wouldCreateCycle } from "../roadmap/cycle.js";
+import {
+  DependencyCycleError,
+  VersionConflictError,
+  type ActivityEventRecord,
+  type IdempotencyActorType,
+  type MilestoneRecord,
+  type TaskCommentRecord,
+  type TaskDependencyRecord,
+  type TaskPatch,
+  type TaskRecord,
+} from "../roadmap/types.js";
 
 export type UserRecord = {
   id: string;
@@ -49,6 +61,18 @@ export {
   OrgSlugTakenError,
   ProjectSlugTakenError,
 } from "../orgs/types.js";
+export {
+  DependencyCycleError,
+  VersionConflictError,
+} from "../roadmap/types.js";
+export type {
+  ActivityEventRecord,
+  MilestoneRecord,
+  TaskCommentRecord,
+  TaskDependencyRecord,
+  TaskPatch,
+  TaskRecord,
+} from "../roadmap/types.js";
 
 export class LoginTakenError extends Error {
   override readonly name = "LoginTakenError";
@@ -117,6 +141,40 @@ export interface AuthStore {
     userId: string,
     acceptedAt: Date,
   ): Promise<ProjectInviteRecord | undefined>;
+  createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord>;
+  listMilestones(projectId: string): Promise<MilestoneRecord[]>;
+  findMilestoneById(id: string): Promise<MilestoneRecord | undefined>;
+  createTask(task: TaskRecord): Promise<TaskRecord>;
+  listTasks(projectId: string): Promise<TaskRecord[]>;
+  findTaskById(id: string): Promise<TaskRecord | undefined>;
+  updateTask(
+    id: string,
+    expectedVersion: number,
+    patch: TaskPatch,
+    updatedAt: Date,
+    options?: { releaseLock?: boolean },
+  ): Promise<{ task: TaskRecord; lockReleased: boolean } | undefined>;
+  softDeleteTask(id: string, deletedAt: Date): Promise<TaskRecord | undefined>;
+  createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
+  addDependency(dependency: TaskDependencyRecord): Promise<TaskDependencyRecord>;
+  writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
+  listActivity(
+    projectId: string,
+    filters?: { objectType?: string; objectId?: string },
+  ): Promise<ActivityEventRecord[]>;
+  findIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    now: Date,
+  ): Promise<unknown | undefined>;
+  saveIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    response: unknown,
+    createdAt: Date,
+  ): Promise<void>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -179,6 +237,8 @@ function emailsEqual(left: string | null | undefined, right: string | null | und
   return left.toLowerCase() === right.toLowerCase();
 }
 
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
 export class MemoryAuthStore implements AuthStore {
   private readonly users = new Map<string, UserRecord>();
   private readonly sessions = new Map<string, SessionRecord>();
@@ -188,6 +248,15 @@ export class MemoryAuthStore implements AuthStore {
   private readonly projects = new Map<string, ProjectRecord>();
   private readonly projectMembers = new Map<string, ProjectMemberRecord>();
   private readonly projectInvites = new Map<string, ProjectInviteRecord>();
+  private readonly milestones = new Map<string, MilestoneRecord>();
+  private readonly tasks = new Map<string, TaskRecord>();
+  private readonly comments = new Map<string, TaskCommentRecord>();
+  private readonly dependencies: TaskDependencyRecord[] = [];
+  private readonly activity = new Map<string, ActivityEventRecord>();
+  private readonly idempotency = new Map<
+    string,
+    { response: unknown; createdAt: Date }
+  >();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -579,4 +648,230 @@ export class MemoryAuthStore implements AuthStore {
       return cloneProjectInvite(invite);
     });
   }
+
+  async createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord> {
+    this.milestones.set(milestone.id, cloneMilestone(milestone));
+    return cloneMilestone(milestone);
+  }
+
+  async listMilestones(projectId: string): Promise<MilestoneRecord[]> {
+    const result: MilestoneRecord[] = [];
+    for (const milestone of this.milestones.values()) {
+      if (milestone.projectId === projectId) {
+        result.push(cloneMilestone(milestone));
+      }
+    }
+    result.sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
+    return result;
+  }
+
+  async findMilestoneById(id: string): Promise<MilestoneRecord | undefined> {
+    const milestone = this.milestones.get(id);
+    return milestone ? cloneMilestone(milestone) : undefined;
+  }
+
+  async createTask(task: TaskRecord): Promise<TaskRecord> {
+    this.tasks.set(task.id, cloneTask(task));
+    return cloneTask(task);
+  }
+
+  async listTasks(projectId: string): Promise<TaskRecord[]> {
+    const result: TaskRecord[] = [];
+    for (const task of this.tasks.values()) {
+      if (task.projectId === projectId && !task.deletedAt) {
+        result.push(cloneTask(task));
+      }
+    }
+    return result;
+  }
+
+  async findTaskById(id: string): Promise<TaskRecord | undefined> {
+    const task = this.tasks.get(id);
+    return task ? cloneTask(task) : undefined;
+  }
+
+  async updateTask(
+    id: string,
+    expectedVersion: number,
+    patch: TaskPatch,
+    updatedAt: Date,
+    options?: { releaseLock?: boolean },
+  ): Promise<{ task: TaskRecord; lockReleased: boolean } | undefined> {
+    return this.enqueueWrite(() => {
+      const task = this.tasks.get(id);
+      if (!task || task.deletedAt) {
+        return undefined;
+      }
+      if (task.version !== expectedVersion) {
+        throw new VersionConflictError(cloneTask(task));
+      }
+      if (patch.title !== undefined) {
+        task.title = patch.title;
+      }
+      if (patch.description !== undefined) {
+        task.description = patch.description;
+      }
+      if (patch.status !== undefined) {
+        task.status = patch.status;
+      }
+      if (patch.type !== undefined) {
+        task.type = patch.type;
+      }
+      if (patch.priority !== undefined) {
+        task.priority = patch.priority;
+      }
+      if (patch.milestoneId !== undefined) {
+        task.milestoneId = patch.milestoneId;
+      }
+      if (patch.parentId !== undefined) {
+        task.parentId = patch.parentId;
+      }
+      if (patch.assigneeUserId !== undefined) {
+        task.assigneeUserId = patch.assigneeUserId;
+      }
+      if (patch.assigneeAgentName !== undefined) {
+        task.assigneeAgentName = patch.assigneeAgentName;
+      }
+      if (patch.agentBrief !== undefined) {
+        task.agentBrief = patch.agentBrief;
+      }
+      if (patch.linkedPaths !== undefined) {
+        task.linkedPaths = patch.linkedPaths.map((path) => ({ ...path }));
+      }
+      const lockReleased = Boolean(options?.releaseLock && task.lockedBySessionId);
+      if (options?.releaseLock) {
+        task.lockedBySessionId = null;
+        task.lockExpiresAt = null;
+      }
+      task.version += 1;
+      task.updatedAt = new Date(updatedAt);
+      return { task: cloneTask(task), lockReleased };
+    });
+  }
+
+  async softDeleteTask(id: string, deletedAt: Date): Promise<TaskRecord | undefined> {
+    const task = this.tasks.get(id);
+    if (!task || task.deletedAt) {
+      return undefined;
+    }
+    task.deletedAt = new Date(deletedAt);
+    task.updatedAt = new Date(deletedAt);
+    task.version += 1;
+    return cloneTask(task);
+  }
+
+  async createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord> {
+    this.comments.set(comment.id, cloneComment(comment));
+    return cloneComment(comment);
+  }
+
+  async addDependency(dependency: TaskDependencyRecord): Promise<TaskDependencyRecord> {
+    return this.enqueueWrite(() => {
+      const existing = this.dependencies.find(
+        (row) =>
+          row.fromTaskId === dependency.fromTaskId &&
+          row.toTaskId === dependency.toTaskId &&
+          row.type === dependency.type,
+      );
+      if (existing) {
+        return { ...existing };
+      }
+      if (dependency.type === "blocks") {
+        const blockEdges = this.dependencies.filter((row) => row.type === "blocks");
+        if (wouldCreateCycle(blockEdges, dependency.fromTaskId, dependency.toTaskId)) {
+          throw new DependencyCycleError();
+        }
+      }
+      this.dependencies.push({ ...dependency });
+      return { ...dependency };
+    });
+  }
+
+  async writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord> {
+    this.activity.set(event.id, cloneActivity(event));
+    return cloneActivity(event);
+  }
+
+  async listActivity(
+    projectId: string,
+    filters?: { objectType?: string; objectId?: string },
+  ): Promise<ActivityEventRecord[]> {
+    const result: ActivityEventRecord[] = [];
+    for (const event of this.activity.values()) {
+      if (event.projectId !== projectId) {
+        continue;
+      }
+      if (filters?.objectType && event.objectType !== filters.objectType) {
+        continue;
+      }
+      if (filters?.objectId && event.objectId !== filters.objectId) {
+        continue;
+      }
+      result.push(cloneActivity(event));
+    }
+    return result;
+  }
+
+  async findIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    now: Date,
+  ): Promise<unknown | undefined> {
+    const stored = this.idempotency.get(idempotencyKey(actorType, actorId, key));
+    if (!stored) {
+      return undefined;
+    }
+    if (now.getTime() - stored.createdAt.getTime() > IDEMPOTENCY_TTL_MS) {
+      this.idempotency.delete(idempotencyKey(actorType, actorId, key));
+      return undefined;
+    }
+    return structuredClone(stored.response);
+  }
+
+  async saveIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    response: unknown,
+    createdAt: Date,
+  ): Promise<void> {
+    this.idempotency.set(idempotencyKey(actorType, actorId, key), {
+      response: structuredClone(response),
+      createdAt: new Date(createdAt),
+    });
+  }
+}
+
+function cloneMilestone(milestone: MilestoneRecord): MilestoneRecord {
+  return { ...milestone, createdAt: new Date(milestone.createdAt) };
+}
+
+function cloneTask(task: TaskRecord): TaskRecord {
+  return {
+    ...task,
+    linkedPaths: task.linkedPaths.map((path) => ({ ...path })),
+    lockExpiresAt: task.lockExpiresAt ? new Date(task.lockExpiresAt) : null,
+    deletedAt: task.deletedAt ? new Date(task.deletedAt) : null,
+    createdAt: new Date(task.createdAt),
+    updatedAt: new Date(task.updatedAt),
+  };
+}
+
+function cloneComment(comment: TaskCommentRecord): TaskCommentRecord {
+  return { ...comment, createdAt: new Date(comment.createdAt) };
+}
+
+function cloneActivity(event: ActivityEventRecord): ActivityEventRecord {
+  return {
+    ...event,
+    payload: { ...event.payload },
+    createdAt: new Date(event.createdAt),
+  };
+}
+
+function idempotencyKey(actorType: IdempotencyActorType, actorId: string, key: string): string {
+  return `${actorType}:${actorId}:${key}`;
 }

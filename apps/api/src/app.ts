@@ -8,6 +8,7 @@ import { mountAuth } from "./auth/routes.js";
 import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
 import { checkDatabase } from "./db.js";
 import { mountOrgs } from "./orgs/routes.js";
+import { mountRoadmap } from "./roadmap/routes.js";
 
 export const packageName = "@beacon/api";
 
@@ -59,6 +60,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   };
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);
+  mountRoadmap(app, authDeps);
 
   return app;
 }

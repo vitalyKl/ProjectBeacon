@@ -33,7 +33,7 @@ type Authed = {
   user: UserRecord;
 };
 
-async function requireSession(c: Context, deps: AuthDeps): Promise<Authed | Response> {
+export async function requireSession(c: Context, deps: AuthDeps): Promise<Authed | Response> {
   const resolved = await loadSession(c, deps);
   if (!resolved) {
     return errorJson(c, 401, "unauthorized", "authentication required");
@@ -42,7 +42,7 @@ async function requireSession(c: Context, deps: AuthDeps): Promise<Authed | Resp
   return { user: resolved.user };
 }
 
-function isResponse(value: Authed | Response): value is Response {
+export function isResponse(value: Authed | Response): value is Response {
   return value instanceof Response;
 }
 
@@ -117,7 +117,7 @@ async function requireOrgMember(
   return { org };
 }
 
-async function requireProjectAccess(
+export async function requireProjectAccess(
   c: Context,
   deps: AuthDeps,
   user: UserRecord,

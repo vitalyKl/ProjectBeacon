@@ -1,15 +1,21 @@
 import {
+  activityEvents,
+  idempotencyKeys,
+  milestones,
   orgInvites,
   orgMembers,
   orgs,
   projectInvites,
   projectMembers,
   projects,
+  taskComments,
+  taskDependencies,
+  tasks,
   userSessions,
   users,
   type Db,
 } from "@beacon/db";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import {
@@ -28,14 +34,32 @@ import {
 } from "../orgs/types.js";
 import {
   BootstrapConsumedError,
+  DependencyCycleError,
   GithubIdTakenError,
   LoginTakenError,
   OrgSlugTakenError,
   ProjectSlugTakenError,
+  VersionConflictError,
+  type ActivityEventRecord,
   type AuthStore,
+  type MilestoneRecord,
   type SessionRecord,
+  type TaskCommentRecord,
+  type TaskDependencyRecord,
+  type TaskPatch,
+  type TaskRecord,
   type UserRecord,
 } from "./store.js";
+import { wouldCreateCycle } from "../roadmap/cycle.js";
+import type {
+  CommentAuthorType,
+  DependencyType,
+  IdempotencyActorType,
+  LinkedPath,
+  MilestoneStatus,
+  TaskStatus,
+  TaskType,
+} from "../roadmap/types.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
 
@@ -176,6 +200,101 @@ function toProjectInvite(row: typeof projectInvites.$inferSelect): ProjectInvite
     invitedBy: row.invitedBy,
     expiresAt: row.expiresAt,
     acceptedAt: row.acceptedAt,
+  };
+}
+
+function asLinkedPaths(value: unknown): LinkedPath[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const paths: LinkedPath[] = [];
+  for (const item of value) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record["repo_id"] === "string" && typeof record["path"] === "string") {
+      paths.push({ repo_id: record["repo_id"], path: record["path"] });
+    }
+  }
+  return paths;
+}
+
+function asPayload(value: unknown): Record<string, unknown> {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function toMilestone(row: typeof milestones.$inferSelect): MilestoneRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    description: row.description,
+    status: row.status as MilestoneStatus,
+    targetDate: row.targetDate,
+    sortOrder: row.sortOrder,
+    createdAt: row.createdAt,
+  };
+}
+
+function toTask(row: typeof tasks.$inferSelect): TaskRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    milestoneId: row.milestoneId,
+    parentId: row.parentId,
+    title: row.title,
+    description: row.description,
+    status: row.status as TaskStatus,
+    priority: row.priority,
+    type: row.type as TaskType,
+    version: row.version,
+    assigneeUserId: row.assigneeUserId,
+    assigneeAgentName: row.assigneeAgentName,
+    agentBrief: row.agentBrief,
+    linkedPaths: asLinkedPaths(row.linkedPaths),
+    githubIssueId: row.githubIssueId,
+    lockedBySessionId: row.lockedBySessionId,
+    lockExpiresAt: row.lockExpiresAt,
+    deletedAt: row.deletedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toComment(row: typeof taskComments.$inferSelect): TaskCommentRecord {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    authorType: row.authorType as CommentAuthorType,
+    authorId: row.authorId,
+    body: row.body,
+    createdAt: row.createdAt,
+  };
+}
+
+function toDependency(row: typeof taskDependencies.$inferSelect): TaskDependencyRecord {
+  return {
+    fromTaskId: row.fromTaskId,
+    toTaskId: row.toTaskId,
+    type: row.type as DependencyType,
+  };
+}
+
+function toActivity(row: typeof activityEvents.$inferSelect): ActivityEventRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    objectType: row.objectType,
+    objectId: row.objectId,
+    actorType: row.actorType,
+    actorId: row.actorId,
+    verb: row.verb,
+    payload: asPayload(row.payload),
+    createdAt: row.createdAt,
   };
 }
 
@@ -758,5 +877,294 @@ export class DbAuthStore implements AuthStore {
         });
       return toProjectInvite(updated);
     });
+  }
+
+  async createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord> {
+    const [row] = await this.db
+      .insert(milestones)
+      .values({
+        id: milestone.id,
+        projectId: milestone.projectId,
+        title: milestone.title,
+        description: milestone.description,
+        status: milestone.status,
+        targetDate: milestone.targetDate,
+        sortOrder: milestone.sortOrder,
+        createdAt: milestone.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert milestone returned no row");
+    }
+    return toMilestone(row);
+  }
+
+  async listMilestones(projectId: string): Promise<MilestoneRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(milestones)
+      .where(eq(milestones.projectId, projectId))
+      .orderBy(asc(milestones.sortOrder), asc(milestones.createdAt), asc(milestones.id));
+    return rows.map(toMilestone);
+  }
+
+  async findMilestoneById(id: string): Promise<MilestoneRecord | undefined> {
+    const [row] = await this.db.select().from(milestones).where(eq(milestones.id, id)).limit(1);
+    return row ? toMilestone(row) : undefined;
+  }
+
+  async createTask(task: TaskRecord): Promise<TaskRecord> {
+    const [row] = await this.db
+      .insert(tasks)
+      .values({
+        id: task.id,
+        projectId: task.projectId,
+        milestoneId: task.milestoneId,
+        parentId: task.parentId,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        type: task.type,
+        version: task.version,
+        assigneeUserId: task.assigneeUserId,
+        assigneeAgentName: task.assigneeAgentName,
+        agentBrief: task.agentBrief,
+        linkedPaths: task.linkedPaths,
+        githubIssueId: task.githubIssueId,
+        lockedBySessionId: task.lockedBySessionId,
+        lockExpiresAt: task.lockExpiresAt,
+        deletedAt: task.deletedAt,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert task returned no row");
+    }
+    return toTask(row);
+  }
+
+  async listTasks(projectId: string): Promise<TaskRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)));
+    return rows.map(toTask);
+  }
+
+  async findTaskById(id: string): Promise<TaskRecord | undefined> {
+    const [row] = await this.db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+    return row ? toTask(row) : undefined;
+  }
+
+  async updateTask(
+    id: string,
+    expectedVersion: number,
+    patch: TaskPatch,
+    updatedAt: Date,
+    options?: { releaseLock?: boolean },
+  ): Promise<{ task: TaskRecord; lockReleased: boolean } | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [current] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+      if (!current || current.deletedAt) {
+        return undefined;
+      }
+      if (current.version !== expectedVersion) {
+        throw new VersionConflictError(toTask(current));
+      }
+      const lockReleased = Boolean(options?.releaseLock && current.lockedBySessionId);
+      const [row] = await tx
+        .update(tasks)
+        .set({
+          ...(patch.title !== undefined ? { title: patch.title } : {}),
+          ...(patch.description !== undefined ? { description: patch.description } : {}),
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.type !== undefined ? { type: patch.type } : {}),
+          ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+          ...(patch.milestoneId !== undefined ? { milestoneId: patch.milestoneId } : {}),
+          ...(patch.parentId !== undefined ? { parentId: patch.parentId } : {}),
+          ...(patch.assigneeUserId !== undefined ? { assigneeUserId: patch.assigneeUserId } : {}),
+          ...(patch.assigneeAgentName !== undefined
+            ? { assigneeAgentName: patch.assigneeAgentName }
+            : {}),
+          ...(patch.agentBrief !== undefined ? { agentBrief: patch.agentBrief } : {}),
+          ...(patch.linkedPaths !== undefined ? { linkedPaths: patch.linkedPaths } : {}),
+          ...(options?.releaseLock ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
+          version: current.version + 1,
+          updatedAt,
+        })
+        .where(and(eq(tasks.id, id), eq(tasks.version, expectedVersion), isNull(tasks.deletedAt)))
+        .returning();
+      if (!row) {
+        const [fresh] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+        if (fresh && !fresh.deletedAt) {
+          throw new VersionConflictError(toTask(fresh));
+        }
+        return undefined;
+      }
+      return { task: toTask(row), lockReleased };
+    });
+  }
+
+  async softDeleteTask(id: string, deletedAt: Date): Promise<TaskRecord | undefined> {
+    const [current] = await this.db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+    if (!current || current.deletedAt) {
+      return undefined;
+    }
+    const [row] = await this.db
+      .update(tasks)
+      .set({
+        deletedAt,
+        updatedAt: deletedAt,
+        version: current.version + 1,
+      })
+      .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)))
+      .returning();
+    return row ? toTask(row) : undefined;
+  }
+
+  async createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord> {
+    const [row] = await this.db
+      .insert(taskComments)
+      .values({
+        id: comment.id,
+        taskId: comment.taskId,
+        authorType: comment.authorType,
+        authorId: comment.authorId,
+        body: comment.body,
+        createdAt: comment.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert comment returned no row");
+    }
+    return toComment(row);
+  }
+
+  async addDependency(dependency: TaskDependencyRecord): Promise<TaskDependencyRecord> {
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(taskDependencies)
+        .where(
+          and(
+            eq(taskDependencies.fromTaskId, dependency.fromTaskId),
+            eq(taskDependencies.toTaskId, dependency.toTaskId),
+            eq(taskDependencies.type, dependency.type),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        return toDependency(existing);
+      }
+      if (dependency.type === "blocks") {
+        const edges = await tx
+          .select()
+          .from(taskDependencies)
+          .where(eq(taskDependencies.type, "blocks"));
+        if (wouldCreateCycle(edges.map(toDependency), dependency.fromTaskId, dependency.toTaskId)) {
+          throw new DependencyCycleError();
+        }
+      }
+      const [row] = await tx
+        .insert(taskDependencies)
+        .values({
+          fromTaskId: dependency.fromTaskId,
+          toTaskId: dependency.toTaskId,
+          type: dependency.type,
+        })
+        .returning();
+      if (!row) {
+        throw new Error("insert dependency returned no row");
+      }
+      return toDependency(row);
+    });
+  }
+
+  async writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord> {
+    const [row] = await this.db
+      .insert(activityEvents)
+      .values({
+        id: event.id,
+        projectId: event.projectId,
+        objectType: event.objectType,
+        objectId: event.objectId,
+        actorType: event.actorType,
+        actorId: event.actorId,
+        verb: event.verb,
+        payload: event.payload,
+        createdAt: event.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert activity returned no row");
+    }
+    return toActivity(row);
+  }
+
+  async listActivity(
+    projectId: string,
+    filters?: { objectType?: string; objectId?: string },
+  ): Promise<ActivityEventRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.projectId, projectId),
+          filters?.objectType ? eq(activityEvents.objectType, filters.objectType) : undefined,
+          filters?.objectId ? eq(activityEvents.objectId, filters.objectId) : undefined,
+        ),
+      )
+      .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id));
+    return rows.map(toActivity);
+  }
+
+  async findIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    now: Date,
+  ): Promise<unknown | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(idempotencyKeys)
+      .where(
+        and(
+          eq(idempotencyKeys.actorType, actorType),
+          eq(idempotencyKeys.actorId, actorId),
+          eq(idempotencyKeys.key, key),
+        ),
+      )
+      .limit(1);
+    if (!row) {
+      return undefined;
+    }
+    if (now.getTime() - row.createdAt.getTime() > 24 * 60 * 60 * 1000) {
+      return undefined;
+    }
+    return row.response;
+  }
+
+  async saveIdempotency(
+    actorType: IdempotencyActorType,
+    actorId: string,
+    key: string,
+    response: unknown,
+    createdAt: Date,
+  ): Promise<void> {
+    await this.db
+      .insert(idempotencyKeys)
+      .values({
+        actorType,
+        actorId,
+        key,
+        response,
+        createdAt,
+      })
+      .onConflictDoNothing({
+        target: [idempotencyKeys.actorType, idempotencyKeys.actorId, idempotencyKeys.key],
+      });
   }
 }
