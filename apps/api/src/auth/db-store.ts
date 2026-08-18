@@ -3,104 +3,17 @@ import {
   DEFAULT_SECURITY_CONSTRAINT_KIND,
   DEFAULT_SECURITY_CONSTRAINT_STATUS,
 } from "@beacon/context";
-import {
-  activityEvents,
-  agentSessions,
-  apiTokens,
-  approvalRequests,
-  codeOwners,
-  constraints,
-  contextNodes,
-  contextRevisions,
-  decisionPaths,
-  decisions,
-  handoffs,
-  idempotencyKeys,
-  milestones,
-  orgInvites,
-  orgMembers,
-  orgs,
-  projectInvites,
-  projectMembers,
-  projectRepos,
-  projects,
-  rateBuckets,
-  taskComments,
-  taskDependencies,
-  tasks,
-  userSessions,
-  users,
-  type Db,
-} from "@beacon/db";
+import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks } from "@beacon/db";
 import { isScope, uuidv7, type Scope } from "@beacon/shared";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-
 import { slugCandidate, slugFromLogin } from "../slug.js";
-import {
-  higherOrgRole,
-  higherProjectRole,
-  type OrgInviteRecord,
-  type OrgInviteRole,
-  type OrgKind,
-  type OrgMemberRecord,
-  type OrgRecord,
-  type OrgRole,
-  type ProjectInviteRecord,
-  type ProjectMemberRecord,
-  type ProjectRecord,
-  type ProjectRole,
-} from "../orgs/types.js";
+import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
-
-import {
-  isConstraintKind,
-  isConstraintStatus,
-  isContextScopeType,
-  isDecisionStatus,
-  type CodeOwnerRecord,
-  type ConstraintRecord,
-  type ContextNodeRecord,
-  type ContextRevisionRecord,
-  type ContextRevisionTarget,
-  type DecisionRecord,
-  type ProjectRepoRecord,
-} from "../context/types.js";
-import {
-  BootstrapConsumedError,
-  DependencyCycleError,
-  GithubIdTakenError,
-  LoginTakenError,
-  OrgSlugTakenError,
-  ProjectSlugTakenError,
-  VersionConflictError,
-  type ActivityEventRecord,
-  type AuthStore,
-  type AgentSessionRef,
-  type IdempotentWrites,
-  type MilestoneRecord,
-  type SessionRecord,
-  type TaskCommentRecord,
-  type TaskDependencyRecord,
-  type TaskPatch,
-  type TaskRecord,
-  type ApprovalRecord,
-  type RateBucketRecord,
-  type TaskRecord,
-  type TokenRecord,
-  type UserRecord,
-} from "./store.js";
+import { isConstraintKind, isConstraintStatus, isContextScopeType, isDecisionStatus, type CodeOwnerRecord, type ConstraintRecord, type ContextNodeRecord, type ContextRevisionRecord, type ContextRevisionTarget, type DecisionRecord, type ProjectRepoRecord, type DecisionPathLink } from "../context/types.js";
+import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type AgentSessionRef, type IdempotentWrites, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef } from "./store.js";
 import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
-import {
-  IDEMPOTENCY_TTL_MS,
-  type CommentAuthorType,
-  type DependencyType,
-  type IdempotencyActorType,
-  type LinkedPath,
-  type MilestoneStatus,
-  type TaskStatus,
-  type TaskType,
-} from "../roadmap/types.js";
+import { IDEMPOTENCY_TTL_MS, type CommentAuthorType, type DependencyType, type IdempotencyActorType, type LinkedPath, type MilestoneStatus, type TaskStatus, type TaskType } from "../roadmap/types.js";
 import {
   InvalidReferenceError,
   isAgentHost,
@@ -121,13 +34,8 @@ const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
-type UniqueConstraint =
-  | "login"
-  | "github_id"
-  | "org_slug"
-  | "project_slug"
-  | "context_node_scope"
-  | "unknown";
+
+type UniqueConstraint = "login" | "github_id" | "org_slug" | "project_slug" | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
@@ -152,9 +60,6 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("projects_org_id_slug")) {
           return "project_slug";
-        }
-        if (constraint.includes("context_nodes_unique_scope")) {
-          return "context_node_scope";
         }
         return "unknown";
       }
@@ -533,7 +438,8 @@ function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | 
 
 function toDecision(
   row: typeof decisions.$inferSelect,
-  relatedPaths: string[],
+  relatedPaths: DecisionPathLink[],
+  relatedTaskIds: string[],
 ): DecisionRecord | undefined {
   if (!isDecisionStatus(row.status)) {
     return undefined;
@@ -551,6 +457,7 @@ function toDecision(
     supersededBy: row.supersededBy,
     createdAt: row.createdAt,
     relatedPaths,
+    relatedTaskIds,
   };
 }
 
@@ -643,13 +550,6 @@ function asScopes(value: string[] | null): Scope[] {
   return value.filter(isScope);
 }
 
-function asPayload(value: unknown): Record<string, unknown> {
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
 function toToken(row: typeof apiTokens.$inferSelect): TokenRecord {
   return {
     id: row.id,
@@ -689,21 +589,8 @@ function toRateBucket(row: typeof rateBuckets.$inferSelect): RateBucketRecord {
   };
 }
 
-function toSession(row: typeof userSessions.$inferSelect): SessionRecord {
-  return {
-    id: row.id,
-    userId: row.userId,
-    tokenHash: asBuffer(row.tokenHash),
-    createdAt: row.createdAt,
-    lastSeenAt: row.lastSeenAt,
-    expiresAt: row.expiresAt,
-    revokedAt: row.revokedAt,
-    userAgent: row.userAgent,
-    ip: row.ip,
-  };
-}
-
 export class DbAuthStore implements AuthStore {
+
   constructor(private readonly db: Db) {}
 
   async hasAnyUser(): Promise<boolean> {
@@ -1092,7 +979,6 @@ export class DbAuthStore implements AuthStore {
           role: "admin",
           createdAt: project.createdAt,
         });
-        await seedDefaultSecurityConstraints(tx, created.id, project.createdAt);
         return toProject(created);
       });
     } catch (error) {
@@ -1661,7 +1547,7 @@ export class DbAuthStore implements AuthStore {
       .select()
       .from(constraints)
       .where(eq(constraints.projectId, projectId))
-      .orderBy(asc(constraints.id));
+      .orderBy(desc(constraints.createdAt), desc(constraints.id));
     return rows.flatMap((row) => {
       const constraint = toConstraint(row);
       return constraint ? [constraint] : [];
@@ -1749,28 +1635,7 @@ export class DbAuthStore implements AuthStore {
       .from(decisions)
       .where(and(eq(decisions.projectId, projectId), eq(decisions.status, "accepted")))
       .orderBy(asc(decisions.id));
-    if (rows.length === 0) {
-      return [];
-    }
-    const paths = await this.db
-      .select()
-      .from(decisionPaths)
-      .where(
-        inArray(
-          decisionPaths.decisionId,
-          rows.map((row) => row.id),
-        ),
-      );
-    const byDecision = new Map<string, string[]>();
-    for (const path of paths) {
-      const list = byDecision.get(path.decisionId) ?? [];
-      list.push(path.path);
-      byDecision.set(path.decisionId, list);
-    }
-    return rows.flatMap((row) => {
-      const decision = toDecision(row, byDecision.get(row.id) ?? []);
-      return decision ? [decision] : [];
-    });
+    return this.attachDecisionLinks(rows);
   }
 
   async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
@@ -1878,6 +1743,8 @@ export class DbAuthStore implements AuthStore {
           }
           return toComment(row);
         },
+        createDecision: async (decision) => insertDecisionTx(tx, decision),
+        createConstraint: async (constraint) => insertConstraintTx(tx, constraint),
         writeActivity: async (event) => {
           const [row] = await tx
             .insert(activityEvents)
@@ -1898,7 +1765,6 @@ export class DbAuthStore implements AuthStore {
           }
           return toActivity(row);
         },
-        startWork: async (input) => startWorkInTx(tx, input),
       };
 
       const response = await produce(writes);
@@ -2068,13 +1934,13 @@ export class DbAuthStore implements AuthStore {
     return toRateBucket(row);
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
     const [row] = await this.db
-      .select()
+      .select({ id: agentSessions.id, projectId: agentSessions.projectId })
       .from(agentSessions)
       .where(eq(agentSessions.id, id))
       .limit(1);
-    return row ? toAgentSession(row) : undefined;
+    return row ?? undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -2228,6 +2094,108 @@ export class DbAuthStore implements AuthStore {
       .limit(1);
     return row ? toHandoff(row) : undefined;
   }
+
+  async findConstraintById(id: string): Promise<ConstraintRecord | undefined> {
+    const [row] = await this.db.select().from(constraints).where(eq(constraints.id, id)).limit(1);
+    return row ? toConstraint(row) : undefined;
+  }
+
+  async createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
+    const [row] = await this.db
+      .insert(constraints)
+      .values({
+        id: constraint.id,
+        projectId: constraint.projectId,
+        kind: constraint.kind,
+        body: constraint.body,
+        scopePath: constraint.scopePath,
+        status: constraint.status,
+        createdAt: constraint.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert constraint returned no row");
+    }
+    const created = toConstraint(row);
+    if (!created) {
+      throw new Error("insert constraint returned invalid row");
+    }
+    return created;
+  }
+
+  async applyConstraint(id: string, appliedAt: Date): Promise<ConstraintRecord | undefined> {
+    void appliedAt;
+    const [row] = await this.db
+      .update(constraints)
+      .set({ status: "active" })
+      .where(and(eq(constraints.id, id), eq(constraints.status, "proposed")))
+      .returning();
+    return row ? toConstraint(row) : undefined;
+  }
+
+  async listDecisions(projectId: string): Promise<DecisionRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(decisions)
+      .where(eq(decisions.projectId, projectId))
+      .orderBy(desc(decisions.createdAt), desc(decisions.id));
+    return this.attachDecisionLinks(rows);
+  }
+
+  async findDecisionById(id: string): Promise<DecisionRecord | undefined> {
+    const [row] = await this.db.select().from(decisions).where(eq(decisions.id, id)).limit(1);
+    if (!row) {
+      return undefined;
+    }
+    const [linked] = await this.attachDecisionLinks([row]);
+    return linked;
+  }
+
+  async createDecision(decision: DecisionRecord): Promise<DecisionRecord> {
+    return this.db.transaction(async (tx) => insertDecisionTx(tx, decision));
+  }
+
+  async findProjectRepo(id: string): Promise<ProjectRepoRef | undefined> {
+    const [row] = await this.db
+      .select({ id: projectRepos.id, projectId: projectRepos.projectId })
+      .from(projectRepos)
+      .where(eq(projectRepos.id, id))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  private async attachDecisionLinks(
+    rows: (typeof decisions.$inferSelect)[],
+  ): Promise<DecisionRecord[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+    const ids = rows.map((row) => row.id);
+    const [paths, taskLinks] = await Promise.all([
+      this.db.select().from(decisionPaths).where(inArray(decisionPaths.decisionId, ids)),
+      this.db.select().from(decisionTasks).where(inArray(decisionTasks.decisionId, ids)),
+    ]);
+    const pathsByDecision = new Map<string, DecisionPathLink[]>();
+    for (const path of paths) {
+      const list = pathsByDecision.get(path.decisionId) ?? [];
+      list.push({ repoId: path.repoId, path: path.path });
+      pathsByDecision.set(path.decisionId, list);
+    }
+    const tasksByDecision = new Map<string, string[]>();
+    for (const link of taskLinks) {
+      const list = tasksByDecision.get(link.decisionId) ?? [];
+      list.push(link.taskId);
+      tasksByDecision.set(link.decisionId, list);
+    }
+    return rows.flatMap((row) => {
+      const decision = toDecision(
+        row,
+        pathsByDecision.get(row.id) ?? [],
+        tasksByDecision.get(row.id) ?? [],
+      );
+      return decision ? [decision] : [];
+    });
+  }
 }
 
 async function startWorkInTx(
@@ -2327,4 +2295,76 @@ async function startWorkInTx(
   }
 
   return { session, stolenFrom };
+}
+
+type WriteTx = Pick<Db, "insert">;
+
+async function insertConstraintTx(
+  tx: WriteTx,
+  constraint: ConstraintRecord,
+): Promise<ConstraintRecord> {
+  const [row] = await tx
+    .insert(constraints)
+    .values({
+      id: constraint.id,
+      projectId: constraint.projectId,
+      kind: constraint.kind,
+      body: constraint.body,
+      scopePath: constraint.scopePath,
+      status: constraint.status,
+      createdAt: constraint.createdAt,
+    })
+    .returning();
+  if (!row) {
+    throw new Error("insert constraint returned no row");
+  }
+  const created = toConstraint(row);
+  if (!created) {
+    throw new Error("insert constraint returned invalid row");
+  }
+  return created;
+}
+
+async function insertDecisionTx(tx: WriteTx, decision: DecisionRecord): Promise<DecisionRecord> {
+  const [row] = await tx
+    .insert(decisions)
+    .values({
+      id: decision.id,
+      projectId: decision.projectId,
+      title: decision.title,
+      status: decision.status,
+      context: decision.context,
+      decision: decision.decision,
+      consequences: decision.consequences,
+      createdByType: decision.createdByType,
+      createdById: decision.createdById,
+      supersededBy: decision.supersededBy,
+      createdAt: decision.createdAt,
+    })
+    .returning();
+  if (!row) {
+    throw new Error("insert decision returned no row");
+  }
+  if (decision.relatedPaths.length > 0) {
+    await tx.insert(decisionPaths).values(
+      decision.relatedPaths.map((path) => ({
+        decisionId: decision.id,
+        repoId: path.repoId,
+        path: path.path,
+      })),
+    );
+  }
+  if (decision.relatedTaskIds.length > 0) {
+    await tx.insert(decisionTasks).values(
+      decision.relatedTaskIds.map((taskId) => ({
+        decisionId: decision.id,
+        taskId,
+      })),
+    );
+  }
+  const created = toDecision(row, decision.relatedPaths, decision.relatedTaskIds);
+  if (!created) {
+    throw new Error("insert decision returned invalid row");
+  }
+  return created;
 }

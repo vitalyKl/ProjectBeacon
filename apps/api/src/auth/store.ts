@@ -13,7 +13,7 @@ import type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } f
 export type { OrgInviteRecord, OrgMemberRecord, OrgRecord, ProjectInviteRecord, ProjectMemberRecord, ProjectRecord } from "../orgs/types.js";
 export { InviteTargetRequiredError, OrgSlugTakenError, ProjectSlugTakenError } from "../orgs/types.js";
 export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
-export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
+export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord, DecisionPathLink } from "../context/types.js";
 export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
 export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
 import {
@@ -73,6 +73,8 @@ export type IdempotentWrites = {
   createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
   writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
   startWork(input: StartWorkInput): Promise<StartWorkWriteResult>;
+  createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
+  createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
 };
 
 export class LoginTakenError extends Error {
@@ -220,11 +222,18 @@ export interface AuthStore {
     now: Date,
     produce: (writes: IdempotentWrites) => Promise<unknown>,
   ): Promise<unknown>;
-  findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined>;
+  findAgentSessionById(id: string): Promise<AgentSessionRef | undefined>;
   listAgentSessions(projectId: string): Promise<AgentSessionRecord[]>;
   heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
   finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
   findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined>;
+  findConstraintById(id: string): Promise<ConstraintRecord | undefined>;
+  createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
+  applyConstraint(id: string, appliedAt: Date): Promise<ConstraintRecord | undefined>;
+  listDecisions(projectId: string): Promise<DecisionRecord[]>;
+  findDecisionById(id: string): Promise<DecisionRecord | undefined>;
+  createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
+  findProjectRepo(id: string): Promise<ProjectRepoRef | undefined>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -279,6 +288,7 @@ function cloneProjectInvite(invite: ProjectInviteRecord): ProjectInviteRecord {
     acceptedAt: invite.acceptedAt ? new Date(invite.acceptedAt) : null,
   };
 }
+
 
 function cloneToken(token: TokenRecord): TokenRecord {
   return {
@@ -338,10 +348,10 @@ export class MemoryAuthStore implements AuthStore {
   private readonly constraints = new Map<string, ConstraintRecord>();
   private readonly decisions = new Map<string, DecisionRecord>();
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
-  private readonly projectRepos = new Map<string, ProjectRepoRecord>();
+  private readonly projectRepos = new Map<string, ProjectRepoRef>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
-  private readonly agentSessions = new Map<string, AgentSessionRecord>();
+  private readonly agentSessions = new Map<string, AgentSessionRef>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -940,8 +950,8 @@ export class MemoryAuthStore implements AuthStore {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
 
-  seedProjectRepo(repo: ProjectRepoRecord): void {
-    this.projectRepos.set(repo.id, cloneProjectRepo(repo));
+  seedProjectRepo(repo: ProjectRepoRef): void {
+    this.projectRepos.set(repo.id, { ...repo });
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
@@ -996,7 +1006,9 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneConstraint(constraint));
       }
     }
-    result.sort((a, b) => a.id.localeCompare(b.id));
+    result.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
+    );
     return result;
   }
 
@@ -1145,8 +1157,9 @@ export class MemoryAuthStore implements AuthStore {
       const writes: IdempotentWrites = {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
+        createDecision: async (decision) => this.insertDecisionUnlocked(decision),
+        createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
-        startWork: async (input) => this.startWorkUnlocked(input),
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1286,34 +1299,13 @@ export class MemoryAuthStore implements AuthStore {
     existing.bytes += BigInt(input.bytesDelta);
     return cloneRateBucket(existing);
   }
-  putAgentSession(session: AgentSessionRef | AgentSessionRecord): void {
-    if ("agentName" in session) {
-      this.agentSessions.set(session.id, cloneAgentSession(session));
-      return;
-    }
-    const now = new Date();
-    this.agentSessions.set(
-      session.id,
-      cloneAgentSession({
-        id: session.id,
-        projectId: session.projectId,
-        taskId: null,
-        tokenId: null,
-        agentName: "test",
-        agentHost: "custom",
-        status: "active",
-        contextRevisionId: null,
-        startedAt: now,
-        finishedAt: null,
-        lockExpiresAt: null,
-        lastHeartbeatAt: now,
-      }),
-    );
+  putAgentSession(session: AgentSessionRef): void {
+    this.agentSessions.set(session.id, { ...session });
   }
 
-  async findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined> {
+  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
     const session = this.agentSessions.get(id);
-    return session ? cloneAgentSession(session) : undefined;
+    return session ? { ...session } : undefined;
   }
 
   async listAgentSessions(projectId: string): Promise<AgentSessionRecord[]> {
@@ -1481,6 +1473,85 @@ export class MemoryAuthStore implements AuthStore {
       previousStatus,
     };
   }
+
+  async findConstraintById(id: string): Promise<ConstraintRecord | undefined> {
+    const constraint = this.constraints.get(id);
+    return constraint ? cloneConstraint(constraint) : undefined;
+  }
+
+  async createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
+    return this.enqueueWrite(() => this.insertConstraintUnlocked(constraint));
+  }
+
+  async applyConstraint(id: string, appliedAt: Date): Promise<ConstraintRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const constraint = this.constraints.get(id);
+      if (!constraint || constraint.status !== "proposed") {
+        return undefined;
+      }
+      constraint.status = "active";
+      void appliedAt;
+      return cloneConstraint(constraint);
+    });
+  }
+
+  async listDecisions(projectId: string): Promise<DecisionRecord[]> {
+    const result: DecisionRecord[] = [];
+    for (const decision of this.decisions.values()) {
+      if (decision.projectId === projectId) {
+        result.push(cloneDecision(decision));
+      }
+    }
+    result.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
+    );
+    return result;
+  }
+
+  async findDecisionById(id: string): Promise<DecisionRecord | undefined> {
+    const decision = this.decisions.get(id);
+    return decision ? cloneDecision(decision) : undefined;
+  }
+
+  async createDecision(decision: DecisionRecord): Promise<DecisionRecord> {
+    return this.enqueueWrite(() => this.insertDecisionUnlocked(decision));
+  }
+
+  async findProjectRepo(id: string): Promise<ProjectRepoRef | undefined> {
+    const repo = this.projectRepos.get(id);
+    return repo ? { ...repo } : undefined;
+  }
+
+  private insertConstraintUnlocked(constraint: ConstraintRecord): ConstraintRecord {
+    if (this.constraints.has(constraint.id)) {
+      throw new UniqueViolationError("constraints_pkey");
+    }
+    this.constraints.set(constraint.id, cloneConstraint(constraint));
+    return cloneConstraint(constraint);
+  }
+
+  private insertDecisionUnlocked(decision: DecisionRecord): DecisionRecord {
+    if (this.decisions.has(decision.id)) {
+      throw new UniqueViolationError("decisions_pkey");
+    }
+    const seenPaths = new Set<string>();
+    for (const path of decision.relatedPaths) {
+      const key = `${path.repoId}:${path.path}`;
+      if (seenPaths.has(key)) {
+        throw new UniqueViolationError("decision_paths_decision_id_repo_id_path_pk");
+      }
+      seenPaths.add(key);
+    }
+    const seenTasks = new Set<string>();
+    for (const taskId of decision.relatedTaskIds) {
+      if (seenTasks.has(taskId)) {
+        throw new UniqueViolationError("decision_tasks_decision_id_task_id_pk");
+      }
+      seenTasks.add(taskId);
+    }
+    this.decisions.set(decision.id, cloneDecision(decision));
+    return cloneDecision(decision);
+  }
     string,
     { response: unknown; createdAt: Date }
   >();
@@ -1528,7 +1599,8 @@ function cloneConstraint(constraint: ConstraintRecord): ConstraintRecord {
 function cloneDecision(decision: DecisionRecord): DecisionRecord {
   return {
     ...decision,
-    relatedPaths: [...decision.relatedPaths],
+    relatedPaths: decision.relatedPaths.map((path) => ({ ...path })),
+    relatedTaskIds: [...decision.relatedTaskIds],
     createdAt: new Date(decision.createdAt),
   };
 }
@@ -1576,3 +1648,8 @@ function cloneHandoff(handoff: HandoffRecord): HandoffRecord {
     createdAt: new Date(handoff.createdAt),
   };
 }
+
+export type ProjectRepoRef = {
+  id: string;
+  projectId: string;
+};

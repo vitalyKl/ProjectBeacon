@@ -72,6 +72,28 @@ export function taskStatusOnCreate(
   return requested && requested.length > 0 ? requested : "backlog";
 }
 
+/** Non-admin tokens may only record decisions as proposed. */
+export function decisionStatusOnCreate(
+  actor: AuthActor,
+  requested: string | undefined,
+): string {
+  if (actor.kind === "token" && !actor.token.scopes.includes("admin")) {
+    return "proposed";
+  }
+  return requested && requested.length > 0 ? requested : "proposed";
+}
+
+/** Non-admin tokens may only create constraints as proposed. */
+export function constraintStatusOnCreate(
+  actor: AuthActor,
+  requested: string | undefined,
+): string {
+  if (actor.kind === "token" && !actor.token.scopes.includes("admin")) {
+    return "proposed";
+  }
+  return requested && requested.length > 0 ? requested : "proposed";
+}
+
 export function actorHasCapability(
   actor: AuthActor,
   needed: Scope,

@@ -1,6 +1,5 @@
 import { createDb } from "@beacon/db";
 import { Hono } from "hono";
-
 import { type AuthConfig, loadAuthConfig } from "./auth/config.js";
 import { systemClock, type Clock } from "./auth/clock.js";
 import { DbAuthStore } from "./auth/db-store.js";
@@ -13,12 +12,14 @@ import { mountOrgs } from "./orgs/routes.js";
 import { mountRoadmap } from "./roadmap/routes.js";
 import { mountSessions } from "./sessions/routes.js";
 import { mountTokenProbe, mountTokens } from "./tokens/routes.js";
+import { mountDecisions } from "./context/decisions.js";
 
 export const packageName = "@beacon/api";
 
 export type ReadyCheck = () => Promise<boolean>;
 
 export type CreateAppOptions = {
+
   checkReady?: ReadyCheck;
   store?: AuthStore;
   config?: AuthConfig;
@@ -68,12 +69,12 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);
   mountRoadmap(app, authDeps);
+  mountContext(app, authDeps);
+  mountDecisions(app, authDeps);
   mountTokens(app, authDeps);
-  mountSessions(app, authDeps);
   if (options.enableTokenProbe) {
     mountTokenProbe(app, authDeps);
   }
-  mountContext(app, authDeps);
 
   return app;
 }

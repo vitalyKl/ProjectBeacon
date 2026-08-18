@@ -39,6 +39,11 @@ export type ConstraintRecord = {
   createdAt: Date;
 };
 
+export type DecisionPathLink = {
+  repoId: string;
+  path: string;
+};
+
 export type DecisionRecord = {
   id: string;
   projectId: string;
@@ -51,7 +56,8 @@ export type DecisionRecord = {
   createdById: string;
   supersededBy: string | null;
   createdAt: Date;
-  relatedPaths: string[];
+  relatedPaths: DecisionPathLink[];
+  relatedTaskIds: string[];
 };
 
 export type ContextRevisionTarget = {

@@ -14,13 +14,46 @@ export function presentConstraint(constraint: ConstraintRecord): ConstraintView 
   };
 }
 
+export function presentConstraintRecord(constraint: ConstraintRecord) {
+  return {
+    id: constraint.id,
+    project_id: constraint.projectId,
+    kind: constraint.kind,
+    body: constraint.body,
+    scope_path: constraint.scopePath,
+    status: constraint.status,
+    created_at: constraint.createdAt.toISOString(),
+  };
+}
+
 export function presentDecision(decision: DecisionRecord): DecisionSummary {
   return {
     id: decision.id,
     title: decision.title,
     status: "accepted",
     decision: decision.decision,
-    related_paths: [...decision.relatedPaths],
+    related_paths: decision.relatedPaths.map((path) => path.path),
+  };
+}
+
+export function presentDecisionRecord(decision: DecisionRecord) {
+  return {
+    id: decision.id,
+    project_id: decision.projectId,
+    title: decision.title,
+    status: decision.status,
+    context: decision.context,
+    decision: decision.decision,
+    consequences: decision.consequences,
+    created_by_type: decision.createdByType,
+    created_by_id: decision.createdById,
+    superseded_by: decision.supersededBy,
+    created_at: decision.createdAt.toISOString(),
+    related_paths: decision.relatedPaths.map((path) => ({
+      repo_id: path.repoId,
+      path: path.path,
+    })),
+    related_task_ids: [...decision.relatedTaskIds],
   };
 }
 
