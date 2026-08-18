@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api";
 import {
@@ -26,30 +26,54 @@ export function useProjectWork(pollMs: number) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const projectId = project?.id ?? null;
+  const requestSeq = useRef(0);
+  const pendingMoves = useRef(new Set<string>());
+
+  const applyList = useCallback((nextTasks: PublicTask[], nextMilestones: PublicMilestone[]) => {
+    setMilestones(nextMilestones);
+    setTasks((current) => {
+      if (pendingMoves.current.size === 0) {
+        return nextTasks;
+      }
+      const byId = new Map(current.map((item) => [item.id, item]));
+      return nextTasks.map((item) =>
+        pendingMoves.current.has(item.id) ? (byId.get(item.id) ?? item) : item,
+      );
+    });
+  }, []);
 
   const reload = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!projectId) {
         return;
       }
+      const seq = ++requestSeq.current;
+      const selectedId = projectId;
       try {
-        await ensureBeaconSeed(projectId);
+        await ensureBeaconSeed(selectedId);
+        if (seq !== requestSeq.current) {
+          return;
+        }
         const [nextTasks, nextMilestones] = await Promise.all([
-          fetchProjectTasks(projectId),
-          fetchProjectMilestones(projectId),
+          fetchProjectTasks(selectedId),
+          fetchProjectMilestones(selectedId),
         ]);
-        setTasks(nextTasks);
-        setMilestones(nextMilestones);
+        if (seq !== requestSeq.current) {
+          return;
+        }
+        applyList(nextTasks, nextMilestones);
         setError(null);
       } catch (caught) {
-        setError(caught instanceof ApiError ? caught.message : "failed to load work");
+        if (seq === requestSeq.current) {
+          setError(caught instanceof ApiError ? caught.message : "failed to load work");
+        }
       } finally {
-        if (!opts?.silent) {
+        if (!opts?.silent && seq === requestSeq.current) {
           setLoading(false);
         }
       }
     },
-    [projectId],
+    [applyList, projectId],
   );
 
   useEffect(() => {
@@ -62,39 +86,14 @@ export function useProjectWork(pollMs: number) {
       }, 0);
       return () => window.clearTimeout(id);
     }
-    const selectedId = projectId;
-    let cancelled = false;
-    async function load() {
-      try {
-        await ensureBeaconSeed(selectedId);
-        if (cancelled) {
-          return;
-        }
-        const [nextTasks, nextMilestones] = await Promise.all([
-          fetchProjectTasks(selectedId),
-          fetchProjectMilestones(selectedId),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setTasks(nextTasks);
-        setMilestones(nextMilestones);
-        setError(null);
-      } catch (caught) {
-        if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load work");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-    void load();
+    const id = window.setTimeout(() => {
+      void reload();
+    }, 0);
     return () => {
-      cancelled = true;
+      window.clearTimeout(id);
+      requestSeq.current += 1;
     };
-  }, [projectId]);
+  }, [projectId, reload]);
 
   useInterval(
     () => {
@@ -110,6 +109,7 @@ export function useProjectWork(pollMs: number) {
         return;
       }
       const optimistic: PublicTask = { ...current, status };
+      pendingMoves.current.add(taskId);
       setTasks((items) => items.map((item) => (item.id === taskId ? optimistic : item)));
       try {
         const updated = await setTaskStatus(taskId, status, current.version);
@@ -125,6 +125,8 @@ export function useProjectWork(pollMs: number) {
         }
         setTasks((items) => items.map((item) => (item.id === taskId ? current : item)));
         toast(caught instanceof ApiError ? caught.message : "failed to update status");
+      } finally {
+        pendingMoves.current.delete(taskId);
       }
     },
     [tasks, toast],

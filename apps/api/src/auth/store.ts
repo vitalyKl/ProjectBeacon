@@ -54,6 +54,7 @@ export type IdempotentWrites = {
   startWork(input: StartWorkInput): Promise<StartWorkWriteResult>;
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
   createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
+  createMilestone?(milestone: MilestoneRecord): Promise<MilestoneRecord>;
 };
 
 export class LoginTakenError extends Error {
@@ -1138,6 +1139,10 @@ export class MemoryAuthStore implements AuthStore {
         createComment: async (comment) => this.insertCommentUnlocked(comment),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
         startWork: async (input) => this.startWorkUnlocked(input),
+        createMilestone: async (milestone) => {
+          this.milestones.set(milestone.id, cloneMilestone(milestone));
+          return cloneMilestone(milestone);
+        },
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {

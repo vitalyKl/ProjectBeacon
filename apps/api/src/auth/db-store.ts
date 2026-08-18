@@ -1768,6 +1768,25 @@ export class DbAuthStore implements AuthStore {
           return toActivity(row);
         },
         startWork: async (input) => startWorkInTx(tx, input),
+        createMilestone: async (milestone) => {
+          const [row] = await tx
+            .insert(milestones)
+            .values({
+              id: milestone.id,
+              projectId: milestone.projectId,
+              title: milestone.title,
+              description: milestone.description,
+              status: milestone.status,
+              targetDate: milestone.targetDate,
+              sortOrder: milestone.sortOrder,
+              createdAt: milestone.createdAt,
+            })
+            .returning();
+          if (!row) {
+            throw new Error("insert milestone returned no row");
+          }
+          return toMilestone(row);
+        },
       };
 
       const response = await produce(writes);

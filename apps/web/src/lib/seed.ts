@@ -12,7 +12,7 @@ const SEED_TASKS = [
   {
     key: "task-detail",
     title: "Open a task and preview the session brief",
-    description: "Comments, activity, lock badge, and fail-soft brief preview on the task.",
+    description: "Comments, activity, and a session brief preview live on the task.",
     status: "ready" as const,
   },
   {
@@ -28,6 +28,8 @@ const SEED_TASKS = [
     status: "backlog" as const,
   },
 ] as const;
+
+const SEED_TITLES = new Set<string>(SEED_TASKS.map((seed) => seed.title));
 
 function seedKey(projectId: string, suffix: string): string {
   return `beacon-dogfood:${projectId}:${suffix}`;
@@ -52,7 +54,13 @@ async function seedProject(projectId: string): Promise<void> {
     fetchProjectMilestones(projectId),
     fetchProjectTasks(projectId),
   ]);
-  if (tasks.length > 0) {
+  const existingTitles = new Set(tasks.map((task) => task.title));
+  const hasUserTasks = tasks.some((task) => !SEED_TITLES.has(task.title));
+  if (hasUserTasks) {
+    return;
+  }
+  const missing = SEED_TASKS.filter((seed) => !existingTitles.has(seed.title));
+  if (missing.length === 0 && milestones.some((item) => item.title === SEED_MILESTONE_TITLE)) {
     return;
   }
 
@@ -62,10 +70,17 @@ async function seedProject(projectId: string): Promise<void> {
       projectId,
       SEED_MILESTONE_TITLE,
       "First human + agent loop on Beacon itself.",
+      seedKey(projectId, "milestone"),
     );
+    const refreshed = await fetchProjectMilestones(projectId);
+    milestone = refreshed.find((item) => item.title === SEED_MILESTONE_TITLE) ?? milestone;
   }
 
-  for (const seed of SEED_TASKS) {
+  for (const seed of missing) {
+    const latest = await fetchProjectTasks(projectId);
+    if (latest.some((task) => task.title === seed.title)) {
+      continue;
+    }
     await createTask(
       projectId,
       {

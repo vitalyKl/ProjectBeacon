@@ -312,6 +312,50 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     }
 
     const now = deps.clock.now();
+    const idempotencyKey = parseIdempotencyKey(c);
+    const seedPrefix = `beacon-dogfood:${access.project.id}:`;
+    if (idempotencyKey?.startsWith(seedPrefix)) {
+      const existingSameTitle = (await deps.store.listMilestones(access.project.id)).find(
+        (item) => item.title === title,
+      );
+      if (existingSameTitle) {
+        return c.json(presentMilestone(existingSameTitle), 201);
+      }
+    }
+    if (idempotencyKey) {
+      const presented = await deps.store.withIdempotency(
+        "user",
+        access.project.id,
+        idempotencyKey,
+        now,
+        async (writes) => {
+          if (!writes.createMilestone) {
+            throw new Error("createMilestone write is unavailable");
+          }
+          const created = await writes.createMilestone({
+            id: uuidv7(now.getTime()),
+            projectId: access.project.id,
+            title,
+            description,
+            status: statusRaw,
+            targetDate,
+            sortOrder,
+            createdAt: now,
+          });
+          await writeActivity(writes, {
+            projectId: access.project.id,
+            objectType: "milestone",
+            objectId: created.id,
+            actorId: session.user.id,
+            verb: "create",
+            now,
+          });
+          return presentMilestone(created);
+        },
+      );
+      return c.json(presented, 201);
+    }
+
     const milestone = await deps.store.createMilestone({
       id: uuidv7(now.getTime()),
       projectId: access.project.id,
@@ -436,9 +480,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
 
     const status: TaskStatus = statusRaw;
     const type: TaskType = typeRaw;
+    const seedPrefix = `beacon-dogfood:${access.project.id}:`;
+    const idempotencyActorId = idempotencyKey.startsWith(seedPrefix)
+      ? access.project.id
+      : session.user.id;
     const presented = await deps.store.withIdempotency(
       "user",
-      session.user.id,
+      idempotencyActorId,
       idempotencyKey,
       now,
       async (writes) => {

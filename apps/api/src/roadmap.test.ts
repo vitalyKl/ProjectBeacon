@@ -108,6 +108,31 @@ describe("milestones and tasks", () => {
       next_cursor: null,
     });
 
+    const seedKey = `beacon-dogfood:${project.id}:milestone`;
+    const firstSeed = await alice.app.request(`/v1/projects/${project.id}/milestones`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": seedKey,
+      },
+      body: JSON.stringify({ title: "Dogfood A" }),
+    });
+    const secondSeed = await alice.app.request(`/v1/projects/${project.id}/milestones`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": seedKey,
+      },
+      body: JSON.stringify({ title: "Dogfood A" }),
+    });
+    expect(firstSeed.status).toBe(201);
+    expect(secondSeed.status).toBe(201);
+    const firstSeedBody = (await firstSeed.json()) as { id: string };
+    const secondSeedBody = (await secondSeed.json()) as { id: string };
+    expect(secondSeedBody.id).toBe(firstSeedBody.id);
+
     const created = await createTask(
       alice.app,
       alice.token,
@@ -220,6 +245,14 @@ describe("milestones and tasks", () => {
     });
     expect(get.status).toBe(404);
     expect(await get.json()).toMatchObject({
+      error: { code: "not_found", message: "task not found" },
+    });
+
+    const comments = await bob.app.request(`/v1/tasks/${task.id}/comments`, {
+      headers: { cookie: cookieHeader(bob.token) },
+    });
+    expect(comments.status).toBe(404);
+    expect(await comments.json()).toMatchObject({
       error: { code: "not_found", message: "task not found" },
     });
 

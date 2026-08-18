@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, createOrgProject } from "@/lib/api";
 import {
   fetchProjectMilestones,
   fetchProjectTasks,
+  isTaskLocked,
   statusLabel,
   type PublicMilestone,
   type PublicTask,
 } from "@/lib/roadmap";
 import { ensureBeaconSeed } from "@/lib/seed";
 import { useInterval } from "@/lib/use-interval";
+import { useNow } from "@/lib/use-now";
 
 import { LockBadge } from "./lock-badge";
 import { useSelectedProject } from "./project-context";
@@ -26,24 +28,38 @@ export default function AppHomePage() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const projectId = project?.id ?? null;
+  const requestSeq = useRef(0);
+  const now = useNow(1000);
 
   const reload = useCallback(async () => {
     if (!projectId) {
       return;
     }
+    const seq = ++requestSeq.current;
+    const selectedId = projectId;
     try {
-      await ensureBeaconSeed(projectId);
+      await ensureBeaconSeed(selectedId);
+      if (seq !== requestSeq.current) {
+        return;
+      }
       const [nextMilestones, nextTasks] = await Promise.all([
-        fetchProjectMilestones(projectId),
-        fetchProjectTasks(projectId),
+        fetchProjectMilestones(selectedId),
+        fetchProjectTasks(selectedId),
       ]);
+      if (seq !== requestSeq.current) {
+        return;
+      }
       setMilestones(nextMilestones);
       setTasks(nextTasks);
       setError(null);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to load home");
+      if (seq === requestSeq.current) {
+        setError(caught instanceof ApiError ? caught.message : "failed to load home");
+      }
     } finally {
-      setReady(true);
+      if (seq === requestSeq.current) {
+        setReady(true);
+      }
     }
   }, [projectId]);
 
@@ -56,39 +72,14 @@ export default function AppHomePage() {
       }, 0);
       return () => window.clearTimeout(id);
     }
-    const selectedId = projectId;
-    let cancelled = false;
-    async function load() {
-      try {
-        await ensureBeaconSeed(selectedId);
-        if (cancelled) {
-          return;
-        }
-        const [nextMilestones, nextTasks] = await Promise.all([
-          fetchProjectMilestones(selectedId),
-          fetchProjectTasks(selectedId),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setMilestones(nextMilestones);
-        setTasks(nextTasks);
-        setError(null);
-      } catch (caught) {
-        if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load home");
-        }
-      } finally {
-        if (!cancelled) {
-          setReady(true);
-        }
-      }
-    }
-    void load();
+    const id = window.setTimeout(() => {
+      void reload();
+    }, 0);
     return () => {
-      cancelled = true;
+      window.clearTimeout(id);
+      requestSeq.current += 1;
     };
-  }, [projectId]);
+  }, [projectId, reload]);
 
   useInterval(
     () => {
@@ -115,7 +106,7 @@ export default function AppHomePage() {
   }
 
   const openMilestones = milestones.filter((item) => item.status === "open");
-  const locked = tasks.filter((task) => Boolean(task.locked_by_session_id && task.lock_expires_at));
+  const locked = tasks.filter((task) => isTaskLocked(task, now));
   const inFlight = tasks.filter(
     (task) => task.status === "in_progress" || task.status === "in_review",
   );

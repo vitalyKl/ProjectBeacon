@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, newIdempotencyKey } from "@/lib/api";
 import {
@@ -45,33 +45,79 @@ export default function TaskDetailPage() {
   const [saving, setSaving] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [commentPending, setCommentPending] = useState(false);
+  const savedText = useRef({ title: "", description: "" });
+  const draftText = useRef({ title: "", description: "" });
+  const requestSeq = useRef(0);
 
-  const applyTask = useCallback((next: PublicTask) => {
-    setTask(next);
+  const applyServerText = useCallback((next: PublicTask) => {
     setTitle(next.title);
     setDescription(next.description);
+    savedText.current = { title: next.title, description: next.description };
+    draftText.current = { title: next.title, description: next.description };
   }, []);
+
+  const applyTaskMeta = useCallback((next: PublicTask, opts?: { text?: boolean }) => {
+    setTask(next);
+    if (opts?.text) {
+      applyServerText(next);
+    }
+  }, [applyServerText]);
+
+  const mergePolledTask = useCallback(
+    (next: PublicTask) => {
+      setTask((current) => {
+        if (!current || current.id !== next.id) {
+          applyServerText(next);
+          return next;
+        }
+        const dirty =
+          draftText.current.title !== savedText.current.title ||
+          draftText.current.description !== savedText.current.description;
+        if (!dirty) {
+          applyServerText(next);
+          return next;
+        }
+        return {
+          ...next,
+          title: current.title,
+          description: current.description,
+        };
+      });
+    },
+    [applyServerText],
+  );
 
   const reload = useCallback(async () => {
     if (!taskId || Array.isArray(taskId)) {
       return;
     }
+    const seq = ++requestSeq.current;
     try {
       const next = await fetchTask(taskId);
-      applyTask(next);
+      if (seq !== requestSeq.current) {
+        return;
+      }
+      mergePolledTask(next);
       const [nextComments, nextActivity] = await Promise.all([
         fetchTaskComments(next.id),
         fetchTaskActivity(next.project_id, next.id),
       ]);
+      if (seq !== requestSeq.current) {
+        return;
+      }
       setComments(nextComments);
       setActivity(nextActivity.filter((item) => item.object_id === next.id));
       setError(null);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "task not found");
+      if (seq === requestSeq.current) {
+        setError(caught instanceof ApiError ? caught.message : "task not found");
+      }
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) {
+        setLoading(false);
+      }
     }
-  }, [applyTask, taskId]);
+  }, [mergePolledTask, taskId]);
 
   useEffect(() => {
     if (!taskId || Array.isArray(taskId)) {
@@ -85,7 +131,7 @@ export default function TaskDetailPage() {
         if (cancelled) {
           return;
         }
-        applyTask(next);
+        applyTaskMeta(next, { text: true });
         const [nextComments, nextActivity] = await Promise.all([
           fetchTaskComments(next.id),
           fetchTaskActivity(next.project_id, next.id),
@@ -110,7 +156,7 @@ export default function TaskDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [applyTask, taskId]);
+  }, [applyTaskMeta, taskId]);
 
   useInterval(
     () => {
@@ -119,16 +165,19 @@ export default function TaskDetailPage() {
     taskId && !Array.isArray(taskId) ? DETAIL_POLL_MS : null,
   );
 
+  const briefTaskId = task?.id ?? null;
+  const briefProjectId = task?.project_id ?? null;
+
   useEffect(() => {
-    if (!task) {
+    if (!briefTaskId || !briefProjectId) {
       return;
     }
-    const projectId = task.project_id;
-    const id = task.id;
+    const selectedProjectId = briefProjectId;
+    const selectedTaskId = briefTaskId;
     let cancelled = false;
     async function loadBrief() {
       try {
-        const compiled = await compileTaskBrief(projectId, id);
+        const compiled = await compileTaskBrief(selectedProjectId, selectedTaskId);
         if (!cancelled) {
           setBrief(compiled);
           setBriefError(null);
@@ -144,18 +193,18 @@ export default function TaskDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [task]);
+  }, [briefProjectId, briefTaskId]);
 
   async function handleConflict(error: unknown, fallback: PublicTask): Promise<boolean> {
     if (error instanceof ApiError && error.code === "version_conflict") {
       const server = taskFromConflict(error);
       if (server) {
-        applyTask(server);
+        applyTaskMeta(server, { text: true });
         toast("Updated elsewhere — reapplied.");
         return true;
       }
     }
-    applyTask(fallback);
+    applyTaskMeta(fallback, { text: true });
     toast(error instanceof ApiError ? error.message : "failed to update task");
     return false;
   }
@@ -167,7 +216,7 @@ export default function TaskDetailPage() {
     }
     const previous = task;
     const optimistic: PublicTask = { ...task, title: title.trim() || task.title, description };
-    applyTask(optimistic);
+    applyTaskMeta(optimistic, { text: true });
     setSaving(true);
     try {
       const updated = await patchTask(task.id, {
@@ -175,7 +224,7 @@ export default function TaskDetailPage() {
         title: optimistic.title,
         description: optimistic.description,
       });
-      applyTask(updated);
+      applyTaskMeta(updated, { text: true });
     } catch (caught) {
       await handleConflict(caught, previous);
     } finally {
@@ -188,10 +237,10 @@ export default function TaskDetailPage() {
       return;
     }
     const previous = task;
-    applyTask({ ...task, status });
+    applyTaskMeta({ ...task, status });
     try {
       const updated = await setTaskStatus(task.id, status, task.version);
-      applyTask(updated);
+      applyTaskMeta(updated);
     } catch (caught) {
       await handleConflict(caught, previous);
     }
@@ -255,7 +304,11 @@ export default function TaskDetailPage() {
           <input
             className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-tight outline-none"
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              draftText.current = { ...draftText.current, title: value };
+              setTitle(value);
+            }}
             maxLength={200}
             aria-label="Title"
           />
@@ -274,7 +327,6 @@ export default function TaskDetailPage() {
               </option>
             ))}
           </select>
-          <span className="text-xs text-muted">v{task.version}</span>
           {task.assignee_agent_name ? (
             <span className="text-xs text-muted">Agent {task.assignee_agent_name}</span>
           ) : null}
@@ -282,7 +334,11 @@ export default function TaskDetailPage() {
         <textarea
           className="min-h-32 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
           value={description}
-          onChange={(event) => setDescription(event.target.value)}
+          onChange={(event) => {
+            const value = event.target.value;
+            draftText.current = { ...draftText.current, description: value };
+            setDescription(value);
+          }}
           maxLength={8000}
           aria-label="Description"
         />

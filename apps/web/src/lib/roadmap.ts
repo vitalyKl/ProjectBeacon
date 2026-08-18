@@ -176,9 +176,15 @@ export async function createMilestone(
   projectId: string,
   title: string,
   description = "",
+  idempotencyKey?: string,
 ): Promise<PublicMilestone> {
+  const headers: HeadersInit = {};
+  if (idempotencyKey) {
+    headers["idempotency-key"] = idempotencyKey;
+  }
   const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/milestones`, {
     method: "POST",
+    headers,
     body: JSON.stringify({ title, description }),
   });
   if (!res.ok) {
@@ -271,8 +277,12 @@ export function taskFromConflict(error: ApiError): PublicTask | null {
   return record as PublicTask;
 }
 
-export function isTaskLocked(task: PublicTask): boolean {
-  return Boolean(task.locked_by_session_id && task.lock_expires_at);
+export function isTaskLocked(task: PublicTask, now = Date.now()): boolean {
+  if (!task.locked_by_session_id || !task.lock_expires_at) {
+    return false;
+  }
+  const expires = Date.parse(task.lock_expires_at);
+  return Number.isFinite(expires) && expires > now;
 }
 
 export function statusLabel(status: TaskStatus): string {

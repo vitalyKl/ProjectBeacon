@@ -1,7 +1,9 @@
 import { isTaskLocked, type PublicTask } from "@/lib/roadmap";
+import { useNow } from "@/lib/use-now";
 
 export function LockBadge({ task }: { task: PublicTask }) {
-  if (!isTaskLocked(task)) {
+  const now = useNow(1000);
+  if (!isTaskLocked(task, now)) {
     return null;
   }
   return (
