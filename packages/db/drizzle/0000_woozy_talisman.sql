@@ -294,8 +294,7 @@ CREATE TABLE "sidecar_connections" (
 	"repo_id" uuid NOT NULL,
 	"token_id" uuid NOT NULL,
 	"connected_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "sidecar_connections_repo_id_unique" UNIQUE("repo_id")
+	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "milestones" (

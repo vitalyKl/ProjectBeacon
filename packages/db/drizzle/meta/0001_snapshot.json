@@ -1,6 +1,6 @@
 {
-  "id": "6dfddf6c-bc38-481c-abaf-be885969135c",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "101fa714-52c7-4e91-8e1a-085242e6c0e9",
+  "prevId": "6dfddf6c-bc38-481c-abaf-be885969135c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2587,7 +2587,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "sidecar_connections_repo_id_unique": {
+          "name": "sidecar_connections_repo_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "repo_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
