@@ -326,6 +326,28 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     });
   });
 
+  app.get("/v1/projects/:id/dependencies", async (c) => {
+    const session = await requireSession(c, deps);
+    if (isResponse(session)) {
+      return session;
+    }
+    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
+    if (access instanceof Response) {
+      return access;
+    }
+    const page = parsePageQuery(c);
+    if (page instanceof Response) {
+      return page;
+    }
+    const records = await deps.store.listDependencies(access.project.id);
+    const keyed = records.map((item) => ({ ...item, id: item.fromTaskId }));
+    const result = paginateRecords(keyed, page, (item) => item.createdAt);
+    return c.json({
+      items: result.items.map(presentDependency),
+      next_cursor: result.next_cursor,
+    });
+  });
+
   app.post("/v1/projects/:id/tasks", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {

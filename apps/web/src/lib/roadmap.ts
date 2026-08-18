@@ -63,6 +63,16 @@ export type PublicComment = {
   created_at: string;
 };
 
+export const DEPENDENCY_TYPES = ["blocks", "relates"] as const;
+
+export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
+
+export type PublicDependency = {
+  from_task_id: string;
+  to_task_id: string;
+  type: DependencyType;
+};
+
 export type PublicActivity = {
   id: string;
   project_id: string;
@@ -139,6 +149,15 @@ export async function fetchProjectTasks(projectId: string): Promise<PublicTask[]
     fetchPage<PublicTask>(
       `/v1/projects/${encodeURIComponent(projectId)}/tasks?${pageQuery(cursor)}`,
       "failed to load tasks",
+    ),
+  );
+}
+
+export async function fetchProjectDependencies(projectId: string): Promise<PublicDependency[]> {
+  return fetchAllPages((cursor) =>
+    fetchPage<PublicDependency>(
+      `/v1/projects/${encodeURIComponent(projectId)}/dependencies?${pageQuery(cursor)}`,
+      "failed to load dependencies",
     ),
   );
 }
@@ -233,6 +252,23 @@ export async function setTaskStatus(
     throw await readApiError(res, "failed to update status");
   }
   return parseJson<PublicTask>(res);
+}
+
+export async function createTaskDependency(
+  fromTaskId: string,
+  toTaskId: string,
+  type: DependencyType,
+  idempotencyKey: string,
+): Promise<PublicDependency> {
+  const res = await apiFetch(`/v1/tasks/${encodeURIComponent(fromTaskId)}/dependencies`, {
+    method: "POST",
+    headers: { "idempotency-key": idempotencyKey },
+    body: JSON.stringify({ to_task_id: toTaskId, type }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to add dependency");
+  }
+  return parseJson<PublicDependency>(res);
 }
 
 export async function createTaskComment(

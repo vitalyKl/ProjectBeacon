@@ -244,6 +244,7 @@ export interface AuthStore {
     settings: Record<string, unknown>,
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined>;
+  listDependencies(projectId: string): Promise<(TaskDependencyRecord & { createdAt: Date })[]>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -298,7 +299,6 @@ function cloneProjectInvite(invite: ProjectInviteRecord): ProjectInviteRecord {
     acceptedAt: invite.acceptedAt ? new Date(invite.acceptedAt) : null,
   };
 }
-
 
 function cloneToken(token: TokenRecord): TokenRecord {
   return {
@@ -860,10 +860,6 @@ export class MemoryAuthStore implements AuthStore {
       if (patch.linkedPaths !== undefined) {
         task.linkedPaths = patch.linkedPaths.map((path) => ({ ...path }));
       }
-      if (patch.githubIssueId !== undefined) {
-        assertUniqueGithubIssue(this.tasks, task.projectId, patch.githubIssueId, task.id);
-        task.githubIssueId = patch.githubIssueId;
-      }
       const lockReleased = Boolean(options?.releaseLock && task.lockedBySessionId);
       if (options?.releaseLock) {
         task.lockedBySessionId = null;
@@ -1164,7 +1160,6 @@ export class MemoryAuthStore implements AuthStore {
     this.decisions.set(decision.id, cloneDecision(decision));
   }
 
-
   async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
     return this.enqueueWrite(() => {
       if (this.contextRevisions.has(revision.id)) {
@@ -1210,10 +1205,12 @@ export class MemoryAuthStore implements AuthStore {
       const writes: IdempotentWrites = {
         createTask: async (task) => this.insertTaskUnlocked(task),
         createComment: async (comment) => this.insertCommentUnlocked(comment),
-        createDecision: async (decision) => this.insertDecisionUnlocked(decision),
-        createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
         startWork: async (input) => this.startWorkUnlocked(input),
+        createMilestone: async (milestone) => {
+          this.milestones.set(milestone.id, cloneMilestone(milestone));
+          return cloneMilestone(milestone);
+        },
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1225,10 +1222,6 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   private insertTaskUnlocked(task: TaskRecord): TaskRecord {
-    if (this.tasks.has(task.id)) {
-      throw new UniqueViolationError("tasks_pkey");
-    }
-    assertUniqueGithubIssue(this.tasks, task.projectId, task.githubIssueId);
     this.tasks.set(task.id, cloneTask(task));
     return cloneTask(task);
   }
@@ -1255,7 +1248,9 @@ export class MemoryAuthStore implements AuthStore {
         result.push(cloneToken(token));
       }
     }
-    result.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+    result.sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+    );
     return result;
   }
 
@@ -1883,6 +1878,27 @@ export class MemoryAuthStore implements AuthStore {
       return cloneProject(project);
     });
   }
+
+  async listDependencies(
+    projectId: string,
+  ): Promise<(TaskDependencyRecord & { createdAt: Date })[]> {
+    const result: (TaskDependencyRecord & { createdAt: Date })[] = [];
+    for (const dependency of this.dependencies) {
+      const from = this.tasks.get(dependency.fromTaskId);
+      const to = this.tasks.get(dependency.toTaskId);
+      if (!from || !to || from.deletedAt || to.deletedAt) {
+        continue;
+      }
+      if (from.projectId !== projectId || to.projectId !== projectId) {
+        continue;
+      }
+      result.push({
+        ...dependency,
+        createdAt: new Date(from.createdAt),
+      });
+    }
+    return result;
+  }
     string,
     { response: unknown; createdAt: Date }
   >();
@@ -1930,8 +1946,7 @@ function cloneConstraint(constraint: ConstraintRecord): ConstraintRecord {
 function cloneDecision(decision: DecisionRecord): DecisionRecord {
   return {
     ...decision,
-    relatedPaths: decision.relatedPaths.map((path) => ({ ...path })),
-    relatedTaskIds: [...decision.relatedTaskIds],
+    relatedPaths: [...decision.relatedPaths],
     createdAt: new Date(decision.createdAt),
   };
 }

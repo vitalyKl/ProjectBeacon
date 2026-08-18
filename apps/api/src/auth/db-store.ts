@@ -1434,6 +1434,33 @@ export class DbAuthStore implements AuthStore {
     });
   }
 
+  async listDependencies(
+    projectId: string,
+  ): Promise<(TaskDependencyRecord & { createdAt: Date })[]> {
+    const projectTasks = await this.db
+      .select({ id: tasks.id, createdAt: tasks.createdAt })
+      .from(tasks)
+      .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)));
+    if (projectTasks.length === 0) {
+      return [];
+    }
+    const createdAtById = new Map(projectTasks.map((task) => [task.id, task.createdAt]));
+    const ids = projectTasks.map((task) => task.id);
+    const rows = await this.db
+      .select()
+      .from(taskDependencies)
+      .where(
+        and(inArray(taskDependencies.fromTaskId, ids), inArray(taskDependencies.toTaskId, ids)),
+      );
+    return rows.flatMap((row) => {
+      const createdAt = createdAtById.get(row.fromTaskId);
+      if (!createdAt) {
+        return [];
+      }
+      return [{ ...toDependency(row), createdAt }];
+    });
+  }
+
   async writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord> {
     const [row] = await this.db
       .insert(activityEvents)

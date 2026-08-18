@@ -559,6 +559,93 @@ describe("milestones and tasks", () => {
     expect(reverse.status).toBe(201);
   });
 
+  it("lists project dependencies and hides them from outsiders", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const project = await createProject(alice.app, alice.token, "graph");
+    const other = await createProject(alice.app, alice.token, "other-graph");
+    const aRes = await createTask(alice.app, alice.token, project.id, { title: "A" }, "graph-a");
+    const bRes = await createTask(alice.app, alice.token, project.id, { title: "B" }, "graph-b");
+    const cRes = await createTask(alice.app, alice.token, other.id, { title: "C" }, "graph-c");
+    const dRes = await createTask(alice.app, alice.token, other.id, { title: "D" }, "graph-d");
+    const a = (await aRes.json()) as TaskBody;
+    const b = (await bRes.json()) as TaskBody;
+    const c = (await cRes.json()) as TaskBody;
+    const d = (await dRes.json()) as TaskBody;
+
+    const eRes = await createTask(alice.app, alice.token, project.id, { title: "E" }, "graph-e");
+    const e = (await eRes.json()) as TaskBody;
+    const created = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: b.id, type: "blocks" }),
+    });
+    expect(created.status).toBe(201);
+    const second = await alice.app.request(`/v1/tasks/${b.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: e.id, type: "relates" }),
+    });
+    expect(second.status).toBe(201);
+    const otherEdge = await alice.app.request(`/v1/tasks/${c.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: d.id, type: "relates" }),
+    });
+    expect(otherEdge.status).toBe(201);
+
+    const listed = await alice.app.request(`/v1/projects/${project.id}/dependencies`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(listed.status).toBe(200);
+    const listedBody = (await listed.json()) as {
+      items: { from_task_id: string; to_task_id: string; type: string }[];
+      next_cursor: string | null;
+    };
+    expect(listedBody.next_cursor).toBeNull();
+    expect(listedBody.items).toEqual(
+      expect.arrayContaining([
+        { from_task_id: a.id, to_task_id: b.id, type: "blocks" },
+        { from_task_id: b.id, to_task_id: e.id, type: "relates" },
+      ]),
+    );
+    expect(listedBody.items).toHaveLength(2);
+
+    const firstPage = await alice.app.request(`/v1/projects/${project.id}/dependencies?limit=1`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(firstPage.status).toBe(200);
+    const firstBody = (await firstPage.json()) as {
+      items: { from_task_id: string; to_task_id: string; type: string }[];
+      next_cursor: string | null;
+    };
+    expect(firstBody.items).toHaveLength(1);
+    expect(firstBody.next_cursor).toEqual(expect.any(String));
+    const secondPage = await alice.app.request(
+      `/v1/projects/${project.id}/dependencies?limit=1&cursor=${encodeURIComponent(firstBody.next_cursor!)}`,
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    expect(secondPage.status).toBe(200);
+    const secondBody = (await secondPage.json()) as {
+      items: { from_task_id: string; to_task_id: string; type: string }[];
+      next_cursor: string | null;
+    };
+    expect(secondBody.items).toHaveLength(1);
+    expect(secondBody.next_cursor).toBeNull();
+    expect([...firstBody.items, ...secondBody.items]).toEqual(
+      expect.arrayContaining(listedBody.items),
+    );
+
+    const hidden = await bob.app.request(`/v1/projects/${project.id}/dependencies`, {
+      headers: { cookie: cookieHeader(bob.token) },
+    });
+    expect(hidden.status).toBe(404);
+    expect(await hidden.json()).toMatchObject({
+      error: { code: "not_found", message: "project not found" },
+    });
+  });
+
   it("rejects an unknown or non-member assignee", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");
