@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-
 import { uuidv7 } from "@beacon/shared";
-
 import { createApp } from "./app.js";
 import type { AuthConfig } from "./auth/config.js";
 import { MemoryAuthStore } from "./auth/store.js";
@@ -12,7 +10,6 @@ const STRONG_PASSWORD = "correct-horse";
 function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
   return {
     bootstrapAdminToken: BOOTSTRAP_TOKEN,
-    workerToken: undefined,
     authLocal: true,
     authLocalInviteOnly: false,
     authGithub: false,
@@ -111,42 +108,129 @@ describe("GET /v1/projects/:id/context/nodes", () => {
 });
 
 describe("PUT /v1/projects/:id/context/nodes/:nodeId", () => {
-  it("creates a project-scope native brief via POST and updates it by id", async () => {
+  it("creates a native project node and updates sections and review_state", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");
-    const project = await createProject(alice.app, alice.token, "brief");
+    const project = await createProject(alice.app, alice.token, "edit-node");
+    const nodeId = uuidv7();
 
-    const created = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
-      method: "POST",
-      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
-      body: JSON.stringify({
-        sections: [
-          { id: "goals", title: "Goals", body_md: "Ship.", ordinal: 0 },
-          { id: "non_goals", title: "Non-goals", body_md: "Scope creep.", ordinal: 1 },
-        ],
-      }),
-    });
-    expect(created.status).toBe(201);
-    const node = (await created.json()) as {
-      id: string;
-      scope_type: string;
-      sections: { id: string }[];
-    };
-    expect(node.scope_type).toBe("project");
-    expect(node.sections.map((section) => section.id)).toEqual(["goals", "non_goals"]);
-
-    const updated = await alice.app.request(`/v1/projects/${project.id}/context/nodes/${node.id}`, {
+    const created = await alice.app.request(`/v1/projects/${project.id}/context/nodes/${nodeId}`, {
       method: "PUT",
       headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
       body: JSON.stringify({
-        sections: [{ id: "goals", title: "Goals", body_md: "Ship the first slice.", ordinal: 0 }],
+        scope_type: "project",
+        path: "",
+        sections: [{ id: "goals", title: "Goals", body_md: "Ship the brief.", ordinal: 0 }],
       }),
     });
-    expect(updated.status).toBe(200);
-    expect(await updated.json()).toMatchObject({
-      id: node.id,
-      sections: [expect.objectContaining({ body_md: "Ship the first slice." })],
+    expect(created.status).toBe(200);
+    const createdBody = (await created.json()) as {
+      id: string;
+      source: string;
+      review_state: string;
+      sections: { id: string; body_md: string }[];
+    };
+    expect(createdBody).toMatchObject({
+      id: nodeId,
+      source: "native",
+      review_state: "reviewed",
     });
+    expect(createdBody.sections[0]).toMatchObject({ id: "goals", body_md: "Ship the brief." });
+
+    await alice.app.request(`/v1/projects/${project.id}/context/import`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        files: [{ path: "AGENTS.md", content: "## Conventions\nMatch routes.\n" }],
+      }),
+    });
+    const listed = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    const items = (
+      (await listed.json()) as {
+        items: { id: string; source: string; review_state: string }[];
+      }
+    ).items;
+    const imported = items.find((item) => item.source === "imported_agents_md");
+    expect(imported?.review_state).toBe("needs_review");
+
+    const reviewed = await alice.app.request(
+      `/v1/projects/${project.id}/context/nodes/${imported!.id}`,
+      {
+        method: "PUT",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({
+          review_state: "reviewed",
+          sections: [
+            { id: "conventions", title: "Conventions", body_md: "Keep it small.", ordinal: 0 },
+          ],
+        }),
+      },
+    );
+    expect(reviewed.status).toBe(200);
+    expect(await reviewed.json()).toMatchObject({
+      id: imported!.id,
+      review_state: "reviewed",
+      sections: [{ id: "conventions", body_md: "Keep it small." }],
+    });
+  });
+
+  it("returns 404 for a non-member or cross-project node", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const aliceProject = await createProject(alice.app, alice.token, "alice-ctx");
+    const bobProject = await createProject(bob.app, bob.token, "bob-ctx");
+    const aliceNode = uuidv7();
+    const bobNode = uuidv7();
+
+    expect(
+      (
+        await alice.app.request(`/v1/projects/${aliceProject.id}/context/nodes/${aliceNode}`, {
+          method: "PUT",
+          headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+          body: JSON.stringify({
+            scope_type: "project",
+            sections: [{ id: "goals", title: "Goals", body_md: "Private.", ordinal: 0 }],
+          }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await bob.app.request(`/v1/projects/${bobProject.id}/context/nodes/${bobNode}`, {
+          method: "PUT",
+          headers: { cookie: cookieHeader(bob.token), "content-type": "application/json" },
+          body: JSON.stringify({
+            scope_type: "project",
+            sections: [{ id: "goals", title: "Goals", body_md: "Bob.", ordinal: 0 }],
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    const outsider = await bob.app.request(
+      `/v1/projects/${aliceProject.id}/context/nodes/${aliceNode}`,
+      {
+        method: "PUT",
+        headers: { cookie: cookieHeader(bob.token), "content-type": "application/json" },
+        body: JSON.stringify({ review_state: "reviewed" }),
+      },
+    );
+    expect(outsider.status).toBe(404);
+    expect(await outsider.json()).toMatchObject({ error: { code: "not_found" } });
+
+    const crossProject = await alice.app.request(
+      `/v1/projects/${aliceProject.id}/context/nodes/${bobNode}`,
+      {
+        method: "PUT",
+        headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+        body: JSON.stringify({ review_state: "reviewed" }),
+      },
+    );
+    expect(crossProject.status).toBe(404);
+    expect(await crossProject.json()).toMatchObject({ error: { code: "not_found" } });
   });
 });
 
@@ -322,5 +406,71 @@ describe("POST /v1/projects/:id/context/compile", () => {
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ error: { code: "not_found" } });
     expect(await store.listContextRevisions(project.id)).toHaveLength(0);
+  });
+});
+
+describe("GET /v1/projects/:id/context/revisions/:revId", () => {
+  it("returns a stored compile revision for a project member", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "revs");
+
+    const compiled = await alice.app.request(`/v1/projects/${project.id}/context/compile`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(compiled.status).toBe(200);
+    const brief = (await compiled.json()) as { revision_id: string; sections: unknown[] };
+
+    const listed = await alice.app.request(`/v1/projects/${project.id}/context/revisions`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(listed.status).toBe(200);
+    const page = (await listed.json()) as { items: { id: string }[] };
+    expect(page.items[0]?.id).toBe(brief.revision_id);
+
+    const res = await alice.app.request(
+      `/v1/projects/${project.id}/context/revisions/${brief.revision_id}`,
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    expect(res.status).toBe(200);
+    const revision = (await res.json()) as {
+      id: string;
+      brief: { revision_id: string };
+      brief_markdown: string;
+    };
+    expect(revision.id).toBe(brief.revision_id);
+    expect(revision.brief.revision_id).toBe(brief.revision_id);
+    expect(revision.brief_markdown.length).toBeGreaterThan(0);
+  });
+
+  it("returns 404 for a non-member or foreign revision", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const aliceProject = await createProject(alice.app, alice.token, "alice-rev");
+    const bobProject = await createProject(bob.app, bob.token, "bob-rev");
+
+    const compiled = await alice.app.request(`/v1/projects/${aliceProject.id}/context/compile`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const brief = (await compiled.json()) as { revision_id: string };
+
+    const outsider = await bob.app.request(
+      `/v1/projects/${aliceProject.id}/context/revisions/${brief.revision_id}`,
+      { headers: { cookie: cookieHeader(bob.token) } },
+    );
+    expect(outsider.status).toBe(404);
+    expect(await outsider.json()).toMatchObject({ error: { code: "not_found" } });
+
+    const foreign = await bob.app.request(
+      `/v1/projects/${bobProject.id}/context/revisions/${brief.revision_id}`,
+      { headers: { cookie: cookieHeader(bob.token) } },
+    );
+    expect(foreign.status).toBe(404);
+    expect(await foreign.json()).toMatchObject({ error: { code: "not_found" } });
   });
 });

@@ -160,8 +160,6 @@ export async function fetchAllPages<T>(
     seen.add(next);
     cursor = next;
   }
-}
-
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }
@@ -234,6 +232,161 @@ export async function logoutSession(): Promise<void> {
   if (!res.ok) {
     throw await readApiError(res, "logout failed");
   }
+}
+
+export type ActorRef = {
+  type: string;
+  id: string;
+  display: string;
+};
+
+export type ContextSection = {
+  id: string;
+  key?: string;
+  title: string;
+  body_md: string;
+  ordinal: number;
+};
+
+export type ContextNode = {
+  id: string;
+  project_id: string;
+  repo_id: string | null;
+  task_id: string | null;
+  scope_type: "project" | "repo" | "path" | "task";
+  path: string;
+  sections: ContextSection[];
+  source: string;
+  source_path: string | null;
+  review_state: "reviewed" | "needs_review";
+  updated_at: string;
+  updated_by: ActorRef;
+};
+
+export type ContextRevisionSummary = {
+  id: string;
+  project_id: string;
+  compiled_hash: string;
+  compiler_version: string;
+  target: { repo_id: string | null; path: string; task_id: string | null };
+  token_estimate: number;
+  source_node_ids: string[];
+  session_id: string | null;
+  created_at: string;
+};
+
+export type ContextRevision = ContextRevisionSummary & {
+  brief_markdown: string;
+  brief: SessionBrief;
+};
+
+export type SessionBrief = {
+  schema_version: string;
+  compiler_version: string;
+  project: { id: string; name: string; slug: string };
+  compiled_at: string;
+  revision_id: string;
+  compiled_hash: string;
+  target: { repo_id: string | null; path: string; task_id: string | null };
+  milestone: { id: string; title: string; status: string } | null;
+  task: { id: string; title: string } | null;
+  sections: ContextSection[];
+  constraints: { id: string; kind: string; body: string; scope_path: string; status: string }[];
+  decisions_relevant: { id: string; title: string; status: string; decision: string }[];
+  budget: {
+    requested: number;
+    used_estimate: number;
+    tokenizer: string;
+    overflow: boolean;
+    dropped: string[];
+  };
+  sources: { node_id: string; scope_type: string; path: string }[];
+};
+
+export type ContextImportResult = {
+  nodes: ContextNode[];
+  code_owners_written: number;
+};
+
+export async function fetchContextNodes(projectId: string): Promise<ContextNode[]> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load context");
+  }
+  const body = await parseJson<{ items: ContextNode[] }>(res);
+  return body.items;
+}
+
+export async function putContextNode(
+  projectId: string,
+  nodeId: string,
+  body: Record<string, unknown>,
+): Promise<ContextNode> {
+  const res = await apiFetch(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/nodes/${encodeURIComponent(nodeId)}`,
+    { method: "PUT", body: JSON.stringify(body) },
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to save context");
+  }
+  return parseJson<ContextNode>(res);
+}
+
+export async function importContextFiles(
+  projectId: string,
+  files: { path: string; content: string }[],
+): Promise<ContextImportResult> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/import`, {
+    method: "POST",
+    body: JSON.stringify({ files }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to import files");
+  }
+  return parseJson<ContextImportResult>(res);
+}
+
+export async function exportAgentsMd(projectId: string): Promise<string> {
+  const res = await apiFetch(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/export/agents-md`,
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to export");
+  }
+  return res.text();
+}
+
+export async function compileContext(projectId: string): Promise<SessionBrief> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/compile`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to compile preview");
+  }
+  return parseJson<SessionBrief>(res);
+}
+
+export async function fetchContextRevisions(projectId: string): Promise<ContextRevisionSummary[]> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/revisions`);
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load revisions");
+  }
+  const body = await parseJson<{ items: ContextRevisionSummary[] }>(res);
+  return body.items;
+}
+
+export async function fetchContextRevision(
+  projectId: string,
+  revisionId: string,
+): Promise<ContextRevision> {
+  const res = await apiFetch(
+    `/v1/projects/${encodeURIComponent(projectId)}/context/revisions/${encodeURIComponent(revisionId)}`,
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load revision");
+  }
+  return parseJson<ContextRevision>(res);
 }
 
 export function githubAuthorizeUrl(clientId: string, redirectTo: string): string {

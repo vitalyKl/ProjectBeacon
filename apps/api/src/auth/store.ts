@@ -180,6 +180,7 @@ export interface AuthStore {
     filters?: { objectType?: string; objectId?: string },
   ): Promise<ActivityEventRecord[]>;
   listContextNodes(projectId: string): Promise<ContextNodeRecord[]>;
+  findContextNodeById(id: string): Promise<ContextNodeRecord | undefined>;
   upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
   listActiveConstraints(projectId: string): Promise<ConstraintRecord[]>;
   listConstraints(projectId: string): Promise<ConstraintRecord[]>;
@@ -187,6 +188,7 @@ export interface AuthStore {
   listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]>;
   insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord>;
   listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]>;
+  findContextRevisionById(id: string): Promise<ContextRevisionRecord | undefined>;
   listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]>;
   findProjectRepoById(id: string): Promise<ProjectRepoRecord | undefined>;
   upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]>;
@@ -926,6 +928,11 @@ export class MemoryAuthStore implements AuthStore {
     return result;
   }
 
+  async findContextNodeById(id: string): Promise<ContextNodeRecord | undefined> {
+    const node = this.contextNodes.get(id);
+    return node ? cloneContextNode(node) : undefined;
+  }
+
   seedContextNode(node: ContextNodeRecord): void {
     this.contextNodes.set(node.id, cloneContextNode(node));
   }
@@ -1118,6 +1125,11 @@ export class MemoryAuthStore implements AuthStore {
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
     );
     return result;
+  }
+
+  async findContextRevisionById(id: string): Promise<ContextRevisionRecord | undefined> {
+    const revision = this.contextRevisions.get(id);
+    return revision ? cloneContextRevision(revision) : undefined;
   }
 
   async withIdempotency(

@@ -15,7 +15,7 @@ import {
 } from "@/lib/api";
 import { APP_NAV } from "@/lib/nav";
 
-import { ProjectProvider } from "./project-context";
+import { ProjectProvider, ProjectSelectionContext } from "./project-context";
 import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "./selection";
 import { ToastProvider } from "./toast";
 
@@ -229,6 +229,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               {children}
             </ProjectProvider>
           </ToastProvider>
+          <ProjectSelectionContext.Provider value={{ project }}>
+            {children}
+          </ProjectSelectionContext.Provider>
         </main>
       </div>
     </div>

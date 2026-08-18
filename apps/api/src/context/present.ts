@@ -1,6 +1,11 @@
 import type { ConstraintView, DecisionSummary, TaskSummary } from "@beacon/api-spec";
 
-import type { ConstraintRecord, ContextNodeRecord, DecisionRecord } from "./types.js";
+import type {
+  ConstraintRecord,
+  ContextNodeRecord,
+  ContextRevisionRecord,
+  DecisionRecord,
+} from "./types.js";
 import type { UserRecord } from "../auth/store.js";
 import type { MilestoneRecord, TaskRecord } from "../roadmap/types.js";
 
@@ -107,6 +112,28 @@ export function presentContextNode(node: ContextNodeRecord, actor?: UserRecord) 
       id: node.updatedById,
       display: actor?.login ?? node.updatedById,
     },
+  };
+}
+
+export function presentContextRevisionSummary(revision: ContextRevisionRecord) {
+  return {
+    id: revision.id,
+    project_id: revision.projectId,
+    compiled_hash: revision.compiledHash,
+    compiler_version: revision.compilerVersion,
+    target: { ...revision.target },
+    token_estimate: revision.tokenEstimate,
+    source_node_ids: [...revision.sourceNodeIds],
+    session_id: revision.sessionId,
+    created_at: revision.createdAt.toISOString(),
+  };
+}
+
+export function presentContextRevision(revision: ContextRevisionRecord) {
+  return {
+    ...presentContextRevisionSummary(revision),
+    brief_markdown: revision.briefMarkdown,
+    brief: revision.briefJson,
   };
 }
 

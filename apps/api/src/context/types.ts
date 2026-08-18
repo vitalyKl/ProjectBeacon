@@ -106,6 +106,10 @@ export function isContextScopeType(value: string): value is ContextScopeType {
   return (CONTEXT_SCOPE_TYPES as readonly string[]).includes(value);
 }
 
+export function isContextReviewState(value: string): value is ContextReviewState {
+  return (CONTEXT_REVIEW_STATES as readonly string[]).includes(value);
+}
+
 export function isConstraintKind(value: string): value is ConstraintKind {
   return (CONSTRAINT_KINDS as readonly string[]).includes(value);
 }

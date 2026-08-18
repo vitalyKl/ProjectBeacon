@@ -1,5 +1,7 @@
-import { Placeholder } from "../placeholder";
+"use client";
+
+import { ContextEditor } from "./context-editor";
 
 export default function ContextPage() {
-  return <Placeholder title="Context" />;
+  return <ContextEditor />;
 }

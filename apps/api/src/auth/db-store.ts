@@ -17,13 +17,7 @@ const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
 type UniqueConstraint =
-  | "login"
-  | "github_id"
-  | "org_slug"
-  | "project_slug"
-  | "context_node_scope"
-  | "project_repo"
-  | "unknown";
+  "login" | "github_id" | "org_slug" | "project_slug" | "context_node_scope" | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
@@ -51,13 +45,6 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("context_nodes_unique_scope")) {
           return "context_node_scope";
-        }
-        if (
-          constraint.includes("project_repos_project_id_github_repo_id") ||
-          constraint.includes("project_repos_local_root") ||
-          constraint.includes("project_repos_pkey")
-        ) {
-          return "project_repo";
         }
         return "unknown";
       }
@@ -144,7 +131,6 @@ function toProject(row: typeof projects.$inferSelect): ProjectRecord {
     name: row.name,
     description: row.description,
     visibility: "private",
-    defaultRepoId: row.defaultRepoId,
     settings: asSettings(row.settings),
     deletedAt: row.deletedAt,
     createdAt: row.createdAt,
@@ -2275,6 +2261,20 @@ export class DbAuthStore implements AuthStore {
       throw new Error("project not found");
     }
     return existing;
+  }
+
+  async findContextNodeById(id: string): Promise<ContextNodeRecord | undefined> {
+    const [row] = await this.db.select().from(contextNodes).where(eq(contextNodes.id, id)).limit(1);
+    return row ? toContextNode(row) : undefined;
+  }
+
+  async findContextRevisionById(id: string): Promise<ContextRevisionRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(contextRevisions)
+      .where(eq(contextRevisions.id, id))
+      .limit(1);
+    return row ? toContextRevision(row) : undefined;
   }
 }
 
