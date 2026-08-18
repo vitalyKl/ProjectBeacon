@@ -299,16 +299,32 @@ importers:
         version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)
 
   packages/mcp-tools:
+    dependencies:
+      '@beacon/api-spec':
+        specifier: workspace:*
+        version: link:../api-spec
+      '@beacon/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
     devDependencies:
       '@beacon/config':
         specifier: workspace:*
         version: link:../config
+      '@types/node':
+        specifier: ^22.18.0
+        version: 22.20.1
       eslint:
         specifier: 'catalog:'
         version: 9.39.5(jiti@2.7.0)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
 
   packages/shared:
     devDependencies:
