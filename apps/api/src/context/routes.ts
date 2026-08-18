@@ -97,6 +97,232 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
     return c.json({ items, next_cursor: result.next_cursor });
   });
 
+  app.put("/v1/projects/:id/context/nodes/:nodeId", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    if (isResponse(access)) {
+      return access;
+    }
+
+    const nodeId = c.req.param("nodeId");
+    if (!isUuid(nodeId)) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+
+    const body = await readObject(c);
+    if (!body) {
+      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+    }
+
+    const existing = await deps.store.findContextNodeById(nodeId);
+    if (existing && existing.projectId !== access.project.id) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+
+    const now = deps.clock.now();
+    let next: ContextNodeRecord;
+
+    if (existing) {
+      const sections =
+        body["sections"] === undefined ? existing.sections : parseSections(body["sections"]);
+      if (!sections) {
+        return errorJson(c, 400, "unauthorized", "invalid sections", { reason: "invalid_body" });
+      }
+      let reviewState: ContextReviewState = existing.reviewState;
+      if (body["review_state"] !== undefined) {
+        if (
+          typeof body["review_state"] !== "string" ||
+          !isContextReviewState(body["review_state"])
+        ) {
+          return errorJson(c, 400, "unauthorized", "invalid review_state", {
+            reason: "invalid_body",
+          });
+        }
+        reviewState = body["review_state"];
+      }
+      next = {
+        ...existing,
+        sections,
+        sectionsText: sectionsText(sections),
+        reviewState,
+        updatedByType:
+          access.actor.kind === "user"
+            ? "user"
+            : access.actor.kind === "token"
+              ? "token"
+              : "system",
+        updatedById:
+          access.actor.kind === "user"
+            ? access.actor.user.id
+            : access.actor.kind === "token"
+              ? access.actor.token.id
+              : "worker",
+        updatedAt: now,
+      };
+    } else {
+      if (body["scope_type"] === undefined) {
+        return errorJson(c, 404, "not_found", "node not found");
+      }
+      const scopeRaw = body["scope_type"];
+      if (typeof scopeRaw !== "string" || !isContextScopeType(scopeRaw)) {
+        return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
+      }
+      if (!NATIVE_CREATE_SCOPES.has(scopeRaw)) {
+        return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
+      }
+      const pathRaw = body["path"] === undefined ? "" : body["path"];
+      if (typeof pathRaw !== "string") {
+        return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+      }
+      const path = normalizeNodePath(pathRaw);
+      if (path === undefined) {
+        return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+      }
+      if (scopeRaw === "path" && path.length === 0) {
+        return errorJson(c, 400, "unauthorized", "path is required for path scope", {
+          reason: "invalid_body",
+        });
+      }
+      if (scopeRaw !== "path" && path.length > 0) {
+        return errorJson(c, 400, "unauthorized", "path must be empty for this scope", {
+          reason: "invalid_body",
+        });
+      }
+
+      let repoId: string | null = null;
+      if (scopeRaw === "project") {
+        if (body["repo_id"] !== undefined && body["repo_id"] !== null) {
+          return errorJson(c, 400, "unauthorized", "repo_id must be null for project scope", {
+            reason: "invalid_body",
+          });
+        }
+      } else {
+        const requested = parseNullableUuid(body["repo_id"]);
+        if (requested === undefined) {
+          return errorJson(c, 400, "unauthorized", "invalid repo_id", { reason: "invalid_body" });
+        }
+        if (requested === null) {
+          const resolved = await resolveRepoId(deps, access.project.id, undefined);
+          if (!resolved.ok) {
+            if (resolved.reason === "ambiguous") {
+              return errorJson(
+                c,
+                400,
+                "repo_ambiguous",
+                "repo_id is required when the project has multiple repos",
+              );
+            }
+            return errorJson(c, 404, "not_found", "repo not found");
+          }
+          if (!resolved.repoId) {
+            return errorJson(c, 400, "unauthorized", "repo_id is required", {
+              reason: "invalid_body",
+            });
+          }
+          repoId = resolved.repoId;
+        } else {
+          const repo = await deps.store.findProjectRepoById(requested);
+          if (!repo || repo.projectId !== access.project.id) {
+            return errorJson(c, 404, "not_found", "repo not found");
+          }
+          repoId = repo.id;
+        }
+      }
+
+      const sections = parseSections(body["sections"] ?? []);
+      if (!sections) {
+        return errorJson(c, 400, "unauthorized", "invalid sections", { reason: "invalid_body" });
+      }
+      let reviewState: ContextReviewState = "reviewed";
+      if (body["review_state"] !== undefined) {
+        if (
+          typeof body["review_state"] !== "string" ||
+          !isContextReviewState(body["review_state"])
+        ) {
+          return errorJson(c, 400, "unauthorized", "invalid review_state", {
+            reason: "invalid_body",
+          });
+        }
+        reviewState = body["review_state"];
+      }
+
+      next = {
+        id: nodeId,
+        projectId: access.project.id,
+        repoId,
+        taskId: null,
+        scopeType: scopeRaw,
+        path,
+        sections,
+        sectionsText: sectionsText(sections),
+        source: NATIVE_SOURCE,
+        sourcePath: parseOptionalString(body["source_path"], MAX_IMPORT_PATH) ?? null,
+        reviewState,
+        updatedByType:
+          access.actor.kind === "user"
+            ? "user"
+            : access.actor.kind === "token"
+              ? "token"
+              : "system",
+        updatedById:
+          access.actor.kind === "user"
+            ? access.actor.user.id
+            : access.actor.kind === "token"
+              ? access.actor.token.id
+              : "worker",
+        updatedAt: now,
+      };
+    }
+
+    const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
+    if (existing) {
+      const stored = await deps.store.upsertContextNode(next);
+      return c.json(presentContextNode(stored, actorUser));
+    }
+
+    const occupied = await deps.store.findContextNodeByScope(next);
+    if (occupied) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+    const stored = await deps.store.insertContextNode(next);
+    if (stored.id !== nodeId) {
+      return errorJson(c, 404, "not_found", "node not found");
+    }
+    return c.json(presentContextNode(stored, actorUser));
+  });
+
+  app.get("/v1/projects/:id/context/revisions", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    const page = parsePageQuery(c);
+    if (page instanceof Response) {
+      return page;
+    }
+    const records = await deps.store.listContextRevisions(access.project.id);
+    const result = paginateRecords(records, page, (item) => item.createdAt);
+    return c.json({
+      items: result.items.map(presentContextRevisionSummary),
+      next_cursor: result.next_cursor,
+    });
+  });
+
+  app.get("/v1/projects/:id/context/revisions/:revId", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    const revId = c.req.param("revId");
+    if (!isUuid(revId)) {
+      return errorJson(c, 404, "not_found", "revision not found");
+    }
+    const revision = await deps.store.findContextRevisionById(revId);
+    if (!revision || revision.projectId !== access.project.id) {
+      return errorJson(c, 404, "not_found", "revision not found");
+    }
+    return c.json(presentContextRevision(revision));
+  });
+
   app.post("/v1/projects/:id/context/import", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
     if (isResponse(access)) {
@@ -329,7 +555,6 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
     }
 
     const now = deps.clock.now();
-    const started = Date.now();
     const compiled = await compileProjectBrief(
       deps.store,
       access.project,
@@ -338,10 +563,8 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
       deps.codeGateway,
     );
     if (!compiled.ok) {
-      observeCompile("not_found", Date.now() - started);
       return errorJson(c, 404, "not_found", "task not found");
     }
-    observeCompile("ok", Date.now() - started);
 
     const brief = compiled.compiled.brief;
     await deps.store.insertContextRevision({

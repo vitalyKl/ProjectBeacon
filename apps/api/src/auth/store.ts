@@ -988,19 +988,15 @@ export class MemoryAuthStore implements AuthStore {
     return node ? cloneContextNode(node) : undefined;
   }
 
-  private findContextNodeByScope(node: ContextNodeRecord): ContextNodeRecord | undefined {
-    for (const existing of this.contextNodes.values()) {
-      if (
-        existing.projectId === node.projectId &&
-        existing.scopeType === node.scopeType &&
-        existing.repoId === node.repoId &&
-        existing.path === node.path &&
-        existing.taskId === node.taskId
-      ) {
-        return existing;
-      }
-    }
-    return undefined;
+  async findContextNodeByScope(scope: {
+    projectId: string;
+    scopeType: ContextNodeRecord["scopeType"];
+    repoId: string | null;
+    path: string;
+    taskId: string | null;
+  }): Promise<ContextNodeRecord | undefined> {
+    const node = this.matchContextNodeByScope(scope);
+    return node ? cloneContextNode(node) : undefined;
   }
 
   seedContextNode(node: ContextNodeRecord): void {
@@ -1013,7 +1009,7 @@ export class MemoryAuthStore implements AuthStore {
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
     return this.enqueueWrite(() => {
-      const existing = this.findContextNodeByScope(node);
+      const existing = this.matchContextNodeByScope(node);
       if (existing) {
         existing.sections = node.sections.map((section) => ({ ...section }));
         existing.sectionsText = node.sectionsText;
