@@ -242,7 +242,8 @@ function FirstProjectForm({ orgId, onCreated }: { orgId: string; onCreated: () =
     <section className="space-y-2">
       <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
       <p className="max-w-xl text-sm leading-6 text-muted">
-        Shell only. Board and wizard land in later PRs.
+        Project home. Open Context to edit or export the brief. Board, backlog, and token settings
+        are still stubs.
       </p>
     </section>
   );

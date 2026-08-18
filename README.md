@@ -2,7 +2,7 @@
 
 Project operating system for mixed human + AI-agent development.
 
-TypeScript monorepo (pnpm workspaces + Turborepo). The web shell (`apps/web`) is a Next.js App Router app with auth pages and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md).
+TypeScript monorepo (pnpm workspaces + Turborepo). The web app (`apps/web`) is a Next.js App Router app with auth pages, a context editor, and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md). Agent-facing repo brief: [AGENTS.md](AGENTS.md).
 
 ## Prerequisites
 
@@ -26,3 +26,11 @@ Self-host Compose is Postgres 16 + API + worker (web/mcp are not in this compose
 Self-host Compose is Postgres 16 + API + web + worker (mcp is not in this compose). Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`, `BOOTSTRAP_ADMIN_TOKEN`, `BEACON_WORKER_TOKEN`, and `INDEX_RPC_TOKEN`. `docker compose up` publishes web `:3000` (same-origin `/v1` rewrite) and API `:8080` so host `/health` still works. Worker index HTTP stays on the Compose network (port 7744, not published).
 
 The sidecar tunnel (`FF_SIDECAR_TUNNEL`, default off) lets `beacon sidecar` dial `wss://$BEACON_HOST/v1/sidecar` with a `code:read` token so remote code tools can reach a laptop index. The CLI dials only when `BEACON_HOST` is set or `FF_SIDECAR_TUNNEL=true`; otherwise heartbeat and local HTTP stay as they are.
+Self-host Compose is Postgres 16 + API + worker + web. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`, `BEACON_WORKER_TOKEN`, and `INDEX_RPC_TOKEN`. `docker compose up` publishes web `:3000` (same-origin `/v1` rewrite) and API `:8080`. The worker has no published ports.
+Mint a project token with `POST /v1/projects/:id/tokens` (admin session). Settings has no token UI. Then:
+```bash
+pnpm --filter @beacon/cli start -- connect <token> --project <id>
+pnpm --filter @beacon/cli start -- sidecar
+pnpm --filter @beacon/cli start -- mcp
+```
+To load this repo's brief into a fresh project: open Context and import root `AGENTS.md`, or write a project-scope brief and export it. The checked-in file is the `exportAgentsMd` projection of `packages/context/src/beacon-brief.ts`.
