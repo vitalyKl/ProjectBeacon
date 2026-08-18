@@ -274,18 +274,25 @@ export const FinishWorkArgsSchema = z.object({
   status: z.enum(["done", "canceled", "in_review", "blocked", "ready"]).optional(),
 });
 
-export const WriteHandoffArgsSchema = z
-  .object({
-    summary: z.string().min(20).max(8000),
-    session_id: UuidSchema.optional(),
+const WriteHandoffFields = {
+  summary: z.string().min(20).max(8000),
+  next_steps: z.string().max(8000).optional(),
+  files_touched: z.array(LinkedPathSchema).optional(),
+  open_questions: z.array(z.string().min(1).max(800)).optional(),
+} as const;
+
+export const WriteHandoffArgsSchema = z.union([
+  z.object({
+    ...WriteHandoffFields,
+    session_id: UuidSchema,
     task_id: UuidSchema.optional(),
-    next_steps: z.string().max(8000).optional(),
-    files_touched: z.array(LinkedPathSchema).optional(),
-    open_questions: z.array(z.string().min(1).max(800)).optional(),
-  })
-  .refine((value) => value.session_id !== undefined || value.task_id !== undefined, {
-    message: "session_id or task_id is required",
-  });
+  }),
+  z.object({
+    ...WriteHandoffFields,
+    task_id: UuidSchema,
+    session_id: UuidSchema.optional(),
+  }),
+]);
 
 export const GetHandoffArgsSchema = z.object({
   task_id: UuidSchema,
@@ -387,6 +394,38 @@ function asJsonSchema(schema: z.ZodType): JsonSchema {
   return json;
 }
 
+function requiredOf(schema: unknown): string[] {
+  if (schema === null || typeof schema !== "object" || Array.isArray(schema)) {
+    return [];
+  }
+  const required = (schema as { required?: unknown }).required;
+  return Array.isArray(required) ? required.filter((name) => typeof name === "string") : [];
+}
+
+function withHandoffTargetAnyOf(schema: JsonSchema): JsonSchema {
+  const variants = [schema["anyOf"], schema["oneOf"]].find(Array.isArray);
+  if (variants) {
+    const covers =
+      variants.some((variant) => requiredOf(variant).includes("session_id")) &&
+      variants.some((variant) => requiredOf(variant).includes("task_id"));
+    if (covers) {
+      return schema;
+    }
+  }
+  return {
+    ...schema,
+    anyOf: [{ required: ["session_id"] }, { required: ["task_id"] }],
+  };
+}
+
+function toolInputSchema(name: ToolName): JsonSchema {
+  const schema = asJsonSchema(TOOL_ARG_SCHEMAS[name]);
+  if (name === "write_handoff") {
+    return withHandoffTargetAnyOf(schema);
+  }
+  return schema;
+}
+
 export type ToolDefinition = {
   name: ToolName;
   inputSchema: JsonSchema;
@@ -395,14 +434,14 @@ export type ToolDefinition = {
 export function listToolDefinitions(): ToolDefinition[] {
   return TOOL_NAMES.map((name) => ({
     name,
-    inputSchema: asJsonSchema(TOOL_ARG_SCHEMAS[name]),
+    inputSchema: toolInputSchema(name),
   }));
 }
 
 export function getToolDefinition(name: ToolName): ToolDefinition {
   return {
     name,
-    inputSchema: asJsonSchema(TOOL_ARG_SCHEMAS[name]),
+    inputSchema: toolInputSchema(name),
   };
 }
 

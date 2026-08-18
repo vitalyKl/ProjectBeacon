@@ -109,4 +109,18 @@ describe("tool catalog", () => {
     expect(parseToolArgs("get_task", { task_id: TASK_ID }).ok).toBe(true);
     expect(parseToolArgs("get_project", { project_id: PROJECT_ID }).ok).toBe(true);
   });
+
+  it("publishes write_handoff session_id or task_id in JSON Schema", () => {
+    const schema = getToolDefinition("write_handoff").inputSchema;
+    const variants = [schema["anyOf"], schema["oneOf"]].find(Array.isArray) as
+      | Record<string, unknown>[]
+      | undefined;
+    expect(variants).toBeDefined();
+    const requiredSets = (variants ?? []).map((variant) => {
+      const required = variant["required"];
+      return Array.isArray(required) ? required : [];
+    });
+    expect(requiredSets.some((required) => required.includes("session_id"))).toBe(true);
+    expect(requiredSets.some((required) => required.includes("task_id"))).toBe(true);
+  });
 });

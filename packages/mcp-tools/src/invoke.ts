@@ -1,5 +1,5 @@
 import { createHttpCodeSource } from "./code-source.js";
-import { integrationUnavailable, invalidArguments } from "./errors.js";
+import { handoffWriteUnavailable, integrationUnavailable, invalidArguments } from "./errors.js";
 import { apiRequest, requireProjectId } from "./http.js";
 import type { InvokeContext, JsonObject } from "./types.js";
 import {
@@ -59,26 +59,6 @@ async function projectIdOfTask(taskId: string, ctx: InvokeContext): Promise<stri
     throw invalidArguments("task is missing project_id");
   }
   return task.project_id;
-}
-
-async function resolveHandoffSessionId(
-  args: ToolArgs<"write_handoff">,
-  ctx: InvokeContext,
-): Promise<string> {
-  if (args.session_id) {
-    return args.session_id;
-  }
-  if (!args.task_id) {
-    throw invalidArguments("session_id or task_id is required");
-  }
-  const handoff = (await apiRequest(ctx, {
-    method: "GET",
-    path: `/v1/tasks/${args.task_id}/handoff`,
-  })) as { session_id?: unknown };
-  if (typeof handoff.session_id !== "string") {
-    throw invalidArguments("latest handoff is missing session_id");
-  }
-  return handoff.session_id;
 }
 
 async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): Promise<unknown> {
@@ -309,20 +289,9 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
         }),
       });
     }
-    case "write_handoff": {
-      const data = argsOf(tool, args);
-      const sessionId = await resolveHandoffSessionId(data, ctx);
-      return apiRequest(ctx, {
-        method: "POST",
-        path: `/v1/sessions/${sessionId}/finish`,
-        body: omitUndefined({
-          summary: data.summary,
-          next_steps: data.next_steps,
-          files_touched: data.files_touched,
-          open_questions: data.open_questions,
-        }),
-      });
-    }
+    case "write_handoff":
+      argsOf(tool, args);
+      throw handoffWriteUnavailable();
     case "get_handoff": {
       const data = argsOf(tool, args);
       return apiRequest(ctx, {

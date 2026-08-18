@@ -125,7 +125,6 @@ describe("invoke routing", () => {
       apply_constraint: { constraint_id: CONSTRAINT_ID },
       start_work: { task_id: TASK_ID, idempotency_key: "start-1", steal: true },
       finish_work: { session_id: SESSION_ID, summary: "Finished the client mapping work" },
-      write_handoff: { session_id: SESSION_ID, summary: "Leaving a handoff without status" },
       get_handoff: { task_id: TASK_ID },
     };
 
@@ -149,7 +148,6 @@ describe("invoke routing", () => {
       apply_constraint: ["POST", `/v1/constraints/${CONSTRAINT_ID}/apply`],
       start_work: ["POST", `/v1/projects/${PROJECT_ID}/sessions`],
       finish_work: ["POST", `/v1/sessions/${SESSION_ID}/finish`],
-      write_handoff: ["POST", `/v1/sessions/${SESSION_ID}/finish`],
       get_handoff: ["GET", `/v1/tasks/${TASK_ID}/handoff`],
     };
 
@@ -279,6 +277,29 @@ describe("invoke routing", () => {
       },
     });
     expect(result).toEqual({ name: "invoke" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("fails write_handoff closed without finishing a session", async () => {
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { unexpected: true } }));
+    await expect(
+      invoke(
+        "write_handoff",
+        { session_id: SESSION_ID, summary: "Leaving a handoff without status" },
+        ctx(fetchImpl),
+      ),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      status: 501,
+      details: { reason: "handoff_route_unavailable" },
+    });
+    await expect(
+      invoke(
+        "write_handoff",
+        { task_id: TASK_ID, summary: "Leaving a handoff without status" },
+        ctx(fetchImpl),
+      ),
+    ).rejects.toMatchObject({ status: 501, details: { reason: "handoff_route_unavailable" } });
     expect(calls).toHaveLength(0);
   });
 

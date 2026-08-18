@@ -48,6 +48,12 @@ export function repoAmbiguous(): ToolError {
   return toolError("repo_ambiguous", 400, "repo_id is required");
 }
 
+export function handoffWriteUnavailable(): ToolError {
+  return toolError("not_found", 501, "write_handoff is unavailable until a handoff-only route exists", {
+    reason: "handoff_route_unavailable",
+  });
+}
+
 type ErrorBody = {
   code: string;
   message: string;
