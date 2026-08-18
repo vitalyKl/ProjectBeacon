@@ -9,7 +9,6 @@ export type AuthConfig = {
   githubAppId?: string;
   githubAppPrivateKey?: string;
   githubAppWebhookSecret?: string;
-  githubTwoWay?: boolean;
   secureCookies: boolean;
   trustProxy: boolean;
   workerToken: string | undefined;
@@ -27,7 +26,6 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     githubAppId: env["GITHUB_APP_ID"],
     githubAppPrivateKey: env["GITHUB_APP_PRIVATE_KEY"],
     githubAppWebhookSecret: env["GITHUB_APP_WEBHOOK_SECRET"],
-    githubTwoWay: env["FF_GITHUB_TWO_WAY"] === "true",
     secureCookies: env["NODE_ENV"] === "production",
     trustProxy: env["TRUST_PROXY"] === "true",
     workerToken: env["BEACON_WORKER_TOKEN"],

@@ -8,6 +8,7 @@ import type { UserRecord } from "../auth/store.js";
 import { OrgSlugTakenError, ProjectSlugTakenError } from "../auth/store.js";
 import { errorJson } from "../errors.js";
 import { parseEmail, parseOptionalString, readObject } from "../http.js";
+import { mergeProjectSettings, parseProjectSettingsPatch } from "../github/settings.js";
 import { parseSlug } from "../slug.js";
 import {
   presentOrg,
@@ -382,11 +383,29 @@ export function mountOrgs(app: Hono, deps: AuthDeps): void {
         reason: "invalid_visibility",
       });
     }
+    const settingsParsed = parseProjectSettingsPatch(body["settings"]);
+    if (!settingsParsed.ok) {
+      return errorJson(c, 400, "unauthorized", settingsParsed.message, {
+        reason: settingsParsed.reason,
+      });
+    }
 
     try {
-      const updated = await deps.store.updateProject(access.project.id, patch, deps.clock.now());
+      const now = deps.clock.now();
+      let updated = await deps.store.updateProject(access.project.id, patch, now);
       if (!updated) {
         return errorJson(c, 404, "not_found", "project not found");
+      }
+      if (settingsParsed.patch) {
+        const next = await deps.store.updateProjectSettings(
+          access.project.id,
+          mergeProjectSettings(updated.settings, settingsParsed.patch),
+          now,
+        );
+        if (!next) {
+          return errorJson(c, 404, "not_found", "project not found");
+        }
+        updated = next;
       }
       return c.json(presentProject(updated));
     } catch (error) {

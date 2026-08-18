@@ -27,6 +27,7 @@ const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
+
 type UniqueConstraint =
   | "login"
   | "github_id"
@@ -34,6 +35,7 @@ type UniqueConstraint =
   | "project_slug"
   | "project_repo"
   | "context_node_scope"
+  | "github_issue"
   | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
@@ -65,6 +67,9 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("context_nodes")) {
           return "context_node_scope";
+        }
+        if (constraint.includes("tasks_project_github_issue_id")) {
+          return "github_issue";
         }
         return "unknown";
       }
@@ -1200,35 +1205,42 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createTask(task: TaskRecord): Promise<TaskRecord> {
-    const [row] = await this.db
-      .insert(tasks)
-      .values({
-        id: task.id,
-        projectId: task.projectId,
-        milestoneId: task.milestoneId,
-        parentId: task.parentId,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        priority: task.priority,
-        type: task.type,
-        version: task.version,
-        assigneeUserId: task.assigneeUserId,
-        assigneeAgentName: task.assigneeAgentName,
-        agentBrief: task.agentBrief,
-        linkedPaths: task.linkedPaths,
-        githubIssueId: task.githubIssueId,
-        lockedBySessionId: task.lockedBySessionId,
-        lockExpiresAt: task.lockExpiresAt,
-        deletedAt: task.deletedAt,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
-      })
-      .returning();
-    if (!row) {
-      throw new Error("insert task returned no row");
+    try {
+      const [row] = await this.db
+        .insert(tasks)
+        .values({
+          id: task.id,
+          projectId: task.projectId,
+          milestoneId: task.milestoneId,
+          parentId: task.parentId,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          type: task.type,
+          version: task.version,
+          assigneeUserId: task.assigneeUserId,
+          assigneeAgentName: task.assigneeAgentName,
+          agentBrief: task.agentBrief,
+          linkedPaths: task.linkedPaths,
+          githubIssueId: task.githubIssueId,
+          lockedBySessionId: task.lockedBySessionId,
+          lockExpiresAt: task.lockExpiresAt,
+          deletedAt: task.deletedAt,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        })
+        .returning();
+      if (!row) {
+        throw new Error("insert task returned no row");
+      }
+      return toTask(row);
+    } catch (error) {
+      if (uniqueConstraint(error) === "github_issue") {
+        throw new UniqueViolationError("tasks_project_github_issue_id_unique");
+      }
+      throw error;
     }
-    return toTask(row);
   }
 
   async listTasks(projectId: string): Promise<TaskRecord[]> {
@@ -1291,6 +1303,11 @@ export class DbAuthStore implements AuthStore {
         return undefined;
       }
       return { task: toTask(row), lockReleased };
+    }).catch((error: unknown) => {
+      if (uniqueConstraint(error) === "github_issue") {
+        throw new UniqueViolationError("tasks_project_github_issue_id_unique");
+      }
+      throw error;
     });
   }
 
@@ -1684,35 +1701,42 @@ export class DbAuthStore implements AuthStore {
 
       const writes: IdempotentWrites = {
         createTask: async (task) => {
-          const [row] = await tx
-            .insert(tasks)
-            .values({
-              id: task.id,
-              projectId: task.projectId,
-              milestoneId: task.milestoneId,
-              parentId: task.parentId,
-              title: task.title,
-              description: task.description,
-              status: task.status,
-              priority: task.priority,
-              type: task.type,
-              version: task.version,
-              assigneeUserId: task.assigneeUserId,
-              assigneeAgentName: task.assigneeAgentName,
-              agentBrief: task.agentBrief,
-              linkedPaths: task.linkedPaths,
-              githubIssueId: task.githubIssueId,
-              lockedBySessionId: task.lockedBySessionId,
-              lockExpiresAt: task.lockExpiresAt,
-              deletedAt: task.deletedAt,
-              createdAt: task.createdAt,
-              updatedAt: task.updatedAt,
-            })
-            .returning();
-          if (!row) {
-            throw new Error("insert task returned no row");
+          try {
+            const [row] = await tx
+              .insert(tasks)
+              .values({
+                id: task.id,
+                projectId: task.projectId,
+                milestoneId: task.milestoneId,
+                parentId: task.parentId,
+                title: task.title,
+                description: task.description,
+                status: task.status,
+                priority: task.priority,
+                type: task.type,
+                version: task.version,
+                assigneeUserId: task.assigneeUserId,
+                assigneeAgentName: task.assigneeAgentName,
+                agentBrief: task.agentBrief,
+                linkedPaths: task.linkedPaths,
+                githubIssueId: task.githubIssueId,
+                lockedBySessionId: task.lockedBySessionId,
+                lockExpiresAt: task.lockExpiresAt,
+                deletedAt: task.deletedAt,
+                createdAt: task.createdAt,
+                updatedAt: task.updatedAt,
+              })
+              .returning();
+            if (!row) {
+              throw new Error("insert task returned no row");
+            }
+            return toTask(row);
+          } catch (error) {
+            if (uniqueConstraint(error) === "github_issue") {
+              throw new UniqueViolationError("tasks_project_github_issue_id_unique");
+            }
+            throw error;
           }
-          return toTask(row);
         },
         createComment: async (comment) => {
           const [row] = await tx
@@ -2499,13 +2523,7 @@ export class DbAuthStore implements AuthStore {
     const [row] = await this.db
       .select()
       .from(tasks)
-      .where(
-        and(
-          eq(tasks.projectId, projectId),
-          eq(tasks.githubIssueId, githubIssueId),
-          isNull(tasks.deletedAt),
-        ),
-      )
+      .where(and(eq(tasks.projectId, projectId), eq(tasks.githubIssueId, githubIssueId)))
       .limit(1);
     return row ? toTask(row) : undefined;
   }
@@ -2682,6 +2700,7 @@ async function startWorkInTx(
 
   return { session, stolenFrom };
 }
+
 
 type WriteTx = Pick<Db, "insert">;
 

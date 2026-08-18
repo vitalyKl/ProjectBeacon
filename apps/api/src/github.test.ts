@@ -6,8 +6,6 @@ import { createApp } from "./app.js";
 import type { AuthConfig } from "./auth/config.js";
 import { MemoryAuthStore } from "./auth/store.js";
 import { MemoryJobQueue } from "./jobs/queue.js";
-import { uuidv7 } from "@beacon/shared";
-
 const BOOTSTRAP_TOKEN = "bootstrap-admin-token-for-tests";
 const STRONG_PASSWORD = "correct-horse";
 const WORKER_TOKEN = "deploy-time-worker-token";
@@ -26,7 +24,6 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     githubAppId: "12345",
     githubAppPrivateKey: APP_PRIVATE_KEY.export({ type: "pkcs8", format: "pem" }).toString(),
     githubAppWebhookSecret: WEBHOOK_SECRET,
-    githubTwoWay: false,
     secureCookies: false,
     trustProxy: false,
     ...overrides,
@@ -74,11 +71,10 @@ async function createProject(app: ReturnType<typeof createApp>, token: string, s
 }
 
 async function createGithubRepo(
-  store: MemoryAuthStore,
   app: ReturnType<typeof createApp>,
   token: string,
   projectId: string,
-  options: { issues?: "import" | "off" } = {},
+  options: { issues?: "import" | "off"; githubRepoId?: number; installationId?: number } = {},
 ) {
   const created = await app.request(`/v1/projects/${projectId}/repos`, {
     method: "POST",
@@ -86,36 +82,36 @@ async function createGithubRepo(
     body: JSON.stringify({
       provider: "github",
       remote_url: "https://github.com/acme/demo",
-      github_repo_id: 4242,
-      installation_id: 77,
+      github_repo_id: options.githubRepoId ?? 4242,
+      installation_id: options.installationId ?? 77,
     }),
   });
   const repo = (await created.json()) as { id: string };
-  const project = await store.findProjectById(projectId);
-  if (!project) {
-    throw new Error("project missing");
-  }
-  await store.upsertGithubInstallation({
-    id: uuidv7(),
-    orgId: project.orgId,
-    installationId: 77n,
-    accountLogin: "acme",
-    createdAt: new Date(),
-  });
   if (options.issues === "import") {
-    await store.updateProjectSettings(projectId, { github: { issues: "import" } }, new Date());
+    const patched = await app.request(`/v1/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ settings: { github: { issues: "import" } } }),
+    });
+    if (patched.status !== 200) {
+      throw new Error(`failed to enable github import: ${patched.status}`);
+    }
   }
   return repo;
 }
 
-function githubFetchImpl(issues: Array<Record<string, unknown>> = []): typeof fetch {
+function githubFetchImpl(
+  issues: Array<Record<string, unknown>> = [],
+  options: { pages?: Array<Array<Record<string, unknown>>> } = {},
+): typeof fetch {
+  const pages = options.pages;
   return async (input, init) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const method = (init?.method ?? "GET").toUpperCase();
     if (url.includes("/app/installations/") && method === "POST") {
       return Response.json({ token: "ghs_install" });
     }
-    if (url.includes("/issues/") && method === "GET") {
+    if (url.includes("/issues/") && method === "GET" && !url.includes("?")) {
       const number = Number(url.split("/issues/")[1]);
       const issue = issues.find((item) => item["number"] === number);
       if (!issue) {
@@ -124,6 +120,17 @@ function githubFetchImpl(issues: Array<Record<string, unknown>> = []): typeof fe
       return Response.json(issue);
     }
     if (url.includes("/issues") && method === "GET") {
+      if (pages) {
+        const parsed = new URL(url, "https://api.github.com");
+        const pageIndex = parsed.searchParams.get("page") === "2" ? 1 : 0;
+        const next =
+          pageIndex === 0 && pages[1]
+            ? `<https://api.github.com/repos/acme/demo/issues?per_page=100&state=open&page=2>; rel="next"`
+            : null;
+        return Response.json(pages[pageIndex] ?? [], {
+          headers: next ? { link: next } : undefined,
+        });
+      }
       return Response.json(issues);
     }
     if (url.includes("/pulls") && method === "GET") {
@@ -156,7 +163,7 @@ describe("GitHub webhooks and import", () => {
     const jobs = new MemoryJobQueue();
     const alice = await registerUser(store, "alice", jobs);
     const project = await createProject(alice.app, alice.token, "gh-import");
-    const repo = await createGithubRepo(store, alice.app, alice.token, project.id, {
+    const repo = await createGithubRepo(alice.app, alice.token, project.id, {
       issues: "import",
     });
 
@@ -189,7 +196,7 @@ describe("GitHub webhooks and import", () => {
     const jobs = new MemoryJobQueue();
     const alice = await registerUser(store, "alice", jobs);
     const project = await createProject(alice.app, alice.token, "gh-off");
-    await createGithubRepo(store, alice.app, alice.token, project.id);
+    await createGithubRepo(alice.app, alice.token, project.id);
 
     const payload = JSON.stringify({
       action: "opened",
@@ -215,7 +222,7 @@ describe("GitHub webhooks and import", () => {
     const jobs = new MemoryJobQueue();
     const alice = await registerUser(store, "alice", jobs);
     const project = await createProject(alice.app, alice.token, "gh-push");
-    const repo = await createGithubRepo(store, alice.app, alice.token, project.id);
+    const repo = await createGithubRepo(alice.app, alice.token, project.id);
 
     const payload = JSON.stringify({
       ref: "refs/heads/main",
@@ -292,7 +299,7 @@ describe("GitHub webhooks and import", () => {
     });
     const token = sessionCookie(registered)!;
     const project = await createProject(app, token, "gh-link");
-    const repo = await createGithubRepo(store, app, token, project.id, { issues: "import" });
+    const repo = await createGithubRepo(app, token, project.id, { issues: "import" });
     const taskRes = await app.request(`/v1/projects/${project.id}/tasks`, {
       method: "POST",
       headers: {
@@ -332,7 +339,7 @@ describe("GitHub webhooks and import", () => {
     const alice = await registerUser(store, "alice");
     const bob = await registerUser(store, "bob");
     const project = await createProject(alice.app, alice.token, "hidden");
-    const repo = await createGithubRepo(store, alice.app, alice.token, project.id);
+    const repo = await createGithubRepo(alice.app, alice.token, project.id);
     const taskRes = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
       method: "POST",
       headers: {
@@ -376,7 +383,7 @@ describe("GitHub webhooks and import", () => {
       headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
       body: JSON.stringify({ name: "worker-import" }),
     });
-    const repo = await createGithubRepo(store, alice.app, alice.token, project.id, {
+    const repo = await createGithubRepo(alice.app, alice.token, project.id, {
       issues: "import",
     });
 
@@ -468,5 +475,240 @@ describe("GitHub webhooks and import", () => {
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: "repo_ambiguous" } });
+  });
+
+  it("turns github.issues on through PATCH settings", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "settings-on");
+    await createGithubRepo(alice.app, alice.token, project.id);
+    const patched = await alice.app.request(`/v1/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ settings: { github: { issues: "import" } } }),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      settings: { github: { issues: "import" } },
+    });
+    const stored = await store.findProjectById(project.id);
+    expect(stored?.settings).toEqual({ github: { issues: "import" } });
+    const twoWay = await alice.app.request(`/v1/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ settings: { github: { issues: "two_way" } } }),
+    });
+    expect(twoWay.status).toBe(400);
+    expect(await twoWay.json()).toMatchObject({
+      error: { details: { reason: "github_two_way_off" } },
+    });
+  });
+
+  it("persists github_installations from repo register and installation webhooks", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "install-persist");
+    await createGithubRepo(alice.app, alice.token, project.id, { installationId: 88 });
+    const fromRepo = await store.findGithubInstallationByInstallationId(88n);
+    expect(fromRepo).toMatchObject({ installationId: 88n, orgId: (await store.findProjectById(project.id))?.orgId });
+
+    const payload = JSON.stringify({
+      action: "created",
+      installation: { id: 91, account: { login: "acme" } },
+      repositories: [{ id: 4242 }],
+    });
+    const res = await alice.app.request("/v1/webhooks/github", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-github-event": "installation",
+        "x-hub-signature-256": signWebhook(payload),
+      },
+      body: payload,
+    });
+    expect(res.status).toBe(202);
+    const fromWebhook = await store.findGithubInstallationByInstallationId(91n);
+    expect(fromWebhook).toMatchObject({ installationId: 91n, accountLogin: "acme" });
+  });
+
+  it("reuses an existing task when two imported issues race on the same github_issue_id", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "race-import");
+    const repo = await createGithubRepo(alice.app, alice.token, project.id, { issues: "import" });
+    const body = {
+      issues: [
+        {
+          github_issue_id: "9001",
+          number: 12,
+          title: "Broken login",
+          body: "users cannot sign in",
+        },
+      ],
+    };
+    const [first, second] = await Promise.all([
+      alice.app.request(`/v1/repos/${repo.id}/github/imported-issues`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${WORKER_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+      alice.app.request(`/v1/repos/${repo.id}/github/imported-issues`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${WORKER_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }),
+    ]);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const firstBody = (await first.json()) as { items: Array<{ id: string }> };
+    const secondBody = (await second.json()) as { items: Array<{ id: string }> };
+    expect(firstBody.items[0]?.id).toBe(secondBody.items[0]?.id);
+    const linked = (await store.listTasks(project.id)).filter((task) => task.githubIssueId === 9001n);
+    expect(linked).toHaveLength(1);
+  });
+
+  it("returns the same 404 for a missing repo and an unauthorized project", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const project = await createProject(alice.app, alice.token, "hidden-repo");
+    const repo = await createGithubRepo(alice.app, alice.token, project.id);
+    const missing = await alice.app.request(
+      "/v1/repos/00000000-0000-7000-8000-000000000099/github/issues",
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    const hidden = await bob.app.request(`/v1/repos/${repo.id}/github/issues`, {
+      headers: { cookie: cookieHeader(bob.token) },
+    });
+    expect(missing.status).toBe(404);
+    expect(hidden.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: "not_found", message: "repo not found" },
+    });
+    expect(await hidden.json()).toMatchObject({
+      error: { code: "not_found", message: "repo not found" },
+    });
+  });
+
+  it("keeps 403 when a member lacks integrations:write", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const reader = await registerUser(store, "reader");
+    const project = await createProject(alice.app, alice.token, "role-repo");
+    const repo = await createGithubRepo(alice.app, alice.token, project.id, { issues: "import" });
+    await alice.app.request(`/v1/projects/${project.id}/members`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ user_id: reader.user.id, role: "read" }),
+    });
+    const res = await reader.app.request(`/v1/repos/${repo.id}/github/sync`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(reader.token) },
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: "forbidden" } });
+  });
+
+  it("paginates GitHub issues past the first 100 and filters PRs by linked task", async () => {
+    const store = new MemoryAuthStore();
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      id: 1000 + index,
+      number: index + 1,
+      title: `Issue ${index + 1}`,
+      body: "",
+      state: "open",
+      html_url: `https://github.com/acme/demo/issues/${index + 1}`,
+    }));
+    const secondPage = [
+      {
+        id: 9001,
+        number: 12,
+        title: "Broken login",
+        body: "users cannot sign in",
+        state: "open",
+        html_url: "https://github.com/acme/demo/issues/12",
+      },
+    ];
+    const pulls = [
+      {
+        id: 55,
+        number: 3,
+        title: "Fix login",
+        body: "Closes #12",
+        state: "open",
+        html_url: "https://github.com/acme/demo/pull/3",
+        pull_request: {},
+      },
+      {
+        id: 56,
+        number: 4,
+        title: "Unrelated",
+        body: "no mention",
+        state: "open",
+        html_url: "https://github.com/acme/demo/pull/4",
+        pull_request: {},
+      },
+    ];
+    const app = createApp({
+      store,
+      config: testConfig(),
+      checkReady: async () => true,
+      githubFetch: githubFetchImpl([...firstPage, ...secondPage, ...pulls], {
+        pages: [firstPage, secondPage],
+      }),
+    });
+    const registered = await app.request("/v1/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: "alice", password: STRONG_PASSWORD }),
+    });
+    const token = sessionCookie(registered)!;
+    const project = await createProject(app, token, "gh-pages");
+    const repo = await createGithubRepo(app, token, project.id, { issues: "import" });
+    const listed = await app.request(`/v1/repos/${repo.id}/github/issues?state=open`, {
+      headers: { cookie: cookieHeader(token) },
+    });
+    expect(listed.status).toBe(200);
+    const page = (await listed.json()) as { items: unknown[]; next_cursor: string | null };
+    expect(page.items).toHaveLength(100);
+    expect(page.next_cursor).toBeTruthy();
+    const next = await app.request(
+      `/v1/repos/${repo.id}/github/issues?state=open&cursor=${page.next_cursor}`,
+      { headers: { cookie: cookieHeader(token) } },
+    );
+    expect(next.status).toBe(200);
+    expect(await next.json()).toMatchObject({
+      items: [expect.objectContaining({ number: 12, title: "Broken login" })],
+      next_cursor: null,
+    });
+
+    const taskRes = await app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(token),
+        "content-type": "application/json",
+        "idempotency-key": "page-task",
+      },
+      body: JSON.stringify({ title: "Fix login" }),
+    });
+    const task = (await taskRes.json()) as { id: string };
+    await app.request(`/v1/tasks/${task.id}/github-issue`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ issue_number: 12, repo_id: repo.id }),
+    });
+    const prs = await app.request(`/v1/repos/${repo.id}/github/pulls?task_id=${task.id}`, {
+      headers: { cookie: cookieHeader(token) },
+    });
+    expect(prs.status).toBe(200);
+    expect(await prs.json()).toMatchObject({
+      items: [expect.objectContaining({ number: 3, title: "Fix login" })],
+    });
   });
 });

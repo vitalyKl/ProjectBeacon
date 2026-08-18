@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { githubIssuesMode, isGithubTwoWayEnabled, mergeProjectSettings } from "./settings.js";
+import {
+  githubIssuesMode,
+  isGithubTwoWayEnabled,
+  mergeProjectSettings,
+  parseProjectSettingsPatch,
+} from "./settings.js";
 
 describe("github settings", () => {
   it("defaults issue sync to off", () => {
@@ -19,5 +24,22 @@ describe("github settings", () => {
     expect(
       mergeProjectSettings({ github: { issues: "off" } }, { github: { issues: "import" } }),
     ).toEqual({ github: { issues: "import" } });
+  });
+
+  it("accepts import and rejects two-way unless the request-time flag is on", () => {
+    expect(parseProjectSettingsPatch({ github: { issues: "import" } })).toEqual({
+      ok: true,
+      patch: { github: { issues: "import" } },
+    });
+    expect(parseProjectSettingsPatch({ github: { issues: "two_way" } }, {})).toMatchObject({
+      ok: false,
+      reason: "github_two_way_off",
+    });
+    expect(
+      parseProjectSettingsPatch({ github: { issues: "two_way" } }, { FF_GITHUB_TWO_WAY: "true" }),
+    ).toMatchObject({
+      ok: false,
+      reason: "github_two_way_unavailable",
+    });
   });
 });

@@ -328,15 +328,23 @@ describe("invoke routing", () => {
     expectRoute(calls[1], "GET", `/v1/repos/${REPO_ID}/github/pulls`);
 
     await invoke(
+      "github_list_prs",
+      { state: "open", task_id: TASK_ID },
+      ctx(fetchImpl, { defaultRepoId: REPO_ID }),
+    );
+    expectRoute(calls[2], "GET", `/v1/repos/${REPO_ID}/github/pulls`);
+    expect(calls[2]?.url.searchParams.get("task_id")).toBe(TASK_ID);
+
+    await invoke(
       "github_link_issue",
       { task_id: TASK_ID, issue_number: 12, repo_id: REPO_ID },
       ctx(fetchImpl),
     );
-    expectRoute(calls[2], "POST", `/v1/tasks/${TASK_ID}/github-issue`);
-    expect(calls[2]?.body).toEqual({ issue_number: 12, repo_id: REPO_ID });
+    expectRoute(calls[3], "POST", `/v1/tasks/${TASK_ID}/github-issue`);
+    expect(calls[3]?.body).toEqual({ issue_number: 12, repo_id: REPO_ID });
 
     await invoke("github_sync_now", {}, ctx(fetchImpl, { defaultRepoId: REPO_ID }));
-    expectRoute(calls[3], "POST", `/v1/repos/${REPO_ID}/github/sync`);
+    expectRoute(calls[4], "POST", `/v1/repos/${REPO_ID}/github/sync`);
 
     await expect(invoke("github_list_issues", {}, ctx(fetchImpl))).rejects.toMatchObject({
       code: "repo_ambiguous",

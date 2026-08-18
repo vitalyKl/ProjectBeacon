@@ -212,18 +212,23 @@ export function createWorkerApi(options: {
       });
     },
     async listGithubIssues(repoId, query) {
-      const params = new URLSearchParams({ limit: String(PAGE_LIMIT) });
-      if (query?.state) {
-        params.set("state", query.state);
-      }
-      if (query?.q) {
-        params.set("q", query.q);
-      }
-      const page = await request<{ items: GithubIssueView[] }>(
-        "GET",
-        `/v1/repos/${repoId}/github/issues?${params.toString()}`,
-      );
-      return page.items;
+      return listAllPages((cursor) => {
+        const params = new URLSearchParams();
+        if (query?.state) {
+          params.set("state", query.state);
+        }
+        if (query?.q) {
+          params.set("q", query.q);
+        }
+        if (cursor) {
+          params.set("cursor", cursor);
+        }
+        const suffix = params.toString();
+        return request<{ items: GithubIssueView[]; next_cursor: string | null }>(
+          "GET",
+          `/v1/repos/${repoId}/github/issues${suffix ? `?${suffix}` : ""}`,
+        );
+      });
     },
     async getGithubIssue(repoId, issueNumber) {
       const items = await this.listGithubIssues(repoId, { state: "all" });

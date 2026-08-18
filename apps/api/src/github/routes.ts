@@ -10,7 +10,7 @@ import {
 } from "../auth/access.js";
 import { isGithubAppConfigured, type AuthConfig } from "../auth/config.js";
 import type { AuthDeps } from "../auth/routes.js";
-import { VersionConflictError } from "../auth/store.js";
+import { UniqueViolationError, VersionConflictError } from "../auth/store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -20,6 +20,8 @@ import { paginateRecords, parsePageQuery } from "../roadmap/page.js";
 import type { TaskRecord } from "../roadmap/types.js";
 import {
   createInstallationToken,
+  decodeGithubPageCursor,
+  encodeGithubPageCursor,
   githubApiRequest,
   parseGithubRemote,
   presentGithubIssue,
@@ -140,6 +142,112 @@ function prQuery(state: string | undefined): string {
   return params.toString();
 }
 
+function githubListPath(
+  remote: { owner: string; repo: string },
+  kind: "issues" | "pulls",
+  query: string,
+  cursor: string | undefined,
+): string | undefined {
+  if (cursor) {
+    return decodeGithubPageCursor(cursor);
+  }
+  return `/repos/${remote.owner}/${remote.repo}/${kind}?${query}`;
+}
+
+async function persistGithubInstallation(
+  deps: GithubDeps,
+  installationId: bigint,
+  accountLogin: string,
+  orgId: string,
+  now: Date,
+): Promise<void> {
+  const existing = await deps.store.findGithubInstallationByInstallationId(installationId);
+  await deps.store.upsertGithubInstallation({
+    id: existing?.id ?? uuidv7(now.getTime()),
+    orgId: existing?.orgId ?? orgId,
+    installationId,
+    accountLogin: accountLogin || existing?.accountLogin || "unknown",
+    createdAt: existing?.createdAt ?? now,
+  });
+}
+
+async function persistInstallationFromWebhook(
+  deps: GithubDeps,
+  payload: Record<string, unknown>,
+  installationId: bigint,
+  now: Date,
+): Promise<void> {
+  const installation = asRecord(payload["installation"]);
+  const account = asRecord(installation?.["account"]);
+  const accountLogin =
+    typeof account?.["login"] === "string" && account["login"].trim().length > 0
+      ? account["login"].trim()
+      : "unknown";
+  const existing = await deps.store.findGithubInstallationByInstallationId(installationId);
+  if (existing) {
+    await persistGithubInstallation(deps, installationId, accountLogin, existing.orgId, now);
+    return;
+  }
+  const repoIds: bigint[] = [];
+  const repository = asRecord(payload["repository"]);
+  const repositoryId = parsePositiveBigInt(repository?.["id"]);
+  if (repositoryId) {
+    repoIds.push(repositoryId);
+  }
+  for (const key of ["repositories", "repositories_added"] as const) {
+    const rows = payload[key];
+    if (!Array.isArray(rows)) {
+      continue;
+    }
+    for (const row of rows) {
+      const id = parsePositiveBigInt(asRecord(row)?.["id"]);
+      if (id) {
+        repoIds.push(id);
+      }
+    }
+  }
+  for (const githubRepoId of repoIds) {
+    const repos = await deps.store.listProjectReposByGithubRepoId(githubRepoId);
+    for (const repo of repos) {
+      const project = await deps.store.findProjectById(repo.projectId);
+      if (project) {
+        await persistGithubInstallation(deps, installationId, accountLogin, project.orgId, now);
+        return;
+      }
+    }
+  }
+}
+
+function mentionsIssue(text: string, issueNumber: number): boolean {
+  return new RegExp(`(?:^|\\W)#${issueNumber}(?:\\W|$)`).test(text);
+}
+
+async function issueNumberForGithubId(
+  token: string,
+  remote: { owner: string; repo: string },
+  githubIssueId: bigint,
+  githubFetch: typeof fetch,
+): Promise<number | undefined> {
+  let path: string | undefined = `/repos/${remote.owner}/${remote.repo}/issues?${issueQuery(
+    "all",
+    undefined,
+  )}`;
+  for (let page = 0; page < 100 && path; page += 1) {
+    const result = await githubApiRequest(token, path, githubFetch);
+    if (!result.ok || !Array.isArray(result.body)) {
+      return undefined;
+    }
+    for (const item of result.body) {
+      const issue = presentGithubIssue(item);
+      if (issue && issue.id === githubIssueId.toString()) {
+        return issue.number;
+      }
+    }
+    path = result.nextUrl;
+  }
+  return undefined;
+}
+
 async function enqueueAccepted(
   c: Context,
   deps: GithubDeps,
@@ -185,13 +293,10 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     const installation = asRecord(payload["installation"]);
     const installationId = parsePositiveBigInt(installation?.["id"]);
     if (installationId) {
-      const stored = await deps.store.findGithubInstallationByInstallationId(installationId);
-      if (!stored) {
-        return c.json({ received: true }, 202);
-      }
+      await persistInstallationFromWebhook(deps, payload, installationId, deps.clock.now());
     }
 
-    if (event === "installation") {
+    if (event === "installation" || event === "installation_repositories") {
       return c.json({ received: true }, 202);
     }
 
@@ -293,11 +398,11 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     }
     const state = c.req.query("state");
     const q = parseOptionalString(c.req.query("q"), 200);
-    const result = await githubApiRequest(
-      token,
-      `/repos/${remote.owner}/${remote.repo}/issues?${issueQuery(state, q)}`,
-      deps.githubFetch,
-    );
+    const path = githubListPath(remote, "issues", issueQuery(state, q), c.req.query("cursor"));
+    if (!path) {
+      return errorJson(c, 400, "unauthorized", "invalid cursor", { reason: "invalid_cursor" });
+    }
+    const result = await githubApiRequest(token, path, deps.githubFetch);
     if (!result.ok || !Array.isArray(result.body)) {
       return errorJson(c, 503, "integration_unavailable", "github request failed");
     }
@@ -307,7 +412,10 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     const filtered = q
       ? items.filter((item) => item.title.toLowerCase().includes(q.toLowerCase()))
       : items;
-    return c.json({ items: filtered, next_cursor: null });
+    return c.json({
+      items: filtered,
+      next_cursor: result.nextUrl ? encodeGithubPageCursor(result.nextUrl) : null,
+    });
   });
 
   app.get("/v1/repos/:id/github/pulls", async (c) => {
@@ -340,18 +448,55 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     if (!remote || !token) {
       return errorJson(c, 503, "integration_unavailable", "github app is not connected");
     }
-    const result = await githubApiRequest(
-      token,
-      `/repos/${remote.owner}/${remote.repo}/pulls?${prQuery(c.req.query("state"))}`,
-      deps.githubFetch,
+    const taskIdRaw = c.req.query("task_id");
+    let linkedIssueNumber: number | undefined;
+    if (taskIdRaw !== undefined) {
+      if (!isUuid(taskIdRaw)) {
+        return errorJson(c, 404, "not_found", "task not found");
+      }
+      const task = await deps.store.findTaskById(taskIdRaw);
+      if (!task || task.deletedAt || task.projectId !== resolved.project.id) {
+        return errorJson(c, 404, "not_found", "task not found");
+      }
+      if (task.githubIssueId === null) {
+        return c.json({ items: [], next_cursor: null });
+      }
+      linkedIssueNumber = await issueNumberForGithubId(
+        token,
+        remote,
+        task.githubIssueId,
+        deps.githubFetch,
+      );
+      if (!linkedIssueNumber) {
+        return c.json({ items: [], next_cursor: null });
+      }
+    }
+    const path = githubListPath(
+      remote,
+      "pulls",
+      prQuery(c.req.query("state")),
+      c.req.query("cursor"),
     );
+    if (!path) {
+      return errorJson(c, 400, "unauthorized", "invalid cursor", { reason: "invalid_cursor" });
+    }
+    const result = await githubApiRequest(token, path, deps.githubFetch);
     if (!result.ok || !Array.isArray(result.body)) {
       return errorJson(c, 503, "integration_unavailable", "github request failed");
     }
     const items = result.body
       .map((item) => presentGithubPull(item))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-    return c.json({ items, next_cursor: null });
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .filter((item) => {
+        if (linkedIssueNumber === undefined) {
+          return true;
+        }
+        return mentionsIssue(`${item.title}\n${item.body}`, linkedIssueNumber);
+      });
+    return c.json({
+      items,
+      next_cursor: result.nextUrl ? encodeGithubPageCursor(result.nextUrl) : null,
+    });
   });
 
   app.post("/v1/repos/:id/github/sync", async (c) => {
@@ -459,12 +604,22 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
         reason: "unique",
       });
     }
-    const updated = await deps.store.updateTask(
-      task.id,
-      task.version,
-      { githubIssueId },
-      deps.clock.now(),
-    );
+    let updated: { task: TaskRecord } | undefined;
+    try {
+      updated = await deps.store.updateTask(
+        task.id,
+        task.version,
+        { githubIssueId },
+        deps.clock.now(),
+      );
+    } catch (error) {
+      if (error instanceof UniqueViolationError) {
+        return errorJson(c, 409, "login_taken", "github issue is already linked", {
+          reason: "unique",
+        });
+      }
+      throw error;
+    }
     if (!updated) {
       return errorJson(c, 404, "not_found", "task not found");
     }
@@ -543,39 +698,50 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
         }
         continue;
       }
-      const created = await deps.store.withIdempotency(
-        "token",
-        actorIdempotencyRef(resolved.actor).id,
-        `github-import:${repo.id}:${githubIssueId.toString()}`,
-        now,
-        async (writes) => {
-          const task = await writes.createTask({
-            id: uuidv7(now.getTime() + createdOffset),
-            projectId: resolved.project.id,
-            milestoneId: null,
-            parentId: null,
-            title,
-            description,
-            status: taskStatusOnCreate(resolved.actor, "backlog") as TaskRecord["status"],
-            priority: 0,
-            type: "task",
-            version: 1,
-            assigneeUserId: null,
-            assigneeAgentName: null,
-            agentBrief: "",
-            linkedPaths: [],
-            githubIssueId,
-            lockedBySessionId: null,
-            lockExpiresAt: null,
-            deletedAt: null,
-            createdAt: now,
-            updatedAt: now,
-          });
-          return presentTask(task);
-        },
-      );
-      createdOffset += 1;
-      items.push(created as ReturnType<typeof presentTask>);
+      try {
+        const created = await deps.store.withIdempotency(
+          "token",
+          actorIdempotencyRef(resolved.actor).id,
+          `github-import:${repo.id}:${githubIssueId.toString()}`,
+          now,
+          async (writes) => {
+            const task = await writes.createTask({
+              id: uuidv7(now.getTime() + createdOffset),
+              projectId: resolved.project.id,
+              milestoneId: null,
+              parentId: null,
+              title,
+              description,
+              status: taskStatusOnCreate(resolved.actor, "backlog") as TaskRecord["status"],
+              priority: 0,
+              type: "task",
+              version: 1,
+              assigneeUserId: null,
+              assigneeAgentName: null,
+              agentBrief: "",
+              linkedPaths: [],
+              githubIssueId,
+              lockedBySessionId: null,
+              lockExpiresAt: null,
+              deletedAt: null,
+              createdAt: now,
+              updatedAt: now,
+            });
+            return presentTask(task);
+          },
+        );
+        createdOffset += 1;
+        items.push(created as ReturnType<typeof presentTask>);
+      } catch (error) {
+        if (!(error instanceof UniqueViolationError)) {
+          throw error;
+        }
+        const raced = await deps.store.findTaskByGithubIssueId(resolved.project.id, githubIssueId);
+        if (!raced) {
+          throw error;
+        }
+        items.push(presentTask(raced));
+      }
     }
 
     const cursor =

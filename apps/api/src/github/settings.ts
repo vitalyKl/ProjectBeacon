@@ -32,3 +32,57 @@ export function mergeProjectSettings(
   }
   return next;
 }
+
+export type SettingsPatchResult =
+  | { ok: true; patch: Record<string, unknown> | undefined }
+  | { ok: false; message: string; reason: string };
+
+export function parseProjectSettingsPatch(
+  settings: unknown,
+  env: NodeJS.ProcessEnv = process.env,
+): SettingsPatchResult {
+  if (settings === undefined) {
+    return { ok: true, patch: undefined };
+  }
+  if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
+    return { ok: false, message: "invalid settings", reason: "invalid_body" };
+  }
+  const record = settings as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.some((key) => key !== "github")) {
+    return { ok: false, message: "invalid settings", reason: "invalid_body" };
+  }
+  if (record["github"] === undefined) {
+    return { ok: true, patch: {} };
+  }
+  const github = record["github"];
+  if (github === null || typeof github !== "object" || Array.isArray(github)) {
+    return { ok: false, message: "invalid github settings", reason: "invalid_body" };
+  }
+  const githubRecord = github as Record<string, unknown>;
+  if (Object.keys(githubRecord).some((key) => key !== "issues")) {
+    return { ok: false, message: "invalid github settings", reason: "invalid_body" };
+  }
+  const issues = githubRecord["issues"];
+  if (issues === undefined) {
+    return { ok: true, patch: { github: {} } };
+  }
+  if (issues === "off" || issues === "import") {
+    return { ok: true, patch: { github: { issues } } };
+  }
+  if (issues === "two_way") {
+    if (!isGithubTwoWayEnabled(env)) {
+      return {
+        ok: false,
+        message: "github two-way write is not enabled",
+        reason: "github_two_way_off",
+      };
+    }
+    return {
+      ok: false,
+      message: "github two-way write is not implemented",
+      reason: "github_two_way_unavailable",
+    };
+  }
+  return { ok: false, message: "github.issues must be off or import", reason: "invalid_body" };
+}

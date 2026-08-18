@@ -299,6 +299,7 @@ function cloneProjectInvite(invite: ProjectInviteRecord): ProjectInviteRecord {
   };
 }
 
+
 function cloneToken(token: TokenRecord): TokenRecord {
   return {
     ...token,
@@ -860,6 +861,7 @@ export class MemoryAuthStore implements AuthStore {
         task.linkedPaths = patch.linkedPaths.map((path) => ({ ...path }));
       }
       if (patch.githubIssueId !== undefined) {
+        assertUniqueGithubIssue(this.tasks, task.projectId, patch.githubIssueId, task.id);
         task.githubIssueId = patch.githubIssueId;
       }
       const lockReleased = Boolean(options?.releaseLock && task.lockedBySessionId);
@@ -1162,6 +1164,7 @@ export class MemoryAuthStore implements AuthStore {
     this.decisions.set(decision.id, cloneDecision(decision));
   }
 
+
   async insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord> {
     return this.enqueueWrite(() => {
       if (this.contextRevisions.has(revision.id)) {
@@ -1222,6 +1225,10 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   private insertTaskUnlocked(task: TaskRecord): TaskRecord {
+    if (this.tasks.has(task.id)) {
+      throw new UniqueViolationError("tasks_pkey");
+    }
+    assertUniqueGithubIssue(this.tasks, task.projectId, task.githubIssueId);
     this.tasks.set(task.id, cloneTask(task));
     return cloneTask(task);
   }
@@ -1817,7 +1824,7 @@ export class MemoryAuthStore implements AuthStore {
     githubIssueId: bigint,
   ): Promise<TaskRecord | undefined> {
     for (const task of this.tasks.values()) {
-      if (task.projectId === projectId && !task.deletedAt && task.githubIssueId === githubIssueId) {
+      if (task.projectId === projectId && task.githubIssueId === githubIssueId) {
         return cloneTask(task);
       }
     }
@@ -1996,4 +2003,24 @@ function cloneGithubSyncState(row: GithubSyncStateRecord): GithubSyncStateRecord
     ...row,
     lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt) : null,
   };
+}
+
+function assertUniqueGithubIssue(
+  tasks: Map<string, TaskRecord>,
+  projectId: string,
+  githubIssueId: bigint | null | undefined,
+  excludeTaskId?: string,
+): void {
+  if (githubIssueId === null || githubIssueId === undefined) {
+    return;
+  }
+  for (const existing of tasks.values()) {
+    if (
+      existing.projectId === projectId &&
+      existing.githubIssueId === githubIssueId &&
+      existing.id !== excludeTaskId
+    ) {
+      throw new UniqueViolationError("tasks_project_github_issue_id_unique");
+    }
+  }
 }

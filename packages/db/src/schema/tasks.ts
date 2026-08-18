@@ -10,6 +10,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { timestamptz } from "./common.js";
@@ -70,6 +71,9 @@ export const tasks = pgTable(
       .on(t.projectId, t.milestoneId)
       .where(sql`${t.deletedAt} IS NULL`),
     index("tasks_updated").on(t.projectId, t.updatedAt.desc(), t.id.desc()),
+    uniqueIndex("tasks_project_github_issue_id_unique")
+      .on(t.projectId, t.githubIssueId)
+      .where(sql`${t.githubIssueId} IS NOT NULL`),
     index("tasks_title_fts").using(
       "gin",
       sql`to_tsvector('simple', ${t.title} || ' ' || ${t.description})`,

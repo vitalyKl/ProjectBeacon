@@ -42,6 +42,9 @@ export async function resolveGithubRepo(
   }
   const access = await authorizeProjectActor(c, deps, actor, repo.projectId, needed);
   if (isResponse(access)) {
+    if (access.status === 404) {
+      return errorJson(c, 404, "not_found", "repo not found");
+    }
     return access;
   }
   return { repo, project: access.project, actor };

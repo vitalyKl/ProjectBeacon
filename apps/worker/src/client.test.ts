@@ -83,6 +83,21 @@ describe("worker /v1 client", () => {
           typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
         calls.push(`${init?.method ?? "GET"} ${url}`);
         if (url.includes("/github/issues")) {
+          if (!url.includes("cursor=")) {
+            return Response.json({
+              items: [
+                {
+                  id: "1",
+                  number: 1,
+                  title: "First page",
+                  body: "",
+                  state: "open",
+                  html_url: "https://github.com/acme/demo/issues/1",
+                },
+              ],
+              next_cursor: "page-2",
+            });
+          }
           return Response.json({
             items: [
               {
@@ -94,12 +109,14 @@ describe("worker /v1 client", () => {
                 html_url: "https://github.com/acme/demo/issues/12",
               },
             ],
+            next_cursor: null,
           });
         }
         return Response.json({ ok: true }, { status: 202 });
       },
     });
-    await api.listGithubIssues("repo-1", { state: "all" });
+    const listed = await api.listGithubIssues("repo-1", { state: "all" });
+    expect(listed).toHaveLength(2);
     await api.upsertImportedIssues(
       "repo-1",
       [{ github_issue_id: "9001", number: 12, title: "Broken login", body: "" }],
@@ -107,8 +124,9 @@ describe("worker /v1 client", () => {
     );
     await api.recordGithubInvalidation("repo-1", { ref: "refs/heads/main" });
     expect(calls[0]).toContain("/v1/repos/repo-1/github/issues");
-    expect(calls[1]).toContain("/v1/repos/repo-1/github/imported-issues");
-    expect(calls[2]).toContain("/v1/repos/repo-1/github/invalidations");
+    expect(calls[1]).toContain("cursor=page-2");
+    expect(calls[2]).toContain("/v1/repos/repo-1/github/imported-issues");
+    expect(calls[3]).toContain("/v1/repos/repo-1/github/invalidations");
   });
 
   it("follows next_cursor when listing milestones and tasks", async () => {

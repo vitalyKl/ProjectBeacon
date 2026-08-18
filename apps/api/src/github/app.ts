@@ -154,12 +154,45 @@ export async function createInstallationToken(
   return typeof record?.["token"] === "string" ? record["token"] : undefined;
 }
 
+export function parseGithubNextLink(linkHeader: string | null): string | undefined {
+  if (!linkHeader) {
+    return undefined;
+  }
+  for (const part of linkHeader.split(",")) {
+    const match = /<([^>]+)>\s*;\s*rel="next"/i.exec(part);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+  return undefined;
+}
+
+export function encodeGithubPageCursor(url: string): string {
+  return Buffer.from(url, "utf8").toString("base64url");
+}
+
+export function decodeGithubPageCursor(cursor: string | undefined): string | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+  try {
+    const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+    if (decoded.startsWith("https://api.github.com/")) {
+      return decoded;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export async function githubApiRequest(
   token: string,
-  path: string,
+  pathOrUrl: string,
   githubFetch: typeof fetch,
-): Promise<{ ok: boolean; status: number; body: unknown }> {
-  const res = await githubFetch(`https://api.github.com${path}`, {
+): Promise<{ ok: boolean; status: number; body: unknown; nextUrl?: string }> {
+  const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `https://api.github.com${pathOrUrl}`;
+  const res = await githubFetch(url, {
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
@@ -176,5 +209,10 @@ export async function githubApiRequest(
       parsed = text;
     }
   }
-  return { ok: res.ok, status: res.status, body: parsed };
+  return {
+    ok: res.ok,
+    status: res.status,
+    body: parsed,
+    nextUrl: parseGithubNextLink(res.headers.get("link")),
+  };
 }
