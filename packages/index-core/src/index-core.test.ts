@@ -158,6 +158,8 @@ describe("IndexCore", () => {
     }
     const binary = readFileExcerpt(core.repoRoot, "binary.dat");
     expect(binary).toEqual({ ok: false, reason: "binary" });
+    expect(readFileExcerpt(core.repoRoot, ".env")).toEqual({ ok: false, reason: "missing" });
+    expect(readFileExcerpt(core.repoRoot, "secret.pem")).toEqual({ ok: false, reason: "missing" });
   });
 
   it("rebuilds from scratch", () => {

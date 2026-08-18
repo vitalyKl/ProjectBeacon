@@ -545,15 +545,21 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       return errorJson(c, 403, "forbidden", "insufficient token scope");
     }
     const repos = await deps.store.listProjectRepos(access.project.id);
-    const requested = c.req.query("repo_id");
-    const repo =
-      (requested ? repos.find((item) => item.id === requested) : undefined) ??
-      (access.project.defaultRepoId
-        ? repos.find((item) => item.id === access.project.defaultRepoId)
-        : undefined) ??
-      (repos.length === 1 ? repos[0] : undefined);
-    if (!repo) {
-      return errorJson(c, 400, "repo_ambiguous", "repo_id is required");
+    const requested = c.req.query("repo_id")?.trim();
+    let repo: ProjectRepoRecord | undefined;
+    if (requested) {
+      repo = repos.find((item) => item.id === requested);
+      if (!repo) {
+        return errorJson(c, 404, "not_found", "repo not found");
+      }
+    } else {
+      repo =
+        (access.project.defaultRepoId
+          ? repos.find((item) => item.id === access.project.defaultRepoId)
+          : undefined) ?? (repos.length === 1 ? repos[0] : undefined);
+      if (!repo) {
+        return errorJson(c, 400, "repo_ambiguous", "repo_id is required");
+      }
     }
     const limit = parsePositiveInt(c.req.query("limit"), 50);
     if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {

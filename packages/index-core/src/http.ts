@@ -17,7 +17,7 @@ export type IndexHttpOptions = {
   host?: string;
   port?: number;
   auth?: IndexHttpAuth;
-  resolve: (repoId: string) => IndexCore | undefined;
+  resolve: (repoId: string) => IndexCore | undefined | Promise<IndexCore | undefined>;
 };
 
 export type PresentedTree = {
@@ -147,6 +147,14 @@ export function handleIndexRequest(
   res: ServerResponse,
   options: Pick<IndexHttpOptions, "auth" | "resolve">,
 ): void {
+  void handleIndexRequestAsync(req, res, options);
+}
+
+async function handleIndexRequestAsync(
+  req: IncomingMessage,
+  res: ServerResponse,
+  options: Pick<IndexHttpOptions, "auth" | "resolve">,
+): Promise<void> {
   if (req.method !== "GET") {
     json(res, 404, errorBody("not_found", "not found"));
     return;
@@ -167,7 +175,13 @@ export function handleIndexRequest(
     json(res, 404, errorBody("not_found", "not found"));
     return;
   }
-  const core = options.resolve(repoId);
+  let core: IndexCore | undefined;
+  try {
+    core = await options.resolve(repoId);
+  } catch {
+    json(res, 503, errorBody("code_index_unavailable", "code index unavailable"));
+    return;
+  }
   if (!core) {
     json(res, 503, errorBody("code_index_unavailable", "code index unavailable"));
     return;
@@ -356,11 +370,11 @@ export function handleIndexRequest(
 
 export function createIndexHttpServer(options: IndexHttpOptions): Server {
   return createServer((req, res) => {
-    try {
-      handleIndexRequest(req, res, options);
-    } catch {
-      json(res, 500, errorBody("unauthorized", "internal error"));
-    }
+    void handleIndexRequestAsync(req, res, options).catch(() => {
+      if (!res.headersSent) {
+        json(res, 500, errorBody("unauthorized", "internal error"));
+      }
+    });
   });
 }
 

@@ -119,7 +119,7 @@ async function autoStartSidecar(
       fetchImpl: options.fetchImpl,
     });
   } catch {
-    // sidecar is best-effort next to connect/mcp
+    // sidecar is best-effort next to mcp
   }
 }
 
@@ -145,7 +145,6 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
       fetchImpl: options.fetchImpl,
     });
     if (result.ok) {
-      await autoStartSidecar(options, env, cwd);
       io.stdout.write(`${result.message}\n`);
       return 0;
     }

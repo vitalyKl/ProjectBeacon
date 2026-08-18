@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-import { BINARY_PROBE_BYTES, containsNul } from "./denylist.js";
+import { BINARY_PROBE_BYTES, containsNul, isDeniedFile, pathHasDeniedSegment } from "./denylist.js";
 import { PathEscapeError, toFsPath, toRepoPosixPath } from "./paths.js";
 import type { LanguageId } from "./types.js";
 import { detectLanguage } from "./languages.js";
@@ -44,6 +44,10 @@ export function readFileExcerpt(
       return { ok: false, reason: "escape" };
     }
     throw error;
+  }
+
+  if (isDeniedFile(repoPath) || pathHasDeniedSegment(repoPath)) {
+    return { ok: false, reason: "missing" };
   }
 
   if (options.indexed?.isBinary) {

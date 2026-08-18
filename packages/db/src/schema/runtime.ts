@@ -8,6 +8,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { bytea, timestamptz } from "./common.js";
@@ -72,8 +73,13 @@ export const handoffs = pgTable(
     taskId: uuid("task_id").references(() => tasks.id),
     summary: text("summary").notNull(),
     nextSteps: text("next_steps").notNull().default(""),
-    filesTouched: jsonb("files_touched").notNull().default(sql`'[]'::jsonb`),
-    openQuestions: text("open_questions").array().notNull().default(sql`'{}'`),
+    filesTouched: jsonb("files_touched")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    openQuestions: text("open_questions")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (t) => [index("handoffs_task").on(t.taskId, t.createdAt.desc())],
@@ -91,7 +97,9 @@ export const activityEvents = pgTable(
     actorType: text("actor_type").notNull(),
     actorId: text("actor_id").notNull(),
     verb: text("verb").notNull(),
-    payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+    payload: jsonb("payload")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (t) => [
@@ -156,21 +164,27 @@ export const idempotencyKeys = pgTable(
   ],
 );
 
-export const sidecarConnections = pgTable("sidecar_connections", {
-  id: uuid("id").primaryKey(),
-  repoId: uuid("repo_id")
-    .notNull()
-    .references(() => projectRepos.id),
-  tokenId: uuid("token_id")
-    .notNull()
-    .references(() => apiTokens.id),
-  connectedAt: timestamptz("connected_at").notNull().defaultNow(),
-  lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),
-});
+export const sidecarConnections = pgTable(
+  "sidecar_connections",
+  {
+    id: uuid("id").primaryKey(),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => projectRepos.id),
+    tokenId: uuid("token_id")
+      .notNull()
+      .references(() => apiTokens.id),
+    connectedAt: timestamptz("connected_at").notNull().defaultNow(),
+    lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => [unique("sidecar_connections_repo_id_unique").on(t.repoId)],
+);
 
 export const rateBuckets = pgTable("rate_buckets", {
   bucketKey: text("bucket_key").primaryKey(),
   windowStart: timestamptz("window_start").notNull(),
   count: integer("count").notNull(),
-  bytes: bigint("bytes", { mode: "bigint" }).notNull().default(sql`0`),
+  bytes: bigint("bytes", { mode: "bigint" })
+    .notNull()
+    .default(sql`0`),
 });

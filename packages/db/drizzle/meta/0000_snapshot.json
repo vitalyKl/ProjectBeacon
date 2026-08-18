@@ -2587,7 +2587,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "sidecar_connections_repo_id_unique": {
+          "name": "sidecar_connections_repo_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "repo_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

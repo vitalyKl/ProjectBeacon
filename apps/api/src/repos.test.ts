@@ -371,6 +371,35 @@ describe("project repos", () => {
     expect(hidden.status).toBe(404);
     expect(await hidden.json()).toMatchObject({ error: { code: "not_found" } });
   });
+
+  it("404s changed-scope when repo_id is present but unknown", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "scope");
+    await alice.app.request(`/v1/projects/${project.id}/repos`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ provider: "local", local_root_hint: "demo" }),
+    });
+    const taskRes = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": "scope-task",
+      },
+      body: JSON.stringify({ title: "Scope" }),
+    });
+    const taskId = ((await taskRes.json()) as { id: string }).id;
+    const res = await alice.app.request(
+      `/v1/tasks/${taskId}/changed-scope?repo_id=00000000-0000-7000-8000-000000000099`,
+      { headers: { cookie: cookieHeader(alice.token) } },
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({
+      error: { code: "not_found", message: "repo not found" },
+    });
+  });
 });
 
 describe("POST /v1/repos/:id/detect", () => {

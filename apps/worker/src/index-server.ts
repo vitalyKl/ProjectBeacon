@@ -77,12 +77,24 @@ export class WorkerIndexRegistry {
 export async function startWorkerIndexHttp(
   config: WorkerConfig,
   registry: WorkerIndexRegistry,
+  api: WorkerApi,
 ): Promise<{ close: () => Promise<void> }> {
   const { server } = await listenIndexHttp({
     host: config.indexRpcHost,
     port: config.indexRpcPort,
     auth: config.indexRpcToken ? { token: config.indexRpcToken } : undefined,
-    resolve: (repoId) => registry.get(repoId),
+    resolve: async (repoId) => {
+      const existing = registry.get(repoId);
+      if (existing) {
+        return existing;
+      }
+      try {
+        await refreshBindMountIndex(api, registry, repoId);
+      } catch {
+        return undefined;
+      }
+      return registry.get(repoId);
+    },
   });
   return {
     close: () =>

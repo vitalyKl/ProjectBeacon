@@ -39,7 +39,7 @@ async function main(): Promise<void> {
     workspace: config.workspace,
     indexDir: config.indexDir,
   });
-  await startWorkerIndexHttp(config, registry);
+  await startWorkerIndexHttp(config, registry, api);
 
   await boss.work(DETECT_QUEUE, async (jobs) => {
     for (const job of jobs) {

@@ -2656,18 +2656,6 @@ export class DbAuthStore implements AuthStore {
     connectedAt: Date;
     lastSeenAt: Date;
   }> {
-    const existing = await this.findSidecarConnectionByRepoId(input.repoId);
-    if (existing) {
-      const [row] = await this.db
-        .update(sidecarConnections)
-        .set({ tokenId: input.tokenId, lastSeenAt: input.now })
-        .where(eq(sidecarConnections.id, existing.id))
-        .returning();
-      if (!row) {
-        throw new Error("update sidecar connection returned no row");
-      }
-      return toSidecar(row);
-    }
     const [row] = await this.db
       .insert(sidecarConnections)
       .values({
@@ -2677,9 +2665,13 @@ export class DbAuthStore implements AuthStore {
         connectedAt: input.now,
         lastSeenAt: input.now,
       })
+      .onConflictDoUpdate({
+        target: sidecarConnections.repoId,
+        set: { tokenId: input.tokenId, lastSeenAt: input.now },
+      })
       .returning();
     if (!row) {
-      throw new Error("insert sidecar connection returned no row");
+      throw new Error("upsert sidecar connection returned no row");
     }
     return toSidecar(row);
   }

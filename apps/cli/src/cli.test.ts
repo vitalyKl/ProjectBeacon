@@ -88,4 +88,34 @@ describe("runCli", () => {
     expect(started).toBe(true);
     expect(sidecar).toBe(true);
   });
+
+  it("does not start the sidecar from connect", async () => {
+    const home = await mkdtemp(join(tmpdir(), "beacon-cli-"));
+    const projectId = "01934567-89ab-7cde-89ab-0123456789ac";
+    const token = TOKEN;
+    let sidecar = false;
+    const out = capture();
+    const code = await runCli({
+      argv: ["connect", token, "--project", projectId],
+      env: { BEACON_HOME: home, BEACON_URL: "http://127.0.0.1:8080" },
+      io: out.io,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ id: projectId, name: "Beacon" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as typeof fetch,
+      startSidecar: async () => {
+        sidecar = true;
+        return {
+          host: "127.0.0.1",
+          port: 1,
+          token: "t",
+          close: async () => undefined,
+        };
+      },
+    });
+    expect(code).toBe(0);
+    expect(sidecar).toBe(false);
+    expect(out.stdout.toLowerCase()).toContain("connected");
+  });
 });

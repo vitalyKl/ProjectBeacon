@@ -84,39 +84,46 @@ export function resolveLocalRepoId(
   requested: string | undefined,
   ctx: InvokeContext,
   map: SidecarRepoMap,
+  listed: { id: string }[] = [],
 ): string {
-  const resolved = requested ?? ctx.defaultRepoId ?? map.defaultRepoId;
-  if (!resolved) {
-    throw repoAmbiguous();
+  if (requested) {
+    return requested;
   }
-  return resolved;
-}
-
-async function defaultRepoIdFromApi(
-  ctx: InvokeContext,
-  map: SidecarRepoMap,
-): Promise<string | undefined> {
   if (ctx.defaultRepoId) {
     return ctx.defaultRepoId;
   }
   if (map.defaultRepoId) {
     return map.defaultRepoId;
   }
-  if (!ctx.projectId) {
-    return undefined;
+  if (listed.length === 1 && listed[0]) {
+    return listed[0].id;
   }
-  const fetchImpl = ctx.fetch ?? fetch;
-  const project = await apiGet(ctx.baseUrl, ctx.token, `/v1/projects/${ctx.projectId}`, fetchImpl);
-  if (
-    project.status < 200 ||
-    project.status >= 300 ||
-    project.body === null ||
-    typeof project.body !== "object"
-  ) {
-    return undefined;
+  throw repoAmbiguous();
+}
+
+async function resolveRepoIdFromApi(
+  requested: string | undefined,
+  ctx: InvokeContext,
+  map: SidecarRepoMap,
+): Promise<string> {
+  if (requested) {
+    return requested;
   }
-  const value = (project.body as { default_repo_id?: unknown }).default_repo_id;
-  return typeof value === "string" ? value : undefined;
+  if (ctx.defaultRepoId) {
+    return ctx.defaultRepoId;
+  }
+  if (map.defaultRepoId) {
+    return map.defaultRepoId;
+  }
+  const loaded = await loadProjectRepos(ctx);
+  const defaultRepoId = loaded.defaultRepoId ?? map.defaultRepoId;
+  if (defaultRepoId) {
+    return defaultRepoId;
+  }
+  if (loaded.repos.length === 1 && loaded.repos[0]) {
+    return loaded.repos[0].id;
+  }
+  throw repoAmbiguous();
 }
 
 export function createLocalCodeSource(options: {
@@ -140,14 +147,7 @@ export function createLocalCodeSource(options: {
   };
 
   const repoIdOf = async (requested: string | undefined, ctx: InvokeContext): Promise<string> => {
-    return resolveLocalRepoId(
-      requested,
-      {
-        ...ctx,
-        defaultRepoId: ctx.defaultRepoId ?? (await defaultRepoIdFromApi(ctx, options.map)),
-      },
-      options.map,
-    );
+    return resolveRepoIdFromApi(requested, ctx, options.map);
   };
 
   const withCore = <T>(repoId: string, fn: (core: IndexCoreType) => T): T => {
