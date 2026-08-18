@@ -2,7 +2,7 @@ import { generateKeyPairSync } from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
-import { cloneUrlWithToken, createInstallationToken, signGithubAppJwt } from "./github-app.js";
+import { createInstallationToken, normalizeCloneRemote, signGithubAppJwt } from "./github-app.js";
 
 describe("github app jwt", () => {
   it("signs an RS256 JWT and mints an installation token", async () => {
@@ -22,9 +22,12 @@ describe("github app jwt", () => {
     ).resolves.toBe("ghs_test");
   });
 
-  it("embeds the installation token in the clone URL", () => {
-    expect(cloneUrlWithToken("https://github.com/acme/demo", "ghs_secret")).toBe(
-      "https://x-access-token:ghs_secret@github.com/acme/demo.git",
+  it("normalizes a tokenless clone remote", () => {
+    expect(normalizeCloneRemote("https://github.com/acme/demo")).toBe(
+      "https://github.com/acme/demo.git",
+    );
+    expect(normalizeCloneRemote("https://x-access-token:ghs_secret@github.com/acme/demo.git")).toBe(
+      "https://github.com/acme/demo.git",
     );
   });
 });

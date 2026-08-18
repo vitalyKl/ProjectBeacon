@@ -66,10 +66,10 @@ export async function createInstallationToken(
   return body.token;
 }
 
-export function cloneUrlWithToken(remoteUrl: string, token: string): string {
+export function normalizeCloneRemote(remoteUrl: string): string {
   const parsed = new URL(remoteUrl);
-  parsed.username = "x-access-token";
-  parsed.password = token;
+  parsed.username = "";
+  parsed.password = "";
   if (!parsed.pathname.endsWith(".git")) {
     parsed.pathname = `${parsed.pathname.replace(/\/+$/, "")}.git`;
   }

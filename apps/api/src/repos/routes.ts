@@ -46,11 +46,8 @@ export function parseBindMountHint(value: unknown): string | undefined {
   }
   const parts = trimmed.split("/").filter((part) => part.length > 0 && part !== ".");
   if (parts.some((part) => part === ".." || part.includes("\0"))) {
-    return undefined;
-  }
   if (parts.length === 0) {
     return ".";
-  }
   return parts.join("/");
 }
 
@@ -62,8 +59,13 @@ function hostedCloneRejected(c: Context, indexMode: IndexMode): Response | undef
     return errorJson(c, 404, "not_found", "hosted clone is disabled", {
       reason: "flag_off",
     });
+  if (!(INDEX_MODES as readonly string[]).includes(value)) {
   }
-  return undefined;
+  const mode = value as IndexMode;
+  if ((mode === "hosted_clone" || mode === "both") && !isHostedCloneEnabled(process.env)) {
+    return undefined;
+  }
+  return mode;
 }
 
 function parseOptionalBigInt(value: unknown): bigint | null | undefined {
@@ -245,7 +247,11 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
 
     const body = await readObject(c);
     const provider = parseProvider(body?.["provider"]);
-    const indexMode = parseIndexMode(body?.["index_mode"] ?? "sidecar");
+    const requestedMode = body?.["index_mode"] ?? "sidecar";
+    const indexMode = parseIndexMode(requestedMode);
+    if (requestedMode !== undefined && indexMode === undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid index_mode", { reason: "invalid_body" });
+    }
     const defaultBranch = parseOptionalString(body?.["default_branch"], 200) ?? "main";
     const remoteUrl =
       body?.["remote_url"] === undefined || body["remote_url"] === null
@@ -291,10 +297,6 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       return errorJson(c, 400, "unauthorized", "hosted clone requires a GitHub App installation", {
         reason: "invalid_body",
       });
-    }
-    const flagged = hostedCloneRejected(c, indexMode);
-    if (flagged) {
-      return flagged;
     }
 
     const now = deps.clock.now();
@@ -367,10 +369,6 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       return errorJson(c, 400, "unauthorized", "hosted clone requires a GitHub App installation", {
         reason: "invalid_body",
       });
-    }
-    const flagged = hostedCloneRejected(c, indexMode);
-    if (flagged) {
-      return flagged;
     }
     const updated = await deps.store.updateProjectRepo(loaded.repo.id, { indexMode });
     const repo = updated ?? { ...loaded.repo, indexMode };

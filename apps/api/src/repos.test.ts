@@ -419,8 +419,10 @@ describe("project repos", () => {
           index_mode: "hosted_clone",
         }),
       });
-      expect(created.status).toBe(404);
-      expect(await created.json()).toMatchObject({ error: { code: "not_found" } });
+      expect(created.status).toBe(400);
+      expect(await created.json()).toMatchObject({
+        error: { code: "unauthorized", message: "invalid index_mode" },
+      });
     } finally {
       if (previous === undefined) {
         delete process.env["ff.hosted_clone"];
