@@ -24,6 +24,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@node-rs/argon2",
       "better-sqlite3",
       "esbuild",
       "tree-sitter",
@@ -31,6 +32,5 @@
       "tree-sitter-python",
       "tree-sitter-typescript"
     ]
-    "onlyBuiltDependencies": ["esbuild", "@node-rs/argon2"]
   }
 }
