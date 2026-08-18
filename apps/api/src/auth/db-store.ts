@@ -1,5 +1,6 @@
 import {
   activityEvents,
+  agentSessions,
   apiTokens,
   approvalRequests,
   idempotencyKeys,
@@ -46,6 +47,7 @@ import {
   VersionConflictError,
   type ActivityEventRecord,
   type AuthStore,
+  type AgentSessionRef,
   type IdempotentWrites,
   type MilestoneRecord,
   type SessionRecord,
@@ -1508,5 +1510,14 @@ export class DbAuthStore implements AuthStore {
       throw new Error("upsert rate bucket returned no row");
     }
     return toRateBucket(row);
+  }
+
+  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+    const [row] = await this.db
+      .select({ id: agentSessions.id, projectId: agentSessions.projectId })
+      .from(agentSessions)
+      .where(eq(agentSessions.id, id))
+      .limit(1);
+    return row ?? undefined;
   }
 }

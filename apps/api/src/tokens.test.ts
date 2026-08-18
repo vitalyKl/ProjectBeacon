@@ -1,4 +1,4 @@
-import { DEFAULT_TOKEN_SCOPES } from "@beacon/shared";
+import { DEFAULT_TOKEN_SCOPES, uuidv7 } from "@beacon/shared";
 import { describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
@@ -37,8 +37,17 @@ function cookieHeader(token: string): string {
   return `beacon_session=${token}`;
 }
 
-async function bootstrapWithProject(store = new MemoryAuthStore()) {
-  const app = createApp({ store, config: testConfig(), checkReady: async () => true });
+async function bootstrapWithProject(
+  store = new MemoryAuthStore(),
+  options: { clock?: { now: () => Date } } = {},
+) {
+  const app = createApp({
+    store,
+    config: testConfig(),
+    checkReady: async () => true,
+    enableTokenProbe: true,
+    clock: options.clock,
+  });
   const boot = await app.request("/v1/auth/bootstrap", {
     method: "POST",
     headers: {
@@ -165,6 +174,7 @@ describe("project tokens", () => {
       store,
       config: testConfig(),
       checkReady: async () => true,
+      enableTokenProbe: true,
       rateLimits: { ...DEFAULT_RATE_LIMITS, tokenPerMin: 1, burstMultiplier: 1 },
     });
     const boot = await app.request("/v1/auth/bootstrap", {
@@ -238,5 +248,106 @@ describe("project tokens", () => {
       headers: { cookie: cookieHeader(cookie) },
     });
     expect(((await after.json()) as { items: unknown[] }).items).toHaveLength(0);
+  });
+
+  it("rejects unknown or cross-project session_id on approval create", async () => {
+    const store = new MemoryAuthStore();
+    const { app, cookie, projectId } = await bootstrapWithProject(store);
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(cookie) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const otherRes = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "other", name: "Other" }),
+    });
+    const otherId = ((await otherRes.json()) as { id: string }).id;
+    const foreign = uuidv7();
+    store.putAgentSession({ id: foreign, projectId: otherId });
+
+    const missing = await app.request(`/v1/projects/${projectId}/approvals`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ action: "constraints.apply", session_id: uuidv7() }),
+    });
+    expect(missing.status).toBe(400);
+
+    const crossed = await app.request(`/v1/projects/${projectId}/approvals`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ action: "constraints.apply", session_id: foreign }),
+    });
+    expect(crossed.status).toBe(400);
+
+    const local = uuidv7();
+    store.putAgentSession({ id: local, projectId });
+    const ok = await app.request(`/v1/projects/${projectId}/approvals`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ action: "constraints.apply", session_id: local }),
+    });
+    expect(ok.status).toBe(201);
+    expect(await ok.json()).toMatchObject({ session_id: local });
+  });
+
+  it("returns 401 after expiry without updating last_used_at", async () => {
+    const store = new MemoryAuthStore();
+    let now = new Date("2026-01-01T00:00:00.000Z");
+    const clock = { now: () => now };
+    const { app, cookie, projectId } = await bootstrapWithProject(store, { clock });
+
+    const minted = await app.request(`/v1/projects/${projectId}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ name: "week", ttl: "7d" }),
+    });
+    const created = (await minted.json()) as { id: string; token: string; expires_at: string };
+    expect(created.expires_at).toBe("2026-01-08T00:00:00.000Z");
+
+    const beforeExpiry = await app.request(`/v1/projects/${projectId}/token-probe`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${created.token}`, "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(beforeExpiry.status).toBe(200);
+    const used = await store.findApiTokenById(created.id);
+    expect(used?.lastUsedAt?.toISOString()).toBe(now.toISOString());
+
+    now = new Date("2026-01-08T00:00:00.000Z");
+    const expired = await app.request(`/v1/projects/${projectId}/token-probe`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${created.token}`, "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(expired.status).toBe(401);
+    const after = await store.findApiTokenById(created.id);
+    expect(after?.lastUsedAt?.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("does not mount token-probe unless tests opt in", async () => {
+    const store = new MemoryAuthStore();
+    const app = createApp({ store, config: testConfig(), checkReady: async () => true });
+    const boot = await app.request("/v1/auth/bootstrap", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${BOOTSTRAP_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ login: "admin", password: STRONG_PASSWORD }),
+    });
+    const cookie = sessionCookie(boot)!;
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(cookie) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "noprobe", name: "No probe" }),
+    });
+    const projectId = ((await created.json()) as { id: string }).id;
+    const probe = await app.request(`/v1/projects/${projectId}/token-probe`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(probe.status).toBe(404);
   });
 });

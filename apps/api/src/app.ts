@@ -10,7 +10,7 @@ import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
 import { checkDatabase } from "./db.js";
 import { mountOrgs } from "./orgs/routes.js";
 import { mountRoadmap } from "./roadmap/routes.js";
-import { mountTokens } from "./tokens/routes.js";
+import { mountTokenProbe, mountTokens } from "./tokens/routes.js";
 
 export const packageName = "@beacon/api";
 
@@ -24,6 +24,7 @@ export type CreateAppOptions = {
   githubFetch?: typeof fetch;
   databaseUrl?: string;
   rateLimits?: RateLimitConfig;
+  enableTokenProbe?: boolean;
 };
 
 function resolveStore(options: CreateAppOptions): AuthStore {
@@ -66,6 +67,9 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   mountOrgs(app, authDeps);
   mountRoadmap(app, authDeps);
   mountTokens(app, authDeps);
+  if (options.enableTokenProbe) {
+    mountTokenProbe(app, authDeps);
+  }
 
   return app;
 }

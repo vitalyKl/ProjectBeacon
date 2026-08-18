@@ -164,14 +164,17 @@ export function mountTokens(app: Hono, deps: AuthDeps): void {
         ? (body["payload"] as Record<string, unknown>)
         : {};
     const sessionIdRaw = body?.["session_id"];
-    const sessionId =
-      sessionIdRaw === undefined || sessionIdRaw === null
-        ? null
-        : typeof sessionIdRaw === "string" && isUuid(sessionIdRaw)
-          ? sessionIdRaw
-          : undefined;
-    if (sessionId === undefined) {
+    let sessionId: string | null;
+    if (sessionIdRaw === undefined || sessionIdRaw === null) {
+      sessionId = null;
+    } else if (typeof sessionIdRaw !== "string" || !isUuid(sessionIdRaw)) {
       return errorJson(c, 400, "unauthorized", "invalid session_id", { reason: "invalid_body" });
+    } else {
+      const session = await deps.store.findAgentSessionById(sessionIdRaw);
+      if (!session || session.projectId !== access.project.id) {
+        return errorJson(c, 400, "unauthorized", "invalid session_id", { reason: "invalid_session" });
+      }
+      sessionId = session.id;
     }
     const now = deps.clock.now();
     const approval = await deps.store.createApproval({
@@ -223,8 +226,10 @@ export function mountTokens(app: Hono, deps: AuthDeps): void {
     }
     return c.json(presentApproval(resolved));
   });
+}
 
-  // Roadmap create is PR 07; this hook exposes backlog-only enforcement.
+/** Test-only stand-in until task create exists (PR 07). */
+export function mountTokenProbe(app: Hono, deps: AuthDeps): void {
   app.post("/v1/projects/:id/token-probe", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {

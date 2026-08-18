@@ -24,7 +24,12 @@ import {
   type TaskPatch,
   type TaskRecord,
 } from "../roadmap/types.js";
-import type { ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
+import type {
+  AgentSessionRef,
+  ApprovalRecord,
+  RateBucketRecord,
+  TokenRecord,
+} from "../tokens/types.js";
 
 export type UserRecord = {
   id: string;
@@ -75,7 +80,12 @@ export type {
   TaskPatch,
   TaskRecord,
 } from "../roadmap/types.js";
-export type { ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
+export type {
+  AgentSessionRef,
+  ApprovalRecord,
+  RateBucketRecord,
+  TokenRecord,
+} from "../tokens/types.js";
 
 export type IdempotentWrites = {
   createTask(task: TaskRecord): Promise<TaskRecord>;
@@ -199,6 +209,7 @@ export interface AuthStore {
     now: Date,
     produce: (writes: IdempotentWrites) => Promise<unknown>,
   ): Promise<unknown>;
+  findAgentSessionById(id: string): Promise<AgentSessionRef | undefined>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -311,6 +322,7 @@ export class MemoryAuthStore implements AuthStore {
     string,
     { response: unknown; createdAt: Date }
   >();
+  private readonly agentSessions = new Map<string, AgentSessionRef>();
   private writeTail: Promise<void> = Promise.resolve();
 
   private orgMemberKey(orgId: string, userId: string): string {
@@ -1048,6 +1060,16 @@ function cloneTask(task: TaskRecord): TaskRecord {
     existing.count += input.countDelta;
     existing.bytes += BigInt(input.bytesDelta);
     return cloneRateBucket(existing);
+  }
+
+  /** Test helper until agent-session create exists. */
+  putAgentSession(session: AgentSessionRef): void {
+    this.agentSessions.set(session.id, { ...session });
+  }
+
+  async findAgentSessionById(id: string): Promise<AgentSessionRef | undefined> {
+    const session = this.agentSessions.get(id);
+    return session ? { ...session } : undefined;
   }
 }
 

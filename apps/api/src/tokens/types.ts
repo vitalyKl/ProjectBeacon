@@ -35,6 +35,11 @@ export type RateBucketRecord = {
   bytes: bigint;
 };
 
+export type AgentSessionRef = {
+  id: string;
+  projectId: string;
+};
+
 export const APPROVAL_STATUSES: readonly ApprovalStatus[] = [
   "pending",
   "approved",
