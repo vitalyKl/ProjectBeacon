@@ -59,7 +59,7 @@ function parseImportFilesBody(body: unknown): ImportFile[] | undefined {
   return files;
 }
 
-async function resolveImportRepoId(
+async function resolveRepoId(
   deps: AuthDeps,
   projectId: string,
   requested: string | undefined,
@@ -127,7 +127,7 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
     }
 
     const repoQuery = c.req.query("repo_id");
-    const resolved = await resolveImportRepoId(deps, access.project.id, repoQuery);
+    const resolved = await resolveRepoId(deps, access.project.id, repoQuery);
     if (!resolved.ok) {
       if (resolved.reason === "ambiguous") {
         return errorJson(c, 400, "repo_ambiguous", "repo_id is required when the project has multiple repos");
@@ -241,34 +241,29 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       return access;
     }
 
-    const repoQuery = c.req.query("repo_id");
     const path = c.req.query("path") ?? "";
     if (path.length > MAX_IMPORT_PATH) {
       return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
     }
-    let repoId: string | undefined;
-    if (repoQuery !== undefined && repoQuery !== "") {
-      if (!isUuid(repoQuery)) {
-        return errorJson(c, 404, "not_found", "repo not found");
+    const resolved = await resolveRepoId(deps, access.project.id, c.req.query("repo_id"));
+    if (!resolved.ok) {
+      if (resolved.reason === "ambiguous") {
+        return errorJson(c, 400, "repo_ambiguous", "repo_id is required when the project has multiple repos");
       }
-      const repo = await deps.store.findProjectRepoById(repoQuery);
-      if (!repo || repo.projectId !== access.project.id) {
-        return errorJson(c, 404, "not_found", "repo not found");
-      }
-      repoId = repo.id;
+      return errorJson(c, 404, "not_found", "repo not found");
     }
 
     const nodes = await deps.store.listContextNodes(access.project.id);
-    const wantedScope = path ? "path" : repoId ? "repo" : "project";
+    const wantedScope = path ? "path" : resolved.repoId ? "repo" : "project";
     const exact =
       nodes.find(
         (node) =>
           node.scopeType === wantedScope &&
-          node.repoId === (repoId ?? null) &&
+          node.repoId === resolved.repoId &&
           node.path === path &&
           node.taskId === null,
       ) ??
-      (!repoId && !path
+      (wantedScope === "project"
         ? nodes.find(
             (node) =>
               node.scopeType === "repo" &&
@@ -281,14 +276,14 @@ export function mountContext(app: Hono, deps: AuthDeps): void {
       ? [toCompileNode(exact)]
       : selectNodes(nodes.map(toCompileNode), {
           project_id: access.project.id,
-          repo_id: repoId,
+          repo_id: resolved.repoId ?? undefined,
           path,
         });
     const sections = mergeSections(selected);
     const latest = (await deps.store.listContextRevisions(access.project.id))[0];
     const markdown = exportAgentsMd({
       revision: latest?.id ?? "uncompiled",
-      scope: { repo_id: repoId ?? null, path },
+      scope: { repo_id: resolved.repoId, path },
       sections,
     });
     return c.text(markdown, 200, {

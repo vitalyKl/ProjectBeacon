@@ -195,6 +195,43 @@ describe("GET /v1/projects/:id/context/export/agents-md", () => {
     expect(markdown).toContain("## Goals");
     expect(markdown).toContain("Ship it.");
   });
+
+  it("defaults to the sole repo the same way import does", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "export-repo");
+    const repoId = uuidv7();
+    store.seedProjectRepo({
+      id: repoId,
+      projectId: project.id,
+      provider: "local",
+      remoteUrl: null,
+      defaultBranch: "main",
+      githubRepoId: null,
+      installationId: null,
+      localRootHint: "/tmp/beacon",
+      indexMode: "sidecar",
+      lastIndexedSha: null,
+      lastIndexedAt: null,
+    });
+    await alice.app.request(`/v1/projects/${project.id}/context/import`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        files: [{ path: "AGENTS.md", content: "## Goals\nShip it.\n" }],
+      }),
+    });
+
+    const res = await alice.app.request(`/v1/projects/${project.id}/context/export/agents-md`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(res.status).toBe(200);
+    const markdown = await res.text();
+    expect(markdown).toContain("managed-by: projectbeacon");
+    expect(markdown).toContain(`scope: ${repoId}`);
+    expect(markdown).toContain("## Goals");
+    expect(markdown).toContain("Ship it.");
+  });
 });
 
 describe("POST /v1/projects/:id/context/compile", () => {

@@ -104,7 +104,13 @@ const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
 const DEPENDENCY_LOCK_NS = 8_811_203;
 
-type UniqueConstraint = "login" | "github_id" | "org_slug" | "project_slug" | "unknown";
+type UniqueConstraint =
+  | "login"
+  | "github_id"
+  | "org_slug"
+  | "project_slug"
+  | "context_node_scope"
+  | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
@@ -129,6 +135,9 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("projects_org_id_slug")) {
           return "project_slug";
+        }
+        if (constraint.includes("context_nodes_unique_scope")) {
+          return "context_node_scope";
         }
         return "unknown";
       }
@@ -1517,71 +1526,72 @@ export class DbAuthStore implements AuthStore {
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
-    const existing = await this.db
-      .select()
-      .from(contextNodes)
-      .where(
-        and(
-          eq(contextNodes.projectId, node.projectId),
-          eq(contextNodes.scopeType, node.scopeType),
-          eq(contextNodes.path, node.path),
-          node.repoId === null ? isNull(contextNodes.repoId) : eq(contextNodes.repoId, node.repoId),
-          node.taskId === null ? isNull(contextNodes.taskId) : eq(contextNodes.taskId, node.taskId),
-        ),
-      )
-      .limit(1);
-    const current = existing[0];
-    if (current) {
-      const [row] = await this.db
-        .update(contextNodes)
-        .set({
-          sections: node.sections,
-          sectionsText: node.sectionsText,
-          source: node.source,
-          sourcePath: node.sourcePath,
-          reviewState: node.reviewState,
-          updatedByType: node.updatedByType,
-          updatedById: node.updatedById,
-          updatedAt: node.updatedAt,
-        })
-        .where(eq(contextNodes.id, current.id))
-        .returning();
+    const scopeMatch = and(
+      eq(contextNodes.projectId, node.projectId),
+      eq(contextNodes.scopeType, node.scopeType),
+      eq(contextNodes.path, node.path),
+      node.repoId === null ? isNull(contextNodes.repoId) : eq(contextNodes.repoId, node.repoId),
+      node.taskId === null ? isNull(contextNodes.taskId) : eq(contextNodes.taskId, node.taskId),
+    );
+    const patch = {
+      sections: node.sections,
+      sectionsText: node.sectionsText,
+      source: node.source,
+      sourcePath: node.sourcePath,
+      reviewState: node.reviewState,
+      updatedByType: node.updatedByType,
+      updatedById: node.updatedById,
+      updatedAt: node.updatedAt,
+    };
+
+    const updateExisting = async (): Promise<ContextNodeRecord | undefined> => {
+      const [row] = await this.db.update(contextNodes).set(patch).where(scopeMatch).returning();
       if (!row) {
-        throw new Error("update context node returned no row");
+        return undefined;
       }
       const stored = toContextNode(row);
       if (!stored) {
         throw new Error("update context node returned invalid row");
       }
       return stored;
+    };
+
+    const updated = await updateExisting();
+    if (updated) {
+      return updated;
     }
-    const [row] = await this.db
-      .insert(contextNodes)
-      .values({
-        id: node.id,
-        projectId: node.projectId,
-        repoId: node.repoId,
-        taskId: node.taskId,
-        scopeType: node.scopeType,
-        path: node.path,
-        sections: node.sections,
-        sectionsText: node.sectionsText,
-        source: node.source,
-        sourcePath: node.sourcePath,
-        reviewState: node.reviewState,
-        updatedByType: node.updatedByType,
-        updatedById: node.updatedById,
-        updatedAt: node.updatedAt,
-      })
-      .returning();
-    if (!row) {
-      throw new Error("insert context node returned no row");
+
+    try {
+      const [row] = await this.db
+        .insert(contextNodes)
+        .values({
+          id: node.id,
+          projectId: node.projectId,
+          repoId: node.repoId,
+          taskId: node.taskId,
+          scopeType: node.scopeType,
+          path: node.path,
+          ...patch,
+        })
+        .returning();
+      if (!row) {
+        throw new Error("insert context node returned no row");
+      }
+      const stored = toContextNode(row);
+      if (!stored) {
+        throw new Error("insert context node returned invalid row");
+      }
+      return stored;
+    } catch (error) {
+      if (uniqueConstraint(error) !== "context_node_scope") {
+        throw error;
+      }
+      const raced = await updateExisting();
+      if (!raced) {
+        throw error;
+      }
+      return raced;
     }
-    const stored = toContextNode(row);
-    if (!stored) {
-      throw new Error("insert context node returned invalid row");
-    }
-    return stored;
   }
 
   async listActiveConstraints(projectId: string): Promise<ConstraintRecord[]> {
