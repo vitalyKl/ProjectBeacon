@@ -4,7 +4,6 @@ export { createHttpCodeSource, type CodeSource } from "./code-source.js";
 export {
   ToolError,
   codeIndexUnavailable,
-  handoffWriteUnavailable,
   integrationUnavailable,
   isToolError,
   parseErrorBody,

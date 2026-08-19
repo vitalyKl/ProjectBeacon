@@ -163,7 +163,11 @@ describe("stdio MCP", () => {
     expect(treeText.content[0]?.text).toContain("code_index_unavailable");
   });
 
-  it("does not remap write_handoff onto finish", async () => {
+  it("does not advertise or remap write_handoff", async () => {
+    expect(TOOL_NAMES).not.toContain("write_handoff");
+    expect(TOOL_NAMES).toContain("finish_work");
+    expect(TOOL_NAMES).toContain("get_handoff");
+
     const { fetchImpl, calls } = mockFetch(() => ({ body: { unexpected: true } }));
     const reply = await handleRpc(
       {
@@ -183,9 +187,10 @@ describe("stdio MCP", () => {
     const body = JSON.parse(
       (reply as { result: { content: { text: string }[] } }).result.content[0]!.text,
     ) as {
-      error: { status: number };
+      error: { status: number; message: string };
     };
-    expect(body.error.status).toBe(501);
+    expect(body.error.status).toBe(400);
+    expect(body.error.message).toBe("unknown tool: write_handoff");
   });
 
   it("serves newline-delimited JSON-RPC on stdio", async () => {

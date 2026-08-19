@@ -43,7 +43,6 @@ const REQUIRED_TOOLS = [
   "get_changed_scope",
   "start_work",
   "finish_work",
-  "write_handoff",
   "get_handoff",
   "github_list_prs",
   "github_list_issues",
@@ -74,10 +73,15 @@ describe("tool catalog", () => {
     ).toEqual([...REQUIRED_TOOLS].sort());
   });
 
-  it("does not expose run_shell or code:write", () => {
+  it("does not expose run_shell, code:write, or write_handoff", () => {
     expect(TOOL_NAMES).not.toContain("run_shell");
     expect(TOOL_NAMES).not.toContain("code:write");
     expect(TOOL_NAMES).not.toContain("code_write");
+    expect(TOOL_NAMES).not.toContain("write_handoff");
+    expect(isToolName("write_handoff")).toBe(false);
+    expect(listToolDefinitions().map((tool) => tool.name)).not.toContain("write_handoff");
+    expect(TOOL_NAMES).toContain("finish_work");
+    expect(TOOL_NAMES).toContain("get_handoff");
   });
 
   it("requires idempotency_key on create tools", () => {
@@ -109,34 +113,12 @@ describe("tool catalog", () => {
   it("rejects missing required fields", () => {
     expect(parseToolArgs("search_context", {}).ok).toBe(false);
     expect(parseToolArgs("create_task", { title: "x" }).ok).toBe(false);
-    expect(parseToolArgs("write_handoff", { summary: "handoff without a target id" }).ok).toBe(
-      false,
-    );
-    expect(
-      parseToolArgs("write_handoff", {
-        summary: "enough characters for a handoff",
-        task_id: TASK_ID,
-      }).ok,
-    ).toBe(true);
     expect(parseToolArgs("get_task", { task_id: TASK_ID }).ok).toBe(true);
     expect(parseToolArgs("list_comments", {}).ok).toBe(false);
     expect(parseToolArgs("list_comments", { task_id: TASK_ID, cursor: "c1", limit: 20 }).ok).toBe(
       true,
     );
     expect(parseToolArgs("get_project", { project_id: PROJECT_ID }).ok).toBe(true);
-  });
-
-  it("publishes write_handoff session_id or task_id in JSON Schema", () => {
-    const schema = getToolDefinition("write_handoff").inputSchema;
-    const variants = [schema["anyOf"], schema["oneOf"]].find(Array.isArray) as
-      Record<string, unknown>[] | undefined;
-    expect(variants).toBeDefined();
-    const requiredSets = (variants ?? []).map((variant) => {
-      const required = variant["required"];
-      return Array.isArray(required) ? required : [];
-    });
-    expect(requiredSets.some((required) => required.includes("session_id"))).toBe(true);
-    expect(requiredSets.some((required) => required.includes("task_id"))).toBe(true);
   });
 
   it("publishes a description for every tool", () => {

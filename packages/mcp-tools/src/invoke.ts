@@ -1,5 +1,5 @@
 import { createHttpCodeSource } from "./code-source.js";
-import { handoffWriteUnavailable, invalidArguments, repoAmbiguous } from "./errors.js";
+import { invalidArguments, repoAmbiguous } from "./errors.js";
 import { apiRequest, contextForProject, requireProjectId } from "./http.js";
 import type { InvokeContext, JsonObject } from "./types.js";
 import { isToolName, parseToolArgs, type ToolArgs, type ToolName } from "./tools.js";
@@ -398,9 +398,6 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
         }),
       });
     }
-    case "write_handoff":
-      argsOf(tool, args);
-      throw handoffWriteUnavailable();
     case "get_handoff": {
       const data = argsOf(tool, args);
       return apiRequest(ctx, {

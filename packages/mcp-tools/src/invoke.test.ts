@@ -332,7 +332,7 @@ describe("invoke routing", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("fails write_handoff closed without finishing a session", async () => {
+  it("rejects write_handoff as an unknown tool and does not remap it", async () => {
     const { fetchImpl, calls } = mockFetch(() => ({ body: { unexpected: true } }));
     await expect(
       invoke(
@@ -341,9 +341,10 @@ describe("invoke routing", () => {
         ctx(fetchImpl),
       ),
     ).rejects.toMatchObject({
-      code: "not_found",
-      status: 501,
-      details: { reason: "handoff_route_unavailable" },
+      code: "unauthorized",
+      status: 400,
+      message: "unknown tool: write_handoff",
+      details: { reason: "invalid_arguments" },
     });
     await expect(
       invoke(
@@ -351,8 +352,13 @@ describe("invoke routing", () => {
         { task_id: TASK_ID, summary: "Leaving a handoff without status" },
         ctx(fetchImpl),
       ),
-    ).rejects.toMatchObject({ status: 501, details: { reason: "handoff_route_unavailable" } });
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "unknown tool: write_handoff",
+      details: { reason: "invalid_arguments" },
+    });
     expect(calls).toHaveLength(0);
+    expect(TOOL_NAMES.includes("write_handoff" as ToolName)).toBe(false);
   });
 
   it("maps github_* tools to /v1 and requires repo_id when default is missing", async () => {

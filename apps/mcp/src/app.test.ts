@@ -175,7 +175,7 @@ describe("POST /mcp", () => {
     expect(body.result.instructions).toBe(HTTP_MCP_INSTRUCTIONS);
   });
 
-  it("lists mcp-tools schemas including write_handoff anyOf", async () => {
+  it("lists mcp-tools schemas without write_handoff", async () => {
     const { fetchImpl } = mockFetch(() => ({ body: { unexpected: true } }));
     const app = appWith(fetchImpl);
     const res = await rpc(app, "tools/list");
@@ -185,16 +185,12 @@ describe("POST /mcp", () => {
     };
     const names = body.result.tools.map((tool) => tool.name);
     expect(names).toContain("get_project");
-    expect(names).toContain("write_handoff");
     expect(names).toContain("finish_work");
-    const handoff = body.result.tools.find((tool) => tool.name === "write_handoff");
-    const variants = [handoff?.inputSchema["anyOf"], handoff?.inputSchema["oneOf"]].find(
-      Array.isArray,
-    );
-    expect(variants).toBeDefined();
+    expect(names).toContain("get_handoff");
+    expect(names).not.toContain("write_handoff");
   });
 
-  it("forwards tools/call through invoke and leaves write_handoff closed", async () => {
+  it("forwards tools/call through invoke and rejects write_handoff as unknown", async () => {
     const { fetchImpl, calls } = mockFetch((call) => {
       if (call.url.pathname === `/v1/projects/${PROJECT_ID}/decisions`) {
         return { body: { items: [], next_cursor: null } };
@@ -223,7 +219,11 @@ describe("POST /mcp", () => {
     };
     expect(handoffBody.result.isError).toBe(true);
     expect(JSON.parse(handoffBody.result.content[0]?.text ?? "{}")).toMatchObject({
-      error: { status: 501, details: { reason: "handoff_route_unavailable" } },
+      error: {
+        status: 400,
+        message: "unknown tool: write_handoff",
+        details: { reason: "invalid_arguments" },
+      },
     });
     expect(calls).toHaveLength(1);
   });
