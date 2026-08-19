@@ -11,6 +11,7 @@ import type { LabelPatch, LabelRecord } from "../labels/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, OrgSlugTakenError, ProjectSlugTakenError, type OrgInviteRecord, type OrgMemberRecord, type OrgRecord, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord } from "../orgs/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
+import { applyTaskPatch } from "../roadmap/patch.js";
 import { DependencyCycleError, IDEMPOTENCY_TTL_MS, VersionConflictError, type ActivityEventRecord, type IdempotencyActorType, type MilestoneRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord } from "../roadmap/types.js";
 import type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
 export type { OrgInviteRecord, OrgMemberRecord, OrgRecord, ProjectInviteRecord, ProjectMemberRecord, ProjectRecord } from "../orgs/types.js";
@@ -883,43 +884,21 @@ export class MemoryAuthStore implements AuthStore {
       if (task.version !== expectedVersion) {
         throw new VersionConflictError(cloneTask(task));
       }
-      if (patch.title !== undefined) {
-        task.title = patch.title;
-      }
-      if (patch.description !== undefined) {
-        task.description = patch.description;
-      }
-      if (patch.status !== undefined) {
-        task.status = patch.status;
-      }
-      if (patch.type !== undefined) {
-        task.type = patch.type;
-      }
-      if (patch.priority !== undefined) {
-        task.priority = patch.priority;
-      }
-      if (patch.milestoneId !== undefined) {
-        task.milestoneId = patch.milestoneId;
-      }
-      if (patch.parentId !== undefined) {
-        task.parentId = patch.parentId;
-      }
-      if (patch.assigneeUserId !== undefined) {
-        task.assigneeUserId = patch.assigneeUserId;
-      }
-      if (patch.assigneeAgentName !== undefined) {
-        task.assigneeAgentName = patch.assigneeAgentName;
-      }
-      if (patch.agentBrief !== undefined) {
-        task.agentBrief = patch.agentBrief;
-      }
-      if (patch.howToCheck !== undefined) {
-        task.howToCheck = patch.howToCheck;
-      }
-      if (patch.linkedPaths !== undefined) {
-        task.linkedPaths = patch.linkedPaths.map((path) => ({ ...path }));
+      const next = applyTaskPatch(task, patch);
+      if (next.githubIssueId !== null) {
+        for (const existing of this.tasks.values()) {
+          if (
+            existing.id !== task.id &&
+            existing.projectId === task.projectId &&
+            existing.githubIssueId === next.githubIssueId &&
+            !existing.deletedAt
+          ) {
+            throw new UniqueViolationError("tasks_project_github_issue_id_unique");
+          }
+        }
       }
       const lockReleased = Boolean(options?.releaseLock && task.lockedBySessionId);
+      Object.assign(task, next);
       if (options?.releaseLock) {
         task.lockedBySessionId = null;
         task.lockExpiresAt = null;

@@ -302,6 +302,14 @@ describe("GitHub webhooks and import", () => {
     const token = sessionCookie(registered)!;
     const project = await createProject(app, token, "gh-link");
     const repo = await createGithubRepo(app, token, project.id, { issues: "import" });
+    const projectRecord = await store.findProjectById(project.id);
+    await store.upsertGithubInstallation({
+      id: "018f1e2c-3d4e-7000-8000-000000000088",
+      orgId: projectRecord!.orgId,
+      installationId: 77n,
+      accountLogin: "acme",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
     const taskRes = await app.request(`/v1/projects/${project.id}/tasks`, {
       method: "POST",
       headers: {
@@ -334,6 +342,81 @@ describe("GitHub webhooks and import", () => {
     });
     const stored = await store.findTaskById(task.id);
     expect(stored?.githubIssueId).toBe(9001n);
+    const fetched = await app.request(`/v1/tasks/${task.id}`, {
+      headers: { cookie: cookieHeader(token) },
+    });
+    expect(fetched.status).toBe(200);
+    expect(await fetched.json()).toMatchObject({ github_issue_id: "9001" });
+
+    const relinked = await app.request(`/v1/tasks/${task.id}/github-issue`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ issue_number: 12, repo_id: repo.id }),
+    });
+    expect(relinked.status).toBe(200);
+    expect((await store.findTaskById(task.id))?.githubIssueId).toBe(9001n);
+
+    const otherRes = await app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(token),
+        "content-type": "application/json",
+        "idempotency-key": "task-2",
+      },
+      body: JSON.stringify({ title: "Also login" }),
+    });
+    const other = (await otherRes.json()) as { id: string };
+    const conflict = await app.request(`/v1/tasks/${other.id}/github-issue`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ issue_number: 12, repo_id: repo.id }),
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({
+      error: { code: "login_taken", details: { reason: "unique" } },
+    });
+    expect((await store.findTaskById(other.id))?.githubIssueId).toBeNull();
+  });
+
+  it("persists githubIssueId through MemoryAuthStore.updateTask", async () => {
+    const store = new MemoryAuthStore();
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    const task = await store.createTask({
+      id: "018f1e2c-3d4e-7000-8000-0000000000aa",
+      projectId: "018f1e2c-3d4e-7000-8000-000000000010",
+      milestoneId: null,
+      parentId: null,
+      title: "Fix login",
+      description: "",
+      status: "ready",
+      priority: 0,
+      type: "bug",
+      version: 1,
+      assigneeUserId: null,
+      assigneeAgentName: null,
+      agentBrief: "",
+      howToCheck: "",
+      linkedPaths: [],
+      githubIssueId: null,
+      lockedBySessionId: null,
+      lockExpiresAt: null,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const updated = await store.updateTask(task.id, task.version, { githubIssueId: 9001n }, now);
+    expect(updated?.task.githubIssueId).toBe(9001n);
+    expect((await store.findTaskById(task.id))?.githubIssueId).toBe(9001n);
+
+    const other = await store.createTask({
+      ...task,
+      id: "018f1e2c-3d4e-7000-8000-0000000000bb",
+      title: "Other",
+    });
+    await expect(
+      store.updateTask(other.id, other.version, { githubIssueId: 9001n }, now),
+    ).rejects.toMatchObject({ name: "UniqueViolationError" });
+    expect((await store.findTaskById(other.id))?.githubIssueId).toBeNull();
   });
 
   it("returns the same 404 for a missing task and a non-member", async () => {

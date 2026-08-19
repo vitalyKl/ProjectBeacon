@@ -17,6 +17,7 @@ import type { LabelPatch, LabelRecord, LabelStatus } from "../labels/types.js";
 import { isLabelStatus } from "../labels/types.js";
 import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
+import { applyTaskPatch } from "../roadmap/patch.js";
 import { IDEMPOTENCY_TTL_MS, type CommentAuthorType, type DependencyType, type IdempotencyActorType, type LinkedPath, type MilestoneStatus, type TaskStatus, type TaskType } from "../roadmap/types.js";
 import { InvalidReferenceError, isAgentHost, isAgentSessionStatus, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
 import {
@@ -1327,29 +1328,37 @@ export class DbAuthStore implements AuthStore {
         throw new VersionConflictError(toTask(current));
       }
       const lockReleased = Boolean(options?.releaseLock && current.lockedBySessionId);
-      const [row] = await tx
-        .update(tasks)
-        .set({
-          ...(patch.title !== undefined ? { title: patch.title } : {}),
-          ...(patch.description !== undefined ? { description: patch.description } : {}),
-          ...(patch.status !== undefined ? { status: patch.status } : {}),
-          ...(patch.type !== undefined ? { type: patch.type } : {}),
-          ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
-          ...(patch.milestoneId !== undefined ? { milestoneId: patch.milestoneId } : {}),
-          ...(patch.parentId !== undefined ? { parentId: patch.parentId } : {}),
-          ...(patch.assigneeUserId !== undefined ? { assigneeUserId: patch.assigneeUserId } : {}),
-          ...(patch.assigneeAgentName !== undefined
-            ? { assigneeAgentName: patch.assigneeAgentName }
-            : {}),
-          ...(patch.agentBrief !== undefined ? { agentBrief: patch.agentBrief } : {}),
-          ...(patch.howToCheck !== undefined ? { howToCheck: patch.howToCheck } : {}),
-          ...(patch.linkedPaths !== undefined ? { linkedPaths: patch.linkedPaths } : {}),
-          ...(options?.releaseLock ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
-          version: current.version + 1,
-          updatedAt,
-        })
-        .where(and(eq(tasks.id, id), eq(tasks.version, expectedVersion), isNull(tasks.deletedAt)))
-        .returning();
+      const next = applyTaskPatch(toTask(current), patch);
+      let row: typeof current | undefined;
+      try {
+        [row] = await tx
+          .update(tasks)
+          .set({
+            title: next.title,
+            description: next.description,
+            status: next.status,
+            type: next.type,
+            priority: next.priority,
+            milestoneId: next.milestoneId,
+            parentId: next.parentId,
+            assigneeUserId: next.assigneeUserId,
+            assigneeAgentName: next.assigneeAgentName,
+            agentBrief: next.agentBrief,
+            howToCheck: next.howToCheck,
+            linkedPaths: next.linkedPaths,
+            githubIssueId: next.githubIssueId,
+            ...(options?.releaseLock ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
+            version: current.version + 1,
+            updatedAt,
+          })
+          .where(and(eq(tasks.id, id), eq(tasks.version, expectedVersion), isNull(tasks.deletedAt)))
+          .returning();
+      } catch (error) {
+        if (uniqueConstraint(error)) {
+          throw new UniqueViolationError("tasks_project_github_issue_id_unique");
+        }
+        throw error;
+      }
       if (!row) {
         const [fresh] = await tx.select().from(tasks).where(eq(tasks.id, id)).limit(1);
         if (fresh && !fresh.deletedAt) {
