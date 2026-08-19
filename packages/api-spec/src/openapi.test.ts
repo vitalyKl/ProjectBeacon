@@ -13,7 +13,10 @@ describe("toOpenApi", () => {
     expect(doc.components?.schemas?.["SessionBrief"]).toBeDefined();
     expect(doc.components?.schemas?.["ErrorResponse"]).toBeDefined();
     expect(doc.components?.schemas?.["PaginationQuery"]).toBeDefined();
+    expect(doc.components?.schemas?.["Comment"]).toBeDefined();
+    expect(doc.components?.schemas?.["CommentPage"]).toBeDefined();
     expect(doc.paths?.["/v1/projects/{id}/context/compile"]).toBeDefined();
+    expect(doc.paths?.["/v1/tasks/{id}/comments"]).toBeDefined();
 
     const pagination = doc.components.schemas["PaginationQuery"] as {
       required?: string[];

@@ -18,6 +18,15 @@ import {
   type SessionBrief,
 } from "@/lib/api";
 
+import { t, tf, type MessageKey } from "@/lib/i18n";
+import {
+  importedNodesNotice,
+  readImportPayload,
+  takeInputFiles,
+  unrecognizedImportMessage,
+} from "@/lib/import-files";
+import { useT, useTf } from "@/lib/use-locale";
+
 import { useSelectedProject } from "../project-context";
 
 type KnownSectionId = Exclude<ContextSection["id"], "custom">;
@@ -26,14 +35,15 @@ const KNOWN_SECTIONS: { id: KnownSectionId; title: string }[] = [
   { id: "goals", title: "Goals" },
   { id: "non_goals", title: "Non-goals" },
   { id: "architecture", title: "Architecture" },
+  { id: "stack", title: "Tech stack" },
   { id: "conventions", title: "Conventions" },
   { id: "style", title: "Style" },
   { id: "commands", title: "Commands" },
+  { id: "definition_of_done", title: "Definition of Done" },
   { id: "security", title: "Security" },
   { id: "pitfalls", title: "Pitfalls" },
   { id: "glossary", title: "Glossary" },
   { id: "ownership", title: "Ownership" },
-  { id: "stack", title: "Stack" },
 ];
 
 function randomUuidV7(): string {
@@ -63,10 +73,14 @@ type CreateScope = "project" | "repo" | "path";
 
 type EditorTab = "edit" | "preview" | "revisions";
 
+function knownSectionTitle(id: KnownSectionId): string {
+  return t(`context.section.${id}` as MessageKey);
+}
+
 function sourceLabel(source: string): string {
   switch (source) {
     case "native":
-      return "Native";
+      return t("context.source.native");
     case "imported_agents_md":
       return "AGENTS.md";
     case "imported_claude_md":
@@ -84,17 +98,30 @@ function sourceLabel(source: string): string {
 
 function scopeLabel(node: Pick<ContextNode, "scope_type" | "path">): string {
   if (node.scope_type === "path") {
-    return node.path || "(path)";
+    return node.path || t("context.scopePathEmpty");
   }
   if (node.scope_type === "repo") {
-    return node.path ? `repo / ${node.path}` : "repo";
+    return node.path ? tf("context.scopeRepoWithPath", { path: node.path }) : t("context.scopeRepo");
   }
-  return node.scope_type;
+  return node.scope_type === "project" ? t("context.scopeProject") : node.scope_type;
+}
+
+function isLegacyDefinitionOfDone(section: ContextSection): boolean {
+  if (section.id !== "custom") {
+    return false;
+  }
+  const key = (section.key ?? "").trim().toLowerCase().replaceAll("_", "-");
+  const title = section.title.trim().toLowerCase();
+  return key === "definition-of-done" || title === "definition of done";
 }
 
 function emptyDraftsFromNode(node: ContextNode | null): DraftSection[] {
   const byId = new Map<string, ContextSection>();
   for (const section of node?.sections ?? []) {
+    if (section.id === "definition_of_done" || isLegacyDefinitionOfDone(section)) {
+      byId.set("definition_of_done", { ...section, id: "definition_of_done" });
+      continue;
+    }
     byId.set(
       section.id === "custom" ? `custom:${section.key ?? section.title}` : section.id,
       section,
@@ -109,7 +136,7 @@ function emptyDraftsFromNode(node: ContextNode | null): DraftSection[] {
     };
   });
   for (const section of node?.sections ?? []) {
-    if (section.id !== "custom") {
+    if (section.id !== "custom" || isLegacyDefinitionOfDone(section)) {
       continue;
     }
     drafts.push({
@@ -163,6 +190,8 @@ function downloadText(filename: string, content: string, type: string): void {
 }
 
 export function ContextEditor() {
+  const label = useT();
+  const format = useTf();
   const { project } = useSelectedProject();
   const [nodes, setNodes] = useState<ContextNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -247,7 +276,7 @@ export function ContextEditor() {
         applyNodes(items);
       } catch (caught) {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load context");
+          setError(caught instanceof ApiError ? caught.message : t("context.failedLoad"));
         }
       }
     }
@@ -273,7 +302,7 @@ export function ContextEditor() {
         }
       } catch (caught) {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load revisions");
+          setError(caught instanceof ApiError ? caught.message : t("context.failedRevisions"));
         }
       } finally {
         if (!cancelled) {
@@ -320,11 +349,11 @@ export function ContextEditor() {
     }
     if (isCreate) {
       if (createScope === "path" && createPath.trim().length === 0) {
-        setError("path is required for path scope");
+        setError(t("context.pathRequired"));
         return;
       }
       if (createScope !== "project" && createRepoId.trim().length === 0) {
-        setError("repo id is required for this scope");
+        setError(t("context.repoRequired"));
         return;
       }
     } else if (!selected) {
@@ -349,10 +378,10 @@ export function ContextEditor() {
         }
       }
       const saved = await putContextNode(project.id, nodeId, body);
-      setNotice(reviewState === "reviewed" ? "Marked reviewed." : "Saved.");
+      setNotice(reviewState === "reviewed" ? t("context.markedReviewed") : t("context.saved"));
       await reloadNodes(saved.id);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to save context");
+      setError(caught instanceof ApiError ? caught.message : t("context.failedSave"));
     } finally {
       setSaving(false);
     }
@@ -368,7 +397,7 @@ export function ContextEditor() {
       const brief = await compileContext(project.id);
       setPreview(brief);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to compile preview");
+      setError(caught instanceof ApiError ? caught.message : t("context.failedPreview"));
     } finally {
       setPreviewing(false);
     }
@@ -382,33 +411,33 @@ export function ContextEditor() {
     try {
       setOpenRevision(await fetchContextRevision(project.id, revisionId));
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to load revision");
+      setError(caught instanceof ApiError ? caught.message : t("context.failedRevisions"));
     }
   }
 
+  async function applyImportedNodes(result: { nodes: ContextNode[] }, successNotice: string) {
+    if (result.nodes.length === 0) {
+      setError(unrecognizedImportMessage());
+      setNotice(null);
+      return;
+    }
+    setNotice(successNotice);
+    await reloadNodes(result.nodes[0]?.id ?? selectedId);
+  }
+
   async function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
-    const files = event.target.files;
-    event.target.value = "";
-    if (!project || !files || files.length === 0) {
+    const files = takeInputFiles(event.target);
+    if (!project || files.length === 0) {
       return;
     }
     setImporting(true);
     setError(null);
     setNotice(null);
     try {
-      const payload: { path: string; content: string }[] = [];
-      for (const file of Array.from(files)) {
-        payload.push({ path: file.webkitRelativePath || file.name, content: await file.text() });
-      }
-      const result = await importContextFiles(project.id, payload);
-      setNotice(
-        result.nodes.length === 1
-          ? "Imported 1 file for review."
-          : `Imported ${result.nodes.length} files for review.`,
-      );
-      await reloadNodes(result.nodes[0]?.id ?? selectedId);
+      const result = await importContextFiles(project.id, await readImportPayload(files));
+      await applyImportedNodes(result, importedNodesNotice(result.nodes.length));
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to import files");
+      setError(caught instanceof ApiError ? caught.message : t("context.failedImport"));
     } finally {
       setImporting(false);
     }
@@ -420,7 +449,7 @@ export function ContextEditor() {
     }
     const path = pastePath.trim();
     if (!path || !pasteBody.trim()) {
-      setError("path and content are required");
+      setError(t("context.pathRequired"));
       return;
     }
     setImporting(true);
@@ -428,12 +457,15 @@ export function ContextEditor() {
     setNotice(null);
     try {
       const result = await importContextFiles(project.id, [{ path, content: pasteBody }]);
+      if (result.nodes.length === 0) {
+        setError(unrecognizedImportMessage());
+        return;
+      }
       setPasteOpen(false);
       setPasteBody("");
-      setNotice("Imported file for review.");
-      await reloadNodes(result.nodes[0]?.id ?? selectedId);
+      await applyImportedNodes(result, t("context.importedOne"));
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to import files");
+      setError(caught instanceof ApiError ? caught.message : t("context.failedImport"));
     } finally {
       setImporting(false);
     }
@@ -449,7 +481,7 @@ export function ContextEditor() {
       const markdown = await exportAgentsMd(project.id);
       downloadText("AGENTS.md", markdown, "text/markdown;charset=utf-8");
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to export");
+      setError(caught instanceof ApiError ? caught.message : t("context.failedExport"));
     } finally {
       setExporting(false);
     }
@@ -458,8 +490,8 @@ export function ContextEditor() {
   if (!project) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Context</h1>
-        <p className="max-w-xl text-sm leading-6 text-muted">Select a project to edit its brief.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.context")}</h1>
+        <p className="max-w-xl text-sm leading-6 text-muted">{label("context.selectProject")}</p>
       </section>
     );
   }
@@ -468,15 +500,23 @@ export function ContextEditor() {
     <section className="flex min-h-0 flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Context</h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted">
-            Write the project brief here. Imported rules files appear after import and need a human
-            review before agents should treat them as instructions.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{label("nav.context")}</h1>
+          <p className="max-w-2xl text-sm leading-6 text-muted">{label("context.intro")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
+            type="button"
+            disabled={previewing}
+            onClick={() => {
+              setTab("preview");
+              void runPreview();
+            }}
+          >
+            {previewing ? label("common.compiling") : label("common.compileBrief")}
+          </button>
           <label className="cursor-pointer rounded-md border border-border bg-surface px-3 py-1.5 text-sm">
-            {importing ? "Importing…" : "Import files"}
+            {importing ? label("context.importing") : label("context.importFiles")}
             <input
               className="hidden"
               type="file"
@@ -490,7 +530,7 @@ export function ContextEditor() {
             type="button"
             onClick={() => setPasteOpen((open) => !open)}
           >
-            Paste file
+            {label("context.pasteFile")}
           </button>
           <button
             className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm disabled:opacity-60"
@@ -498,7 +538,7 @@ export function ContextEditor() {
             disabled={exporting}
             onClick={() => void onExport()}
           >
-            {exporting ? "Exporting…" : "Export AGENTS.md"}
+            {exporting ? label("context.exporting") : label("context.export")}
           </button>
         </div>
       </div>
@@ -506,7 +546,7 @@ export function ContextEditor() {
       {pasteOpen ? (
         <div className="space-y-2 rounded-lg border border-border bg-surface p-3">
           <label className="flex flex-col gap-1 text-sm">
-            Path
+            {label("common.path")}
             <input
               className="h-9 rounded-md border border-border bg-background px-2"
               value={pastePath}
@@ -514,7 +554,7 @@ export function ContextEditor() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Content
+            {label("common.content")}
             <textarea
               className="min-h-32 rounded-md border border-border bg-background px-2 py-1.5 font-mono text-sm"
               value={pasteBody}
@@ -527,7 +567,7 @@ export function ContextEditor() {
             disabled={importing}
             onClick={() => void onPasteImport()}
           >
-            Import pasted file
+            {label("context.importPasted")}
           </button>
         </div>
       ) : null}
@@ -538,25 +578,25 @@ export function ContextEditor() {
       <div className="grid min-h-[32rem] gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="flex flex-col rounded-lg border border-border bg-surface">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <h2 className="text-sm font-medium">Nodes</h2>
+            <h2 className="text-sm font-medium">{label("context.nodes")}</h2>
             <button
               className="text-sm text-muted hover:text-foreground"
               type="button"
               onClick={beginCreate}
             >
-              New brief
+              {label("context.newBrief")}
             </button>
           </div>
           {nodes.length === 0 && !isCreate ? (
             <p className="px-3 py-3 text-sm leading-6 text-muted">
-              No brief yet. Write one here, or import an AGENTS.md / CLAUDE.md / conventions file.
+              {label("context.empty")}
             </p>
           ) : (
             <ul className="flex flex-col">
               {isCreate ? (
                 <li>
                   <div className="flex w-full flex-col items-start gap-1 bg-background px-3 py-2 text-left text-sm">
-                    <span className="font-medium">New brief</span>
+                    <span className="font-medium">{label("context.newBrief")}</span>
                     <span className="text-xs text-muted">{createScope}</span>
                   </div>
                 </li>
@@ -576,7 +616,7 @@ export function ContextEditor() {
                       <span className="text-xs text-muted">{sourceLabel(node.source)}</span>
                       {node.review_state === "needs_review" ? (
                         <span className="rounded-full border border-border px-2 py-0.5 text-xs">
-                          Imported, review
+                          {label("context.importedReview")}
                         </span>
                       ) : null}
                     </button>
@@ -591,11 +631,11 @@ export function ContextEditor() {
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
             {(
               [
-                ["edit", "Edit"],
-                ["preview", "Agent preview"],
-                ["revisions", "Revisions"],
+                ["edit", "common.edit"],
+                ["preview", "context.previewTab"],
+                ["revisions", "context.revisionsTab"],
               ] as const
-            ).map(([id, label]) => (
+            ).map(([id, message]) => (
               <button
                 key={id}
                 className={`rounded-md px-3 py-1.5 text-sm ${
@@ -604,7 +644,7 @@ export function ContextEditor() {
                 type="button"
                 onClick={() => setTab(id)}
               >
-                {label}
+                {label(message)}
               </button>
             ))}
           </div>
@@ -617,29 +657,29 @@ export function ContextEditor() {
                   <span className="text-muted">{sourceLabel(selected.source)}</span>
                   {selected.review_state === "needs_review" ? (
                     <span className="rounded-full border border-border px-2 py-0.5 text-xs">
-                      Imported, review
+                      {label("context.importedReview")}
                     </span>
                   ) : null}
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted">New brief. Save to create it.</p>
+                  <p className="text-sm text-muted">{label("context.newBriefHint")}</p>
                   <div className="flex flex-wrap gap-3">
                     <label className="flex flex-col gap-1 text-sm">
-                      Scope
+                      {label("context.scope")}
                       <select
                         className="h-9 rounded-md border border-border bg-background px-2"
                         value={createScope}
                         onChange={(event) => setCreateScope(event.target.value as CreateScope)}
                       >
-                        <option value="project">project</option>
-                        <option value="repo">repo</option>
-                        <option value="path">path</option>
+                        <option value="project">{label("context.scopeProject")}</option>
+                        <option value="repo">{label("context.scopeRepo")}</option>
+                        <option value="path">{label("context.scopePath")}</option>
                       </select>
                     </label>
                     {createScope !== "project" ? (
                       <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
-                        Repo id
+                        {label("context.repoId")}
                         <input
                           className="h-9 rounded-md border border-border bg-background px-2 font-mono"
                           value={createRepoId}
@@ -649,7 +689,7 @@ export function ContextEditor() {
                     ) : null}
                     {createScope === "path" ? (
                       <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
-                        Path
+                        {label("common.path")}
                         <input
                           className="h-9 rounded-md border border-border bg-background px-2 font-mono"
                           value={createPath}
@@ -666,7 +706,9 @@ export function ContextEditor() {
                   key={`${draft.id}:${draft.key ?? draft.title}`}
                   className="flex flex-col gap-1"
                 >
-                  <span className="text-sm font-medium">{draft.title}</span>
+                  <span className="text-sm font-medium">
+                    {draft.id !== "custom" ? knownSectionTitle(draft.id) : draft.title}
+                  </span>
                   <textarea
                     className="min-h-24 rounded-md border border-border bg-background px-2 py-1.5 font-mono text-sm"
                     value={draft.body_md}
@@ -682,7 +724,7 @@ export function ContextEditor() {
                   disabled={saving}
                   onClick={() => void save()}
                 >
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? label("common.saving") : label("common.save")}
                 </button>
                 {selected?.review_state === "needs_review" ? (
                   <button
@@ -691,7 +733,7 @@ export function ContextEditor() {
                     disabled={saving}
                     onClick={() => void save("reviewed")}
                   >
-                    Mark reviewed
+                    {label("context.markReviewed")}
                   </button>
                 ) : null}
               </div>
@@ -707,12 +749,9 @@ export function ContextEditor() {
                   disabled={previewing}
                   onClick={() => void runPreview()}
                 >
-                  {previewing ? "Compiling…" : "Compile preview"}
+                  {previewing ? label("common.compiling") : label("context.compilePreview")}
                 </button>
-                <p className="text-sm text-muted">
-                  The preview still works if some extras are unavailable. Omitted parts are listed
-                  below.
-                </p>
+                <p className="text-sm text-muted">{label("context.previewHint")}</p>
               </div>
               {preview ? <BriefView brief={preview} /> : null}
             </div>
@@ -722,11 +761,9 @@ export function ContextEditor() {
             <div className="grid gap-4 p-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
               <div>
                 {revisionsLoading ? (
-                  <p className="text-sm text-muted">Loading…</p>
+                  <p className="text-sm text-muted">{label("common.loading")}</p>
                 ) : revisions.length === 0 ? (
-                  <p className="text-sm leading-6 text-muted">
-                    No stored revisions yet. Compile a preview to keep one.
-                  </p>
+                  <p className="text-sm leading-6 text-muted">{label("context.noRevisions")}</p>
                 ) : (
                   <ul className="flex flex-col gap-1">
                     {revisions.map((revision) => (
@@ -749,7 +786,7 @@ export function ContextEditor() {
               </div>
               {openRevision ? (
                 <div className="space-y-3">
-                  <p className="text-xs text-muted">Revision {openRevision.id}</p>
+                  <p className="text-xs text-muted">{format("context.revision", { id: openRevision.id })}</p>
                   {openRevision.brief ? <BriefView brief={openRevision.brief} /> : null}
                 </div>
               ) : null}
@@ -765,12 +802,12 @@ function BriefView({ brief }: { brief: SessionBrief }) {
   return (
     <div className="space-y-4">
       {brief.budget.dropped.length > 0 ? (
-        <p className="text-sm text-muted">Dropped: {brief.budget.dropped.join(", ")}</p>
+        <p className="text-sm text-muted">{tf("context.dropped", { items: brief.budget.dropped.join(", ") })}</p>
       ) : (
-        <p className="text-sm text-muted">Nothing dropped.</p>
+        <p className="text-sm text-muted">{t("context.nothingDropped")}</p>
       )}
       {brief.sections.length === 0 ? (
-        <p className="text-sm text-muted">No sections in this brief yet.</p>
+        <p className="text-sm text-muted">{t("context.noSections")}</p>
       ) : (
         brief.sections.map((section) => (
           <article key={`${section.id}:${section.key ?? section.ordinal}`} className="space-y-1">

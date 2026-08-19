@@ -55,6 +55,7 @@ export const tasks = pgTable(
     assigneeUserId: uuid("assignee_user_id").references(() => users.id),
     assigneeAgentName: text("assignee_agent_name"),
     agentBrief: text("agent_brief").notNull().default(""),
+    howToCheck: text("how_to_check").notNull().default(""),
     linkedPaths: jsonb("linked_paths").notNull().default(sql`'[]'::jsonb`),
     githubIssueId: bigint("github_issue_id", { mode: "bigint" }),
     lockedBySessionId: uuid("locked_by_session_id"),

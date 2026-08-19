@@ -45,6 +45,8 @@ describe("beacon connect", () => {
     expect(saved["token"]).toBe(TOKEN);
     expect(saved["project_id"]).toBe(PROJECT_ID);
     expect(saved["url"]).toBe("http://127.0.0.1:8080");
+    const raw = await readFile(join(home, "config.toml"), "utf8");
+    expect(raw).toContain(`[projects."${PROJECT_ID}"]`);
   });
 
   it("rejects a malformed token", async () => {

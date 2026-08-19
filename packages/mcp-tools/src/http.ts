@@ -54,6 +54,21 @@ export function requireProjectId(
   return projectId;
 }
 
+export function contextForProject(ctx: InvokeContext, projectId: string): InvokeContext {
+  const token = ctx.projectTokens?.[projectId] ?? (ctx.projectId === projectId ? ctx.token : undefined);
+  if (!token) {
+    throw invalidArguments(
+      `no saved token for project ${projectId}. Run beacon connect <token> --project ${projectId}.`,
+    );
+  }
+  return {
+    ...ctx,
+    token,
+    projectId,
+    baseUrl: ctx.projectUrls?.[projectId] ?? ctx.baseUrl,
+  };
+}
+
 export async function apiRequest(
   ctx: InvokeContext,
   request: HttpRequest,

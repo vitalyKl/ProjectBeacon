@@ -3,7 +3,7 @@
   "info": {
     "title": "ProjectBeacon API",
     "version": "0.0.0",
-    "description": "Generated fragment: SessionBrief, errors, and pagination."
+    "description": "Generated fragment: SessionBrief, comments, errors, and pagination."
   },
   "servers": [
     {
@@ -42,6 +42,63 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SessionBrief"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{id}/comments": {
+      "get": {
+        "summary": "List comments on a task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPage"
                 }
               }
             }
@@ -230,6 +287,9 @@
                   "acceptance_md": {
                     "type": "string"
                   },
+                  "how_to_check": {
+                    "type": "string"
+                  },
                   "linked_paths": {
                     "type": "array",
                     "items": {
@@ -259,6 +319,7 @@
                   "type",
                   "milestone_id",
                   "acceptance_md",
+                  "how_to_check",
                   "linked_paths"
                 ],
                 "additionalProperties": false
@@ -320,7 +381,8 @@
                         "commands",
                         "stack",
                         "security",
-                        "style"
+                        "style",
+                        "definition_of_done"
                       ]
                     },
                     "key": {
@@ -790,6 +852,14 @@
           "path": {
             "type": "string"
           },
+          "extra_paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
           "task_id": {
             "type": "string",
             "format": "uuid",
@@ -1216,6 +1286,9 @@
                         "acceptance_md": {
                           "type": "string"
                         },
+                        "how_to_check": {
+                          "type": "string"
+                        },
                         "linked_paths": {
                           "type": "array",
                           "items": {
@@ -1245,6 +1318,7 @@
                         "type",
                         "milestone_id",
                         "acceptance_md",
+                        "how_to_check",
                         "linked_paths"
                       ],
                       "additionalProperties": false
@@ -1306,7 +1380,8 @@
                               "commands",
                               "stack",
                               "security",
-                              "style"
+                              "style",
+                              "definition_of_done"
                             ]
                           },
                           "key": {
@@ -1705,6 +1780,119 @@
                 "tree_capsule",
                 "budget",
                 "sources"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "Comment": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+          },
+          "author_type": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent",
+              "system"
+            ]
+          },
+          "author_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "author_type",
+          "author_id",
+          "body",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "CommentPage": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                },
+                "task_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                },
+                "author_type": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "agent",
+                    "system"
+                  ]
+                },
+                "author_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "body": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "id",
+                "task_id",
+                "author_type",
+                "author_id",
+                "body",
+                "created_at"
               ],
               "additionalProperties": false
             }

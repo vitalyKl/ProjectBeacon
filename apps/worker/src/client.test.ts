@@ -44,6 +44,21 @@ describe("worker /v1 client", () => {
       if (url.endsWith("/tasks")) {
         return Response.json({ id: "task-1" }, { status: 201 });
       }
+      if (url.includes("/projects/") && url.includes("/labels") && (init?.method ?? "GET") === "GET") {
+        return Response.json({
+          items: [{ id: "lab-api", slug: "api", name: "API", status: "active", paths: [] }],
+          next_cursor: null,
+        });
+      }
+      if (url.includes("/labels/") && (init?.method ?? "GET") === "PATCH") {
+        return Response.json({
+          id: "lab-api",
+          slug: "api",
+          name: "API",
+          status: "active",
+          paths: [{ repo_id: "repo-1", path: "apps/api" }],
+        });
+      }
       return new Response("missing", { status: 404 });
     };
 
@@ -68,12 +83,18 @@ describe("worker /v1 client", () => {
       { title: "Review imported project context" },
       "detect:repo-1:task:0",
     );
+    await expect(api.listLabels("proj-1")).resolves.toEqual([
+      expect.objectContaining({ slug: "api" }),
+    ]);
+    await api.patchLabel("lab-api", { paths: [{ repo_id: "repo-1", path: "apps/api" }] });
 
     expect(calls[0]?.headers.get("authorization")).toBe("Bearer worker-secret");
     expect(calls[1]?.url).toContain("/v1/projects/proj-1/context/import?repo_id=repo-1");
-    expect(calls.at(-1)?.headers.get("idempotency-key")).toBe("detect:repo-1:task:0");
+    expect(calls.at(-1)?.method).toBe("PATCH");
+    expect(calls.at(-1)?.url).toContain("/v1/labels/lab-api");
     expect(calls.some((call) => call.url.includes("/milestones?limit=100"))).toBe(true);
     expect(calls.some((call) => call.url.includes("/tasks?limit=100"))).toBe(true);
+    expect(calls.some((call) => call.url.includes("/labels?limit=100"))).toBe(true);
   });
 
   it("imports issues and records invalidation through /v1", async () => {

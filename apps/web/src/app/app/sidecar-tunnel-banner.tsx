@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, fetchProjectRepos, fetchRepo, type PublicRepo } from "@/lib/api";
+import { ApiError, type PublicRepo } from "@/lib/api";
+import { fetchDetailedProjectRepos } from "@/lib/index-status";
 import { LIVE_POLL_MS } from "@/lib/poll";
+import { useT } from "@/lib/use-locale";
 
 import { useAppSelection } from "./project-context";
 
@@ -15,20 +17,18 @@ function tunnelServing(repos: PublicRepo[]): boolean {
 }
 
 export function SidecarTunnelBanner({ enabled }: { enabled: boolean }) {
+  const t = useT();
   const selection = useAppSelection();
   const project = selection?.project ?? null;
   const [servingProjectId, setServingProjectId] = useState<string | null>(null);
   const serving = Boolean(enabled && project && servingProjectId === project.id);
 
   const load = useCallback(async (projectId: string) => {
-    const listed = await fetchProjectRepos(projectId);
+    const listed = await fetchDetailedProjectRepos(projectId);
     if (!listed) {
       return false;
     }
-    const detailed = await Promise.all(
-      listed.map(async (repo) => (await fetchRepo(repo.id)) ?? repo),
-    );
-    return tunnelServing(detailed);
+    return tunnelServing(listed);
   }, []);
 
   useEffect(() => {
@@ -75,8 +75,7 @@ export function SidecarTunnelBanner({ enabled }: { enabled: boolean }) {
       data-sidecar-tunnel-banner="on"
       role="status"
     >
-      This project is serving code through the sidecar tunnel. File contents pass through the
-      control plane.
+      {t("sidecar.banner")}
     </div>
   );
 }

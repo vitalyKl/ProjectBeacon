@@ -13,7 +13,9 @@ import {
   type PublicOrg,
   type PublicProject,
 } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { APP_NAV, LOGIN_PATH, POST_LOGIN_PATH } from "@/lib/nav";
+import { useT } from "@/lib/use-locale";
 
 import { AppSelectionProvider, ProjectProvider } from "./project-context";
 import {
@@ -29,6 +31,7 @@ import { ToastProvider } from "./toast";
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const label = useT();
   const [me, setMe] = useState<PublicMe | null>(null);
   const [org, setOrg] = useState<PublicOrg | null>(null);
   const [projects, setProjects] = useState<PublicProject[]>([]);
@@ -65,7 +68,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
         }
       } catch (caught) {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load session");
+          setError(caught instanceof ApiError ? caught.message : t("common.failedSession"));
         }
       } finally {
         if (!cancelled) {
@@ -93,7 +96,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
       await loadProjects(next);
     } catch (caught) {
       setProjects([]);
-      setError(caught instanceof ApiError ? caught.message : "failed to load projects");
+      setError(caught instanceof ApiError ? caught.message : t("common.failedProjects"));
     }
   }
 
@@ -113,7 +116,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
     try {
       await logoutSession();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "logout failed");
+      setError(caught instanceof ApiError ? caught.message : t("common.logoutFailed"));
       return;
     }
     writeStoredId(ORG_STORAGE_KEY, null);
@@ -124,7 +127,9 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
 
   if (loading) {
     return (
-      <div className="flex min-h-full items-center justify-center text-sm text-muted">Loading…</div>
+      <div className="flex min-h-full items-center justify-center text-sm text-muted">
+        {label("common.loading")}
+      </div>
     );
   }
 
@@ -152,15 +157,15 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
           <div className="flex min-h-full flex-col">
             <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
               <Link className="font-semibold tracking-tight" href={POST_LOGIN_PATH}>
-                Beacon
+                {label("common.brand")}
               </Link>
               <select
                 className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-                aria-label="Org"
+                aria-label={label("common.org")}
                 value={org?.id ?? ""}
                 onChange={(event) => void onOrgChange(event.target.value)}
               >
-                {me.orgs.length === 0 ? <option value="">Org</option> : null}
+                {me.orgs.length === 0 ? <option value="">{label("common.org")}</option> : null}
                 {me.orgs.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
@@ -169,12 +174,12 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
               </select>
               <select
                 className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-                aria-label="Project"
+                aria-label={label("common.project")}
                 value={project?.id ?? ""}
                 onChange={(event) => onProjectChange(event.target.value)}
                 disabled={!org}
               >
-                {projects.length === 0 ? <option value="">Project</option> : null}
+                {projects.length === 0 ? <option value="">{label("common.project")}</option> : null}
                 {projects.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
@@ -188,7 +193,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                   type="button"
                   onClick={() => void onLogout()}
                 >
-                  Log out
+                  {label("common.logout")}
                 </button>
               </div>
             </header>
@@ -197,7 +202,10 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
               <nav className="w-52 shrink-0 border-r border-border bg-surface px-3 py-4">
                 <ul className="flex flex-col gap-1">
                   {APP_NAV.map((item) => {
-                    const active = pathname === item.href;
+                    const active =
+                      item.href === POST_LOGIN_PATH
+                        ? pathname === item.href
+                        : pathname === item.href || pathname.startsWith(`${item.href}/`);
                     return (
                       <li key={item.href}>
                         <Link
@@ -208,7 +216,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                           }`}
                           href={item.href}
                         >
-                          {item.label}
+                          {label(item.message)}
                         </Link>
                       </li>
                     );

@@ -1,4 +1,6 @@
 import { ApiError, apiFetch, fetchAllPages, parseJson, readApiError } from "./api";
+import { t, type MessageKey } from "./i18n";
+import type { PublicLabelSummary } from "./labels";
 
 export const TASK_STATUSES = [
   "backlog",
@@ -45,7 +47,9 @@ export type PublicTask = {
   assignee_user_id: string | null;
   assignee_agent_name: string | null;
   agent_brief: string;
+  how_to_check: string;
   linked_paths: LinkedPath[];
+  labels: PublicLabelSummary[];
   github_issue_id: string | null;
   locked_by_session_id: string | null;
   lock_expires_at: string | null;
@@ -93,7 +97,7 @@ export type SessionBriefPreview = {
     dropped?: string[];
   };
   sections?: { title: string; body_md: string }[];
-  task?: { title: string; status: string } | null;
+  task?: { title: string; status: string; how_to_check?: string } | null;
   milestone?: { title: string; status: string } | null;
   handoff?: { summary: string; next_steps: string } | null;
 };
@@ -105,6 +109,9 @@ export type CreateTaskInput = {
   type?: TaskType;
   milestone_id?: string | null;
   assignee_agent_name?: string | null;
+  label_ids?: string[];
+  how_to_check?: string;
+  priority?: number;
 };
 
 export type TaskPatchInput = {
@@ -116,6 +123,8 @@ export type TaskPatchInput = {
   milestone_id?: string | null;
   assignee_agent_name?: string | null;
   agent_brief?: string;
+  how_to_check?: string;
+  priority?: number;
 };
 
 export async function fetchProjectMilestones(projectId: string): Promise<PublicMilestone[]> {
@@ -283,7 +292,7 @@ export function taskFromConflict(error: ApiError): PublicTask | null {
   if (typeof record.id !== "string" || typeof record.version !== "number") {
     return null;
   }
-  return record as PublicTask;
+  return { labels: [], ...record } as PublicTask;
 }
 
 export function isTaskLocked(task: PublicTask, now = Date.now()): boolean {
@@ -295,12 +304,9 @@ export function isTaskLocked(task: PublicTask, now = Date.now()): boolean {
 }
 
 export function statusLabel(status: TaskStatus): string {
-  switch (status) {
-    case "in_progress":
-      return "In progress";
-    case "in_review":
-      return "In review";
-    default:
-      return status.replaceAll("_", " ");
-  }
+  return t(`status.${status}` as MessageKey);
+}
+
+export function milestoneStatusLabel(status: PublicMilestone["status"]): string {
+  return t(status === "closed" ? "roadmap.closed" : "roadmap.open");
 }

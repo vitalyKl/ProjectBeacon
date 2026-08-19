@@ -19,22 +19,33 @@ import {
   type PublicProjectMember,
   type PublicRepo,
 } from "@/lib/api";
+import { t } from "@/lib/i18n";
+import { indexModeLabel } from "@/lib/index-status";
 import { DEFAULT_POLL_MS } from "@/lib/poll";
+import { useT, useTf } from "@/lib/use-locale";
 
-const PROJECT_ROLES: { value: ProjectRole; label: string }[] = [
-  { value: "admin", label: "Admin" },
-  { value: "write", label: "Write" },
-  { value: "read", label: "Read" },
+import { AttachLocalRepoForm } from "../attach-local-repo-form";
+import { CopyableProjectId } from "../copyable-project-id";
+import { LabelsCatalog } from "./labels-catalog";
+import { LanguagePicker } from "./language-picker";
+
+const PROJECT_ROLES: { value: ProjectRole; labelKey: "settings.roleAdmin" | "settings.roleWrite" | "settings.roleRead" }[] = [
+  { value: "admin", labelKey: "settings.roleAdmin" },
+  { value: "write", labelKey: "settings.roleWrite" },
+  { value: "read", labelKey: "settings.roleRead" },
 ];
 
-const VISIBLE_INDEX_MODES: { value: IndexMode; label: string }[] = [
-  { value: "sidecar", label: "This machine" },
-  { value: "bind_mount", label: "Compose workspace" },
+const VISIBLE_INDEX_MODES: { value: IndexMode; labelKey: "settings.modeSidecar" | "settings.modeBindMount" }[] = [
+  { value: "sidecar", labelKey: "settings.modeSidecar" },
+  { value: "bind_mount", labelKey: "settings.modeBindMount" },
 ];
 
-const HOSTED_INDEX_MODES: { value: IndexMode; label: string }[] = [
-  { value: "hosted_clone", label: "Hosted clone" },
-  { value: "both", label: "Sidecar, then hosted clone" },
+const HOSTED_INDEX_MODES: {
+  value: IndexMode;
+  labelKey: "settings.modeHostedClone" | "settings.modeBoth";
+}[] = [
+  { value: "hosted_clone", labelKey: "settings.modeHostedClone" },
+  { value: "both", labelKey: "settings.modeBoth" },
 ];
 
 function memberLabel(member: PublicProjectMember): string {
@@ -42,10 +53,20 @@ function memberLabel(member: PublicProjectMember): string {
 }
 
 function inviteTarget(invite: PublicProjectInvite): string {
-  return invite.email || invite.github_login || "Invite";
+  return invite.email || invite.github_login || t("common.invite");
 }
 
-function indexModes(hostedClone: boolean): { value: IndexMode; label: string }[] {
+function roleLabel(role: ProjectRole): string {
+  if (role === "admin") {
+    return t("settings.roleAdmin");
+  }
+  if (role === "write") {
+    return t("settings.roleWrite");
+  }
+  return t("settings.roleRead");
+}
+
+function indexModes(hostedClone: boolean) {
   return hostedClone ? [...VISIBLE_INDEX_MODES, ...HOSTED_INDEX_MODES] : VISIBLE_INDEX_MODES;
 }
 
@@ -74,6 +95,8 @@ export function SettingsView({
   const [inviting, setInviting] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteTargetValue, setInviteTargetValue] = useState("");
+  const label = useT();
+  const format = useTf();
   const [inviteRole, setInviteRole] = useState<ProjectRole>("read");
 
   const loadMembers = useCallback(async (projectId: string) => {
@@ -108,7 +131,7 @@ export function SettingsView({
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load settings");
+          setError(caught instanceof ApiError ? caught.message : t("common.failedLoadSettings"));
         }
       })
       .finally(() => {
@@ -132,7 +155,7 @@ export function SettingsView({
           setRepos(nextRepos);
         })
         .catch((caught: unknown) => {
-          setError(caught instanceof ApiError ? caught.message : "failed to refresh settings");
+          setError(caught instanceof ApiError ? caught.message : t("common.failedRefreshSettings"));
         });
     }, DEFAULT_POLL_MS);
     return () => {
@@ -145,6 +168,13 @@ export function SettingsView({
   const isAdmin = Boolean(
     me && members.some((member) => member.user_id === me.id && member.role === "admin"),
   );
+  const canWriteLabels = Boolean(
+    me &&
+      members.some(
+        (member) =>
+          member.user_id === me.id && (member.role === "admin" || member.role === "write"),
+      ),
+  );
 
   async function onSaveProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -153,7 +183,7 @@ export function SettingsView({
     }
     const nextName = name.trim();
     if (!nextName) {
-      setError("name is required");
+      setError(t("common.nameRequired"));
       return;
     }
     setSaving(true);
@@ -162,7 +192,7 @@ export function SettingsView({
       const updated = await updateProject(project.id, { name: nextName, description });
       onProjectSaved?.(updated);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to update project");
+      setError(caught instanceof ApiError ? caught.message : t("common.failedUpdateProject"));
     } finally {
       setSaving(false);
     }
@@ -178,7 +208,7 @@ export function SettingsView({
         current.map((item) => (item.user_id === updated.user_id ? updated : item)),
       );
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to update member");
+      setError(caught instanceof ApiError ? caught.message : t("common.failedUpdateMember"));
     }
   }
 
@@ -196,7 +226,7 @@ export function SettingsView({
     }
     const target = inviteTargetValue.trim();
     if (!target) {
-      setInviteError("email or GitHub login is required");
+      setInviteError(t("common.inviteTargetRequired"));
       return;
     }
     setInviting(true);
@@ -211,7 +241,7 @@ export function SettingsView({
       setInviteTargetValue("");
       setInviteRole("read");
     } catch (caught) {
-      setInviteError(caught instanceof ApiError ? caught.message : "failed to create invite");
+      setInviteError(caught instanceof ApiError ? caught.message : t("common.failedCreateInvite"));
     } finally {
       setInviting(false);
     }
@@ -229,15 +259,18 @@ export function SettingsView({
           : current,
       );
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to update repository");
+      setError(caught instanceof ApiError ? caught.message : t("common.failedUpdateRepo"));
     }
   }
 
   if (!project) {
     return (
-      <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted">Select a project to edit members and settings.</p>
+      <section className="space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold tracking-tight">{label("nav.settings")}</h1>
+          <p className="text-sm text-muted">{label("settings.selectProject")}</p>
+        </div>
+        <LanguagePicker />
       </section>
     );
   }
@@ -245,17 +278,20 @@ export function SettingsView({
   return (
     <section className="space-y-8" data-sidecar-tunnel={sidecarTunnel ? "on" : "off"}>
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted">Project members and settings for {project.name}.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.settings")}</h1>
+        <p className="text-sm text-muted">{format("settings.forProject", { name: project.name })}</p>
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {loading ? <p className="text-sm text-muted">Loading…</p> : null}
+      {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
+
+      <LanguagePicker />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Project</h2>
+        <h2 className="text-lg font-semibold">{label("common.project")}</h2>
+        <CopyableProjectId projectId={project.id} />
         <form className="max-w-xl space-y-3" onSubmit={onSaveProject}>
           <label className="flex flex-col gap-1 text-sm">
-            Name
+            {label("common.name")}
             <input
               className="h-9 rounded-md border border-border bg-background px-3"
               value={name}
@@ -266,7 +302,7 @@ export function SettingsView({
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Description
+            {label("common.description")}
             <textarea
               className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
               value={description}
@@ -281,7 +317,7 @@ export function SettingsView({
               type="submit"
               disabled={saving}
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? label("common.saving") : label("common.save")}
             </button>
           ) : null}
         </form>
@@ -290,8 +326,8 @@ export function SettingsView({
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Members</h2>
-            <p className="text-sm text-muted">These roles apply only to this project.</p>
+            <h2 className="text-lg font-semibold">{label("settings.members")}</h2>
+            <p className="text-sm text-muted">{label("settings.membersHint")}</p>
           </div>
           {isAdmin ? (
             <button
@@ -299,7 +335,7 @@ export function SettingsView({
               type="button"
               onClick={openInvite}
             >
-              Invite
+              {label("common.invite")}
             </button>
           ) : null}
         </div>
@@ -310,7 +346,7 @@ export function SettingsView({
             onSubmit={onInvite}
           >
             <label className="flex flex-col gap-1 text-sm">
-              Email or GitHub login
+              {label("settings.inviteTarget")}
               <input
                 className="h-9 rounded-md border border-border bg-background px-3"
                 value={inviteTargetValue}
@@ -319,7 +355,7 @@ export function SettingsView({
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              Role
+              {label("common.role")}
               <select
                 className="h-9 rounded-md border border-border bg-background px-2"
                 value={inviteRole}
@@ -327,19 +363,19 @@ export function SettingsView({
               >
                 {roleOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {label(option.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
-            <p className="text-xs text-muted">Invites expire in 7 days.</p>
+            <p className="text-xs text-muted">{label("settings.inviteExpiresIn")}</p>
             <div className="flex gap-2">
               <button
                 className="h-9 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
                 type="submit"
                 disabled={inviting}
               >
-                {inviting ? "Sending…" : "Send invite"}
+                {inviting ? label("settings.sending") : label("settings.sendInvite")}
               </button>
               <button
                 className="h-9 rounded-md border border-border px-3 text-sm"
@@ -349,13 +385,13 @@ export function SettingsView({
                   setInviteError(null);
                 }}
               >
-                Cancel
+                {label("common.cancel")}
               </button>
             </div>
           </form>
         ) : null}
         {members.length === 0 ? (
-          <p className="text-sm text-muted">No members yet.</p>
+          <p className="text-sm text-muted">{label("settings.noMembers")}</p>
         ) : (
           <ul className="space-y-2">
             {members.map((member) => (
@@ -368,19 +404,19 @@ export function SettingsView({
                   <p className="text-muted">{member.email ?? member.login ?? ""}</p>
                 </div>
                 <label className="flex items-center gap-2">
-                  <span className="text-muted">Role</span>
+                  <span className="text-muted">{label("common.role")}</span>
                   <select
                     className="h-9 rounded-md border border-border bg-background px-2"
                     value={member.role}
                     onChange={(event) =>
                       void onRoleChange(member, event.target.value as ProjectRole)
                     }
-                    aria-label={`Role for ${memberLabel(member)}`}
+                    aria-label={format("settings.roleFor", { name: memberLabel(member) })}
                     disabled={!isAdmin}
                   >
                     {roleOptions.map((option) => (
                       <option key={option.value} value={option.value}>
-                        {option.label}
+                        {label(option.labelKey)}
                       </option>
                     ))}
                   </select>
@@ -391,7 +427,7 @@ export function SettingsView({
         )}
         {invites.length > 0 ? (
           <div className="space-y-2">
-            <h3 className="text-sm font-medium">Pending invites</h3>
+            <h3 className="text-sm font-medium">{label("settings.pendingInvites")}</h3>
             <ul className="space-y-2">
               {invites.map((invite) => (
                 <li
@@ -400,7 +436,10 @@ export function SettingsView({
                 >
                   <div className="font-medium">{inviteTarget(invite)}</div>
                   <p className="text-muted">
-                    {invite.role} · expires {new Date(invite.expires_at).toLocaleString()}
+                    {format("settings.inviteMeta", {
+                      role: roleLabel(invite.role),
+                      when: new Date(invite.expires_at).toLocaleString(),
+                    })}
                   </p>
                 </li>
               ))}
@@ -409,17 +448,47 @@ export function SettingsView({
         ) : null}
       </section>
 
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">{label("settings.repositories")}</h2>
+          <p className="text-sm text-muted">{label("settings.repositoriesHint")}</p>
+        </div>
+        {repos === null || repos.length === 0 ? (
+          <p className="text-sm text-muted">{label("settings.noRepos")}</p>
+        ) : (
+          <ul className="space-y-2">
+            {repos.map((repo) => (
+              <li
+                key={repo.id}
+                className="space-y-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
+              >
+                <div className="font-medium">
+                  {repo.remote_url || repo.local_root_hint || label("common.repository")}
+                </div>
+                <p className="text-muted">{indexModeLabel(repo.index_mode)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        <AttachLocalRepoForm
+          projectId={project.id}
+          canSubmit={isAdmin}
+          onAttached={(created) => {
+            setRepos((current) => (current ? [...current, created] : [created]));
+          }}
+        />
+      </section>
+
+      <LabelsCatalog projectId={project.id} repos={repos} canWrite={canWriteLabels} />
+
       {sidecarTunnel ? (
         <section className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold">Sidecar tunnel</h2>
-            <p className="text-sm text-muted">
-              When a sidecar is connected, remote code tools can read this machine through the
-              control plane.
-            </p>
+            <h2 className="text-lg font-semibold">{label("settings.sidecarTunnel")}</h2>
+            <p className="text-sm text-muted">{label("settings.sidecarHint")}</p>
           </div>
           {repos === null || repos.length === 0 ? (
-            <p className="text-sm text-muted">Connect a repository first.</p>
+            <p className="text-sm text-muted">{label("settings.connectRepo")}</p>
           ) : (
             <ul className="space-y-2">
               {repos.map((repo) => (
@@ -428,12 +497,10 @@ export function SettingsView({
                   className="space-y-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
                 >
                   <div className="font-medium">
-                    {repo.remote_url || repo.local_root_hint || "Repository"}
+                    {repo.remote_url || repo.local_root_hint || label("common.repository")}
                   </div>
                   <p className="text-muted">
-                    {repo.sidecar_connected
-                      ? "Sidecar connected. Code tools may transit file contents."
-                      : "Sidecar offline."}
+                    {repo.sidecar_connected ? label("settings.sidecarOn") : label("settings.sidecarOff")}
                   </p>
                 </li>
               ))}
@@ -445,14 +512,11 @@ export function SettingsView({
       {hostedClone ? (
         <section className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold">Hosted clone</h2>
-            <p className="text-sm text-muted">
-              Index a GitHub clone on this instance. Leave this off unless you want source on the
-              server.
-            </p>
+            <h2 className="text-lg font-semibold">{label("settings.hostedClone")}</h2>
+            <p className="text-sm text-muted">{label("settings.hostedHint")}</p>
           </div>
           {repos === null || repos.length === 0 ? (
-            <p className="text-sm text-muted">Connect a repository first.</p>
+            <p className="text-sm text-muted">{label("settings.connectRepo")}</p>
           ) : (
             <ul className="space-y-2">
               {repos.map((repo) => (
@@ -461,10 +525,10 @@ export function SettingsView({
                   className="space-y-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
                 >
                   <div className="font-medium">
-                    {repo.remote_url || repo.local_root_hint || "Repository"}
+                    {repo.remote_url || repo.local_root_hint || label("common.repository")}
                   </div>
                   <label className="flex flex-col gap-1">
-                    Index
+                    {label("settings.index")}
                     <select
                       className="h-9 max-w-sm rounded-md border border-border bg-background px-2"
                       value={repo.index_mode}
@@ -475,7 +539,7 @@ export function SettingsView({
                     >
                       {modeOptions.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {label(option.labelKey)}
                         </option>
                       ))}
                     </select>

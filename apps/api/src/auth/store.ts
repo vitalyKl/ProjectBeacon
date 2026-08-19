@@ -1,6 +1,13 @@
-import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
+import {
+  DEFAULT_PROJECT_LABELS,
+  DEFAULT_PROJECT_LABEL_STATUS,
+  DEFAULT_SECURITY_CONSTRAINTS,
+  DEFAULT_SECURITY_CONSTRAINT_KIND,
+  DEFAULT_SECURITY_CONSTRAINT_STATUS,
+} from "@beacon/context";
 import { uuidv7 } from "@beacon/shared";
 import type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
+import type { LabelPatch, LabelRecord } from "../labels/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, OrgSlugTakenError, ProjectSlugTakenError, type OrgInviteRecord, type OrgMemberRecord, type OrgRecord, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord } from "../orgs/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
@@ -10,9 +17,12 @@ export type { OrgInviteRecord, OrgMemberRecord, OrgRecord, ProjectInviteRecord, 
 export { InviteTargetRequiredError, OrgSlugTakenError, ProjectSlugTakenError } from "../orgs/types.js";
 export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
 export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord, DecisionPathLink } from "../context/types.js";
+export type { LabelPatch, LabelRecord } from "../labels/types.js";
 export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
 export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
 import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
+import type { ProjectReportRecord, ProjectReviewRecord } from "../reports/types.js";
+import { cloneReport, cloneReview } from "../reports/build.js";
 export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../sessions/types.js";
 export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
 import { ACTIVITY_RETENTION_MS, BRIEF_RETENTION_PER_PROJECT, IDEMPOTENCY_RETENTION_MS, idsOlderThanKeep, isUserSessionPastRetention, type ExpireLocksCounts, type RetentionCounts, decideExpiredLocks } from "../jobs/policy.js";
@@ -53,6 +63,7 @@ export type IdempotentWrites = {
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
   createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
   createMilestone?(milestone: MilestoneRecord): Promise<MilestoneRecord>;
+  setTaskLabels?(taskId: string, labelIds: string[]): Promise<LabelRecord[]>;
 };
 
 export class LoginTakenError extends Error {
@@ -221,6 +232,12 @@ export interface AuthStore {
   listDecisions(projectId: string): Promise<DecisionRecord[]>;
   findDecisionById(id: string): Promise<DecisionRecord | undefined>;
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
+  listLabels(projectId: string): Promise<LabelRecord[]>;
+  findLabelById(id: string): Promise<LabelRecord | undefined>;
+  createLabel(label: LabelRecord): Promise<LabelRecord>;
+  updateLabel(id: string, patch: LabelPatch): Promise<LabelRecord | undefined>;
+  listTaskLabels(taskId: string): Promise<LabelRecord[]>;
+  setTaskLabels(taskId: string, labelIds: string[]): Promise<LabelRecord[]>;
   findProjectRepo(id: string): Promise<ProjectRepoRef | undefined>;
   listComments(taskId: string): Promise<TaskCommentRecord[]>;
   createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord>;
@@ -274,6 +291,12 @@ export interface AuthStore {
   >;
   countPendingApprovals(): Promise<number>;
   githubSyncLagSeconds(now: Date): Promise<number>;
+  createReport(report: ProjectReportRecord): Promise<ProjectReportRecord>;
+  listReports(projectId: string): Promise<ProjectReportRecord[]>;
+  findReportById(id: string): Promise<ProjectReportRecord | undefined>;
+  createReview(review: ProjectReviewRecord): Promise<ProjectReviewRecord>;
+  listReviews(projectId: string): Promise<ProjectReviewRecord[]>;
+  findReviewById(id: string): Promise<ProjectReviewRecord | undefined>;
 }
 
 function cloneUser(user: UserRecord): UserRecord {
@@ -386,6 +409,8 @@ export class MemoryAuthStore implements AuthStore {
   private readonly contextNodes = new Map<string, ContextNodeRecord>();
   private readonly constraints = new Map<string, ConstraintRecord>();
   private readonly decisions = new Map<string, DecisionRecord>();
+  private readonly labels = new Map<string, LabelRecord>();
+  private readonly taskLabelIds = new Map<string, string[]>();
   private readonly contextRevisions = new Map<string, ContextRevisionRecord>();
   private readonly projectRepos = new Map<string, ProjectRepoRecord>();
   private readonly codeOwners = new Map<string, CodeOwnerRecord>();
@@ -662,6 +687,7 @@ export class MemoryAuthStore implements AuthStore {
         createdAt: project.createdAt,
       });
       this.seedDefaultSecurityConstraints(project.id, project.createdAt);
+      this.seedDefaultProjectLabels(project.id, project.createdAt);
       return cloneProject(project);
     });
   }
@@ -886,6 +912,9 @@ export class MemoryAuthStore implements AuthStore {
       }
       if (patch.agentBrief !== undefined) {
         task.agentBrief = patch.agentBrief;
+      }
+      if (patch.howToCheck !== undefined) {
+        task.howToCheck = patch.howToCheck;
       }
       if (patch.linkedPaths !== undefined) {
         task.linkedPaths = patch.linkedPaths.map((path) => ({ ...path }));
@@ -1120,6 +1149,33 @@ export class MemoryAuthStore implements AuthStore {
     }
   }
 
+  private seedDefaultProjectLabels(projectId: string, createdAt: Date): void {
+    const existingSlugs = new Set(
+      [...this.labels.values()]
+        .filter((label) => label.projectId === projectId)
+        .map((label) => label.slug),
+    );
+    let offset = 0;
+    for (const seed of DEFAULT_PROJECT_LABELS) {
+      if (existingSlugs.has(seed.slug)) {
+        continue;
+      }
+      const id = uuidv7(createdAt.getTime() + offset);
+      offset += 1;
+      this.labels.set(id, {
+        id,
+        projectId,
+        slug: seed.slug,
+        name: seed.name,
+        description: seed.description,
+        color: seed.color,
+        status: DEFAULT_PROJECT_LABEL_STATUS,
+        createdAt: new Date(createdAt),
+        paths: [],
+      });
+    }
+  }
+
   async listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]> {
     const result: ProjectRepoRecord[] = [];
     for (const repo of this.projectRepos.values()) {
@@ -1235,6 +1291,7 @@ export class MemoryAuthStore implements AuthStore {
         createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
         writeActivity: async (event) => this.insertActivityUnlocked(event),
         startWork: async (input) => this.startWorkUnlocked(input),
+        setTaskLabels: async (taskId, labelIds) => this.replaceTaskLabelsUnlocked(taskId, labelIds),
       };
       const response = await produce(writes);
       this.idempotency.set(slot, {
@@ -1537,6 +1594,9 @@ export class MemoryAuthStore implements AuthStore {
         }
         previousStatus = current.status;
         current.status = input.taskStatus;
+        if (input.howToCheck.trim().length > 0) {
+          current.howToCheck = input.howToCheck;
+        }
         lockReleased = current.lockedBySessionId === session.id;
         if (lockReleased) {
           current.lockedBySessionId = null;
@@ -1603,6 +1663,115 @@ export class MemoryAuthStore implements AuthStore {
     result.sort(
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
     );
+    return result;
+  }
+
+  async listLabels(projectId: string): Promise<LabelRecord[]> {
+    const result: LabelRecord[] = [];
+    for (const label of this.labels.values()) {
+      if (label.projectId === projectId) {
+        result.push(cloneLabel(label));
+      }
+    }
+    result.sort(
+      (a, b) =>
+        a.status.localeCompare(b.status) ||
+        a.name.localeCompare(b.name) ||
+        a.id.localeCompare(b.id),
+    );
+    return result;
+  }
+
+  async findLabelById(id: string): Promise<LabelRecord | undefined> {
+    const label = this.labels.get(id);
+    return label ? cloneLabel(label) : undefined;
+  }
+
+  async createLabel(label: LabelRecord): Promise<LabelRecord> {
+    return this.enqueueWrite(() => {
+      for (const existing of this.labels.values()) {
+        if (existing.projectId === label.projectId && existing.slug === label.slug) {
+          throw new UniqueViolationError("labels_project_slug");
+        }
+      }
+      this.labels.set(label.id, cloneLabel(label));
+      return cloneLabel(label);
+    });
+  }
+
+  async updateLabel(id: string, patch: LabelPatch): Promise<LabelRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const label = this.labels.get(id);
+      if (!label) {
+        return undefined;
+      }
+      if (patch.slug !== undefined && patch.slug !== label.slug) {
+        for (const existing of this.labels.values()) {
+          if (
+            existing.id !== id &&
+            existing.projectId === label.projectId &&
+            existing.slug === patch.slug
+          ) {
+            throw new UniqueViolationError("labels_project_slug");
+          }
+        }
+        label.slug = patch.slug;
+      }
+      if (patch.name !== undefined) {
+        label.name = patch.name;
+      }
+      if (patch.description !== undefined) {
+        label.description = patch.description;
+      }
+      if (patch.color !== undefined) {
+        label.color = patch.color;
+      }
+      if (patch.status !== undefined) {
+        label.status = patch.status;
+      }
+      if (patch.paths !== undefined) {
+        label.paths = patch.paths.map((path) => ({ ...path }));
+      }
+      return cloneLabel(label);
+    });
+  }
+
+  async listTaskLabels(taskId: string): Promise<LabelRecord[]> {
+    const ids = this.taskLabelIds.get(taskId) ?? [];
+    const result: LabelRecord[] = [];
+    for (const id of ids) {
+      const label = this.labels.get(id);
+      if (label) {
+        result.push(cloneLabel(label));
+      }
+    }
+    result.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    return result;
+  }
+
+  async setTaskLabels(taskId: string, labelIds: string[]): Promise<LabelRecord[]> {
+    return this.enqueueWrite(() => this.replaceTaskLabelsUnlocked(taskId, labelIds));
+  }
+
+  private replaceTaskLabelsUnlocked(taskId: string, labelIds: string[]): LabelRecord[] {
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const id of labelIds) {
+      if (seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      unique.push(id);
+    }
+    this.taskLabelIds.set(taskId, unique);
+    const result: LabelRecord[] = [];
+    for (const id of unique) {
+      const label = this.labels.get(id);
+      if (label) {
+        result.push(cloneLabel(label));
+      }
+    }
+    result.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     return result;
   }
 
@@ -2086,6 +2255,51 @@ export class MemoryAuthStore implements AuthStore {
     void now;
     return 0;
   }
+
+  private readonly reports = new Map<string, ProjectReportRecord>();
+  private readonly reviews = new Map<string, ProjectReviewRecord>();
+
+  async createReport(report: ProjectReportRecord): Promise<ProjectReportRecord> {
+    this.reports.set(report.id, cloneReport(report));
+    return cloneReport(report);
+  }
+
+  async listReports(projectId: string): Promise<ProjectReportRecord[]> {
+    return [...this.reports.values()]
+      .filter((item) => item.projectId === projectId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+      .map(cloneReport);
+  }
+
+  async findReportById(id: string): Promise<ProjectReportRecord | undefined> {
+    const report = this.reports.get(id);
+    return report ? cloneReport(report) : undefined;
+  }
+
+  async createReview(review: ProjectReviewRecord): Promise<ProjectReviewRecord> {
+    this.reviews.set(review.id, cloneReview(review));
+    return cloneReview(review);
+  }
+
+  async listReviews(projectId: string): Promise<ProjectReviewRecord[]> {
+    return [...this.reviews.values()]
+      .filter((item) => item.projectId === projectId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+      .map(cloneReview);
+  }
+
+  async findReviewById(id: string): Promise<ProjectReviewRecord | undefined> {
+    const review = this.reviews.get(id);
+    return review ? cloneReview(review) : undefined;
+  }
+}
+
+function cloneLabel(label: LabelRecord): LabelRecord {
+  return {
+    ...label,
+    paths: label.paths.map((path) => ({ ...path })),
+    createdAt: new Date(label.createdAt),
+  };
 }
 
 function cloneMilestone(milestone: MilestoneRecord): MilestoneRecord {
@@ -2203,26 +2417,6 @@ function cloneGithubSyncState(row: GithubSyncStateRecord): GithubSyncStateRecord
     ...row,
     lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt) : null,
   };
-}
-
-function assertUniqueGithubIssue(
-  tasks: Map<string, TaskRecord>,
-  projectId: string,
-  githubIssueId: bigint | null | undefined,
-  excludeTaskId?: string,
-): void {
-  if (githubIssueId === null || githubIssueId === undefined) {
-    return;
-  }
-  for (const existing of tasks.values()) {
-    if (
-      existing.projectId === projectId &&
-      existing.githubIssueId === githubIssueId &&
-      existing.id !== excludeTaskId
-    ) {
-      throw new UniqueViolationError("tasks_project_github_issue_id_unique");
-    }
-  }
 }
 
 function cloneSidecar(row: {

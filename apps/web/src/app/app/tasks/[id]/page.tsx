@@ -5,6 +5,14 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, newIdempotencyKey } from "@/lib/api";
+import { isOfferedToAgents } from "@/lib/brief";
+import {
+  fetchProjectLabels,
+  setTaskLabels,
+  toggleLabelId,
+  type PublicLabel,
+} from "@/lib/labels";
+import { DEFAULT_TASK_PRIORITY } from "@/lib/priority";
 import {
   compileTaskBrief,
   createTaskComment,
@@ -22,9 +30,13 @@ import {
   type SessionBriefPreview,
   type TaskStatus,
 } from "@/lib/roadmap";
+import { activityVerbLabel, t } from "@/lib/i18n";
 import { useInterval } from "@/lib/use-interval";
+import { useT, useTf } from "@/lib/use-locale";
 
+import { BriefBlocks } from "../../brief-blocks";
 import { LockBadge } from "../../lock-badge";
+import { PrioritySelect } from "../../priority-select";
 import { useToast } from "../../toast";
 
 const DETAIL_POLL_MS = 10000;
@@ -32,28 +44,43 @@ const DETAIL_POLL_MS = 10000;
 export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();
   const taskId = params.id;
+  const label = useT();
+  const format = useTf();
   const { toast } = useToast();
   const [task, setTask] = useState<PublicTask | null>(null);
   const [comments, setComments] = useState<PublicComment[]>([]);
   const [activity, setActivity] = useState<PublicActivity[]>([]);
   const [brief, setBrief] = useState<SessionBriefPreview | null>(null);
   const [briefError, setBriefError] = useState<string | null>(null);
+  const [briefPending, setBriefPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [howToCheck, setHowToCheck] = useState("");
   const [saving, setSaving] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [commentPending, setCommentPending] = useState(false);
-  const savedText = useRef({ title: "", description: "" });
-  const draftText = useRef({ title: "", description: "" });
+  const [catalog, setCatalog] = useState<PublicLabel[]>([]);
+  const [labelPending, setLabelPending] = useState(false);
+  const savedText = useRef({ title: "", description: "", howToCheck: "" });
+  const draftText = useRef({ title: "", description: "", howToCheck: "" });
   const requestSeq = useRef(0);
 
   const applyServerText = useCallback((next: PublicTask) => {
     setTitle(next.title);
     setDescription(next.description);
-    savedText.current = { title: next.title, description: next.description };
-    draftText.current = { title: next.title, description: next.description };
+    setHowToCheck(next.how_to_check ?? "");
+    savedText.current = {
+      title: next.title,
+      description: next.description,
+      howToCheck: next.how_to_check ?? "",
+    };
+    draftText.current = {
+      title: next.title,
+      description: next.description,
+      howToCheck: next.how_to_check ?? "",
+    };
   }, []);
 
   const applyTaskMeta = useCallback((next: PublicTask, opts?: { text?: boolean }) => {
@@ -81,7 +108,8 @@ export default function TaskDetailPage() {
         }
         const dirty =
           draftText.current.title !== savedText.current.title ||
-          draftText.current.description !== savedText.current.description;
+          draftText.current.description !== savedText.current.description ||
+          draftText.current.howToCheck !== savedText.current.howToCheck;
         if (!dirty) {
           applyServerText(next);
           return next;
@@ -90,6 +118,7 @@ export default function TaskDetailPage() {
           ...next,
           title: current.title,
           description: current.description,
+          how_to_check: current.how_to_check,
         };
       });
     },
@@ -108,19 +137,21 @@ export default function TaskDetailPage() {
         return;
       }
       mergePolledTask(next, selectedId);
-      const [nextComments, nextActivity] = await Promise.all([
+      const [nextComments, nextActivity, nextLabels] = await Promise.all([
         fetchTaskComments(next.id),
         fetchTaskActivity(next.project_id, next.id),
+        fetchProjectLabels(next.project_id),
       ]);
       if (seq !== requestSeq.current || next.id !== selectedId) {
         return;
       }
       setComments(nextComments);
       setActivity(nextActivity.filter((item) => item.object_id === selectedId));
+      setCatalog(nextLabels);
       setError(null);
     } catch (caught) {
       if (seq === requestSeq.current) {
-        setError(caught instanceof ApiError ? caught.message : "task not found");
+        setError(caught instanceof ApiError ? caught.message : t("task.notFound"));
       }
     } finally {
       if (seq === requestSeq.current) {
@@ -142,19 +173,21 @@ export default function TaskDetailPage() {
           return;
         }
         applyTaskMeta(next, { text: true });
-        const [nextComments, nextActivity] = await Promise.all([
+        const [nextComments, nextActivity, nextLabels] = await Promise.all([
           fetchTaskComments(next.id),
           fetchTaskActivity(next.project_id, next.id),
+          fetchProjectLabels(next.project_id),
         ]);
         if (cancelled) {
           return;
         }
         setComments(nextComments);
         setActivity(nextActivity.filter((item) => item.object_id === next.id));
+        setCatalog(nextLabels);
         setError(null);
       } catch (caught) {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "task not found");
+          setError(caught instanceof ApiError ? caught.message : t("task.notFound"));
         }
       } finally {
         if (!cancelled) {
@@ -179,31 +212,21 @@ export default function TaskDetailPage() {
   const briefTaskId = task?.id ?? null;
   const briefProjectId = task?.project_id ?? null;
 
-  useEffect(() => {
+  const loadBrief = useCallback(async () => {
     if (!briefTaskId || !briefProjectId) {
       return;
     }
-    const selectedProjectId = briefProjectId;
-    const selectedTaskId = briefTaskId;
-    let cancelled = false;
-    async function loadBrief() {
-      try {
-        const compiled = await compileTaskBrief(selectedProjectId, selectedTaskId);
-        if (!cancelled) {
-          setBrief(compiled);
-          setBriefError(null);
-        }
-      } catch (caught) {
-        if (!cancelled) {
-          setBrief(null);
-          setBriefError(caught instanceof ApiError ? caught.message : "brief unavailable");
-        }
-      }
+    setBriefPending(true);
+    try {
+      const compiled = await compileTaskBrief(briefProjectId, briefTaskId);
+      setBrief(compiled);
+      setBriefError(null);
+    } catch (caught) {
+      setBrief(null);
+      setBriefError(caught instanceof ApiError ? caught.message : t("task.briefUnavailableShort"));
+    } finally {
+      setBriefPending(false);
     }
-    void loadBrief();
-    return () => {
-      cancelled = true;
-    };
   }, [briefProjectId, briefTaskId]);
 
   async function handleConflict(error: unknown, fallback: PublicTask): Promise<boolean> {
@@ -212,13 +235,13 @@ export default function TaskDetailPage() {
       if (server) {
         requestSeq.current += 1;
         applyTaskMeta(server, { text: true });
-        toast("Updated elsewhere — reapplied.");
+        toast(t("common.conflictReapplied"));
         return true;
       }
     }
     requestSeq.current += 1;
     applyTaskMeta(fallback, { text: true });
-    toast(error instanceof ApiError ? error.message : "failed to update task");
+    toast(error instanceof ApiError ? error.message : t("common.failedUpdateTask"));
     return false;
   }
 
@@ -228,7 +251,12 @@ export default function TaskDetailPage() {
       return;
     }
     const previous = task;
-    const optimistic: PublicTask = { ...task, title: title.trim() || task.title, description };
+    const optimistic: PublicTask = {
+      ...task,
+      title: title.trim() || task.title,
+      description,
+      how_to_check: howToCheck,
+    };
     applyTaskMeta(optimistic, { text: true });
     setSaving(true);
     try {
@@ -236,6 +264,7 @@ export default function TaskDetailPage() {
         expected_version: task.version,
         title: optimistic.title,
         description: optimistic.description,
+        how_to_check: optimistic.how_to_check,
       });
       requestSeq.current += 1;
       applyTaskMeta(updated, { text: true });
@@ -243,6 +272,41 @@ export default function TaskDetailPage() {
       await handleConflict(caught, previous);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onToggleLabel(labelId: string) {
+    if (!task) {
+      return;
+    }
+    const previous = task;
+    const nextIds = toggleLabelId(
+      (task.labels ?? []).map((item) => item.id),
+      labelId,
+    );
+    const optimistic: PublicTask = {
+      ...task,
+      labels: catalog
+        .filter((item) => nextIds.includes(item.id))
+        .map((item) => ({
+          id: item.id,
+          slug: item.slug,
+          name: item.name,
+          color: item.color,
+          status: item.status,
+        })),
+    };
+    applyTaskMeta(optimistic);
+    setLabelPending(true);
+    try {
+      const updated = await setTaskLabels(task.id, nextIds);
+      requestSeq.current += 1;
+      applyTaskMeta(updated);
+    } catch (caught) {
+      applyTaskMeta(previous);
+      toast(caught instanceof ApiError ? caught.message : t("task.failedLabels"));
+    } finally {
+      setLabelPending(false);
     }
   }
 
@@ -254,6 +318,24 @@ export default function TaskDetailPage() {
     applyTaskMeta({ ...task, status });
     try {
       const updated = await setTaskStatus(task.id, status, task.version);
+      requestSeq.current += 1;
+      applyTaskMeta(updated);
+    } catch (caught) {
+      await handleConflict(caught, previous);
+    }
+  }
+
+  async function onPriorityChange(priority: number) {
+    if (!task || task.priority === priority) {
+      return;
+    }
+    const previous = task;
+    applyTaskMeta({ ...task, priority });
+    try {
+      const updated = await patchTask(task.id, {
+        expected_version: task.version,
+        priority,
+      });
       requestSeq.current += 1;
       applyTaskMeta(updated);
     } catch (caught) {
@@ -276,23 +358,23 @@ export default function TaskDetailPage() {
       setCommentBody("");
       await reload();
     } catch (caught) {
-      toast(caught instanceof ApiError ? caught.message : "failed to add comment");
+      toast(caught instanceof ApiError ? caught.message : t("task.failedComment"));
     } finally {
       setCommentPending(false);
     }
   }
 
   if (loading && !task) {
-    return <p className="text-sm text-muted">Loading…</p>;
+    return <p className="text-sm text-muted">{label("common.loading")}</p>;
   }
 
   if (!task) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Task</h1>
-        <p className="text-sm text-red-600">{error ?? "task not found"}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label("task.title")}</h1>
+        <p className="text-sm text-red-600">{error ?? label("task.notFound")}</p>
         <Link className="text-sm underline" href="/app/board">
-          Back to board
+          {label("task.backToBoard")}
         </Link>
       </section>
     );
@@ -306,11 +388,11 @@ export default function TaskDetailPage() {
     <section className="space-y-6">
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
         <Link className="underline" href="/app/board">
-          Board
+          {label("nav.board")}
         </Link>
         <span>/</span>
         <Link className="underline" href="/app/backlog">
-          Backlog
+          {label("nav.backlog")}
         </Link>
       </div>
 
@@ -325,14 +407,14 @@ export default function TaskDetailPage() {
               setTitle(value);
             }}
             maxLength={200}
-            aria-label="Title"
+            aria-label={label("common.title")}
           />
           <LockBadge task={task} />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select
             className="h-9 rounded-md border border-border bg-background px-2 text-sm capitalize"
-            aria-label="Status"
+            aria-label={label("common.status")}
             value={task.status}
             onChange={(event) => void onStatusChange(event.target.value as TaskStatus)}
           >
@@ -342,9 +424,41 @@ export default function TaskDetailPage() {
               </option>
             ))}
           </select>
+          <PrioritySelect
+            value={task.priority ?? DEFAULT_TASK_PRIORITY}
+            onChange={(priority) => void onPriorityChange(priority)}
+          />
           {task.assignee_agent_name ? (
-            <span className="text-xs text-muted">Agent {task.assignee_agent_name}</span>
+            <span className="text-xs text-muted">
+              {format("task.agent", { name: task.assignee_agent_name })}
+            </span>
           ) : null}
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">{label("task.areas")}</h2>
+          {catalog.length === 0 ? (
+            <p className="text-sm text-muted">{label("task.noAreas")}</p>
+          ) : (
+            <fieldset className="flex flex-wrap gap-2" disabled={labelPending}>
+              <legend className="sr-only">{label("task.areas")}</legend>
+              {catalog.map((area) => (
+                <label
+                  key={area.id}
+                  className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(task.labels ?? []).some((item) => item.id === area.id)}
+                    onChange={() => void onToggleLabel(area.id)}
+                  />
+                  {area.name}
+                  {area.status === "proposed" ? (
+                    <span className="text-muted">{label("task.proposed")}</span>
+                  ) : null}
+                </label>
+              ))}
+            </fieldset>
+          )}
         </div>
         <textarea
           className="min-h-32 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
@@ -355,47 +469,101 @@ export default function TaskDetailPage() {
             setDescription(value);
           }}
           maxLength={8000}
-          aria-label="Description"
+          aria-label={label("common.description")}
         />
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs font-semibold tracking-wide text-muted uppercase">
+            {label("task.howToCheck")}
+          </span>
+          <span className="text-xs text-muted">{label("task.howToCheckHelp")}</span>
+          <textarea
+            className="min-h-24 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+            value={howToCheck}
+            onChange={(event) => {
+              const value = event.target.value;
+              draftText.current = { ...draftText.current, howToCheck: value };
+              setHowToCheck(value);
+            }}
+            maxLength={8000}
+            placeholder={label("task.howToCheckPlaceholder")}
+            aria-label={label("task.howToCheck")}
+          />
+        </label>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <button
           className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
           type="submit"
           disabled={saving}
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? label("common.saving") : label("common.save")}
         </button>
       </form>
 
-      <article className="space-y-2 rounded-lg border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold tracking-wide uppercase">Session brief</h2>
+      <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.sessionBrief")}</h2>
+            <p className="text-sm text-muted">{label("task.sessionBriefHint")}</p>
+          </div>
+          <button
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
+            type="button"
+            disabled={briefPending}
+            onClick={() => void loadBrief()}
+          >
+            {briefPending
+              ? label("common.compiling")
+              : brief
+                ? label("task.compileAgain")
+                : label("common.compileBrief")}
+          </button>
+        </div>
+        {isOfferedToAgents(task) ? (
+          <p className="text-sm text-muted">
+            {label("task.offered")}
+          </p>
+        ) : null}
         {briefError ? (
-          <p className="text-sm text-muted">Brief unavailable. {briefError}</p>
-        ) : !brief ? (
-          <p className="text-sm text-muted">Compiling…</p>
-        ) : (
-          <div className="space-y-2 text-sm">
+          <p className="text-sm text-red-600">{format("task.briefUnavailable", { error: briefError })}</p>
+        ) : null}
+        {!brief && !briefError && !briefPending ? (
+          <p className="text-sm text-muted">{label("task.compileWhen")}</p>
+        ) : null}
+        {brief ? (
+          <div className="space-y-3">
             {brief.milestone ? (
-              <p className="text-muted">Milestone: {brief.milestone.title}</p>
+              <p className="text-sm text-muted">
+                {format("task.milestone", { title: brief.milestone.title })}
+              </p>
             ) : null}
-            {brief.handoff ? <p>{brief.handoff.summary}</p> : null}
-            {(brief.sections ?? []).slice(0, 4).map((section) => (
-              <div key={section.title}>
-                <p className="font-medium">{section.title}</p>
-                <p className="whitespace-pre-wrap text-muted">{section.body_md || "—"}</p>
+            {brief.task?.how_to_check ? (
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
+                  {label("task.howToCheck")}
+                </h3>
+                <p className="text-sm whitespace-pre-wrap">{brief.task.how_to_check}</p>
               </div>
-            ))}
+            ) : null}
+            {brief.handoff ? (
+              <p className="text-sm whitespace-pre-wrap">{brief.handoff.summary}</p>
+            ) : null}
+            <BriefBlocks
+              sections={brief.sections ?? []}
+              empty={label("task.noBriefSections")}
+            />
             {brief.budget?.dropped && brief.budget.dropped.length > 0 ? (
-              <p className="text-xs text-muted">Dropped: {brief.budget.dropped.join(", ")}</p>
+              <p className="text-xs text-muted">
+                {format("task.dropped", { items: brief.budget.dropped.join(", ") })}
+              </p>
             ) : null}
           </div>
-        )}
+        ) : null}
       </article>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">Comments</h2>
-          {comments.length === 0 ? <p className="text-sm text-muted">No comments yet.</p> : null}
+          <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.comments")}</h2>
+          {comments.length === 0 ? <p className="text-sm text-muted">{label("task.noComments")}</p> : null}
           <ul className="space-y-3">
             {comments.map((comment) => (
               <li key={comment.id} className="text-sm">
@@ -411,7 +579,7 @@ export default function TaskDetailPage() {
               className="min-h-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
               value={commentBody}
               onChange={(event) => setCommentBody(event.target.value)}
-              placeholder="Write a comment"
+              placeholder={label("task.writeComment")}
               maxLength={8000}
             />
             <button
@@ -419,20 +587,20 @@ export default function TaskDetailPage() {
               type="submit"
               disabled={commentPending}
             >
-              {commentPending ? "Posting…" : "Comment"}
+              {commentPending ? label("task.posting") : label("task.comment")}
             </button>
           </form>
         </article>
 
         <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">Agent activity</h2>
+          <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.agentActivity")}</h2>
           {agentEvents.length === 0 ? (
-            <p className="text-sm text-muted">No agent events on this task yet.</p>
+            <p className="text-sm text-muted">{label("task.noAgentEvents")}</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {agentEvents.map((event) => (
                 <li key={event.id}>
-                  <p className="font-medium">{event.verb.replaceAll("_", " ")}</p>
+                  <p className="font-medium">{activityVerbLabel(event.verb)}</p>
                   <p className="text-xs text-muted">
                     {new Date(event.created_at).toLocaleString()}
                   </p>

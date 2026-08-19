@@ -312,15 +312,24 @@ export async function resolveRepoForCode(
   return { ok: false, reason: "ambiguous" };
 }
 
-export function taskChangedScopeQuery(task: TaskRecord, repoId: string, limit?: number): CodeQuery {
+export function taskChangedScopeQuery(
+  task: TaskRecord,
+  repoId: string,
+  limit?: number,
+  extraPrefixes: string[] = [],
+): CodeQuery {
   const linked = task.linkedPaths
     .filter((item) => item.repo_id === repoId)
     .map((item) => item.path);
+  const prefixes = [
+    ...linked.map((path) => path.replace(/\/[^/]+$/, "")).filter(Boolean),
+    ...extraPrefixes,
+  ];
   return {
     kind: "changed_scope",
     identifiers: extractIdentifiers(task.title, task.description, task.agentBrief),
     linkedPaths: linked,
-    pathPrefixes: linked.map((path) => path.replace(/\/[^/]+$/, "")).filter(Boolean),
+    pathPrefixes: [...new Set(prefixes)],
     limit,
   };
 }

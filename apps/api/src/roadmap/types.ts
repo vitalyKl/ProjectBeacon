@@ -64,6 +64,7 @@ export type TaskRecord = {
   assigneeUserId: string | null;
   assigneeAgentName: string | null;
   agentBrief: string;
+  howToCheck: string;
   linkedPaths: LinkedPath[];
   githubIssueId: bigint | null;
   lockedBySessionId: string | null;
@@ -84,6 +85,7 @@ export type TaskPatch = {
   assigneeUserId?: string | null;
   assigneeAgentName?: string | null;
   agentBrief?: string;
+  howToCheck?: string;
   linkedPaths?: LinkedPath[];
   githubIssueId?: bigint | null;
 };

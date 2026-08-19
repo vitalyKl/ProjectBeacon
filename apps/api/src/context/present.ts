@@ -70,6 +70,7 @@ export function presentTaskSummary(task: TaskRecord): TaskSummary {
     type: task.type,
     milestone_id: task.milestoneId,
     acceptance_md: acceptanceMarkdown(task),
+    how_to_check: howToCheckMarkdown(task),
     linked_paths: task.linkedPaths.map((path) => ({ repo_id: path.repo_id, path: path.path })),
   };
 }
@@ -147,6 +148,13 @@ function acceptanceMarkdown(task: TaskRecord): string {
     return fromDescription;
   }
   return task.agentBrief;
+}
+
+export function howToCheckMarkdown(task: TaskRecord): string {
+  if (task.howToCheck.trim().length > 0) {
+    return task.howToCheck;
+  }
+  return headingSection(task.description, "How to check") ?? "";
 }
 
 function headingSection(markdown: string, heading: string): string | undefined {

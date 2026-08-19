@@ -29,6 +29,7 @@ const validSessionBrief = {
     type: "task",
     milestone_id: MILESTONE_ID,
     acceptance_md: "Zod schemas parse a valid brief.",
+    how_to_check: "Open the compile preview and confirm the schema parses.",
     linked_paths: [{ repo_id: REPO_ID, path: "packages/api-spec/src" }],
   },
   sections: [

@@ -10,6 +10,7 @@ import {
   fetchProjectMilestones,
   fetchProjectTasks,
   isTaskLocked,
+  milestoneStatusLabel,
   statusLabel,
   type DependencyType,
   type PublicDependency,
@@ -17,8 +18,10 @@ import {
   type PublicTask,
   type TaskStatus,
 } from "@/lib/roadmap";
+import { t } from "@/lib/i18n";
 import { ensureBeaconSeed } from "@/lib/seed";
 import { useInterval } from "@/lib/use-interval";
+import { useT } from "@/lib/use-locale";
 
 import { LockBadge } from "../lock-badge";
 import { useSelectedProject } from "../project-context";
@@ -49,6 +52,7 @@ const STATUS_FILL: Record<TaskStatus, string> = {
 type RoadmapView = "timeline" | "graph";
 
 export default function RoadmapPage() {
+  const label = useT();
   const { project } = useSelectedProject();
   const { toast } = useToast();
   const [view, setView] = useState<RoadmapView>("timeline");
@@ -86,7 +90,7 @@ export default function RoadmapPage() {
         setError(null);
       } catch (caught) {
         if (seq === requestSeq.current) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load roadmap");
+          setError(caught instanceof ApiError ? caught.message : t("roadmap.failedLoad"));
         }
       } finally {
         if (!opts?.silent && seq === requestSeq.current) {
@@ -132,8 +136,8 @@ export default function RoadmapPage() {
   if (!project) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Roadmap</h1>
-        <p className="text-sm text-muted">Select a project from the header.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.roadmap")}</h1>
+        <p className="text-sm text-muted">{label("common.selectProject")}</p>
       </section>
     );
   }
@@ -142,24 +146,24 @@ export default function RoadmapPage() {
     <section className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Roadmap</h1>
-          <p className="text-sm text-muted">Milestones and task links for {project.name}.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{label("nav.roadmap")}</h1>
+          <p className="text-sm text-muted">{label("roadmap.hint")}</p>
         </div>
         <div className="flex rounded-md border border-border bg-surface p-0.5 text-sm">
           <ViewTab
-            label="Timeline"
+            label={label("roadmap.timeline")}
             active={view === "timeline"}
             onClick={() => setView("timeline")}
           />
           <ViewTab
-            label="Dependencies"
+            label={label("roadmap.dependencies")}
             active={view === "graph"}
             onClick={() => setView("graph")}
           />
         </div>
       </header>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {loading ? <p className="text-sm text-muted">Loading…</p> : null}
+      {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
       {view === "timeline" ? (
         <TimelineView milestones={milestones} tasks={tasks} />
       ) : (
@@ -227,8 +231,9 @@ function TimelineView({
     return { sorted, byMilestone, unscheduled };
   }, [milestones, tasks]);
 
+  const text = t;
   if (milestones.length === 0 && tasks.length === 0) {
-    return <p className="text-sm text-muted">No milestones or tasks yet.</p>;
+    return <p className="text-sm text-muted">{text("roadmap.empty")}</p>;
   }
 
   return (
@@ -246,20 +251,20 @@ function TimelineView({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                 <span className="rounded-full border border-border px-2 py-0.5 capitalize">
-                  {milestone.status}
+                  {milestoneStatusLabel(milestone.status)}
                 </span>
                 {milestone.target_date ? <span>{milestone.target_date}</span> : null}
               </div>
             </header>
-            <TaskList tasks={buckets.byMilestone.get(milestone.id) ?? []} empty="No tasks yet." />
+            <TaskList tasks={buckets.byMilestone.get(milestone.id) ?? []} empty={text("roadmap.noTasks")} />
           </article>
         </li>
       ))}
       <li className="relative">
         <span className="absolute top-1.5 -left-[1.7rem] h-3 w-3 rounded-full border border-dashed border-border bg-background" />
         <article className="space-y-3 rounded-lg border border-dashed border-border bg-surface p-4">
-          <h2 className="font-medium">Unscheduled</h2>
-          <TaskList tasks={buckets.unscheduled} empty="No unscheduled tasks." />
+          <h2 className="font-medium">{text("roadmap.unscheduled")}</h2>
+          <TaskList tasks={buckets.unscheduled} empty={text("roadmap.noUnscheduled")} />
         </article>
       </li>
     </ol>
@@ -306,13 +311,12 @@ function DependencyView({
 }) {
   const layout = useMemo(() => layoutGraph(tasks, dependencies), [tasks, dependencies]);
 
+  const text = t;
   return (
     <div className="space-y-4">
       {dependencies.length === 0 ? (
         <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <p className="text-sm text-muted">
-            No task links yet. Add a blocks or relates link between two existing tasks.
-          </p>
+          <p className="text-sm text-muted">{text("roadmap.noLinks")}</p>
           <AddDependencyForm
             key={tasks[0]?.project_id ?? "none"}
             tasks={tasks}
@@ -323,9 +327,10 @@ function DependencyView({
       ) : (
         <>
           <div className="overflow-x-auto rounded-lg border border-border bg-surface p-4">
+            <p className="mb-3 text-sm text-muted">{text("roadmap.graphHint")}</p>
             <svg
               role="img"
-              aria-label="Task dependency graph"
+              aria-label={text("roadmap.graphLabel")}
               viewBox={`0 0 ${layout.width} ${layout.height}`}
               className="h-auto min-h-72 w-full min-w-[36rem]"
             >
@@ -393,7 +398,7 @@ function DependencyView({
                     </text>
                     <text x={26} y={38} className="fill-[var(--muted)] text-[10px]">
                       {statusLabel(node.task.status)}
-                      {node.locked ? " · locked" : ""}
+                      {node.locked ? text("lock.suffix") : ""}
                     </text>
                   </a>
                 </g>
@@ -401,7 +406,30 @@ function DependencyView({
             </svg>
           </div>
           <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold tracking-wide uppercase">Add link</h2>
+            <h2 className="text-sm font-semibold tracking-wide uppercase">{text("roadmap.links")}</h2>
+            <ul className="space-y-2 text-sm">
+              {dependencies.map((edge) => {
+                const from = tasks.find((task) => task.id === edge.from_task_id);
+                const to = tasks.find((task) => task.id === edge.to_task_id);
+                return (
+                  <li
+                    key={`${edge.from_task_id}-${edge.to_task_id}-${edge.type}`}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                  >
+                    <Link className="font-medium underline-offset-2 hover:underline" href={`/app/tasks/${edge.from_task_id}`}>
+                      {from?.title ?? edge.from_task_id}
+                    </Link>
+                    <span className="text-muted">
+                      {edge.type === "blocks" ? text("roadmap.blocks") : text("roadmap.relatesTo")}
+                    </span>
+                    <Link className="font-medium underline-offset-2 hover:underline" href={`/app/tasks/${edge.to_task_id}`}>
+                      {to?.title ?? edge.to_task_id}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+            <h2 className="text-sm font-semibold tracking-wide uppercase">{text("roadmap.addLink")}</h2>
             <AddDependencyForm
               key={tasks[0]?.project_id ?? "none"}
               tasks={tasks}
@@ -424,6 +452,7 @@ function AddDependencyForm({
   onCreated: () => void;
   onCycle: (message: string) => void;
 }) {
+  const label = useT();
   const ids = new Set(tasks.map((task) => task.id));
   const [fromTaskId, setFromTaskId] = useState(tasks[0]?.id ?? "");
   const [toTaskId, setToTaskId] = useState(tasks[1]?.id ?? tasks[0]?.id ?? "");
@@ -434,13 +463,13 @@ function AddDependencyForm({
   const toValue = ids.has(toTaskId) ? toTaskId : (tasks[1]?.id ?? tasks[0]?.id ?? "");
 
   if (tasks.length < 2) {
-    return <p className="text-sm text-muted">Create at least two tasks before linking them.</p>;
+    return <p className="text-sm text-muted">{label("roadmap.needTwo")}</p>;
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!fromValue || !toValue) {
-      setError("choose two tasks");
+      setError(t("roadmap.chooseTwo"));
       return;
     }
     setPending(true);
@@ -450,10 +479,10 @@ function AddDependencyForm({
       onCreated();
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "dependency_cycle") {
-        onCycle("That link would create a cycle.");
-        setError("That link would create a cycle.");
+        onCycle(t("roadmap.cycle"));
+        setError(t("roadmap.cycle"));
       } else {
-        setError(caught instanceof ApiError ? caught.message : "failed to add dependency");
+        setError(caught instanceof ApiError ? caught.message : t("roadmap.failedAdd"));
       }
     } finally {
       setPending(false);
@@ -463,7 +492,7 @@ function AddDependencyForm({
   return (
     <form className="flex flex-wrap items-end gap-2" onSubmit={onSubmit}>
       <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-muted">
-        From
+        {label("roadmap.thisTask")}
         <select
           className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
           value={fromValue}
@@ -477,18 +506,18 @@ function AddDependencyForm({
         </select>
       </label>
       <label className="flex min-w-28 flex-col gap-1 text-xs text-muted">
-        Type
+        {label("roadmap.type")}
         <select
           className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground capitalize"
           value={type}
           onChange={(event) => setType(event.target.value as DependencyType)}
         >
-          <option value="blocks">blocks</option>
-          <option value="relates">relates</option>
+          <option value="blocks">{label("roadmap.blocks")}</option>
+          <option value="relates">{label("roadmap.relates")}</option>
         </select>
       </label>
       <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-muted">
-        To
+        {label("roadmap.thatTask")}
         <select
           className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
           value={toValue}
@@ -506,7 +535,7 @@ function AddDependencyForm({
         type="submit"
         disabled={pending}
       >
-        {pending ? "Saving…" : "Add link"}
+        {pending ? label("common.saving") : label("roadmap.addLink")}
       </button>
       {error ? <p className="w-full text-sm text-red-600">{error}</p> : null}
     </form>

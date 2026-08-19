@@ -19,16 +19,24 @@ import {
   type PublicRepo,
   type PublicToken,
 } from "@/lib/api";
+import {
+  fetchProjectLabels,
+  sortLabels,
+  toggleLabelId,
+  type PublicLabel,
+} from "@/lib/labels";
+import { t } from "@/lib/i18n";
 import { POST_LOGIN_PATH } from "@/lib/nav";
+import { useT } from "@/lib/use-locale";
 
 import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "../../selection";
 
-const STEPS = [
-  "Create project",
-  "Connect code",
-  "Detect",
-  "First brief",
-  "Connect an agent",
+const STEP_KEYS = [
+  "wizard.stepCreate",
+  "wizard.stepConnect",
+  "wizard.stepDetect",
+  "wizard.stepBrief",
+  "wizard.stepAgent",
 ] as const;
 
 type DetectStatus = "idle" | "pending" | "later" | "started";
@@ -51,6 +59,7 @@ export function ProjectWizard({
   workspaceEnabled: boolean;
   githubAppEnabled: boolean;
 }) {
+  const label = useT();
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -70,13 +79,18 @@ export function ProjectWizard({
 
   const [detectStatus, setDetectStatus] = useState<DetectStatus>("idle");
 
-  const [goals, setGoals] = useState("Ship a first working loop for this project.");
-  const [nonGoals, setNonGoals] = useState("Do not invent extra scope before the first milestone.");
-  const [milestoneTitle, setMilestoneTitle] = useState("First slice");
-  const [taskTitle, setTaskTitle] = useState("Confirm repo layout and fill the first brief");
+  const [goals, setGoals] = useState(() => t("wizard.defaultGoals"));
+  const [nonGoals, setNonGoals] = useState(() => t("wizard.defaultNonGoals"));
+  const [stack, setStack] = useState(() => t("wizard.defaultStack"));
+  const [commands, setCommands] = useState(() => t("wizard.defaultCommands"));
+  const [definitionOfDone, setDefinitionOfDone] = useState(() => t("wizard.defaultDod"));
+  const [milestoneTitle, setMilestoneTitle] = useState(() => t("wizard.defaultMilestone"));
+  const [taskTitle, setTaskTitle] = useState(() => t("wizard.defaultTask"));
   const [milestoneId, setMilestoneId] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [briefSaved, setBriefSaved] = useState(false);
+  const [labels, setLabels] = useState<PublicLabel[]>([]);
+  const [firstTaskLabelIds, setFirstTaskLabelIds] = useState<string[]>([]);
 
   const [agentTab, setAgentTab] = useState<AgentTab>("stdio");
 
@@ -107,7 +121,7 @@ export function ProjectWizard({
         setOrgName(org?.name ?? null);
       } catch (caught) {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load session");
+          setError(caught instanceof ApiError ? caught.message : t("common.failedSession"));
         }
       }
     }
@@ -120,7 +134,7 @@ export function ProjectWizard({
   async function onCreateProject(event: FormEvent) {
     event.preventDefault();
     if (!orgId) {
-      setError("Select an org in the header first.");
+      setError(t("wizard.selectOrg"));
       return;
     }
     setPending(true);
@@ -129,9 +143,14 @@ export function ProjectWizard({
       const created = await createOrgProject(orgId, { name: name.trim(), slug: derivedSlug });
       setProject(created);
       writeStoredId(PROJECT_STORAGE_KEY, created.id);
+      try {
+        setLabels(sortLabels(await fetchProjectLabels(created.id)));
+      } catch {
+        setLabels([]);
+      }
       setStep(1);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to create project");
+      setError(caught instanceof ApiError ? caught.message : t("common.failedCreateProject"));
     } finally {
       setPending(false);
     }
@@ -148,7 +167,7 @@ export function ProjectWizard({
       setToken(minted);
       setConnectKind("cli");
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to mint token");
+      setError(caught instanceof ApiError ? caught.message : t("wizard.failedMint"));
     } finally {
       setPending(false);
     }
@@ -169,7 +188,7 @@ export function ProjectWizard({
       setRepo(created);
       setConnectKind("workspace");
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to index workspace");
+      setError(caught instanceof ApiError ? caught.message : t("wizard.failedIndex"));
     } finally {
       setPending(false);
     }
@@ -189,7 +208,7 @@ export function ProjectWizard({
       setDetectStatus(result === "started" ? "started" : "later");
       setStep(3);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to start detect");
+      setError(caught instanceof ApiError ? caught.message : t("wizard.failedDetect"));
       setDetectStatus("later");
     } finally {
       setPending(false);
@@ -207,6 +226,14 @@ export function ProjectWizard({
       await saveProjectBrief(project.id, [
         { id: "goals", title: "Goals", body_md: goals, ordinal: 0 },
         { id: "non_goals", title: "Non-goals", body_md: nonGoals, ordinal: 1 },
+        { id: "stack", title: "Tech stack", body_md: stack, ordinal: 2 },
+        { id: "commands", title: "Commands", body_md: commands, ordinal: 3 },
+        {
+          id: "definition_of_done",
+          title: "Definition of Done",
+          body_md: definitionOfDone,
+          ordinal: 4,
+        },
       ]);
       const wantedMilestone = milestoneTitle.trim();
       const wantedTask = taskTitle.trim();
@@ -233,7 +260,8 @@ export function ProjectWizard({
           const created = await createTask(project.id, {
             title: wantedTask,
             milestone_id: nextMilestoneId,
-            description: "Proposed first task from the new-project wizard.",
+            description: t("wizard.firstTaskDescription"),
+            label_ids: firstTaskLabelIds,
           });
           setTaskId(created.id);
         }
@@ -241,7 +269,7 @@ export function ProjectWizard({
       setBriefSaved(true);
       setStep(4);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to save brief");
+      setError(caught instanceof ApiError ? caught.message : t("wizard.failedBrief"));
     } finally {
       setPending(false);
     }
@@ -258,17 +286,19 @@ export function ProjectWizard({
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <header className="space-y-2">
-        <p className="text-sm text-muted">New project{orgName ? ` · ${orgName}` : ""}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{STEPS[step]}</h1>
+        <p className="text-sm text-muted">
+          {orgName ? `${label("wizard.newProject")} · ${orgName}` : label("wizard.newProject")}
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label(STEP_KEYS[step] ?? "wizard.stepCreate")}</h1>
         <ol className="flex flex-wrap gap-2 text-xs text-muted">
-          {STEPS.map((label, index) => (
+          {STEP_KEYS.map((key, index) => (
             <li
-              key={label}
+              key={key}
               className={`rounded-full border px-2 py-1 ${
                 index === step ? "border-foreground text-foreground" : "border-border"
               }`}
             >
-              {index + 1}. {label}
+              {index + 1}. {label(key)}
             </li>
           ))}
         </ol>
@@ -282,7 +312,7 @@ export function ProjectWizard({
           onSubmit={onCreateProject}
         >
           <label className="flex flex-col gap-1 text-sm">
-            Name
+            {label("common.name")}
             <input
               className="h-11 rounded-lg border border-border bg-background px-3"
               value={name}
@@ -292,7 +322,7 @@ export function ProjectWizard({
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Slug
+            {label("common.slug")}
             <input
               className="h-11 rounded-lg border border-border bg-background px-3 font-mono"
               value={derivedSlug}
@@ -304,15 +334,13 @@ export function ProjectWizard({
               maxLength={64}
             />
           </label>
-          <p className="text-xs leading-5 text-muted">
-            Visibility is private. The org comes from the header switcher.
-          </p>
+          <p className="text-xs leading-5 text-muted">{label("wizard.starterHint")}</p>
           <button
             className="h-11 rounded-lg bg-accent text-sm font-medium text-accent-fg disabled:opacity-60"
             type="submit"
             disabled={pending || !orgId}
           >
-            {pending ? "Creating…" : "Create project"}
+            {pending ? label("common.creating") : label("common.createProject")}
           </button>
         </form>
       ) : null}
@@ -320,36 +348,28 @@ export function ProjectWizard({
       {step === 1 && project ? (
         <div className="grid gap-4">
           <article className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
-            <h2 className="text-lg font-semibold">GitHub repository</h2>
+            <h2 className="text-lg font-semibold">{label("wizard.github")}</h2>
             {githubAppEnabled ? (
-              <p className="text-sm leading-6 text-muted">
-                GitHub App import is available later from Settings. Continue with this machine or a
-                workspace path.
-              </p>
+              <p className="text-sm leading-6 text-muted">{label("wizard.githubLater")}</p>
             ) : (
-              <p className="text-sm leading-6 text-muted">
-                Unavailable on this instance. Coming later.
-              </p>
+              <p className="text-sm leading-6 text-muted">{label("wizard.githubUnavailable")}</p>
             )}
           </article>
 
           <article className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
-            <h2 className="text-lg font-semibold">This machine</h2>
-            <p className="text-sm leading-6 text-muted">
-              Mint a CLI token and run <code className="font-mono">beacon connect</code> on the
-              machine that has the code.
-            </p>
+            <h2 className="text-lg font-semibold">{label("wizard.thisMachine")}</h2>
+            <p className="text-sm leading-6 text-muted">{label("wizard.mintHint")}</p>
             <button
               className="h-10 w-fit rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg disabled:opacity-60"
               type="button"
               onClick={() => void mintCliToken()}
               disabled={pending}
             >
-              {token ? "Mint another token" : "Mint CLI token"}
+              {token ? label("wizard.mintAnother") : label("wizard.mintCli")}
             </button>
             {token?.token ? (
               <div className="space-y-2 rounded-lg border border-dashed border-border p-3 text-sm">
-                <p className="text-muted">Shown once. Copy it now.</p>
+                <p className="text-muted">{label("wizard.shownOnce")}</p>
                 <pre className="overflow-x-auto font-mono text-xs">{token.token}</pre>
                 <pre className="overflow-x-auto font-mono text-xs">
                   beacon connect {token.token}
@@ -360,12 +380,10 @@ export function ProjectWizard({
 
           {workspaceEnabled ? (
             <article className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
-              <h2 className="text-lg font-semibold">Index this Compose workspace</h2>
-              <p className="text-sm leading-6 text-muted">
-                Relative POSIX path under the workspace volume. Creates a local bind-mount repo.
-              </p>
+              <h2 className="text-lg font-semibold">{label("wizard.indexWorkspace")}</h2>
+              <p className="text-sm leading-6 text-muted">{label("wizard.indexHint")}</p>
               <label className="flex flex-col gap-1 text-sm">
-                Path
+                {label("common.path")}
                 <input
                   className="h-11 rounded-lg border border-border bg-background px-3 font-mono"
                   value={workspacePath}
@@ -378,7 +396,7 @@ export function ProjectWizard({
                 onClick={() => void connectWorkspace()}
                 disabled={pending}
               >
-                {repo ? "Connected" : "Index this path"}
+                {repo ? label("wizard.connected") : label("wizard.indexPath")}
               </button>
             </article>
           ) : null}
@@ -389,7 +407,7 @@ export function ProjectWizard({
               type="button"
               onClick={() => setStep(2)}
             >
-              Continue
+              {label("common.continue")}
             </button>
           </div>
         </div>
@@ -397,12 +415,10 @@ export function ProjectWizard({
 
       {step === 2 && project ? (
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
-          <p className="text-sm leading-6 text-muted">
-            Detect runs in the background. You can continue without waiting.
-          </p>
+          <p className="text-sm leading-6 text-muted">{label("wizard.detectHint")}</p>
           {connectKind === "none" && !repo ? (
             <p className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted">
-              No repo connected yet. Detection can run later.
+              {label("wizard.noRepo")}
             </p>
           ) : null}
           {detectStatus === "pending" ? (
@@ -415,7 +431,7 @@ export function ProjectWizard({
               onClick={() => void startDetect()}
               disabled={pending}
             >
-              {repo ? "Start detect" : "Run later"}
+              {repo ? label("wizard.startDetect") : label("wizard.runLater")}
             </button>
             <button
               className="h-11 rounded-lg border border-border px-4 text-sm font-medium"
@@ -425,7 +441,7 @@ export function ProjectWizard({
                 setStep(3);
               }}
             >
-              Skip for now
+              {label("wizard.skip")}
             </button>
           </div>
         </div>
@@ -438,11 +454,11 @@ export function ProjectWizard({
         >
           {detectStatus === "later" || detectStatus === "pending" ? (
             <p className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted">
-              Detection is pending. You can run it later and keep editing this brief.
+              {label("wizard.detectPending")}
             </p>
           ) : null}
           <label className="flex flex-col gap-1 text-sm">
-            Goals
+            {label("context.section.goals")}
             <textarea
               className="min-h-24 rounded-lg border border-border bg-background px-3 py-2"
               value={goals}
@@ -450,7 +466,7 @@ export function ProjectWizard({
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Non-goals
+            {label("context.section.non_goals")}
             <textarea
               className="min-h-24 rounded-lg border border-border bg-background px-3 py-2"
               value={nonGoals}
@@ -458,7 +474,31 @@ export function ProjectWizard({
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            First milestone
+            {label("context.section.stack")}
+            <textarea
+              className="min-h-24 rounded-lg border border-border bg-background px-3 py-2"
+              value={stack}
+              onChange={(event) => setStack(event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {label("context.section.commands")}
+            <textarea
+              className="min-h-24 rounded-lg border border-border bg-background px-3 py-2"
+              value={commands}
+              onChange={(event) => setCommands(event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {label("context.section.definition_of_done")}
+            <textarea
+              className="min-h-32 rounded-lg border border-border bg-background px-3 py-2"
+              value={definitionOfDone}
+              onChange={(event) => setDefinitionOfDone(event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            {label("wizard.firstMilestone")}
             <input
               className="h-11 rounded-lg border border-border bg-background px-3"
               value={milestoneTitle}
@@ -467,7 +507,7 @@ export function ProjectWizard({
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            First task
+            {label("wizard.firstTask")}
             <input
               className="h-11 rounded-lg border border-border bg-background px-3"
               value={taskTitle}
@@ -475,12 +515,39 @@ export function ProjectWizard({
               required
             />
           </label>
+          {labels.length > 0 ? (
+            <fieldset className="space-y-2">
+              <legend className="text-sm">{label("wizard.attachAreas")}</legend>
+              <p className="text-xs leading-5 text-muted">{label("wizard.attachHint")}</p>
+              <div className="flex flex-wrap gap-2">
+                {labels.map((label) => (
+                  <label
+                    key={label.id}
+                    className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={firstTaskLabelIds.includes(label.id)}
+                      onChange={() =>
+                        setFirstTaskLabelIds((current) => toggleLabelId(current, label.id))
+                      }
+                    />
+                    {label.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
           <button
             className="h-11 rounded-lg bg-accent text-sm font-medium text-accent-fg disabled:opacity-60"
             type="submit"
             disabled={pending}
           >
-            {pending ? "Saving…" : briefSaved ? "Saved — continue" : "Save brief"}
+            {pending
+              ? label("common.saving")
+              : briefSaved
+                ? label("wizard.savedContinue")
+                : label("wizard.saveBrief")}
           </button>
         </form>
       ) : null}
@@ -495,7 +562,7 @@ export function ProjectWizard({
               type="button"
               onClick={() => setAgentTab("stdio")}
             >
-              stdio / beacon mcp
+              {label("wizard.stdio")}
             </button>
             <button
               className={`h-9 rounded-md px-3 text-sm ${
@@ -504,15 +571,12 @@ export function ProjectWizard({
               type="button"
               onClick={() => setAgentTab("http")}
             >
-              HTTP MCP
+              {label("wizard.http")}
             </button>
           </div>
           {agentTab === "stdio" ? (
             <div className="space-y-3 text-sm leading-6">
-              <p>
-                Local agents get context and code through{" "}
-                <code className="font-mono">beacon mcp</code>.
-              </p>
+              <p>{label("wizard.stdioHint")}</p>
               {token?.token ? (
                 <pre className="overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
                   {`beacon connect ${token.token}\nbeacon mcp`}
@@ -524,17 +588,14 @@ export function ProjectWizard({
               )}
             </div>
           ) : (
-            <p className="text-sm leading-6 text-muted">
-              Control plane (context &amp; tasks). Code tools need a local sidecar, a self-host
-              bind-mount, or an enabled hosted clone.
-            </p>
+            <p className="text-sm leading-6 text-muted">{label("wizard.httpHint")}</p>
           )}
           <button
             className="h-11 w-fit rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
             type="button"
             onClick={finish}
           >
-            Open project
+            {label("wizard.openProject")}
           </button>
         </div>
       ) : null}

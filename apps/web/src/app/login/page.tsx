@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { githubAuthorizeUrl } from "@/lib/api";
 import { githubCallbackUrl, publicAuthConfig } from "@/lib/auth-config";
+import { t } from "@/lib/i18n";
 
 import { LoginForm } from "./login-form";
 
@@ -17,11 +18,9 @@ export default async function LoginPage() {
   return (
     <main className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center gap-6 px-6 py-16">
       <div className="space-y-2">
-        <p className="text-sm font-medium text-muted">Self-host</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Local login</h1>
-        <p className="text-sm leading-6 text-muted">
-          Username and password for this Compose or air-gapped instance.
-        </p>
+        <p className="text-sm font-medium text-muted">{t("landing.selfHost")}</p>
+        <h1 className="text-3xl font-semibold tracking-tight">{t("login.title")}</h1>
+        <p className="text-sm leading-6 text-muted">{t("login.intro")}</p>
       </div>
       <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
         <LoginForm />
@@ -29,14 +28,14 @@ export default async function LoginPage() {
       <div className="flex flex-col gap-2 text-sm text-muted">
         {githubHref ? (
           <a className="font-medium text-foreground underline" href={githubHref}>
-            Continue with GitHub instead
+            {t("login.githubInstead")}
           </a>
         ) : null}
         <Link className="underline" href="/bootstrap">
-          First user? Bootstrap this instance
+          {t("login.firstUser")}
         </Link>
         <Link className="underline" href="/">
-          Back to both paths
+          {t("login.back")}
         </Link>
       </div>
     </main>

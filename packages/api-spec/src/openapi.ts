@@ -1,6 +1,12 @@
+import { PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT } from "@beacon/shared";
 import { z } from "zod";
 
-import { ErrorResponseSchema, PaginationQuerySchema, paginatedResponseSchema } from "./common.js";
+import {
+  CommentSchema,
+  ErrorResponseSchema,
+  PaginationQuerySchema,
+  paginatedResponseSchema,
+} from "./common.js";
 import { CompileInputSchema, SessionBriefSchema } from "./session-brief.js";
 
 type JsonSchema = Record<string, unknown>;
@@ -50,32 +56,33 @@ export function toOpenApi(): {
   const CompileInput = asComponentSchema(CompileInputSchema);
   const PaginationQuery = markDefaultedFieldsOptional(asComponentSchema(PaginationQuerySchema));
   const SessionBriefPage = asComponentSchema(paginatedResponseSchema(SessionBriefSchema));
+  const Comment = asComponentSchema(CommentSchema);
+  const CommentPage = asComponentSchema(paginatedResponseSchema(CommentSchema));
+  const idParam = {
+    name: "id",
+    in: "path",
+    required: true,
+    schema: {
+      type: "string",
+      format: "uuid",
+      pattern:
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+    },
+  };
 
   return {
     openapi: "3.1.0",
     info: {
       title: "ProjectBeacon API",
       version: "0.0.0",
-      description: "Generated fragment: SessionBrief, errors, and pagination.",
+      description: "Generated fragment: SessionBrief, comments, errors, and pagination.",
     },
     servers: [{ url: "/" }],
     paths: {
       "/v1/projects/{id}/context/compile": {
         post: {
           summary: "Compile a session brief",
-          parameters: [
-            {
-              name: "id",
-              in: "path",
-              required: true,
-              schema: {
-                type: "string",
-                format: "uuid",
-                pattern:
-                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-              },
-            },
-          ],
+          parameters: [idParam],
           requestBody: {
             content: {
               "application/json": {
@@ -103,6 +110,43 @@ export function toOpenApi(): {
           },
         },
       },
+      "/v1/tasks/{id}/comments": {
+        get: {
+          summary: "List comments on a task",
+          parameters: [
+            idParam,
+            { name: "cursor", in: "query", schema: { type: "string", minLength: 1 } },
+            {
+              name: "limit",
+              in: "query",
+              schema: {
+                type: "integer",
+                minimum: 1,
+                maximum: PAGINATION_MAX_LIMIT,
+                default: PAGINATION_DEFAULT_LIMIT,
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Task comments",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CommentPage" },
+                },
+              },
+            },
+            default: {
+              description: "Error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -111,6 +155,8 @@ export function toOpenApi(): {
         CompileInput,
         PaginationQuery,
         SessionBriefPage,
+        Comment,
+        CommentPage,
       },
     },
   };

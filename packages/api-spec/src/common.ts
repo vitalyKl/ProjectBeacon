@@ -37,6 +37,15 @@ export function paginatedResponseSchema<T extends z.ZodType>(itemSchema: T) {
   });
 }
 
+export const CommentSchema = z.object({
+  id: UuidSchema,
+  task_id: UuidSchema,
+  author_type: ActorTypeSchema,
+  author_id: z.string().min(1),
+  body: z.string(),
+  created_at: z.iso.datetime({ offset: true }),
+});
+
 export const LinkedPathSchema = z.object({
   repo_id: UuidSchema,
   path: z.string(),
@@ -49,3 +58,4 @@ export type ErrorBody = z.infer<typeof ErrorBodySchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
 export type LinkedPath = z.infer<typeof LinkedPathSchema>;
+export type Comment = z.infer<typeof CommentSchema>;

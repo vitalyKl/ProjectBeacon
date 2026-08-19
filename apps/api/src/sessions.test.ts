@@ -11,7 +11,6 @@ const SUMMARY = "Finished the first cut of the API session routes.";
 function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
   return {
     bootstrapAdminToken: BOOTSTRAP_TOKEN,
-    workerToken: undefined,
     authLocal: true,
     authLocalInviteOnly: false,
     authGithub: false,

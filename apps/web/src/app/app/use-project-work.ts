@@ -12,6 +12,7 @@ import {
   type PublicTask,
   type TaskStatus,
 } from "@/lib/roadmap";
+import { t } from "@/lib/i18n";
 import { ensureBeaconSeed } from "@/lib/seed";
 import { useInterval } from "@/lib/use-interval";
 
@@ -69,7 +70,7 @@ export function useProjectWork(pollMs: number) {
         setError(null);
       } catch (caught) {
         if (seq === requestSeq.current) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load work");
+          setError(caught instanceof ApiError ? caught.message : t("common.failedLoadWork"));
         }
       } finally {
         if (!opts?.silent && seq === requestSeq.current) {
@@ -125,13 +126,13 @@ export function useProjectWork(pollMs: number) {
           if (server) {
             requestSeq.current += 1;
             setTasks((items) => items.map((item) => (item.id === taskId ? server : item)));
-            toast("Updated elsewhere — reapplied.");
+            toast(t("common.conflictReapplied"));
             return;
           }
         }
         requestSeq.current += 1;
         setTasks((items) => items.map((item) => (item.id === taskId ? current : item)));
-        toast(caught instanceof ApiError ? caught.message : "failed to update status");
+        toast(caught instanceof ApiError ? caught.message : t("common.failedUpdateStatus"));
       } finally {
         pendingMoves.current.delete(taskId);
       }

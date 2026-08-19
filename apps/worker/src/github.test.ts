@@ -27,9 +27,24 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
         id: "repo-1",
         project_id: "proj-1",
         provider: "github",
+        remote_url: null,
+        default_branch: "main",
+        installation_id: null,
         local_root_hint: null,
         index_mode: "sidecar",
       };
+    },
+    async reportIndex() {
+      return {};
+    },
+    async consumeCloneInvalidation() {
+      return { consumed: null };
+    },
+    async listDeletedProjects() {
+      return [];
+    },
+    async projectClonePurge() {
+      return { project_id: "proj-1", deleted: false, repo_ids: [] };
     },
     async importContext() {
       return {};
@@ -45,6 +60,18 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
     },
     async createTask() {
       return { id: "task-1" };
+    },
+    async listLabels() {
+      return [];
+    },
+    async patchLabel(labelId, body) {
+      return {
+        id: labelId,
+        slug: "api",
+        name: "API",
+        status: "active",
+        paths: body.paths ?? [],
+      };
     },
     async listGithubIssues() {
       return issues;

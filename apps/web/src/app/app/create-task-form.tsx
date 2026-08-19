@@ -3,7 +3,12 @@
 import { useState, type FormEvent } from "react";
 
 import { ApiError, newIdempotencyKey } from "@/lib/api";
-import { createTask, TASK_STATUSES, type PublicMilestone, type TaskStatus } from "@/lib/roadmap";
+import { fetchProjectLabels, toggleLabelId, type PublicLabel } from "@/lib/labels";
+import { DEFAULT_TASK_PRIORITY } from "@/lib/priority";
+import { createTask, statusLabel, TASK_STATUSES, type PublicMilestone, type TaskStatus } from "@/lib/roadmap";
+import { useT } from "@/lib/use-locale";
+
+import { PrioritySelect } from "./priority-select";
 
 export function CreateTaskForm({
   projectId,
@@ -16,19 +21,27 @@ export function CreateTaskForm({
   defaultStatus: TaskStatus;
   onCreated: () => Promise<void> | void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [howToCheck, setHowToCheck] = useState("");
   const [status, setStatus] = useState<TaskStatus>(defaultStatus);
+  const [priority, setPriority] = useState(DEFAULT_TASK_PRIORITY);
   const [milestoneId, setMilestoneId] = useState("");
+  const [labelIds, setLabelIds] = useState<string[]>([]);
+  const [catalog, setCatalog] = useState<PublicLabel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   function reset() {
     setTitle("");
     setDescription("");
+    setHowToCheck("");
     setStatus(defaultStatus);
+    setPriority(DEFAULT_TASK_PRIORITY);
     setMilestoneId("");
+    setLabelIds([]);
     setError(null);
   }
 
@@ -36,7 +49,7 @@ export function CreateTaskForm({
     event.preventDefault();
     const nextTitle = title.trim();
     if (!nextTitle) {
-      setError("title is required");
+      setError(t("common.titleRequired"));
       return;
     }
     setPending(true);
@@ -47,8 +60,11 @@ export function CreateTaskForm({
         {
           title: nextTitle,
           description,
+          how_to_check: howToCheck,
           status,
+          priority,
           milestone_id: milestoneId || null,
+          label_ids: labelIds,
         },
         newIdempotencyKey(),
       );
@@ -56,7 +72,7 @@ export function CreateTaskForm({
       setOpen(false);
       await onCreated();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "failed to create task");
+      setError(caught instanceof ApiError ? caught.message : t("task.failedCreate"));
     } finally {
       setPending(false);
     }
@@ -70,9 +86,12 @@ export function CreateTaskForm({
         onClick={() => {
           reset();
           setOpen(true);
+          void fetchProjectLabels(projectId)
+            .then(setCatalog)
+            .catch(() => setCatalog([]));
         }}
       >
-        New task
+        {t("task.new")}
       </button>
     );
   }
@@ -84,7 +103,7 @@ export function CreateTaskForm({
     >
       <input
         className="h-9 rounded-md border border-border bg-background px-2 text-sm"
-        placeholder="Title"
+        placeholder={t("common.title")}
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         maxLength={200}
@@ -92,31 +111,40 @@ export function CreateTaskForm({
       />
       <textarea
         className="min-h-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
-        placeholder="Description"
+        placeholder={t("common.description")}
         value={description}
         onChange={(event) => setDescription(event.target.value)}
         maxLength={8000}
       />
+      <textarea
+        className="min-h-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
+        placeholder={t("task.howToCheckHint")}
+        value={howToCheck}
+        onChange={(event) => setHowToCheck(event.target.value)}
+        maxLength={8000}
+        aria-label={t("task.howToCheck")}
+      />
       <div className="flex flex-wrap gap-2">
         <select
           className="h-9 rounded-md border border-border bg-background px-2 text-sm"
-          aria-label="Status"
+          aria-label={t("common.status")}
           value={status}
           onChange={(event) => setStatus(event.target.value as TaskStatus)}
         >
           {TASK_STATUSES.map((item) => (
             <option key={item} value={item}>
-              {item.replaceAll("_", " ")}
+              {statusLabel(item)}
             </option>
           ))}
         </select>
+        <PrioritySelect value={priority} onChange={setPriority} />
         <select
           className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-          aria-label="Milestone"
+          aria-label={t("home.milestones")}
           value={milestoneId}
           onChange={(event) => setMilestoneId(event.target.value)}
         >
-          <option value="">No milestone</option>
+          <option value="">{t("task.noMilestone")}</option>
           {milestones.map((item) => (
             <option key={item.id} value={item.id}>
               {item.title}
@@ -124,6 +152,27 @@ export function CreateTaskForm({
           ))}
         </select>
       </div>
+      {catalog.length > 0 ? (
+        <fieldset className="flex flex-wrap gap-2">
+          <legend className="sr-only">{t("task.areas")}</legend>
+          {catalog.map((label) => (
+            <label
+              key={label.id}
+              className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+            >
+              <input
+                type="checkbox"
+                checked={labelIds.includes(label.id)}
+                onChange={() => setLabelIds((current) => toggleLabelId(current, label.id))}
+              />
+              {label.name}
+              {label.status === "proposed" ? (
+                <span className="text-muted">{t("task.proposed")}</span>
+              ) : null}
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <div className="flex gap-2">
         <button
@@ -131,7 +180,7 @@ export function CreateTaskForm({
           type="submit"
           disabled={pending}
         >
-          {pending ? "Saving…" : "Save"}
+          {pending ? t("common.saving") : t("common.save")}
         </button>
         <button
           className="rounded-md border border-border px-3 py-1.5 text-sm"
@@ -141,7 +190,7 @@ export function CreateTaskForm({
             setOpen(false);
           }}
         >
-          Cancel
+          {t("common.cancel")}
         </button>
       </div>
     </form>

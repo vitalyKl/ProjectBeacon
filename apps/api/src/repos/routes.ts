@@ -23,6 +23,7 @@ import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { isHostedCloneEnabled } from "../flags.js";
 import type { JobQueue } from "../jobs/queue.js";
+import { extraCompilePaths } from "../labels/scope.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { fileLineCount, recordCodeAnomaly, recordGetFileAnomaly } from "../observability.js";
 import { parseLocalRootHint } from "./local-root.js";
@@ -638,12 +639,13 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
       return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
     }
+    const attached = await deps.store.listTaskLabels(task.id);
     return runCodeQuery(
       c,
       deps,
       repo,
       actorRateRef(access.actor),
-      taskChangedScopeQuery(task, repo.id, limit),
+      taskChangedScopeQuery(task, repo.id, limit, extraCompilePaths(attached, repo.id)),
       gateway,
     );
   });

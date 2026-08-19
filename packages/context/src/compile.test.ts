@@ -91,6 +91,7 @@ function document(nodes: CompileNode[], extras?: Partial<CompileDocument>): Comp
       type: "task",
       milestone_id: null,
       acceptance_md: "Compile succeeds without index extras.",
+      how_to_check: "",
       linked_paths: [],
     },
     milestone: null,
@@ -122,6 +123,49 @@ describe("compileSessionBrief", () => {
     expect(brief.sources.map((source) => source.node_id)).toEqual(fixture.expected.source_node_ids);
   });
 
+  it("includes the only repo-scope brief when compile has no repo_id", () => {
+    const repoNode: CompileNode = {
+      id: "018f1e2c-3d4e-7000-8000-000000000014",
+      project_id: PROJECT_ID,
+      repo_id: REPO_ID,
+      task_id: null,
+      scope_type: "repo",
+      path: "",
+      sections: [section("goals", "Imported living brief.", 0)],
+    };
+    const { brief } = compileSessionBrief({ project_id: PROJECT_ID }, document([repoNode]));
+    expect(brief.sections.find((item) => item.id === "goals")?.body_md).toBe(
+      "Imported living brief.",
+    );
+    expect(brief.sources.map((source) => source.node_id)).toEqual([repoNode.id]);
+  });
+
+  it("merges extra_paths from attached labels into the selected path nodes", () => {
+    const extraNode: CompileNode = {
+      id: "018f1e2c-3d4e-7000-8000-000000000013",
+      project_id: PROJECT_ID,
+      repo_id: REPO_ID,
+      task_id: null,
+      scope_type: "path",
+      path: "apps/web",
+      sections: [section("conventions", "Keep the board thin.", 0)],
+    };
+    const { brief } = compileSessionBrief(
+      { project_id: PROJECT_ID, repo_id: REPO_ID, extra_paths: ["apps/web"] },
+      document([
+        projectNode([
+          section("goals", "Ship the product.", 0),
+          section("security", "Do not leak tokens.", 1),
+        ]),
+        extraNode,
+      ]),
+    );
+    expect(brief.sections.find((item) => item.id === "conventions")?.body_md).toBe(
+      "Keep the board thin.",
+    );
+    expect(brief.sources.map((source) => source.node_id)).toContain(extraNode.id);
+  });
+
   it("emits never-drop layers and sets overflow when the budget is tiny", () => {
     const fixture = loadFixture<{
       input: { project_id: string; budget_tokens: number };
@@ -145,6 +189,26 @@ describe("compileSessionBrief", () => {
     expect(brief.handoff).toBeNull();
     expect(brief.changed_scope).toBeNull();
     expect(brief.tree_capsule).toBeNull();
+  });
+
+  it("keeps definition of done when the budget is tiny", () => {
+    const { brief } = compileSessionBrief(
+      { project_id: PROJECT_ID, budget_tokens: 1 },
+      document([
+        projectNode([
+          section("non_goals", "No embeddings in v1.", 0),
+          section("security", "Do not leak tokens.", 1),
+          section("definition_of_done", "Tests and typecheck are green.", 2),
+          section("glossary", "Brief means SessionBrief.", 3),
+        ]),
+      ]),
+    );
+    expect(brief.sections.map((item) => item.id)).toEqual([
+      "non_goals",
+      "security",
+      "definition_of_done",
+    ]);
+    expect(brief.budget.dropped).toContain("section:glossary");
   });
 
   it("succeeds with no index extras and lists changed_scope and tree_capsule in dropped", () => {
@@ -172,6 +236,47 @@ describe("compileSessionBrief", () => {
     expect(brief.budget.overflow).toBe(fixture.expected.overflow);
     expect(brief.schema_version).toBe("1");
     expect(brief.compiler_version).toBe(COMPILER_VERSION);
+  });
+
+  it("never compiles What's next / Next work — the board is the queue", () => {
+    const nextWork: CompileNode["sections"][number] = {
+      id: "custom",
+      key: "next-work",
+      title: "Next work",
+      body_md: "Pick the next ready item from the board.",
+      ordinal: 4,
+    };
+    const { brief, markdown } = compileSessionBrief(
+      { project_id: PROJECT_ID },
+      document([
+        projectNode([
+          section("security", "Do not leak tokens.", 0),
+          nextWork,
+        ]),
+      ], { milestone: null, task: null }),
+    );
+    expect(brief.sections.some((item) => item.title === "Next work")).toBe(false);
+    expect(markdown).not.toContain("## Next work");
+  });
+
+  it("includes How to check when the task has verification notes", () => {
+    const { markdown } = compileSessionBrief(
+      { project_id: PROJECT_ID },
+      document([projectNode([section("security", "Do not leak tokens.", 0)])], {
+        task: {
+          id: TASK_ID,
+          title: "Compile session briefs",
+          status: "in_progress",
+          type: "task",
+          milestone_id: null,
+          acceptance_md: "Compile succeeds without index extras.",
+          how_to_check: "Open /app/tasks and confirm How to check is visible.",
+          linked_paths: [],
+        },
+      }),
+    );
+    expect(markdown).toContain("## How to check");
+    expect(markdown).toContain("Open /app/tasks and confirm How to check is visible.");
   });
 
   it("estimates tokens with js_length_div_4 of the markdown projection", () => {

@@ -1,12 +1,20 @@
-import { DEFAULT_SECURITY_CONSTRAINTS, DEFAULT_SECURITY_CONSTRAINT_KIND, DEFAULT_SECURITY_CONSTRAINT_STATUS } from "@beacon/context";
-import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projects, rateBuckets, taskComments, taskDependencies, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState, sidecarConnections, githubCloneInvalidations } from "@beacon/db";
+import {
+  DEFAULT_PROJECT_LABELS,
+  DEFAULT_PROJECT_LABEL_STATUS,
+  DEFAULT_SECURITY_CONSTRAINTS,
+  DEFAULT_SECURITY_CONSTRAINT_KIND,
+  DEFAULT_SECURITY_CONSTRAINT_STATUS,
+} from "@beacon/context";
+import { activityEvents, agentSessions, apiTokens, approvalRequests, codeOwners, constraints, contextNodes, contextRevisions, decisionPaths, decisions, handoffs, idempotencyKeys, labelPaths, labels, milestones, orgInvites, orgMembers, orgs, projectInvites, projectMembers, projectRepos, projectReports, projectReviews, projects, rateBuckets, taskComments, taskDependencies, taskLabels, tasks, userSessions, users, type Db, decisionTasks, githubInstallations, githubSyncState, sidecarConnections, githubCloneInvalidations } from "@beacon/db";
 import { isScope, uuidv7, type Scope } from "@beacon/shared";
 import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or, isNotNull } from "drizzle-orm";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
 import { isConstraintKind, isConstraintStatus, isContextScopeType, isDecisionStatus, type CodeOwnerRecord, type ConstraintRecord, type ContextNodeRecord, type ContextRevisionRecord, type ContextRevisionTarget, type DecisionRecord, type ProjectRepoRecord, type DecisionPathLink } from "../context/types.js";
-import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type AgentSessionRef, type IdempotentWrites, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, ProjectNotFoundError, UniqueViolationError } from "./store.js";
+import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type IdempotentWrites, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, UniqueViolationError } from "./store.js";
+import type { LabelPatch, LabelRecord, LabelStatus } from "../labels/types.js";
+import { isLabelStatus } from "../labels/types.js";
 import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
 import { IDEMPOTENCY_TTL_MS, type CommentAuthorType, type DependencyType, type IdempotencyActorType, type LinkedPath, type MilestoneStatus, type TaskStatus, type TaskType } from "../roadmap/types.js";
@@ -22,6 +30,8 @@ import {
   type RetentionCounts,
 } from "../jobs/policy.js";
 import type { GithubInstallationRecord, GithubSyncStateRecord } from "../github/types.js";
+import type { ProjectReportRecord, ProjectReviewRecord, ReportSnapshot } from "../reports/types.js";
+import { isReviewStatus } from "../reports/types.js";
 
 const BOOTSTRAP_LOCK_KEY = 8_811_201;
 const IDEMPOTENCY_LOCK_NS = 8_811_202;
@@ -34,6 +44,7 @@ type UniqueConstraint =
   | "project_slug"
   | "context_node_scope"
   | "project_repo"
+  | "label_slug"
   | "unknown";
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
@@ -65,6 +76,9 @@ function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
         }
         if (constraint.includes("project_repos")) {
           return "project_repo";
+        }
+        if (constraint.includes("labels_project_slug")) {
+          return "label_slug";
         }
         return "unknown";
       }
@@ -233,6 +247,7 @@ function toTask(row: typeof tasks.$inferSelect): TaskRecord {
     assigneeUserId: row.assigneeUserId,
     assigneeAgentName: row.assigneeAgentName,
     agentBrief: row.agentBrief,
+    howToCheck: row.howToCheck,
     linkedPaths: asLinkedPaths(row.linkedPaths),
     githubIssueId: row.githubIssueId,
     lockedBySessionId: row.lockedBySessionId,
@@ -315,7 +330,8 @@ function asSections(value: unknown): ContextSection[] {
       id === "commands" ||
       id === "stack" ||
       id === "security" ||
-      id === "style"
+      id === "style" ||
+      id === "definition_of_done"
     ) {
       const key = record["key"];
       sections.push({
@@ -427,6 +443,39 @@ async function seedDefaultSecurityConstraints(
   await tx.insert(constraints).values(values);
 }
 
+async function seedDefaultProjectLabels(
+  tx: Pick<Db, "select" | "insert">,
+  projectId: string,
+  createdAt: Date,
+): Promise<void> {
+  const existing = await tx
+    .select({ slug: labels.slug })
+    .from(labels)
+    .where(eq(labels.projectId, projectId));
+  const existingSlugs = new Set(existing.map((row) => row.slug));
+  const values = DEFAULT_PROJECT_LABELS.flatMap((seed, index) => {
+    if (existingSlugs.has(seed.slug)) {
+      return [];
+    }
+    return [
+      {
+        id: uuidv7(createdAt.getTime() + index),
+        projectId,
+        slug: seed.slug,
+        name: seed.name,
+        description: seed.description,
+        color: seed.color,
+        status: DEFAULT_PROJECT_LABEL_STATUS,
+        createdAt,
+      },
+    ];
+  });
+  if (values.length === 0) {
+    return;
+  }
+  await tx.insert(labels).values(values);
+}
+
 function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | undefined {
   if (!isConstraintKind(row.kind) || !isConstraintStatus(row.status)) {
     return undefined;
@@ -439,6 +488,21 @@ function toConstraint(row: typeof constraints.$inferSelect): ConstraintRecord | 
     scopePath: row.scopePath,
     status: row.status,
     createdAt: row.createdAt,
+  };
+}
+
+function toLabel(row: typeof labels.$inferSelect, paths: LinkedPath[]): LabelRecord {
+  const status: LabelStatus = isLabelStatus(row.status) ? row.status : "active";
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    color: row.color,
+    status,
+    createdAt: row.createdAt,
+    paths,
   };
 }
 
@@ -986,6 +1050,7 @@ export class DbAuthStore implements AuthStore {
           createdAt: project.createdAt,
         });
         await seedDefaultSecurityConstraints(tx, created.id, project.createdAt);
+        await seedDefaultProjectLabels(tx, created.id, project.createdAt);
         return toProject(created);
       });
     } catch (error) {
@@ -1217,6 +1282,7 @@ export class DbAuthStore implements AuthStore {
         assigneeUserId: task.assigneeUserId,
         assigneeAgentName: task.assigneeAgentName,
         agentBrief: task.agentBrief,
+        howToCheck: task.howToCheck,
         linkedPaths: task.linkedPaths,
         githubIssueId: task.githubIssueId,
         lockedBySessionId: task.lockedBySessionId,
@@ -1276,6 +1342,7 @@ export class DbAuthStore implements AuthStore {
             ? { assigneeAgentName: patch.assigneeAgentName }
             : {}),
           ...(patch.agentBrief !== undefined ? { agentBrief: patch.agentBrief } : {}),
+          ...(patch.howToCheck !== undefined ? { howToCheck: patch.howToCheck } : {}),
           ...(patch.linkedPaths !== undefined ? { linkedPaths: patch.linkedPaths } : {}),
           ...(options?.releaseLock ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
           version: current.version + 1,
@@ -1727,6 +1794,7 @@ export class DbAuthStore implements AuthStore {
               assigneeUserId: task.assigneeUserId,
               assigneeAgentName: task.assigneeAgentName,
               agentBrief: task.agentBrief,
+              howToCheck: task.howToCheck,
               linkedPaths: task.linkedPaths,
               githubIssueId: task.githubIssueId,
               lockedBySessionId: task.lockedBySessionId,
@@ -1781,6 +1849,45 @@ export class DbAuthStore implements AuthStore {
           return toActivity(row);
         },
         startWork: async (input) => startWorkInTx(tx, input),
+        setTaskLabels: async (taskId, labelIds) => {
+          const unique: string[] = [];
+          const seen = new Set<string>();
+          for (const id of labelIds) {
+            if (seen.has(id)) {
+              continue;
+            }
+            seen.add(id);
+            unique.push(id);
+          }
+          await tx.delete(taskLabels).where(eq(taskLabels.taskId, taskId));
+          if (unique.length > 0) {
+            await tx.insert(taskLabels).values(unique.map((labelId) => ({ taskId, labelId })));
+          }
+          if (unique.length === 0) {
+            return [];
+          }
+          const rows = await tx
+            .select()
+            .from(labels)
+            .where(inArray(labels.id, unique))
+            .orderBy(asc(labels.name), asc(labels.id));
+          const paths = await tx
+            .select()
+            .from(labelPaths)
+            .where(
+              inArray(
+                labelPaths.labelId,
+                rows.map((row) => row.id),
+              ),
+            );
+          const byLabel = new Map<string, LinkedPath[]>();
+          for (const path of paths) {
+            const list = byLabel.get(path.labelId) ?? [];
+            list.push({ repo_id: path.repoId, path: path.path });
+            byLabel.set(path.labelId, list);
+          }
+          return rows.map((row) => toLabel(row, byLabel.get(row.id) ?? []));
+        },
       };
 
       const response = await produce(writes);
@@ -2052,6 +2159,7 @@ export class DbAuthStore implements AuthStore {
               status: input.taskStatus,
               version: current.version + 1,
               updatedAt: input.now,
+              ...(input.howToCheck.trim().length > 0 ? { howToCheck: input.howToCheck } : {}),
               ...(lockReleased ? { lockedBySessionId: null, lockExpiresAt: null } : {}),
             })
             .where(eq(tasks.id, current.id))
@@ -2170,6 +2278,170 @@ export class DbAuthStore implements AuthStore {
 
   async createDecision(decision: DecisionRecord): Promise<DecisionRecord> {
     return this.db.transaction(async (tx) => insertDecisionTx(tx, decision));
+  }
+
+  async listLabels(projectId: string): Promise<LabelRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(labels)
+      .where(eq(labels.projectId, projectId))
+      .orderBy(asc(labels.status), asc(labels.name), asc(labels.id));
+    return this.attachLabelPaths(rows);
+  }
+
+  async findLabelById(id: string): Promise<LabelRecord | undefined> {
+    const [row] = await this.db.select().from(labels).where(eq(labels.id, id)).limit(1);
+    if (!row) {
+      return undefined;
+    }
+    const [linked] = await this.attachLabelPaths([row]);
+    return linked;
+  }
+
+  async createLabel(label: LabelRecord): Promise<LabelRecord> {
+    try {
+      return await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(labels)
+          .values({
+            id: label.id,
+            projectId: label.projectId,
+            slug: label.slug,
+            name: label.name,
+            description: label.description,
+            color: label.color,
+            status: label.status,
+            createdAt: label.createdAt,
+          })
+          .returning();
+        if (!row) {
+          throw new Error("insert label returned no row");
+        }
+        if (label.paths.length > 0) {
+          await tx.insert(labelPaths).values(
+            label.paths.map((path) => ({
+              labelId: label.id,
+              repoId: path.repo_id,
+              path: path.path,
+            })),
+          );
+        }
+        return toLabel(row, label.paths);
+      });
+    } catch (error) {
+      if (uniqueConstraint(error) === "label_slug") {
+        throw new UniqueViolationError("labels_project_slug");
+      }
+      throw error;
+    }
+  }
+
+  async updateLabel(id: string, patch: LabelPatch): Promise<LabelRecord | undefined> {
+    try {
+      return await this.db.transaction(async (tx) => {
+        const [current] = await tx.select().from(labels).where(eq(labels.id, id)).limit(1);
+        if (!current) {
+          return undefined;
+        }
+        const [row] = await tx
+          .update(labels)
+          .set({
+            ...(patch.name !== undefined ? { name: patch.name } : {}),
+            ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
+            ...(patch.description !== undefined ? { description: patch.description } : {}),
+            ...(patch.color !== undefined ? { color: patch.color } : {}),
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+          })
+          .where(eq(labels.id, id))
+          .returning();
+        if (!row) {
+          return undefined;
+        }
+        if (patch.paths !== undefined) {
+          await tx.delete(labelPaths).where(eq(labelPaths.labelId, id));
+          if (patch.paths.length > 0) {
+            await tx.insert(labelPaths).values(
+              patch.paths.map((path) => ({
+                labelId: id,
+                repoId: path.repo_id,
+                path: path.path,
+              })),
+            );
+          }
+        }
+        const paths =
+          patch.paths ??
+          (await tx.select().from(labelPaths).where(eq(labelPaths.labelId, id))).map((item) => ({
+            repo_id: item.repoId,
+            path: item.path,
+          }));
+        return toLabel(row, paths);
+      });
+    } catch (error) {
+      if (uniqueConstraint(error) === "label_slug") {
+        throw new UniqueViolationError("labels_project_slug");
+      }
+      throw error;
+    }
+  }
+
+  async listTaskLabels(taskId: string): Promise<LabelRecord[]> {
+    const links = await this.db.select().from(taskLabels).where(eq(taskLabels.taskId, taskId));
+    if (links.length === 0) {
+      return [];
+    }
+    const rows = await this.db
+      .select()
+      .from(labels)
+      .where(
+        inArray(
+          labels.id,
+          links.map((link) => link.labelId),
+        ),
+      )
+      .orderBy(asc(labels.name), asc(labels.id));
+    return this.attachLabelPaths(rows);
+  }
+
+  async setTaskLabels(taskId: string, labelIds: string[]): Promise<LabelRecord[]> {
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const id of labelIds) {
+      if (seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      unique.push(id);
+    }
+    await this.db.transaction(async (tx) => {
+      await tx.delete(taskLabels).where(eq(taskLabels.taskId, taskId));
+      if (unique.length > 0) {
+        await tx.insert(taskLabels).values(unique.map((labelId) => ({ taskId, labelId })));
+      }
+    });
+    return this.listTaskLabels(taskId);
+  }
+
+  private async attachLabelPaths(rows: (typeof labels.$inferSelect)[]): Promise<LabelRecord[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+    const paths = await this.db
+      .select()
+      .from(labelPaths)
+      .where(
+        inArray(
+          labelPaths.labelId,
+          rows.map((row) => row.id),
+        ),
+      );
+    const byLabel = new Map<string, LinkedPath[]>();
+    for (const path of paths) {
+      const list = byLabel.get(path.labelId) ?? [];
+      list.push({ repo_id: path.repoId, path: path.path });
+      byLabel.set(path.labelId, list);
+    }
+    return rows.map((row) => toLabel(row, byLabel.get(row.id) ?? []));
   }
 
   async findProjectRepo(id: string): Promise<ProjectRepoRef | undefined> {
@@ -2782,6 +3054,150 @@ export class DbAuthStore implements AuthStore {
     }
     return Math.max(0, Math.floor((now.getTime() - row.lastSyncedAt.getTime()) / 1000));
   }
+
+  async createReport(report: ProjectReportRecord): Promise<ProjectReportRecord> {
+    const [row] = await this.db
+      .insert(projectReports)
+      .values({
+        id: report.id,
+        projectId: report.projectId,
+        title: report.title,
+        bodyMd: report.bodyMd,
+        snapshot: report.snapshot,
+        createdByType: report.createdByType,
+        createdById: report.createdById,
+        createdAt: report.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert report returned no row");
+    }
+    return toReport(row);
+  }
+
+  async listReports(projectId: string): Promise<ProjectReportRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(projectReports)
+      .where(eq(projectReports.projectId, projectId))
+      .orderBy(desc(projectReports.createdAt), desc(projectReports.id));
+    return rows.map(toReport);
+  }
+
+  async findReportById(id: string): Promise<ProjectReportRecord | undefined> {
+    const [row] = await this.db.select().from(projectReports).where(eq(projectReports.id, id)).limit(1);
+    return row ? toReport(row) : undefined;
+  }
+
+  async createReview(review: ProjectReviewRecord): Promise<ProjectReviewRecord> {
+    const [row] = await this.db
+      .insert(projectReviews)
+      .values({
+        id: review.id,
+        projectId: review.projectId,
+        title: review.title,
+        bodyMd: review.bodyMd,
+        source: review.source,
+        sourcePath: review.sourcePath,
+        status: review.status,
+        createdByType: review.createdByType,
+        createdById: review.createdById,
+        createdAt: review.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert review returned no row");
+    }
+    return toReview(row);
+  }
+
+  async listReviews(projectId: string): Promise<ProjectReviewRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(projectReviews)
+      .where(eq(projectReviews.projectId, projectId))
+      .orderBy(desc(projectReviews.createdAt), desc(projectReviews.id));
+    return rows.map(toReview);
+  }
+
+  async findReviewById(id: string): Promise<ProjectReviewRecord | undefined> {
+    const [row] = await this.db.select().from(projectReviews).where(eq(projectReviews.id, id)).limit(1);
+    return row ? toReview(row) : undefined;
+  }
+}
+
+function toReport(row: typeof projectReports.$inferSelect): ProjectReportRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    bodyMd: row.bodyMd,
+    snapshot: asReportSnapshot(row.snapshot),
+    createdByType: row.createdByType,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+  };
+}
+
+function toReview(row: typeof projectReviews.$inferSelect): ProjectReviewRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    bodyMd: row.bodyMd,
+    source: row.source,
+    sourcePath: row.sourcePath,
+    status: isReviewStatus(row.status) ? row.status : "needs_review",
+    createdByType: row.createdByType,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+  };
+}
+
+function asReportSnapshot(value: unknown): ReportSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      generated_at: new Date(0).toISOString(),
+      milestones: { open: 0, closed: 0 },
+      tasks: {},
+      ready_task_ids: [],
+      in_flight_task_ids: [],
+      review_ids: [],
+    };
+  }
+  const record = value as Record<string, unknown>;
+  const milestones =
+    record["milestones"] && typeof record["milestones"] === "object" && !Array.isArray(record["milestones"])
+      ? (record["milestones"] as Record<string, unknown>)
+      : {};
+  const tasks =
+    record["tasks"] && typeof record["tasks"] === "object" && !Array.isArray(record["tasks"])
+      ? (record["tasks"] as Record<string, unknown>)
+      : {};
+  const counts: Record<string, number> = {};
+  for (const [key, count] of Object.entries(tasks)) {
+    if (typeof count === "number") {
+      counts[key] = count;
+    }
+  }
+  return {
+    generated_at: typeof record["generated_at"] === "string" ? record["generated_at"] : new Date(0).toISOString(),
+    milestones: {
+      open: typeof milestones["open"] === "number" ? milestones["open"] : 0,
+      closed: typeof milestones["closed"] === "number" ? milestones["closed"] : 0,
+    },
+    tasks: counts,
+    ready_task_ids: stringArray(record["ready_task_ids"]),
+    in_flight_task_ids: stringArray(record["in_flight_task_ids"]),
+    review_ids: stringArray(record["review_ids"]),
+  };
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 async function startWorkInTx(

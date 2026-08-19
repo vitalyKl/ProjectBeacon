@@ -1,6 +1,6 @@
 import { createHttpCodeSource } from "./code-source.js";
 import { handoffWriteUnavailable, invalidArguments, repoAmbiguous } from "./errors.js";
-import { apiRequest, requireProjectId } from "./http.js";
+import { apiRequest, contextForProject, requireProjectId } from "./http.js";
 import type { InvokeContext, JsonObject } from "./types.js";
 import { isToolName, parseToolArgs, type ToolArgs, type ToolName } from "./tools.js";
 
@@ -52,6 +52,17 @@ function resolveRepoId(repoId: string | undefined, ctx: InvokeContext): string {
   return resolved;
 }
 
+function requestContext(
+  args: { project_id?: string | undefined },
+  ctx: InvokeContext,
+): InvokeContext {
+  const projectId = args.project_id;
+  if (!projectId || projectId === ctx.projectId) {
+    return ctx;
+  }
+  return contextForProject(ctx, projectId);
+}
+
 async function projectIdOfTask(taskId: string, ctx: InvokeContext): Promise<string> {
   const task = (await apiRequest(ctx, {
     method: "GET",
@@ -61,6 +72,13 @@ async function projectIdOfTask(taskId: string, ctx: InvokeContext): Promise<stri
     throw invalidArguments("task is missing project_id");
   }
   return task.project_id;
+}
+
+function scoped(ctx: InvokeContext, projectId: string): InvokeContext {
+  if (!projectId || projectId === ctx.projectId) {
+    return ctx;
+  }
+  return contextForProject(ctx, projectId);
 }
 
 async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): Promise<unknown> {
@@ -105,15 +123,19 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
         path: `/v1/repos/${resolveRepoId(data.repo_id, ctx)}/github/sync`,
       });
     }
-    case "get_project":
-      return apiRequest(ctx, {
+    case "get_project": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "GET",
-        path: `/v1/projects/${requireProjectId(argsOf(tool, args), ctx)}`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}`,
       });
+    }
     case "get_context_pack": {
       const data = argsOf(tool, args);
-      const projectId = requireProjectId(data, ctx);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      const projectId = requireProjectId(data, scopedCtx);
+      return apiRequest(scopedCtx, {
         method: "POST",
         path: `/v1/projects/${projectId}/context/compile`,
         body: omitUndefined({
@@ -127,9 +149,10 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     }
     case "search_context": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "GET",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/context/search`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/context/search`,
         query: {
           q: data.q,
           limit: data.limit,
@@ -139,7 +162,8 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     case "get_task_brief": {
       const data = argsOf(tool, args);
       const projectId = await projectIdOfTask(data.task_id, ctx);
-      return apiRequest(ctx, {
+      const scopedCtx = scoped(ctx, projectId);
+      return apiRequest(scopedCtx, {
         method: "POST",
         path: `/v1/projects/${projectId}/context/compile`,
         body: omitUndefined({
@@ -152,9 +176,10 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     }
     case "list_milestones": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "GET",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/milestones`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/milestones`,
         query: {
           include_closed: data.include_closed,
         },
@@ -162,14 +187,16 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     }
     case "list_tasks": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "GET",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/tasks`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/tasks`,
         query: {
           milestone_id: data.milestone_id,
           status: statusQuery(data.status),
           q: data.q,
           assignee: data.assignee,
+          label_id: data.label_id,
           cursor: data.cursor,
           limit: data.limit,
         },
@@ -184,9 +211,10 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     }
     case "create_task": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "POST",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/tasks`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/tasks`,
         idempotencyKey: data.idempotency_key,
         body: omitKeys(data as JsonObject, ["project_id", "idempotency_key"]),
       });
@@ -197,6 +225,17 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
         method: "PATCH",
         path: `/v1/tasks/${data.task_id}`,
         body: omitKeys(data as JsonObject, ["task_id"]),
+      });
+    }
+    case "list_comments": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "GET",
+        path: `/v1/tasks/${data.task_id}/comments`,
+        query: {
+          cursor: data.cursor,
+          limit: data.limit,
+        },
       });
     }
     case "add_comment": {
@@ -232,9 +271,10 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     }
     case "list_decisions": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "GET",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/decisions`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/decisions`,
         query: {
           status: data.status,
           q: data.q,
@@ -244,20 +284,51 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
         },
       });
     }
-    case "record_decision": {
+    case "list_labels": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
+        method: "GET",
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/labels`,
+        query: {
+          cursor: data.cursor,
+          limit: data.limit,
+        },
+      });
+    }
+    case "propose_label": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
+        method: "POST",
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/labels`,
+        body: omitKeys(data as JsonObject, ["project_id"]),
+      });
+    }
+    case "set_task_labels": {
       const data = argsOf(tool, args);
       return apiRequest(ctx, {
+        method: "PUT",
+        path: `/v1/tasks/${data.task_id}/labels`,
+        body: { label_ids: data.label_ids },
+      });
+    }
+    case "record_decision": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "POST",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/decisions`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/decisions`,
         idempotencyKey: data.idempotency_key,
         body: omitKeys(data as JsonObject, ["project_id", "idempotency_key"]),
       });
     }
     case "get_constraints": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "GET",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/constraints`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/constraints`,
         query: {
           path: data.path,
           active_only: data.active_only,
@@ -266,9 +337,10 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     }
     case "create_constraint": {
       const data = argsOf(tool, args);
-      return apiRequest(ctx, {
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
         method: "POST",
-        path: `/v1/projects/${requireProjectId(data, ctx)}/constraints`,
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/constraints`,
         idempotencyKey: data.idempotency_key,
         body: omitKeys(data as JsonObject, ["project_id", "idempotency_key"]),
       });
@@ -298,7 +370,8 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
     case "start_work": {
       const data = argsOf(tool, args);
       const projectId = await projectIdOfTask(data.task_id, ctx);
-      return apiRequest(ctx, {
+      const scopedCtx = scoped(ctx, projectId);
+      return apiRequest(scopedCtx, {
         method: "POST",
         path: `/v1/projects/${projectId}/sessions`,
         idempotencyKey: data.idempotency_key,
@@ -318,6 +391,7 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
         body: omitUndefined({
           summary: data.summary,
           next_steps: data.next_steps,
+          how_to_check: data.how_to_check,
           files_touched: data.files_touched,
           open_questions: data.open_questions,
           status: data.status,
@@ -332,6 +406,66 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
       return apiRequest(ctx, {
         method: "GET",
         path: `/v1/tasks/${data.task_id}/handoff`,
+      });
+    }
+    case "list_reports": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
+        method: "GET",
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/reports`,
+        query: {
+          cursor: data.cursor,
+          limit: data.limit,
+        },
+      });
+    }
+    case "generate_report": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
+        method: "POST",
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/reports`,
+        body: omitUndefined({ title: data.title }),
+      });
+    }
+    case "get_report": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "GET",
+        path: `/v1/reports/${data.report_id}`,
+      });
+    }
+    case "list_reviews": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
+        method: "GET",
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/reviews`,
+        query: {
+          cursor: data.cursor,
+          limit: data.limit,
+        },
+      });
+    }
+    case "import_review": {
+      const data = argsOf(tool, args);
+      const scopedCtx = requestContext(data, ctx);
+      return apiRequest(scopedCtx, {
+        method: "POST",
+        path: `/v1/projects/${requireProjectId(data, scopedCtx)}/reviews`,
+        body: omitUndefined({
+          title: data.title,
+          body_md: data.body_md,
+          source_path: data.source_path,
+        }),
+      });
+    }
+    case "get_review": {
+      const data = argsOf(tool, args);
+      return apiRequest(ctx, {
+        method: "GET",
+        path: `/v1/reviews/${data.review_id}`,
       });
     }
     default:

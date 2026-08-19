@@ -11,12 +11,18 @@ export type BeaconConfig = {
   project_id?: string;
 };
 
+export type ProjectProfile = {
+  token: string;
+  url?: string;
+};
+
 export type ConfigFile = {
   values: Record<string, string>;
+  projects: Record<string, ProjectProfile>;
 };
 
 export function emptyConfigFile(): ConfigFile {
-  return { values: {} };
+  return { values: {}, projects: {} };
 }
 
 export function configFromValues(values: Record<string, string>): BeaconConfig {
@@ -27,10 +33,25 @@ export function configFromValues(values: Record<string, string>): BeaconConfig {
 }
 
 export function parseTomlScalars(source: string): Record<string, string> {
+  return parseTomlDocument(source).values;
+}
+
+export function parseTomlDocument(source: string): {
+  values: Record<string, string>;
+  tables: Record<string, Record<string, string>>;
+} {
   const values: Record<string, string> = {};
+  const tables: Record<string, Record<string, string>> = {};
+  let current = values;
   for (const rawLine of source.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line || line.startsWith("#") || line.startsWith("[")) {
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    if (line.startsWith("[") && line.endsWith("]")) {
+      const name = line.slice(1, -1).trim();
+      tables[name] = tables[name] ?? {};
+      current = tables[name];
       continue;
     }
     const eq = line.indexOf("=");
@@ -41,10 +62,32 @@ export function parseTomlScalars(source: string): Record<string, string> {
     const raw = line.slice(eq + 1).trim();
     const value = unquoteToml(raw);
     if (key && value !== undefined) {
-      values[key] = value;
+      current[key] = value;
     }
   }
-  return values;
+  return { values, tables };
+}
+
+export function projectsFromTables(
+  tables: Record<string, Record<string, string>>,
+): Record<string, ProjectProfile> {
+  const projects: Record<string, ProjectProfile> = {};
+  for (const [name, table] of Object.entries(tables)) {
+    const projectId = parseProjectsTableName(name);
+    const token = table["token"]?.trim();
+    if (!projectId || !token) {
+      continue;
+    }
+    const url = table["url"]?.trim();
+    projects[projectId] = url ? { token, url } : { token };
+  }
+  return projects;
+}
+
+function parseProjectsTableName(name: string): string | undefined {
+  const match = /^projects\.(?:"([^"]+)"|'([^']+)'|(.+))$/.exec(name.trim());
+  const id = match?.[1] ?? match?.[2] ?? match?.[3];
+  return id?.trim() || undefined;
 }
 
 function unquoteToml(raw: string): string | undefined {
@@ -80,6 +123,21 @@ export function serializeConfigFile(file: ConfigFile): string {
     }
     lines.push(`${key} = ${quoteToml(value)}`);
   }
+  const projectIds = Object.keys(file.projects).sort();
+  for (const projectId of projectIds) {
+    const profile = file.projects[projectId];
+    if (!profile?.token) {
+      continue;
+    }
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push(`[projects.${quoteToml(projectId)}]`);
+    lines.push(`token = ${quoteToml(profile.token)}`);
+    if (profile.url) {
+      lines.push(`url = ${quoteToml(profile.url)}`);
+    }
+  }
   return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
@@ -90,7 +148,8 @@ function isKnownConfigKey(key: string): boolean {
 export async function readConfigFile(path: string): Promise<ConfigFile> {
   try {
     const source = await readFile(path, "utf8");
-    return { values: parseTomlScalars(source) };
+    const parsed = parseTomlDocument(source);
+    return { values: parsed.values, projects: projectsFromTables(parsed.tables) };
   } catch (error) {
     if (isNotFound(error)) {
       return emptyConfigFile();
@@ -109,6 +168,7 @@ export async function writeConfigFile(path: string, file: ConfigFile): Promise<v
 
 export function applyConfigPatch(file: ConfigFile, patch: Partial<BeaconConfig>): ConfigFile {
   const values = { ...file.values };
+  const projects = { ...file.projects };
   if (patch.url !== undefined) {
     values["url"] = patch.url;
   }
@@ -118,28 +178,57 @@ export function applyConfigPatch(file: ConfigFile, patch: Partial<BeaconConfig>)
   if (patch.project_id !== undefined) {
     values["project_id"] = patch.project_id;
   }
-  return { values };
+  const projectId = patch.project_id?.trim() || values["project_id"]?.trim();
+  const token = patch.token?.trim() || (projectId ? projects[projectId]?.token : undefined);
+  if (projectId && token) {
+    const url = patch.url?.trim() || projects[projectId]?.url || values["url"]?.trim();
+    projects[projectId] = url ? { token, url } : { token };
+  }
+  return { values, projects };
+}
+
+export function mergeProjectProfiles(
+  file: ConfigFile,
+  extra: Record<string, ProjectProfile> = {},
+): Record<string, ProjectProfile> {
+  const projects = { ...file.projects, ...extra };
+  const top = configFromValues(file.values);
+  if (top.project_id && top.token && !projects[top.project_id]) {
+    projects[top.project_id] = top.url ? { token: top.token, url: top.url } : { token: top.token };
+  }
+  return projects;
 }
 
 export type RuntimeConfig = BeaconConfig & {
   home: string;
   configPath: string;
+  projects: Record<string, ProjectProfile>;
 };
 
 export function resolveRuntimeConfig(
   env: NodeJS.ProcessEnv = process.env,
   file: ConfigFile = emptyConfigFile(),
+  requestedProjectId?: string,
 ): RuntimeConfig {
   const home = resolveBeaconHome(env);
   const fromFile = configFromValues(file.values);
-  const url = normalizeBeaconUrl(env["BEACON_URL"]?.trim() || fromFile.url);
-  const projectId = env["BEACON_PROJECT"]?.trim() || fromFile.project_id;
+  const projects = mergeProjectProfiles(file);
+  const requested = requestedProjectId?.trim() || env["BEACON_PROJECT"]?.trim() || undefined;
+  const projectId = requested || fromFile.project_id || Object.keys(projects).sort()[0];
+  const profile = projectId ? projects[projectId] : undefined;
+  const url = normalizeBeaconUrl(env["BEACON_URL"]?.trim() || profile?.url || fromFile.url);
+  const token =
+    profile?.token ??
+    (Object.keys(projects).length === 0 || !requested || requested === fromFile.project_id
+      ? fromFile.token
+      : undefined);
   return {
     home,
     configPath: resolveConfigPath(home),
     url,
-    token: fromFile.token,
+    token,
     project_id: projectId || undefined,
+    projects,
   };
 }
 

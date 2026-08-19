@@ -13,7 +13,6 @@ const STRONG_PASSWORD = "correct-horse";
 function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
   return {
     bootstrapAdminToken: BOOTSTRAP_TOKEN,
-    workerToken: undefined,
     authLocal: true,
     authLocalInviteOnly: false,
     authGithub: false,

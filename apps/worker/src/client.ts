@@ -32,6 +32,14 @@ export type TaskView = {
   version?: number;
 };
 
+export type LabelView = {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  paths: { repo_id: string; path: string }[];
+};
+
 export type GithubIssueView = {
   id: string;
   number: number;
@@ -75,9 +83,15 @@ export type WorkerApi = {
       milestone_id?: string | null;
       type?: string;
       linked_paths?: { repo_id: string; path: string }[];
+      label_ids?: string[];
     },
     idempotencyKey: string,
   ): Promise<{ id: string }>;
+  listLabels(projectId: string): Promise<LabelView[]>;
+  patchLabel(
+    labelId: string,
+    body: { paths?: { repo_id: string; path: string }[] },
+  ): Promise<LabelView>;
   listGithubIssues(
     repoId: string,
     query?: { state?: string; q?: string },
@@ -108,9 +122,7 @@ export type RepoView = {
   installation_id: string | null;
   local_root_hint: string | null;
   index_mode: string;
-  remote_url?: string | null;
   github_repo_id?: string | null;
-  installation_id?: string | null;
 };
 
 const PAGE_LIMIT = 100;
@@ -242,6 +254,17 @@ export function createWorkerApi(options: {
         body,
         idempotencyKey,
       });
+    },
+    async listLabels(projectId) {
+      return listAllPages((cursor) =>
+        request<{ items: LabelView[]; next_cursor: string | null }>(
+          "GET",
+          pagedPath(`/v1/projects/${projectId}/labels`, cursor),
+        ),
+      );
+    },
+    patchLabel(labelId, body) {
+      return request<LabelView>("PATCH", `/v1/labels/${labelId}`, { body });
     },
     async listGithubIssues(repoId, query) {
       return listAllPages((cursor) => {

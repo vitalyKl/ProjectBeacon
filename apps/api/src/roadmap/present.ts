@@ -1,3 +1,5 @@
+import type { LabelRecord } from "../labels/types.js";
+import { presentLabelSummary } from "../labels/present.js";
 import type {
   ActivityEventRecord,
   MilestoneRecord,
@@ -19,7 +21,14 @@ export function presentMilestone(milestone: MilestoneRecord) {
   };
 }
 
-export function presentTask(task: TaskRecord) {
+export async function presentTaskWithLabels(
+  store: { listTaskLabels(taskId: string): Promise<LabelRecord[]> },
+  task: TaskRecord,
+) {
+  return presentTask(task, await store.listTaskLabels(task.id));
+}
+
+export function presentTask(task: TaskRecord, attached: LabelRecord[] = []) {
   return {
     id: task.id,
     project_id: task.projectId,
@@ -34,7 +43,9 @@ export function presentTask(task: TaskRecord) {
     assignee_user_id: task.assigneeUserId,
     assignee_agent_name: task.assigneeAgentName,
     agent_brief: task.agentBrief,
+    how_to_check: task.howToCheck,
     linked_paths: task.linkedPaths.map((path) => ({ repo_id: path.repo_id, path: path.path })),
+    labels: attached.map(presentLabelSummary),
     github_issue_id: task.githubIssueId === null ? null : task.githubIssueId.toString(),
     locked_by_session_id: task.lockedBySessionId,
     lock_expires_at: task.lockExpiresAt ? task.lockExpiresAt.toISOString() : null,

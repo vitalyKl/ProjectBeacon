@@ -21,7 +21,18 @@ export const CHANGED_SCOPE_PATH_CAP = 40;
 export const DECISIONS_CAP = 10;
 export const DECISION_TEXT_CAP = 400;
 
-const NEVER_DROP_SECTION_IDS = new Set(["non_goals", "security"]);
+const NEVER_DROP_SECTION_IDS = new Set(["non_goals", "security", "definition_of_done"]);
+
+const NEXT_WORK_KEYS = new Set(["next-work", "whats-next", "what's-next", "what-is-next"]);
+
+function isNextWorkSection(section: ContextSection): boolean {
+  if (section.id !== "custom") {
+    return false;
+  }
+  const key = section.key.trim().toLowerCase();
+  const title = section.title.trim().toLowerCase();
+  return NEXT_WORK_KEYS.has(key) || title === "next work" || title === "what's next" || title === "whats next";
+}
 
 const SECTION_PRIORITY = [
   "pitfalls",
@@ -85,38 +96,63 @@ export function posixPathPrefixes(path: string): string[] {
   return prefixes;
 }
 
+function collectPathPrefixes(input: CompileInput): string[] {
+  const prefixes = new Set<string>();
+  for (const prefix of posixPathPrefixes(input.path ?? "")) {
+    prefixes.add(prefix);
+  }
+  for (const extra of input.extra_paths ?? []) {
+    for (const prefix of posixPathPrefixes(extra)) {
+      prefixes.add(prefix);
+    }
+  }
+  return [...prefixes];
+}
+
 export function selectNodes(nodes: CompileNode[], input: CompileInput): CompileNode[] {
   const selected: CompileNode[] = [];
-  const projectNode = nodes.find((node) => node.scope_type === "project");
-  if (projectNode) {
-    selected.push(projectNode);
+  const seen = new Set<string>();
+  const push = (node: CompileNode | undefined) => {
+    if (!node || seen.has(node.id)) {
+      return;
+    }
+    seen.add(node.id);
+    selected.push(node);
+  };
+
+  push(nodes.find((node) => node.scope_type === "project"));
+
+  const repoNodes = nodes.filter(
+    (node) => node.scope_type === "repo" && node.path === "",
+  );
+  if (input.repo_id) {
+    push(repoNodes.find((node) => node.repo_id === input.repo_id));
+  } else if (repoNodes.length === 1) {
+    // Import attaches as repo scope. A project-only compile still needs that brief.
+    push(repoNodes[0]);
   }
 
   if (input.repo_id) {
-    const repoRoot = nodes.find(
-      (node) => node.scope_type === "repo" && node.repo_id === input.repo_id && node.path === "",
-    );
-    if (repoRoot) {
-      selected.push(repoRoot);
-    }
-    for (const prefix of posixPathPrefixes(input.path ?? "")) {
-      const pathNode = nodes.find(
-        (node) =>
-          node.scope_type === "path" && node.repo_id === input.repo_id && node.path === prefix,
+    for (const prefix of collectPathPrefixes(input)) {
+      push(
+        nodes.find(
+          (node) =>
+            node.scope_type === "path" && node.repo_id === input.repo_id && node.path === prefix,
+        ),
       );
-      if (pathNode) {
-        selected.push(pathNode);
+    }
+  } else {
+    for (const prefix of collectPathPrefixes(input)) {
+      for (const node of nodes) {
+        if (node.scope_type === "path" && node.path === prefix) {
+          push(node);
+        }
       }
     }
   }
 
   if (input.task_id) {
-    const taskNode = nodes.find(
-      (node) => node.scope_type === "task" && node.task_id === input.task_id,
-    );
-    if (taskNode) {
-      selected.push(taskNode);
-    }
+    push(nodes.find((node) => node.scope_type === "task" && node.task_id === input.task_id));
   }
 
   return selected;
@@ -139,10 +175,9 @@ function compareSections(left: ContextSection, right: ContextSection): number {
     return leftNever - rightNever;
   }
   if (leftNever === 0) {
-    if (left.id !== right.id) {
-      return left.id === "non_goals" ? -1 : 1;
-    }
-    return 0;
+    const neverOrder = ["non_goals", "security", "definition_of_done"] as const;
+    return neverOrder.indexOf(left.id as (typeof neverOrder)[number]) -
+      neverOrder.indexOf(right.id as (typeof neverOrder)[number]);
   }
   const leftRank = PRIORITY_RANK.get(left.id) ?? Number.MAX_SAFE_INTEGER;
   const rightRank = PRIORITY_RANK.get(right.id) ?? Number.MAX_SAFE_INTEGER;
@@ -225,7 +260,13 @@ export function truncateHandoff(handoff: BriefHandoff): BriefHandoff {
 export function sessionBriefMarkdown(brief: SessionBrief): string {
   const lines: string[] = [`# ${brief.project.name}`, ""];
   if (brief.task) {
-    lines.push("## Task", brief.task.title, "", brief.task.acceptance_md, "");
+    lines.push("## Task", brief.task.title, "");
+    if (brief.task.acceptance_md.trim()) {
+      lines.push(brief.task.acceptance_md, "");
+    }
+    if (brief.task.how_to_check.trim()) {
+      lines.push("## How to check", brief.task.how_to_check, "");
+    }
   }
   if (brief.constraints.length > 0) {
     lines.push("## Constraints");
@@ -330,7 +371,10 @@ export function compileSessionBrief(input: CompileInput, document: CompileDocume
   const includeTreeCapsule = input.include?.tree_capsule ?? true;
 
   const selectedNodes = selectNodes(document.nodes, input);
-  const merged = mergeSections(selectedNodes).slice().sort(compareSections);
+  const merged = mergeSections(selectedNodes)
+    .filter((section) => !isNextWorkSection(section))
+    .slice()
+    .sort(compareSections);
   const neverDropSections = merged.filter((section) => NEVER_DROP_SECTION_IDS.has(section.id));
   const optionalSections = merged.filter((section) => !NEVER_DROP_SECTION_IDS.has(section.id));
   const constraints = activeConstraints(document.constraints);

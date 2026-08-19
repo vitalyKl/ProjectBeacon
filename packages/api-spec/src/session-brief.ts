@@ -36,6 +36,7 @@ export const ContextSectionSchema = z.discriminatedUnion("id", [
       "stack",
       "security",
       "style",
+      "definition_of_done",
     ]),
     key: z.string().min(1).optional(),
     ...ContextSectionFields,
@@ -49,6 +50,7 @@ export const TaskSummarySchema = z.object({
   type: TaskTypeSchema,
   milestone_id: UuidSchema.nullable(),
   acceptance_md: z.string(),
+  how_to_check: z.string(),
   linked_paths: z.array(LinkedPathSchema),
 });
 
@@ -171,6 +173,7 @@ export const CompileInputSchema = z.object({
   project_id: UuidSchema,
   repo_id: UuidSchema.optional(),
   path: z.string().optional(),
+  extra_paths: z.array(z.string().min(1).max(1024)).optional(),
   task_id: UuidSchema.optional(),
   budget_tokens: z.number().int().positive().optional(),
   include: CompileIncludeSchema.optional(),

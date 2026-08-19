@@ -5,12 +5,13 @@ import type { AuthDeps } from "../auth/routes.js";
 import { DependencyCycleError, VersionConflictError, type UserRecord } from "../auth/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
+import { parseLabelIds } from "../labels/parse.js";
 import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
 import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { isTerminalTaskStatus } from "../sessions/types.js";
 import { parsePageQuery, paginateRecords, dependencyCursorId } from "./page.js";
-import { presentActivity, presentComment, presentDependency, presentMilestone, presentTask } from "./present.js";
+import { presentActivity, presentComment, presentDependency, presentMilestone, presentTask, presentTaskWithLabels } from "./present.js";
 import { isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, type DependencyType, type LinkedPath, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
 
 function parseExpectedVersion(value: unknown): number | undefined {
@@ -314,10 +315,31 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (page instanceof Response) {
       return page;
     }
-    const records = await deps.store.listTasks(access.project.id);
+    const labelId = c.req.query("label_id")?.trim();
+    if (labelId) {
+      if (!isUuid(labelId)) {
+        return errorJson(c, 400, "unauthorized", "invalid label_id", { reason: "invalid_query" });
+      }
+      const label = await deps.store.findLabelById(labelId);
+      if (!label || label.projectId !== access.project.id) {
+        return errorJson(c, 400, "unauthorized", "invalid label_id", { reason: "invalid_label" });
+      }
+    }
+    let records = await deps.store.listTasks(access.project.id);
+    if (labelId) {
+      const matches = await Promise.all(
+        records.map(async (task) => ({
+          task,
+          labels: await deps.store.listTaskLabels(task.id),
+        })),
+      );
+      records = matches
+        .filter((item) => item.labels.some((label) => label.id === labelId))
+        .map((item) => item.task);
+    }
     const result = paginateRecords(records, page, (item) => item.updatedAt);
     return c.json({
-      items: result.items.map(presentTask),
+      items: await Promise.all(result.items.map((task) => presentTaskWithLabels(deps.store, task))),
       next_cursor: result.next_cursor,
     });
   });
@@ -382,12 +404,29 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
         : parseOptionalString(body["assignee_agent_name"], 120);
     const agentBrief =
       body?.["agent_brief"] === undefined ? "" : parseText(body["agent_brief"], 8000, true);
+    const howToCheck =
+      body?.["how_to_check"] === undefined ? "" : parseText(body["how_to_check"], 8000, true);
     const linkedPaths = parseLinkedPaths(body?.["linked_paths"]);
     if (!linkedPaths.ok) {
       if (linkedPaths.reason === "repo_ambiguous") {
         return errorJson(c, 400, "repo_ambiguous", "repo_id is required on linked_paths");
       }
       return errorJson(c, 400, "unauthorized", "invalid linked_paths", { reason: "invalid_body" });
+    }
+    const labelIds =
+      body?.["label_ids"] === undefined
+        ? { ok: true as const, ids: [] }
+        : parseLabelIds(body["label_ids"]);
+    if (!labelIds.ok) {
+      return errorJson(c, 400, "unauthorized", "invalid label_ids", { reason: "invalid_body" });
+    }
+    for (const labelId of labelIds.ids) {
+      const label = await deps.store.findLabelById(labelId);
+      if (!label || label.projectId !== access.project.id) {
+        return errorJson(c, 400, "unauthorized", "invalid label_ids", {
+          reason: "invalid_label",
+        });
+      }
     }
 
     if (
@@ -402,7 +441,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       parentId === undefined ||
       assigneeUserId === undefined ||
       assigneeAgentName === undefined ||
-      agentBrief === undefined
+      agentBrief === undefined ||
+      howToCheck === undefined
     ) {
       return errorJson(c, 400, "unauthorized", "title is required", { reason: "invalid_body" });
     }
@@ -429,8 +469,8 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     const status: TaskStatus = statusRaw;
     const type: TaskType = typeRaw;
     const presented = await deps.store.withIdempotency(
-      idempotencyActor(access.actor).type,
-      idempotencyActor(access.actor).id,
+      actorIdempotencyRef(access.actor).type,
+      actorIdempotencyRef(access.actor).id,
       idempotencyKey,
       now,
       async (writes) => {
@@ -448,6 +488,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           assigneeUserId,
           assigneeAgentName,
           agentBrief,
+          howToCheck,
           linkedPaths: linkedPaths.paths,
           githubIssueId: null,
           lockedBySessionId: null,
@@ -467,7 +508,14 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           payload: { status: task.status, type: task.type },
           now,
         });
-        return presentTask(task);
+        if (labelIds.ids.length > 0) {
+          if (writes.setTaskLabels) {
+            await writes.setTaskLabels(task.id, labelIds.ids);
+          } else {
+            await deps.store.setTaskLabels(task.id, labelIds.ids);
+          }
+        }
+        return presentTaskWithLabels(deps.store, task);
       },
     );
     return c.json(presented, 201);
@@ -478,7 +526,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (access instanceof Response) {
       return access;
     }
-    return c.json(presentTask(access.task));
+    return c.json(await presentTaskWithLabels(deps.store, access.task));
   });
 
   app.patch("/v1/tasks/:id", async (c) => {
@@ -599,6 +647,13 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       }
       patch.agentBrief = agentBrief;
     }
+    if (body["how_to_check"] !== undefined) {
+      const howToCheck = parseText(body["how_to_check"], 8000, true);
+      if (howToCheck === undefined) {
+        return errorJson(c, 400, "unauthorized", "invalid how_to_check", { reason: "invalid_body" });
+      }
+      patch.howToCheck = howToCheck;
+    }
     if (body["linked_paths"] !== undefined) {
       const linkedPaths = parseLinkedPaths(body["linked_paths"]);
       if (!linkedPaths.ok) {
@@ -642,7 +697,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           now,
         });
       }
-      return c.json(presentTask(updated.task));
+      return c.json(await presentTaskWithLabels(deps.store, updated.task));
     } catch (error) {
       if (error instanceof VersionConflictError) {
         return versionConflict(c, error.current);
@@ -673,7 +728,24 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       verb: "delete",
       now,
     });
-    return c.json(presentTask(deleted));
+    return c.json(await presentTaskWithLabels(deps.store, deleted));
+  });
+
+  app.get("/v1/tasks/:id/comments", async (c) => {
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:read");
+    if (access instanceof Response) {
+      return access;
+    }
+    const page = parsePageQuery(c);
+    if (page instanceof Response) {
+      return page;
+    }
+    const records = await deps.store.listComments(access.task.id);
+    const result = paginateRecords(records, page, (item) => item.createdAt);
+    return c.json({
+      items: result.items.map(presentComment),
+      next_cursor: result.next_cursor,
+    });
   });
 
   app.post("/v1/tasks/:id/comments", async (c) => {
@@ -694,19 +766,19 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
     if (!commentBody) {
       return errorJson(c, 400, "unauthorized", "body is required", { reason: "invalid_body" });
     }
-    const author = actorRef(access.actor);
-    const actor = actorActivity(access.actor);
+    const author = actorActivity(access.actor);
+    const actor = author;
     const presented = await deps.store.withIdempotency(
-      idempotencyActor(access.actor).type,
-      idempotencyActor(access.actor).id,
+      actorIdempotencyRef(access.actor).type,
+      actorIdempotencyRef(access.actor).id,
       idempotencyKey,
       now,
       async (writes) => {
         const comment = await writes.createComment({
           id: uuidv7(now.getTime()),
           taskId: access.task.id,
-          authorType: author.type === "agent" ? "agent" : "user",
-          authorId: author.id,
+          authorType: author.actorType === "token" || author.actorType === "agent" ? "agent" : "user",
+          authorId: author.actorId,
           body: commentBody,
           createdAt: now,
         });
@@ -783,7 +855,7 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
           now,
         });
       }
-      return c.json(presentTask(updated.task));
+      return c.json(await presentTaskWithLabels(deps.store, updated.task));
     } catch (error) {
       if (error instanceof VersionConflictError) {
         return versionConflict(c, error.current);
@@ -871,34 +943,4 @@ export function mountRoadmap(app: Hono, deps: AuthDeps): void {
       next_cursor: result.next_cursor,
     });
   });
-}
-
-function writeActorActivity(
-  writer: { writeActivity: AuthDeps["store"]["writeActivity"] },
-  actor: AuthActor,
-  input: {
-    projectId: string;
-    objectType: string;
-    objectId: string;
-    verb: string;
-    payload?: Record<string, unknown>;
-    now: Date;
-  },
-): Promise<void> {
-  const ref = actorActivityRef(actor);
-  return writeActivity(writer, { ...input, actorId: ref.id, actorType: ref.type });
-}
-
-function actorRef(actor: AuthActor): { type: string; id: string } {
-  if (actor.kind === "token") {
-    return { type: "agent", id: actor.token.id };
-  }
-  return { type: "user", id: actor.user.id };
-}
-
-function idempotencyActor(actor: AuthActor): { type: "token" | "user"; id: string } {
-  if (actor.kind === "token") {
-    return { type: "token", id: actor.token.id };
-  }
-  return { type: "user", id: actor.user.id };
 }

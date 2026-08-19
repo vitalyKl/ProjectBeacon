@@ -1,13 +1,13 @@
 import { CompileInputSchema, ContextSectionSchema, type ContextSection } from "@beacon/api-spec";
-import { compileSessionBrief, exportAgentsMd, mergeSections, parseImportFiles, selectNodes, type ImportFile } from "@beacon/context";
-import { isUuid, uuidv7, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT, observeCompile } from "@beacon/shared";
+import { exportAgentsMd, mergeSections, parseImportFiles, selectNodes, type ImportFile } from "@beacon/context";
+import { isUuid, uuidv7, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT } from "@beacon/shared";
 import type { Hono } from "hono";
 import type { AuthDeps } from "../auth/routes.js";
 import { errorJson } from "../errors.js";
 import { readJson, readObject, parseOptionalString } from "../http.js";
-import { isResponse } from "../orgs/routes.js";
+
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
-import { presentConstraint, presentContextNode, presentDecision, presentMilestoneBrief, presentTaskSummary, sectionsText, toCompileNode, presentContextRevision, presentContextRevisionSummary } from "./present.js";
+import { presentContextNode, sectionsText, toCompileNode, presentContextRevision, presentContextRevisionSummary } from "./present.js";
 import { compileProjectBrief } from "./compile-brief.js";
 import { type ContextNodeRecord, isContextReviewState, isContextScopeType, type ContextReviewState, type ContextScopeType } from "./types.js";
 import { requireProjectActor } from "../auth/access.js";
@@ -16,6 +16,10 @@ import type { CodeGateway } from "../code/gateway.js";
 const MAX_IMPORT_FILES = 200;
 const MAX_IMPORT_PATH = 1024;
 const MAX_IMPORT_CONTENT = 256_000;
+
+function isResponse<T>(value: T | Response): value is Response {
+  return value instanceof Response;
+}
 
 function parseImportFilesBody(body: unknown): ImportFile[] | undefined {
   const list = Array.isArray(body)
@@ -620,57 +624,6 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 }
 
-const KNOWN_SECTION_IDS = [
-  "goals",
-  "non_goals",
-  "architecture",
-  "conventions",
-  "glossary",
-  "ownership",
-  "pitfalls",
-  "commands",
-  "stack",
-  "security",
-  "style",
-] as const;
-
-function parseNativeSections(value: unknown): ContextNodeRecord["sections"] | undefined {
-  if (!Array.isArray(value) || value.length === 0) {
-    return undefined;
-  }
-  const sections: ContextNodeRecord["sections"] = [];
-  for (const [index, item] of value.entries()) {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
-      return undefined;
-    }
-    const record = item as Record<string, unknown>;
-    const title = typeof record["title"] === "string" ? record["title"].trim() : "";
-    const bodyMd = typeof record["body_md"] === "string" ? record["body_md"] : "";
-    const id = typeof record["id"] === "string" ? record["id"] : "custom";
-    if (!title) {
-      return undefined;
-    }
-    if (id === "custom") {
-      const key =
-        typeof record["key"] === "string" && record["key"].trim().length > 0
-          ? record["key"].trim()
-          : `section-${index + 1}`;
-      sections.push({ id: "custom", key, title, body_md: bodyMd, ordinal: index });
-      continue;
-    }
-    if (!(KNOWN_SECTION_IDS as readonly string[]).includes(id)) {
-      return undefined;
-    }
-    sections.push({
-      id: id as (typeof KNOWN_SECTION_IDS)[number],
-      title,
-      body_md: bodyMd,
-      ordinal: index,
-    });
-  }
-  return sections;
-}
-
 const NATIVE_CREATE_SCOPES = new Set<ContextScopeType>(["project", "repo", "path"]);
 const NATIVE_SOURCE = "native";
 
@@ -708,42 +661,6 @@ function normalizeNodePath(value: string): string | undefined {
     return undefined;
   }
   return path;
-}
-
-function parseSearchLimit(raw: string | undefined): number | undefined {
-  if (raw === undefined || raw === "") {
-    return PAGINATION_DEFAULT_LIMIT;
-  }
-  if (!/^[0-9]+$/.test(raw)) {
-    return undefined;
-  }
-  const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
-    return undefined;
-  }
-  return parsed;
-}
-
-function nodeMatchesQuery(
-  node: {
-    path: string;
-    sectionsText: string;
-    sections: { title: string; body_md: string }[];
-  },
-  query: string,
-): boolean {
-  const needle = query.toLowerCase();
-  if (
-    node.path.toLowerCase().includes(needle) ||
-    node.sectionsText.toLowerCase().includes(needle)
-  ) {
-    return true;
-  }
-  return node.sections.some(
-    (section) =>
-      section.title.toLowerCase().includes(needle) ||
-      section.body_md.toLowerCase().includes(needle),
-  );
 }
 
 export type ContextDeps = AuthDeps & {

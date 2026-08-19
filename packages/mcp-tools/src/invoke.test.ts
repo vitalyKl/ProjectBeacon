@@ -108,10 +108,14 @@ describe("invoke routing", () => {
       get_task: { task_id: TASK_ID },
       create_task: { title: "Ship MCP", idempotency_key: "create-1" },
       update_task: { task_id: TASK_ID, expected_version: 2, title: "Renamed" },
+      list_comments: { task_id: TASK_ID, cursor: "cmt1", limit: 20 },
       add_comment: { task_id: TASK_ID, body: "note", idempotency_key: "comment-1" },
       set_status: { task_id: TASK_ID, status: "ready", expected_version: 3 },
       link_dependency: { from_task_id: FROM_TASK_ID, to_task_id: TO_TASK_ID, type: "blocks" },
       list_decisions: { q: "auth", cursor: "d1" },
+      list_labels: { cursor: "l1", limit: 20 },
+      propose_label: { name: "API", slug: "api" },
+      set_task_labels: { task_id: TASK_ID, label_ids: [TASK_ID] },
       record_decision: {
         title: "Use bearer",
         context: "MCP needs a token",
@@ -124,6 +128,12 @@ describe("invoke routing", () => {
       start_work: { task_id: TASK_ID, idempotency_key: "start-1", steal: true },
       finish_work: { session_id: SESSION_ID, summary: "Finished the client mapping work" },
       get_handoff: { task_id: TASK_ID },
+      list_reports: { cursor: "r1", limit: 10 },
+      generate_report: { title: "Weekly" },
+      get_report: { report_id: TASK_ID },
+      list_reviews: { cursor: "v1" },
+      import_review: { body_md: "# Review\nCheck the board.", source_path: "notes.md" },
+      get_review: { review_id: TASK_ID },
     };
 
     const expected: Record<string, [string, string]> = {
@@ -136,10 +146,14 @@ describe("invoke routing", () => {
       get_task: ["GET", `/v1/tasks/${TASK_ID}`],
       create_task: ["POST", `/v1/projects/${PROJECT_ID}/tasks`],
       update_task: ["PATCH", `/v1/tasks/${TASK_ID}`],
+      list_comments: ["GET", `/v1/tasks/${TASK_ID}/comments`],
       add_comment: ["POST", `/v1/tasks/${TASK_ID}/comments`],
       set_status: ["POST", `/v1/tasks/${TASK_ID}/status`],
       link_dependency: ["POST", `/v1/tasks/${FROM_TASK_ID}/dependencies`],
       list_decisions: ["GET", `/v1/projects/${PROJECT_ID}/decisions`],
+      list_labels: ["GET", `/v1/projects/${PROJECT_ID}/labels`],
+      propose_label: ["POST", `/v1/projects/${PROJECT_ID}/labels`],
+      set_task_labels: ["PUT", `/v1/tasks/${TASK_ID}/labels`],
       record_decision: ["POST", `/v1/projects/${PROJECT_ID}/decisions`],
       get_constraints: ["GET", `/v1/projects/${PROJECT_ID}/constraints`],
       create_constraint: ["POST", `/v1/projects/${PROJECT_ID}/constraints`],
@@ -147,6 +161,12 @@ describe("invoke routing", () => {
       start_work: ["POST", `/v1/projects/${PROJECT_ID}/sessions`],
       finish_work: ["POST", `/v1/sessions/${SESSION_ID}/finish`],
       get_handoff: ["GET", `/v1/tasks/${TASK_ID}/handoff`],
+      list_reports: ["GET", `/v1/projects/${PROJECT_ID}/reports`],
+      generate_report: ["POST", `/v1/projects/${PROJECT_ID}/reports`],
+      get_report: ["GET", `/v1/reports/${TASK_ID}`],
+      list_reviews: ["GET", `/v1/projects/${PROJECT_ID}/reviews`],
+      import_review: ["POST", `/v1/projects/${PROJECT_ID}/reviews`],
+      get_review: ["GET", `/v1/reviews/${TASK_ID}`],
     };
 
     for (const [tool, toolArgs] of Object.entries(args)) {
@@ -214,6 +234,28 @@ describe("invoke routing", () => {
     expect(calls[0]?.url.searchParams.get("assignee")).toBe("ada");
     expect(calls[0]?.url.searchParams.get("cursor")).toBe("abc");
     expect(calls[0]?.url.searchParams.get("limit")).toBe("10");
+
+    calls.length = 0;
+    await invoke("list_tasks", { label_id: TASK_ID, limit: 5 }, ctx(fetchImpl));
+    expect(calls[0]?.url.searchParams.get("label_id")).toBe(TASK_ID);
+
+    calls.length = 0;
+    await invoke("list_comments", { task_id: TASK_ID, cursor: "cmt1", limit: 20 }, ctx(fetchImpl));
+    expect(calls[0]?.url.pathname).toBe(`/v1/tasks/${TASK_ID}/comments`);
+    expect(calls[0]?.url.searchParams.get("cursor")).toBe("cmt1");
+    expect(calls[0]?.url.searchParams.get("limit")).toBe("20");
+  });
+
+  it("uses a saved token when project_id is not the default", async () => {
+    const other = "01934567-89ab-7cde-89ab-0123456789b2";
+    const { fetchImpl, calls } = mockFetch(() => ({ body: { items: [] } }));
+    await invoke(
+      "list_tasks",
+      { project_id: other },
+      ctx(fetchImpl, { projectTokens: { [other]: "tok_other" } }),
+    );
+    expect(calls[0]?.headers["authorization"]).toBe("Bearer tok_other");
+    expect(calls[0]?.url.pathname).toBe(`/v1/projects/${other}/tasks`);
   });
 
   it("maps HTTP error JSON to ToolError", async () => {

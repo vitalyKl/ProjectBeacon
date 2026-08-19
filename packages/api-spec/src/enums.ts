@@ -30,6 +30,7 @@ export const ContextSectionIdSchema = z.enum([
   "stack",
   "security",
   "style",
+  "definition_of_done",
   "custom",
 ]);
 

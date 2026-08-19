@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import type { AuthConfig } from "./auth/config.js";
 import { MemoryAuthStore } from "./auth/store.js";
-import { parseBindMountHint } from "./repos/routes.js";
+import { parseLocalRootHint } from "./repos/local-root.js";
 import { MemoryJobQueue } from "./jobs/queue.js";
 
 const BOOTSTRAP_TOKEN = "bootstrap-admin-token-for-tests";
@@ -61,15 +61,15 @@ async function createProject(app: ReturnType<typeof createApp>, token: string, s
   return (await created.json()) as { id: string; default_repo_id: string | null };
 }
 
-describe("parseBindMountHint", () => {
+describe("parseLocalRootHint", () => {
   it("accepts a relative POSIX path and rejects traversal or absolute paths", () => {
-    expect(parseBindMountHint("apps/web")).toBe("apps/web");
-    expect(parseBindMountHint("./apps/web")).toBe("apps/web");
-    expect(parseBindMountHint(".")).toBe(".");
-    expect(parseBindMountHint("./")).toBe(".");
-    expect(parseBindMountHint("/workspace/apps")).toBeUndefined();
-    expect(parseBindMountHint("../secret")).toBeUndefined();
-    expect(parseBindMountHint("C:/Windows")).toBeUndefined();
+    expect(parseLocalRootHint("apps/web")).toBe("apps/web");
+    expect(parseLocalRootHint("./apps/web")).toBeUndefined();
+    expect(parseLocalRootHint(".")).toBe(".");
+    expect(parseLocalRootHint("./")).toBeUndefined();
+    expect(parseLocalRootHint("/workspace/apps")).toBeUndefined();
+    expect(parseLocalRootHint("../secret")).toBeUndefined();
+    expect(parseLocalRootHint("C:/Windows")).toBeUndefined();
   });
 });
 

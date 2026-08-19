@@ -4,13 +4,16 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { WorkerApi } from "./client.js";
+import type { LabelView, WorkerApi } from "./client.js";
 import { runDetectJob } from "./detect.js";
 
 function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
   imports: { projectId: string; repoId: string; files: { path: string; content: string }[] }[];
   milestones: string[];
   tasks: string[];
+  created: Array<{ title: string; label_ids?: string[] }>;
+  labels: LabelView[];
+  patches: { id: string; paths: { repo_id: string; path: string }[] }[];
 } {
   const imports: {
     projectId: string;
@@ -19,8 +22,20 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
   }[] = [];
   const milestones: { id: string; title: string }[] = [];
   const tasks: { id: string; title: string; milestone_id: string | null }[] = [];
+  const created: Array<{ title: string; label_ids?: string[] }> = [];
+  const labels: LabelView[] = [];
+  const patches: { id: string; paths: { repo_id: string; path: string }[] }[] = [];
   return {
     imports,
+    get created() {
+      return created;
+    },
+    get labels() {
+      return labels;
+    },
+    get patches() {
+      return patches;
+    },
     get milestones() {
       return milestones.map((row) => row.title);
     },
@@ -67,13 +82,26 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
       return tasks.map((row) => ({ ...row }));
     },
     async createTask(_projectId, body) {
-      const created = {
+      const next = {
         id: `task-${tasks.length + 1}`,
         title: body.title,
         milestone_id: body.milestone_id ?? null,
       };
-      tasks.push(created);
-      return created;
+      tasks.push(next);
+      created.push({ title: body.title, label_ids: body.label_ids });
+      return next;
+    },
+    async listLabels() {
+      return labels.map((row) => ({ ...row, paths: row.paths.map((path) => ({ ...path })) }));
+    },
+    async patchLabel(labelId, body) {
+      const current = labels.find((row) => row.id === labelId);
+      if (!current) {
+        throw new Error(`missing label ${labelId}`);
+      }
+      current.paths = (body.paths ?? []).map((path) => ({ ...path }));
+      patches.push({ id: labelId, paths: current.paths.map((path) => ({ ...path })) });
+      return { ...current, paths: current.paths.map((path) => ({ ...path })) };
     },
     async listGithubIssues() {
       return [];
@@ -139,5 +167,55 @@ describe("runDetectJob", () => {
     expect(api.milestones).toEqual(["Detector skeleton"]);
     expect(second.tasks).toBe(0);
     expect(api.tasks).toEqual(["Review imported project context"]);
+  });
+
+  it("binds suggested prefixes onto seeded areas that have none for the repo", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "beacon-detect-areas-"));
+    await mkdir(path.join(workspace, "demo", "apps", "api"), { recursive: true });
+    await mkdir(path.join(workspace, "demo", "apps", "web"), { recursive: true });
+    await writeFile(path.join(workspace, "demo", "apps", "api", "package.json"), "{}");
+    await writeFile(path.join(workspace, "demo", "apps", "web", "package.json"), "{}");
+
+    const api = mockApi();
+    api.labels.push(
+      {
+        id: "lab-api",
+        slug: "api",
+        name: "API",
+        status: "active",
+        paths: [],
+      },
+      {
+        id: "lab-web",
+        slug: "web",
+        name: "Web",
+        status: "active",
+        paths: [{ repo_id: "repo-1", path: "frontend" }],
+      },
+      {
+        id: "lab-cli",
+        slug: "cli",
+        name: "CLI",
+        status: "active",
+        paths: [],
+      },
+    );
+
+    await runDetectJob({ repo_id: "repo-1", project_id: "proj-1" }, { api, workspace });
+
+    expect(api.patches).toEqual([
+      { id: "lab-api", paths: [{ repo_id: "repo-1", path: "apps/api" }] },
+    ]);
+    expect(api.labels.find((label) => label.id === "lab-web")?.paths).toEqual([
+      { repo_id: "repo-1", path: "frontend" },
+    ]);
+    expect(api.created.find((task) => task.title === "Confirm Node workspace layout")).toEqual({
+      title: "Confirm Node workspace layout",
+      label_ids: ["lab-api"],
+    });
+    expect(api.created.find((task) => task.title === "Review imported project context")).toEqual({
+      title: "Review imported project context",
+      label_ids: [],
+    });
   });
 });

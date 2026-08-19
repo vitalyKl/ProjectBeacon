@@ -1,7 +1,13 @@
 import path from "node:path";
 
+import {
+  labelIdsMatchingPath,
+  normalizePosixPrefix,
+  suggestedLabelPrefixes,
+} from "@beacon/context";
+
 import { parseLocalRootHint } from "./local-root.js";
-import type { WorkerApi } from "./client.js";
+import type { LabelView, WorkerApi } from "./client.js";
 import type { DetectJobData } from "./jobs.js";
 import { scanDetectFiles } from "./scan.js";
 
@@ -24,6 +30,13 @@ export async function runDetectJob(
   if (files.length > 0) {
     await options.api.importContext(repo.project_id, repo.id, files);
   }
+
+  const catalog = await bindSuggestedLabelPrefixes(
+    options.api,
+    repo.project_id,
+    repo.id,
+    files.map((file) => file.path),
+  );
 
   const existingMilestones = await options.api.listMilestones(repo.project_id);
   const existingMilestone = existingMilestones.find(
@@ -59,6 +72,7 @@ export async function runDetectJob(
         milestone_id: milestone.id,
         type: "task",
         linked_paths: task.path ? [{ repo_id: repo.id, path: task.path }] : [],
+        label_ids: labelIdsMatchingPath(catalog, repo.id, task.path),
       },
       `detect:${repo.id}:task:${index}:${task.title}`,
     );
@@ -83,6 +97,49 @@ async function scanWorkspace(
     return [];
   }
   return scanDetectFiles(root);
+}
+
+async function bindSuggestedLabelPrefixes(
+  api: WorkerApi,
+  projectId: string,
+  repoId: string,
+  paths: string[],
+): Promise<LabelView[]> {
+  const catalog = await api.listLabels(projectId);
+  const suggestions = suggestedLabelPrefixes(paths);
+  if (suggestions.length === 0) {
+    return catalog;
+  }
+  const bySlug = new Map(catalog.map((label) => [label.slug, label]));
+  for (const suggestion of suggestions) {
+    const label = bySlug.get(suggestion.slug);
+    if (!label || labelHasRepoPath(label, repoId)) {
+      continue;
+    }
+    const next = mergeLabelPath(label, repoId, suggestion.path);
+    if (next === label.paths) {
+      continue;
+    }
+    const updated = await api.patchLabel(label.id, { paths: next });
+    bySlug.set(updated.slug, updated);
+  }
+  return [...bySlug.values()];
+}
+
+function labelHasRepoPath(label: LabelView, repoId: string): boolean {
+  return label.paths.some((item) => item.repo_id === repoId);
+}
+
+function mergeLabelPath(
+  label: LabelView,
+  repoId: string,
+  pathPrefix: string,
+): { repo_id: string; path: string }[] {
+  const normalized = normalizePosixPrefix(pathPrefix);
+  if (!normalized) {
+    return label.paths;
+  }
+  return [...label.paths, { repo_id: repoId, path: normalized }];
 }
 
 function detectorTasks(

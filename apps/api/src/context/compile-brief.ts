@@ -10,6 +10,7 @@ import {
   taskChangedScopeQuery,
   type CodeGateway,
 } from "../code/gateway.js";
+import { extraCompilePaths } from "../labels/scope.js";
 import type { TaskRecord } from "../roadmap/types.js";
 import { presentHandoff } from "../sessions/present.js";
 import {
@@ -32,6 +33,7 @@ export async function compileProjectBrief(
     | "findProjectRepoById"
     | "listProjectRepos"
     | "findProjectById"
+    | "listTaskLabels"
   >,
   project: { id: string; name: string; slug: string },
   input: CompileInput,
@@ -70,6 +72,9 @@ export async function compileProjectBrief(
     }
   }
 
+  const attached = task ? await store.listTaskLabels(task.id) : [];
+  const extraPaths = extraCompilePaths(attached, input.repo_id);
+
   let changedScope: ChangedScope | null | undefined = input.extras?.changed_scope;
   let treeCapsule: TreeCapsule | null | undefined = input.extras?.tree_capsule;
   if (gateway && (changedScope === undefined || treeCapsule === undefined)) {
@@ -91,7 +96,7 @@ export async function compileProjectBrief(
         try {
           const scope = await gateway.query(
             resolved.repo,
-            taskChangedScopeQuery(task, resolved.repo.id),
+            taskChangedScopeQuery(task, resolved.repo.id, undefined, extraPaths),
           );
           changedScope = presentChangedScope(resolved.repo.id, scope);
         } catch {
@@ -106,6 +111,7 @@ export async function compileProjectBrief(
     compiled: compileSessionBrief(
       {
         ...input,
+        extra_paths: [...(input.extra_paths ?? []), ...extraPaths],
         extras: {
           ...input.extras,
           handoff: input.extras?.handoff ?? handoff,

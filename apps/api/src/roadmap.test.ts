@@ -9,6 +9,7 @@ const STRONG_PASSWORD = "correct-horse";
 function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
   return {
     bootstrapAdminToken: BOOTSTRAP_TOKEN,
+    workerToken: undefined,
     authLocal: true,
     authLocalInviteOnly: false,
     authGithub: false,
@@ -67,15 +68,6 @@ type TaskBody = {
   version: number;
   project_id: string;
 };
-
-async function mintToken(app: ReturnType<typeof createApp>, cookie: string, projectId: string) {
-  const minted = await app.request(`/v1/projects/${projectId}/tokens`, {
-    method: "POST",
-    headers: { cookie: cookieHeader(cookie), "content-type": "application/json" },
-    body: JSON.stringify({ name: "agent" }),
-  });
-  return (await minted.json()) as { token: string };
-}
 
 async function createTask(
   app: ReturnType<typeof createApp>,
@@ -309,11 +301,27 @@ describe("milestones and tasks", () => {
       body: JSON.stringify({ body: "looks good" }),
     });
     expect(comment.status).toBe(201);
-    expect(await comment.json()).toMatchObject({
+    const created = (await comment.json()) as { id: string; task_id: string; body: string };
+    expect(created).toMatchObject({
       task_id: task.id,
       author_type: "user",
       body: "looks good",
     });
+
+    const listed = await alice.app.request(`/v1/tasks/${task.id}/comments`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      items: [{ id: created.id, task_id: task.id, body: "looks good" }],
+      next_cursor: null,
+    });
+
+    const outsider = await registerUser(store, "bob");
+    const hidden = await outsider.app.request(`/v1/tasks/${task.id}/comments`, {
+      headers: { cookie: cookieHeader(outsider.token) },
+    });
+    expect(hidden.status).toBe(404);
 
     const activity = await alice.app.request(
       `/v1/projects/${project.id}/activity?object_id=${task.id}`,
@@ -416,6 +424,7 @@ describe("milestones and tasks", () => {
       assigneeUserId: null,
       assigneeAgentName: "codex",
       agentBrief: "",
+      howToCheck: "",
       linkedPaths: [],
       githubIssueId: null,
       lockedBySessionId: "018f1e2c-3d4e-7000-8000-0000000000bb",
@@ -466,6 +475,7 @@ describe("milestones and tasks", () => {
       assigneeUserId: null,
       assigneeAgentName: "codex",
       agentBrief: "",
+      howToCheck: "",
       linkedPaths: [],
       githubIssueId: null,
       lockedBySessionId: "018f1e2c-3d4e-7000-8000-0000000000dd",

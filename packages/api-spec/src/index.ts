@@ -2,6 +2,7 @@ export const packageName = "@beacon/api-spec";
 
 export {
   ActorRefSchema,
+  CommentSchema,
   ErrorBodySchema,
   ErrorResponseSchema,
   LinkedPathSchema,
@@ -11,6 +12,7 @@ export {
   UuidSchema,
   paginatedResponseSchema,
   type ActorRef,
+  type Comment,
   type ErrorBody,
   type ErrorResponse,
   type LinkedPath,

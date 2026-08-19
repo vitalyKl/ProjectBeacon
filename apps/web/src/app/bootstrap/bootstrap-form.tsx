@@ -5,8 +5,10 @@ import { useState, type FormEvent } from "react";
 
 import { ApiError, bootstrapLocal } from "@/lib/api";
 import { POST_LOGIN_PATH } from "@/lib/nav";
+import { useT } from "@/lib/use-locale";
 
 export function BootstrapForm() {
+  const t = useT();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -24,7 +26,7 @@ export function BootstrapForm() {
       router.replace(POST_LOGIN_PATH);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "bootstrap failed");
+      setError(caught instanceof ApiError ? caught.message : t("bootstrap.failed"));
     } finally {
       setPending(false);
     }
@@ -33,7 +35,7 @@ export function BootstrapForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
       <label className="flex flex-col gap-1 text-sm">
-        BOOTSTRAP token
+        {t("bootstrap.token")}
         <input
           className="h-11 rounded-lg border border-border bg-background px-3 font-mono"
           name="token"
@@ -42,7 +44,7 @@ export function BootstrapForm() {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Username
+        {t("login.username")}
         <input
           className="h-11 rounded-lg border border-border bg-background px-3"
           name="login"
@@ -52,7 +54,7 @@ export function BootstrapForm() {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Password
+        {t("login.password")}
         <input
           className="h-11 rounded-lg border border-border bg-background px-3"
           name="password"
@@ -62,14 +64,14 @@ export function BootstrapForm() {
           minLength={10}
         />
       </label>
-      <p className="text-xs leading-5 text-muted">Password must be at least 10 characters.</p>
+      <p className="text-xs leading-5 text-muted">{t("bootstrap.passwordHint")}</p>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <button
         className="h-11 rounded-lg bg-accent text-sm font-medium text-accent-fg disabled:opacity-60"
         type="submit"
         disabled={pending}
       >
-        {pending ? "Creating first user…" : "Create first user"}
+        {pending ? t("bootstrap.creating") : t("bootstrap.create")}
       </button>
     </form>
   );

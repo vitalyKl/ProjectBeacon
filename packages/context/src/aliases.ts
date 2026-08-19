@@ -13,7 +13,11 @@ const HEADING_ALIASES: ReadonlyArray<{ pattern: RegExp; id: KnownSectionId }> = 
   { pattern: /^(pitfalls?|gotchas?|do not)$/i, id: "pitfalls" },
   { pattern: /^glossary$/i, id: "glossary" },
   { pattern: /^(ownership|code\s*owners?)$/i, id: "ownership" },
-  { pattern: /^stack$/i, id: "stack" },
+  { pattern: /^(tech[-\s]?stack|stack)$/i, id: "stack" },
+  {
+    pattern: /^(definition of done|done when|acceptance( criteria)?)$/i,
+    id: "definition_of_done",
+  },
 ];
 
 export function slugifyHeading(heading: string): string {

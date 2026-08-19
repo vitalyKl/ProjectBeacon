@@ -5,8 +5,10 @@ import { useState, type FormEvent } from "react";
 
 import { ApiError, loginLocal } from "@/lib/api";
 import { POST_LOGIN_PATH } from "@/lib/nav";
+import { useT } from "@/lib/use-locale";
 
 export function LoginForm() {
+  const t = useT();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -23,7 +25,7 @@ export function LoginForm() {
       router.replace(POST_LOGIN_PATH);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "invalid login or password");
+      setError(caught instanceof ApiError ? caught.message : t("login.invalid"));
     } finally {
       setPending(false);
     }
@@ -32,7 +34,7 @@ export function LoginForm() {
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
       <label className="flex flex-col gap-1 text-sm">
-        Username
+        {t("login.username")}
         <input
           className="h-11 rounded-lg border border-border bg-background px-3"
           name="login"
@@ -42,7 +44,7 @@ export function LoginForm() {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Password
+        {t("login.password")}
         <input
           className="h-11 rounded-lg border border-border bg-background px-3"
           name="password"
@@ -57,7 +59,7 @@ export function LoginForm() {
         type="submit"
         disabled={pending}
       >
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? t("login.signingIn") : t("login.signIn")}
       </button>
     </form>
   );

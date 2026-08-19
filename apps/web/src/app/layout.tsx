@@ -3,9 +3,11 @@ import type { ReactNode } from "react";
 
 import "./globals.css";
 
+import { t } from "@/lib/i18n";
+
 export const metadata: Metadata = {
-  title: "Beacon",
-  description: "Project operating system for mixed human + AI-agent development.",
+  title: t("common.brand"),
+  description: t("layout.description"),
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

@@ -21,6 +21,10 @@ describe("sectionIdForHeading", () => {
     expect(sectionIdForHeading("Pitfalls")).toEqual({ id: "pitfalls" });
     expect(sectionIdForHeading("Gotchas")).toEqual({ id: "pitfalls" });
     expect(sectionIdForHeading("Do not")).toEqual({ id: "pitfalls" });
+    expect(sectionIdForHeading("Stack")).toEqual({ id: "stack" });
+    expect(sectionIdForHeading("Tech stack")).toEqual({ id: "stack" });
+    expect(sectionIdForHeading("Definition of Done")).toEqual({ id: "definition_of_done" });
+    expect(sectionIdForHeading("Acceptance criteria")).toEqual({ id: "definition_of_done" });
     expect(sectionIdForHeading("Release checklist")).toEqual({
       id: "custom",
       key: "release-checklist",

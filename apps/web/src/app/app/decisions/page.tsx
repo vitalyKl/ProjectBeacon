@@ -1,5 +1,7 @@
-import { Placeholder } from "../placeholder";
+"use client";
+
+import { DecisionsView } from "./decisions-view";
 
 export default function DecisionsPage() {
-  return <Placeholder title="Decisions" />;
+  return <DecisionsView />;
 }

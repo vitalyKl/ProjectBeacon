@@ -719,6 +719,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
               assigneeUserId: null,
               assigneeAgentName: null,
               agentBrief: "",
+              howToCheck: "",
               linkedPaths: [],
               githubIssueId,
               lockedBySessionId: null,
@@ -831,7 +832,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     );
     const result = paginateRecords(linked, page, (item) => item.updatedAt);
     return c.json({
-      items: result.items.map(presentTask),
+      items: result.items.map((task) => presentTask(task)),
       next_cursor: result.next_cursor,
     });
   });

@@ -2,7 +2,7 @@
 
 Project operating system for mixed human + AI-agent development.
 
-TypeScript monorepo (pnpm workspaces + Turborepo). The web app (`apps/web`) is a Next.js App Router app with auth pages, a context editor, and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md). Agent-facing repo brief: [AGENTS.md](AGENTS.md).
+TypeScript monorepo (pnpm workspaces + Turborepo). The web app (`apps/web`) is a Next.js App Router app with auth pages, a context editor, and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md). The living brief is Context; [AGENTS.md](AGENTS.md) is an export for hosts that only read the repo.
 
 ## Prerequisites
 
@@ -27,10 +27,13 @@ Self-host Compose is Postgres 16 + API + web + worker (mcp is not in this compos
 
 The sidecar tunnel (`FF_SIDECAR_TUNNEL`, default off) lets `beacon sidecar` dial `wss://$BEACON_HOST/v1/sidecar` with a `code:read` token so remote code tools can reach a laptop index. The CLI dials only when `BEACON_HOST` is set or `FF_SIDECAR_TUNNEL=true`; otherwise heartbeat and local HTTP stay as they are.
 Self-host Compose is Postgres 16 + API + worker + web. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`, `BEACON_WORKER_TOKEN`, and `INDEX_RPC_TOKEN`. `docker compose up` publishes web `:3000` (same-origin `/v1` rewrite) and API `:8080`. The worker has no published ports.
-Mint a project token with `POST /v1/projects/:id/tokens` (admin session). Settings has no token UI. Then:
+Mint a project token with `POST /v1/projects/:id/tokens` (admin session). Settings has no token UI. Then paste it when setup asks:
 ```bash
-pnpm --filter @beacon/cli start -- connect <token> --project <id>
+setup.cmd     # Windows; double-click so the window stays open
+./setup.sh    # Unix
+pnpm --filter @beacon/cli start -- setup
 pnpm --filter @beacon/cli start -- sidecar
 pnpm --filter @beacon/cli start -- mcp
 ```
-To load this repo's brief into a fresh project: open Context and import root `AGENTS.md`, or write a project-scope brief and export it. The checked-in file is the `exportAgentsMd` projection of `packages/context/src/beacon-brief.ts`.
+`beacon setup` asks for the project token in the console. It writes the local token, a `mcp.cjs` launcher, and Grok / Cursor / Claude MCP configs so those agents can call Beacon. The token stays in `BEACON_HOME`. It does not mint tokens or start a hosted agent. Flags (`--token`, `--project`) still work for non-interactive use.
+The living brief is the Context editor. Import an existing `AGENTS.md` only to bootstrap a new project. After that, edit Context and export when a host needs the file. The checked-in `AGENTS.md` is an `exportAgentsMd` snapshot of `packages/context/src/beacon-brief.ts`, not a second source of truth.

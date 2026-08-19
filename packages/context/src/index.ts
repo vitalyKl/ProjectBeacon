@@ -2,9 +2,15 @@ export const packageName = "@beacon/context";
 
 export { sectionFromHeading, sectionIdForHeading, slugifyHeading } from "./aliases.js";
 export {
+  DEFAULT_LABEL_PATH_HINTS,
+  DEFAULT_PROJECT_LABELS,
+  DEFAULT_PROJECT_LABEL_STATUS,
   DEFAULT_SECURITY_CONSTRAINTS,
   DEFAULT_SECURITY_CONSTRAINT_KIND,
   DEFAULT_SECURITY_CONSTRAINT_STATUS,
+  suggestedLabelPrefixes,
+  type DefaultProjectLabel,
+  type SuggestedLabelPrefix,
 } from "./defaults.js";
 export { exportAgentsMd, type AgentsMdExportInput, type AgentsMdScope } from "./export.js";
 export {
@@ -38,3 +44,15 @@ export {
   type CompileNode,
   type CompileResult,
 } from "./compile.js";
+
+export {
+  compileExtraPaths,
+  labelIdsMatchingPath,
+  normalizePosixPrefix,
+  parentPrefix,
+  pathUnderPrefix,
+  scopePathsForRepo,
+  uniqueScopePaths,
+  type MatchingLabel,
+  type ScopePath,
+} from "./label-scope.js";

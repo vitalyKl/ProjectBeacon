@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import {
@@ -8,10 +9,8 @@ import {
   DEFAULT_TOKEN_SCOPES,
   createProjectToken,
   fetchProjectActivity,
-  fetchProjectRepos,
   fetchProjectSessions,
   fetchProjectTokens,
-  fetchRepo,
   revokeProjectToken,
   type PublicActivityEvent,
   type PublicAgentSession,
@@ -20,35 +19,40 @@ import {
   type PublicRepo,
   type TokenTtl,
 } from "@/lib/api";
+import { offeredTasks } from "@/lib/brief";
+import {
+  connectionLabel,
+  fetchDetailedProjectRepos,
+  formatIndexWhen,
+  indexModeLabel,
+  repoDisplayName,
+} from "@/lib/index-status";
+import { activityLine, t } from "@/lib/i18n";
 import { LIVE_POLL_MS } from "@/lib/poll";
+import { DEFAULT_TASK_PRIORITY, priorityLabel } from "@/lib/priority";
+import { fetchProjectTasks, statusLabel, type PublicTask } from "@/lib/roadmap";
+import { useT, useTf } from "@/lib/use-locale";
 
-const TOKEN_TTLS: { value: TokenTtl; label: string }[] = [
-  { value: "7d", label: "7 days" },
-  { value: "90d", label: "90 days" },
-  { value: "1y", label: "1 year" },
-  { value: "none", label: "No expiry" },
+import { CopyableProjectId } from "../copyable-project-id";
+
+const TOKEN_TTLS: { value: TokenTtl; labelKey: "agents.ttl7d" | "agents.ttl90d" | "agents.ttl1y" | "agents.ttlNone" }[] = [
+  { value: "7d", labelKey: "agents.ttl7d" },
+  { value: "90d", labelKey: "agents.ttl90d" },
+  { value: "1y", labelKey: "agents.ttl1y" },
+  { value: "none", labelKey: "agents.ttlNone" },
 ];
 
-function formatWhen(value: string | null | undefined): string {
-  if (!value) {
-    return "never";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
-}
-
 function activityLabel(event: PublicActivityEvent): string {
-  const verb = event.verb.replaceAll("_", " ");
-  return `${verb} · ${event.object_type}`;
+  return activityLine(event.verb, event.object_type);
 }
 
 export function AgentsView({ project }: { project: PublicProject | null }) {
+  const label = useT();
+  const format = useTf();
   const [sessions, setSessions] = useState<PublicAgentSession[]>([]);
   const [activity, setActivity] = useState<PublicActivityEvent[]>([]);
   const [tokens, setTokens] = useState<PublicApiToken[]>([]);
+  const [tasks, setTasks] = useState<PublicTask[]>([]);
   const [repos, setRepos] = useState<PublicRepo[] | null>([]);
   const [error, setError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
@@ -64,21 +68,18 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
   const [canManageTokens, setCanManageTokens] = useState(true);
 
   const loadLive = useCallback(async (projectId: string) => {
-    const [nextSessions, nextActivity, nextRepos] = await Promise.all([
+    const [nextSessions, nextActivity, nextRepos, nextTasks] = await Promise.all([
       fetchProjectSessions(projectId),
       fetchProjectActivity(projectId),
-      fetchProjectRepos(projectId),
+      fetchDetailedProjectRepos(projectId),
+      fetchProjectTasks(projectId),
     ]);
-    let detailed = nextRepos;
-    if (nextRepos) {
-      detailed = await Promise.all(
-        nextRepos.map(async (repo) => {
-          const live = await fetchRepo(repo.id);
-          return live ?? repo;
-        }),
-      );
-    }
-    return { sessions: nextSessions, activity: nextActivity, repos: detailed };
+    return {
+      sessions: nextSessions,
+      activity: nextActivity,
+      repos: nextRepos,
+      tasks: nextTasks,
+    };
   }, []);
 
   const loadAll = useCallback(
@@ -113,11 +114,12 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
         setActivity(next.activity);
         setTokens(next.tokens);
         setRepos(next.repos);
+        setTasks(next.tasks);
         setCanManageTokens(next.canManageTokens);
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
-          setError(caught instanceof ApiError ? caught.message : "failed to load agents");
+          setError(caught instanceof ApiError ? caught.message : t("agents.failedLoad"));
         }
       })
       .finally(() => {
@@ -140,9 +142,10 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
           setSessions(next.sessions);
           setActivity(next.activity);
           setRepos(next.repos);
+          setTasks(next.tasks);
         })
         .catch((caught: unknown) => {
-          setError(caught instanceof ApiError ? caught.message : "failed to refresh agents");
+          setError(caught instanceof ApiError ? caught.message : t("agents.failedRefresh"));
         });
     }, LIVE_POLL_MS);
     return () => {
@@ -154,6 +157,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
     () => sessions.filter((session) => session.status === "active"),
     [sessions],
   );
+  const offered = useMemo(() => offeredTasks(tasks), [tasks]);
   const listedTokens = useMemo(() => tokens.filter((token) => !token.revoked_at), [tokens]);
 
   function resetCreateForm() {
@@ -178,11 +182,11 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
     }
     const name = tokenName.trim();
     if (!name) {
-      setTokenError("name is required");
+      setTokenError(t("common.nameRequired"));
       return;
     }
     if (ttl === "none" && !confirmNone) {
-      setTokenError("Confirm that this token should never expire.");
+      setTokenError(t("agents.confirmExpiry"));
       return;
     }
     setCreating(true);
@@ -197,7 +201,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
       setShowCreate(false);
       resetCreateForm();
     } catch (caught) {
-      setTokenError(caught instanceof ApiError ? caught.message : "failed to create token");
+      setTokenError(caught instanceof ApiError ? caught.message : t("agents.failedCreate"));
     } finally {
       setCreating(false);
     }
@@ -211,7 +215,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
         setRevealed(null);
       }
     } catch (caught) {
-      setTokenError(caught instanceof ApiError ? caught.message : "failed to revoke token");
+      setTokenError(caught instanceof ApiError ? caught.message : t("agents.failedRevoke"));
     }
   }
 
@@ -230,10 +234,8 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
   if (!project) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
-        <p className="text-sm text-muted">
-          Select a project to see sessions, activity, and tokens.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.agents")}</h1>
+        <p className="text-sm text-muted">{label("agents.selectProject")}</p>
       </section>
     );
   }
@@ -241,18 +243,19 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
   return (
     <section className="space-y-8">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
-        <p className="text-sm text-muted">Sessions and tokens for {project.name}.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.agents")}</h1>
+        <p className="text-sm text-muted">{label("agents.intro")}</p>
+        <CopyableProjectId projectId={project.id} />
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {loading ? <p className="text-sm text-muted">Loading…</p> : null}
+      {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Index</h2>
+        <h2 className="text-lg font-semibold">{label("index.title")}</h2>
         {repos === null ? (
-          <p className="text-sm text-muted">No repositories yet.</p>
+          <p className="text-sm text-muted">{label("agents.noRepos")}</p>
         ) : repos.length === 0 ? (
-          <p className="text-sm text-muted">No repositories yet.</p>
+          <p className="text-sm text-muted">{label("agents.noRepos")}</p>
         ) : (
           <ul className="space-y-2">
             {repos.map((repo) => (
@@ -260,14 +263,16 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                 key={repo.id}
                 className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
               >
-                <div className="font-medium">
-                  {repo.remote_url || repo.local_root_hint || "Repository"}
-                </div>
+                <div className="font-medium">{repoDisplayName(repo)}</div>
                 <dl className="mt-2 grid gap-1 text-muted sm:grid-cols-2">
-                  <div>Index: {repo.index_mode.replaceAll("_", " ")}</div>
-                  <div>Sidecar: {repo.sidecar_connected ? "connected" : "offline"}</div>
-                  <div>Worker: {repo.worker_index_connected ? "connected" : "offline"}</div>
-                  <div>Last indexed: {formatWhen(repo.last_indexed_at)}</div>
+                  <div>{format("agents.indexLine", { value: indexModeLabel(repo.index_mode) })}</div>
+                  <div>{format("agents.sidecarLine", { value: connectionLabel(repo.sidecar_connected) })}</div>
+                  <div>
+                    {format("agents.workerLine", { value: connectionLabel(repo.worker_index_connected) })}
+                  </div>
+                  <div>
+                    {format("agents.lastIndexedLine", { value: formatIndexWhen(repo.last_indexed_at) })}
+                  </div>
                 </dl>
               </li>
             ))}
@@ -276,9 +281,38 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Active sessions</h2>
+        <h2 className="text-lg font-semibold">{label("agents.ready")}</h2>
+        {offered.length === 0 ? (
+          <p className="text-sm text-muted">{label("agents.noReady")}</p>
+        ) : (
+          <ul className="space-y-2">
+            {offered.map((task) => (
+              <li
+                key={task.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
+              >
+                <div>
+                  <Link className="font-medium underline" href={`/app/tasks/${task.id}`}>
+                    {task.title}
+                  </Link>
+                  <p className="text-muted capitalize">
+                    {statusLabel(task.status)}
+                    {task.priority !== DEFAULT_TASK_PRIORITY
+                      ? ` · ${priorityLabel(task.priority)}`
+                      : ""}
+                  </p>
+                </div>
+                <span className="text-xs text-muted">{label("agents.offered")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">{label("agents.sessions")}</h2>
         {activeSessions.length === 0 ? (
-          <p className="text-sm text-muted">No active sessions.</p>
+          <p className="text-sm text-muted">{label("agents.noSessions")}</p>
         ) : (
           <ul className="space-y-2">
             {activeSessions.map((session) => (
@@ -288,7 +322,10 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
               >
                 <div className="font-medium">{session.agent.name}</div>
                 <p className="text-muted">
-                  {session.agent.host} · last seen {formatWhen(session.last_heartbeat_at)}
+                  {format("agents.lastSeen", {
+                    host: session.agent.host,
+                    when: formatIndexWhen(session.last_heartbeat_at),
+                  })}
                 </p>
               </li>
             ))}
@@ -297,9 +334,9 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Activity</h2>
+        <h2 className="text-lg font-semibold">{label("agents.activity")}</h2>
         {activity.length === 0 ? (
-          <p className="text-sm text-muted">No activity yet.</p>
+          <p className="text-sm text-muted">{label("agents.noActivity")}</p>
         ) : (
           <ul className="space-y-2">
             {activity.slice(0, 40).map((event) => (
@@ -308,7 +345,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                 className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
               >
                 <div className="font-medium">{activityLabel(event)}</div>
-                <p className="text-muted">{formatWhen(event.created_at)}</p>
+                <p className="text-muted">{formatIndexWhen(event.created_at)}</p>
               </li>
             ))}
           </ul>
@@ -317,21 +354,21 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Tokens</h2>
+          <h2 className="text-lg font-semibold">{label("agents.tokens")}</h2>
           {canManageTokens ? (
             <button
               className="rounded-md border border-border px-3 py-1.5 text-sm"
               type="button"
               onClick={openCreate}
             >
-              New token
+              {label("agents.newToken")}
             </button>
           ) : null}
         </div>
         {tokenError ? <p className="text-sm text-red-600">{tokenError}</p> : null}
         {revealed?.token ? (
           <div className="space-y-2 rounded-lg border border-border bg-surface px-4 py-3">
-            <p className="text-sm font-medium">Copy this token now. It will not be shown again.</p>
+            <p className="text-sm font-medium">{label("agents.copyNow")}</p>
             <code className="block break-all rounded-md bg-background px-3 py-2 text-sm">
               {revealed.token}
             </code>
@@ -340,7 +377,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
               type="button"
               onClick={() => void onCopySecret()}
             >
-              {copied ? "Copied" : "Copy token"}
+              {copied ? label("common.copied") : label("agents.copyToken")}
             </button>
           </div>
         ) : null}
@@ -350,7 +387,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
             onSubmit={onCreateToken}
           >
             <label className="flex flex-col gap-1 text-sm">
-              Name
+              {label("common.name")}
               <input
                 className="h-9 rounded-md border border-border bg-background px-3"
                 value={tokenName}
@@ -360,7 +397,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              Expires
+              {label("agents.expires")}
               <select
                 className="h-9 rounded-md border border-border bg-background px-2"
                 value={ttl}
@@ -368,7 +405,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
               >
                 {TOKEN_TTLS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {label(option.labelKey)}
                   </option>
                 ))}
               </select>
@@ -381,7 +418,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                   checked={confirmNone}
                   onChange={(event) => setConfirmNone(event.target.checked)}
                 />
-                I confirm this token should never expire.
+                {label("agents.confirmNever")}
               </label>
             ) : null}
             <label className="flex items-start gap-2 text-sm">
@@ -391,7 +428,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                 checked={allowCode}
                 onChange={(event) => setAllowCode(event.target.checked)}
               />
-              Allow code tools (tree, file, symbols)
+              {label("agents.allowCode")}
             </label>
             <div className="flex gap-2">
               <button
@@ -399,7 +436,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                 type="submit"
                 disabled={creating}
               >
-                {creating ? "Creating…" : "Create token"}
+                {creating ? label("common.creating") : label("agents.createToken")}
               </button>
               <button
                 className="h-9 rounded-md border border-border px-3 text-sm"
@@ -409,15 +446,15 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                   resetCreateForm();
                 }}
               >
-                Cancel
+                {label("common.cancel")}
               </button>
             </div>
           </form>
         ) : null}
         {!canManageTokens ? (
-          <p className="text-sm text-muted">Project admins can mint and revoke tokens.</p>
+          <p className="text-sm text-muted">{label("agents.adminsOnly")}</p>
         ) : listedTokens.length === 0 ? (
-          <p className="text-sm text-muted">No tokens yet.</p>
+          <p className="text-sm text-muted">{label("agents.noTokens")}</p>
         ) : (
           <ul className="space-y-2">
             {listedTokens.map((token) => (
@@ -428,9 +465,13 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                 <div>
                   <div className="font-medium">{token.name}</div>
                   <p className="text-muted">
-                    {token.prefix}… ·{" "}
-                    {token.scopes.includes(CODE_READ_SCOPE) ? "code tools on" : "code tools off"} ·
-                    expires {formatWhen(token.expires_at)}
+                    {format("agents.tokenMeta", {
+                      prefix: token.prefix,
+                      code: token.scopes.includes(CODE_READ_SCOPE)
+                        ? label("agents.codeOn")
+                        : label("agents.codeOff"),
+                      when: formatIndexWhen(token.expires_at),
+                    })}
                   </p>
                 </div>
                 <button
@@ -438,7 +479,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                   type="button"
                   onClick={() => void onRevoke(token)}
                 >
-                  Revoke
+                  {label("agents.revoke")}
                 </button>
               </li>
             ))}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { DEFAULT_TASK_PRIORITY, priorityLabel } from "@/lib/priority";
 import { statusLabel, type PublicTask } from "@/lib/roadmap";
 
 import { LockBadge } from "./lock-badge";
@@ -36,7 +37,23 @@ export function TaskCard({
         <p className="font-medium leading-5">{task.title}</p>
         <LockBadge task={task} />
       </div>
-      <p className="mt-1 text-xs text-muted capitalize">{statusLabel(task.status)}</p>
+      <p className="mt-1 text-xs text-muted capitalize">
+        {statusLabel(task.status)}
+        {task.priority !== DEFAULT_TASK_PRIORITY ? ` · ${priorityLabel(task.priority)}` : ""}
+      </p>
+      {(task.labels ?? []).length > 0 ? (
+        <ul className="mt-2 flex flex-wrap gap-1">
+          {(task.labels ?? []).map((label) => (
+            <li
+              key={label.id}
+              className="rounded-full border border-border px-2 py-0.5 text-[10px] tracking-wide uppercase"
+              style={label.color ? { borderColor: label.color, color: label.color } : undefined}
+            >
+              {label.name}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </Link>
   );
 }

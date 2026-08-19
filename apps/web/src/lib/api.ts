@@ -492,6 +492,7 @@ export type ContextSectionId =
   | "stack"
   | "security"
   | "style"
+  | "definition_of_done"
   | "custom";
 
 export type ContextSection = {
@@ -608,10 +609,16 @@ export async function exportAgentsMd(projectId: string): Promise<string> {
   return res.text();
 }
 
-export async function compileContext(projectId: string): Promise<SessionBrief> {
+export async function compileContext(
+  projectId: string,
+  input: { task_id?: string; path?: string; repo_id?: string } = {},
+): Promise<SessionBrief> {
   const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/compile`, {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify({
+      project_id: projectId,
+      ...input,
+    }),
   });
   if (!res.ok) {
     throw await readApiError(res, "failed to compile preview");
@@ -713,7 +720,12 @@ export async function createMilestone(
 
 export async function createTask(
   projectId: string,
-  input: { title: string; description?: string; milestone_id?: string | null },
+  input: {
+    title: string;
+    description?: string;
+    milestone_id?: string | null;
+    label_ids?: string[];
+  },
 ): Promise<PublicTask> {
   return createRoadmapTask(projectId, input, newIdempotencyKey());
 }

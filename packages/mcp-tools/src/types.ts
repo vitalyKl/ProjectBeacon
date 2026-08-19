@@ -5,6 +5,8 @@ export type InvokeContext = {
   token: string;
   projectId?: string;
   defaultRepoId?: string;
+  projectTokens?: Record<string, string>;
+  projectUrls?: Record<string, string>;
   fetch?: typeof fetch;
   codeSource?: CodeSource;
 };

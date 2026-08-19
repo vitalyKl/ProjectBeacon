@@ -26,6 +26,8 @@ function testConfig(overrides: Partial<AuthConfig> = {}): AuthConfig {
     secureCookies: false,
     trustProxy: false,
     workerToken: WORKER_TOKEN,
+    indexRpcUrl: "http://127.0.0.1:7744",
+    indexRpcToken: "index-rpc-test",
     ...overrides,
   };
 }
@@ -206,6 +208,7 @@ describe("worker hygiene jobs", () => {
       assigneeUserId: null,
       assigneeAgentName: null,
       agentBrief: "",
+      howToCheck: "",
       linkedPaths: [],
       githubIssueId: null,
       lockedBySessionId: sessionId,
@@ -314,6 +317,7 @@ describe("worker hygiene jobs", () => {
       assigneeUserId: null,
       assigneeAgentName: null,
       agentBrief: "",
+      howToCheck: "",
       linkedPaths: [],
       githubIssueId: null,
       lockedBySessionId: sessionId,

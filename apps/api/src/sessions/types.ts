@@ -55,6 +55,7 @@ export type FinishWorkInput = {
   handoffId: string;
   summary: string;
   nextSteps: string;
+  howToCheck: string;
   filesTouched: LinkedPath[];
   openQuestions: string[];
   taskStatus: FinishWorkStatus;

@@ -42,6 +42,10 @@ describe("runCli", () => {
     expect(out.stdout).toContain("BEACON_URL");
     expect(out.stdout).toContain("mcp");
     expect(out.stdout).toContain("sidecar");
+    expect(out.stdout).toContain("setup");
+    expect(out.stdout).toContain("projects");
+    expect(out.stdout).toContain("[projects.");
+    expect(out.stdout).toContain("writes Grok, Cursor, and Claude MCP configs");
     expect(out.stdout.toLowerCase()).not.toContain("device-flow");
     expect(out.stdout.toLowerCase()).not.toContain("indexer");
   });
@@ -117,5 +121,52 @@ describe("runCli", () => {
     expect(code).toBe(0);
     expect(sidecar).toBe(false);
     expect(out.stdout.toLowerCase()).toContain("connected");
+  });
+
+  it("setup without a token or TTY tells the user to paste one", async () => {
+    const home = await mkdtemp(join(tmpdir(), "beacon-cli-setup-"));
+    const out = capture();
+    const code = await runCli({
+      argv: ["setup"],
+      env: { BEACON_HOME: home },
+      io: {
+        ...out.io,
+        stdin: { isTTY: false } as NodeJS.ReadStream,
+      },
+    });
+    expect(code).toBe(2);
+    expect(out.stderr).toContain("paste");
+    expect(out.stderr).toContain("--token");
+  });
+
+  it("lists saved project ids from config.toml", async () => {
+    const home = await mkdtemp(join(tmpdir(), "beacon-cli-projects-"));
+    const first = "01934567-89ab-7cde-89ab-0123456789ac";
+    const second = "01934567-89ab-7cde-89ab-0123456789ad";
+    await writeFile(
+      join(home, "config.toml"),
+      [
+        `url = "http://127.0.0.1:8080"`,
+        `token = "${TOKEN}"`,
+        `project_id = "${second}"`,
+        "",
+        `[projects."${first}"]`,
+        `token = "${TOKEN}"`,
+        "",
+        `[projects."${second}"]`,
+        `token = "${TOKEN}"`,
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const out = capture();
+    const code = await runCli({
+      argv: ["projects"],
+      env: { BEACON_HOME: home },
+      io: out.io,
+    });
+    expect(code).toBe(0);
+    expect(out.stdout).toContain(first);
+    expect(out.stdout).toContain(`${second} *`);
   });
 });

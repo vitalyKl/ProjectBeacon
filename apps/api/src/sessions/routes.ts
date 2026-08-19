@@ -400,6 +400,13 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
       }
       nextSteps = body["next_steps"];
     }
+    let howToCheck = "";
+    if (body?.["how_to_check"] !== undefined) {
+      if (typeof body["how_to_check"] !== "string" || body["how_to_check"].length > 8000) {
+        return errorJson(c, 400, "unauthorized", "invalid how_to_check", { reason: "invalid_body" });
+      }
+      howToCheck = body["how_to_check"];
+    }
     const filesTouched = parseLinkedPaths(body?.["files_touched"]);
     if (!filesTouched.ok) {
       if (filesTouched.reason === "repo_ambiguous") {
@@ -428,6 +435,7 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
         handoffId: uuidv7(now.getTime()),
         summary,
         nextSteps: nextSteps ?? "",
+        howToCheck,
         filesTouched: filesTouched.paths,
         openQuestions,
         taskStatus,

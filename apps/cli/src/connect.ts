@@ -40,9 +40,10 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
 
   const env = options.env ?? process.env;
   const existing = await readConfigFile(resolveRuntimeConfig(env).configPath);
-  const runtime = resolveRuntimeConfig(env, existing);
+  const requestedProjectId = options.projectId?.trim();
+  const runtime = resolveRuntimeConfig(env, existing, requestedProjectId);
   const url = normalizeBeaconUrl(options.url?.trim() || runtime.url);
-  const projectId = options.projectId?.trim() || runtime.project_id;
+  const projectId = requestedProjectId || runtime.project_id;
   if (!projectId) {
     return {
       ok: false,
@@ -74,7 +75,7 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
   return {
     ok: true,
     config: { ...runtime, url, token, project_id: projectId },
-    message: `Connected to ${projectLabel}. Token saved to ${runtime.configPath}.`,
+    message: `Connected to ${projectLabel}. Token saved under [projects."${projectId}"] in ${runtime.configPath}.`,
   };
 }
 

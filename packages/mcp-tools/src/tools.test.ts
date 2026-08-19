@@ -22,11 +22,15 @@ const REQUIRED_TOOLS = [
   "get_task",
   "create_task",
   "update_task",
+  "list_comments",
   "add_comment",
   "set_status",
   "link_dependency",
   "list_decisions",
   "record_decision",
+  "list_labels",
+  "propose_label",
+  "set_task_labels",
   "get_constraints",
   "create_constraint",
   "apply_constraint",
@@ -45,6 +49,12 @@ const REQUIRED_TOOLS = [
   "github_list_issues",
   "github_link_issue",
   "github_sync_now",
+  "list_reports",
+  "generate_report",
+  "get_report",
+  "list_reviews",
+  "import_review",
+  "get_review",
 ] as const;
 
 const TASK_ID = "01934567-89ab-7cde-89ab-0123456789ab";
@@ -109,6 +119,10 @@ describe("tool catalog", () => {
       }).ok,
     ).toBe(true);
     expect(parseToolArgs("get_task", { task_id: TASK_ID }).ok).toBe(true);
+    expect(parseToolArgs("list_comments", {}).ok).toBe(false);
+    expect(parseToolArgs("list_comments", { task_id: TASK_ID, cursor: "c1", limit: 20 }).ok).toBe(
+      true,
+    );
     expect(parseToolArgs("get_project", { project_id: PROJECT_ID }).ok).toBe(true);
   });
 
