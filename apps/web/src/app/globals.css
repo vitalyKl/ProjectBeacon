@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-:root {
+:root,
+[data-theme="light"] {
   --background: #f4f4f5;
   --foreground: #18181b;
   --surface: #ffffff;
@@ -8,6 +9,19 @@
   --border: #e4e4e7;
   --accent: #18181b;
   --accent-fg: #fafafa;
+  --danger: #dc2626;
+  --danger-fg: #fafafa;
+  --warning: #d97706;
+  --warning-fg: #78350f;
+  --success: #059669;
+  --success-fg: #ecfdf5;
+  --status-backlog: #a1a1aa;
+  --status-ready: #0ea5e9;
+  --status-in-progress: #f59e0b;
+  --status-blocked: #ef4444;
+  --status-in-review: #8b5cf6;
+  --status-done: #10b981;
+  --status-canceled: #71717a;
 }
 
 @theme inline {
@@ -18,10 +32,24 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-fg);
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-status-backlog: var(--status-backlog);
+  --color-status-ready: var(--status-ready);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-blocked: var(--status-blocked);
+  --color-status-in-review: var(--status-in-review);
+  --color-status-done: var(--status-done);
+  --color-status-canceled: var(--status-canceled);
 }
 
+/* Scoped so [data-theme="light"] is not overridden by the OS. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #09090b;
     --foreground: #fafafa;
     --surface: #18181b;
@@ -29,7 +57,43 @@
     --border: #27272a;
     --accent: #fafafa;
     --accent-fg: #18181b;
+    --danger: #f87171;
+    --danger-fg: #18181b;
+    --warning: #fbbf24;
+    --warning-fg: #fef3c7;
+    --success: #34d399;
+    --success-fg: #022c22;
+    --status-backlog: #a1a1aa;
+    --status-ready: #38bdf8;
+    --status-in-progress: #fbbf24;
+    --status-blocked: #f87171;
+    --status-in-review: #a78bfa;
+    --status-done: #34d399;
+    --status-canceled: #a1a1aa;
   }
+}
+
+[data-theme="dark"] {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --surface: #18181b;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  --accent: #fafafa;
+  --accent-fg: #18181b;
+  --danger: #f87171;
+  --danger-fg: #18181b;
+  --warning: #fbbf24;
+  --warning-fg: #fef3c7;
+  --success: #34d399;
+  --success-fg: #022c22;
+  --status-backlog: #a1a1aa;
+  --status-ready: #38bdf8;
+  --status-in-progress: #fbbf24;
+  --status-blocked: #f87171;
+  --status-in-review: #a78bfa;
+  --status-done: #34d399;
+  --status-canceled: #a1a1aa;
 }
 
 body {
