@@ -99,11 +99,11 @@ const STRINGS = {
     "learn.home":
       "Home is a pulse: Goals and Definition of Done, a queue peek, open milestones, active agents, and index status. Create a project from the wizard.",
     "learn.board":
-      "Board is the living queue. Drag a card to change status. Ready is what local agents can start.",
+      "Board is the living queue. Switch to Backlog from the header. Filter by area to hide cards that are not in that area. Drag a card to change status. Ready is what local agents can start.",
     "learn.backlog":
-      "Backlog is the same work as a list. Use it when you want to scan or re-status quickly.",
+      "Backlog is the same work as a list. Open it from Board in the header — it is not in the side nav. The area filter is shared with Board and hides tasks that do not match.",
     "learn.roadmap":
-      "Roadmap groups work by milestone. Dependencies show which task must finish before another can start.",
+      "Roadmap groups work by milestone. Dependencies show which task must finish before another can start. The area control is shown but does not filter the timeline or graph.",
     "learn.context":
       "Context is the living project brief. Compile a session brief from here or from a task. AGENTS.md is an export. The board is the queue. The code index is optional.",
     "learn.files":
@@ -248,6 +248,7 @@ const STRINGS = {
     "board.hint": "Drag a card to any status. A human move releases an agent lock.",
     "board.filterArea": "Filter by area",
     "board.allAreas": "All areas",
+    "work.views": "Work views",
     "backlog.hint": "List view. Change status from any row.",
     "backlog.empty": "No tasks yet. Create one to start the board.",
     "backlog.statusFor": "Status for {title}",

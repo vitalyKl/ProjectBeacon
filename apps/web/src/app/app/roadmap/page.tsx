@@ -20,12 +20,16 @@ import {
 } from "@/lib/roadmap";
 import { t } from "@/lib/i18n";
 import { ensureBeaconSeed } from "@/lib/seed";
+import { STATUS_FILL_VAR, segmentedItemClass } from "@/lib/ui";
+import { Segmented } from "@/lib/ui/segmented";
 import { useInterval } from "@/lib/use-interval";
 import { useT } from "@/lib/use-locale";
 
 import { LockBadge } from "../lock-badge";
 import { useSelectedProject } from "../project-context";
 import { useToast } from "../toast";
+import { useWorkFilters } from "../use-work-filters";
+import { WorkHeader } from "../work-header";
 
 const ROADMAP_POLL_MS = 10000;
 
@@ -39,22 +43,13 @@ const STATUS_DOT: Record<TaskStatus, string> = {
   canceled: "bg-zinc-500",
 };
 
-const STATUS_FILL: Record<TaskStatus, string> = {
-  backlog: "#a1a1aa",
-  ready: "#0ea5e9",
-  in_progress: "#f59e0b",
-  blocked: "#ef4444",
-  in_review: "#8b5cf6",
-  done: "#10b981",
-  canceled: "#71717a",
-};
-
 type RoadmapView = "timeline" | "graph";
 
 export default function RoadmapPage() {
   const label = useT();
   const { project } = useSelectedProject();
   const { toast } = useToast();
+  const { labelId, setLabelId, catalog } = useWorkFilters(project?.id ?? null);
   const [view, setView] = useState<RoadmapView>("timeline");
   const [tasks, setTasks] = useState<PublicTask[]>([]);
   const [milestones, setMilestones] = useState<PublicMilestone[]>([]);
@@ -144,24 +139,32 @@ export default function RoadmapPage() {
 
   return (
     <section className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{label("nav.roadmap")}</h1>
-          <p className="text-sm text-muted">{label("roadmap.hint")}</p>
-        </div>
-        <div className="flex rounded-md border border-border bg-surface p-0.5 text-sm">
-          <ViewTab
-            label={label("roadmap.timeline")}
-            active={view === "timeline"}
-            onClick={() => setView("timeline")}
-          />
-          <ViewTab
-            label={label("roadmap.dependencies")}
-            active={view === "graph"}
-            onClick={() => setView("graph")}
-          />
-        </div>
-      </header>
+      <WorkHeader
+        surface="roadmap"
+        title={label("nav.roadmap")}
+        description={label("roadmap.hint")}
+        catalog={catalog}
+        labelId={labelId}
+        onLabelIdChange={setLabelId}
+        actions={
+          <Segmented>
+            <button
+              className={segmentedItemClass(view === "timeline")}
+              type="button"
+              onClick={() => setView("timeline")}
+            >
+              {label("roadmap.timeline")}
+            </button>
+            <button
+              className={segmentedItemClass(view === "graph")}
+              type="button"
+              onClick={() => setView("graph")}
+            >
+              {label("roadmap.dependencies")}
+            </button>
+          </Segmented>
+        }
+      />
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
       {view === "timeline" ? (
@@ -175,26 +178,6 @@ export default function RoadmapPage() {
         />
       )}
     </section>
-  );
-}
-
-function ViewTab({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`rounded px-3 py-1.5 ${active ? "bg-background font-medium" : "text-muted"}`}
-      type="button"
-      onClick={onClick}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -387,7 +370,7 @@ function DependencyView({
                       cx={14}
                       cy={node.height / 2}
                       r={5}
-                      fill={STATUS_FILL[node.task.status]}
+                      fill={STATUS_FILL_VAR[node.task.status]}
                     />
                     <text
                       x={26}
