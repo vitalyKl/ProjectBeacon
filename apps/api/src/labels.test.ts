@@ -149,6 +149,22 @@ describe("project labels", () => {
     };
     expect(task.labels).toEqual([expect.objectContaining({ id: label.id, slug: "api" })]);
 
+    const replay = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": "task-api",
+      },
+      body: JSON.stringify({ title: "Ship compile extras", label_ids: [label.id] }),
+    });
+    expect(replay.status).toBe(201);
+    const replayed = (await replay.json()) as {
+      id: string;
+      labels: { id: string; slug: string }[];
+    };
+    expect(replayed).toEqual(task);
+
     const filtered = await alice.app.request(
       `/v1/projects/${project.id}/tasks?label_id=${label.id}`,
       { headers: { cookie: cookieHeader(alice.token) } },

@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   DEFAULT_PROJECT_LABELS,
   DEFAULT_PROJECT_LABEL_STATUS,
@@ -12,7 +13,7 @@ import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
 import { isConstraintKind, isConstraintStatus, isContextScopeType, isDecisionStatus, type CodeOwnerRecord, type ConstraintRecord, type ContextNodeRecord, type ContextRevisionRecord, type ContextRevisionTarget, type DecisionPatch, type DecisionRecord, type ProjectRepoRecord, type DecisionPathLink } from "../context/types.js";
-import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type IdempotentWrites, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, UniqueViolationError } from "./store.js";
+import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, UniqueViolationError } from "./store.js";
 import type { LabelPatch, LabelRecord, LabelStatus } from "../labels/types.js";
 import { isLabelStatus } from "../labels/types.js";
 import type { ApprovalStatus } from "../tokens/types.js";
@@ -47,6 +48,21 @@ type UniqueConstraint =
   | "project_repo"
   | "label_slug"
   | "unknown";
+
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+function uniqueIds(ids: string[]): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    unique.push(id);
+  }
+  return unique;
+}
 
 function uniqueConstraint(error: unknown): UniqueConstraint | undefined {
   let current: unknown = error;
@@ -661,8 +677,13 @@ function toRateBucket(row: typeof rateBuckets.$inferSelect): RateBucketRecord {
 }
 
 export class DbAuthStore implements AuthStore {
+  private readonly writeTx = new AsyncLocalStorage<Tx>();
 
   constructor(private readonly db: Db) {}
+
+  private writeDb(): Db | Tx {
+    return this.writeTx.getStore() ?? this.db;
+  }
 
   async hasAnyUser(): Promise<boolean> {
     const row = await this.db.select({ id: users.id }).from(users).limit(1);
@@ -1266,37 +1287,51 @@ export class DbAuthStore implements AuthStore {
     return row ? toMilestone(row) : undefined;
   }
 
-  async createTask(task: TaskRecord): Promise<TaskRecord> {
-    const [row] = await this.db
-      .insert(tasks)
-      .values({
-        id: task.id,
-        projectId: task.projectId,
-        milestoneId: task.milestoneId,
-        parentId: task.parentId,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        priority: task.priority,
-        type: task.type,
-        version: task.version,
-        assigneeUserId: task.assigneeUserId,
-        assigneeAgentName: task.assigneeAgentName,
-        agentBrief: task.agentBrief,
-        howToCheck: task.howToCheck,
-        linkedPaths: task.linkedPaths,
-        githubIssueId: task.githubIssueId,
-        lockedBySessionId: task.lockedBySessionId,
-        lockExpiresAt: task.lockExpiresAt,
-        deletedAt: task.deletedAt,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
-      })
-      .returning();
-    if (!row) {
-      throw new Error("insert task returned no row");
+  async createTask(task: TaskRecord, labelIds: string[] = []): Promise<TaskRecord> {
+    const run = async (db: Db | Tx) => {
+      const [row] = await db
+        .insert(tasks)
+        .values({
+          id: task.id,
+          projectId: task.projectId,
+          milestoneId: task.milestoneId,
+          parentId: task.parentId,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          type: task.type,
+          version: task.version,
+          assigneeUserId: task.assigneeUserId,
+          assigneeAgentName: task.assigneeAgentName,
+          agentBrief: task.agentBrief,
+          howToCheck: task.howToCheck,
+          linkedPaths: task.linkedPaths,
+          githubIssueId: task.githubIssueId,
+          lockedBySessionId: task.lockedBySessionId,
+          lockExpiresAt: task.lockExpiresAt,
+          deletedAt: task.deletedAt,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        })
+        .returning();
+      if (!row) {
+        throw new Error("insert task returned no row");
+      }
+      const unique = uniqueIds(labelIds);
+      if (unique.length > 0) {
+        await db.insert(taskLabels).values(unique.map((labelId) => ({ taskId: task.id, labelId })));
+      }
+      return toTask(row);
+    };
+    const bound = this.writeTx.getStore();
+    if (bound) {
+      return run(bound);
     }
-    return toTask(row);
+    if (labelIds.length > 0) {
+      return this.db.transaction((tx) => run(tx));
+    }
+    return run(this.db);
   }
 
   async listTasks(projectId: string): Promise<TaskRecord[]> {
@@ -1388,7 +1423,7 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord> {
-    const [row] = await this.db
+    const [row] = await this.writeDb()
       .insert(taskComments)
       .values({
         id: comment.id,
@@ -1521,7 +1556,7 @@ export class DbAuthStore implements AuthStore {
   }
 
   async writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord> {
-    const [row] = await this.db
+    const [row] = await this.writeDb()
       .insert(activityEvents)
       .values({
         id: event.id,
@@ -1761,154 +1796,42 @@ export class DbAuthStore implements AuthStore {
     return rows.map(toContextRevision);
   }
 
-  async withIdempotency(
+  async withIdempotency<T>(
     actorType: IdempotencyActorType,
     actorId: string,
     key: string,
     now: Date,
-    produce: (writes: IdempotentWrites) => Promise<unknown>,
-  ): Promise<unknown> {
-    return this.db.transaction(async (tx) => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(${IDEMPOTENCY_LOCK_NS}, hashtext(${`${actorType}:${actorId}:${key}`}))`,
-      );
-      const keyMatch = and(
-        eq(idempotencyKeys.actorType, actorType),
-        eq(idempotencyKeys.actorId, actorId),
-        eq(idempotencyKeys.key, key),
-      );
-      const [existing] = await tx.select().from(idempotencyKeys).where(keyMatch).limit(1);
-      if (existing && now.getTime() - existing.createdAt.getTime() <= IDEMPOTENCY_TTL_MS) {
-        return existing.response;
-      }
-      if (existing) {
-        await tx.delete(idempotencyKeys).where(keyMatch);
-      }
+    produce: () => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction((tx) =>
+      this.writeTx.run(tx, async () => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${IDEMPOTENCY_LOCK_NS}, hashtext(${`${actorType}:${actorId}:${key}`}))`,
+        );
+        const keyMatch = and(
+          eq(idempotencyKeys.actorType, actorType),
+          eq(idempotencyKeys.actorId, actorId),
+          eq(idempotencyKeys.key, key),
+        );
+        const [existing] = await tx.select().from(idempotencyKeys).where(keyMatch).limit(1);
+        if (existing && now.getTime() - existing.createdAt.getTime() <= IDEMPOTENCY_TTL_MS) {
+          return existing.response as T;
+        }
+        if (existing) {
+          await tx.delete(idempotencyKeys).where(keyMatch);
+        }
 
-      const writes: IdempotentWrites = {
-        createTask: async (task) => {
-          const [row] = await tx
-            .insert(tasks)
-            .values({
-              id: task.id,
-              projectId: task.projectId,
-              milestoneId: task.milestoneId,
-              parentId: task.parentId,
-              title: task.title,
-              description: task.description,
-              status: task.status,
-              priority: task.priority,
-              type: task.type,
-              version: task.version,
-              assigneeUserId: task.assigneeUserId,
-              assigneeAgentName: task.assigneeAgentName,
-              agentBrief: task.agentBrief,
-              howToCheck: task.howToCheck,
-              linkedPaths: task.linkedPaths,
-              githubIssueId: task.githubIssueId,
-              lockedBySessionId: task.lockedBySessionId,
-              lockExpiresAt: task.lockExpiresAt,
-              deletedAt: task.deletedAt,
-              createdAt: task.createdAt,
-              updatedAt: task.updatedAt,
-            })
-            .returning();
-          if (!row) {
-            throw new Error("insert task returned no row");
-          }
-          return toTask(row);
-        },
-        createComment: async (comment) => {
-          const [row] = await tx
-            .insert(taskComments)
-            .values({
-              id: comment.id,
-              taskId: comment.taskId,
-              authorType: comment.authorType,
-              authorId: comment.authorId,
-              body: comment.body,
-              createdAt: comment.createdAt,
-            })
-            .returning();
-          if (!row) {
-            throw new Error("insert comment returned no row");
-          }
-          return toComment(row);
-        },
-        createDecision: async (decision) => insertDecisionTx(tx, decision),
-        createConstraint: async (constraint) => insertConstraintTx(tx, constraint),
-        writeActivity: async (event) => {
-          const [row] = await tx
-            .insert(activityEvents)
-            .values({
-              id: event.id,
-              projectId: event.projectId,
-              objectType: event.objectType,
-              objectId: event.objectId,
-              actorType: event.actorType,
-              actorId: event.actorId,
-              verb: event.verb,
-              payload: event.payload,
-              createdAt: event.createdAt,
-            })
-            .returning();
-          if (!row) {
-            throw new Error("insert activity returned no row");
-          }
-          return toActivity(row);
-        },
-        startWork: async (input) => startWorkInTx(tx, input),
-        setTaskLabels: async (taskId, labelIds) => {
-          const unique: string[] = [];
-          const seen = new Set<string>();
-          for (const id of labelIds) {
-            if (seen.has(id)) {
-              continue;
-            }
-            seen.add(id);
-            unique.push(id);
-          }
-          await tx.delete(taskLabels).where(eq(taskLabels.taskId, taskId));
-          if (unique.length > 0) {
-            await tx.insert(taskLabels).values(unique.map((labelId) => ({ taskId, labelId })));
-          }
-          if (unique.length === 0) {
-            return [];
-          }
-          const rows = await tx
-            .select()
-            .from(labels)
-            .where(inArray(labels.id, unique))
-            .orderBy(asc(labels.name), asc(labels.id));
-          const paths = await tx
-            .select()
-            .from(labelPaths)
-            .where(
-              inArray(
-                labelPaths.labelId,
-                rows.map((row) => row.id),
-              ),
-            );
-          const byLabel = new Map<string, LinkedPath[]>();
-          for (const path of paths) {
-            const list = byLabel.get(path.labelId) ?? [];
-            list.push({ repo_id: path.repoId, path: path.path });
-            byLabel.set(path.labelId, list);
-          }
-          return rows.map((row) => toLabel(row, byLabel.get(row.id) ?? []));
-        },
-      };
-
-      const response = await produce(writes);
-      await tx.insert(idempotencyKeys).values({
-        actorType,
-        actorId,
-        key,
-        response,
-        createdAt: now,
-      });
-      return response;
-    });
+        const response = await produce();
+        await tx.insert(idempotencyKeys).values({
+          actorType,
+          actorId,
+          key,
+          response,
+          createdAt: now,
+        });
+        return response;
+      }),
+    );
   }
   async createApiToken(token: TokenRecord): Promise<TokenRecord> {
     const [row] = await this.db
@@ -2219,6 +2142,14 @@ export class DbAuthStore implements AuthStore {
     });
   }
 
+  async startWork(input: StartWorkInput): Promise<StartWorkWriteResult> {
+    const bound = this.writeTx.getStore();
+    if (bound) {
+      return startWorkInTx(bound, input);
+    }
+    return this.db.transaction((tx) => startWorkInTx(tx, input));
+  }
+
   async findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined> {
     const [row] = await this.db
       .select()
@@ -2235,7 +2166,7 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord> {
-    const [row] = await this.db
+    const [row] = await this.writeDb()
       .insert(constraints)
       .values({
         id: constraint.id,
@@ -2286,7 +2217,11 @@ export class DbAuthStore implements AuthStore {
   }
 
   async createDecision(decision: DecisionRecord): Promise<DecisionRecord> {
-    return this.db.transaction(async (tx) => insertDecisionTx(tx, decision));
+    const bound = this.writeTx.getStore();
+    if (bound) {
+      return insertDecisionTx(bound, decision);
+    }
+    return this.db.transaction((tx) => insertDecisionTx(tx, decision));
   }
 
   async updateDecision(id: string, patch: DecisionPatch): Promise<DecisionRecord | undefined> {
@@ -2431,11 +2366,12 @@ export class DbAuthStore implements AuthStore {
   }
 
   async listTaskLabels(taskId: string): Promise<LabelRecord[]> {
-    const links = await this.db.select().from(taskLabels).where(eq(taskLabels.taskId, taskId));
+    const db = this.writeDb();
+    const links = await db.select().from(taskLabels).where(eq(taskLabels.taskId, taskId));
     if (links.length === 0) {
       return [];
     }
-    const rows = await this.db
+    const rows = await db
       .select()
       .from(labels)
       .where(
@@ -2449,21 +2385,19 @@ export class DbAuthStore implements AuthStore {
   }
 
   async setTaskLabels(taskId: string, labelIds: string[]): Promise<LabelRecord[]> {
-    const unique: string[] = [];
-    const seen = new Set<string>();
-    for (const id of labelIds) {
-      if (seen.has(id)) {
-        continue;
-      }
-      seen.add(id);
-      unique.push(id);
-    }
-    await this.db.transaction(async (tx) => {
-      await tx.delete(taskLabels).where(eq(taskLabels.taskId, taskId));
+    const unique = uniqueIds(labelIds);
+    const apply = async (db: Db | Tx) => {
+      await db.delete(taskLabels).where(eq(taskLabels.taskId, taskId));
       if (unique.length > 0) {
-        await tx.insert(taskLabels).values(unique.map((labelId) => ({ taskId, labelId })));
+        await db.insert(taskLabels).values(unique.map((labelId) => ({ taskId, labelId })));
       }
-    });
+    };
+    const bound = this.writeTx.getStore();
+    if (bound) {
+      await apply(bound);
+    } else {
+      await this.db.transaction((tx) => apply(tx));
+    }
     return this.listTaskLabels(taskId);
   }
 
@@ -2471,7 +2405,7 @@ export class DbAuthStore implements AuthStore {
     if (rows.length === 0) {
       return [];
     }
-    const paths = await this.db
+    const paths = await this.writeDb()
       .select()
       .from(labelPaths)
       .where(
@@ -3245,10 +3179,7 @@ function stringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-async function startWorkInTx(
-  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
-  input: StartWorkInput,
-): Promise<StartWorkWriteResult> {
+async function startWorkInTx(tx: Tx, input: StartWorkInput): Promise<StartWorkWriteResult> {
   if (input.session.tokenId) {
     const [token] = await tx
       .select({ id: apiTokens.id, projectId: apiTokens.projectId })
@@ -3345,32 +3276,6 @@ async function startWorkInTx(
 }
 
 type WriteTx = Pick<Db, "insert">;
-
-async function insertConstraintTx(
-  tx: WriteTx,
-  constraint: ConstraintRecord,
-): Promise<ConstraintRecord> {
-  const [row] = await tx
-    .insert(constraints)
-    .values({
-      id: constraint.id,
-      projectId: constraint.projectId,
-      kind: constraint.kind,
-      body: constraint.body,
-      scopePath: constraint.scopePath,
-      status: constraint.status,
-      createdAt: constraint.createdAt,
-    })
-    .returning();
-  if (!row) {
-    throw new Error("insert constraint returned no row");
-  }
-  const created = toConstraint(row);
-  if (!created) {
-    throw new Error("insert constraint returned invalid row");
-  }
-  return created;
-}
 
 async function insertDecisionTx(tx: WriteTx, decision: DecisionRecord): Promise<DecisionRecord> {
   const [row] = await tx

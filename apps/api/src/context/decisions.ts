@@ -218,8 +218,8 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
       idem.id,
       idempotencyKey,
       now,
-      async (writes) => {
-        const decision = await writes.createDecision({
+      async () => {
+        const decision = await deps.store.createDecision({
           id: uuidv7(now.getTime()),
           projectId: access.project.id,
           title,
@@ -234,7 +234,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
           relatedPaths: relatedPaths.paths,
           relatedTaskIds: relatedTasks.ids,
         });
-        await writes.writeActivity({
+        await deps.store.writeActivity({
           id: uuidv7(now.getTime()),
           projectId: access.project.id,
           objectType: "decision",
@@ -383,8 +383,8 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
       idem.id,
       idempotencyKey,
       now,
-      async (writes) => {
-        const constraint = await writes.createConstraint({
+      async () => {
+        const constraint = await deps.store.createConstraint({
           id: uuidv7(now.getTime()),
           projectId: access.project.id,
           kind,
@@ -393,7 +393,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
           status,
           createdAt: now,
         });
-        await writes.writeActivity({
+        await deps.store.writeActivity({
           id: uuidv7(now.getTime()),
           projectId: access.project.id,
           objectType: "constraint",

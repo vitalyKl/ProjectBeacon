@@ -11,7 +11,7 @@ export interface RoadmapStore {
   createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord>;
   listMilestones(projectId: string): Promise<MilestoneRecord[]>;
   findMilestoneById(id: string): Promise<MilestoneRecord | undefined>;
-  createTask(task: TaskRecord): Promise<TaskRecord>;
+  createTask(task: TaskRecord, labelIds?: string[]): Promise<TaskRecord>;
   listTasks(projectId: string): Promise<TaskRecord[]>;
   findTaskById(id: string): Promise<TaskRecord | undefined>;
   updateTask(

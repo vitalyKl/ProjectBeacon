@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   DEFAULT_PROJECT_LABELS,
   DEFAULT_PROJECT_LABEL_STATUS,
@@ -35,7 +36,7 @@ import type { OrgStore } from "../orgs/store.js";
 import type { ReportStore } from "../reports/store.js";
 import type { ProjectRepoRef, RepoStore } from "../repos/store.js";
 import type { RoadmapStore } from "../roadmap/store.js";
-import type { IdempotentWrites, WorkStore } from "../sessions/store.js";
+import type { WorkStore } from "../sessions/store.js";
 import type { TokenStore } from "../tokens/store.js";
 import {
   BootstrapConsumedError,
@@ -48,7 +49,6 @@ import {
 
 export type { SessionRecord, UserRecord } from "./identity.js";
 export { BootstrapConsumedError, GithubIdTakenError, LoginTakenError } from "./identity.js";
-export type { IdempotentWrites } from "../sessions/store.js";
 export type { ProjectRepoRef } from "../repos/store.js";
 
 export class UniqueViolationError extends Error {
@@ -188,6 +188,7 @@ export class MemoryAuthStore implements AuthStore {
   private readonly idempotency = new Map<string, { response: unknown; createdAt: Date }>();
   private readonly agentSessions = new Map<string, AgentSessionRecord>();
   private writeTail: Promise<void> = Promise.resolve();
+  private readonly writeContext = new AsyncLocalStorage<true>();
 
   private orgMemberKey(orgId: string, userId: string): string {
     return `${orgId}:${userId}`;
@@ -198,7 +199,10 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   private enqueueWrite<T>(fn: () => T | Promise<T>): Promise<T> {
-    const run = this.writeTail.then(fn);
+    if (this.writeContext.getStore()) {
+      return Promise.resolve().then(fn);
+    }
+    const run = this.writeTail.then(() => this.writeContext.run(true, fn));
     this.writeTail = run.then(
       () => undefined,
       () => undefined,
@@ -620,8 +624,14 @@ export class MemoryAuthStore implements AuthStore {
     return milestone ? cloneMilestone(milestone) : undefined;
   }
 
-  async createTask(task: TaskRecord): Promise<TaskRecord> {
-    return this.enqueueWrite(() => this.insertTaskUnlocked(task));
+  async createTask(task: TaskRecord, labelIds: string[] = []): Promise<TaskRecord> {
+    return this.enqueueWrite(() => {
+      const created = this.insertTaskUnlocked(task);
+      if (labelIds.length > 0) {
+        this.replaceTaskLabelsUnlocked(task.id, labelIds);
+      }
+      return created;
+    });
   }
 
   async listTasks(projectId: string): Promise<TaskRecord[]> {
@@ -1047,30 +1057,21 @@ export class MemoryAuthStore implements AuthStore {
     return revision ? cloneContextRevision(revision) : undefined;
   }
 
-  async withIdempotency(
+  async withIdempotency<T>(
     actorType: IdempotencyActorType,
     actorId: string,
     key: string,
     now: Date,
-    produce: (writes: IdempotentWrites) => Promise<unknown>,
-  ): Promise<unknown> {
+    produce: () => Promise<T>,
+  ): Promise<T> {
     return this.enqueueWrite(async () => {
       const slot = idempotencyKey(actorType, actorId, key);
       const stored = this.idempotency.get(slot);
       if (stored && now.getTime() - stored.createdAt.getTime() <= IDEMPOTENCY_TTL_MS) {
-        return structuredClone(stored.response);
+        return structuredClone(stored.response) as T;
       }
       this.idempotency.delete(slot);
-      const writes: IdempotentWrites = {
-        createTask: async (task) => this.insertTaskUnlocked(task),
-        createComment: async (comment) => this.insertCommentUnlocked(comment),
-        createDecision: async (decision) => this.insertDecisionUnlocked(decision),
-        createConstraint: async (constraint) => this.insertConstraintUnlocked(constraint),
-        writeActivity: async (event) => this.insertActivityUnlocked(event),
-        startWork: async (input) => this.startWorkUnlocked(input),
-        setTaskLabels: async (taskId, labelIds) => this.replaceTaskLabelsUnlocked(taskId, labelIds),
-      };
-      const response = await produce(writes);
+      const response = await produce();
       this.idempotency.set(slot, {
         response: structuredClone(response),
         createdAt: new Date(now),
@@ -1269,6 +1270,10 @@ export class MemoryAuthStore implements AuthStore {
       }
       return cloneAgentSession(session);
     });
+  }
+
+  async startWork(input: StartWorkInput): Promise<StartWorkWriteResult> {
+    return this.enqueueWrite(() => this.startWorkUnlocked(input));
   }
 
   async finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined> {

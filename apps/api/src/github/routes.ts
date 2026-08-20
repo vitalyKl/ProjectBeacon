@@ -711,8 +711,8 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
           actorIdempotencyRef(resolved.actor).id,
           `github-import:${repo.id}:${githubIssueId.toString()}`,
           now,
-          async (writes) => {
-            const task = await writes.createTask({
+          async () => {
+            const task = await deps.store.createTask({
               id: uuidv7(now.getTime() + createdOffset),
               projectId: resolved.project.id,
               milestoneId: null,

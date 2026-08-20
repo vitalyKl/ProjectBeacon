@@ -264,8 +264,8 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
         actor.id,
         idempotencyKey,
         now,
-        async (writes) => {
-          const started = await writes.startWork({
+        async () => {
+          const started = await deps.store.startWork({
             session: {
               id: sessionId,
               projectId: access.project.id,
@@ -296,7 +296,7 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
             steal,
             now,
           });
-          await writes.writeActivity({
+          await deps.store.writeActivity({
             id: uuidv7(now.getTime()),
             projectId: access.project.id,
             objectType: "session",
@@ -308,7 +308,7 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
             createdAt: now,
           });
           if (started.stolenFrom) {
-            await writes.writeActivity({
+            await deps.store.writeActivity({
               id: uuidv7(now.getTime()),
               projectId: access.project.id,
               objectType: "task",

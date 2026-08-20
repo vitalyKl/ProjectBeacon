@@ -479,32 +479,35 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       actorIdempotencyRef(access.actor).id,
       idempotencyKey,
       now,
-      async (writes) => {
-        const task = await writes.createTask({
-          id: uuidv7(now.getTime()),
-          projectId: access.project.id,
-          milestoneId,
-          parentId,
-          title,
-          description,
-          status,
-          priority,
-          type,
-          version: 1,
-          assigneeUserId,
-          assigneeAgentName,
-          agentBrief,
-          howToCheck,
-          linkedPaths: linkedPaths.paths,
-          githubIssueId: null,
-          lockedBySessionId: null,
-          lockExpiresAt: null,
-          deletedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        });
+      async () => {
+        const task = await deps.store.createTask(
+          {
+            id: uuidv7(now.getTime()),
+            projectId: access.project.id,
+            milestoneId,
+            parentId,
+            title,
+            description,
+            status,
+            priority,
+            type,
+            version: 1,
+            assigneeUserId,
+            assigneeAgentName,
+            agentBrief,
+            howToCheck,
+            linkedPaths: linkedPaths.paths,
+            githubIssueId: null,
+            lockedBySessionId: null,
+            lockExpiresAt: null,
+            deletedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+          labelIds.ids,
+        );
         const actor = actorActivity(access.actor);
-        await writeActivity(writes, {
+        await writeActivity(deps.store, {
           projectId: access.project.id,
           objectType: "task",
           objectId: task.id,
@@ -514,13 +517,6 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
           payload: { status: task.status, type: task.type },
           now,
         });
-        if (labelIds.ids.length > 0) {
-          if (writes.setTaskLabels) {
-            await writes.setTaskLabels(task.id, labelIds.ids);
-          } else {
-            await deps.store.setTaskLabels(task.id, labelIds.ids);
-          }
-        }
         return presentTaskWithLabels(deps.store, task);
       },
     );
@@ -779,8 +775,8 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       actorIdempotencyRef(access.actor).id,
       idempotencyKey,
       now,
-      async (writes) => {
-        const comment = await writes.createComment({
+      async () => {
+        const comment = await deps.store.createComment({
           id: uuidv7(now.getTime()),
           taskId: access.task.id,
           authorType: author.actorType === "token" || author.actorType === "agent" ? "agent" : "user",
@@ -788,7 +784,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
           body: commentBody,
           createdAt: now,
         });
-        await writeActivity(writes, {
+        await writeActivity(deps.store, {
           projectId: access.task.projectId,
           objectType: "task",
           objectId: access.task.id,
