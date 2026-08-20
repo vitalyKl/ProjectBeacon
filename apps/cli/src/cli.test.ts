@@ -48,6 +48,8 @@ describe("runCli", () => {
     expect(out.stdout).toContain("writes Grok, Cursor, and Claude MCP configs");
     expect(out.stdout.toLowerCase()).not.toContain("device-flow");
     expect(out.stdout.toLowerCase()).not.toContain("indexer");
+    expect(out.stdout.toLowerCase()).not.toContain("outbound tunnel");
+    expect(out.stdout.toLowerCase()).not.toContain("wss://");
   });
 
   it("starts mcp only after connect", async () => {

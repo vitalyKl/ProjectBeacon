@@ -165,7 +165,7 @@ async function main(): Promise<void> {
     } catch (error) {
       writeLog({
         level: "error",
-        msg: "hosted clone purge",
+        msg: "deleted project index purge",
         error: { message: error instanceof Error ? error.message : String(error) },
       });
     }

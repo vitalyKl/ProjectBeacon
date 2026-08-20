@@ -6,14 +6,12 @@ export async function purgeProjectClones(
   registry: WorkerIndexRegistry,
   projectId: string,
 ): Promise<string[]> {
-  const purge = await api.projectClonePurge(projectId);
-  if (!purge.deleted) {
-    return [];
-  }
-  for (const repoId of purge.repo_ids) {
+  const repos = await api.listProjectRepos(projectId);
+  const repoIds = repos.map((repo) => repo.id);
+  for (const repoId of repoIds) {
     await registry.dropRepo(repoId);
   }
-  return purge.repo_ids;
+  return repoIds;
 }
 
 export async function purgeDeletedProjectClones(

@@ -157,14 +157,6 @@ export function createIndexRpcClient(options: {
   };
 }
 
-function usesWorkerIndex(repo: ProjectRepoRecord): boolean {
-  return (
-    repo.indexMode === "bind_mount" ||
-    repo.indexMode === "hosted_clone" ||
-    repo.indexMode === "both"
-  );
-}
-
 type TunnelClient = {
   isLive(repoId: string): boolean;
   query(repoId: string, path: string, query?: RpcQuery): Promise<unknown>;
@@ -172,12 +164,9 @@ type TunnelClient = {
 
 export function createCodeGateway(options: {
   config: Pick<AuthConfig, "indexRpcUrl" | "indexRpcToken">;
-  store: Pick<RepoStore, "findSidecarConnectionByRepoId">;
-  now: () => Date;
   fetchImpl?: typeof fetch;
   rpc?: IndexRpcClient;
   tunnel?: TunnelClient;
-  tunnelEnabled?: () => boolean;
 }): CodeGateway {
   const rpc =
     options.rpc ??
@@ -187,26 +176,12 @@ export function createCodeGateway(options: {
       fetchImpl: options.fetchImpl,
     });
 
-  function tunnelLive(repoId: string): boolean {
-    return Boolean(options.tunnelEnabled?.() && options.tunnel?.isLive(repoId));
-  }
-
-  async function route(repo: ProjectRepoRecord): Promise<"tunnel" | "worker" | "none"> {
-    if (repo.indexMode === "sidecar") {
-      return tunnelLive(repo.id) ? "tunnel" : "none";
-    }
-    if (repo.indexMode === "both") {
-      const sidecar = await options.store.findSidecarConnectionByRepoId(repo.id);
-      if (
-        sidecar &&
-        options.now().getTime() - sidecar.lastSeenAt.getTime() <= SIDECAR_SEEN_MS &&
-        tunnelLive(repo.id)
-      ) {
-        return "tunnel";
-      }
-    }
-    if (usesWorkerIndex(repo)) {
+  function route(repo: ProjectRepoRecord): "tunnel" | "worker" | "none" {
+    if (repo.indexMode === "bind_mount") {
       return "worker";
+    }
+    if (repo.indexMode === "sidecar" && options.tunnel?.isLive(repo.id)) {
+      return "tunnel";
     }
     return "none";
   }
@@ -259,7 +234,7 @@ export function createCodeGateway(options: {
 
   return {
     async health(repo) {
-      const target = await route(repo);
+      const target = route(repo);
       if (target === "tunnel") {
         return true;
       }
@@ -269,7 +244,7 @@ export function createCodeGateway(options: {
       return rpc.health();
     },
     async query(repo, query) {
-      const target = await route(repo);
+      const target = route(repo);
       if (target === "none") {
         throw new CodeGatewayError({
           status: 503,

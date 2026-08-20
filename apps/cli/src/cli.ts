@@ -28,7 +28,6 @@ Options:
 BEACON_HOME defaults to ~/.beacon (Unix) or %USERPROFILE%\\.beacon (Windows).
 Connect again for each Beacon project. Tokens stay in BEACON_HOME/config.toml under [projects."<id>"].
 mcp --project <id> or BEACON_PROJECT selects the default. Agents may still pass project_id on a tool.
-BEACON_HOST opts the sidecar into the outbound tunnel (wss://$BEACON_HOST/v1/sidecar).
 setup writes Grok, Cursor, and Claude MCP configs. The token stays in BEACON_HOME. It does not mint tokens or start a hosted agent.`;
 
 export type CliIo = {
@@ -160,8 +159,6 @@ async function autoStartSidecar(
       token: runtime.token,
       projectId: runtime.project_id,
       fetchImpl: options.fetchImpl,
-      beaconHost: env["BEACON_HOST"],
-      tunnelEnabled: env["FF_SIDECAR_TUNNEL"] === "true" || env["ff.sidecar_tunnel"] === "true",
     });
   } catch {
     // sidecar is best-effort next to mcp
@@ -278,8 +275,6 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
       token: runtime.token,
       projectId: runtime.project_id,
       fetchImpl: options.fetchImpl,
-      beaconHost: env["BEACON_HOST"],
-      tunnelEnabled: env["FF_SIDECAR_TUNNEL"] === "true" || env["ff.sidecar_tunnel"] === "true",
     });
     io.stdout.write(`Sidecar listening on ${started.host}:${started.port}\n`);
     return 0;

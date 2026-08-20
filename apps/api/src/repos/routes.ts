@@ -27,7 +27,6 @@ import {
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
-import { isHostedCloneEnabled } from "../flags.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { extraCompilePaths } from "../labels/scope.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
@@ -35,7 +34,7 @@ import { fileLineCount, recordCodeAnomaly, recordGetFileAnomaly } from "../obser
 import { parseLocalRootHint } from "./local-root.js";
 import { presentProjectRepo } from "./present.js";
 
-const INDEX_MODES = ["sidecar", "bind_mount", "hosted_clone", "both"] as const;
+const INDEX_MODES = ["sidecar", "bind_mount"] as const;
 const PROVIDERS = ["github", "local"] as const;
 
 type IndexMode = (typeof INDEX_MODES)[number];
@@ -64,14 +63,7 @@ function parseIndexMode(value: unknown): IndexMode | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
-  if (!(INDEX_MODES as readonly string[]).includes(value)) {
-    return undefined;
-  }
-  const mode = value as IndexMode;
-  if ((mode === "hosted_clone" || mode === "both") && !isHostedCloneEnabled(process.env)) {
-    return undefined;
-  }
-  return mode;
+  return (INDEX_MODES as readonly string[]).includes(value) ? (value as IndexMode) : undefined;
 }
 
 function parseOptionalBigInt(value: unknown): bigint | null | undefined {
@@ -123,11 +115,7 @@ async function repoStatusExtras(deps: RepoDeps, repo: ProjectRepoRecord, gateway
     sidecar && deps.clock.now().getTime() - sidecar.lastSeenAt.getTime() <= SIDECAR_SEEN_MS,
   );
   const workerIndexConnected =
-    repo.indexMode === "bind_mount" ||
-    repo.indexMode === "hosted_clone" ||
-    repo.indexMode === "both"
-      ? await gateway.health(repo)
-      : false;
+    repo.indexMode === "bind_mount" ? await gateway.health(repo) : false;
   return { sidecarConnected, workerIndexConnected };
 }
 
@@ -229,8 +217,6 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     deps.codeGateway ??
     createCodeGateway({
       config: deps.config,
-      store: deps.store,
-      now: () => deps.clock.now(),
     });
 
   app.get("/v1/projects/:id/repos", async (c) => {
@@ -301,14 +287,6 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
         reason: "invalid_body",
       });
     }
-    if (
-      (indexMode === "hosted_clone" || indexMode === "both") &&
-      (provider !== "github" || !installationId)
-    ) {
-      return errorJson(c, 400, "invalid_request", "hosted clone requires a GitHub App installation", {
-        reason: "invalid_body",
-      });
-    }
 
     const now = deps.clock.now();
     const repo: ProjectRepoRecord = {
@@ -375,42 +353,9 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     if (!indexMode) {
       return errorJson(c, 400, "invalid_request", "invalid index_mode", { reason: "invalid_body" });
     }
-    if (
-      (indexMode === "hosted_clone" || indexMode === "both") &&
-      (loaded.repo.provider !== "github" || !loaded.repo.installationId)
-    ) {
-      return errorJson(c, 400, "invalid_request", "hosted clone requires a GitHub App installation", {
-        reason: "invalid_body",
-      });
-    }
     const updated = await deps.store.updateProjectRepo(loaded.repo.id, { indexMode });
     const repo = updated ?? { ...loaded.repo, indexMode };
-    if (
-      (indexMode === "hosted_clone" || indexMode === "both") &&
-      loaded.repo.indexMode !== indexMode
-    ) {
-      await deps.jobs.enqueueDetect(
-        { repo_id: repo.id, project_id: repo.projectId },
-        { singletonKey: `detect:${repo.id}` },
-      );
-    }
     return c.json(presentProjectRepo(repo, await repoStatusExtras(deps, repo, gateway)));
-  });
-
-  app.post("/v1/repos/:id/clone-invalidation/consume", async (c) => {
-    const loaded = await loadAuthorizedRepo(c, deps, "project:write");
-    if (isResponse(loaded)) {
-      return loaded;
-    }
-    if (loaded.actor.kind !== "worker") {
-      return errorJson(c, 403, "forbidden", "insufficient token scope");
-    }
-    const consumed = await deps.store.consumeCloneInvalidation(loaded.repo.id, deps.clock.now());
-    return c.json({
-      consumed: consumed
-        ? { id: consumed.id, sha: consumed.sha, created_at: consumed.createdAt.toISOString() }
-        : null,
-    });
   });
 
   app.post("/v1/repos/:id/index", async (c) => {

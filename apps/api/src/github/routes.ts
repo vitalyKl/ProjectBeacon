@@ -327,18 +327,6 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     }
 
     if (event === "push") {
-      for (const repo of repos) {
-        await deps.jobs.enqueueGithubInvalidate(
-          {
-            repo_id: repo.id,
-            project_id: repo.projectId,
-            ref: typeof payload["ref"] === "string" ? payload["ref"] : undefined,
-            before: typeof payload["before"] === "string" ? payload["before"] : undefined,
-            after: typeof payload["after"] === "string" ? payload["after"] : undefined,
-          },
-          { singletonKey: `github-invalidate:${repo.id}` },
-        );
-      }
       return c.json({ received: true }, 202);
     }
 
@@ -760,45 +748,6 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
       lastSyncedAt: now,
     });
     return c.json({ items, count: items.length });
-  });
-
-  app.post("/v1/repos/:id/github/invalidations", async (c) => {
-    const actor = await requireActor(c, deps);
-    if (isResponse(actor)) {
-      return actor;
-    }
-    const resolved = await resolveGithubRepo(
-      c,
-      deps,
-      actor,
-      c.req.param("id"),
-      undefined,
-      "integrations:write",
-    );
-    if (isResponse(resolved)) {
-      return resolved;
-    }
-    if (resolved.actor.kind !== "worker") {
-      return errorJson(c, 404, "not_found", "repo not found");
-    }
-    const body = await readObject(c);
-    const now = deps.clock.now();
-    await deps.store.writeActivity({
-      id: uuidv7(now.getTime()),
-      projectId: resolved.project.id,
-      objectType: "repo",
-      objectId: resolved.repo.id,
-      actorType: "system",
-      actorId: actorIdempotencyRef(resolved.actor).id,
-      verb: "github_clone_invalidated",
-      payload: {
-        ref: typeof body?.["ref"] === "string" ? body["ref"] : null,
-        before: typeof body?.["before"] === "string" ? body["before"] : null,
-        after: typeof body?.["after"] === "string" ? body["after"] : null,
-      },
-      createdAt: now,
-    });
-    return c.json({ recorded: true }, 202);
   });
 
   app.get("/v1/repos/:id/github/sync-state", async (c) => {

@@ -43,8 +43,8 @@ function mockApi(overrides: Partial<WorkerApi> = {}): WorkerApi & {
     async listDeletedProjects() {
       return [];
     },
-    async projectClonePurge() {
-      return { project_id: "proj-1", deleted: false, repo_ids: [] };
+    async listProjectRepos() {
+      return [];
     },
     async importContext() {
       return {};

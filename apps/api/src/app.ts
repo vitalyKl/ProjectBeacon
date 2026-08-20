@@ -122,10 +122,7 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
     options.codeGateway ??
     createCodeGateway({
       config: authDeps.config,
-      store: authDeps.store,
-      now: () => authDeps.clock.now(),
       tunnel: sidecarTunnel,
-      tunnelEnabled: sidecarTunnelEnabled,
     });
   mountAuth(app, authDeps);
   mountOrgs(app, authDeps);

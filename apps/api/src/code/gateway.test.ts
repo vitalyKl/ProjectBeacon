@@ -29,8 +29,6 @@ describe("CodeGateway", () => {
     }) as typeof fetch;
     const gateway = createCodeGateway({
       config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
-      store: { findSidecarConnectionByRepoId: async () => undefined },
-      now: () => new Date("2026-01-01T00:00:00.000Z"),
       fetchImpl,
     });
     await gateway.query(REPO, { kind: "tree", depth: 2 });
@@ -41,8 +39,6 @@ describe("CodeGateway", () => {
   it("returns 503 when sidecar-only repos have no worker index", async () => {
     const gateway = createCodeGateway({
       config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
-      store: { findSidecarConnectionByRepoId: async () => undefined },
-      now: () => new Date("2026-01-01T00:00:00.000Z"),
       fetchImpl: (async () => {
         throw new Error("should not fetch");
       }) as typeof fetch,
@@ -55,41 +51,34 @@ describe("CodeGateway", () => {
     });
   });
 
-  it("falls through to worker HTTP in both mode when a sidecar heartbeat is fresh but the tunnel is not live", async () => {
-    const calls: string[] = [];
-    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
-      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
-      return Response.json({ items: [] });
-    }) as typeof fetch;
+  it("does not route hosted_clone or both to the worker index", async () => {
     const gateway = createCodeGateway({
       config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
-      store: {
-        findSidecarConnectionByRepoId: async () => ({
-          id: "sid-1",
-          repoId: REPO.id,
-          tokenId: "tok-1",
-          connectedAt: new Date("2026-01-01T00:00:00.000Z"),
-          lastSeenAt: new Date("2026-01-01T00:00:30.000Z"),
-        }),
-      },
-      now: () => new Date("2026-01-01T00:00:40.000Z"),
-      fetchImpl,
+      fetchImpl: (async () => {
+        throw new Error("should not fetch");
+      }) as typeof fetch,
       tunnel: {
-        isLive: () => false,
+        isLive: () => true,
         query: async () => {
           throw new Error("should not query tunnel");
         },
       },
-      tunnelEnabled: () => true,
     });
-    await expect(gateway.query({ ...REPO, indexMode: "both" }, { kind: "tree" })).resolves.toEqual({
-      items: [],
+    await expect(
+      gateway.query({ ...REPO, indexMode: "hosted_clone" }, { kind: "tree" }),
+    ).rejects.toMatchObject({
+      status: 503,
+      code: "code_index_unavailable",
     });
-    expect(calls[0]).toContain("http://worker:7744/repos/");
-    expect(calls[0]).toContain("/tree");
+    await expect(gateway.query({ ...REPO, indexMode: "both" }, { kind: "tree" })).rejects.toMatchObject(
+      {
+        status: 503,
+        code: "code_index_unavailable",
+      },
+    );
   });
 
-  it("proxies sidecar and both mode over a live tunnel when the flag is on", async () => {
+  it("proxies sidecar mode over a live tunnel", async () => {
     const calls: string[] = [];
     const tunnel = {
       isLive: (repoId: string) => repoId === REPO.id,
@@ -100,48 +89,31 @@ describe("CodeGateway", () => {
     };
     const gateway = createCodeGateway({
       config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
-      store: {
-        findSidecarConnectionByRepoId: async () => ({
-          id: "sid-1",
-          repoId: REPO.id,
-          tokenId: "tok-1",
-          connectedAt: new Date("2026-01-01T00:00:00.000Z"),
-          lastSeenAt: new Date("2026-01-01T00:00:30.000Z"),
-        }),
-      },
-      now: () => new Date("2026-01-01T00:00:40.000Z"),
       fetchImpl: (async () => {
         throw new Error("should not fetch");
       }) as typeof fetch,
       tunnel,
-      tunnelEnabled: () => true,
     });
     await expect(
       gateway.query({ ...REPO, indexMode: "sidecar" }, { kind: "tree" }),
     ).resolves.toEqual({
       items: [],
     });
-    await expect(gateway.query({ ...REPO, indexMode: "both" }, { kind: "tree" })).resolves.toEqual({
-      items: [],
-    });
-    expect(calls).toEqual([`${REPO.id}/tree`, `${REPO.id}/tree`]);
+    expect(calls).toEqual([`${REPO.id}/tree`]);
   });
 
-  it("does not wait on a tunnel when the flag is off", async () => {
+  it("does not query a tunnel that is not live", async () => {
     const gateway = createCodeGateway({
       config: { indexRpcUrl: "http://worker:7744", indexRpcToken: "rpc-secret" },
-      store: { findSidecarConnectionByRepoId: async () => undefined },
-      now: () => new Date("2026-01-01T00:00:00.000Z"),
       fetchImpl: (async () => {
         throw new Error("should not fetch");
       }) as typeof fetch,
       tunnel: {
-        isLive: () => true,
+        isLive: () => false,
         query: async () => {
           throw new Error("should not query tunnel");
         },
       },
-      tunnelEnabled: () => false,
     });
     await expect(
       gateway.query({ ...REPO, indexMode: "sidecar" }, { kind: "tree" }),

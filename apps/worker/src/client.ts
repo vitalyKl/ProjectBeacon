@@ -59,11 +59,7 @@ export type WorkerApi = {
     repoId: string,
   ): Promise<{ consumed: { id: string; sha: string | null; created_at: string } | null }>;
   listDeletedProjects(): Promise<{ id: string; deleted_at: string | null }[]>;
-  projectClonePurge(projectId: string): Promise<{
-    project_id: string;
-    deleted: boolean;
-    repo_ids: string[];
-  }>;
+  listProjectRepos(projectId: string): Promise<RepoView[]>;
   importContext(
     projectId: string,
     repoId: string,
@@ -205,6 +201,17 @@ export function createWorkerApi(options: {
     return parsed as T;
   }
 
+  async function emptyOnNotFound<T>(run: () => Promise<T>, empty: T): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      if (error instanceof WorkerApiError && error.status === 404) {
+        return empty;
+      }
+      throw error;
+    }
+  }
+
   return {
     getRepo(repoId) {
       return request<RepoView>("GET", `/v1/repos/${repoId}`);
@@ -213,7 +220,14 @@ export function createWorkerApi(options: {
       return request("POST", `/v1/repos/${repoId}/index`, { body });
     },
     consumeCloneInvalidation(repoId) {
-      return request("POST", `/v1/repos/${repoId}/clone-invalidation/consume`);
+      return emptyOnNotFound(
+        () =>
+          request<{ consumed: { id: string; sha: string | null; created_at: string } | null }>(
+            "POST",
+            `/v1/repos/${repoId}/clone-invalidation/consume`,
+          ),
+        { consumed: null },
+      );
     },
     async listDeletedProjects() {
       const page = await request<{ items: { id: string; deleted_at: string | null }[] }>(
@@ -222,8 +236,17 @@ export function createWorkerApi(options: {
       );
       return page.items;
     },
-    projectClonePurge(projectId) {
-      return request("GET", `/v1/projects/${projectId}/hosted-clone-purge`);
+    async listProjectRepos(projectId) {
+      return emptyOnNotFound(
+        () =>
+          listAllPages((cursor) =>
+            request<{ items: RepoView[]; next_cursor: string | null }>(
+              "GET",
+              pagedPath(`/v1/projects/${projectId}/repos`, cursor),
+            ),
+          ),
+        [],
+      );
     },
     importContext(projectId, repoId, files) {
       return request("POST", `/v1/projects/${projectId}/context/import?repo_id=${repoId}`, {
@@ -295,7 +318,10 @@ export function createWorkerApi(options: {
       });
     },
     recordGithubInvalidation(repoId, body) {
-      return request("POST", `/v1/repos/${repoId}/github/invalidations`, { body });
+      return emptyOnNotFound(
+        () => request("POST", `/v1/repos/${repoId}/github/invalidations`, { body }),
+        { recorded: true },
+      );
     },
   };
 }

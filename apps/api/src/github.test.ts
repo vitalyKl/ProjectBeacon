@@ -219,7 +219,7 @@ describe("GitHub webhooks and import", () => {
     expect(jobs.githubImportJobs).toHaveLength(0);
   });
 
-  it("records hosted-clone invalidation for push without cloning", async () => {
+  it("accepts push webhooks without enqueueing clone invalidation", async () => {
     const store = new MemoryAuthStore();
     const jobs = new MemoryJobQueue();
     const alice = await registerUser(store, "alice", jobs);
@@ -243,17 +243,13 @@ describe("GitHub webhooks and import", () => {
       body: payload,
     });
     expect(res.status).toBe(202);
-    expect(jobs.githubInvalidateJobs).toEqual([
-      expect.objectContaining({
-        data: {
-          repo_id: repo.id,
-          project_id: project.id,
-          ref: "refs/heads/main",
-          before: "aaa",
-          after: "bbb",
-        },
-      }),
-    ]);
+    expect(jobs.githubInvalidateJobs).toEqual([]);
+
+    const recorded = await alice.app.request(`/v1/repos/${repo.id}/github/invalidations`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+    });
+    expect(recorded.status).toBe(404);
   });
 
   it("ignores events for repos that are not installed", async () => {

@@ -97,6 +97,52 @@ describe("worker /v1 client", () => {
     expect(calls.some((call) => call.url.includes("/labels?limit=100"))).toBe(true);
   });
 
+  it("lists project repos for deleted-project index drop", async () => {
+    const calls: string[] = [];
+    const api = createWorkerApi({
+      apiUrl: "http://api:8080",
+      token: "worker-secret",
+      fetchImpl: async (input) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        calls.push(url);
+        return Response.json({
+          items: [
+            {
+              id: "repo-1",
+              project_id: "proj-1",
+              provider: "local",
+              remote_url: null,
+              default_branch: "main",
+              installation_id: null,
+              local_root_hint: "demo",
+              index_mode: "bind_mount",
+            },
+          ],
+          next_cursor: null,
+        });
+      },
+    });
+    await expect(api.listProjectRepos("proj-1")).resolves.toEqual([
+      expect.objectContaining({ id: "repo-1", index_mode: "bind_mount" }),
+    ]);
+    expect(calls[0]).toContain("/v1/projects/proj-1/repos?limit=100");
+  });
+
+  it("treats 404 on removed hosted endpoints as empty", async () => {
+    const api = createWorkerApi({
+      apiUrl: "http://api:8080",
+      token: "worker-secret",
+      fetchImpl: async () =>
+        Response.json({ error: { code: "not_found", message: "not found" } }, { status: 404 }),
+    });
+    await expect(api.consumeCloneInvalidation("repo-1")).resolves.toEqual({ consumed: null });
+    await expect(api.recordGithubInvalidation("repo-1", { ref: "main" })).resolves.toEqual({
+      recorded: true,
+    });
+    await expect(api.listProjectRepos("proj-1")).resolves.toEqual([]);
+  });
+
   it("imports issues and records invalidation through /v1", async () => {
     const calls: string[] = [];
     const api = createWorkerApi({

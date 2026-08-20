@@ -442,22 +442,6 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
     });
   });
 
-  app.get("/v1/projects/:id/hosted-clone-purge", async (c) => {
-    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
-    if (access instanceof Response) {
-      return access;
-    }
-    if (access.actor.kind !== "worker") {
-      return errorJson(c, 403, "forbidden", "insufficient token scope");
-    }
-    const repos = await deps.store.listProjectRepos(access.project.id);
-    return c.json({
-      project_id: access.project.id,
-      deleted: Boolean(access.project.deletedAt),
-      repo_ids: repos.map((repo) => repo.id),
-    });
-  });
-
   app.get("/v1/projects/:id/members", async (c) => {
     const access = await requireProjectUser(c, deps, c.req.param("id"), "project:read");
     if (access instanceof Response) {
