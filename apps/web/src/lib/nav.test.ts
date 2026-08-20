@@ -159,21 +159,24 @@ describe("auth paths", () => {
     expect(readWeb("app/app/tasks/[id]/page.tsx")).not.toContain("nav.group.work");
     expect(readWeb("app/app/tasks/[id]/page.tsx")).not.toContain("write_handoff");
     expect(readWeb("app/app/home-view.tsx")).toContain("BriefBlocks");
-    expect(readWeb("app/app/context/context-editor.tsx")).toContain("BriefBlocks");
+    expect(readWeb("app/app/context/preview-revisions.tsx")).toContain("BriefBlocks");
     expect(readWeb("app/app/context/context-editor.tsx")).toContain("fetchProjectRepos");
-    expect(readWeb("app/app/context/context-editor.tsx")).toContain("repoPickerOptions");
+    expect(readWeb("app/app/context/section-drafts.tsx")).toContain("repoPickerOptions");
     expect(readWeb("app/app/context/context-editor.tsx")).toContain("projectRepoCatalog");
     expect(readWeb("app/app/context/context-editor.tsx")).toContain('setCreateRepoId("")');
-    expect(readWeb("app/app/context/context-editor.tsx")).toContain("context.failedRepos");
+    expect(readWeb("app/app/context/section-drafts.tsx")).toContain("context.failedRepos");
     expect(readWeb("app/app/context/context-editor.tsx")).not.toContain("function BriefView");
+    expect(readWeb("app/app/context/preview-revisions.tsx")).not.toContain("function BriefView");
     expect(readWeb("app/app/context/context-editor.tsx")).not.toContain("write_handoff");
     expect(readWeb("app/app/board/page.tsx")).toContain("sortTasksByPriority");
     expect(readWeb("app/app/backlog/page.tsx")).toContain("sortTasksByPriority");
-    expect(readWeb("app/app/context/context-editor.tsx")).toContain("common.compileBrief");
+    expect(readWeb("app/app/context/import-export.tsx")).toContain("common.compileBrief");
     expect(readWeb("app/app/context/context-editor.tsx")).toContain("takeInputFiles");
     expect(readWeb("app/app/context/context-editor.tsx")).not.toMatch(
       /const files = event\.target\.files;\s*event\.target\.value = "";/,
     );
+    expect(readWeb("app/app/context/context-editor.tsx")).toContain("createContextNode");
+    expect(readWeb("app/app/context/context-editor.tsx")).not.toContain("randomUuidV7");
   });
 
   it("keeps Agents as sessions, tokens, and activity with setup steps", () => {
@@ -197,15 +200,18 @@ describe("auth paths", () => {
   });
 
   it("keeps Definition of Done and tech stack as first-class brief sections", () => {
-    const editor = readWeb("app/app/context/context-editor.tsx");
-    expect(editor).toContain('id: "definition_of_done"');
-    expect(editor).toContain('id: "stack"');
-    expect(editor).toContain("knownSectionTitle");
-    expect(editor).toContain("context.section.${id}");
+    const sections = readWeb("lib/context-sections.ts");
+    expect(sections).toContain('"definition_of_done"');
+    expect(sections).toContain('"stack"');
+    expect(sections).toContain("knownSectionTitle");
+    expect(sections).toContain("context.section.${id}");
+    expect(readWeb("app/app/context/section-drafts.tsx")).toContain("knownSectionTitle");
     const wizard = readWeb("app/app/projects/new/wizard.tsx");
-    expect(wizard).toContain('id: "definition_of_done"');
-    expect(wizard).toContain('id: "stack"');
-    expect(wizard).toContain('id: "commands"');
+    expect(wizard).toContain("wizardBriefSections");
+    expect(wizard).toContain("context.section.definition_of_done");
+    expect(wizard).toContain("context.section.stack");
+    expect(wizard).toContain("context.section.commands");
+    expect(wizard).not.toContain('title: "Goals"');
   });
 });
 

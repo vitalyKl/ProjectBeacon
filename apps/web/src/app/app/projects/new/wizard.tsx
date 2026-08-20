@@ -19,13 +19,14 @@ import {
   type PublicRepo,
   type PublicToken,
 } from "@/lib/api";
+import { wizardBriefSections } from "@/lib/context-sections";
+import { t } from "@/lib/i18n";
 import {
   fetchProjectLabels,
   sortLabels,
   toggleLabelId,
   type PublicLabel,
 } from "@/lib/labels";
-import { t } from "@/lib/i18n";
 import { POST_LOGIN_PATH } from "@/lib/nav";
 import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
@@ -221,18 +222,16 @@ export function ProjectWizard({
     setPending(true);
     setError(null);
     try {
-      await saveProjectBrief(project.id, [
-        { id: "goals", title: "Goals", body_md: goals, ordinal: 0 },
-        { id: "non_goals", title: "Non-goals", body_md: nonGoals, ordinal: 1 },
-        { id: "stack", title: "Tech stack", body_md: stack, ordinal: 2 },
-        { id: "commands", title: "Commands", body_md: commands, ordinal: 3 },
-        {
-          id: "definition_of_done",
-          title: "Definition of Done",
-          body_md: definitionOfDone,
-          ordinal: 4,
-        },
-      ]);
+      await saveProjectBrief(
+        project.id,
+        wizardBriefSections({
+          goals,
+          non_goals: nonGoals,
+          stack,
+          commands,
+          definition_of_done: definitionOfDone,
+        }),
+      );
       const wantedMilestone = milestoneTitle.trim();
       const wantedTask = taskTitle.trim();
       let nextMilestoneId = milestoneId;

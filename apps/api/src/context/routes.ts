@@ -1,7 +1,7 @@
 import { CompileInputSchema, ContextSectionSchema, type ContextSection } from "@beacon/api-spec";
 import { exportAgentsMd, mergeSections, parseImportFiles, selectNodes, type ImportFile } from "@beacon/context";
 import { isUuid, uuidv7, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT } from "@beacon/shared";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import type { AuthDeps } from "../auth/routes.js";
 import { errorJson } from "../errors.js";
 import { readJson, readObject, parseOptionalString } from "../http.js";
@@ -10,7 +10,7 @@ import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentContextNode, sectionsText, toCompileNode, presentContextRevision, presentContextRevisionSummary } from "./present.js";
 import { compileProjectBrief } from "./compile-brief.js";
 import { type ContextNodeRecord, isContextReviewState, isContextScopeType, type ContextReviewState, type ContextScopeType } from "./types.js";
-import { requireProjectActor } from "../auth/access.js";
+import { requireProjectActor, type AuthActor } from "../auth/access.js";
 import type { CodeGateway } from "../code/gateway.js";
 
 const MAX_IMPORT_FILES = 200;
@@ -101,6 +101,25 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
     return c.json({ items, next_cursor: result.next_cursor });
   });
 
+  app.post("/v1/projects/:id/context/nodes", async (c) => {
+    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    if (isResponse(access)) {
+      return access;
+    }
+
+    const body = await readObject(c);
+    if (!body) {
+      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+    }
+
+    const parsed = await parseNativeCreate(c, deps, access.project.id, body, "project");
+    if (isResponse(parsed)) {
+      return parsed;
+    }
+    const now = deps.clock.now();
+    return insertNativeNode(c, deps, access, parsed, uuidv7(now.getTime()), now);
+  });
+
   app.put("/v1/projects/:id/context/nodes/:nodeId", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
     if (isResponse(access)) {
@@ -123,7 +142,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
     }
 
     const now = deps.clock.now();
-    let next: ContextNodeRecord;
+    const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
 
     if (existing) {
       const sections =
@@ -143,155 +162,21 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
         }
         reviewState = body["review_state"];
       }
-      next = {
+      const stored = await deps.store.upsertContextNode({
         ...existing,
         sections,
         sectionsText: sectionsText(sections),
         reviewState,
-        updatedByType:
-          access.actor.kind === "user"
-            ? "user"
-            : access.actor.kind === "token"
-              ? "token"
-              : "system",
-        updatedById:
-          access.actor.kind === "user"
-            ? access.actor.user.id
-            : access.actor.kind === "token"
-              ? access.actor.token.id
-              : "worker",
-        updatedAt: now,
-      };
-    } else {
-      if (body["scope_type"] === undefined) {
-        return errorJson(c, 404, "not_found", "node not found");
-      }
-      const scopeRaw = body["scope_type"];
-      if (typeof scopeRaw !== "string" || !isContextScopeType(scopeRaw)) {
-        return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
-      }
-      if (!NATIVE_CREATE_SCOPES.has(scopeRaw)) {
-        return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
-      }
-      const pathRaw = body["path"] === undefined ? "" : body["path"];
-      if (typeof pathRaw !== "string") {
-        return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
-      }
-      const path = normalizeNodePath(pathRaw);
-      if (path === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
-      }
-      if (scopeRaw === "path" && path.length === 0) {
-        return errorJson(c, 400, "unauthorized", "path is required for path scope", {
-          reason: "invalid_body",
-        });
-      }
-      if (scopeRaw !== "path" && path.length > 0) {
-        return errorJson(c, 400, "unauthorized", "path must be empty for this scope", {
-          reason: "invalid_body",
-        });
-      }
-
-      let repoId: string | null = null;
-      if (scopeRaw === "project") {
-        if (body["repo_id"] !== undefined && body["repo_id"] !== null) {
-          return errorJson(c, 400, "unauthorized", "repo_id must be null for project scope", {
-            reason: "invalid_body",
-          });
-        }
-      } else {
-        const requested = parseNullableUuid(body["repo_id"]);
-        if (requested === undefined) {
-          return errorJson(c, 400, "unauthorized", "invalid repo_id", { reason: "invalid_body" });
-        }
-        if (requested === null) {
-          const resolved = await resolveRepoId(deps, access.project.id, undefined);
-          if (!resolved.ok) {
-            if (resolved.reason === "ambiguous") {
-              return errorJson(
-                c,
-                400,
-                "repo_ambiguous",
-                "repo_id is required when the project has multiple repos",
-              );
-            }
-            return errorJson(c, 404, "not_found", "repo not found");
-          }
-          if (!resolved.repoId) {
-            return errorJson(c, 400, "unauthorized", "repo_id is required", {
-              reason: "invalid_body",
-            });
-          }
-          repoId = resolved.repoId;
-        } else {
-          const repo = await deps.store.findProjectRepoById(requested);
-          if (!repo || repo.projectId !== access.project.id) {
-            return errorJson(c, 404, "not_found", "repo not found");
-          }
-          repoId = repo.id;
-        }
-      }
-
-      const sections = parseSections(body["sections"] ?? []);
-      if (!sections) {
-        return errorJson(c, 400, "unauthorized", "invalid sections", { reason: "invalid_body" });
-      }
-      let reviewState: ContextReviewState = "reviewed";
-      if (body["review_state"] !== undefined) {
-        if (
-          typeof body["review_state"] !== "string" ||
-          !isContextReviewState(body["review_state"])
-        ) {
-          return errorJson(c, 400, "unauthorized", "invalid review_state", {
-            reason: "invalid_body",
-          });
-        }
-        reviewState = body["review_state"];
-      }
-
-      next = {
-        id: nodeId,
-        projectId: access.project.id,
-        repoId,
-        taskId: null,
-        scopeType: scopeRaw,
-        path,
-        sections,
-        sectionsText: sectionsText(sections),
-        source: NATIVE_SOURCE,
-        sourcePath: parseOptionalString(body["source_path"], MAX_IMPORT_PATH) ?? null,
-        reviewState,
-        updatedByType:
-          access.actor.kind === "user"
-            ? "user"
-            : access.actor.kind === "token"
-              ? "token"
-              : "system",
-        updatedById:
-          access.actor.kind === "user"
-            ? access.actor.user.id
-            : access.actor.kind === "token"
-              ? access.actor.token.id
-              : "worker",
-        updatedAt: now,
-      };
-    }
-
-    const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
-    if (existing) {
-      const stored = await deps.store.upsertContextNode(next);
+        ...contextWriter(access.actor, now),
+      });
       return c.json(presentContextNode(stored, actorUser));
     }
 
-    const occupied = await deps.store.findContextNodeByScope(next);
-    if (occupied) {
-      return errorJson(c, 404, "not_found", "node not found");
+    const parsed = await parseNativeCreate(c, deps, access.project.id, body, "not_found");
+    if (isResponse(parsed)) {
+      return parsed;
     }
-    const stored = await deps.store.insertContextNode(next);
-    if (stored.id !== nodeId) {
-      return errorJson(c, 404, "not_found", "node not found");
-    }
-    return c.json(presentContextNode(stored, actorUser));
+    return insertNativeNode(c, deps, access, parsed, nodeId, now);
   });
 
   app.get("/v1/projects/:id/context/revisions", async (c) => {
@@ -626,6 +511,164 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
 
 const NATIVE_CREATE_SCOPES = new Set<ContextScopeType>(["project", "repo", "path"]);
 const NATIVE_SOURCE = "native";
+
+type NativeCreateFields = {
+  scopeType: ContextScopeType;
+  path: string;
+  repoId: string | null;
+  sections: ContextSection[];
+  reviewState: ContextReviewState;
+  sourcePath: string | null;
+};
+
+function contextWriter(actor: AuthActor, now: Date) {
+  return {
+    updatedByType:
+      actor.kind === "user"
+        ? ("user" as const)
+        : actor.kind === "token"
+          ? ("token" as const)
+          : ("system" as const),
+    updatedById:
+      actor.kind === "user" ? actor.user.id : actor.kind === "token" ? actor.token.id : "worker",
+    updatedAt: now,
+  };
+}
+
+async function parseNativeCreate(
+  c: Context,
+  deps: AuthDeps,
+  projectId: string,
+  body: Record<string, unknown>,
+  missingScope: "project" | "not_found",
+): Promise<NativeCreateFields | Response> {
+  const scopeRaw =
+    body["scope_type"] === undefined && missingScope === "project" ? "project" : body["scope_type"];
+  if (scopeRaw === undefined) {
+    return errorJson(c, 404, "not_found", "node not found");
+  }
+  if (typeof scopeRaw !== "string" || !isContextScopeType(scopeRaw)) {
+    return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
+  }
+  if (!NATIVE_CREATE_SCOPES.has(scopeRaw)) {
+    return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
+  }
+  const pathRaw = body["path"] === undefined ? "" : body["path"];
+  if (typeof pathRaw !== "string") {
+    return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+  }
+  const path = normalizeNodePath(pathRaw);
+  if (path === undefined) {
+    return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+  }
+  if (scopeRaw === "path" && path.length === 0) {
+    return errorJson(c, 400, "unauthorized", "path is required for path scope", {
+      reason: "invalid_body",
+    });
+  }
+  if (scopeRaw !== "path" && path.length > 0) {
+    return errorJson(c, 400, "unauthorized", "path must be empty for this scope", {
+      reason: "invalid_body",
+    });
+  }
+
+  let repoId: string | null = null;
+  if (scopeRaw === "project") {
+    if (body["repo_id"] !== undefined && body["repo_id"] !== null) {
+      return errorJson(c, 400, "unauthorized", "repo_id must be null for project scope", {
+        reason: "invalid_body",
+      });
+    }
+  } else {
+    const requested = parseNullableUuid(body["repo_id"]);
+    if (requested === undefined) {
+      return errorJson(c, 400, "unauthorized", "invalid repo_id", { reason: "invalid_body" });
+    }
+    if (requested === null) {
+      const resolved = await resolveRepoId(deps, projectId, undefined);
+      if (!resolved.ok) {
+        if (resolved.reason === "ambiguous") {
+          return errorJson(
+            c,
+            400,
+            "repo_ambiguous",
+            "repo_id is required when the project has multiple repos",
+          );
+        }
+        return errorJson(c, 404, "not_found", "repo not found");
+      }
+      if (!resolved.repoId) {
+        return errorJson(c, 400, "unauthorized", "repo_id is required", {
+          reason: "invalid_body",
+        });
+      }
+      repoId = resolved.repoId;
+    } else {
+      const repo = await deps.store.findProjectRepoById(requested);
+      if (!repo || repo.projectId !== projectId) {
+        return errorJson(c, 404, "not_found", "repo not found");
+      }
+      repoId = repo.id;
+    }
+  }
+
+  const sections = parseSections(body["sections"] ?? []);
+  if (!sections) {
+    return errorJson(c, 400, "unauthorized", "invalid sections", { reason: "invalid_body" });
+  }
+  let reviewState: ContextReviewState = "reviewed";
+  if (body["review_state"] !== undefined) {
+    if (typeof body["review_state"] !== "string" || !isContextReviewState(body["review_state"])) {
+      return errorJson(c, 400, "unauthorized", "invalid review_state", {
+        reason: "invalid_body",
+      });
+    }
+    reviewState = body["review_state"];
+  }
+
+  return {
+    scopeType: scopeRaw,
+    path,
+    repoId,
+    sections,
+    reviewState,
+    sourcePath: parseOptionalString(body["source_path"], MAX_IMPORT_PATH) ?? null,
+  };
+}
+
+async function insertNativeNode(
+  c: Context,
+  deps: AuthDeps,
+  access: { project: { id: string }; actor: AuthActor },
+  parsed: NativeCreateFields,
+  nodeId: string,
+  now: Date,
+): Promise<Response> {
+  const next: ContextNodeRecord = {
+    id: nodeId,
+    projectId: access.project.id,
+    repoId: parsed.repoId,
+    taskId: null,
+    scopeType: parsed.scopeType,
+    path: parsed.path,
+    sections: parsed.sections,
+    sectionsText: sectionsText(parsed.sections),
+    source: NATIVE_SOURCE,
+    sourcePath: parsed.sourcePath,
+    reviewState: parsed.reviewState,
+    ...contextWriter(access.actor, now),
+  };
+  const occupied = await deps.store.findContextNodeByScope(next);
+  if (occupied) {
+    return errorJson(c, 404, "not_found", "node not found");
+  }
+  const stored = await deps.store.insertContextNode(next);
+  if (stored.id !== nodeId) {
+    return errorJson(c, 404, "not_found", "node not found");
+  }
+  const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
+  return c.json(presentContextNode(stored, actorUser));
+}
 
 function parseSections(value: unknown): ContextSection[] | undefined {
   if (!Array.isArray(value)) {

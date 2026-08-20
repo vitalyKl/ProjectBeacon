@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uuidv7 } from "@beacon/shared";
+import { isUuidV7, uuidv7 } from "@beacon/shared";
 import { createApp } from "./app.js";
 import type { AuthConfig } from "./auth/config.js";
 import { MemoryAuthStore } from "./auth/store.js";
@@ -337,6 +337,110 @@ describe("PUT /v1/projects/:id/context/nodes/:nodeId", () => {
     const stored = await store.listContextNodes(project.id);
     expect(stored).toHaveLength(1);
     expect(stored[0]?.id).toBe(first);
+    expect(stored[0]?.sections[0]).toMatchObject({ body_md: "First." });
+  });
+});
+
+describe("POST /v1/projects/:id/context/nodes", () => {
+  it("mints a node id and defaults missing scope_type to project", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "post-node");
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        sections: [{ id: "goals", title: "Goals", body_md: "Ship the brief.", ordinal: 0 }],
+      }),
+    });
+    expect(created.status).toBe(200);
+    const createdBody = (await created.json()) as {
+      id: string;
+      source: string;
+      scope_type: string;
+      review_state: string;
+      sections: { id: string; body_md: string }[];
+    };
+    expect(isUuidV7(createdBody.id)).toBe(true);
+    expect(createdBody).toMatchObject({
+      source: "native",
+      scope_type: "project",
+      review_state: "reviewed",
+    });
+    expect(createdBody.sections[0]).toMatchObject({ id: "goals", body_md: "Ship the brief." });
+
+    const listed = await store.listContextNodes(project.id);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe(createdBody.id);
+  });
+
+  it("creates a repo-scoped node when scope_type is sent", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "post-repo");
+    const repoId = uuidv7();
+    store.seedProjectRepo({
+      id: repoId,
+      projectId: project.id,
+      provider: "local",
+      remoteUrl: null,
+      defaultBranch: "main",
+      githubRepoId: null,
+      installationId: null,
+      localRootHint: "/tmp/beacon",
+      indexMode: "sidecar",
+      lastIndexedSha: null,
+      lastIndexedAt: null,
+    });
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        scope_type: "repo",
+        path: "",
+        repo_id: repoId,
+        sections: [{ id: "stack", title: "Tech stack", body_md: "TypeScript", ordinal: 0 }],
+      }),
+    });
+    expect(created.status).toBe(200);
+    expect(await created.json()).toMatchObject({
+      scope_type: "repo",
+      repo_id: repoId,
+      source: "native",
+      sections: [{ id: "stack", body_md: "TypeScript" }],
+    });
+  });
+
+  it("returns 404 when creating onto an existing project scope", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "post-dup");
+    const first = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        sections: [{ id: "goals", title: "Goals", body_md: "First.", ordinal: 0 }],
+      }),
+    });
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as { id: string };
+
+    const raced = await alice.app.request(`/v1/projects/${project.id}/context/nodes`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        sections: [{ id: "goals", title: "Goals", body_md: "Second.", ordinal: 0 }],
+      }),
+    });
+    expect(raced.status).toBe(404);
+    expect(await raced.json()).toMatchObject({
+      error: { code: "not_found", message: "node not found" },
+    });
+    const stored = await store.listContextNodes(project.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.id).toBe(firstBody.id);
     expect(stored[0]?.sections[0]).toMatchObject({ body_md: "First." });
   });
 });

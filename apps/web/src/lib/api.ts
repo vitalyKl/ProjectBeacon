@@ -585,6 +585,20 @@ export async function putContextNode(
   return parseJson<ContextNode>(res);
 }
 
+export async function createContextNode(
+  projectId: string,
+  body: Record<string, unknown>,
+): Promise<ContextNode> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to save context");
+  }
+  return parseJson<ContextNode>(res);
+}
+
 export async function importContextFiles(
   projectId: string,
   files: { path: string; content: string }[],
@@ -693,14 +707,7 @@ export async function saveProjectBrief(
   projectId: string,
   sections: ContextSection[],
 ): Promise<ContextNode> {
-  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/context/nodes`, {
-    method: "POST",
-    body: JSON.stringify({ sections }),
-  });
-  if (!res.ok) {
-    throw await readApiError(res, "failed to save brief");
-  }
-  return parseJson<ContextNode>(res);
+  return createContextNode(projectId, { sections, scope_type: "project", path: "" });
 }
 
 export { fetchProjectMilestones, fetchProjectTasks } from "./roadmap";
