@@ -326,6 +326,18 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       }
       throw error;
     }
+    if (provider === "github" && created.installationId !== null) {
+      const existing = await deps.store.findGithubInstallationByInstallationId(
+        created.installationId,
+      );
+      await deps.store.upsertGithubInstallation({
+        id: existing?.id ?? uuidv7(now.getTime()),
+        orgId: existing?.orgId ?? access.project.orgId,
+        installationId: created.installationId,
+        accountLogin: existing?.accountLogin || "unknown",
+        createdAt: existing?.createdAt ?? now,
+      });
+    }
     const project = await deps.store.setDefaultRepoIfEmpty(access.project.id, created.id, now);
     return c.json(presentProjectRepo({ ...created, projectId: project.id }), 201);
   });

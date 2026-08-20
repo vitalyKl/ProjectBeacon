@@ -224,8 +224,10 @@ describe("project repos", () => {
       body: JSON.stringify({
         provider: "local",
         index_mode: "sidecar",
+        local_root_hint: ".",
       }),
     });
+    expect(created.status).toBe(201);
     const repo = (await created.json()) as { id: string };
     const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
       method: "POST",
