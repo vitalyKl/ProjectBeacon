@@ -1,13 +1,7 @@
-# worker and mcp are not in this compose yet.
-# Later PRs may unpublish API :8080; both stay published for now so API /health still works.
-# mcp is still later. web is not in this compose yet.
-# postgres + api + worker. web and mcp are omitted.
-# postgres, api, mcp, and web. Worker is not in this compose.
+# Postgres + API + web + worker.
 # API :8080 is published so host liveness (/health) works.
-# Worker ports are not published.
-# postgres, api, mcp, and web. worker is not in this compose yet.
-# Web :3000 reverse-proxies /mcp to the mcp service.
-# Compose does not terminate TLS; put Caddy/nginx in front for anything beyond localhost, and do not expose /mcp without TLS and bearer token discipline.
+# Worker index HTTP stays on the Compose network (7744). It is not published.
+# apps/mcp HTTP is a stub; local agents use `beacon mcp` (stdio).
 
 services:
   postgres:
@@ -68,10 +62,6 @@ services:
       dockerfile: Dockerfile.web
       args:
         BEACON_API_URL: http://api:8080
-  mcp:
-    build:
-      context: .
-      dockerfile: Dockerfile.mcp
     depends_on:
       api:
         condition: service_healthy
@@ -82,13 +72,9 @@ services:
       BEACON_PUBLIC_URL: ${BEACON_PUBLIC_URL:-http://localhost:3000}
       AUTH_GITHUB: ${AUTH_GITHUB:-false}
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
-      BEACON_WORKSPACE: ${BEACON_WORKSPACE:-/workspace}
-      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
-      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
-      FF_HOSTED_CLONE: ${FF_HOSTED_CLONE:-false}
-      FF_SIDECAR_TUNNEL: ${FF_SIDECAR_TUNNEL:-false}
     ports:
       - "3000:3000"
+
   worker:
     build:
       context: .
@@ -97,8 +83,10 @@ services:
       postgres:
         condition: service_healthy
       api:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
+      BEACON_API_URL: http://api:8080
       BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
       BEACON_WORKSPACE: ${BEACON_WORKSPACE:-/workspace}
       INDEX_RPC_HOST: 0.0.0.0
@@ -111,27 +99,6 @@ services:
     # Index HTTP stays on the Compose network (7744). It is not published.
     volumes:
       - ${BEACON_WORKSPACE:-./workspace}:/workspace:ro
-      PORT: "8080"
-      BEACON_PROJECT_ID: ${BEACON_PROJECT_ID:-}
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  web:
-      dockerfile: Dockerfile.web
-      mcp:
-      HOST: "0.0.0.0"
-      MCP_URL: http://mcp:8080
-          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
       - workerdata:/var/lib/beacon
 
 volumes:
