@@ -42,9 +42,15 @@ describe("auth paths", () => {
     expect(APP_NAV[0]?.href).toBe(POST_LOGIN_PATH);
     expect(APP_NAV.map((item) => item.href)).toEqual([...APP_NAV_HREFS]);
     expect(readWeb("app/login/login-form.tsx")).toContain("router.replace(POST_LOGIN_PATH)");
+    expect(readWeb("app/login/login-form.tsx")).toContain("@/lib/ui/");
+    expect(readWeb("app/login/page.tsx")).toContain("@/lib/ui/");
+    expect(readWeb("app/login/page.tsx")).not.toContain("app/app/");
     expect(readWeb("app/bootstrap/bootstrap-form.tsx")).toContain(
       "router.replace(POST_LOGIN_PATH)",
     );
+    expect(readWeb("app/bootstrap/page.tsx")).toContain("@/lib/ui/");
+    expect(readWeb("app/bootstrap/page.tsx")).not.toContain("app/app/");
+    expect(readWeb("app/page.tsx")).toContain("@/lib/ui/");
   });
 
   it("keeps the post-login shell from rendering an unbound Link", () => {
@@ -61,6 +67,15 @@ describe("auth paths", () => {
     expect(readWeb("app/app/decisions/decisions-view.tsx")).toContain("fetchProjectDecisions");
     expect(readWeb("app/app/decisions/decisions-view.tsx")).toContain("patchDecision");
     expect(readWeb("app/app/decisions/decisions-view.tsx")).toContain("decisions.accept");
+  });
+
+  it("does not keep an unused Placeholder stub", () => {
+    expect(() => readWeb("app/app/placeholder.tsx")).toThrow();
+    expect(readWeb("app/app/decisions/page.tsx")).not.toContain("Placeholder");
+    expect(readWeb("app/app/reports/page.tsx")).not.toContain("Placeholder");
+    expect(readWeb("app/app/files/page.tsx")).not.toContain("Placeholder");
+    expect(readWeb("app/app/learn/page.tsx")).not.toContain("Placeholder");
+    expect(readWeb("app/app/settings/page.tsx")).not.toContain("Placeholder");
   });
 
   it("keeps a live Areas catalog on Settings", () => {
@@ -123,11 +138,15 @@ describe("auth paths", () => {
     );
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("CopyableProjectId");
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("LanguagePicker");
+    expect(readWeb("app/app/settings/settings-view.tsx")).toContain("setTheme");
+    expect(readWeb("app/app/settings/settings-view.tsx")).not.toContain("/app/settings/members");
     expect(readWeb("app/app/learn/page.tsx")).toContain("learn.startBody");
     expect(readWeb("app/app/learn/page.tsx")).toContain("learn.files");
     expect(readWeb("app/app/files/page.tsx")).toContain("FilesView");
     expect(readWeb("app/app/files/files-view.tsx")).toContain("fetchRepoTree");
     expect(readWeb("app/app/files/files-view.tsx")).toContain("fetchRepoFile");
+    expect(readWeb("app/app/files/files-view.tsx")).toContain("filesEmptyKind");
+    expect(readWeb("app/app/files/files-view.tsx")).not.toContain('href="/app/settings"');
     expect(readWeb("app/app/reports/page.tsx")).toContain("fetchProjectReports");
     expect(readWeb("app/app/tasks/[id]/page.tsx")).toContain("common.compileBrief");
     expect(readWeb("app/app/create-task-form.tsx")).toContain("PrioritySelect");

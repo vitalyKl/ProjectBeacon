@@ -147,6 +147,11 @@ const STRINGS = {
     "files.selectFile": "Select a file to read a local excerpt.",
     "settings.language": "Language",
     "settings.languageHint": "Choose the language for labels, empty states, and this Learn page.",
+    "settings.theme": "Theme",
+    "settings.themeSystem": "System",
+    "settings.themeLight": "Light",
+    "settings.themeDark": "Dark",
+    "settings.themeHint": "Choose system, light, or dark. Saved in this browser.",
     "home.welcome":
       "Create a project to start the board. The wizard adds a first brief, milestone, and starter task.",
     "home.emptyAction": "New project",
@@ -294,8 +299,6 @@ const STRINGS = {
     "task.briefUnavailableShort": "brief unavailable",
     "task.title": "Task",
     "copy.projectId": "Project ID",
-    "placeholder.stub":
-      "This screen is a stub. Context editor, compile preview, and local code tools are available.",
     "sidecar.banner":
       "This project is serving code through the sidecar tunnel. File contents pass through the control plane.",
     "brief.empty": "No brief sections yet.",

@@ -16,6 +16,12 @@ import {
 } from "@/lib/labels";
 import { t } from "@/lib/i18n";
 import { DEFAULT_POLL_MS } from "@/lib/poll";
+import { FIELD_INPUT_CLASS, FIELD_TEXTAREA_CLASS } from "@/lib/ui";
+import { Banner } from "@/lib/ui/banner";
+import { Button } from "@/lib/ui/button";
+import { EmptyState } from "@/lib/ui/empty-state";
+import { Field } from "@/lib/ui/field";
+import { Panel } from "@/lib/ui/panel";
 import { useT } from "@/lib/use-locale";
 
 export function LabelsCatalog({
@@ -207,15 +213,15 @@ export function LabelsCatalog({
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" id="areas">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">{labelText("labels.areas")}</h2>
           <p className="text-sm text-muted">{labelText("labels.areasHint")}</p>
         </div>
         {canWrite ? (
-          <button
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          <Button
+            variant="secondary"
             type="button"
             onClick={() => {
               resetForm();
@@ -223,240 +229,217 @@ export function LabelsCatalog({
             }}
           >
             {labelText("labels.newArea")}
-          </button>
+          </Button>
         ) : null}
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       {loading ? <p className="text-sm text-muted">{labelText("common.loading")}</p> : null}
       {open ? (
-        <form
-          className="max-w-xl space-y-3 rounded-lg border border-border bg-surface p-4"
-          onSubmit={onCreate}
-        >
-          <label className="flex flex-col gap-1 text-sm">
-            {labelText("common.name")}
-            <input
-              className="h-9 rounded-md border border-border bg-background px-3"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={80}
-              required
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {labelText("common.description")}
-            <textarea
-              className="min-h-16 rounded-md border border-border bg-background px-3 py-2"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              maxLength={400}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {labelText("labels.color")}
-            <input
-              className="h-9 rounded-md border border-border bg-background px-3"
-              value={color}
-              onChange={(event) => setColor(event.target.value)}
-              placeholder="#3366ff"
-              maxLength={7}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <select
-              className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-              aria-label={labelText("common.repository")}
-              value={repoId}
-              onChange={(event) => setRepoId(event.target.value)}
-            >
-              <option value="">{labelText("labels.noPrefix")}</option>
-              {(repos ?? []).map((repo) => (
-                <option key={repo.id} value={repo.id}>
-                  {repo.remote_url || repo.local_root_hint || repo.id}
-                </option>
-              ))}
-            </select>
-            <input
-              className="h-9 min-w-40 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-              placeholder="apps/api"
-              value={path}
-              onChange={(event) => setPath(event.target.value)}
-              disabled={!repoId}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              className="h-9 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
-              type="submit"
-              disabled={pending}
-            >
-              {pending ? labelText("common.saving") : labelText("common.save")}
-            </button>
-            <button
-              className="h-9 rounded-md border border-border px-3 text-sm"
-              type="button"
-              onClick={() => {
-                resetForm();
-                setOpen(false);
-              }}
-            >
-              {labelText("common.cancel")}
-            </button>
-          </div>
-        </form>
+        <Panel className="max-w-xl space-y-3">
+          <form className="space-y-3" onSubmit={onCreate}>
+            <Field label={labelText("common.name")}>
+              <input
+                className={FIELD_INPUT_CLASS}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={80}
+                required
+              />
+            </Field>
+            <Field label={labelText("common.description")}>
+              <textarea
+                className={FIELD_TEXTAREA_CLASS}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                maxLength={400}
+              />
+            </Field>
+            <Field label={labelText("labels.color")}>
+              <input
+                className={FIELD_INPUT_CLASS}
+                value={color}
+                onChange={(event) => setColor(event.target.value)}
+                placeholder="#3366ff"
+                maxLength={7}
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <select
+                className={`${FIELD_INPUT_CLASS} min-w-40`}
+                aria-label={labelText("common.repository")}
+                value={repoId}
+                onChange={(event) => setRepoId(event.target.value)}
+              >
+                <option value="">{labelText("labels.noPrefix")}</option>
+                {(repos ?? []).map((repo) => (
+                  <option key={repo.id} value={repo.id}>
+                    {repo.remote_url || repo.local_root_hint || repo.id}
+                  </option>
+                ))}
+              </select>
+              <input
+                className={`${FIELD_INPUT_CLASS} min-w-40 flex-1`}
+                placeholder="apps/api"
+                value={path}
+                onChange={(event) => setPath(event.target.value)}
+                disabled={!repoId}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={pending}>
+                {pending ? labelText("common.saving") : labelText("common.save")}
+              </Button>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setOpen(false);
+                }}
+              >
+                {labelText("common.cancel")}
+              </Button>
+            </div>
+          </form>
+        </Panel>
       ) : null}
       {labels.length === 0 && !loading ? (
-        <p className="text-sm text-muted">
-          {labelText("labels.empty")}
-        </p>
+        <EmptyState description={labelText("labels.empty")} />
       ) : (
         <ul className="space-y-2">
           {labels.map((label) => (
-            <li
-              key={label.id}
-              className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{label.name}</span>
-                    <span className="text-xs tracking-wide text-muted uppercase">
-                      {labelStatusLabel(label.status)}
-                    </span>
-                    <span className="text-xs text-muted">{label.slug}</span>
-                  </div>
-                  {label.description ? (
-                    <p className="text-muted whitespace-pre-wrap">{label.description}</p>
-                  ) : null}
-                  <p className="text-xs text-muted">{formatLabelPaths(label)}</p>
-                </div>
-                {canWrite ? (
-                  <div className="flex flex-wrap gap-2">
-                    {label.status === "proposed" ? (
-                      <button
-                        className="rounded-md border border-border px-3 py-1.5 text-sm"
-                        type="button"
-                        onClick={() => void onActivate(label)}
-                      >
-                        {labelText("labels.activate")}
-                      </button>
+            <li key={label.id}>
+              <Panel className="px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{label.name}</span>
+                      <span className="text-xs tracking-wide text-muted uppercase">
+                        {labelStatusLabel(label.status)}
+                      </span>
+                      <span className="text-xs text-muted">{label.slug}</span>
+                    </div>
+                    {label.description ? (
+                      <p className="text-muted whitespace-pre-wrap">{label.description}</p>
                     ) : null}
-                    <button
-                      className="rounded-md border border-border px-3 py-1.5 text-sm"
-                      type="button"
-                      onClick={() => startEdit(label)}
-                    >
-                      {labelText("common.edit")}
-                    </button>
+                    <p className="text-xs text-muted">{formatLabelPaths(label)}</p>
                   </div>
-                ) : null}
-              </div>
-            {canWrite && editingId === label.id ? (
-              <form className="mt-3 space-y-3" onSubmit={(event) => void onSaveEdit(event, label)}>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-sm">
-                    {labelText("common.name")}
-                    <input
-                      className="h-9 rounded-md border border-border bg-background px-3"
-                      value={editName}
-                      onChange={(event) => setEditName(event.target.value)}
-                      maxLength={80}
-                      required
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm">
-                    {labelText("labels.color")}
-                    <input
-                      className="h-9 rounded-md border border-border bg-background px-3"
-                      value={editColor}
-                      onChange={(event) => setEditColor(event.target.value)}
-                      placeholder="#3366ff"
-                      maxLength={7}
-                    />
-                  </label>
-                </div>
-                <label className="flex flex-col gap-1 text-sm">
-                  {labelText("common.description")}
-                  <textarea
-                    className="min-h-16 rounded-md border border-border bg-background px-3 py-2"
-                    value={editDescription}
-                    onChange={(event) => setEditDescription(event.target.value)}
-                    maxLength={400}
-                  />
-                </label>
-                <div className="space-y-2">
-                  <p className="text-xs text-muted">{labelText("labels.pathPrefixes")}</p>
-                  {label.paths.length === 0 ? (
-                    <p className="text-xs text-muted">{labelText("labels.noneYet")}</p>
-                  ) : (
-                    <ul className="flex flex-wrap gap-2">
-                      {label.paths.map((item) => (
-                        <li
-                          key={`${item.repo_id}:${item.path}`}
-                          className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs"
+                  {canWrite ? (
+                    <div className="flex flex-wrap gap-2">
+                      {label.status === "proposed" ? (
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          onClick={() => void onActivate(label)}
                         >
-                          <span className="font-mono">{item.path}</span>
-                          <button
-                            className="text-muted underline"
-                            type="button"
-                            onClick={() => void onRemovePath(label, item.repo_id, item.path)}
-                            disabled={editPending}
-                          >
-                            {labelText("labels.remove")}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <select
-                      className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
-                      aria-label={labelText("labels.repoForPrefix")}
-                      value={editRepoId}
-                      onChange={(event) => setEditRepoId(event.target.value)}
-                    >
-                      <option value="">{labelText("labels.chooseRepo")}</option>
-                      {(repos ?? []).map((repo) => (
-                        <option key={repo.id} value={repo.id}>
-                          {repo.remote_url || repo.local_root_hint || repo.id}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="h-9 min-w-40 flex-1 rounded-md border border-border bg-background px-3 text-sm"
-                      placeholder="apps/api"
-                      value={editPath}
-                      onChange={(event) => setEditPath(event.target.value)}
-                      disabled={!editRepoId}
-                    />
-                    <button
-                      className="h-9 rounded-md border border-border px-3 text-sm disabled:opacity-60"
-                      type="button"
-                      onClick={() => void onAddPath(label)}
-                      disabled={editPending || !editRepoId}
-                    >
-                      {labelText("labels.addPrefix")}
-                    </button>
-                  </div>
+                          {labelText("labels.activate")}
+                        </Button>
+                      ) : null}
+                      <Button variant="secondary" type="button" onClick={() => startEdit(label)}>
+                        {labelText("common.edit")}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    className="h-9 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
-                    type="submit"
-                    disabled={editPending}
+                {canWrite && editingId === label.id ? (
+                  <form
+                    className="mt-3 space-y-3"
+                    onSubmit={(event) => void onSaveEdit(event, label)}
                   >
-                    {editPending ? labelText("common.saving") : labelText("labels.saveArea")}
-                  </button>
-                  <button
-                    className="h-9 rounded-md border border-border px-3 text-sm"
-                    type="button"
-                    onClick={cancelEdit}
-                  >
-                    {labelText("common.cancel")}
-                  </button>
-                </div>
-              </form>
-            ) : null}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Field label={labelText("common.name")}>
+                        <input
+                          className={FIELD_INPUT_CLASS}
+                          value={editName}
+                          onChange={(event) => setEditName(event.target.value)}
+                          maxLength={80}
+                          required
+                        />
+                      </Field>
+                      <Field label={labelText("labels.color")}>
+                        <input
+                          className={FIELD_INPUT_CLASS}
+                          value={editColor}
+                          onChange={(event) => setEditColor(event.target.value)}
+                          placeholder="#3366ff"
+                          maxLength={7}
+                        />
+                      </Field>
+                    </div>
+                    <Field label={labelText("common.description")}>
+                      <textarea
+                        className={FIELD_TEXTAREA_CLASS}
+                        value={editDescription}
+                        onChange={(event) => setEditDescription(event.target.value)}
+                        maxLength={400}
+                      />
+                    </Field>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted">{labelText("labels.pathPrefixes")}</p>
+                      {label.paths.length === 0 ? (
+                        <p className="text-xs text-muted">{labelText("labels.noneYet")}</p>
+                      ) : (
+                        <ul className="flex flex-wrap gap-2">
+                          {label.paths.map((item) => (
+                            <li
+                              key={`${item.repo_id}:${item.path}`}
+                              className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs"
+                            >
+                              <span className="font-mono">{item.path}</span>
+                              <button
+                                className="text-muted underline"
+                                type="button"
+                                onClick={() => void onRemovePath(label, item.repo_id, item.path)}
+                                disabled={editPending}
+                              >
+                                {labelText("labels.remove")}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          className={`${FIELD_INPUT_CLASS} min-w-40`}
+                          aria-label={labelText("labels.repoForPrefix")}
+                          value={editRepoId}
+                          onChange={(event) => setEditRepoId(event.target.value)}
+                        >
+                          <option value="">{labelText("labels.chooseRepo")}</option>
+                          {(repos ?? []).map((repo) => (
+                            <option key={repo.id} value={repo.id}>
+                              {repo.remote_url || repo.local_root_hint || repo.id}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          className={`${FIELD_INPUT_CLASS} min-w-40 flex-1`}
+                          placeholder="apps/api"
+                          value={editPath}
+                          onChange={(event) => setEditPath(event.target.value)}
+                          disabled={!editRepoId}
+                        />
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          onClick={() => void onAddPath(label)}
+                          disabled={editPending || !editRepoId}
+                        >
+                          {labelText("labels.addPrefix")}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={editPending}>
+                        {editPending ? labelText("common.saving") : labelText("labels.saveArea")}
+                      </Button>
+                      <Button variant="secondary" type="button" onClick={cancelEdit}>
+                        {labelText("common.cancel")}
+                      </Button>
+                    </div>
+                  </form>
+                ) : null}
+              </Panel>
             </li>
           ))}
         </ul>

@@ -5,6 +5,10 @@ import { useState, type FormEvent } from "react";
 
 import { ApiError, loginLocal } from "@/lib/api";
 import { POST_LOGIN_PATH } from "@/lib/nav";
+import { FIELD_INPUT_CLASS } from "@/lib/ui";
+import { Banner } from "@/lib/ui/banner";
+import { Button } from "@/lib/ui/button";
+import { Field } from "@/lib/ui/field";
 import { useT } from "@/lib/use-locale";
 
 export function LoginForm() {
@@ -33,34 +37,28 @@ export function LoginForm() {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-      <label className="flex flex-col gap-1 text-sm">
-        {t("login.username")}
+      <Field label={t("login.username")}>
         <input
-          className="h-11 rounded-lg border border-border bg-background px-3"
+          className={`${FIELD_INPUT_CLASS} h-11`}
           name="login"
           autoComplete="username"
           required
           maxLength={64}
         />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        {t("login.password")}
+      </Field>
+      <Field label={t("login.password")}>
         <input
-          className="h-11 rounded-lg border border-border bg-background px-3"
+          className={`${FIELD_INPUT_CLASS} h-11`}
           name="password"
           type="password"
           autoComplete="current-password"
           required
         />
-      </label>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <button
-        className="h-11 rounded-lg bg-accent text-sm font-medium text-accent-fg disabled:opacity-60"
-        type="submit"
-        disabled={pending}
-      >
+      </Field>
+      {error ? <Banner tone="danger">{error}</Banner> : null}
+      <Button className="h-11" type="submit" disabled={pending}>
         {pending ? t("login.signingIn") : t("login.signIn")}
-      </button>
+      </Button>
     </form>
   );
 }

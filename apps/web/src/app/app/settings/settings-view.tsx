@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {
   ApiError,
@@ -22,6 +22,16 @@ import {
 import { t } from "@/lib/i18n";
 import { indexModeLabel } from "@/lib/index-status";
 import { DEFAULT_POLL_MS } from "@/lib/poll";
+import { SETTINGS_JUMP_LINKS, SETTINGS_THEME_OPTIONS } from "@/lib/settings";
+import { getTheme, setTheme, subscribeTheme } from "@/lib/theme";
+import { FIELD_INPUT_CLASS, FIELD_TEXTAREA_CLASS } from "@/lib/ui";
+import { Banner } from "@/lib/ui/banner";
+import { Button } from "@/lib/ui/button";
+import { EmptyState } from "@/lib/ui/empty-state";
+import { Field } from "@/lib/ui/field";
+import { PageHeader } from "@/lib/ui/page-header";
+import { Panel } from "@/lib/ui/panel";
+import { Segmented, SegmentedItem } from "@/lib/ui/segmented";
 import { useT, useTf } from "@/lib/use-locale";
 
 import { AttachLocalRepoForm } from "../attach-local-repo-form";
@@ -68,6 +78,45 @@ function roleLabel(role: ProjectRole): string {
 
 function indexModes(hostedClone: boolean) {
   return hostedClone ? [...VISIBLE_INDEX_MODES, ...HOSTED_INDEX_MODES] : VISIBLE_INDEX_MODES;
+}
+
+function SettingsJumpNav({ ids }: { ids: ReadonlyArray<(typeof SETTINGS_JUMP_LINKS)[number]["id"]> }) {
+  const label = useT();
+  const links = SETTINGS_JUMP_LINKS.filter((item) => ids.includes(item.id));
+  return (
+    <nav className="flex flex-wrap gap-3 text-sm" aria-label={label("nav.settings")}>
+      {links.map((item) => (
+        <a className="underline-offset-2 hover:underline" href={`#${item.id}`} key={item.id}>
+          {label(item.message)}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function ThemeControl() {
+  const label = useT();
+  const theme = useSyncExternalStore(subscribeTheme, getTheme, getTheme);
+  return (
+    <section className="space-y-3" id="theme">
+      <div>
+        <h2 className="text-lg font-semibold">{label("settings.theme")}</h2>
+        <p className="text-sm text-muted">{label("settings.themeHint")}</p>
+      </div>
+      <Segmented>
+        {SETTINGS_THEME_OPTIONS.map((option) => (
+          <SegmentedItem
+            key={option.value}
+            active={theme === option.value}
+            aria-pressed={theme === option.value}
+            onClick={() => setTheme(option.value)}
+          >
+            {label(option.message)}
+          </SegmentedItem>
+        ))}
+      </Segmented>
+    </section>
+  );
 }
 
 export function SettingsView({
@@ -266,10 +315,9 @@ export function SettingsView({
   if (!project) {
     return (
       <section className="space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{label("nav.settings")}</h1>
-          <p className="text-sm text-muted">{label("settings.selectProject")}</p>
-        </div>
+        <PageHeader title={label("nav.settings")} description={label("settings.selectProject")} />
+        <SettingsJumpNav ids={["theme", "language"]} />
+        <ThemeControl />
         <LanguagePicker />
       </section>
     );
@@ -277,150 +325,134 @@ export function SettingsView({
 
   return (
     <section className="space-y-8" data-sidecar-tunnel={sidecarTunnel ? "on" : "off"}>
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.settings")}</h1>
-        <p className="text-sm text-muted">{format("settings.forProject", { name: project.name })}</p>
-      </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <PageHeader
+        title={label("nav.settings")}
+        description={format("settings.forProject", { name: project.name })}
+      />
+      <SettingsJumpNav ids={SETTINGS_JUMP_LINKS.map((item) => item.id)} />
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
 
+      <ThemeControl />
       <LanguagePicker />
 
-      <section className="space-y-3">
+      <section className="space-y-3" id="project">
         <h2 className="text-lg font-semibold">{label("common.project")}</h2>
         <CopyableProjectId projectId={project.id} />
         <form className="max-w-xl space-y-3" onSubmit={onSaveProject}>
-          <label className="flex flex-col gap-1 text-sm">
-            {label("common.name")}
+          <Field label={label("common.name")}>
             <input
-              className="h-9 rounded-md border border-border bg-background px-3"
+              className={FIELD_INPUT_CLASS}
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={120}
               required
               disabled={!isAdmin}
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {label("common.description")}
+          </Field>
+          <Field label={label("common.description")}>
             <textarea
-              className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
+              className={FIELD_TEXTAREA_CLASS}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               maxLength={2000}
               disabled={!isAdmin}
             />
-          </label>
+          </Field>
           {isAdmin ? (
-            <button
-              className="h-9 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
-              type="submit"
-              disabled={saving}
-            >
+            <Button type="submit" disabled={saving}>
               {saving ? label("common.saving") : label("common.save")}
-            </button>
+            </Button>
           ) : null}
         </form>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3" id="members">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">{label("settings.members")}</h2>
             <p className="text-sm text-muted">{label("settings.membersHint")}</p>
           </div>
           {isAdmin ? (
-            <button
-              className="rounded-md border border-border px-3 py-1.5 text-sm"
-              type="button"
-              onClick={openInvite}
-            >
+            <Button variant="secondary" type="button" onClick={openInvite}>
               {label("common.invite")}
-            </button>
+            </Button>
           ) : null}
         </div>
-        {inviteError ? <p className="text-sm text-red-600">{inviteError}</p> : null}
+        {inviteError ? <Banner tone="danger">{inviteError}</Banner> : null}
         {showInvite ? (
-          <form
-            className="max-w-xl space-y-3 rounded-lg border border-border bg-surface p-4"
-            onSubmit={onInvite}
-          >
-            <label className="flex flex-col gap-1 text-sm">
-              {label("settings.inviteTarget")}
-              <input
-                className="h-9 rounded-md border border-border bg-background px-3"
-                value={inviteTargetValue}
-                onChange={(event) => setInviteTargetValue(event.target.value)}
-                required
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              {label("common.role")}
-              <select
-                className="h-9 rounded-md border border-border bg-background px-2"
-                value={inviteRole}
-                onChange={(event) => setInviteRole(event.target.value as ProjectRole)}
-              >
-                {roleOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {label(option.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p className="text-xs text-muted">{label("settings.inviteExpiresIn")}</p>
-            <div className="flex gap-2">
-              <button
-                className="h-9 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-60"
-                type="submit"
-                disabled={inviting}
-              >
-                {inviting ? label("settings.sending") : label("settings.sendInvite")}
-              </button>
-              <button
-                className="h-9 rounded-md border border-border px-3 text-sm"
-                type="button"
-                onClick={() => {
-                  setShowInvite(false);
-                  setInviteError(null);
-                }}
-              >
-                {label("common.cancel")}
-              </button>
-            </div>
-          </form>
+          <Panel className="max-w-xl space-y-3">
+            <form className="space-y-3" onSubmit={onInvite}>
+              <Field label={label("settings.inviteTarget")}>
+                <input
+                  className={FIELD_INPUT_CLASS}
+                  value={inviteTargetValue}
+                  onChange={(event) => setInviteTargetValue(event.target.value)}
+                  required
+                />
+              </Field>
+              <Field label={label("common.role")}>
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  value={inviteRole}
+                  onChange={(event) => setInviteRole(event.target.value as ProjectRole)}
+                >
+                  {roleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {label(option.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <p className="text-xs text-muted">{label("settings.inviteExpiresIn")}</p>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={inviting}>
+                  {inviting ? label("settings.sending") : label("settings.sendInvite")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={() => {
+                    setShowInvite(false);
+                    setInviteError(null);
+                  }}
+                >
+                  {label("common.cancel")}
+                </Button>
+              </div>
+            </form>
+          </Panel>
         ) : null}
         {members.length === 0 ? (
-          <p className="text-sm text-muted">{label("settings.noMembers")}</p>
+          <EmptyState description={label("settings.noMembers")} />
         ) : (
           <ul className="space-y-2">
             {members.map((member) => (
-              <li
-                key={member.user_id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-              >
-                <div>
-                  <div className="font-medium">{memberLabel(member)}</div>
-                  <p className="text-muted">{member.email ?? member.login ?? ""}</p>
-                </div>
-                <label className="flex items-center gap-2">
-                  <span className="text-muted">{label("common.role")}</span>
-                  <select
-                    className="h-9 rounded-md border border-border bg-background px-2"
-                    value={member.role}
-                    onChange={(event) =>
-                      void onRoleChange(member, event.target.value as ProjectRole)
-                    }
-                    aria-label={format("settings.roleFor", { name: memberLabel(member) })}
-                    disabled={!isAdmin}
-                  >
-                    {roleOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {label(option.labelKey)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <li key={member.user_id}>
+                <Panel className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+                  <div>
+                    <div className="font-medium">{memberLabel(member)}</div>
+                    <p className="text-muted">{member.email ?? member.login ?? ""}</p>
+                  </div>
+                  <label className="flex items-center gap-2">
+                    <span className="text-muted">{label("common.role")}</span>
+                    <select
+                      className={FIELD_INPUT_CLASS}
+                      value={member.role}
+                      onChange={(event) =>
+                        void onRoleChange(member, event.target.value as ProjectRole)
+                      }
+                      aria-label={format("settings.roleFor", { name: memberLabel(member) })}
+                      disabled={!isAdmin}
+                    >
+                      {roleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {label(option.labelKey)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </Panel>
               </li>
             ))}
           </ul>
@@ -430,17 +462,16 @@ export function SettingsView({
             <h3 className="text-sm font-medium">{label("settings.pendingInvites")}</h3>
             <ul className="space-y-2">
               {invites.map((invite) => (
-                <li
-                  key={invite.id}
-                  className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-                >
-                  <div className="font-medium">{inviteTarget(invite)}</div>
-                  <p className="text-muted">
-                    {format("settings.inviteMeta", {
-                      role: roleLabel(invite.role),
-                      when: new Date(invite.expires_at).toLocaleString(),
-                    })}
-                  </p>
+                <li key={invite.id}>
+                  <Panel className="px-4 py-3 text-sm">
+                    <div className="font-medium">{inviteTarget(invite)}</div>
+                    <p className="text-muted">
+                      {format("settings.inviteMeta", {
+                        role: roleLabel(invite.role),
+                        when: new Date(invite.expires_at).toLocaleString(),
+                      })}
+                    </p>
+                  </Panel>
                 </li>
               ))}
             </ul>
@@ -448,24 +479,23 @@ export function SettingsView({
         ) : null}
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3" id="repositories">
         <div>
           <h2 className="text-lg font-semibold">{label("settings.repositories")}</h2>
           <p className="text-sm text-muted">{label("settings.repositoriesHint")}</p>
         </div>
         {repos === null || repos.length === 0 ? (
-          <p className="text-sm text-muted">{label("settings.noRepos")}</p>
+          <EmptyState description={label("settings.noRepos")} />
         ) : (
           <ul className="space-y-2">
             {repos.map((repo) => (
-              <li
-                key={repo.id}
-                className="space-y-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-              >
-                <div className="font-medium">
-                  {repo.remote_url || repo.local_root_hint || label("common.repository")}
-                </div>
-                <p className="text-muted">{indexModeLabel(repo.index_mode, { hostedClone })}</p>
+              <li key={repo.id}>
+                <Panel className="space-y-1 px-4 py-3 text-sm">
+                  <div className="font-medium">
+                    {repo.remote_url || repo.local_root_hint || label("common.repository")}
+                  </div>
+                  <p className="text-muted">{indexModeLabel(repo.index_mode, { hostedClone })}</p>
+                </Panel>
               </li>
             ))}
           </ul>
@@ -488,20 +518,19 @@ export function SettingsView({
             <p className="text-sm text-muted">{label("settings.sidecarHint")}</p>
           </div>
           {repos === null || repos.length === 0 ? (
-            <p className="text-sm text-muted">{label("settings.connectRepo")}</p>
+            <EmptyState description={label("settings.connectRepo")} />
           ) : (
             <ul className="space-y-2">
               {repos.map((repo) => (
-                <li
-                  key={repo.id}
-                  className="space-y-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-                >
-                  <div className="font-medium">
-                    {repo.remote_url || repo.local_root_hint || label("common.repository")}
-                  </div>
-                  <p className="text-muted">
-                    {repo.sidecar_connected ? label("settings.sidecarOn") : label("settings.sidecarOff")}
-                  </p>
+                <li key={repo.id}>
+                  <Panel className="space-y-1 px-4 py-3 text-sm">
+                    <div className="font-medium">
+                      {repo.remote_url || repo.local_root_hint || label("common.repository")}
+                    </div>
+                    <p className="text-muted">
+                      {repo.sidecar_connected ? label("settings.sidecarOn") : label("settings.sidecarOff")}
+                    </p>
+                  </Panel>
                 </li>
               ))}
             </ul>
@@ -516,34 +545,32 @@ export function SettingsView({
             <p className="text-sm text-muted">{label("settings.hostedHint")}</p>
           </div>
           {repos === null || repos.length === 0 ? (
-            <p className="text-sm text-muted">{label("settings.connectRepo")}</p>
+            <EmptyState description={label("settings.connectRepo")} />
           ) : (
             <ul className="space-y-2">
               {repos.map((repo) => (
-                <li
-                  key={repo.id}
-                  className="space-y-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-                >
-                  <div className="font-medium">
-                    {repo.remote_url || repo.local_root_hint || label("common.repository")}
-                  </div>
-                  <label className="flex flex-col gap-1">
-                    {label("settings.index")}
-                    <select
-                      className="h-9 max-w-sm rounded-md border border-border bg-background px-2"
-                      value={repo.index_mode}
-                      onChange={(event) =>
-                        void onIndexModeChange(repo, event.target.value as IndexMode)
-                      }
-                      disabled={!isAdmin}
-                    >
-                      {modeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {label(option.labelKey)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <li key={repo.id}>
+                  <Panel className="space-y-2 px-4 py-3 text-sm">
+                    <div className="font-medium">
+                      {repo.remote_url || repo.local_root_hint || label("common.repository")}
+                    </div>
+                    <Field label={label("settings.index")}>
+                      <select
+                        className={`${FIELD_INPUT_CLASS} max-w-sm`}
+                        value={repo.index_mode}
+                        onChange={(event) =>
+                          void onIndexModeChange(repo, event.target.value as IndexMode)
+                        }
+                        disabled={!isAdmin}
+                      >
+                        {modeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {label(option.labelKey)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </Panel>
                 </li>
               ))}
             </ul>

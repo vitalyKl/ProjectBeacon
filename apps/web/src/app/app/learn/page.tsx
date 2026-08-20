@@ -3,6 +3,9 @@
 import Link from "next/link";
 
 import { navMessageForHref } from "@/lib/nav";
+import { Banner } from "@/lib/ui/banner";
+import { PageHeader } from "@/lib/ui/page-header";
+import { Panel } from "@/lib/ui/panel";
 import { useT } from "@/lib/use-locale";
 
 const SCREENS = [
@@ -22,41 +25,40 @@ export default function LearnPage() {
   const t = useT();
   return (
     <section className="mx-auto max-w-3xl space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("learn.title")}</h1>
-        <p className="text-sm leading-6 text-muted">{t("learn.intro")}</p>
-      </header>
+      <PageHeader title={t("learn.title")} description={t("learn.intro")} />
 
-      <article className="space-y-2 rounded-lg border border-border bg-surface p-4">
+      <Panel className="space-y-2">
         <h2 className="text-sm font-semibold tracking-wide uppercase">{t("learn.start")}</h2>
         <p className="text-sm leading-6">{t("learn.startBody")}</p>
-      </article>
+      </Panel>
 
       <article className="space-y-3">
         <h2 className="text-sm font-semibold tracking-wide uppercase">{t("learn.screens")}</h2>
         <ol className="space-y-3">
           {SCREENS.map((item) => (
-            <li key={item.href} className="rounded-lg border border-border bg-surface p-4">
-              <Link className="text-sm font-medium underline-offset-2 hover:underline" href={item.href}>
-                {t(navMessageForHref(item.href))}
-              </Link>
-              <p className="mt-1 text-sm leading-6 text-muted">{t(item.title)}</p>
+            <li key={item.href}>
+              <Panel>
+                <Link className="text-sm font-medium underline-offset-2 hover:underline" href={item.href}>
+                  {t(navMessageForHref(item.href))}
+                </Link>
+                <p className="mt-1 text-sm leading-6 text-muted">{t(item.title)}</p>
+              </Panel>
             </li>
           ))}
         </ol>
       </article>
 
-      <article className="space-y-2 rounded-lg border border-border bg-surface p-4">
+      <Panel className="space-y-2">
         <h2 className="text-sm font-semibold tracking-wide uppercase">{t("learn.check")}</h2>
         <p className="text-sm leading-6">{t("learn.checkBody")}</p>
-      </article>
+      </Panel>
 
-      <article className="space-y-2 rounded-lg border border-border bg-surface p-4">
+      <Panel className="space-y-2">
         <h2 className="text-sm font-semibold tracking-wide uppercase">{t("learn.multi")}</h2>
         <p className="text-sm leading-6">{t("learn.multiBody")}</p>
-      </article>
+      </Panel>
 
-      <article className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40">
+      <Banner tone="warning" className="space-y-2">
         <h2 className="text-sm font-semibold tracking-wide uppercase">{t("learn.guide")}</h2>
         <ol className="space-y-1 text-sm leading-6">
           <li>{t("learn.guideOne")}</li>
@@ -64,7 +66,7 @@ export default function LearnPage() {
           <li>{t("learn.guideThree")}</li>
           <li>{t("learn.guideFour")}</li>
         </ol>
-      </article>
+      </Banner>
     </section>
   );
 }

@@ -12,6 +12,12 @@ import {
   type PublicReport,
   type PublicReview,
 } from "@/lib/reports";
+import { FIELD_INPUT_CLASS, FIELD_TEXTAREA_CLASS } from "@/lib/ui";
+import { Banner } from "@/lib/ui/banner";
+import { Button } from "@/lib/ui/button";
+import { EmptyState } from "@/lib/ui/empty-state";
+import { PageHeader } from "@/lib/ui/page-header";
+import { Panel } from "@/lib/ui/panel";
 import { useT } from "@/lib/use-locale";
 
 import { MarkdownView } from "../markdown-view";
@@ -109,36 +115,30 @@ export default function ReportsPage() {
   if (!project) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("reports.title")}</h1>
-        <p className="text-sm text-muted">{t("common.selectProject")}</p>
+        <PageHeader title={t("reports.title")} description={t("common.selectProject")} />
       </section>
     );
   }
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("reports.title")}</h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted">{t("reports.intro")}</p>
-        </div>
-        <button
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
-          type="button"
-          disabled={generating}
-          onClick={() => void onGenerate()}
-        >
-          {generating ? t("reports.generating") : t("reports.generate")}
-        </button>
-      </header>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <PageHeader
+        title={t("reports.title")}
+        description={t("reports.intro")}
+        actions={
+          <Button type="button" disabled={generating} onClick={() => void onGenerate()}>
+            {generating ? t("reports.generating") : t("reports.generate")}
+          </Button>
+        }
+      />
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       {loading ? <p className="text-sm text-muted">{t("common.loading")}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <Panel className="space-y-3">
           <h2 className="text-sm font-semibold tracking-wide uppercase">{t("reports.snapshots")}</h2>
           {reports.length === 0 ? (
-            <p className="text-sm text-muted">{t("reports.emptyReports")}</p>
+            <EmptyState description={t("reports.emptyReports")} />
           ) : (
             <ul className="space-y-3">
               {reports.map((report) => (
@@ -156,37 +156,33 @@ export default function ReportsPage() {
               ))}
             </ul>
           )}
-        </article>
+        </Panel>
 
-        <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <Panel className="space-y-3">
           <h2 className="text-sm font-semibold tracking-wide uppercase">{t("reports.reviews")}</h2>
           <p className="text-sm text-muted">{t("reports.reviewsIntro")}</p>
           <form className="space-y-2" onSubmit={(event) => void onImport(event)}>
             <input
-              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+              className={`${FIELD_INPUT_CLASS} w-full`}
               value={reviewTitle}
               onChange={(event) => setReviewTitle(event.target.value)}
               placeholder={t("reports.reviewTitle")}
               maxLength={200}
             />
             <textarea
-              className="min-h-28 w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-sm"
+              className={`${FIELD_TEXTAREA_CLASS} min-h-28 w-full font-mono`}
               value={reviewBody}
               onChange={(event) => setReviewBody(event.target.value)}
               placeholder={t("reports.reviewBody")}
               required
               maxLength={32000}
             />
-            <button
-              className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60"
-              type="submit"
-              disabled={importing}
-            >
+            <Button variant="secondary" type="submit" disabled={importing}>
               {importing ? t("reports.importing") : t("reports.import")}
-            </button>
+            </Button>
           </form>
           {reviews.length === 0 ? (
-            <p className="text-sm text-muted">{t("reports.emptyReviews")}</p>
+            <EmptyState description={t("reports.emptyReviews")} />
           ) : (
             <ul className="space-y-3">
               {reviews.map((review) => (
@@ -206,7 +202,7 @@ export default function ReportsPage() {
               ))}
             </ul>
           )}
-        </article>
+        </Panel>
       </div>
     </section>
   );

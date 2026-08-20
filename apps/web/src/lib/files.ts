@@ -3,6 +3,19 @@ import { apiFetch, ApiError, parseJson, readApiError } from "./api";
 export const FILE_EXCERPT_MAX_LINES = 400;
 export const DEFAULT_TREE_DEPTH = 2;
 
+export type FilesEmptyKind = "none" | "attach" | "ask-admin";
+
+export function filesEmptyKind(input: {
+  loading: boolean;
+  repoCount: number;
+  canAttach: boolean;
+}): FilesEmptyKind {
+  if (input.loading || input.repoCount > 0) {
+    return "none";
+  }
+  return input.canAttach ? "attach" : "ask-admin";
+}
+
 export type RepoTreeDir = {
   path: string;
   file_count: number;

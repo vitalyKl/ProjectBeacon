@@ -6,6 +6,7 @@ import {
   fetchRepoFile,
   fetchRepoTree,
   FILE_EXCERPT_MAX_LINES,
+  filesEmptyKind,
   isCodeIndexUnavailable,
   isUnsupportedMedia,
   mergeTreeDirs,
@@ -74,6 +75,15 @@ describe("tree helpers", () => {
       "apps",
       "apps/web",
     ]);
+  });
+});
+
+describe("files empty-state picker", () => {
+  it("shows attach for empty+admin and ask-admin for empty+non-admin", () => {
+    expect(filesEmptyKind({ loading: true, repoCount: 0, canAttach: true })).toBe("none");
+    expect(filesEmptyKind({ loading: false, repoCount: 1, canAttach: true })).toBe("none");
+    expect(filesEmptyKind({ loading: false, repoCount: 0, canAttach: true })).toBe("attach");
+    expect(filesEmptyKind({ loading: false, repoCount: 0, canAttach: false })).toBe("ask-admin");
   });
 });
 

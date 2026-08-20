@@ -31,6 +31,13 @@ import {
 } from "@/lib/decisions";
 import { t } from "@/lib/i18n";
 import { DEFAULT_POLL_MS } from "@/lib/poll";
+import { FIELD_INPUT_CLASS, FIELD_TEXTAREA_CLASS } from "@/lib/ui";
+import { Banner } from "@/lib/ui/banner";
+import { Button } from "@/lib/ui/button";
+import { EmptyState } from "@/lib/ui/empty-state";
+import { Field } from "@/lib/ui/field";
+import { PageHeader } from "@/lib/ui/page-header";
+import { Panel } from "@/lib/ui/panel";
 import { useInterval } from "@/lib/use-interval";
 import { useT, useTf } from "@/lib/use-locale";
 
@@ -123,19 +130,18 @@ export function DecisionsView() {
   if (!project) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.decisions")}</h1>
-        <p className="text-sm text-muted">{label("common.selectProject")}</p>
+        <PageHeader title={label("nav.decisions")} description={label("common.selectProject")} />
       </section>
     );
   }
 
   return (
     <section className="space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{label("nav.decisions")}</h1>
-        <p className="text-sm text-muted">{format("decisions.intro", { name: project.name })}</p>
-      </header>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <PageHeader
+        title={label("nav.decisions")}
+        description={format("decisions.intro", { name: project.name })}
+      />
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
 
       <section className="space-y-3">
@@ -144,14 +150,12 @@ export function DecisionsView() {
           <CreateDecisionForm projectId={project.id} onCreated={onCreatedDecision} />
         </div>
         {sortedDecisions.length === 0 && !loading ? (
-          <p className="text-sm text-muted">{label("decisions.empty")}</p>
+          <EmptyState description={label("decisions.empty")} />
         ) : (
           <ul className="space-y-3">
             {sortedDecisions.map((item) => (
-              <li
-                key={item.id}
-                className="space-y-2 rounded-lg border border-border bg-surface px-4 py-3"
-              >
+              <li key={item.id}>
+                <Panel className="space-y-2 px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <h3 className="font-medium">{item.title}</h3>
                   <span className="text-xs tracking-wide text-muted uppercase">
@@ -171,6 +175,7 @@ export function DecisionsView() {
                   onUpdated={onUpdatedDecision}
                   onError={setError}
                 />
+                </Panel>
               </li>
             ))}
           </ul>
@@ -183,14 +188,12 @@ export function DecisionsView() {
           <CreateConstraintForm projectId={project.id} onCreated={onCreatedConstraint} />
         </div>
         {sortedConstraints.length === 0 && !loading ? (
-          <p className="text-sm text-muted">{label("decisions.noConstraints")}</p>
+          <EmptyState description={label("decisions.noConstraints")} />
         ) : (
           <ul className="space-y-3">
             {sortedConstraints.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3"
-              >
+              <li key={item.id}>
+                <Panel className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2 text-xs tracking-wide text-muted uppercase">
                     <span>{constraintKindLabel(item.kind)}</span>
@@ -200,14 +203,11 @@ export function DecisionsView() {
                   <p className="text-sm whitespace-pre-wrap">{item.body}</p>
                 </div>
                 {canApplyConstraint(item) ? (
-                  <button
-                    className="rounded-md border border-border px-3 py-1.5 text-sm"
-                    type="button"
-                    onClick={() => void onApply(item)}
-                  >
+                  <Button variant="secondary" type="button" onClick={() => void onApply(item)}>
                     {label("common.apply")}
-                  </button>
+                  </Button>
                 ) : null}
+                </Panel>
               </li>
             ))}
           </ul>
@@ -272,18 +272,18 @@ function DecisionLifecycleActions({
       {showAccept || showSupersede || showDeprecate ? (
         <div className="flex flex-wrap gap-2">
           {showAccept ? (
-            <button
-              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            <Button
+              variant="secondary"
               type="button"
               disabled={pending}
               onClick={() => void applyStatus("accepted")}
             >
               {label("decisions.accept")}
-            </button>
+            </Button>
           ) : null}
           {showSupersede ? (
-            <button
-              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            <Button
+              variant="secondary"
               type="button"
               disabled={pending}
               onClick={() => {
@@ -292,17 +292,17 @@ function DecisionLifecycleActions({
               }}
             >
               {label("decisions.supersede")}
-            </button>
+            </Button>
           ) : null}
           {showDeprecate ? (
-            <button
-              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            <Button
+              variant="secondary"
               type="button"
               disabled={pending}
               onClick={() => void applyStatus("deprecated")}
             >
               {label("decisions.deprecate")}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -320,10 +320,9 @@ function DecisionLifecycleActions({
               void applyStatus("superseded", successorId);
             }}
           >
-            <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">
-              <span className="text-muted">{label("decisions.supersedeWith")}</span>
+            <Field className="min-w-48 flex-1" label={<span className="text-muted">{label("decisions.supersedeWith")}</span>}>
               <select
-                className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                className={FIELD_INPUT_CLASS}
                 aria-label={label("decisions.chooseSuccessor")}
                 value={successorId}
                 onChange={(event) => setSuccessorId(event.target.value)}
@@ -334,14 +333,10 @@ function DecisionLifecycleActions({
                   </option>
                 ))}
               </select>
-            </label>
-            <button
-              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
-              type="submit"
-              disabled={pending || !successorId}
-            >
+            </Field>
+            <Button type="submit" disabled={pending || !successorId}>
               {pending ? label("common.saving") : label("decisions.supersede")}
-            </button>
+            </Button>
           </form>
         )
       ) : null}
@@ -410,8 +405,8 @@ function CreateDecisionForm({
 
   if (!open) {
     return (
-      <button
-        className="rounded-md border border-border px-3 py-1.5 text-sm"
+      <Button
+        variant="secondary"
         type="button"
         onClick={() => {
           reset();
@@ -419,79 +414,74 @@ function CreateDecisionForm({
         }}
       >
         {label("decisions.new")}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <form
-      className="flex w-full max-w-xl flex-col gap-2 rounded-md border border-border bg-surface p-3"
-      onSubmit={onSubmit}
-    >
-      <input
-        className="h-9 rounded-md border border-border bg-background px-2 text-sm"
-        placeholder={label("common.title")}
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        maxLength={200}
-        required
-      />
-      <textarea
-        className="min-h-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
-        placeholder={label("decisions.context")}
-        value={context}
-        onChange={(event) => setContext(event.target.value)}
-        maxLength={8000}
-        required
-      />
-      <textarea
-        className="min-h-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
-        placeholder={label("decisions.decision")}
-        value={decision}
-        onChange={(event) => setDecision(event.target.value)}
-        maxLength={8000}
-        required
-      />
-      <textarea
-        className="min-h-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
-        placeholder={label("decisions.consequences")}
-        value={consequences}
-        onChange={(event) => setConsequences(event.target.value)}
-        maxLength={8000}
-      />
-      <select
-        className="h-9 rounded-md border border-border bg-background px-2 text-sm capitalize"
-        aria-label={label("decisions.status")}
-        value={status}
-        onChange={(event) => setStatus(event.target.value as DecisionStatus)}
-      >
-        {DECISION_STATUSES.map((item) => (
-          <option key={item} value={item}>
-            {decisionStatusLabel(item)}
-          </option>
-        ))}
-      </select>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <div className="flex gap-2">
-        <button
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
-          type="submit"
-          disabled={pending}
+    <Panel className="w-full max-w-xl p-3">
+      <form className="flex flex-col gap-2" onSubmit={onSubmit}>
+        <input
+          className={FIELD_INPUT_CLASS}
+          placeholder={label("common.title")}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          maxLength={200}
+          required
+        />
+        <textarea
+          className={FIELD_TEXTAREA_CLASS}
+          placeholder={label("decisions.context")}
+          value={context}
+          onChange={(event) => setContext(event.target.value)}
+          maxLength={8000}
+          required
+        />
+        <textarea
+          className={FIELD_TEXTAREA_CLASS}
+          placeholder={label("decisions.decision")}
+          value={decision}
+          onChange={(event) => setDecision(event.target.value)}
+          maxLength={8000}
+          required
+        />
+        <textarea
+          className={FIELD_TEXTAREA_CLASS}
+          placeholder={label("decisions.consequences")}
+          value={consequences}
+          onChange={(event) => setConsequences(event.target.value)}
+          maxLength={8000}
+        />
+        <select
+          className={`${FIELD_INPUT_CLASS} capitalize`}
+          aria-label={label("decisions.status")}
+          value={status}
+          onChange={(event) => setStatus(event.target.value as DecisionStatus)}
         >
-          {pending ? label("common.saving") : label("common.save")}
-        </button>
-        <button
-          className="rounded-md border border-border px-3 py-1.5 text-sm"
-          type="button"
-          onClick={() => {
-            reset();
-            setOpen(false);
-          }}
-        >
-          {label("common.cancel")}
-        </button>
-      </div>
-    </form>
+          {DECISION_STATUSES.map((item) => (
+            <option key={item} value={item}>
+              {decisionStatusLabel(item)}
+            </option>
+          ))}
+        </select>
+        {error ? <Banner tone="danger">{error}</Banner> : null}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={pending}>
+            {pending ? label("common.saving") : label("common.save")}
+          </Button>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => {
+              reset();
+              setOpen(false);
+            }}
+          >
+            {label("common.cancel")}
+          </Button>
+        </div>
+      </form>
+    </Panel>
   );
 }
 
@@ -551,8 +541,8 @@ function CreateConstraintForm({
 
   if (!open) {
     return (
-      <button
-        className="rounded-md border border-border px-3 py-1.5 text-sm"
+      <Button
+        variant="secondary"
         type="button"
         onClick={() => {
           reset();
@@ -560,76 +550,71 @@ function CreateConstraintForm({
         }}
       >
         {label("decisions.newConstraint")}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <form
-      className="flex w-full max-w-xl flex-col gap-2 rounded-md border border-border bg-surface p-3"
-      onSubmit={onSubmit}
-    >
-      <textarea
-        className="min-h-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
-        placeholder={label("decisions.rule")}
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        maxLength={8000}
-        required
-      />
-      <input
-        className="h-9 rounded-md border border-border bg-background px-2 text-sm"
-        placeholder={label("decisions.scopeOptional")}
-        value={scopePath}
-        onChange={(event) => setScopePath(event.target.value)}
-        maxLength={1024}
-      />
-      <div className="flex flex-wrap gap-2">
-        <select
-          className="h-9 rounded-md border border-border bg-background px-2 text-sm capitalize"
-          aria-label={label("decisions.kind")}
-          value={kind}
-          onChange={(event) => setKind(event.target.value as ConstraintKind)}
-        >
-          {CONSTRAINT_KINDS.map((item) => (
-            <option key={item} value={item}>
-              {constraintKindLabel(item)}
-            </option>
-          ))}
-        </select>
-        <select
-          className="h-9 rounded-md border border-border bg-background px-2 text-sm capitalize"
-          aria-label={label("decisions.constraintStatus")}
-          value={status}
-          onChange={(event) => setStatus(event.target.value as ConstraintStatus)}
-        >
-          {CONSTRAINT_STATUSES.filter((item) => item !== "rejected").map((item) => (
-            <option key={item} value={item}>
-              {constraintStatusLabel(item)}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <div className="flex gap-2">
-        <button
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
-          type="submit"
-          disabled={pending}
-        >
-          {pending ? label("common.saving") : label("common.save")}
-        </button>
-        <button
-          className="rounded-md border border-border px-3 py-1.5 text-sm"
-          type="button"
-          onClick={() => {
-            reset();
-            setOpen(false);
-          }}
-        >
-          {label("common.cancel")}
-        </button>
-      </div>
-    </form>
+    <Panel className="w-full max-w-xl p-3">
+      <form className="flex flex-col gap-2" onSubmit={onSubmit}>
+        <textarea
+          className={FIELD_TEXTAREA_CLASS}
+          placeholder={label("decisions.rule")}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          maxLength={8000}
+          required
+        />
+        <input
+          className={FIELD_INPUT_CLASS}
+          placeholder={label("decisions.scopeOptional")}
+          value={scopePath}
+          onChange={(event) => setScopePath(event.target.value)}
+          maxLength={1024}
+        />
+        <div className="flex flex-wrap gap-2">
+          <select
+            className={`${FIELD_INPUT_CLASS} capitalize`}
+            aria-label={label("decisions.kind")}
+            value={kind}
+            onChange={(event) => setKind(event.target.value as ConstraintKind)}
+          >
+            {CONSTRAINT_KINDS.map((item) => (
+              <option key={item} value={item}>
+                {constraintKindLabel(item)}
+              </option>
+            ))}
+          </select>
+          <select
+            className={`${FIELD_INPUT_CLASS} capitalize`}
+            aria-label={label("decisions.constraintStatus")}
+            value={status}
+            onChange={(event) => setStatus(event.target.value as ConstraintStatus)}
+          >
+            {CONSTRAINT_STATUSES.filter((item) => item !== "rejected").map((item) => (
+              <option key={item} value={item}>
+                {constraintStatusLabel(item)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {error ? <Banner tone="danger">{error}</Banner> : null}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={pending}>
+            {pending ? label("common.saving") : label("common.save")}
+          </Button>
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => {
+              reset();
+              setOpen(false);
+            }}
+          >
+            {label("common.cancel")}
+          </Button>
+        </div>
+      </form>
+    </Panel>
   );
 }

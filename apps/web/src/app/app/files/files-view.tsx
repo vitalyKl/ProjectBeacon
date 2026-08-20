@@ -8,6 +8,7 @@ import {
   fetchRepoFile,
   fetchRepoTree,
   FILE_EXCERPT_MAX_LINES,
+  filesEmptyKind,
   isCodeIndexUnavailable,
   isUnsupportedMedia,
   mergeTreeDirs,
@@ -23,6 +24,12 @@ import {
   pickHomeIndexRepo,
   repoDisplayName,
 } from "@/lib/index-status";
+import { FIELD_INPUT_CLASS } from "@/lib/ui";
+import { Banner } from "@/lib/ui/banner";
+import { Button } from "@/lib/ui/button";
+import { EmptyState } from "@/lib/ui/empty-state";
+import { PageHeader } from "@/lib/ui/page-header";
+import { Panel } from "@/lib/ui/panel";
 import { useT, useTf } from "@/lib/use-locale";
 
 import { AttachLocalRepoForm } from "../attach-local-repo-form";
@@ -234,46 +241,44 @@ export function FilesView() {
   if (!project) {
     return (
       <section className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("nav.files")}</h1>
-        <p className="text-sm text-muted">{t("common.selectProject")}</p>
+        <PageHeader title={t("nav.files")} description={t("common.selectProject")} />
       </section>
     );
   }
 
   const root = dirsByPath.get(".") ?? dirs[0] ?? null;
+  const emptyKind = filesEmptyKind({ loading, repoCount: repos.length, canAttach });
 
   return (
     <section className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{t("nav.files")}</h1>
-          <p className="max-w-2xl text-sm text-muted">{t("files.intro")}</p>
-        </div>
-        {repos.length > 1 ? (
-          <label className="flex items-center gap-2 text-sm">
-            {t("files.repo")}
-            <select
-              className="h-9 rounded-md border border-border bg-background px-2"
-              value={repoId ?? ""}
-              onChange={(event) => void onSelectRepo(event.target.value)}
-            >
-              {repos.map((repo) => (
-                <option key={repo.id} value={repo.id}>
-                  {repoDisplayName(repo)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-      </header>
+      <PageHeader
+        title={t("nav.files")}
+        description={t("files.intro")}
+        actions={
+          repos.length > 1 ? (
+            <label className="flex items-center gap-2 text-sm">
+              {t("files.repo")}
+              <select
+                className={FIELD_INPUT_CLASS}
+                value={repoId ?? ""}
+                onChange={(event) => void onSelectRepo(event.target.value)}
+              >
+                {repos.map((repo) => (
+                  <option key={repo.id} value={repo.id}>
+                    {repoDisplayName(repo)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null
+        }
+      />
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       {loading ? <p className="text-sm text-muted">{t("common.loading")}</p> : null}
 
-      {!loading && repos.length === 0 ? (
-        <div className="space-y-3">
-          <p className="text-sm text-muted">{t("files.emptyRepos")}</p>
-          <p className="text-sm text-muted">{t("files.emptyReposHint")}</p>
+      {emptyKind !== "none" ? (
+        <EmptyState title={t("files.emptyRepos")} description={t("files.emptyReposHint")}>
           <AttachLocalRepoForm
             projectId={project.id}
             canSubmit={canAttach}
@@ -281,14 +286,14 @@ export function FilesView() {
               void reload();
             }}
           />
-        </div>
+        </EmptyState>
       ) : null}
 
       {!loading && repos.length > 0 && indexUnavailable ? (
-        <div className="space-y-1 rounded-lg border border-border bg-surface p-4">
+        <Panel className="space-y-1">
           <p className="text-sm font-medium">{t("files.unavailable")}</p>
           <p className="text-sm text-muted">{t("files.unavailableHint")}</p>
-        </div>
+        </Panel>
       ) : null}
 
       {!loading && repos.length > 0 && !indexUnavailable ? (
@@ -308,7 +313,7 @@ export function FilesView() {
               <p className="text-sm text-muted">{t("files.emptyTree")}</p>
             )}
           </aside>
-          <article className="min-h-64 space-y-3 rounded-lg border border-border bg-surface p-4">
+          <Panel className="min-h-64 space-y-3">
             {selectedPath ? (
               <>
                 <header className="space-y-1">
@@ -333,14 +338,14 @@ export function FilesView() {
                       <code>{excerpt.content}</code>
                     </pre>
                     {excerptCanContinue(excerpt) ? (
-                      <button
+                      <Button
+                        variant="secondary"
                         type="button"
-                        className="rounded-md border border-border px-3 py-1.5 text-sm"
                         onClick={() => void onOpenFile(selectedPath, excerpt.end_line + 1)}
                         disabled={fileLoading}
                       >
                         {t("files.more")}
-                      </button>
+                      </Button>
                     ) : null}
                   </>
                 ) : null}
@@ -348,7 +353,7 @@ export function FilesView() {
             ) : (
               <p className="text-sm text-muted">{t("files.selectFile")}</p>
             )}
-          </article>
+          </Panel>
         </div>
       ) : null}
     </section>

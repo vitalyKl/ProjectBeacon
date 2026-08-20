@@ -1,6 +1,7 @@
 "use client";
 
 import { LOCALES, LOCALE_LABELS, isLocale, setLocale } from "@/lib/i18n";
+import { FIELD_INPUT_CLASS } from "@/lib/ui";
 import { useLocale, useT } from "@/lib/use-locale";
 
 export function LanguagePicker() {
@@ -8,7 +9,7 @@ export function LanguagePicker() {
   const t = useT();
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-3" id="language">
       <div>
         <h2 className="text-lg font-semibold">{t("settings.language")}</h2>
         <p className="text-sm text-muted">{t("settings.languageHint")}</p>
@@ -16,7 +17,7 @@ export function LanguagePicker() {
       <label className="flex max-w-xs flex-col gap-1 text-sm">
         {t("common.language")}
         <select
-          className="h-9 rounded-md border border-border bg-background px-2"
+          className={FIELD_INPUT_CLASS}
           value={locale}
           aria-label={t("common.language")}
           onChange={(event) => {
