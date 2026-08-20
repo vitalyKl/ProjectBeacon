@@ -32,9 +32,18 @@ const INDEX_MODE_KEYS: Record<NonNullable<PublicRepo["index_mode"]>, MessageKey>
   both: "index.both",
 };
 
-export function indexModeLabel(mode: PublicRepo["index_mode"] | undefined): string {
+export function indexModeLabel(
+  mode: PublicRepo["index_mode"] | undefined,
+  options: { hostedClone?: boolean } = {},
+): string {
   if (!mode) {
     return t("index.notConnected");
+  }
+  if (mode === "hosted_clone" && options.hostedClone !== true) {
+    return t("index.notConnected");
+  }
+  if (mode === "both" && options.hostedClone !== true) {
+    return t("index.sidecar");
   }
   return t(INDEX_MODE_KEYS[mode] ?? "index.notConnected");
 }

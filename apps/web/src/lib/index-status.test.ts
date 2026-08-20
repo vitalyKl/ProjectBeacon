@@ -60,6 +60,16 @@ describe("index labels", () => {
       "https://github.com/acme/app",
     );
   });
+
+  it("hides hosted-clone names when the flag is off", () => {
+    expect(indexModeLabel("hosted_clone")).toBe("Not connected");
+    expect(indexModeLabel("hosted_clone", { hostedClone: false })).toBe("Not connected");
+    expect(indexModeLabel("hosted_clone", { hostedClone: true })).toBe("hosted clone");
+    expect(indexModeLabel("both")).toBe("sidecar");
+    expect(indexModeLabel("both", { hostedClone: false })).toBe("sidecar");
+    expect(indexModeLabel("both", { hostedClone: true })).toBe("both");
+    expect(indexModeLabel("sidecar", { hostedClone: false })).toBe("sidecar");
+  });
 });
 
 describe("fetchDetailedProjectRepos", () => {

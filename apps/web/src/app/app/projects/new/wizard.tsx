@@ -40,7 +40,6 @@ const STEP_KEYS = [
 ] as const;
 
 type DetectStatus = "idle" | "pending" | "later" | "started";
-type AgentTab = "stdio" | "http";
 
 function slugFromName(name: string): string {
   const slug = name
@@ -91,8 +90,6 @@ export function ProjectWizard({
   const [briefSaved, setBriefSaved] = useState(false);
   const [labels, setLabels] = useState<PublicLabel[]>([]);
   const [firstTaskLabelIds, setFirstTaskLabelIds] = useState<string[]>([]);
-
-  const [agentTab, setAgentTab] = useState<AgentTab>("stdio");
 
   const derivedSlug = useMemo(
     () => (slugTouched ? slug : slugFromName(name)),
@@ -554,42 +551,18 @@ export function ProjectWizard({
 
       {step === 4 && project ? (
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-6">
-          <div className="flex gap-2">
-            <button
-              className={`h-9 rounded-md px-3 text-sm ${
-                agentTab === "stdio" ? "bg-background font-medium" : "text-muted"
-              }`}
-              type="button"
-              onClick={() => setAgentTab("stdio")}
-            >
-              {label("wizard.stdio")}
-            </button>
-            <button
-              className={`h-9 rounded-md px-3 text-sm ${
-                agentTab === "http" ? "bg-background font-medium" : "text-muted"
-              }`}
-              type="button"
-              onClick={() => setAgentTab("http")}
-            >
-              {label("wizard.http")}
-            </button>
+          <div className="space-y-3 text-sm leading-6">
+            <p>{label("wizard.stdioHint")}</p>
+            {token?.token ? (
+              <pre className="overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
+                {`beacon connect ${token.token}\nbeacon mcp`}
+              </pre>
+            ) : (
+              <pre className="overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
+                beacon mcp
+              </pre>
+            )}
           </div>
-          {agentTab === "stdio" ? (
-            <div className="space-y-3 text-sm leading-6">
-              <p>{label("wizard.stdioHint")}</p>
-              {token?.token ? (
-                <pre className="overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
-                  {`beacon connect ${token.token}\nbeacon mcp`}
-                </pre>
-              ) : (
-                <pre className="overflow-x-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
-                  beacon mcp
-                </pre>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm leading-6 text-muted">{label("wizard.httpHint")}</p>
-          )}
           <button
             className="h-11 w-fit rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
             type="button"

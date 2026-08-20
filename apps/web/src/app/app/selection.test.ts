@@ -70,7 +70,7 @@ describe("pickProject", () => {
     expect(pickProject([beacon, other], null)).toEqual(beacon);
   });
 
-  it("returns null so Home can show the first-project form", () => {
+  it("returns null when the org has no projects", () => {
     expect(pickProject([], "proj-beacon")).toBeNull();
   });
 });

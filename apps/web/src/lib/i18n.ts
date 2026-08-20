@@ -97,7 +97,7 @@ const STRINGS = {
       "Create or pick a project in the header. Write the living brief in Context. Put work on the Board as Ready. Mint a project token on Agents, then run setup on the machine that hosts the agent.",
     "learn.screens": "What each screen is for",
     "learn.home":
-      "Home is the current snapshot: brief, milestones, index status, and work that is ready or in flight.",
+      "Home is a pulse: Goals and Definition of Done, a queue peek, open milestones, active agents, and index status. Create a project from the wizard.",
     "learn.board":
       "Board is the living queue. Drag a card to change status. Ready is what local agents can start.",
     "learn.backlog":
@@ -148,7 +148,18 @@ const STRINGS = {
     "settings.language": "Language",
     "settings.languageHint": "Choose the language for labels, empty states, and this Learn page.",
     "home.welcome":
-      "Create a project to start the board. Beacon will add a first milestone and a few starter tasks.",
+      "Create a project to start the board. The wizard adds a first brief, milestone, and starter task.",
+    "home.emptyAction": "New project",
+    "home.queue": "Queue",
+    "home.queueReady": "Ready",
+    "home.queueInProgress": "In progress",
+    "home.queueInReview": "In review",
+    "home.queueOpen": "Open board",
+    "home.openMilestones": "{count} open",
+    "home.agents": "Agents",
+    "home.agentsActive": "{count} active",
+    "home.agentsLast": "Last: {verb}",
+    "home.noActivity": "No agent activity yet.",
     "common.selectOrg": "Select an org to continue.",
     "common.name": "Name",
     "common.slug": "Slug",
@@ -223,7 +234,7 @@ const STRINGS = {
     "home.brief": "Project brief",
     "home.editInContext": "Edit in Context",
     "home.noBrief":
-      "No project brief yet. Open Context to write Goals, Architecture, and the other sections, then compile a session brief from there or a task.",
+      "No Goals or Definition of Done yet. Open Context to write those sections.",
     "home.milestones": "Milestones",
     "home.noMilestones": "No open milestones yet.",
     "home.ready": "Ready for agents",
@@ -580,10 +591,8 @@ const STRINGS = {
     "wizard.savedContinue": "Saved — continue",
     "wizard.saveBrief": "Save brief",
     "wizard.stdio": "stdio / beacon mcp",
-    "wizard.http": "HTTP MCP",
-    "wizard.stdioHint": "Local agents get context and code through beacon mcp.",
-    "wizard.httpHint":
-      "Control plane (context & tasks). Code tools need a local sidecar, a self-host bind-mount, or an enabled hosted clone.",
+    "wizard.stdioHint":
+      "Local agents get context and code through beacon mcp on this machine. Run setup, then beacon mcp.",
     "wizard.openProject": "Open project",
     "wizard.selectOrg": "Select an org in the header first.",
     "wizard.failedMint": "failed to mint token",

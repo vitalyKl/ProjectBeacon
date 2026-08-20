@@ -79,26 +79,51 @@ describe("auth paths", () => {
   });
 
   it("loads Home index status from the project repos instead of a hardcoded offline card", () => {
-    const home = readWeb("app/app/page.tsx");
+    const home = readWeb("app/app/home-view.tsx");
+    const card = readWeb("app/app/index-status-card.tsx");
+    expect(readWeb("app/app/page.tsx")).toContain("publicFlags");
     expect(home).toContain("fetchDetailedProjectRepos");
     expect(home).toContain("pickHomeIndexRepo");
+    expect(home).toContain("IndexStatusCard");
+    expect(card).toContain("indexModeLabel(repo?.index_mode, { hostedClone })");
     expect(home).not.toContain("Not connected");
     expect(home).not.toMatch(/>Offline</);
+    expect(card).not.toContain("hosted clone");
   });
 
-  it("shows the project brief as section blocks and offers ready tasks to agents", () => {
-    const home = readWeb("app/app/page.tsx");
+  it("keeps Home as a pulse: Goals and DoD, queue peek, milestones, agents, index", () => {
+    const home = readWeb("app/app/home-view.tsx");
+    const wizard = readWeb("app/app/projects/new/wizard.tsx");
     expect(home).toContain("fetchContextNodes");
+    expect(home).toContain("pickPulseBriefSections");
+    expect(home).toContain("countHomeQueue");
+    expect(home).toContain("peekReadyTasks");
+    expect(home).toContain("countOpenMilestones");
+    expect(home).toContain("fetchProjectMilestones");
+    expect(home).toContain("fetchProjectSessions");
+    expect(home).toContain("fetchProjectActivity");
+    expect(home).toContain("NEW_PROJECT_PATH");
+    expect(home).toContain("/app/roadmap");
     expect(home).toContain("home.brief");
-    expect(home).toContain("home.ready");
-    expect(home).toContain("common.compileBrief");
     expect(home).toContain("/app/learn");
+    expect(home).not.toContain("FirstProjectForm");
+    expect(home).not.toContain("common.compileBrief");
+    expect(home).not.toContain("createOrgProject");
+    expect(home).not.toContain("sections.slice(0, 2)");
+    expect(home).not.toContain("sections.slice(0,2)");
+    expect(wizard).not.toContain("AgentTab");
+    expect(wizard).not.toContain("wizard.http");
+    expect(wizard).not.toContain("hosted clone");
+    expect(wizard).toContain("wizard.stdioHint");
     expect(readWeb("app/app/agents/agents-view.tsx")).toContain("agents.ready");
     expect(readWeb("app/app/agents/agents-view.tsx")).toContain("agents.intro");
     expect(readWeb("app/app/agents/agents-view.tsx")).toContain("agents.offered");
     expect(readWeb("lib/i18n.ts")).toContain("start_work");
     expect(readWeb("lib/i18n.ts")).toContain("beacon setup");
     expect(readWeb("lib/i18n.ts")).toContain("setup.cmd");
+    expect(readWeb("lib/i18n.ts")).toContain(
+      "Home is a pulse: Goals and Definition of Done, a queue peek, open milestones, active agents, and index status.",
+    );
     expect(readWeb("app/app/agents/agents-view.tsx")).toContain("CopyableProjectId");
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("CopyableProjectId");
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("LanguagePicker");

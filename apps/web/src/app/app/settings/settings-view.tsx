@@ -465,7 +465,7 @@ export function SettingsView({
                 <div className="font-medium">
                   {repo.remote_url || repo.local_root_hint || label("common.repository")}
                 </div>
-                <p className="text-muted">{indexModeLabel(repo.index_mode)}</p>
+                <p className="text-muted">{indexModeLabel(repo.index_mode, { hostedClone })}</p>
               </li>
             ))}
           </ul>
