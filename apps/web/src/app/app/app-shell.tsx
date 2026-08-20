@@ -23,11 +23,11 @@ import {
   navGroupMessage,
 } from "@/lib/nav";
 import { hydrateTheme } from "@/lib/theme";
-import { BUTTON_VARIANT_CLASS, FIELD_INPUT_CLASS, cx } from "@/lib/ui";
+import { BUTTON_VARIANT_CLASS, FIELD_ERROR_CLASS, FIELD_INPUT_CLASS, cx } from "@/lib/ui";
 import { CommandPalette } from "@/lib/ui/command-palette";
 import { useLocale, useT } from "@/lib/use-locale";
 
-import { AppSelectionProvider, ProjectProvider } from "./project-context";
+import { AppSelectionProvider } from "./project-context";
 import {
   ORG_STORAGE_KEY,
   PROJECT_STORAGE_KEY,
@@ -154,99 +154,127 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
 
   return (
     <ToastProvider>
-      <AppSelectionProvider value={{ me, org, project, projects, replaceProject }}>
-        <ProjectProvider
-          value={{
-            org,
-            project,
-            projects,
-            loading,
-            setProjectId: onProjectChange,
-            reloadProjects: async () => {
-              if (org) {
-                await loadProjects(org);
-              }
-            },
-          }}
-        >
-          <div className="flex min-h-full flex-col">
-            <a
-              className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
-              href="#main"
+      <AppSelectionProvider
+        value={{
+          me,
+          org,
+          project,
+          projects,
+          loading,
+          setProjectId: onProjectChange,
+          reloadProjects: async () => {
+            if (org) {
+              await loadProjects(org);
+            }
+          },
+          replaceProject,
+        }}
+      >
+        <div className="flex min-h-full flex-col">
+          <a
+            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
+            href="#main"
+          >
+            {label("a11y.skipToMain")}
+          </a>
+          <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
+            <Link className="font-semibold tracking-tight" href={POST_LOGIN_PATH}>
+              {label("common.brand")}
+            </Link>
+            <select
+              className={cx(FIELD_INPUT_CLASS, "min-w-40")}
+              aria-label={label("common.org")}
+              value={org?.id ?? ""}
+              onChange={(event) => void onOrgChange(event.target.value)}
             >
-              {label("a11y.skipToMain")}
-            </a>
-            <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
-              <Link className="font-semibold tracking-tight" href={POST_LOGIN_PATH}>
-                {label("common.brand")}
+              {me.orgs.length === 0 ? <option value="">{label("common.org")}</option> : null}
+              {me.orgs.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className={cx(FIELD_INPUT_CLASS, "min-w-40")}
+              aria-label={label("common.project")}
+              value={project?.id ?? ""}
+              onChange={(event) => onProjectChange(event.target.value)}
+              disabled={!org}
+            >
+              {projects.length === 0 ? <option value="">{label("common.project")}</option> : null}
+              {projects.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
+              <CommandPalette hasProject={project !== null} />
+              <select
+                className={FIELD_INPUT_CLASS}
+                aria-label={label("common.language")}
+                value={locale}
+                onChange={(event) => {
+                  if (isLocale(event.target.value)) {
+                    setLocale(event.target.value);
+                  }
+                }}
+              >
+                {LOCALES.map((item) => (
+                  <option key={item} value={item}>
+                    {LOCALE_LABELS[item]}
+                  </option>
+                ))}
+              </select>
+              <Link className={BUTTON_VARIANT_CLASS.secondary} href={NEW_PROJECT_PATH}>
+                {label("wizard.newProject")}
               </Link>
-              <select
-                className={cx(FIELD_INPUT_CLASS, "min-w-40")}
-                aria-label={label("common.org")}
-                value={org?.id ?? ""}
-                onChange={(event) => void onOrgChange(event.target.value)}
+              <span className="text-muted">{me.login}</span>
+              <button
+                className={BUTTON_VARIANT_CLASS.secondary}
+                type="button"
+                onClick={() => void onLogout()}
               >
-                {me.orgs.length === 0 ? <option value="">{label("common.org")}</option> : null}
-                {me.orgs.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className={cx(FIELD_INPUT_CLASS, "min-w-40")}
-                aria-label={label("common.project")}
-                value={project?.id ?? ""}
-                onChange={(event) => onProjectChange(event.target.value)}
-                disabled={!org}
-              >
-                {projects.length === 0 ? <option value="">{label("common.project")}</option> : null}
-                {projects.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
-                <CommandPalette hasProject={project !== null} />
-                <select
-                  className={FIELD_INPUT_CLASS}
-                  aria-label={label("common.language")}
-                  value={locale}
-                  onChange={(event) => {
-                    if (isLocale(event.target.value)) {
-                      setLocale(event.target.value);
-                    }
-                  }}
-                >
-                  {LOCALES.map((item) => (
-                    <option key={item} value={item}>
-                      {LOCALE_LABELS[item]}
-                    </option>
-                  ))}
-                </select>
-                <Link className={BUTTON_VARIANT_CLASS.secondary} href={NEW_PROJECT_PATH}>
-                  {label("wizard.newProject")}
-                </Link>
-                <span className="text-muted">{me.login}</span>
-                <button
-                  className={BUTTON_VARIANT_CLASS.secondary}
-                  type="button"
-                  onClick={() => void onLogout()}
-                >
-                  {label("common.logout")}
-                </button>
-              </div>
-            </header>
-            {banner}
-            <nav className="overflow-x-auto border-b border-border bg-surface px-3 py-2 md:hidden">
-              <ul className="flex w-max gap-1">
-                {APP_NAV_VISIBLE.map((item) => {
+                {label("common.logout")}
+              </button>
+            </div>
+          </header>
+          {banner}
+          <nav className="overflow-x-auto border-b border-border bg-surface px-3 py-2 md:hidden">
+            <ul className="flex w-max gap-1">
+              {APP_NAV_VISIBLE.map((item) => {
+                const active = isNavItemActive(pathname, item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      className={`block whitespace-nowrap rounded-md px-3 py-2 text-sm ${
+                        active ? "bg-background font-medium" : "text-muted hover:text-foreground"
+                      }`}
+                      href={item.href}
+                    >
+                      {label(item.message)}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+          <div className="flex min-h-0 flex-1">
+            <nav className="hidden w-52 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
+              <ul className="flex flex-col gap-1">
+                {APP_NAV_VISIBLE.map((item, index) => {
+                  const previous = APP_NAV_VISIBLE[index - 1]?.group;
+                  const groupLabel = navGroupMessage(item.group, previous);
                   const active = isNavItemActive(pathname, item.href);
                   return (
                     <li key={item.href}>
+                      {groupLabel ? (
+                        <p className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-muted uppercase">
+                          {label(groupLabel)}
+                        </p>
+                      ) : null}
                       <Link
-                        className={`block whitespace-nowrap rounded-md px-3 py-2 text-sm ${
+                        className={`block rounded-md px-3 py-2 text-sm ${
                           active ? "bg-background font-medium" : "text-muted hover:text-foreground"
                         }`}
                         href={item.href}
@@ -258,42 +286,12 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                 })}
               </ul>
             </nav>
-            <div className="flex min-h-0 flex-1">
-              <nav className="hidden w-52 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
-                <ul className="flex flex-col gap-1">
-                  {APP_NAV_VISIBLE.map((item, index) => {
-                    const previous = APP_NAV_VISIBLE[index - 1]?.group;
-                    const groupLabel = navGroupMessage(item.group, previous);
-                    const active = isNavItemActive(pathname, item.href);
-                    return (
-                      <li key={item.href}>
-                        {groupLabel ? (
-                          <p className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-muted uppercase">
-                            {label(groupLabel)}
-                          </p>
-                        ) : null}
-                        <Link
-                          className={`block rounded-md px-3 py-2 text-sm ${
-                            active
-                              ? "bg-background font-medium"
-                              : "text-muted hover:text-foreground"
-                          }`}
-                          href={item.href}
-                        >
-                          {label(item.message)}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </nav>
-              <main id="main" className="min-w-0 flex-1 px-6 py-6">
-                {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
-                {children}
-              </main>
-            </div>
+            <main id="main" className="min-w-0 flex-1 px-6 py-6">
+              {error ? <p className={cx("mb-4", FIELD_ERROR_CLASS)}>{error}</p> : null}
+              {children}
+            </main>
           </div>
-        </ProjectProvider>
+        </div>
       </AppSelectionProvider>
     </ToastProvider>
   );

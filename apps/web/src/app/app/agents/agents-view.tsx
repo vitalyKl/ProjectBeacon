@@ -21,6 +21,7 @@ import {
 import { formatIndexWhen } from "@/lib/index-status";
 import { activityLine, t } from "@/lib/i18n";
 import { LIVE_POLL_MS } from "@/lib/poll";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT, useTf } from "@/lib/use-locale";
 
 const TOKEN_TTLS: { value: TokenTtl; labelKey: "agents.ttl7d" | "agents.ttl90d" | "agents.ttl1y" | "agents.ttlNone" }[] = [
@@ -231,7 +232,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
           </Link>
         </p>
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
 
       <section className="space-y-3">
@@ -290,7 +291,7 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
             </button>
           ) : null}
         </div>
-        {tokenError ? <p className="text-sm text-red-600">{tokenError}</p> : null}
+        {tokenError ? <p className={FIELD_ERROR_CLASS}>{tokenError}</p> : null}
         {revealed?.token ? (
           <div className="space-y-2 rounded-lg border border-border bg-surface px-4 py-3">
             <p className="text-sm font-medium">{label("agents.copyNow")}</p>

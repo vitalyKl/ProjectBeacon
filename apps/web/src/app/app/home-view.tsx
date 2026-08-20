@@ -35,7 +35,7 @@ import {
   type PublicTask,
 } from "@/lib/roadmap";
 import { ensureBeaconSeed } from "@/lib/seed";
-import { BUTTON_VARIANT_CLASS } from "@/lib/ui";
+import { BUTTON_VARIANT_CLASS, FIELD_ERROR_CLASS } from "@/lib/ui";
 import { EmptyState } from "@/lib/ui/empty-state";
 import { useInterval } from "@/lib/use-interval";
 import { useT, useTf } from "@/lib/use-locale";
@@ -193,7 +193,7 @@ export function HomeView({ hostedClone }: { hostedClone: boolean }) {
           {t("home.newHereAfter")}
         </p>
       </header>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {!ready ? <p className="text-sm text-muted">{t("common.loading")}</p> : null}
 
       <article className="space-y-3">

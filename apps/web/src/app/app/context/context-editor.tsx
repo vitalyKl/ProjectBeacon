@@ -28,6 +28,7 @@ import {
   unrecognizedImportMessage,
 } from "@/lib/import-files";
 import { projectRepoCatalog, repoPickerOptions } from "@/lib/repo-picker";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT, useTf } from "@/lib/use-locale";
 
 import { BriefBlocks } from "../brief-blocks";
@@ -622,7 +623,7 @@ export function ContextEditor() {
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {notice ? <p className="text-sm text-muted">{notice}</p> : null}
 
       <div className="grid min-h-[32rem] gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
@@ -733,7 +734,7 @@ export function ContextEditor() {
                         {repoCatalog.state === "loading" ? (
                           <span className="text-sm text-muted">{label("common.loading")}</span>
                         ) : repoCatalog.state === "error" ? (
-                          <span className="text-sm text-red-600">{label("context.failedRepos")}</span>
+                          <span className={FIELD_ERROR_CLASS}>{label("context.failedRepos")}</span>
                         ) : repoCatalog.state === "empty" ? (
                           <span className="text-sm text-muted">{label("context.repoNone")}</span>
                         ) : (

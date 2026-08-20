@@ -27,6 +27,7 @@ import {
 } from "@/lib/labels";
 import { t } from "@/lib/i18n";
 import { POST_LOGIN_PATH } from "@/lib/nav";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
 
 import { ORG_STORAGE_KEY, PROJECT_STORAGE_KEY, readStoredId, writeStoredId } from "../../selection";
@@ -301,7 +302,7 @@ export function ProjectWizard({
         </ol>
       </header>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
 
       {step === 0 ? (
         <form

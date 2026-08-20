@@ -12,6 +12,7 @@ import {
   type PublicMilestone,
   type TaskStatus,
 } from "@/lib/roadmap";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
 
 import { PrioritySelect } from "./priority-select";
@@ -209,7 +210,7 @@ export function CreateTaskForm({
           ))}
         </fieldset>
       ) : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       <div className="flex gap-2">
         <button
           className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"

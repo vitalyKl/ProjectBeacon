@@ -37,6 +37,7 @@ import {
   taskDetailCrumbs,
   taskDetailFallbackHref,
 } from "@/lib/task-detail";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useInterval } from "@/lib/use-interval";
 import { useT, useTf } from "@/lib/use-locale";
 
@@ -392,7 +393,7 @@ function TaskDetailView() {
     return (
       <section className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{label("task.title")}</h1>
-        <p className="text-sm text-red-600">{error ?? label("task.notFound")}</p>
+        <p className={FIELD_ERROR_CLASS}>{error ?? label("task.notFound")}</p>
         <Link className="text-sm underline" href={taskDetailFallbackHref()}>
           {label("task.backToBoard")}
         </Link>
@@ -521,7 +522,7 @@ function TaskDetailView() {
               aria-label={label("task.howToCheck")}
             />
           </label>
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
           <button
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
             type="submit"
@@ -554,7 +555,7 @@ function TaskDetailView() {
             <p className="text-sm text-muted">{label("task.offered")}</p>
           ) : null}
           {briefError ? (
-            <p className="text-sm text-red-600">{format("task.briefUnavailable", { error: briefError })}</p>
+            <p className={FIELD_ERROR_CLASS}>{format("task.briefUnavailable", { error: briefError })}</p>
           ) : null}
           {!brief && !briefError && !briefPending ? (
             <p className="text-sm text-muted">{label("task.compileWhen")}</p>

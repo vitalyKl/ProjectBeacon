@@ -3,6 +3,7 @@
 import { tf } from "@/lib/i18n";
 import { sortTasksByPriority } from "@/lib/priority";
 import { statusLabel, TASK_STATUSES, type TaskStatus } from "@/lib/roadmap";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
 
 import { CreateTaskForm } from "../create-task-form";
@@ -52,7 +53,7 @@ export default function BacklogPage() {
           />
         }
       />
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{t("common.loading")}</p> : null}
       {sorted.length === 0 && !loading ? (
         <p className="text-sm text-muted">{t("backlog.empty")}</p>

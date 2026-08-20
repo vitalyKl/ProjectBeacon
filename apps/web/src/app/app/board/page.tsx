@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { isNewTaskQuery } from "@/lib/command-palette";
 import { sortTasksByPriority } from "@/lib/priority";
 import { statusLabel, TASK_STATUSES, type PublicTask, type TaskStatus } from "@/lib/roadmap";
+import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
 
 import { CreateTaskForm } from "../create-task-form";
@@ -81,7 +82,7 @@ function BoardView() {
           />
         }
       />
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{t("common.loading")}</p> : null}
       <div className="flex min-h-[28rem] gap-3 overflow-x-auto pb-2">
         {TASK_STATUSES.map((status) => (

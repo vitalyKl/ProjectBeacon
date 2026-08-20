@@ -33,13 +33,13 @@ import { Panel } from "@/lib/ui/panel";
 import { useT, useTf } from "@/lib/use-locale";
 
 import { AttachLocalRepoForm } from "../attach-local-repo-form";
-import { useAppSelection, useSelectedProject } from "../project-context";
+import { useAppSelection } from "../project-context";
 
 export function FilesView() {
   const t = useT();
   const tf = useTf();
-  const { project } = useSelectedProject();
   const selection = useAppSelection();
+  const project = selection?.project ?? null;
   const [repos, setRepos] = useState<PublicRepo[]>([]);
   const [repoId, setRepoId] = useState<string | null>(null);
   const [dirs, setDirs] = useState<RepoTreeDir[]>([]);

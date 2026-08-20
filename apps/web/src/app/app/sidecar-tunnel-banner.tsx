@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, type PublicRepo } from "@/lib/api";
 import { fetchDetailedProjectRepos } from "@/lib/index-status";
 import { LIVE_POLL_MS } from "@/lib/poll";
+import { BANNER_TONE_CLASS, cx } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
 
 import { useAppSelection } from "./project-context";
@@ -71,7 +72,7 @@ export function SidecarTunnelBanner({ enabled }: { enabled: boolean }) {
 
   return (
     <div
-      className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-50"
+      className={cx("border-b", BANNER_TONE_CLASS.warning)}
       data-sidecar-tunnel-banner="on"
       role="status"
     >

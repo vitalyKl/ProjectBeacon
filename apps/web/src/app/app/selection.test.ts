@@ -1,8 +1,18 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import type { PublicMe, PublicOrg, PublicProject } from "@/lib/api";
 
 import { pickOrg, pickProject } from "./selection";
+
+const appRoot = dirname(fileURLToPath(import.meta.url));
+
+function readApp(relativePath: string): string {
+  return readFileSync(join(appRoot, relativePath), "utf8");
+}
 
 const personal: PublicOrg = {
   id: "org-personal",
@@ -72,5 +82,20 @@ describe("pickProject", () => {
 
   it("returns null when the org has no projects", () => {
     expect(pickProject([], "proj-beacon")).toBeNull();
+  });
+});
+
+describe("app selection provider", () => {
+  it("exports one provider and aliases useSelectedProject onto useAppSelection", () => {
+    const context = readApp("project-context.tsx");
+    const shell = readApp("app-shell.tsx");
+    expect(context).toContain("export function AppSelectionProvider");
+    expect(context).toContain("export function useAppSelection");
+    expect(context).toContain("export function useSelectedProject");
+    expect(context).toMatch(/useSelectedProject[\s\S]*useAppSelection\(\)/);
+    expect(context).not.toContain("ProjectProvider");
+    expect(context).not.toContain("ProjectSelectionContext");
+    expect(shell).toContain("AppSelectionProvider");
+    expect(shell).not.toContain("ProjectProvider");
   });
 });

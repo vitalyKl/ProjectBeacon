@@ -16,11 +16,10 @@ import {
   type PublicDependency,
   type PublicMilestone,
   type PublicTask,
-  type TaskStatus,
 } from "@/lib/roadmap";
 import { t } from "@/lib/i18n";
 import { ensureBeaconSeed } from "@/lib/seed";
-import { STATUS_FILL_VAR, segmentedItemClass } from "@/lib/ui";
+import { FIELD_ERROR_CLASS, STATUS_BG_CLASS, STATUS_FILL_VAR, cx, segmentedItemClass } from "@/lib/ui";
 import { Segmented } from "@/lib/ui/segmented";
 import { useInterval } from "@/lib/use-interval";
 import { useT } from "@/lib/use-locale";
@@ -32,16 +31,6 @@ import { useWorkFilters } from "../use-work-filters";
 import { WorkHeader } from "../work-header";
 
 const ROADMAP_POLL_MS = 10000;
-
-const STATUS_DOT: Record<TaskStatus, string> = {
-  backlog: "bg-zinc-400",
-  ready: "bg-sky-500",
-  in_progress: "bg-amber-500",
-  blocked: "bg-red-500",
-  in_review: "bg-violet-500",
-  done: "bg-emerald-500",
-  canceled: "bg-zinc-500",
-};
 
 type RoadmapView = "timeline" | "graph";
 
@@ -165,7 +154,7 @@ export default function RoadmapPage() {
           </Segmented>
         }
       />
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
       {view === "timeline" ? (
         <TimelineView milestones={milestones} tasks={tasks} />
@@ -267,7 +256,7 @@ function TaskList({ tasks, empty }: { tasks: PublicTask[]; empty: string }) {
             href={`/app/tasks/${task.id}`}
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[task.status]}`} />
+              <span className={cx("h-2 w-2 shrink-0 rounded-full", STATUS_BG_CLASS[task.status])} />
               <span className="truncate">{task.title}</span>
             </span>
             <span className="flex items-center gap-2 text-xs text-muted capitalize">
@@ -520,7 +509,7 @@ function AddDependencyForm({
       >
         {pending ? label("common.saving") : label("roadmap.addLink")}
       </button>
-      {error ? <p className="w-full text-sm text-red-600">{error}</p> : null}
+      {error ? <p className={cx("w-full", FIELD_ERROR_CLASS)}>{error}</p> : null}
     </form>
   );
 }
