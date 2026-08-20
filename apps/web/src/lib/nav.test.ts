@@ -48,6 +48,8 @@ describe("auth paths", () => {
     expect(page).not.toContain("Placeholder");
     expect(page).toContain("DecisionsView");
     expect(readWeb("app/app/decisions/decisions-view.tsx")).toContain("fetchProjectDecisions");
+    expect(readWeb("app/app/decisions/decisions-view.tsx")).toContain("patchDecision");
+    expect(readWeb("app/app/decisions/decisions-view.tsx")).toContain("decisions.accept");
   });
 
   it("keeps a live Areas catalog on Settings", () => {

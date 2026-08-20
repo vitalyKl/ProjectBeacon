@@ -439,6 +439,156 @@ describe("decisions and constraints", () => {
     expect((await store.findConstraintById(row.id))?.status).toBe("proposed");
   });
 
+  it("lets a human accept, supersede, and deprecate a decision", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "lifecycle");
+
+    const proposedRes = await alice.app.request(`/v1/projects/${project.id}/decisions`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": "proposed-adr",
+      },
+      body: JSON.stringify({
+        title: "Use HTTP MCP later",
+        context: "Need a transport",
+        decision: "Start with stdio.",
+      }),
+    });
+    expect(proposedRes.status).toBe(201);
+    const proposed = (await proposedRes.json()) as { id: string; status: string };
+    expect(proposed.status).toBe("proposed");
+
+    const acceptedRes = await alice.app.request(`/v1/decisions/${proposed.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "accepted" }),
+    });
+    expect(acceptedRes.status).toBe(200);
+    expect(await acceptedRes.json()).toMatchObject({ id: proposed.id, status: "accepted" });
+
+    const successorRes = await alice.app.request(`/v1/projects/${project.id}/decisions`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": "successor-adr",
+      },
+      body: JSON.stringify({
+        title: "Stay on stdio",
+        context: "HTTP MCP is a stub",
+        decision: "Keep the living transport on stdio.",
+        status: "accepted",
+      }),
+    });
+    const successor = (await successorRes.json()) as { id: string };
+
+    const supersededRes = await alice.app.request(`/v1/decisions/${proposed.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "superseded", superseded_by: successor.id }),
+    });
+    expect(supersededRes.status).toBe(200);
+    expect(await supersededRes.json()).toMatchObject({
+      id: proposed.id,
+      status: "superseded",
+      superseded_by: successor.id,
+    });
+
+    const deprecatedRes = await alice.app.request(`/v1/decisions/${successor.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "deprecated" }),
+    });
+    expect(deprecatedRes.status).toBe(200);
+    expect(await deprecatedRes.json()).toMatchObject({ id: successor.id, status: "deprecated" });
+  });
+
+  it("rejects agent lifecycle PATCH and invalid superseded_by", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "agent-patch");
+    const minted = await mintToken(alice.app, alice.token, project.id);
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/decisions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${minted.token}`,
+        "content-type": "application/json",
+        "idempotency-key": "agent-proposed",
+      },
+      body: JSON.stringify({
+        title: "Record only",
+        context: "Agents propose",
+        decision: "Do not accept via token",
+        status: "accepted",
+      }),
+    });
+    const decision = (await created.json()) as { id: string; status: string };
+    expect(decision.status).toBe("proposed");
+
+    const denied = await alice.app.request(`/v1/decisions/${decision.id}`, {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${minted.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ status: "accepted" }),
+    });
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ error: { code: "forbidden" } });
+    expect((await store.findDecisionById(decision.id))?.status).toBe("proposed");
+
+    const missingSuccessor = await alice.app.request(`/v1/decisions/${decision.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "superseded" }),
+    });
+    expect(missingSuccessor.status).toBe(400);
+    expect(await missingSuccessor.json()).toMatchObject({
+      error: { details: { reason: "invalid_body" } },
+    });
+
+    const unknownSuccessor = await alice.app.request(`/v1/decisions/${decision.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "superseded", superseded_by: uuidv7() }),
+    });
+    expect(unknownSuccessor.status).toBe(400);
+    expect(await unknownSuccessor.json()).toMatchObject({
+      error: { details: { reason: "invalid_superseded_by" } },
+    });
+  });
+
+  it("returns 404 when a non-member PATCHes a decision", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const project = await createProject(alice.app, alice.token, "hidden-adr");
+    const created = await alice.app.request(`/v1/projects/${project.id}/decisions`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": "hidden",
+      },
+      body: JSON.stringify({
+        title: "Keep private",
+        context: "Members only",
+        decision: "Hide lifecycle from outsiders",
+      }),
+    });
+    const row = (await created.json()) as { id: string };
+    const patched = await bob.app.request(`/v1/decisions/${row.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(bob.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "accepted" }),
+    });
+    expect(patched.status).toBe(404);
+  });
+
   it("requires Idempotency-Key on decision and constraint create", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");

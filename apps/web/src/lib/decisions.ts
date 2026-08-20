@@ -48,6 +48,11 @@ export type CreateDecisionInput = {
   status?: DecisionStatus;
 };
 
+export type PatchDecisionInput = {
+  status: Exclude<DecisionStatus, "proposed">;
+  superseded_by?: string | null;
+};
+
 export type CreateConstraintInput = {
   kind: ConstraintKind;
   body: string;
@@ -101,6 +106,20 @@ export async function createConstraint(
   return parseJson<PublicConstraint>(res);
 }
 
+export async function patchDecision(
+  decisionId: string,
+  input: PatchDecisionInput,
+): Promise<PublicDecision> {
+  const res = await apiFetch(`/v1/decisions/${encodeURIComponent(decisionId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to update decision");
+  }
+  return parseJson<PublicDecision>(res);
+}
+
 export async function applyConstraint(constraintId: string): Promise<PublicConstraint> {
   const res = await apiFetch(`/v1/constraints/${encodeURIComponent(constraintId)}/apply`, {
     method: "POST",
@@ -138,6 +157,27 @@ export function constraintStatusLabel(status: ConstraintStatus): string {
 
 export function canApplyConstraint(constraint: Pick<PublicConstraint, "status">): boolean {
   return constraint.status === "proposed";
+}
+
+export function canAcceptDecision(decision: Pick<PublicDecision, "status">): boolean {
+  return decision.status === "proposed";
+}
+
+export function canSupersedeDecision(decision: Pick<PublicDecision, "status">): boolean {
+  return decision.status === "proposed" || decision.status === "accepted";
+}
+
+export function canDeprecateDecision(decision: Pick<PublicDecision, "status">): boolean {
+  return decision.status === "proposed" || decision.status === "accepted";
+}
+
+export function successorDecisionOptions(
+  items: PublicDecision[],
+  currentId: string,
+): PublicDecision[] {
+  return items.filter(
+    (item) => item.id !== currentId && (item.status === "proposed" || item.status === "accepted"),
+  );
 }
 
 const DECISION_STATUS_ORDER: Record<DecisionStatus, number> = {

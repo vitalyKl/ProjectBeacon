@@ -1,3 +1,4 @@
+import { PatchDecisionSchema } from "@beacon/api-spec";
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
@@ -7,6 +8,7 @@ import {
   authorizeProjectActor,
   constraintStatusOnCreate,
   decisionStatusOnCreate,
+  isAdminActor,
   requireActor,
   requireProjectActor,
 } from "../auth/access.js";
@@ -239,6 +241,76 @@ export function mountDecisions(app: Hono, deps: AuthDeps): void {
       },
     );
     return c.json(presented, 201);
+  });
+
+  app.patch("/v1/decisions/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) {
+      return errorJson(c, 404, "not_found", "decision not found");
+    }
+    const existing = await deps.store.findDecisionById(id);
+    if (!existing) {
+      return errorJson(c, 404, "not_found", "decision not found");
+    }
+    const access = await requireProjectActor(c, deps, existing.projectId, "decisions:write");
+    if (isResponse(access)) {
+      return access;
+    }
+    if (access.actor.kind === "token" && !isAdminActor(access.actor, access.role)) {
+      return errorJson(c, 403, "forbidden", "agents may only record proposed decisions");
+    }
+
+    const raw = await readObject(c);
+    const parsed = PatchDecisionSchema.safeParse(raw);
+    if (!parsed.success) {
+      return errorJson(c, 400, "unauthorized", "invalid decision", { reason: "invalid_body" });
+    }
+
+    const nextStatus = parsed.data.status;
+    let supersededBy = existing.supersededBy;
+    if (nextStatus === "superseded") {
+      const successorId = parsed.data.superseded_by;
+      if (!successorId) {
+        return errorJson(c, 400, "unauthorized", "superseded_by is required", {
+          reason: "invalid_body",
+        });
+      }
+      if (successorId === existing.id) {
+        return errorJson(c, 400, "unauthorized", "invalid superseded_by", {
+          reason: "invalid_superseded_by",
+        });
+      }
+      const successor = await deps.store.findDecisionById(successorId);
+      if (!successor || successor.projectId !== existing.projectId) {
+        return errorJson(c, 400, "unauthorized", "invalid superseded_by", {
+          reason: "invalid_superseded_by",
+        });
+      }
+      supersededBy = successorId;
+    } else if (parsed.data.superseded_by !== undefined) {
+      supersededBy = parsed.data.superseded_by;
+    }
+
+    const updated = await deps.store.updateDecision(existing.id, {
+      status: nextStatus,
+      supersededBy,
+    });
+    if (!updated) {
+      return errorJson(c, 404, "not_found", "decision not found");
+    }
+    const actor = actorRef(access.actor);
+    await deps.store.writeActivity({
+      id: uuidv7(deps.clock.now().getTime()),
+      projectId: existing.projectId,
+      objectType: "decision",
+      objectId: updated.id,
+      actorType: actor.type,
+      actorId: actor.id,
+      verb: "update",
+      payload: { status: updated.status, superseded_by: updated.supersededBy },
+      createdAt: deps.clock.now(),
+    });
+    return c.json(presentDecisionRecord(updated));
   });
 
   app.get("/v1/projects/:id/constraints", async (c) => {

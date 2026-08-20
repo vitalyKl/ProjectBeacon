@@ -36,6 +36,10 @@ export const ContextSectionIdSchema = z.enum([
 
 export const ConstraintKindSchema = z.enum(["must", "must_not", "security", "compliance"]);
 
+export const DecisionStatusSchema = z.enum(["proposed", "accepted", "superseded", "deprecated"]);
+
+export const DecisionLifecycleStatusSchema = z.enum(["accepted", "superseded", "deprecated"]);
+
 export const MilestoneStatusSchema = z.enum(["open", "closed"]);
 
 export const TokenizerIdSchema = z.literal(TOKENIZER_ID);
@@ -49,6 +53,8 @@ export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type TaskType = z.infer<typeof TaskTypeSchema>;
 export type ContextSectionId = z.infer<typeof ContextSectionIdSchema>;
 export type ConstraintKind = z.infer<typeof ConstraintKindSchema>;
+export type DecisionStatus = z.infer<typeof DecisionStatusSchema>;
+export type DecisionLifecycleStatus = z.infer<typeof DecisionLifecycleStatusSchema>;
 export type MilestoneStatus = z.infer<typeof MilestoneStatusSchema>;
 export type TokenizerId = z.infer<typeof TokenizerIdSchema>;
 export type ScopeType = z.infer<typeof ScopeTypeSchema>;

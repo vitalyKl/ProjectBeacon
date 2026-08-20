@@ -11,7 +11,7 @@ import { and, asc, desc, eq, inArray, isNull, sql, lte, lt, or, isNotNull } from
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
-import { isConstraintKind, isConstraintStatus, isContextScopeType, isDecisionStatus, type CodeOwnerRecord, type ConstraintRecord, type ContextNodeRecord, type ContextRevisionRecord, type ContextRevisionTarget, type DecisionRecord, type ProjectRepoRecord, type DecisionPathLink } from "../context/types.js";
+import { isConstraintKind, isConstraintStatus, isContextScopeType, isDecisionStatus, type CodeOwnerRecord, type ConstraintRecord, type ContextNodeRecord, type ContextRevisionRecord, type ContextRevisionTarget, type DecisionPatch, type DecisionRecord, type ProjectRepoRecord, type DecisionPathLink } from "../context/types.js";
 import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type IdempotentWrites, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, UniqueViolationError } from "./store.js";
 import type { LabelPatch, LabelRecord, LabelStatus } from "../labels/types.js";
 import { isLabelStatus } from "../labels/types.js";
@@ -2287,6 +2287,22 @@ export class DbAuthStore implements AuthStore {
 
   async createDecision(decision: DecisionRecord): Promise<DecisionRecord> {
     return this.db.transaction(async (tx) => insertDecisionTx(tx, decision));
+  }
+
+  async updateDecision(id: string, patch: DecisionPatch): Promise<DecisionRecord | undefined> {
+    const [row] = await this.db
+      .update(decisions)
+      .set({
+        status: patch.status,
+        ...(patch.supersededBy !== undefined ? { supersededBy: patch.supersededBy } : {}),
+      })
+      .where(eq(decisions.id, id))
+      .returning();
+    if (!row) {
+      return undefined;
+    }
+    const [linked] = await this.attachDecisionLinks([row]);
+    return linked;
   }
 
   async listLabels(projectId: string): Promise<LabelRecord[]> {

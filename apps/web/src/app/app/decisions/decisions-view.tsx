@@ -5,7 +5,10 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { ApiError, newIdempotencyKey } from "@/lib/api";
 import {
   applyConstraint,
+  canAcceptDecision,
   canApplyConstraint,
+  canDeprecateDecision,
+  canSupersedeDecision,
   CONSTRAINT_KINDS,
   CONSTRAINT_STATUSES,
   constraintKindLabel,
@@ -16,8 +19,10 @@ import {
   decisionStatusLabel,
   fetchProjectConstraints,
   fetchProjectDecisions,
+  patchDecision,
   sortConstraints,
   sortDecisions,
+  successorDecisionOptions,
   type ConstraintKind,
   type ConstraintStatus,
   type DecisionStatus,
@@ -99,6 +104,10 @@ export function DecisionsView() {
     setConstraints((current) => [created, ...current.filter((item) => item.id !== created.id)]);
   }
 
+  async function onUpdatedDecision(updated: PublicDecision) {
+    setDecisions((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  }
+
   async function onApply(constraint: PublicConstraint) {
     try {
       const applied = await applyConstraint(constraint.id);
@@ -156,6 +165,12 @@ export function DecisionsView() {
                 {item.consequences ? (
                   <p className="text-sm text-muted whitespace-pre-wrap">{item.consequences}</p>
                 ) : null}
+                <DecisionLifecycleActions
+                  decision={item}
+                  decisions={sortedDecisions}
+                  onUpdated={onUpdatedDecision}
+                  onError={setError}
+                />
               </li>
             ))}
           </ul>
@@ -199,6 +214,138 @@ export function DecisionsView() {
         )}
       </section>
     </section>
+  );
+}
+
+function DecisionLifecycleActions({
+  decision,
+  decisions,
+  onUpdated,
+  onError,
+}: {
+  decision: PublicDecision;
+  decisions: PublicDecision[];
+  onUpdated: (decision: PublicDecision) => void | Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const label = useT();
+  const format = useTf();
+  const [superseding, setSuperseding] = useState(false);
+  const successors = successorDecisionOptions(decisions, decision.id);
+  const [successorId, setSuccessorId] = useState(successors[0]?.id ?? "");
+  const [pending, setPending] = useState(false);
+  const successor = decision.superseded_by
+    ? decisions.find((item) => item.id === decision.superseded_by)
+    : undefined;
+
+  async function applyStatus(status: "accepted" | "superseded" | "deprecated", nextId?: string) {
+    setPending(true);
+    try {
+      const updated = await patchDecision(decision.id, {
+        status,
+        ...(status === "superseded" ? { superseded_by: nextId } : {}),
+      });
+      onError(null);
+      setSuperseding(false);
+      await onUpdated(updated);
+    } catch (caught) {
+      onError(caught instanceof ApiError ? caught.message : t("decisions.failedUpdate"));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const showAccept = canAcceptDecision(decision);
+  const showSupersede = canSupersedeDecision(decision);
+  const showDeprecate = canDeprecateDecision(decision);
+  if (!showAccept && !showSupersede && !showDeprecate && !successor) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      {successor ? (
+        <p className="text-sm text-muted">
+          {format("decisions.supersededBy", { title: successor.title })}
+        </p>
+      ) : null}
+      {showAccept || showSupersede || showDeprecate ? (
+        <div className="flex flex-wrap gap-2">
+          {showAccept ? (
+            <button
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+              type="button"
+              disabled={pending}
+              onClick={() => void applyStatus("accepted")}
+            >
+              {label("decisions.accept")}
+            </button>
+          ) : null}
+          {showSupersede ? (
+            <button
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setSuccessorId(successors[0]?.id ?? "");
+                setSuperseding((open) => !open);
+              }}
+            >
+              {label("decisions.supersede")}
+            </button>
+          ) : null}
+          {showDeprecate ? (
+            <button
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+              type="button"
+              disabled={pending}
+              onClick={() => void applyStatus("deprecated")}
+            >
+              {label("decisions.deprecate")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {superseding && showSupersede ? (
+        successors.length === 0 ? (
+          <p className="text-sm text-muted">{label("decisions.noSuccessor")}</p>
+        ) : (
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!successorId) {
+                return;
+              }
+              void applyStatus("superseded", successorId);
+            }}
+          >
+            <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm">
+              <span className="text-muted">{label("decisions.supersedeWith")}</span>
+              <select
+                className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                aria-label={label("decisions.chooseSuccessor")}
+                value={successorId}
+                onChange={(event) => setSuccessorId(event.target.value)}
+              >
+                {successors.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
+              type="submit"
+              disabled={pending || !successorId}
+            >
+              {pending ? label("common.saving") : label("decisions.supersede")}
+            </button>
+          </form>
+        )
+      ) : null}
+    </div>
   );
 }
 

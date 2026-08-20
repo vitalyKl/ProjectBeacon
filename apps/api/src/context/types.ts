@@ -60,6 +60,11 @@ export type DecisionRecord = {
   relatedTaskIds: string[];
 };
 
+export type DecisionPatch = {
+  status: DecisionStatus;
+  supersededBy?: string | null;
+};
+
 export type ContextRevisionTarget = {
   repo_id: string | null;
   path: string;

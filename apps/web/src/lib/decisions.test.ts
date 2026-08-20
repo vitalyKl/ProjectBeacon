@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   applyConstraint,
+  canAcceptDecision,
   canApplyConstraint,
+  canDeprecateDecision,
+  canSupersedeDecision,
   constraintKindLabel,
   constraintStatusLabel,
   createConstraint,
@@ -10,8 +13,10 @@ import {
   decisionStatusLabel,
   fetchProjectConstraints,
   fetchProjectDecisions,
+  patchDecision,
   sortConstraints,
   sortDecisions,
+  successorDecisionOptions,
   type PublicConstraint,
   type PublicDecision,
 } from "./decisions";
@@ -110,6 +115,25 @@ describe("sortConstraints", () => {
       "active",
       "rejected",
     ]);
+  });
+});
+
+describe("decision lifecycle helpers", () => {
+  it("accepts proposed only and supersedes live decisions", () => {
+    expect(canAcceptDecision(decision({ status: "proposed" }))).toBe(true);
+    expect(canAcceptDecision(decision({ status: "accepted" }))).toBe(false);
+    expect(canSupersedeDecision(decision({ status: "accepted" }))).toBe(true);
+    expect(canDeprecateDecision(decision({ status: "superseded" }))).toBe(false);
+    expect(
+      successorDecisionOptions(
+        [
+          decision({ id: "current", status: "accepted" }),
+          decision({ id: "next", status: "accepted" }),
+          decision({ id: "old", status: "deprecated" }),
+        ],
+        "current",
+      ).map((item) => item.id),
+    ).toEqual(["next"]);
   });
 });
 
@@ -216,6 +240,23 @@ describe("decisions API client", () => {
       3,
       "/v1/constraints/created-con/apply",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("patches decision status", async () => {
+    const accepted = decision({ id: "dec-1", status: "accepted" });
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify(accepted), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(patchDecision("dec-1", { status: "accepted" })).resolves.toEqual(accepted);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/v1/decisions/dec-1",
+      expect.objectContaining({ method: "PATCH" }),
     );
   });
 });

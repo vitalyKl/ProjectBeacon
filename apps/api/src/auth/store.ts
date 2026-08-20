@@ -6,7 +6,7 @@ import {
   DEFAULT_SECURITY_CONSTRAINT_STATUS,
 } from "@beacon/context";
 import { uuidv7 } from "@beacon/shared";
-import type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
+import type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionPatch, DecisionRecord, ProjectRepoRecord } from "../context/types.js";
 import type { LabelPatch, LabelRecord } from "../labels/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, OrgSlugTakenError, ProjectSlugTakenError, type OrgInviteRecord, type OrgMemberRecord, type OrgRecord, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord } from "../orgs/types.js";
@@ -17,7 +17,7 @@ import type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } f
 export type { OrgInviteRecord, OrgMemberRecord, OrgRecord, ProjectInviteRecord, ProjectMemberRecord, ProjectRecord } from "../orgs/types.js";
 export { InviteTargetRequiredError, OrgSlugTakenError, ProjectSlugTakenError } from "../orgs/types.js";
 export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
-export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionRecord, ProjectRepoRecord, DecisionPathLink } from "../context/types.js";
+export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionPatch, DecisionRecord, ProjectRepoRecord, DecisionPathLink } from "../context/types.js";
 export type { LabelPatch, LabelRecord } from "../labels/types.js";
 export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
 export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
@@ -233,6 +233,7 @@ export interface AuthStore {
   listDecisions(projectId: string): Promise<DecisionRecord[]>;
   findDecisionById(id: string): Promise<DecisionRecord | undefined>;
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
+  updateDecision(id: string, patch: DecisionPatch): Promise<DecisionRecord | undefined>;
   listLabels(projectId: string): Promise<LabelRecord[]>;
   backfillEmptyProjectLabelCatalogs(): Promise<number>;
   findLabelById(id: string): Promise<LabelRecord | undefined>;
@@ -1790,6 +1791,20 @@ export class MemoryAuthStore implements AuthStore {
 
   async createDecision(decision: DecisionRecord): Promise<DecisionRecord> {
     return this.enqueueWrite(() => this.insertDecisionUnlocked(decision));
+  }
+
+  async updateDecision(id: string, patch: DecisionPatch): Promise<DecisionRecord | undefined> {
+    return this.enqueueWrite(() => {
+      const decision = this.decisions.get(id);
+      if (!decision) {
+        return undefined;
+      }
+      decision.status = patch.status;
+      if (patch.supersededBy !== undefined) {
+        decision.supersededBy = patch.supersededBy;
+      }
+      return cloneDecision(decision);
+    });
   }
 
   async findProjectRepo(id: string): Promise<ProjectRepoRef | undefined> {

@@ -17,6 +17,9 @@ describe("toOpenApi", () => {
     expect(doc.components?.schemas?.["CommentPage"]).toBeDefined();
     expect(doc.paths?.["/v1/projects/{id}/context/compile"]).toBeDefined();
     expect(doc.paths?.["/v1/tasks/{id}/comments"]).toBeDefined();
+    expect(doc.paths?.["/v1/decisions/{id}"]).toBeDefined();
+    expect(doc.components?.schemas?.["Decision"]).toBeDefined();
+    expect(doc.components?.schemas?.["PatchDecision"]).toBeDefined();
 
     const pagination = doc.components.schemas["PaginationQuery"] as {
       required?: string[];

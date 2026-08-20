@@ -4,7 +4,13 @@ import {
 } from "@beacon/shared";
 import { z } from "zod";
 
-import { ActorTypeSchema, ErrorCodeSchema, ScopeSchema } from "./enums.js";
+import {
+  ActorTypeSchema,
+  DecisionLifecycleStatusSchema,
+  DecisionStatusSchema,
+  ErrorCodeSchema,
+  ScopeSchema,
+} from "./enums.js";
 
 export const AnyUuidSchema = z.uuid();
 export const UuidSchema = z.uuidv7();
@@ -51,6 +57,37 @@ export const LinkedPathSchema = z.object({
   path: z.string(),
 });
 
+export const DecisionSchema = z.object({
+  id: UuidSchema,
+  project_id: UuidSchema,
+  title: z.string(),
+  status: DecisionStatusSchema,
+  context: z.string(),
+  decision: z.string(),
+  consequences: z.string(),
+  created_by_type: z.string(),
+  created_by_id: z.string(),
+  superseded_by: UuidSchema.nullable(),
+  created_at: z.iso.datetime({ offset: true }),
+  related_paths: z.array(LinkedPathSchema),
+  related_task_ids: z.array(UuidSchema),
+});
+
+export const PatchDecisionSchema = z
+  .object({
+    status: DecisionLifecycleStatusSchema,
+    superseded_by: UuidSchema.nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.status === "superseded" && value.superseded_by == null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["superseded_by"],
+        message: "superseded_by is required",
+      });
+    }
+  });
+
 export const ScopeListSchema = z.array(ScopeSchema);
 
 export type ActorRef = z.infer<typeof ActorRefSchema>;
@@ -58,4 +95,6 @@ export type ErrorBody = z.infer<typeof ErrorBodySchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
 export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
 export type LinkedPath = z.infer<typeof LinkedPathSchema>;
+export type Decision = z.infer<typeof DecisionSchema>;
+export type PatchDecision = z.infer<typeof PatchDecisionSchema>;
 export type Comment = z.infer<typeof CommentSchema>;

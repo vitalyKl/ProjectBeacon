@@ -3,8 +3,10 @@ import { z } from "zod";
 
 import {
   CommentSchema,
+  DecisionSchema,
   ErrorResponseSchema,
   PaginationQuerySchema,
+  PatchDecisionSchema,
   paginatedResponseSchema,
 } from "./common.js";
 import { CompileInputSchema, SessionBriefSchema } from "./session-brief.js";
@@ -58,6 +60,8 @@ export function toOpenApi(): {
   const SessionBriefPage = asComponentSchema(paginatedResponseSchema(SessionBriefSchema));
   const Comment = asComponentSchema(CommentSchema);
   const CommentPage = asComponentSchema(paginatedResponseSchema(CommentSchema));
+  const Decision = asComponentSchema(DecisionSchema);
+  const PatchDecision = asComponentSchema(PatchDecisionSchema);
   const idParam = {
     name: "id",
     in: "path",
@@ -75,7 +79,7 @@ export function toOpenApi(): {
     info: {
       title: "ProjectBeacon API",
       version: "0.0.0",
-      description: "Generated fragment: SessionBrief, comments, errors, and pagination.",
+      description: "Generated fragment: SessionBrief, comments, decisions, errors, and pagination.",
     },
     servers: [{ url: "/" }],
     paths: {
@@ -96,6 +100,38 @@ export function toOpenApi(): {
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/SessionBrief" },
+                },
+              },
+            },
+            default: {
+              description: "Error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/v1/decisions/{id}": {
+        patch: {
+          summary: "Update a decision lifecycle status",
+          parameters: [idParam],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PatchDecision" },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Updated decision",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Decision" },
                 },
               },
             },
@@ -157,6 +193,8 @@ export function toOpenApi(): {
         SessionBriefPage,
         Comment,
         CommentPage,
+        Decision,
+        PatchDecision,
       },
     },
   };
