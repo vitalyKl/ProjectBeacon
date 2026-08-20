@@ -4,7 +4,16 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { APP_NAV, LOGIN_PATH, POST_LOGIN_PATH } from "./nav";
+import {
+  APP_NAV,
+  APP_NAV_VISIBLE,
+  LOGIN_PATH,
+  NEW_PROJECT_PATH,
+  POST_LOGIN_PATH,
+  isNavItemActive,
+  isNavVisible,
+  navGroupMessage,
+} from "./nav";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -12,24 +21,26 @@ function readWeb(relativePath: string): string {
   return readFileSync(join(webRoot, relativePath), "utf8");
 }
 
+const APP_NAV_HREFS = [
+  "/app",
+  "/app/board",
+  "/app/backlog",
+  "/app/roadmap",
+  "/app/context",
+  "/app/agents",
+  "/app/decisions",
+  "/app/reports",
+  "/app/files",
+  "/app/learn",
+  "/app/settings",
+] as const;
+
 describe("auth paths", () => {
   it("sends a successful local login to /app", () => {
     expect(LOGIN_PATH).toBe("/login");
     expect(POST_LOGIN_PATH).toBe("/app");
     expect(APP_NAV[0]?.href).toBe(POST_LOGIN_PATH);
-    expect(APP_NAV.map((item) => item.href)).toEqual([
-      "/app",
-      "/app/board",
-      "/app/backlog",
-      "/app/roadmap",
-      "/app/context",
-      "/app/files",
-      "/app/agents",
-      "/app/decisions",
-      "/app/reports",
-      "/app/learn",
-      "/app/settings",
-    ]);
+    expect(APP_NAV.map((item) => item.href)).toEqual([...APP_NAV_HREFS]);
     expect(readWeb("app/login/login-form.tsx")).toContain("router.replace(POST_LOGIN_PATH)");
     expect(readWeb("app/bootstrap/bootstrap-form.tsx")).toContain(
       "router.replace(POST_LOGIN_PATH)",
@@ -119,5 +130,55 @@ describe("auth paths", () => {
     expect(wizard).toContain('id: "definition_of_done"');
     expect(wizard).toContain('id: "stack"');
     expect(wizard).toContain('id: "commands"');
+  });
+});
+
+describe("app nav grouping", () => {
+  it("assigns a group to every item and keeps Backlog off the scroller", () => {
+    expect(APP_NAV).toHaveLength(11);
+    expect(APP_NAV.every((item) => item.group)).toBe(true);
+    const hidden = APP_NAV.filter((item) => !isNavVisible(item));
+    expect(hidden.map((item) => item.href)).toEqual(["/app/backlog"]);
+    expect(APP_NAV_VISIBLE.map((item) => item.href)).toEqual(
+      APP_NAV_HREFS.filter((href) => href !== "/app/backlog"),
+    );
+    expect(APP_NAV_VISIBLE.map((item) => item.href)).not.toContain("/app/backlog");
+    expect(APP_NAV.find((item) => item.href === "/app/files")?.group).toBe("utility");
+    expect(APP_NAV.find((item) => item.href === "/app/decisions")?.group).toBe("record");
+    expect(APP_NAV.find((item) => item.href === "/app/board")?.group).toBe("work");
+  });
+
+  it("labels work and record only when the group changes", () => {
+    expect(navGroupMessage("work")).toBe("nav.group.work");
+    expect(navGroupMessage("work", "work")).toBeNull();
+    expect(navGroupMessage("record", "work")).toBe("nav.group.record");
+    expect(navGroupMessage("record", "record")).toBeNull();
+    expect(navGroupMessage("utility", "record")).toBeNull();
+  });
+
+  it("treats Home as exact-path only so nested /app routes stay inactive", () => {
+    expect(isNavItemActive("/app", "/app")).toBe(true);
+    expect(isNavItemActive("/app/board", "/app")).toBe(false);
+    expect(isNavItemActive("/app/board/extra", "/app/board")).toBe(true);
+    expect(isNavItemActive("/app/backlog", "/app/board")).toBe(false);
+  });
+
+  it("renders a skip link, language control, New project, and a narrow scroller without a hamburger", () => {
+    const shell = readWeb("app/app/app-shell.tsx");
+    expect(shell).toContain("a11y.skipToMain");
+    expect(shell).toContain('href="#main"');
+    expect(shell).toContain("hydrateTheme");
+    expect(shell).toContain("NEW_PROJECT_PATH");
+    expect(shell).toContain("wizard.newProject");
+    expect(shell).toContain("common.language");
+    expect(shell).toContain("APP_NAV_VISIBLE");
+    expect(shell).toContain("overflow-x-auto");
+    expect(shell).toContain("md:hidden");
+    expect(shell).not.toMatch(/hamburger/i);
+    expect(shell).not.toContain("command palette");
+    expect(shell).not.toContain("LocaleAttribute");
+    expect(NEW_PROJECT_PATH).toBe("/app/projects/new");
+    expect(readWeb("app/app/projects/new/page.tsx")).toContain("ProjectWizard");
+    expect(readWeb("app/app/backlog/page.tsx")).toContain("nav.backlog");
   });
 });

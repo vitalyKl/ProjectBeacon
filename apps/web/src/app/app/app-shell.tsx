@@ -13,9 +13,18 @@ import {
   type PublicOrg,
   type PublicProject,
 } from "@/lib/api";
-import { t } from "@/lib/i18n";
-import { APP_NAV, LOGIN_PATH, POST_LOGIN_PATH } from "@/lib/nav";
-import { useT } from "@/lib/use-locale";
+import { LOCALES, LOCALE_LABELS, isLocale, setLocale, t } from "@/lib/i18n";
+import {
+  APP_NAV_VISIBLE,
+  LOGIN_PATH,
+  NEW_PROJECT_PATH,
+  POST_LOGIN_PATH,
+  isNavItemActive,
+  navGroupMessage,
+} from "@/lib/nav";
+import { hydrateTheme } from "@/lib/theme";
+import { BUTTON_VARIANT_CLASS, FIELD_INPUT_CLASS, cx } from "@/lib/ui";
+import { useLocale, useT } from "@/lib/use-locale";
 
 import { AppSelectionProvider, ProjectProvider } from "./project-context";
 import {
@@ -31,6 +40,7 @@ import { ToastProvider } from "./toast";
 export function AppShell({ children, banner }: { children: ReactNode; banner?: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const locale = useLocale();
   const label = useT();
   const [me, setMe] = useState<PublicMe | null>(null);
   const [org, setOrg] = useState<PublicOrg | null>(null);
@@ -45,6 +55,10 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
     const nextProject = pickProject(items, readStoredId(PROJECT_STORAGE_KEY));
     setProject(nextProject);
     writeStoredId(PROJECT_STORAGE_KEY, nextProject?.id ?? null);
+  }, []);
+
+  useEffect(() => {
+    hydrateTheme();
   }, []);
 
   useEffect(() => {
@@ -155,12 +169,18 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
           }}
         >
           <div className="flex min-h-full flex-col">
+            <a
+              className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
+              href="#main"
+            >
+              {label("a11y.skipToMain")}
+            </a>
             <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3">
               <Link className="font-semibold tracking-tight" href={POST_LOGIN_PATH}>
                 {label("common.brand")}
               </Link>
               <select
-                className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
+                className={cx(FIELD_INPUT_CLASS, "min-w-40")}
                 aria-label={label("common.org")}
                 value={org?.id ?? ""}
                 onChange={(event) => void onOrgChange(event.target.value)}
@@ -173,7 +193,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                 ))}
               </select>
               <select
-                className="h-9 min-w-40 rounded-md border border-border bg-background px-2 text-sm"
+                className={cx(FIELD_INPUT_CLASS, "min-w-40")}
                 aria-label={label("common.project")}
                 value={project?.id ?? ""}
                 onChange={(event) => onProjectChange(event.target.value)}
@@ -186,10 +206,29 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                   </option>
                 ))}
               </select>
-              <div className="ml-auto flex items-center gap-3 text-sm">
+              <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
+                <select
+                  className={FIELD_INPUT_CLASS}
+                  aria-label={label("common.language")}
+                  value={locale}
+                  onChange={(event) => {
+                    if (isLocale(event.target.value)) {
+                      setLocale(event.target.value);
+                    }
+                  }}
+                >
+                  {LOCALES.map((item) => (
+                    <option key={item} value={item}>
+                      {LOCALE_LABELS[item]}
+                    </option>
+                  ))}
+                </select>
+                <Link className={BUTTON_VARIANT_CLASS.secondary} href={NEW_PROJECT_PATH}>
+                  {label("wizard.newProject")}
+                </Link>
                 <span className="text-muted">{me.login}</span>
                 <button
-                  className="rounded-md border border-border px-3 py-1.5"
+                  className={BUTTON_VARIANT_CLASS.secondary}
                   type="button"
                   onClick={() => void onLogout()}
                 >
@@ -198,16 +237,39 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
               </div>
             </header>
             {banner}
+            <nav className="overflow-x-auto border-b border-border bg-surface px-3 py-2 md:hidden">
+              <ul className="flex w-max gap-1">
+                {APP_NAV_VISIBLE.map((item) => {
+                  const active = isNavItemActive(pathname, item.href);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        className={`block whitespace-nowrap rounded-md px-3 py-2 text-sm ${
+                          active ? "bg-background font-medium" : "text-muted hover:text-foreground"
+                        }`}
+                        href={item.href}
+                      >
+                        {label(item.message)}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
             <div className="flex min-h-0 flex-1">
-              <nav className="w-52 shrink-0 border-r border-border bg-surface px-3 py-4">
+              <nav className="hidden w-52 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
                 <ul className="flex flex-col gap-1">
-                  {APP_NAV.map((item) => {
-                    const active =
-                      item.href === POST_LOGIN_PATH
-                        ? pathname === item.href
-                        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  {APP_NAV_VISIBLE.map((item, index) => {
+                    const previous = APP_NAV_VISIBLE[index - 1]?.group;
+                    const groupLabel = navGroupMessage(item.group, previous);
+                    const active = isNavItemActive(pathname, item.href);
                     return (
                       <li key={item.href}>
+                        {groupLabel ? (
+                          <p className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-muted uppercase">
+                            {label(groupLabel)}
+                          </p>
+                        ) : null}
                         <Link
                           className={`block rounded-md px-3 py-2 text-sm ${
                             active
@@ -223,7 +285,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                   })}
                 </ul>
               </nav>
-              <main className="min-w-0 flex-1 px-6 py-6">
+              <main id="main" className="min-w-0 flex-1 px-6 py-6">
                 {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
                 {children}
               </main>
