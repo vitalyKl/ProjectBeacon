@@ -9,15 +9,17 @@ import {
   fetchContextNodes,
   fetchContextRevision,
   fetchContextRevisions,
+  fetchProjectRepos,
   importContextFiles,
   putContextNode,
   type ContextNode,
   type ContextRevision,
   type ContextRevisionSummary,
   type ContextSection,
+  type PublicRepo,
   type SessionBrief,
 } from "@/lib/api";
-
+import { briefDroppedItems } from "@/lib/brief-preview";
 import { t, tf, type MessageKey } from "@/lib/i18n";
 import {
   importedNodesNotice,
@@ -25,8 +27,10 @@ import {
   takeInputFiles,
   unrecognizedImportMessage,
 } from "@/lib/import-files";
+import { projectRepoCatalog, repoPickerOptions } from "@/lib/repo-picker";
 import { useT, useTf } from "@/lib/use-locale";
 
+import { BriefBlocks } from "../brief-blocks";
 import { useSelectedProject } from "../project-context";
 
 type KnownSectionId = Exclude<ContextSection["id"], "custom">;
@@ -215,12 +219,26 @@ export function ContextEditor() {
   const [createScope, setCreateScope] = useState<CreateScope>("project");
   const [createPath, setCreatePath] = useState("");
   const [createRepoId, setCreateRepoId] = useState("");
+  const [repos, setRepos] = useState<PublicRepo[] | null>(null);
+  const [reposProjectId, setReposProjectId] = useState<string | null>(null);
+  const [reposFailed, setReposFailed] = useState(false);
 
   const selected = useMemo(
     () => (creating ? null : (nodes.find((node) => node.id === selectedId) ?? null)),
     [creating, nodes, selectedId],
   );
   const isCreate = creating || !selected;
+  const repoCatalog = projectRepoCatalog({
+    projectId: project?.id,
+    loadedProjectId: reposProjectId,
+    repos,
+    failed: reposFailed,
+    selectedId: createRepoId,
+  });
+  const repoOptions = useMemo(
+    () => repoPickerOptions(repoCatalog.repos, repoCatalog.selectedId),
+    [repoCatalog.repos, repoCatalog.selectedId],
+  );
 
   const applyNodes = useCallback((items: ContextNode[], preferId?: string | null) => {
     setNodes(items);
@@ -285,6 +303,38 @@ export function ContextEditor() {
       cancelled = true;
     };
   }, [applyNodes, project]);
+
+  useEffect(() => {
+    if (!project) {
+      return;
+    }
+    const projectId = project.id;
+    let cancelled = false;
+    async function load() {
+      try {
+        const listed = await fetchProjectRepos(projectId);
+        if (cancelled) {
+          return;
+        }
+        setRepos(listed ?? []);
+        setReposProjectId(projectId);
+        setReposFailed(false);
+        setCreateRepoId("");
+      } catch (caught) {
+        if (!cancelled) {
+          setRepos(null);
+          setReposProjectId(projectId);
+          setReposFailed(true);
+          setCreateRepoId("");
+          setError(caught instanceof ApiError ? caught.message : t("context.failedRepos"));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [project]);
 
   useEffect(() => {
     if (!project || tab !== "revisions") {
@@ -680,11 +730,26 @@ export function ContextEditor() {
                     {createScope !== "project" ? (
                       <label className="flex min-w-56 flex-1 flex-col gap-1 text-sm">
                         {label("context.repoId")}
-                        <input
-                          className="h-9 rounded-md border border-border bg-background px-2 font-mono"
-                          value={createRepoId}
-                          onChange={(event) => setCreateRepoId(event.target.value)}
-                        />
+                        {repoCatalog.state === "loading" ? (
+                          <span className="text-sm text-muted">{label("common.loading")}</span>
+                        ) : repoCatalog.state === "error" ? (
+                          <span className="text-sm text-red-600">{label("context.failedRepos")}</span>
+                        ) : repoCatalog.state === "empty" ? (
+                          <span className="text-sm text-muted">{label("context.repoNone")}</span>
+                        ) : (
+                          <select
+                            className="h-9 rounded-md border border-border bg-background px-2"
+                            value={repoCatalog.selectedId}
+                            onChange={(event) => setCreateRepoId(event.target.value)}
+                          >
+                            <option value="">{label("context.repoPlaceholder")}</option>
+                            {repoOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </label>
                     ) : null}
                     {createScope === "path" ? (
@@ -753,7 +818,7 @@ export function ContextEditor() {
                 </button>
                 <p className="text-sm text-muted">{label("context.previewHint")}</p>
               </div>
-              {preview ? <BriefView brief={preview} /> : null}
+              {preview ? <ContextBriefPreview brief={preview} /> : null}
             </div>
           ) : null}
 
@@ -787,7 +852,7 @@ export function ContextEditor() {
               {openRevision ? (
                 <div className="space-y-3">
                   <p className="text-xs text-muted">{format("context.revision", { id: openRevision.id })}</p>
-                  {openRevision.brief ? <BriefView brief={openRevision.brief} /> : null}
+                  {openRevision.brief ? <ContextBriefPreview brief={openRevision.brief} /> : null}
                 </div>
               ) : null}
             </div>
@@ -798,26 +863,16 @@ export function ContextEditor() {
   );
 }
 
-function BriefView({ brief }: { brief: SessionBrief }) {
+function ContextBriefPreview({ brief }: { brief: SessionBrief }) {
+  const dropped = briefDroppedItems(brief.budget.dropped);
   return (
     <div className="space-y-4">
-      {brief.budget.dropped.length > 0 ? (
-        <p className="text-sm text-muted">{tf("context.dropped", { items: brief.budget.dropped.join(", ") })}</p>
+      {dropped.length > 0 ? (
+        <p className="text-sm text-muted">{tf("context.dropped", { items: dropped.join(", ") })}</p>
       ) : (
         <p className="text-sm text-muted">{t("context.nothingDropped")}</p>
       )}
-      {brief.sections.length === 0 ? (
-        <p className="text-sm text-muted">{t("context.noSections")}</p>
-      ) : (
-        brief.sections.map((section) => (
-          <article key={`${section.id}:${section.key ?? section.ordinal}`} className="space-y-1">
-            <h3 className="text-sm font-medium">{section.title}</h3>
-            <pre className="whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-sm">
-              {section.body_md}
-            </pre>
-          </article>
-        ))
-      )}
+      <BriefBlocks sections={brief.sections} empty={t("context.noSections")} />
     </div>
   );
 }

@@ -516,7 +516,9 @@ const STRINGS = {
     "context.scopeProject": "project",
     "context.scopeRepo": "repo",
     "context.scopePath": "path",
-    "context.repoId": "Repo id",
+    "context.repoId": "Repo",
+    "context.repoNone": "No repositories on this project yet.",
+    "context.repoPlaceholder": "Select a repository",
     "context.markReviewed": "Mark reviewed",
     "context.compilePreview": "Compile preview",
     "context.previewHint":
@@ -529,6 +531,7 @@ const STRINGS = {
     "context.saved": "Saved.",
     "context.markedReviewed": "Marked reviewed.",
     "context.failedLoad": "failed to load context",
+    "context.failedRepos": "failed to load repositories",
     "context.failedRevisions": "failed to load revisions",
     "context.pathRequired": "path is required for path scope",
     "context.repoRequired": "repo id is required for this scope",

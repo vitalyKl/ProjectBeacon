@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, newIdempotencyKey } from "@/lib/api";
 import { isOfferedToAgents } from "@/lib/brief";
+import { briefDroppedItems } from "@/lib/brief-preview";
+import { activityVerbLabel, t } from "@/lib/i18n";
 import {
   fetchProjectLabels,
   setTaskLabels,
@@ -30,7 +32,11 @@ import {
   type SessionBriefPreview,
   type TaskStatus,
 } from "@/lib/roadmap";
-import { activityVerbLabel, t } from "@/lib/i18n";
+import {
+  isTaskDetailFromBacklog,
+  taskDetailCrumbs,
+  taskDetailFallbackHref,
+} from "@/lib/task-detail";
 import { useInterval } from "@/lib/use-interval";
 import { useT, useTf } from "@/lib/use-locale";
 
@@ -42,7 +48,21 @@ import { useToast } from "../../toast";
 const DETAIL_POLL_MS = 10000;
 
 export default function TaskDetailPage() {
+  return (
+    <Suspense fallback={<TaskDetailFallback />}>
+      <TaskDetailView />
+    </Suspense>
+  );
+}
+
+function TaskDetailFallback() {
+  const label = useT();
+  return <p className="text-sm text-muted">{label("common.loading")}</p>;
+}
+
+function TaskDetailView() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const taskId = params.id;
   const label = useT();
   const format = useTf();
@@ -373,7 +393,7 @@ export default function TaskDetailPage() {
       <section className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{label("task.title")}</h1>
         <p className="text-sm text-red-600">{error ?? label("task.notFound")}</p>
-        <Link className="text-sm underline" href="/app/board">
+        <Link className="text-sm underline" href={taskDetailFallbackHref()}>
           {label("task.backToBoard")}
         </Link>
       </section>
@@ -383,232 +403,243 @@ export default function TaskDetailPage() {
   const agentEvents = activity.filter(
     (item) => item.actor_type === "token" || item.actor_type === "agent",
   );
+  const fromBacklog = isTaskDetailFromBacklog(searchParams);
+  const crumbs = taskDetailCrumbs(title.trim() || task.title, { fromBacklog });
+  const dropped = briefDroppedItems(brief?.budget?.dropped);
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
-        <Link className="underline" href="/app/board">
-          {label("nav.board")}
-        </Link>
-        <span>/</span>
-        <Link className="underline" href="/app/backlog">
-          {label("nav.backlog")}
-        </Link>
-      </div>
-
-      <form className="space-y-3" onSubmit={onSave}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <input
-            className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-tight outline-none"
-            value={title}
-            onChange={(event) => {
-              const value = event.target.value;
-              draftText.current = { ...draftText.current, title: value };
-              setTitle(value);
-            }}
-            maxLength={200}
-            aria-label={label("common.title")}
-          />
-          <LockBadge task={task} />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm capitalize"
-            aria-label={label("common.status")}
-            value={task.status}
-            onChange={(event) => void onStatusChange(event.target.value as TaskStatus)}
+      <nav className="flex flex-wrap items-center gap-2 text-sm text-muted">
+        {crumbs.map((crumb, index) => (
+          <span
+            key={crumb.type === "link" ? crumb.surface : "title"}
+            className="flex items-center gap-2"
           >
-            {TASK_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {statusLabel(status)}
-              </option>
-            ))}
-          </select>
-          <PrioritySelect
-            value={task.priority ?? DEFAULT_TASK_PRIORITY}
-            onChange={(priority) => void onPriorityChange(priority)}
-          />
-          {task.assignee_agent_name ? (
-            <span className="text-xs text-muted">
-              {format("task.agent", { name: task.assignee_agent_name })}
-            </span>
-          ) : null}
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">{label("task.areas")}</h2>
-          {catalog.length === 0 ? (
-            <p className="text-sm text-muted">{label("task.noAreas")}</p>
-          ) : (
-            <fieldset className="flex flex-wrap gap-2" disabled={labelPending}>
-              <legend className="sr-only">{label("task.areas")}</legend>
-              {catalog.map((area) => (
-                <label
-                  key={area.id}
-                  className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
-                >
-                  <input
-                    type="checkbox"
-                    checked={(task.labels ?? []).some((item) => item.id === area.id)}
-                    onChange={() => void onToggleLabel(area.id)}
-                  />
-                  {area.name}
-                  {area.status === "proposed" ? (
-                    <span className="text-muted">{label("task.proposed")}</span>
-                  ) : null}
-                </label>
-              ))}
-            </fieldset>
-          )}
-        </div>
-        <textarea
-          className="min-h-32 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-          value={description}
-          onChange={(event) => {
-            const value = event.target.value;
-            draftText.current = { ...draftText.current, description: value };
-            setDescription(value);
-          }}
-          maxLength={8000}
-          aria-label={label("common.description")}
-        />
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-xs font-semibold tracking-wide text-muted uppercase">
-            {label("task.howToCheck")}
+            {index > 0 ? <span>/</span> : null}
+            {crumb.type === "link" ? (
+              <Link className="underline" href={crumb.href}>
+                {label(crumb.surface === "board" ? "nav.board" : "nav.backlog")}
+              </Link>
+            ) : (
+              <span className="text-foreground">{crumb.text}</span>
+            )}
           </span>
-          <span className="text-xs text-muted">{label("task.howToCheckHelp")}</span>
+        ))}
+      </nav>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <form className="space-y-3" onSubmit={onSave}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <input
+              className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-tight outline-none"
+              value={title}
+              onChange={(event) => {
+                const value = event.target.value;
+                draftText.current = { ...draftText.current, title: value };
+                setTitle(value);
+              }}
+              maxLength={200}
+              aria-label={label("common.title")}
+            />
+            <LockBadge task={task} />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              className="h-9 rounded-md border border-border bg-background px-2 text-sm capitalize"
+              aria-label={label("common.status")}
+              value={task.status}
+              onChange={(event) => void onStatusChange(event.target.value as TaskStatus)}
+            >
+              {TASK_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </select>
+            <PrioritySelect
+              value={task.priority ?? DEFAULT_TASK_PRIORITY}
+              onChange={(priority) => void onPriorityChange(priority)}
+            />
+            {task.assignee_agent_name ? (
+              <span className="text-xs text-muted">
+                {format("task.agent", { name: task.assignee_agent_name })}
+              </span>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">{label("task.areas")}</h2>
+            {catalog.length === 0 ? (
+              <p className="text-sm text-muted">{label("task.noAreas")}</p>
+            ) : (
+              <fieldset className="flex flex-wrap gap-2" disabled={labelPending}>
+                <legend className="sr-only">{label("task.areas")}</legend>
+                {catalog.map((area) => (
+                  <label
+                    key={area.id}
+                    className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(task.labels ?? []).some((item) => item.id === area.id)}
+                      onChange={() => void onToggleLabel(area.id)}
+                    />
+                    {area.name}
+                    {area.status === "proposed" ? (
+                      <span className="text-muted">{label("task.proposed")}</span>
+                    ) : null}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+          </div>
           <textarea
-            className="min-h-24 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-            value={howToCheck}
+            className="min-h-32 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+            value={description}
             onChange={(event) => {
               const value = event.target.value;
-              draftText.current = { ...draftText.current, howToCheck: value };
-              setHowToCheck(value);
+              draftText.current = { ...draftText.current, description: value };
+              setDescription(value);
             }}
             maxLength={8000}
-            placeholder={label("task.howToCheckPlaceholder")}
-            aria-label={label("task.howToCheck")}
+            aria-label={label("common.description")}
           />
-        </label>
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        <button
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
-          type="submit"
-          disabled={saving}
-        >
-          {saving ? label("common.saving") : label("common.save")}
-        </button>
-      </form>
-
-      <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.sessionBrief")}</h2>
-            <p className="text-sm text-muted">{label("task.sessionBriefHint")}</p>
-          </div>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs font-semibold tracking-wide text-muted uppercase">
+              {label("task.howToCheck")}
+            </span>
+            <span className="text-xs text-muted">{label("task.howToCheckHelp")}</span>
+            <textarea
+              className="min-h-24 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+              value={howToCheck}
+              onChange={(event) => {
+                const value = event.target.value;
+                draftText.current = { ...draftText.current, howToCheck: value };
+                setHowToCheck(value);
+              }}
+              maxLength={8000}
+              placeholder={label("task.howToCheckPlaceholder")}
+              aria-label={label("task.howToCheck")}
+            />
+          </label>
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <button
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
-            type="button"
-            disabled={briefPending}
-            onClick={() => void loadBrief()}
+            type="submit"
+            disabled={saving}
           >
-            {briefPending
-              ? label("common.compiling")
-              : brief
-                ? label("task.compileAgain")
-                : label("common.compileBrief")}
+            {saving ? label("common.saving") : label("common.save")}
           </button>
-        </div>
-        {isOfferedToAgents(task) ? (
-          <p className="text-sm text-muted">
-            {label("task.offered")}
-          </p>
-        ) : null}
-        {briefError ? (
-          <p className="text-sm text-red-600">{format("task.briefUnavailable", { error: briefError })}</p>
-        ) : null}
-        {!brief && !briefError && !briefPending ? (
-          <p className="text-sm text-muted">{label("task.compileWhen")}</p>
-        ) : null}
-        {brief ? (
-          <div className="space-y-3">
-            {brief.milestone ? (
-              <p className="text-sm text-muted">
-                {format("task.milestone", { title: brief.milestone.title })}
-              </p>
-            ) : null}
-            {brief.task?.how_to_check ? (
-              <div className="space-y-1">
-                <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
-                  {label("task.howToCheck")}
-                </h3>
-                <p className="text-sm whitespace-pre-wrap">{brief.task.how_to_check}</p>
-              </div>
-            ) : null}
-            {brief.handoff ? (
-              <p className="text-sm whitespace-pre-wrap">{brief.handoff.summary}</p>
-            ) : null}
-            <BriefBlocks
-              sections={brief.sections ?? []}
-              empty={label("task.noBriefSections")}
-            />
-            {brief.budget?.dropped && brief.budget.dropped.length > 0 ? (
-              <p className="text-xs text-muted">
-                {format("task.dropped", { items: brief.budget.dropped.join(", ") })}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </article>
+        </form>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.comments")}</h2>
-          {comments.length === 0 ? <p className="text-sm text-muted">{label("task.noComments")}</p> : null}
-          <ul className="space-y-3">
-            {comments.map((comment) => (
-              <li key={comment.id} className="text-sm">
-                <p className="text-xs text-muted">
-                  {comment.author_type} · {new Date(comment.created_at).toLocaleString()}
-                </p>
-                <p className="whitespace-pre-wrap">{comment.body}</p>
-              </li>
-            ))}
-          </ul>
-          <form className="flex flex-col gap-2" onSubmit={onComment}>
-            <textarea
-              className="min-h-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
-              value={commentBody}
-              onChange={(event) => setCommentBody(event.target.value)}
-              placeholder={label("task.writeComment")}
-              maxLength={8000}
-            />
+        <article className="min-w-0 space-y-3 rounded-lg border border-border bg-surface p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.sessionBrief")}</h2>
+              <p className="text-sm text-muted">{label("task.sessionBriefHint")}</p>
+            </div>
             <button
-              className="self-start rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60"
-              type="submit"
-              disabled={commentPending}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-60"
+              type="button"
+              disabled={briefPending}
+              onClick={() => void loadBrief()}
             >
-              {commentPending ? label("task.posting") : label("task.comment")}
+              {briefPending
+                ? label("common.compiling")
+                : brief
+                  ? label("task.compileAgain")
+                  : label("common.compileBrief")}
             </button>
-          </form>
+          </div>
+          {isOfferedToAgents(task) ? (
+            <p className="text-sm text-muted">{label("task.offered")}</p>
+          ) : null}
+          {briefError ? (
+            <p className="text-sm text-red-600">{format("task.briefUnavailable", { error: briefError })}</p>
+          ) : null}
+          {!brief && !briefError && !briefPending ? (
+            <p className="text-sm text-muted">{label("task.compileWhen")}</p>
+          ) : null}
+          {brief ? (
+            <div className="space-y-3">
+              {brief.milestone ? (
+                <p className="text-sm text-muted">
+                  {format("task.milestone", { title: brief.milestone.title })}
+                </p>
+              ) : null}
+              {brief.task?.how_to_check ? (
+                <div className="space-y-1">
+                  <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
+                    {label("task.howToCheck")}
+                  </h3>
+                  <p className="text-sm whitespace-pre-wrap">{brief.task.how_to_check}</p>
+                </div>
+              ) : null}
+              {brief.handoff ? (
+                <p className="text-sm whitespace-pre-wrap">{brief.handoff.summary}</p>
+              ) : null}
+              <BriefBlocks
+                sections={brief.sections ?? []}
+                empty={label("task.noBriefSections")}
+              />
+              {dropped.length > 0 ? (
+                <p className="text-xs text-muted">
+                  {format("task.dropped", { items: dropped.join(", ") })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </article>
 
-        <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.agentActivity")}</h2>
-          {agentEvents.length === 0 ? (
-            <p className="text-sm text-muted">{label("task.noAgentEvents")}</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {agentEvents.map((event) => (
-                <li key={event.id}>
-                  <p className="font-medium">{activityVerbLabel(event.verb)}</p>
+        <div className="grid gap-4 lg:col-span-2 lg:grid-cols-2">
+          <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
+            <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.comments")}</h2>
+            {comments.length === 0 ? <p className="text-sm text-muted">{label("task.noComments")}</p> : null}
+            <ul className="space-y-3">
+              {comments.map((comment) => (
+                <li key={comment.id} className="text-sm">
                   <p className="text-xs text-muted">
-                    {new Date(event.created_at).toLocaleString()}
+                    {comment.author_type} · {new Date(comment.created_at).toLocaleString()}
                   </p>
+                  <p className="whitespace-pre-wrap">{comment.body}</p>
                 </li>
               ))}
             </ul>
-          )}
-        </article>
+            <form className="flex flex-col gap-2" onSubmit={onComment}>
+              <textarea
+                className="min-h-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                value={commentBody}
+                onChange={(event) => setCommentBody(event.target.value)}
+                placeholder={label("task.writeComment")}
+                maxLength={8000}
+              />
+              <button
+                className="self-start rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60"
+                type="submit"
+                disabled={commentPending}
+              >
+                {commentPending ? label("task.posting") : label("task.comment")}
+              </button>
+            </form>
+          </article>
+
+          <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
+            <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.agentActivity")}</h2>
+            {agentEvents.length === 0 ? (
+              <p className="text-sm text-muted">{label("task.noAgentEvents")}</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {agentEvents.map((event) => (
+                  <li key={event.id}>
+                    <p className="font-medium">{activityVerbLabel(event.verb)}</p>
+                    <p className="text-xs text-muted">
+                      {new Date(event.created_at).toLocaleString()}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+        </div>
       </div>
     </section>
   );

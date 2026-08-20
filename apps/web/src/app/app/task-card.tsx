@@ -4,23 +4,26 @@ import Link from "next/link";
 
 import { DEFAULT_TASK_PRIORITY, priorityLabel } from "@/lib/priority";
 import { statusLabel, type PublicTask } from "@/lib/roadmap";
+import { taskDetailHref } from "@/lib/task-detail";
 
 import { LockBadge } from "./lock-badge";
 
 export function TaskCard({
   task,
+  from,
   draggable = false,
   onDragStart,
   onDragEnd,
 }: {
   task: PublicTask;
+  from?: "backlog";
   draggable?: boolean;
   onDragStart?: (task: PublicTask) => void;
   onDragEnd?: () => void;
 }) {
   return (
     <Link
-      href={`/app/tasks/${task.id}`}
+      href={taskDetailHref(task.id, from)}
       className="block rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm hover:border-foreground/20"
       draggable={draggable}
       onDragStart={(event) => {

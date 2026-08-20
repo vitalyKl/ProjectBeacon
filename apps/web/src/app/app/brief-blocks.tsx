@@ -1,14 +1,9 @@
+import { briefPreviewSectionKey, type BriefPreviewSection } from "@/lib/brief-preview";
 import { t } from "@/lib/i18n";
 
 import { MarkdownView } from "./markdown-view";
 
-export type BriefBlockSection = {
-  id?: string;
-  key?: string;
-  title: string;
-  body_md: string;
-  ordinal?: number;
-};
+export type BriefBlockSection = BriefPreviewSection;
 
 export function BriefBlocks({
   sections,
@@ -24,7 +19,7 @@ export function BriefBlocks({
     <div className="space-y-4">
       {sections.map((section, index) => (
         <article
-          key={`${section.id ?? section.title}:${section.key ?? section.ordinal ?? index}`}
+          key={briefPreviewSectionKey(section, index)}
           className="space-y-1 rounded-lg border border-border bg-surface p-4"
         >
           <h3 className="text-sm font-semibold tracking-wide uppercase">{section.title}</h3>
