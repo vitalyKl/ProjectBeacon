@@ -1,11 +1,22 @@
 import type { LabelPatch, LabelRecord } from "../labels/types.js";
 import type {
+  CodeOwnerRecord,
   ConstraintRecord,
   ContextNodeRecord,
   ContextRevisionRecord,
   DecisionPatch,
   DecisionRecord,
 } from "./types.js";
+
+export type ImportContextInput = {
+  nodes: ContextNodeRecord[];
+  codeOwners?: { repoId: string; rows: CodeOwnerRecord[] };
+};
+
+export type ImportContextResult = {
+  nodes: ContextNodeRecord[];
+  codeOwnersWritten: number;
+};
 
 export interface ContextStore {
   listContextNodes(projectId: string): Promise<ContextNodeRecord[]>;
@@ -19,6 +30,7 @@ export interface ContextStore {
   }): Promise<ContextNodeRecord | undefined>;
   upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
   insertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
+  importContext(input: ImportContextInput): Promise<ImportContextResult>;
   listActiveConstraints(projectId: string): Promise<ConstraintRecord[]>;
   listConstraints(projectId: string): Promise<ConstraintRecord[]>;
   insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;

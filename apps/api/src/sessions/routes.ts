@@ -14,7 +14,6 @@ import type { AccessDeps } from "../auth/access.js";
 import type { ContextStore } from "../context/store.js";
 import type { RepoStore } from "../repos/store.js";
 import type { RoadmapStore } from "../roadmap/store.js";
-import type { CodeGateway } from "../code/gateway.js";
 import { compileProjectBrief } from "../context/compile-brief.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -174,7 +173,6 @@ function taskLocked(c: Context, task: TaskRecord) {
 
 export type SessionDeps = AccessDeps & {
   store: WorkStore & RoadmapStore & ContextStore & RepoStore;
-  codeGateway?: CodeGateway;
 };
 
 export function mountSessions(app: Hono, deps: SessionDeps): void {
@@ -249,7 +247,6 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
         budget_tokens: budgetTokens,
       },
       now,
-      deps.codeGateway,
     );
     if (!compiled.ok) {
       return errorJson(c, 404, "not_found", "task not found");
@@ -446,6 +443,8 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
         filesTouched: filesTouched.paths,
         openQuestions,
         taskStatus,
+        actorType: actorIds.type,
+        actorId: actorIds.id,
         now,
       });
     } catch (error) {
@@ -461,47 +460,6 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
     }
     if (!finished) {
       return errorJson(c, 404, "not_found", "session not found");
-    }
-    await deps.store.writeActivity({
-      id: uuidv7(now.getTime()),
-      projectId: session.projectId,
-      objectType: "session",
-      objectId: session.id,
-      actorType: actorIds.type,
-      actorId: actorIds.id,
-      verb: "finish_work",
-      payload: { task_id: session.taskId, status: taskStatus },
-      createdAt: now,
-    });
-    if (
-      finished.task &&
-      finished.previousStatus &&
-      finished.previousStatus !== finished.task.status
-    ) {
-      await deps.store.writeActivity({
-        id: uuidv7(now.getTime()),
-        projectId: session.projectId,
-        objectType: "task",
-        objectId: finished.task.id,
-        actorType: actorIds.type,
-        actorId: actorIds.id,
-        verb: "status",
-        payload: { from: finished.previousStatus, to: finished.task.status },
-        createdAt: now,
-      });
-    }
-    if (finished.lockReleased && finished.task) {
-      await deps.store.writeActivity({
-        id: uuidv7(now.getTime()),
-        projectId: session.projectId,
-        objectType: "task",
-        objectId: finished.task.id,
-        actorType: actorIds.type,
-        actorId: actorIds.id,
-        verb: "lock_released",
-        payload: {},
-        createdAt: now,
-      });
     }
     return c.json({
       session: presentSession(finished.session),

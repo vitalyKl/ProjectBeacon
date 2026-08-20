@@ -1,4 +1,6 @@
-import type { LinkedPath, TaskRecord, TaskStatus } from "../roadmap/types.js";
+import { uuidv7 } from "@beacon/shared";
+
+import type { ActivityEventRecord, LinkedPath, TaskRecord, TaskStatus } from "../roadmap/types.js";
 import type { ContextRevisionRecord } from "../context/types.js";
 
 export const AGENT_SESSION_STATUSES = ["active", "paused", "finished", "abandoned"] as const;
@@ -59,6 +61,8 @@ export type FinishWorkInput = {
   filesTouched: LinkedPath[];
   openQuestions: string[];
   taskStatus: FinishWorkStatus;
+  actorType: string;
+  actorId: string;
   now: Date;
 };
 
@@ -118,6 +122,58 @@ export function isTerminalTaskStatus(status: string): boolean {
 
 export function lockExpiresAt(now: Date): Date {
   return new Date(now.getTime() + LOCK_TTL_MS);
+}
+
+export function finishWorkActivities(input: {
+  session: AgentSessionRecord;
+  task: TaskRecord | null;
+  previousStatus: TaskStatus | null;
+  lockReleased: boolean;
+  taskStatus: FinishWorkStatus;
+  actorType: string;
+  actorId: string;
+  now: Date;
+}): ActivityEventRecord[] {
+  const events: ActivityEventRecord[] = [
+    {
+      id: uuidv7(input.now.getTime()),
+      projectId: input.session.projectId,
+      objectType: "session",
+      objectId: input.session.id,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      verb: "finish_work",
+      payload: { task_id: input.session.taskId, status: input.taskStatus },
+      createdAt: new Date(input.now),
+    },
+  ];
+  if (input.task && input.previousStatus && input.previousStatus !== input.task.status) {
+    events.push({
+      id: uuidv7(input.now.getTime() + 1),
+      projectId: input.session.projectId,
+      objectType: "task",
+      objectId: input.task.id,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      verb: "status",
+      payload: { from: input.previousStatus, to: input.task.status },
+      createdAt: new Date(input.now),
+    });
+  }
+  if (input.lockReleased && input.task) {
+    events.push({
+      id: uuidv7(input.now.getTime() + 2),
+      projectId: input.session.projectId,
+      objectType: "task",
+      objectId: input.task.id,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      verb: "lock_released",
+      payload: {},
+      createdAt: new Date(input.now),
+    });
+  }
+  return events;
 }
 
 export function isLockActive(task: TaskRecord, now: Date): boolean {

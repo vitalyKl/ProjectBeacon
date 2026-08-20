@@ -389,20 +389,18 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
 
     try {
       const now = deps.clock.now();
-      let updated = await deps.store.updateProject(access.project.id, patch, now);
+      const updated = await deps.store.updateProject(
+        access.project.id,
+        {
+          ...patch,
+          ...(settingsParsed.patch
+            ? { settings: mergeProjectSettings(access.project.settings, settingsParsed.patch) }
+            : {}),
+        },
+        now,
+      );
       if (!updated) {
         return errorJson(c, 404, "not_found", "project not found");
-      }
-      if (settingsParsed.patch) {
-        const next = await deps.store.updateProjectSettings(
-          access.project.id,
-          mergeProjectSettings(updated.settings, settingsParsed.patch),
-          now,
-        );
-        if (!next) {
-          return errorJson(c, 404, "not_found", "project not found");
-        }
-        updated = next;
       }
       return c.json(presentProject(updated));
     } catch (error) {

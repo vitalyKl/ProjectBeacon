@@ -280,7 +280,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
 
     const existingNodes = await deps.store.listContextNodes(access.project.id);
     const now = deps.clock.now();
-    const nodes = [];
+    const nodesToWrite = [];
     let ordinal = 0;
     for (const incoming of mergedIncoming.values()) {
       const repoId = incoming.scope_type === "project" ? null : resolved.repoId;
@@ -313,7 +313,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
             },
           ])
         : incoming.sections;
-      const stored = await deps.store.upsertContextNode({
+      nodesToWrite.push({
         id: uuidv7(now.getTime() + ordinal),
         projectId: access.project.id,
         repoId,
@@ -324,13 +324,13 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
         sectionsText: sectionsText(sections),
         source: incoming.source,
         sourcePath: incoming.source_path,
-        reviewState: "needs_review",
+        reviewState: "needs_review" as const,
         updatedByType:
           access.actor.kind === "user"
-            ? "user"
+            ? ("user" as const)
             : access.actor.kind === "token"
-              ? "token"
-              : "system",
+              ? ("token" as const)
+              : ("system" as const),
         updatedById:
           access.actor.kind === "user"
             ? access.actor.user.id
@@ -339,29 +339,33 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
               : "worker",
         updatedAt: now,
       });
-      nodes.push(stored);
       ordinal += 1;
     }
 
-    let ownersWritten = 0;
-    if (resolved.repoId && parsed.code_owners.length > 0) {
-      const written = await deps.store.upsertCodeOwners(
-        resolved.repoId,
-        parsed.code_owners.map((row, index) => ({
-          id: uuidv7(now.getTime() + 1_000 + index),
-          repoId: resolved.repoId!,
-          pathPattern: row.path_pattern,
-          owners: row.owners,
-          source: row.source,
-        })),
-      );
-      ownersWritten = written.length;
-    }
+    const ownerRepoId = resolved.repoId;
+    const imported = await deps.store.importContext({
+      nodes: nodesToWrite,
+      codeOwners:
+        ownerRepoId && parsed.code_owners.length > 0
+          ? {
+              repoId: ownerRepoId,
+              rows: parsed.code_owners.map((row, index) => ({
+                id: uuidv7(now.getTime() + 1_000 + index),
+                repoId: ownerRepoId,
+                pathPattern: row.path_pattern,
+                owners: row.owners,
+                source: row.source,
+              })),
+            }
+          : undefined,
+    });
 
     const actorUser = access.actor.kind === "user" ? access.actor.user : undefined;
     return c.json({
-      nodes: await Promise.all(nodes.map(async (node) => presentContextNode(node, actorUser))),
-      code_owners_written: ownersWritten,
+      nodes: await Promise.all(
+        imported.nodes.map(async (node) => presentContextNode(node, actorUser)),
+      ),
+      code_owners_written: imported.codeOwnersWritten,
     });
   });
 

@@ -181,6 +181,35 @@ describe("orgs and projects", () => {
     expect(listed.items).toEqual([expect.objectContaining({ role: "admin" })]);
   });
 
+  it("patches project name and settings in one write", async () => {
+    const store = new MemoryAuthStore();
+    const { app, token } = await bootstrapAdmin(store);
+    const me = await app.request("/v1/me", { headers: { cookie: cookieHeader(token!) } });
+    const personal = ((await me.json()) as { personal_org: { id: string } }).personal_org;
+    const created = await app.request(`/v1/orgs/${personal.id}/projects`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({ slug: "settings", name: "Settings" }),
+    });
+    const project = (await created.json()) as { id: string };
+    const patched = await app.request(`/v1/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(token!), "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Beacon settings",
+        settings: { github: { issues: "import" } },
+      }),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      name: "Beacon settings",
+      settings: { github: { issues: "import" } },
+    });
+    const stored = await store.findProjectById(project.id);
+    expect(stored?.name).toBe("Beacon settings");
+    expect(stored?.settings).toEqual({ github: { issues: "import" } });
+  });
+
   it("lets a project token read GET /v1/projects/:id", async () => {
     const store = new MemoryAuthStore();
     const { app, token } = await bootstrapAdmin(store);

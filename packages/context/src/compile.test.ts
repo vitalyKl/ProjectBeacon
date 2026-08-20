@@ -238,6 +238,62 @@ describe("compileSessionBrief", () => {
     expect(brief.compiler_version).toBe(COMPILER_VERSION);
   });
 
+  it("attaches extras when the client sends them without include flags", () => {
+    const extras = {
+      changed_scope: {
+        paths: [{ repo_id: REPO_ID, path: "apps/api" }],
+        reasons: [{ path: "apps/api", repo_id: REPO_ID, reason: "linked_path" }],
+      },
+      tree_capsule: {
+        repo_id: REPO_ID,
+        root: ".",
+        entries: [{ path: "apps", kind: "dir" as const }],
+      },
+    };
+    const { brief } = compileSessionBrief(
+      { project_id: PROJECT_ID, extras },
+      document([
+        projectNode([
+          section("non_goals", "No embeddings in v1.", 0),
+          section("security", "Do not leak tokens.", 1),
+        ]),
+      ]),
+    );
+    expect(brief.changed_scope).toEqual(extras.changed_scope);
+    expect(brief.tree_capsule).toEqual(extras.tree_capsule);
+    expect(brief.budget.dropped).not.toContain("changed_scope");
+    expect(brief.budget.dropped).not.toContain("tree_capsule");
+  });
+
+  it("omits extras when include flags are explicitly off", () => {
+    const { brief } = compileSessionBrief(
+      {
+        project_id: PROJECT_ID,
+        include: { changed_scope: false, tree_capsule: false },
+        extras: {
+          changed_scope: {
+            paths: [{ repo_id: REPO_ID, path: "apps/api" }],
+            reasons: [{ path: "apps/api", repo_id: REPO_ID, reason: "linked_path" }],
+          },
+          tree_capsule: {
+            repo_id: REPO_ID,
+            root: ".",
+            entries: [{ path: "apps", kind: "dir" as const }],
+          },
+        },
+      },
+      document([
+        projectNode([
+          section("non_goals", "No embeddings in v1.", 0),
+          section("security", "Do not leak tokens.", 1),
+        ]),
+      ]),
+    );
+    expect(brief.changed_scope).toBeNull();
+    expect(brief.tree_capsule).toBeNull();
+    expect(brief.budget.dropped).toEqual(expect.arrayContaining(["changed_scope", "tree_capsule"]));
+  });
+
   it("never compiles What's next / Next work — the board is the queue", () => {
     const nextWork: CompileNode["sections"][number] = {
       id: "custom",

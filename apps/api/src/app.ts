@@ -132,7 +132,7 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
   mountLabels(app, authDeps);
   mountReports(app, authDeps);
   mountTokens(app, authDeps);
-  mountSessions(app, { ...authDeps, codeGateway });
+  mountSessions(app, authDeps);
   mountRepos(app, { ...authDeps, jobs, codeGateway });
   mountGithub(app, { ...authDeps, jobs });
   mountJobs(app, authDeps);

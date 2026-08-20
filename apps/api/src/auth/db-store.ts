@@ -20,7 +20,8 @@ import type { ApprovalStatus } from "../tokens/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
 import { applyTaskPatch } from "../roadmap/patch.js";
 import { IDEMPOTENCY_TTL_MS, type CommentAuthorType, type DependencyType, type IdempotencyActorType, type LinkedPath, type MilestoneStatus, type TaskStatus, type TaskType } from "../roadmap/types.js";
-import { InvalidReferenceError, isAgentHost, isAgentSessionStatus, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
+import { InvalidReferenceError, isAgentHost, isAgentSessionStatus, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, finishWorkActivities, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
+import type { ImportContextInput, ImportContextResult } from "../context/store.js";
 import {
   ACTIVITY_DELETE_BATCH,
   ACTIVITY_RETENTION_MS,
@@ -420,6 +421,94 @@ function toCodeOwner(row: typeof codeOwners.$inferSelect): CodeOwnerRecord {
     owners: [...row.owners],
     source: row.source,
   };
+}
+
+async function upsertContextNodeInDb(
+  db: Db | Tx,
+  node: ContextNodeRecord,
+): Promise<ContextNodeRecord> {
+  const scopeMatch = and(
+    eq(contextNodes.projectId, node.projectId),
+    eq(contextNodes.scopeType, node.scopeType),
+    eq(contextNodes.path, node.path),
+    node.repoId === null ? isNull(contextNodes.repoId) : eq(contextNodes.repoId, node.repoId),
+    node.taskId === null ? isNull(contextNodes.taskId) : eq(contextNodes.taskId, node.taskId),
+  );
+  await db.execute(sql`
+    INSERT INTO "context_nodes" (
+      "id", "project_id", "repo_id", "task_id", "scope_type", "path",
+      "sections", "sections_text", "source", "source_path", "review_state",
+      "updated_by_type", "updated_by_id", "updated_at"
+    ) VALUES (
+      ${node.id},
+      ${node.projectId},
+      ${node.repoId},
+      ${node.taskId},
+      ${node.scopeType},
+      ${node.path},
+      ${JSON.stringify(node.sections)}::jsonb,
+      ${node.sectionsText},
+      ${node.source},
+      ${node.sourcePath},
+      ${node.reviewState},
+      ${node.updatedByType},
+      ${node.updatedById},
+      ${node.updatedAt}
+    )
+    ON CONFLICT (
+      "project_id",
+      "scope_type",
+      (COALESCE("repo_id", '00000000-0000-0000-0000-000000000000')),
+      "path",
+      (COALESCE("task_id", '00000000-0000-0000-0000-000000000000'))
+    )
+    DO UPDATE SET
+      "sections" = EXCLUDED."sections",
+      "sections_text" = EXCLUDED."sections_text",
+      "source" = EXCLUDED."source",
+      "source_path" = EXCLUDED."source_path",
+      "review_state" = EXCLUDED."review_state",
+      "updated_by_type" = EXCLUDED."updated_by_type",
+      "updated_by_id" = EXCLUDED."updated_by_id",
+      "updated_at" = EXCLUDED."updated_at"
+  `);
+  const [row] = await db.select().from(contextNodes).where(scopeMatch).limit(1);
+  if (!row) {
+    throw new Error("upsert context node returned no row");
+  }
+  const stored = toContextNode(row);
+  if (!stored) {
+    throw new Error("upsert context node returned invalid row");
+  }
+  return stored;
+}
+
+async function upsertCodeOwnersInTx(
+  tx: Tx,
+  repoId: string,
+  rows: CodeOwnerRecord[],
+): Promise<CodeOwnerRecord[]> {
+  await tx
+    .delete(codeOwners)
+    .where(and(eq(codeOwners.repoId, repoId), eq(codeOwners.source, "codeowners")));
+  const byPattern = new Map<string, CodeOwnerRecord>();
+  for (const row of rows) {
+    byPattern.set(row.pathPattern, row);
+  }
+  const values = [...byPattern.values()].map((row) => ({
+    id: row.id,
+    repoId,
+    pathPattern: row.pathPattern,
+    owners: row.owners,
+    source: row.source,
+  }));
+  if (values.length === 0) {
+    return [];
+  }
+  const inserted = await tx.insert(codeOwners).values(values).returning();
+  return inserted
+    .map(toCodeOwner)
+    .sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
 }
 
 async function seedDefaultSecurityConstraints(
@@ -1103,7 +1192,12 @@ export class DbAuthStore implements AuthStore {
 
   async updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string },
+    patch: {
+      name?: string;
+      description?: string;
+      slug?: string;
+      settings?: Record<string, unknown>;
+    },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined> {
     try {
@@ -1113,6 +1207,7 @@ export class DbAuthStore implements AuthStore {
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.description !== undefined ? { description: patch.description } : {}),
           ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
+          ...(patch.settings !== undefined ? { settings: patch.settings } : {}),
           updatedAt,
         })
         .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
@@ -1607,72 +1702,31 @@ export class DbAuthStore implements AuthStore {
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
-    const scopeMatch = and(
-      eq(contextNodes.projectId, node.projectId),
-      eq(contextNodes.scopeType, node.scopeType),
-      eq(contextNodes.path, node.path),
-      node.repoId === null ? isNull(contextNodes.repoId) : eq(contextNodes.repoId, node.repoId),
-      node.taskId === null ? isNull(contextNodes.taskId) : eq(contextNodes.taskId, node.taskId),
-    );
-    const patch = {
-      sections: node.sections,
-      sectionsText: node.sectionsText,
-      source: node.source,
-      sourcePath: node.sourcePath,
-      reviewState: node.reviewState,
-      updatedByType: node.updatedByType,
-      updatedById: node.updatedById,
-      updatedAt: node.updatedAt,
+    return upsertContextNodeInDb(this.writeDb(), node);
+  }
+
+  async importContext(input: ImportContextInput): Promise<ImportContextResult> {
+    const run = async (tx: Tx): Promise<ImportContextResult> => {
+      const nodes: ContextNodeRecord[] = [];
+      for (const node of input.nodes) {
+        nodes.push(await upsertContextNodeInDb(tx, node));
+      }
+      let codeOwnersWritten = 0;
+      if (input.codeOwners) {
+        const written = await upsertCodeOwnersInTx(
+          tx,
+          input.codeOwners.repoId,
+          input.codeOwners.rows,
+        );
+        codeOwnersWritten = written.length;
+      }
+      return { nodes, codeOwnersWritten };
     };
-
-    const updateExisting = async (): Promise<ContextNodeRecord | undefined> => {
-      const [row] = await this.db.update(contextNodes).set(patch).where(scopeMatch).returning();
-      if (!row) {
-        return undefined;
-      }
-      const stored = toContextNode(row);
-      if (!stored) {
-        throw new Error("update context node returned invalid row");
-      }
-      return stored;
-    };
-
-    const updated = await updateExisting();
-    if (updated) {
-      return updated;
+    const bound = this.writeTx.getStore();
+    if (bound) {
+      return run(bound);
     }
-
-    try {
-      const [row] = await this.db
-        .insert(contextNodes)
-        .values({
-          id: node.id,
-          projectId: node.projectId,
-          repoId: node.repoId,
-          taskId: node.taskId,
-          scopeType: node.scopeType,
-          path: node.path,
-          ...patch,
-        })
-        .returning();
-      if (!row) {
-        throw new Error("insert context node returned no row");
-      }
-      const stored = toContextNode(row);
-      if (!stored) {
-        throw new Error("insert context node returned invalid row");
-      }
-      return stored;
-    } catch (error) {
-      if (uniqueConstraint(error) !== "context_node_scope") {
-        throw error;
-      }
-      const raced = await updateExisting();
-      if (!raced) {
-        throw error;
-      }
-      return raced;
-    }
+    return this.db.transaction(run);
   }
 
   async listActiveConstraints(projectId: string): Promise<ConstraintRecord[]> {
@@ -1730,29 +1784,11 @@ export class DbAuthStore implements AuthStore {
   }
 
   async upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]> {
-    return this.db.transaction(async (tx) => {
-      await tx
-        .delete(codeOwners)
-        .where(and(eq(codeOwners.repoId, repoId), eq(codeOwners.source, "codeowners")));
-      const byPattern = new Map<string, CodeOwnerRecord>();
-      for (const row of rows) {
-        byPattern.set(row.pathPattern, row);
-      }
-      const values = [...byPattern.values()].map((row) => ({
-        id: row.id,
-        repoId,
-        pathPattern: row.pathPattern,
-        owners: row.owners,
-        source: row.source,
-      }));
-      if (values.length === 0) {
-        return [];
-      }
-      const inserted = await tx.insert(codeOwners).values(values).returning();
-      return inserted
-        .map(toCodeOwner)
-        .sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
-    });
+    const bound = this.writeTx.getStore();
+    if (bound) {
+      return upsertCodeOwnersInTx(bound, repoId, rows);
+    }
+    return this.db.transaction((tx) => upsertCodeOwnersInTx(tx, repoId, rows));
   }
 
   async listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]> {
@@ -2132,13 +2168,36 @@ export class DbAuthStore implements AuthStore {
         throw new SessionNotActiveError(session);
       }
 
-      return {
+      const result = {
         session: finished,
         handoff: toHandoff(handoffRow),
         task,
         lockReleased,
         previousStatus,
       };
+      for (const event of finishWorkActivities({
+        session: result.session,
+        task: result.task,
+        previousStatus: result.previousStatus,
+        lockReleased: result.lockReleased,
+        taskStatus: input.taskStatus,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        now: input.now,
+      })) {
+        await tx.insert(activityEvents).values({
+          id: event.id,
+          projectId: event.projectId,
+          objectType: event.objectType,
+          objectId: event.objectId,
+          actorType: event.actorType,
+          actorId: event.actorId,
+          verb: event.verb,
+          payload: event.payload,
+          createdAt: event.createdAt,
+        });
+      }
+      return result;
     });
   }
 
@@ -2860,19 +2919,6 @@ export class DbAuthStore implements AuthStore {
       throw new Error("upsert github sync state returned no row");
     }
     return toGithubSyncState(stored);
-  }
-
-  async updateProjectSettings(
-    id: string,
-    settings: Record<string, unknown>,
-    updatedAt: Date,
-  ): Promise<ProjectRecord | undefined> {
-    const [row] = await this.db
-      .update(projects)
-      .set({ settings, updatedAt })
-      .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
-      .returning();
-    return row ? toProject(row) : undefined;
   }
 
   async updateProjectRepoIndex(

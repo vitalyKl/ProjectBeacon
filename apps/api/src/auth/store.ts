@@ -22,14 +22,14 @@ export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevis
 export type { LabelPatch, LabelRecord } from "../labels/types.js";
 export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
 export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
-import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
+import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, finishWorkActivities, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
 import type { ProjectReportRecord, ProjectReviewRecord } from "../reports/types.js";
 import { cloneReport, cloneReview } from "../reports/build.js";
 export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../sessions/types.js";
 export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
 import { ACTIVITY_RETENTION_MS, BRIEF_RETENTION_PER_PROJECT, IDEMPOTENCY_RETENTION_MS, idsOlderThanKeep, isUserSessionPastRetention, type ExpireLocksCounts, type RetentionCounts, decideExpiredLocks } from "../jobs/policy.js";
 import type { GithubInstallationRecord, GithubSyncStateRecord } from "../github/types.js";
-import type { ContextStore } from "../context/store.js";
+import type { ContextStore, ImportContextInput, ImportContextResult } from "../context/store.js";
 import type { GithubStore } from "../github/store.js";
 import type { JobStore } from "../jobs/store.js";
 import type { OrgStore } from "../orgs/store.js";
@@ -491,7 +491,12 @@ export class MemoryAuthStore implements AuthStore {
 
   async updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string },
+    patch: {
+      name?: string;
+      description?: string;
+      slug?: string;
+      settings?: Record<string, unknown>;
+    },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined> {
     return this.enqueueWrite(() => {
@@ -516,6 +521,9 @@ export class MemoryAuthStore implements AuthStore {
       }
       if (patch.description !== undefined) {
         project.description = patch.description;
+      }
+      if (patch.settings !== undefined) {
+        project.settings = { ...patch.settings };
       }
       project.updatedAt = new Date(updatedAt);
       return cloneProject(project);
@@ -809,21 +817,20 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
+    return this.enqueueWrite(() => this.upsertContextNodeUnlocked(node));
+  }
+
+  async importContext(input: ImportContextInput): Promise<ImportContextResult> {
     return this.enqueueWrite(() => {
-      const existing = this.matchContextNodeByScope(node);
-      if (existing) {
-        existing.sections = node.sections.map((section) => ({ ...section }));
-        existing.sectionsText = node.sectionsText;
-        existing.source = node.source;
-        existing.sourcePath = node.sourcePath;
-        existing.reviewState = node.reviewState;
-        existing.updatedByType = node.updatedByType;
-        existing.updatedById = node.updatedById;
-        existing.updatedAt = new Date(node.updatedAt);
-        return cloneContextNode(existing);
+      const nodes = input.nodes.map((node) => this.upsertContextNodeUnlocked(node));
+      let codeOwnersWritten = 0;
+      if (input.codeOwners) {
+        codeOwnersWritten = this.upsertCodeOwnersUnlocked(
+          input.codeOwners.repoId,
+          input.codeOwners.rows,
+        ).length;
       }
-      this.contextNodes.set(node.id, cloneContextNode(node));
-      return cloneContextNode(node);
+      return { nodes, codeOwnersWritten };
     });
   }
 
@@ -991,27 +998,7 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]> {
-    return this.enqueueWrite(() => {
-      for (const [id, existing] of this.codeOwners) {
-        if (existing.repoId === repoId && existing.source === "codeowners") {
-          this.codeOwners.delete(id);
-        }
-      }
-      const written: CodeOwnerRecord[] = [];
-      const byPattern = new Map<string, CodeOwnerRecord>();
-      for (const row of rows) {
-        byPattern.set(row.pathPattern, row);
-      }
-      for (const row of byPattern.values()) {
-        const stored = cloneCodeOwner({ ...row, repoId });
-        this.codeOwners.set(stored.id, stored);
-        written.push(cloneCodeOwner(stored));
-      }
-      written.sort(
-        (a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id),
-      );
-      return written;
-    });
+    return this.enqueueWrite(() => this.upsertCodeOwnersUnlocked(repoId, rows));
   }
 
   async listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]> {
@@ -1093,6 +1080,43 @@ export class MemoryAuthStore implements AuthStore {
   private insertActivityUnlocked(event: ActivityEventRecord): ActivityEventRecord {
     this.activity.set(event.id, cloneActivity(event));
     return cloneActivity(event);
+  }
+
+  private upsertContextNodeUnlocked(node: ContextNodeRecord): ContextNodeRecord {
+    const existing = this.matchContextNodeByScope(node);
+    if (existing) {
+      existing.sections = node.sections.map((section) => ({ ...section }));
+      existing.sectionsText = node.sectionsText;
+      existing.source = node.source;
+      existing.sourcePath = node.sourcePath;
+      existing.reviewState = node.reviewState;
+      existing.updatedByType = node.updatedByType;
+      existing.updatedById = node.updatedById;
+      existing.updatedAt = new Date(node.updatedAt);
+      return cloneContextNode(existing);
+    }
+    this.contextNodes.set(node.id, cloneContextNode(node));
+    return cloneContextNode(node);
+  }
+
+  private upsertCodeOwnersUnlocked(repoId: string, rows: CodeOwnerRecord[]): CodeOwnerRecord[] {
+    for (const [id, existing] of this.codeOwners) {
+      if (existing.repoId === repoId && existing.source === "codeowners") {
+        this.codeOwners.delete(id);
+      }
+    }
+    const written: CodeOwnerRecord[] = [];
+    const byPattern = new Map<string, CodeOwnerRecord>();
+    for (const row of rows) {
+      byPattern.set(row.pathPattern, row);
+    }
+    for (const row of byPattern.values()) {
+      const stored = cloneCodeOwner({ ...row, repoId });
+      this.codeOwners.set(stored.id, stored);
+      written.push(cloneCodeOwner(stored));
+    }
+    written.sort((a, b) => a.pathPattern.localeCompare(b.pathPattern) || a.id.localeCompare(b.id));
+    return written;
   }
   private readonly handoffs = new Map<string, HandoffRecord>();
   async createApiToken(token: TokenRecord): Promise<TokenRecord> {
@@ -1405,13 +1429,26 @@ export class MemoryAuthStore implements AuthStore {
     session.status = "finished";
     session.finishedAt = new Date(input.now);
 
-    return {
+    const finished = {
       session: cloneAgentSession(session),
       handoff: cloneHandoff(handoff),
       task,
       lockReleased,
       previousStatus,
     };
+    for (const event of finishWorkActivities({
+      session: finished.session,
+      task: finished.task,
+      previousStatus: finished.previousStatus,
+      lockReleased: finished.lockReleased,
+      taskStatus: input.taskStatus,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      now: input.now,
+    })) {
+      this.insertActivityUnlocked(event);
+    }
+    return finished;
   }
 
   async findConstraintById(id: string): Promise<ConstraintRecord | undefined> {
@@ -1849,22 +1886,6 @@ export class MemoryAuthStore implements AuthStore {
     return this.enqueueWrite(() => {
       this.githubSyncState.set(row.repoId, cloneGithubSyncState(row));
       return cloneGithubSyncState(row);
-    });
-  }
-
-  async updateProjectSettings(
-    id: string,
-    settings: Record<string, unknown>,
-    updatedAt: Date,
-  ): Promise<ProjectRecord | undefined> {
-    return this.enqueueWrite(() => {
-      const project = this.projects.get(id);
-      if (!project || project.deletedAt) {
-        return undefined;
-      }
-      project.settings = { ...settings };
-      project.updatedAt = new Date(updatedAt);
-      return cloneProject(project);
     });
   }
 

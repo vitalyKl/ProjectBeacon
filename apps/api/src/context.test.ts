@@ -562,6 +562,49 @@ describe("POST /v1/projects/:id/context/import", () => {
     expect(await store.listCodeOwners(repoId)).toHaveLength(2);
   });
 
+  it("writes nodes and code owners through one importContext call", async () => {
+    const store = new MemoryAuthStore();
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    const projectId = uuidv7();
+    const repoId = uuidv7();
+    const imported = await store.importContext({
+      nodes: [
+        {
+          id: uuidv7(now.getTime()),
+          projectId,
+          repoId,
+          taskId: null,
+          scopeType: "repo",
+          path: "",
+          sections: [{ id: "goals", title: "Goals", body_md: "Ship it.", ordinal: 0 }],
+          sectionsText: "Goals\nShip it.",
+          source: "agents.md",
+          sourcePath: "AGENTS.md",
+          reviewState: "needs_review",
+          updatedByType: "user",
+          updatedById: "user-1",
+          updatedAt: now,
+        },
+      ],
+      codeOwners: {
+        repoId,
+        rows: [
+          {
+            id: uuidv7(now.getTime() + 1),
+            repoId,
+            pathPattern: "*",
+            owners: ["@beacon/core"],
+            source: "codeowners",
+          },
+        ],
+      },
+    });
+    expect(imported.nodes).toHaveLength(1);
+    expect(imported.codeOwnersWritten).toBe(1);
+    expect(await store.listContextNodes(projectId)).toHaveLength(1);
+    expect(await store.listCodeOwners(repoId)).toHaveLength(1);
+  });
+
   it("returns 404 for a non-member", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");
@@ -667,6 +710,56 @@ describe("POST /v1/projects/:id/context/compile", () => {
     const revisions = await store.listContextRevisions(project.id);
     expect(revisions).toHaveLength(1);
     expect(revisions[0]?.id).toBe(brief.revision_id);
+  });
+
+  it("attaches extras without calling CodeGateway", async () => {
+    const queries: unknown[] = [];
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "extras");
+    const repoId = uuidv7();
+    store.seedProjectRepo({
+      id: repoId,
+      projectId: project.id,
+      provider: "local",
+      remoteUrl: null,
+      defaultBranch: "main",
+      githubRepoId: null,
+      installationId: null,
+      localRootHint: "/tmp/beacon",
+      indexMode: "sidecar",
+      lastIndexedSha: null,
+      lastIndexedAt: null,
+    });
+    const app = createApp({
+      store,
+      config: testConfig(),
+      checkReady: async () => true,
+      codeGateway: {
+        async query(_repo, query) {
+          queries.push(query);
+          return { items: [] };
+        },
+        async health() {
+          return true;
+        },
+      },
+    });
+    const extras = {
+      tree_capsule: {
+        repo_id: repoId,
+        root: ".",
+        entries: [{ path: "apps", kind: "dir" }],
+      },
+    };
+    const res = await app.request(`/v1/projects/${project.id}/context/compile`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ extras }),
+    });
+    expect(res.status).toBe(200);
+    expect(queries).toEqual([]);
+    expect(await res.json()).toMatchObject({ tree_capsule: extras.tree_capsule });
   });
 
   it("returns 404 for a non-member", async () => {

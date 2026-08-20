@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import type { AuthConfig } from "./auth/config.js";
 import { MemoryAuthStore } from "./auth/store.js";
+import type { CodeGateway } from "./code/gateway.js";
 
 const BOOTSTRAP_TOKEN = "bootstrap-admin-token-for-tests";
 const STRONG_PASSWORD = "correct-horse";
@@ -38,13 +39,16 @@ function cookieHeader(token: string): string {
   return `beacon_session=${token}`;
 }
 
-async function bootstrapWithProject(options: { clock?: { now: () => Date } } = {}) {
+async function bootstrapWithProject(
+  options: { clock?: { now: () => Date }; codeGateway?: CodeGateway } = {},
+) {
   const store = new MemoryAuthStore();
   const app = createApp({
     store,
     config: testConfig(),
     checkReady: async () => true,
     clock: options.clock,
+    codeGateway: options.codeGateway,
   });
   const boot = await app.request("/v1/auth/bootstrap", {
     method: "POST",
@@ -131,6 +135,46 @@ describe("agent sessions", () => {
     const locked = await store.findTaskById(task.id);
     expect(locked?.lockedBySessionId).toBe(body.session.id);
     expect(locked?.lockExpiresAt).not.toBeNull();
+  });
+
+  it("does not call CodeGateway on start_work even when a repo and gateway exist", async () => {
+    const queries: unknown[] = [];
+    const { app, store, cookie, projectId, task } = await bootstrapWithProject({
+      codeGateway: {
+        async query(_repo, query) {
+          queries.push(query);
+          throw new Error("CodeGateway should not be called");
+        },
+        async health() {
+          throw new Error("CodeGateway should not be called");
+        },
+      },
+    });
+    store.seedProjectRepo({
+      id: "018f1e2c-3d4e-7000-8000-00000000aa01",
+      projectId,
+      provider: "local",
+      remoteUrl: null,
+      defaultBranch: "main",
+      githubRepoId: null,
+      installationId: null,
+      localRootHint: "/tmp/beacon",
+      indexMode: "sidecar",
+      lastIndexedSha: null,
+      lastIndexedAt: null,
+    });
+    const secret = await mintToken(app, cookie, projectId);
+    const started = await app.request(`/v1/projects/${projectId}/sessions`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "content-type": "application/json",
+        "idempotency-key": "start-no-gateway",
+      },
+      body: JSON.stringify({ task_id: task.id }),
+    });
+    expect(started.status).toBe(200);
+    expect(queries).toEqual([]);
   });
 
   it("returns 409 task_locked unless steal=true", async () => {
@@ -226,6 +270,12 @@ describe("agent sessions", () => {
     const after = await store.findTaskById(task.id);
     expect(after?.lockedBySessionId).toBeNull();
     expect(after?.status).toBe("done");
+
+    const activity = await store.listActivity(projectId);
+    expect(activity.map((event) => event.verb)).toEqual(
+      expect.arrayContaining(["start_work", "finish_work", "status", "lock_released"]),
+    );
+    expect(activity.filter((event) => event.verb === "finish_work")).toHaveLength(1);
   });
 
   it("lets a human cookie session drag a locked task to done", async () => {

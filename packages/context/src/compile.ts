@@ -367,8 +367,10 @@ function sortDropped(ids: Iterable<string>): string[] {
 export function compileSessionBrief(input: CompileInput, document: CompileDocument): CompileResult {
   const budgetTokens = input.budget_tokens ?? DEFAULT_BUDGET_TOKENS;
   const includeHandoff = input.include?.handoff ?? true;
-  const includeChangedScope = input.include?.changed_scope ?? true;
-  const includeTreeCapsule = input.include?.tree_capsule ?? true;
+  const includeChangedScope =
+    input.include?.changed_scope ?? extrasProvided(input.extras?.changed_scope);
+  const includeTreeCapsule =
+    input.include?.tree_capsule ?? extrasProvided(input.extras?.tree_capsule);
 
   const selectedNodes = selectNodes(document.nodes, input);
   const merged = mergeSections(selectedNodes)

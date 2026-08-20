@@ -81,10 +81,13 @@ export async function compileProjectBrief(
 
   let changedScope: ChangedScope | null | undefined = input.extras?.changed_scope;
   let treeCapsule: TreeCapsule | null | undefined = input.extras?.tree_capsule;
-  if (gateway && (changedScope === undefined || treeCapsule === undefined)) {
+  const wantTree = treeCapsule === undefined && Boolean(input.include?.tree_capsule);
+  const wantChanged =
+    changedScope === undefined && Boolean(task) && Boolean(input.include?.changed_scope);
+  if (gateway && (wantTree || wantChanged)) {
     const resolved = await resolveRepoForCode(store, project.id, input.repo_id);
     if (resolved.ok) {
-      if (treeCapsule === undefined && (input.include?.tree_capsule ?? true)) {
+      if (wantTree) {
         try {
           const tree = await gateway.query(resolved.repo, {
             kind: "tree",
@@ -96,7 +99,7 @@ export async function compileProjectBrief(
           treeCapsule = undefined;
         }
       }
-      if (changedScope === undefined && task && (input.include?.changed_scope ?? true)) {
+      if (wantChanged && task) {
         try {
           const scope = await gateway.query(
             resolved.repo,

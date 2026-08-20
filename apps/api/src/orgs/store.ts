@@ -29,7 +29,12 @@ export interface OrgStore {
   findProjectById(id: string): Promise<ProjectRecord | undefined>;
   updateProject(
     id: string,
-    patch: { name?: string; description?: string; slug?: string },
+    patch: {
+      name?: string;
+      description?: string;
+      slug?: string;
+      settings?: Record<string, unknown>;
+    },
     updatedAt: Date,
   ): Promise<ProjectRecord | undefined>;
   softDeleteProject(id: string, deletedAt: Date): Promise<ProjectRecord | undefined>;
@@ -43,11 +48,6 @@ export interface OrgStore {
     userId: string,
     acceptedAt: Date,
   ): Promise<ProjectInviteRecord | undefined>;
-  updateProjectSettings(
-    id: string,
-    settings: Record<string, unknown>,
-    updatedAt: Date,
-  ): Promise<ProjectRecord | undefined>;
   listDeletedProjects(): Promise<ProjectRecord[]>;
   setDefaultRepoIfEmpty(projectId: string, repoId: string, updatedAt: Date): Promise<ProjectRecord>;
 }

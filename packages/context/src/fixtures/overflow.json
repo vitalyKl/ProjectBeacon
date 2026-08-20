@@ -6,6 +6,6 @@
   "expected": {
     "overflow": true,
     "kept_section_ids": ["non_goals", "security"],
-    "dropped": ["section:glossary", "decisions", "handoff", "changed_scope", "tree_capsule"]
+    "dropped": ["section:glossary", "decisions", "handoff"]
   }
 }
