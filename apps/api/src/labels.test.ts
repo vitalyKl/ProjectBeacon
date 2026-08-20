@@ -290,4 +290,109 @@ describe("project labels", () => {
     );
     expect(brief.sources.map((source) => source.node_id)).toContain(nodeId);
   });
+
+  it("backfills starter areas only onto projects with an empty catalog", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const seeded = await createProject(alice.app, alice.token, "already-seeded");
+    const orgId = (await store.findProjectById(seeded.id))!.orgId;
+    const beforeSeeded = await store.listLabels(seeded.id);
+    expect(beforeSeeded.map((item) => item.slug).sort()).toEqual(
+      DEFAULT_PROJECT_LABELS.map((item) => item.slug).sort(),
+    );
+
+    const emptyCreatedAt = new Date("2025-01-01T00:00:00.000Z");
+    const emptyId = uuidv7(emptyCreatedAt.getTime());
+    store.seedProject(
+      {
+        id: emptyId,
+        orgId,
+        slug: "pre-seed",
+        name: "pre-seed",
+        description: "",
+        visibility: "private",
+        defaultRepoId: null,
+        settings: {},
+        deletedAt: null,
+        createdAt: emptyCreatedAt,
+        updatedAt: emptyCreatedAt,
+      },
+      alice.user.id,
+    );
+    expect(await store.listLabels(emptyId)).toEqual([]);
+
+    const deletedCreatedAt = new Date("2024-12-01T00:00:00.000Z");
+    const deletedId = uuidv7(deletedCreatedAt.getTime());
+    store.seedProject(
+      {
+        id: deletedId,
+        orgId,
+        slug: "trashed-empty",
+        name: "trashed-empty",
+        description: "",
+        visibility: "private",
+        defaultRepoId: null,
+        settings: {},
+        deletedAt: deletedCreatedAt,
+        createdAt: deletedCreatedAt,
+        updatedAt: deletedCreatedAt,
+      },
+      alice.user.id,
+    );
+    expect(await store.listLabels(deletedId)).toEqual([]);
+
+    const customCreatedAt = new Date("2025-02-01T00:00:00.000Z");
+    const customId = uuidv7(customCreatedAt.getTime());
+    store.seedProject(
+      {
+        id: customId,
+        orgId,
+        slug: "custom-catalog",
+        name: "custom-catalog",
+        description: "",
+        visibility: "private",
+        defaultRepoId: null,
+        settings: {},
+        deletedAt: null,
+        createdAt: customCreatedAt,
+        updatedAt: customCreatedAt,
+      },
+      alice.user.id,
+    );
+    await store.createLabel({
+      id: uuidv7(customCreatedAt.getTime() + 1),
+      projectId: customId,
+      slug: "docs",
+      name: "Docs",
+      description: "Custom only",
+      color: "#111111",
+      status: "active",
+      createdAt: customCreatedAt,
+      paths: [],
+    });
+
+    expect(await store.backfillEmptyProjectLabelCatalogs()).toBe(1);
+
+    const emptyCatalog = await store.listLabels(emptyId);
+    expect(emptyCatalog.map((item) => item.slug).sort()).toEqual(
+      DEFAULT_PROJECT_LABELS.map((item) => item.slug).sort(),
+    );
+    expect(emptyCatalog.every((item) => item.status === "active" && item.paths.length === 0)).toBe(
+      true,
+    );
+
+    const afterSeeded = await store.listLabels(seeded.id);
+    expect(afterSeeded.map((item) => item.id).sort()).toEqual(
+      beforeSeeded.map((item) => item.id).sort(),
+    );
+
+    const customCatalog = await store.listLabels(customId);
+    expect(customCatalog.map((item) => item.slug)).toEqual(["docs"]);
+    expect(await store.listLabels(deletedId)).toEqual([]);
+
+    expect(await store.backfillEmptyProjectLabelCatalogs()).toBe(0);
+    expect((await store.listLabels(emptyId)).map((item) => item.id).sort()).toEqual(
+      emptyCatalog.map((item) => item.id).sort(),
+    );
+  });
 });

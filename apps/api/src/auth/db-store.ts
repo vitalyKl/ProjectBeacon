@@ -2298,6 +2298,26 @@ export class DbAuthStore implements AuthStore {
     return this.attachLabelPaths(rows);
   }
 
+  async backfillEmptyProjectLabelCatalogs(): Promise<number> {
+    return this.db.transaction(async (tx) => {
+      const labeled = await tx.select({ projectId: labels.projectId }).from(labels);
+      const labeledIds = new Set(labeled.map((row) => row.projectId));
+      const rows = await tx
+        .select({ id: projects.id, createdAt: projects.createdAt })
+        .from(projects)
+        .where(isNull(projects.deletedAt));
+      let count = 0;
+      for (const project of rows) {
+        if (labeledIds.has(project.id)) {
+          continue;
+        }
+        await seedDefaultProjectLabels(tx, project.id, project.createdAt);
+        count += 1;
+      }
+      return count;
+    });
+  }
+
   async findLabelById(id: string): Promise<LabelRecord | undefined> {
     const [row] = await this.db.select().from(labels).where(eq(labels.id, id)).limit(1);
     if (!row) {

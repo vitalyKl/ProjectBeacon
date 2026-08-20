@@ -37,6 +37,15 @@ async function resolveJobs(): Promise<JobQueue> {
 
 const jobs = await resolveJobs();
 const app = createApp({ jobs });
+try {
+  await app.authDeps.store.backfillEmptyProjectLabelCatalogs();
+} catch (error) {
+  writeLog({
+    level: "error",
+    msg: "starter label backfill failed",
+    error: { message: error instanceof Error ? error.message : String(error) },
+  });
+}
 const otel = loadOtelConfig(process.env, "beacon-api");
 if (otel.enabled) {
   writeLog({

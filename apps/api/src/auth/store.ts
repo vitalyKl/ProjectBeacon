@@ -234,6 +234,7 @@ export interface AuthStore {
   findDecisionById(id: string): Promise<DecisionRecord | undefined>;
   createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
   listLabels(projectId: string): Promise<LabelRecord[]>;
+  backfillEmptyProjectLabelCatalogs(): Promise<number>;
   findLabelById(id: string): Promise<LabelRecord | undefined>;
   createLabel(label: LabelRecord): Promise<LabelRecord>;
   updateLabel(id: string, patch: LabelPatch): Promise<LabelRecord | undefined>;
@@ -1018,6 +1019,16 @@ export class MemoryAuthStore implements AuthStore {
     this.projectRepos.set(repo.id, cloneProjectRepo(repo));
   }
 
+  seedProject(project: ProjectRecord, creatorUserId: string): void {
+    this.projects.set(project.id, cloneProject(project));
+    this.projectMembers.set(this.projectMemberKey(project.id, creatorUserId), {
+      projectId: project.id,
+      userId: creatorUserId,
+      role: "admin",
+      createdAt: project.createdAt,
+    });
+  }
+
   async upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord> {
     return this.enqueueWrite(() => {
       const existing = this.matchContextNodeByScope(node);
@@ -1153,6 +1164,24 @@ export class MemoryAuthStore implements AuthStore {
         paths: [],
       });
     }
+  }
+
+  async backfillEmptyProjectLabelCatalogs(): Promise<number> {
+    return this.enqueueWrite(() => {
+      let count = 0;
+      for (const project of this.projects.values()) {
+        if (project.deletedAt) {
+          continue;
+        }
+        const empty = ![...this.labels.values()].some((label) => label.projectId === project.id);
+        if (!empty) {
+          continue;
+        }
+        this.seedDefaultProjectLabels(project.id, project.createdAt);
+        count += 1;
+      }
+      return count;
+    });
   }
 
   async listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]> {
