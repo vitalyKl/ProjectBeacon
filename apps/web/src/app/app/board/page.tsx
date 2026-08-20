@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
+import { isNewTaskQuery } from "@/lib/command-palette";
 import { fetchProjectLabels, type PublicLabel } from "@/lib/labels";
 import { sortTasksByPriority } from "@/lib/priority";
 import { statusLabel, TASK_STATUSES, type PublicTask, type TaskStatus } from "@/lib/roadmap";
@@ -14,12 +16,28 @@ import { useProjectWork } from "../use-project-work";
 const BOARD_POLL_MS = 10000;
 
 export default function BoardPage() {
+  return (
+    <Suspense fallback={<BoardFallback />}>
+      <BoardView />
+    </Suspense>
+  );
+}
+
+function BoardFallback() {
   const t = useT();
+  return <p className="text-sm text-muted">{t("common.loading")}</p>;
+}
+
+function BoardView() {
+  const t = useT();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { project, tasks, milestones, error, loading, reload, moveTask } =
     useProjectWork(BOARD_POLL_MS);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [labelId, setLabelId] = useState("");
   const [catalog, setCatalog] = useState<PublicLabel[]>([]);
+  const [createOpen, setCreateOpen] = useState(() => isNewTaskQuery(searchParams.toString()));
 
   useEffect(() => {
     if (!project) {
@@ -49,6 +67,19 @@ export default function BoardPage() {
       window.clearTimeout(id);
     };
   }, [project]);
+
+  useEffect(() => {
+    if (!isNewTaskQuery(searchParams.toString())) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      if (project) {
+        setCreateOpen(true);
+      }
+      router.replace("/app/board", { scroll: false });
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [project, router, searchParams]);
 
   if (!project) {
     return (
@@ -86,6 +117,8 @@ export default function BoardPage() {
             projectId={project.id}
             milestones={milestones}
             defaultStatus="ready"
+            open={createOpen}
+            onOpenChange={setCreateOpen}
             onCreated={() => reload({ silent: true })}
           />
         </div>

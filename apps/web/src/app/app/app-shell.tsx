@@ -24,6 +24,7 @@ import {
 } from "@/lib/nav";
 import { hydrateTheme } from "@/lib/theme";
 import { BUTTON_VARIANT_CLASS, FIELD_INPUT_CLASS, cx } from "@/lib/ui";
+import { CommandPalette } from "@/lib/ui/command-palette";
 import { useLocale, useT } from "@/lib/use-locale";
 
 import { AppSelectionProvider, ProjectProvider } from "./project-context";
@@ -207,6 +208,7 @@ export function AppShell({ children, banner }: { children: ReactNode; banner?: R
                 ))}
               </select>
               <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
+                <CommandPalette hasProject={project !== null} />
                 <select
                   className={FIELD_INPUT_CLASS}
                   aria-label={label("common.language")}

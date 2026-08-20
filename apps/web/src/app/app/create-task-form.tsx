@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, newIdempotencyKey } from "@/lib/api";
 import { fetchProjectLabels, toggleLabelId, type PublicLabel } from "@/lib/labels";
 import { DEFAULT_TASK_PRIORITY } from "@/lib/priority";
-import { createTask, statusLabel, TASK_STATUSES, type PublicMilestone, type TaskStatus } from "@/lib/roadmap";
+import {
+  createTask,
+  statusLabel,
+  TASK_STATUSES,
+  type PublicMilestone,
+  type TaskStatus,
+} from "@/lib/roadmap";
 import { useT } from "@/lib/use-locale";
 
 import { PrioritySelect } from "./priority-select";
@@ -15,14 +21,18 @@ export function CreateTaskForm({
   milestones,
   defaultStatus,
   onCreated,
+  open: openProp,
+  onOpenChange,
 }: {
   projectId: string;
   milestones: PublicMilestone[];
   defaultStatus: TaskStatus;
   onCreated: () => Promise<void> | void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [howToCheck, setHowToCheck] = useState("");
@@ -33,6 +43,14 @@ export function CreateTaskForm({
   const [catalog, setCatalog] = useState<PublicLabel[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+
+  function setOpen(next: boolean) {
+    onOpenChange?.(next);
+    if (openProp === undefined) {
+      setUncontrolledOpen(next);
+    }
+  }
 
   function reset() {
     setTitle("");
@@ -44,6 +62,27 @@ export function CreateTaskForm({
     setLabelIds([]);
     setError(null);
   }
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let cancelled = false;
+    void fetchProjectLabels(projectId)
+      .then((items) => {
+        if (!cancelled) {
+          setCatalog(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCatalog([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,9 +125,6 @@ export function CreateTaskForm({
         onClick={() => {
           reset();
           setOpen(true);
-          void fetchProjectLabels(projectId)
-            .then(setCatalog)
-            .catch(() => setCatalog([]));
         }}
       >
         {t("task.new")}

@@ -175,6 +175,7 @@ describe("app nav grouping", () => {
     expect(shell).toContain("overflow-x-auto");
     expect(shell).toContain("md:hidden");
     expect(shell).not.toMatch(/hamburger/i);
+    expect(shell).toContain("CommandPalette");
     expect(shell).not.toContain("command palette");
     expect(shell).not.toContain("LocaleAttribute");
     expect(NEW_PROJECT_PATH).toBe("/app/projects/new");

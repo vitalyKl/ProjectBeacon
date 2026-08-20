@@ -56,6 +56,11 @@ const STRINGS = {
     "nav.group.work": "Work",
     "nav.group.record": "Record",
     "a11y.skipToMain": "Skip to main content",
+    "command.placeholder": "Search commands…",
+    "command.noResults": "No matching commands.",
+    "command.open": "Open command palette",
+    "command.newProject": "New project",
+    "command.newTask": "New task",
     "common.loading": "Loading…",
     "common.selectProject": "Select a project from the header.",
     "common.language": "Language",
@@ -71,7 +76,8 @@ const STRINGS = {
     "reports.generate": "Generate report",
     "reports.generating": "Generating…",
     "reports.snapshots": "Snapshots",
-    "reports.emptyReports": "No reports yet. Generate one when you want a checkpoint agents can read.",
+    "reports.emptyReports":
+      "No reports yet. Generate one when you want a checkpoint agents can read.",
     "reports.reviews": "Imported reviews",
     "reports.reviewsIntro":
       "Paste a review, audit, or user note. Agents can list these and turn findings into tasks.",
@@ -94,7 +100,8 @@ const STRINGS = {
       "Home is the current snapshot: brief, milestones, index status, and work that is ready or in flight.",
     "learn.board":
       "Board is the living queue. Drag a card to change status. Ready is what local agents can start.",
-    "learn.backlog": "Backlog is the same work as a list. Use it when you want to scan or re-status quickly.",
+    "learn.backlog":
+      "Backlog is the same work as a list. Use it when you want to scan or re-status quickly.",
     "learn.roadmap":
       "Roadmap groups work by milestone. Dependencies show which task must finish before another can start.",
     "learn.context":
@@ -103,7 +110,8 @@ const STRINGS = {
       "Files is a read-only tree of the connected repo. Attach a local path when none is connected. Open a file to see an excerpt when the local sidecar or bind-mount index is up.",
     "learn.agents":
       "Agents is where you mint a project token and watch sessions. Beacon does not run a hosted coding agent.",
-    "learn.decisions": "Decisions and constraints are the durable rules agents should not invent around.",
+    "learn.decisions":
+      "Decisions and constraints are the durable rules agents should not invent around.",
     "learn.reports":
       "Reports is a checkpoint of the board plus imported reviews. Agents can list them and turn findings into tasks.",
     "learn.settings":
@@ -118,7 +126,8 @@ const STRINGS = {
     "learn.guideOne": "1. Write Goals and Definition of Done in Context.",
     "learn.guideTwo": "2. Create a Ready task with How to check filled in.",
     "learn.guideThree": "3. Mint a token on Agents and run setup.cmd or beacon setup.",
-    "learn.guideFour": "4. Let the agent call start_work, then confirm the change from How to check.",
+    "learn.guideFour":
+      "4. Let the agent call start_work, then confirm the change from How to check.",
     "files.intro":
       "Browse the connected repository. This is a read-only excerpt from the local sidecar or bind-mount index. File bodies stay on the machine.",
     "files.repo": "Repository",
@@ -138,7 +147,8 @@ const STRINGS = {
     "files.selectFile": "Select a file to read a local excerpt.",
     "settings.language": "Language",
     "settings.languageHint": "Choose the language for labels, empty states, and this Learn page.",
-    "home.welcome": "Create a project to start the board. Beacon will add a first milestone and a few starter tasks.",
+    "home.welcome":
+      "Create a project to start the board. Beacon will add a first milestone and a few starter tasks.",
     "common.selectOrg": "Select an org to continue.",
     "common.name": "Name",
     "common.slug": "Slug",
@@ -217,7 +227,8 @@ const STRINGS = {
     "home.milestones": "Milestones",
     "home.noMilestones": "No open milestones yet.",
     "home.ready": "Ready for agents",
-    "home.noReady": "No ready tasks. Move a card to Ready and a connected agent can call start_work.",
+    "home.noReady":
+      "No ready tasks. Move a card to Ready and a connected agent can call start_work.",
     "home.inFlight": "In flight",
     "home.noInFlight": "Nothing in progress. Open the backlog to pick up work.",
     "home.newHereBefore": "New here? Open",
@@ -254,7 +265,8 @@ const STRINGS = {
     "task.offered":
       "This task is Ready. Connected agents can call start_work and receive this compiled brief. Beacon does not run a hosted coding agent.",
     "task.briefUnavailable": "Brief unavailable. {error}",
-    "task.compileWhen": "Compile when you want the session brief. Edit the living project brief in Context.",
+    "task.compileWhen":
+      "Compile when you want the session brief. Edit the living project brief in Context.",
     "task.milestone": "Milestone: {title}",
     "task.noBriefSections": "No brief sections compiled. Write the project brief in Context first.",
     "task.dropped": "Dropped: {items}",
@@ -276,9 +288,11 @@ const STRINGS = {
       "This project is serving code through the sidecar tunnel. File contents pass through the control plane.",
     "brief.empty": "No brief sections yet.",
     "landing.title": "Hosted and self-host are equal paths.",
-    "landing.intro": "Sign in on this instance. Hosted GitHub and self-host login are equal first steps.",
+    "landing.intro":
+      "Sign in on this instance. Hosted GitHub and self-host login are equal first steps.",
     "landing.hosted": "Hosted",
-    "landing.hostedBody": "Continue with GitHub on the hosted control plane. Optional on self-host.",
+    "landing.hostedBody":
+      "Continue with GitHub on the hosted control plane. Optional on self-host.",
     "landing.continueGithub": "Continue with GitHub",
     "landing.githubDisabled":
       "GitHub sign-in is not enabled on this instance. Use self-host login or bootstrap.",
@@ -333,7 +347,8 @@ const STRINGS = {
     "settings.attaching": "Attaching…",
     "settings.localRootHint":
       "Relative POSIX path under the workspace or this machine (for example . or apps/web). Absolute paths and parent traversal are rejected.",
-    "settings.invalidLocalPath": "Enter a relative POSIX path. Absolute paths and .. are not allowed.",
+    "settings.invalidLocalPath":
+      "Enter a relative POSIX path. Absolute paths and .. are not allowed.",
     "settings.askAdminRepo": "An admin can attach a local repository to this project.",
     "settings.sidecarOn": "Sidecar connected. Code tools may transit file contents.",
     "settings.sidecarOff": "Sidecar offline.",
@@ -440,7 +455,8 @@ const STRINGS = {
     "decisions.constraintStatus": "Constraint status",
     "decisions.bodyRequired": "body is required",
     "decisions.failedCreateConstraint": "failed to create constraint",
-    "roadmap.hint": "Timeline groups work by milestone. Dependencies show which tasks block others.",
+    "roadmap.hint":
+      "Timeline groups work by milestone. Dependencies show which tasks block others.",
     "roadmap.timeline": "Timeline",
     "roadmap.dependencies": "Dependencies",
     "roadmap.empty": "No milestones or tasks yet.",
@@ -554,11 +570,13 @@ const STRINGS = {
     "wizard.startDetect": "Start detect",
     "wizard.runLater": "Run later",
     "wizard.skip": "Skip for now",
-    "wizard.detectPending": "Detection is pending. You can run it later and keep editing this brief.",
+    "wizard.detectPending":
+      "Detection is pending. You can run it later and keep editing this brief.",
     "wizard.firstMilestone": "First milestone",
     "wizard.firstTask": "First task",
     "wizard.attachAreas": "Attach starter areas",
-    "wizard.attachHint": "Suggested from project create. Edit names and path prefixes later in Settings.",
+    "wizard.attachHint":
+      "Suggested from project create. Edit names and path prefixes later in Settings.",
     "wizard.savedContinue": "Saved — continue",
     "wizard.saveBrief": "Save brief",
     "wizard.stdio": "stdio / beacon mcp",
@@ -655,18 +673,19 @@ const STRINGS = {
     "learn.startBody":
       "Crea o elige un proyecto en la cabecera. Escribe el brief en Contexto. Pon el trabajo en Ready. Crea un token en Agentes y ejecuta setup en la máquina del agente.",
     "learn.screens": "Para qué sirve cada pantalla",
-    "learn.home":
-      "Inicio es el resumen: brief, hitos, índice y el trabajo listo o en curso.",
+    "learn.home": "Inicio es el resumen: brief, hitos, índice y el trabajo listo o en curso.",
     "learn.board":
       "El tablero es la cola viva. Arrastra una tarjeta para cambiar el estado. Ready es lo que pueden empezar los agentes locales.",
-    "learn.backlog": "El backlog es el mismo trabajo en lista. Úsalo para revisar o cambiar estados rápido.",
+    "learn.backlog":
+      "El backlog es el mismo trabajo en lista. Úsalo para revisar o cambiar estados rápido.",
     "learn.roadmap":
       "La hoja de ruta agrupa por hito. Las dependencias dicen qué tarea debe terminar antes de otra.",
     "learn.context":
       "Contexto es el AGENTS.md vivo. Compila un brief de sesión desde aquí o desde una tarea. El índice es opcional.",
     "learn.agents":
       "En Agentes creas un token y ves sesiones. Beacon no ejecuta un agente de código alojado.",
-    "learn.decisions": "Decisiones y restricciones son las reglas que los agentes no deben inventar.",
+    "learn.decisions":
+      "Decisiones y restricciones son las reglas que los agentes no deben inventar.",
     "learn.reports":
       "Informes es un punto de control del tablero más revisiones importadas. Los agentes pueden listarlas y crear tareas.",
     "learn.settings":
@@ -681,10 +700,12 @@ const STRINGS = {
     "learn.guideOne": "1. Escribe Goals y Definition of Done en Contexto.",
     "learn.guideTwo": "2. Crea una tarea Ready con How to check.",
     "learn.guideThree": "3. Crea un token en Agentes y ejecuta setup.cmd o beacon setup.",
-    "learn.guideFour": "4. Deja que el agente llame start_work y comprueba el cambio con How to check.",
+    "learn.guideFour":
+      "4. Deja que el agente llame start_work y comprueba el cambio con How to check.",
     "settings.language": "Idioma",
     "settings.languageHint": "Elige el idioma de las etiquetas, estados vacíos y esta página.",
-    "home.welcome": "Crea un proyecto para empezar el tablero. Beacon añadirá un primer hito y unas tareas.",
+    "home.welcome":
+      "Crea un proyecto para empezar el tablero. Beacon añadirá un primer hito y unas tareas.",
   },
   uk: {
     "nav.home": "Головна",
@@ -732,11 +753,11 @@ const STRINGS = {
     "learn.startBody":
       "Створіть або оберіть проєкт у шапці. Напишіть бриф у Контексті. Поставте роботу в Ready. Згенеруйте токен на Агентах і запустіть setup на машині агента.",
     "learn.screens": "Навіщо кожен екран",
-    "learn.home":
-      "Головна — поточний знімок: бриф, віхи, індекс і робота, що готова або в роботі.",
+    "learn.home": "Головна — поточний знімок: бриф, віхи, індекс і робота, що готова або в роботі.",
     "learn.board":
       "Дошка — жива черга. Перетягніть картку, щоб змінити статус. Ready — те, що можуть брати локальні агенти.",
-    "learn.backlog": "Беклог — та сама робота списком. Зручно швидко переглянути або змінити статус.",
+    "learn.backlog":
+      "Беклог — та сама робота списком. Зручно швидко переглянути або змінити статус.",
     "learn.roadmap":
       "Дорожня карта групує роботу за віхами. Залежності показують, яка задача має завершитися раніше.",
     "learn.context":
@@ -761,7 +782,8 @@ const STRINGS = {
     "learn.guideFour": "4. Нехай агент викличе start_work, потім перевірте зміну за How to check.",
     "settings.language": "Мова",
     "settings.languageHint": "Оберіть мову підписів, порожніх станів і цієї сторінки.",
-    "home.welcome": "Створіть проєкт, щоб почати дошку. Beacon додасть першу віху і кілька стартових задач.",
+    "home.welcome":
+      "Створіть проєкт, щоб почати дошку. Beacon додасть першу віху і кілька стартових задач.",
   },
   fr: {
     "nav.home": "Accueil",
@@ -838,9 +860,11 @@ const STRINGS = {
     "learn.guideOne": "1. Écrivez Goals et Definition of Done dans Contexte.",
     "learn.guideTwo": "2. Créez une tâche Ready avec How to check rempli.",
     "learn.guideThree": "3. Créez un jeton dans Agents et lancez setup.cmd ou beacon setup.",
-    "learn.guideFour": "4. Laissez l’agent appeler start_work, puis confirmez le changement depuis How to check.",
+    "learn.guideFour":
+      "4. Laissez l’agent appeler start_work, puis confirmez le changement depuis How to check.",
     "settings.language": "Langue",
-    "settings.languageHint": "Choisissez la langue des libellés, des états vides et de cette page Découvrir.",
+    "settings.languageHint":
+      "Choisissez la langue des libellés, des états vides et de cette page Découvrir.",
     "home.welcome":
       "Créez un projet pour démarrer le tableau. Beacon ajoutera un premier jalon et quelques tâches de départ.",
   },
@@ -918,10 +942,13 @@ const STRINGS = {
     "learn.guide": "Erste Stunde",
     "learn.guideOne": "1. Schreiben Sie Goals und Definition of Done in Kontext.",
     "learn.guideTwo": "2. Legen Sie eine Ready-Aufgabe mit ausgefülltem How to check an.",
-    "learn.guideThree": "3. Erzeugen Sie auf Agenten ein Token und führen Sie setup.cmd oder beacon setup aus.",
-    "learn.guideFour": "4. Lassen Sie den Agenten start_work aufrufen und bestätigen Sie die Änderung über How to check.",
+    "learn.guideThree":
+      "3. Erzeugen Sie auf Agenten ein Token und führen Sie setup.cmd oder beacon setup aus.",
+    "learn.guideFour":
+      "4. Lassen Sie den Agenten start_work aufrufen und bestätigen Sie die Änderung über How to check.",
     "settings.language": "Sprache",
-    "settings.languageHint": "Wählen Sie die Sprache für Beschriftungen, leere Zustände und diese Lernseite.",
+    "settings.languageHint":
+      "Wählen Sie die Sprache für Beschriftungen, leere Zustände und diese Lernseite.",
     "home.welcome":
       "Erstellen Sie ein Projekt, um das Board zu starten. Beacon fügt einen ersten Meilenstein und ein paar Startaufgaben hinzu.",
   },
@@ -1000,9 +1027,11 @@ const STRINGS = {
     "learn.guideOne": "1. Escreva Goals e Definition of Done em Contexto.",
     "learn.guideTwo": "2. Crie uma tarefa Ready com How to check preenchido.",
     "learn.guideThree": "3. Crie um token em Agentes e execute setup.cmd ou beacon setup.",
-    "learn.guideFour": "4. Deixe o agente chamar start_work e confirme a alteração em How to check.",
+    "learn.guideFour":
+      "4. Deixe o agente chamar start_work e confirme a alteração em How to check.",
     "settings.language": "Idioma",
-    "settings.languageHint": "Escolha o idioma das etiquetas, estados vazios e desta página Aprender.",
+    "settings.languageHint":
+      "Escolha o idioma das etiquetas, estados vazios e desta página Aprender.",
     "home.welcome":
       "Crie um projeto para começar o quadro. O Beacon adicionará um primeiro marco e algumas tarefas iniciais.",
   },
@@ -1081,7 +1110,8 @@ const STRINGS = {
     "learn.guideOne": "1. Napisz Goals i Definition of Done w Kontekście.",
     "learn.guideTwo": "2. Utwórz zadanie Ready z wypełnionym How to check.",
     "learn.guideThree": "3. Wystaw token w Agentach i uruchom setup.cmd albo beacon setup.",
-    "learn.guideFour": "4. Niech agent wywoła start_work, potem potwierdź zmianę według How to check.",
+    "learn.guideFour":
+      "4. Niech agent wywoła start_work, potem potwierdź zmianę według How to check.",
     "settings.language": "Język",
     "settings.languageHint": "Wybierz język etykiet, pustych stanów i tej strony Poznaj.",
     "home.welcome":
@@ -1162,9 +1192,11 @@ const STRINGS = {
     "learn.guideOne": "1. Scrivi Goals e Definition of Done in Contesto.",
     "learn.guideTwo": "2. Crea un’attività Ready con How to check compilato.",
     "learn.guideThree": "3. Crea un token in Agenti ed esegui setup.cmd o beacon setup.",
-    "learn.guideFour": "4. Lascia che l’agente chiami start_work, poi conferma il cambiamento da How to check.",
+    "learn.guideFour":
+      "4. Lascia che l’agente chiami start_work, poi conferma il cambiamento da How to check.",
     "settings.language": "Lingua",
-    "settings.languageHint": "Scegli la lingua di etichette, stati vuoti e di questa pagina Scopri.",
+    "settings.languageHint":
+      "Scegli la lingua di etichette, stati vuoti e di questa pagina Scopri.",
     "home.welcome":
       "Crea un progetto per avviare la bacheca. Beacon aggiungerà una prima milestone e alcune attività iniziali.",
   },
@@ -1227,8 +1259,7 @@ const STRINGS = {
       "コンテキストは生きた AGENTS.md です。ここまたはタスクからセッションブリーフをコンパイルします。コードインデックスは任意です。",
     "learn.agents":
       "エージェントではプロジェクトトークンを発行し、セッションを見ます。Beacon はホスト型コーディングエージェントを実行しません。",
-    "learn.decisions":
-      "決定と制約は、エージェントが勝手に迂回してはいけない持続的なルールです。",
+    "learn.decisions": "決定と制約は、エージェントが勝手に迂回してはいけない持続的なルールです。",
     "learn.reports":
       "レポートはボードのチェックポイントと取り込んだレビューです。エージェントは一覧し、指摘をタスクにできます。",
     "learn.settings":
@@ -1242,7 +1273,8 @@ const STRINGS = {
     "learn.guide": "最初の1時間",
     "learn.guideOne": "1. コンテキストに Goals と Definition of Done を書く。",
     "learn.guideTwo": "2. How to check を埋めた Ready タスクを作る。",
-    "learn.guideThree": "3. エージェントでトークンを発行し、setup.cmd または beacon setup を実行する。",
+    "learn.guideThree":
+      "3. エージェントでトークンを発行し、setup.cmd または beacon setup を実行する。",
     "learn.guideFour": "4. エージェントに start_work を呼ばせ、How to check で変更を確認する。",
     "settings.language": "言語",
     "settings.languageHint": "ラベル、空の状態、この学ぶページの言語を選びます。",
@@ -1271,15 +1303,13 @@ const STRINGS = {
     "common.failedProjects": "无法加载项目",
     "common.logoutFailed": "退出登录失败",
     "reports.title": "报告",
-    "reports.intro":
-      "生成当前看板的快照，或导入评审，让智能体阅读并创建跟进任务。",
+    "reports.intro": "生成当前看板的快照，或导入评审，让智能体阅读并创建跟进任务。",
     "reports.generate": "生成报告",
     "reports.generating": "正在生成…",
     "reports.snapshots": "快照",
     "reports.emptyReports": "还没有报告。需要智能体可读的检查点时再生成。",
     "reports.reviews": "已导入的评审",
-    "reports.reviewsIntro":
-      "粘贴评审、审计或备注。智能体可以列出它们，并把发现变成任务。",
+    "reports.reviewsIntro": "粘贴评审、审计或备注。智能体可以列出它们，并把发现变成任务。",
     "reports.reviewTitle": "标题（可选）",
     "reports.reviewBody": "评审 Markdown",
     "reports.import": "导入评审",
@@ -1289,28 +1319,20 @@ const STRINGS = {
     "reports.generateFailed": "无法生成报告",
     "reports.importFailed": "无法导入评审",
     "learn.title": "了解",
-    "learn.intro":
-      "Beacon 是围绕智能体的操作系统。人维护简报和看板。本地智能体领取 Ready 工作。",
+    "learn.intro": "Beacon 是围绕智能体的操作系统。人维护简报和看板。本地智能体领取 Ready 工作。",
     "learn.start": "从这里开始",
     "learn.startBody":
       "在页眉创建或选择项目。在上下文中写活的简报。把工作放到看板上并设为 Ready。在智能体页签发项目令牌，然后在托管智能体的机器上运行 setup。",
     "learn.screens": "每个页面的用途",
-    "learn.home":
-      "首页是当前快照：简报、里程碑、索引状态，以及就绪或进行中的工作。",
-    "learn.board":
-      "看板是活的队列。拖动卡片即可改状态。Ready 是本地智能体可以开始的工作。",
+    "learn.home": "首页是当前快照：简报、里程碑、索引状态，以及就绪或进行中的工作。",
+    "learn.board": "看板是活的队列。拖动卡片即可改状态。Ready 是本地智能体可以开始的工作。",
     "learn.backlog": "待办是同一批工作的列表。适合快速浏览或改状态。",
-    "learn.roadmap":
-      "路线图按里程碑分组。依赖关系显示哪项任务必须先完成。",
-    "learn.context":
-      "上下文是活的 AGENTS.md。可从这里或从任务编译会话简报。代码索引是可选的。",
-    "learn.agents":
-      "在智能体页签发项目令牌并查看会话。Beacon 不运行托管的编码智能体。",
+    "learn.roadmap": "路线图按里程碑分组。依赖关系显示哪项任务必须先完成。",
+    "learn.context": "上下文是活的 AGENTS.md。可从这里或从任务编译会话简报。代码索引是可选的。",
+    "learn.agents": "在智能体页签发项目令牌并查看会话。Beacon 不运行托管的编码智能体。",
     "learn.decisions": "决策和约束是智能体不应绕开的持久规则。",
-    "learn.reports":
-      "报告是看板检查点加上导入的评审。智能体可以列出它们并把发现变成任务。",
-    "learn.settings":
-      "设置保存项目 ID、成员和区域标签。区域是路径前缀，不是自由标签。",
+    "learn.reports": "报告是看板检查点加上导入的评审。智能体可以列出它们并把发现变成任务。",
+    "learn.settings": "设置保存项目 ID、成员和区域标签。区域是路径前缀，不是自由标签。",
     "learn.check": "如何检查已完成的任务",
     "learn.checkBody":
       "打开任务。阅读 How to check。在应用中按这些步骤检查。如果备注为空，请让智能体在 finish_work 时写上。",
@@ -1377,8 +1399,7 @@ const STRINGS = {
       "Главная — текущий снимок: бриф, вехи, состояние индекса и работа, которая готова или уже идёт.",
     "learn.board":
       "Доска — живая очередь. Перетащите карточку, чтобы сменить статус. Ready — то, что могут начать локальные агенты.",
-    "learn.backlog":
-      "Бэклог — та же работа списком. Удобно быстро просмотреть или сменить статус.",
+    "learn.backlog": "Бэклог — та же работа списком. Удобно быстро просмотреть или сменить статус.",
     "learn.roadmap":
       "Дорожная карта группирует работу по вехам. Зависимости показывают, какая задача должна закончиться раньше.",
     "learn.context":
@@ -1401,7 +1422,8 @@ const STRINGS = {
     "learn.guideOne": "1. Напишите Goals и Definition of Done в Контексте.",
     "learn.guideTwo": "2. Создайте Ready-задачу с заполненным How to check.",
     "learn.guideThree": "3. Выпустите токен в Агентах и запустите setup.cmd или beacon setup.",
-    "learn.guideFour": "4. Пусть агент вызовет start_work, затем проверьте изменение по How to check.",
+    "learn.guideFour":
+      "4. Пусть агент вызовет start_work, затем проверьте изменение по How to check.",
     "settings.language": "Язык",
     "settings.languageHint": "Выберите язык подписей, пустых состояний и этой страницы справки.",
     "home.welcome":
@@ -1482,7 +1504,8 @@ const STRINGS = {
     "learn.guideOne": "1. Kontekste parašykite Goals ir Definition of Done.",
     "learn.guideTwo": "2. Sukurkite Ready užduotį su užpildytu How to check.",
     "learn.guideThree": "3. Agentuose išduokite žetoną ir paleiskite setup.cmd arba beacon setup.",
-    "learn.guideFour": "4. Tegul agentas kviečia start_work, tada patvirtinkite pakeitimą pagal How to check.",
+    "learn.guideFour":
+      "4. Tegul agentas kviečia start_work, tada patvirtinkite pakeitimą pagal How to check.",
     "settings.language": "Kalba",
     "settings.languageHint": "Pasirinkite etikečių, tuščių būsenų ir šio Sužinoti puslapio kalbą.",
     "home.welcome":
@@ -1563,7 +1586,8 @@ const STRINGS = {
     "learn.guideOne": "1. Kontekstā uzrakstiet Goals un Definition of Done.",
     "learn.guideTwo": "2. Izveidojiet Ready uzdevumu ar aizpildītu How to check.",
     "learn.guideThree": "3. Aģentos izsniedziet marķieri un palaidiet setup.cmd vai beacon setup.",
-    "learn.guideFour": "4. Ļaujiet aģentam izsaukt start_work, tad apstipriniet izmaiņu pēc How to check.",
+    "learn.guideFour":
+      "4. Ļaujiet aģentam izsaukt start_work, tad apstipriniet izmaiņu pēc How to check.",
     "settings.language": "Valoda",
     "settings.languageHint": "Izvēlieties etiķešu, tukšo stāvokļu un šīs Uzzināt lapas valodu.",
     "home.welcome":
@@ -1620,8 +1644,7 @@ const STRINGS = {
       "Галоўная — бягучы здымак: брыф, вехі, стан індэкса і праца, якая гатовая або ўжо ідзе.",
     "learn.board":
       "Дошка — жывая чарга. Перацягніце картку, каб змяніць статус. Ready — тое, што могуць пачаць лакальныя агенты.",
-    "learn.backlog":
-      "Бэклог — тая ж праца спісам. Зручна хутка прагледзець або змяніць статус.",
+    "learn.backlog": "Бэклог — тая ж праца спісам. Зручна хутка прагледзець або змяніць статус.",
     "learn.roadmap":
       "Дарожная карта групуе працу па вехах. Залежнасці паказваюць, якая задача мае скончыцца раней.",
     "learn.context":
@@ -1644,7 +1667,8 @@ const STRINGS = {
     "learn.guideOne": "1. Напішыце Goals і Definition of Done ў Кантэксце.",
     "learn.guideTwo": "2. Стварыце Ready-задачу з запоўненым How to check.",
     "learn.guideThree": "3. Выпусьціце токен у Агентах і запусціце setup.cmd або beacon setup.",
-    "learn.guideFour": "4. Няхай агент выкліча start_work, потым праверце змяненне па How to check.",
+    "learn.guideFour":
+      "4. Няхай агент выкліча start_work, потым праверце змяненне па How to check.",
     "settings.language": "Мова",
     "settings.languageHint": "Абярыце мову подпісаў, пустых станаў і гэтай старонкі даведкі.",
     "home.welcome":
@@ -1709,8 +1733,7 @@ const STRINGS = {
       "Контекст — тірі AGENTS.md. Сессия брифін осы жерден немесе тапсырмадан құрастырыңыз. Код индексі міндетті емес.",
     "learn.agents":
       "Агенттерде жоба токенін шығарып, сессияларды көресіз. Beacon хостталатын код агентін іске қоспайды.",
-    "learn.decisions":
-      "Шешімдер мен шектеулер — агенттер айналып өтпеуі тиіс тұрақты ережелер.",
+    "learn.decisions": "Шешімдер мен шектеулер — агенттер айналып өтпеуі тиіс тұрақты ережелер.",
     "learn.reports":
       "Есептер — тақтаның бақылау нүктесі және импортталған шолулар. Агенттер оларды оқып, тапсырма жасай алады.",
     "learn.settings":
@@ -1725,7 +1748,8 @@ const STRINGS = {
     "learn.guideOne": "1. Контексте Goals пен Definition of Done жазыңыз.",
     "learn.guideTwo": "2. How to check толтырылған Ready тапсырмасын жасаңыз.",
     "learn.guideThree": "3. Агенттерде токен шығарып, setup.cmd немесе beacon setup іске қосыңыз.",
-    "learn.guideFour": "4. Агент start_work шақырсын, содан кейін How to check бойынша өзгерісті растаңыз.",
+    "learn.guideFour":
+      "4. Агент start_work шақырсын, содан кейін How to check бойынша өзгерісті растаңыз.",
     "settings.language": "Тіл",
     "settings.languageHint": "Жапсырмалар, бос күйлер және осы Анықтама бетінің тілін таңдаңыз.",
     "home.welcome":
@@ -1782,16 +1806,14 @@ const STRINGS = {
       "홈은 현재 스냅샷입니다. 브리프, 마일스톤, 인덱스 상태, 준비되었거나 진행 중인 작업.",
     "learn.board":
       "보드는 살아있는 대기열입니다. 카드를 끌어 상태를 바꿉니다. Ready는 로컬 에이전트가 시작할 수 있는 일입니다.",
-    "learn.backlog":
-      "백로그는 같은 일의 목록입니다. 빠르게 훑거나 상태를 바꿀 때 사용하세요.",
+    "learn.backlog": "백로그는 같은 일의 목록입니다. 빠르게 훑거나 상태를 바꿀 때 사용하세요.",
     "learn.roadmap":
       "로드맵은 마일스톤별로 일을 묶습니다. 의존성은 어떤 작업이 먼저 끝나야 하는지 보여 줍니다.",
     "learn.context":
       "컨텍스트는 살아있는 AGENTS.md입니다. 여기 또는 작업에서 세션 브리프를 컴파일하세요. 코드 인덱스는 선택입니다.",
     "learn.agents":
       "에이전트에서 프로젝트 토큰을 발급하고 세션을 봅니다. Beacon은 호스팅된 코딩 에이전트를 실행하지 않습니다.",
-    "learn.decisions":
-      "결정과 제약은 에이전트가 둘러서 만들지 말아야 할 지속적인 규칙입니다.",
+    "learn.decisions": "결정과 제약은 에이전트가 둘러서 만들지 말아야 할 지속적인 규칙입니다.",
     "learn.reports":
       "보고서는 보드 점검 지점과 가져온 리뷰입니다. 에이전트가 목록을 보고 발견 사항을 작업으로 바꿀 수 있습니다.",
     "learn.settings":
@@ -1806,7 +1828,8 @@ const STRINGS = {
     "learn.guideOne": "1. 컨텍스트에 Goals와 Definition of Done을 씁니다.",
     "learn.guideTwo": "2. How to check가 채워진 Ready 작업을 만듭니다.",
     "learn.guideThree": "3. 에이전트에서 토큰을 발급하고 setup.cmd 또는 beacon setup을 실행합니다.",
-    "learn.guideFour": "4. 에이전트가 start_work를 호출하게 한 뒤 How to check로 변경을 확인합니다.",
+    "learn.guideFour":
+      "4. 에이전트가 start_work를 호출하게 한 뒤 How to check로 변경을 확인합니다.",
     "settings.language": "언어",
     "settings.languageHint": "레이블, 빈 상태, 이 배우기 페이지의 언어를 선택하세요.",
     "home.welcome":
