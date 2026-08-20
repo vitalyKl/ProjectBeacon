@@ -722,7 +722,7 @@ export async function createMilestone(
   projectId: string,
   input: { title: string; description?: string },
 ): Promise<PublicMilestone> {
-  return createRoadmapMilestone(projectId, input.title, input.description ?? "");
+  return createRoadmapMilestone(projectId, input);
 }
 
 export async function createTask(

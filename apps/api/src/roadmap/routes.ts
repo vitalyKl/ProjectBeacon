@@ -27,7 +27,7 @@ import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { isTerminalTaskStatus } from "../sessions/types.js";
 import { paginateRecords, dependencyCursorId } from "./page.js";
 import { presentActivity, presentComment, presentDependency, presentMilestone, presentTask, presentTaskWithLabels } from "./present.js";
-import { DependencyCycleError, isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, VersionConflictError, type DependencyType, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
+import { DependencyCycleError, isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, VersionConflictError, type DependencyType, type MilestonePatch, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
 import type { RoadmapStore } from "./store.js";
 
 export type RoadmapDeps = AccessDeps & {
@@ -68,6 +68,21 @@ function parseNullableUuid(value: unknown): string | null | undefined {
     return value;
   }
   return undefined;
+}
+
+function parseTargetDateField(
+  value: unknown,
+): { ok: true; date: string | null | undefined } | { ok: false } {
+  if (value === undefined) {
+    return { ok: true, date: undefined };
+  }
+  if (value === null) {
+    return { ok: true, date: null };
+  }
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return { ok: true, date: value };
+  }
+  return { ok: false };
 }
 
 function versionConflict(c: Context, task: TaskRecord) {
@@ -169,14 +184,11 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       body?.["description"] === undefined ? "" : parseText(body["description"], 8000, true);
     const statusRaw = body?.["status"] === undefined ? "open" : body["status"];
     const sortOrder = body?.["sort_order"] === undefined ? 0 : parsePriority(body["sort_order"]);
-    const targetDateRaw = body?.["target_date"];
-    let targetDate: string | null = null;
-    if (targetDateRaw !== undefined && targetDateRaw !== null) {
-      if (typeof targetDateRaw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(targetDateRaw)) {
-        return errorJson(c, 400, "invalid_request", "invalid target_date", { reason: "invalid_body" });
-      }
-      targetDate = targetDateRaw;
+    const parsedDate = parseTargetDateField(body?.["target_date"]);
+    if (!parsedDate.ok) {
+      return errorJson(c, 400, "invalid_request", "invalid target_date", { reason: "invalid_body" });
     }
+    const targetDate = parsedDate.date ?? null;
     if (
       !title ||
       description === undefined ||
@@ -208,6 +220,85 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       now,
     });
     return c.json(presentMilestone(milestone), 201);
+  });
+
+  app.patch("/v1/milestones/:id", async (c) => {
+    const loaded = await requireProjectResource(
+      c,
+      deps,
+      async () => {
+        const id = c.req.param("id");
+        if (!isUuid(id)) {
+          return null;
+        }
+        return deps.store.findMilestoneById(id);
+      },
+      "tasks:write",
+      "milestone not found",
+    );
+    if (loaded instanceof Response) {
+      return loaded;
+    }
+
+    const body = await readObject(c);
+    if (!body) {
+      return errorJson(c, 400, "invalid_request", "invalid body", { reason: "invalid_body" });
+    }
+
+    const patch: MilestonePatch = {};
+    if (body["title"] !== undefined) {
+      const title = parseOptionalString(body["title"], 200);
+      if (!title) {
+        return errorJson(c, 400, "invalid_request", "invalid title", { reason: "invalid_body" });
+      }
+      patch.title = title;
+    }
+    if (body["description"] !== undefined) {
+      const description = parseText(body["description"], 8000, true);
+      if (description === undefined) {
+        return errorJson(c, 400, "invalid_request", "invalid description", {
+          reason: "invalid_body",
+        });
+      }
+      patch.description = description;
+    }
+    if (body["status"] !== undefined) {
+      if (typeof body["status"] !== "string" || !isMilestoneStatus(body["status"])) {
+        return errorJson(c, 400, "invalid_request", "invalid status", { reason: "invalid_body" });
+      }
+      patch.status = body["status"];
+    }
+    if (body["target_date"] !== undefined) {
+      const parsedDate = parseTargetDateField(body["target_date"]);
+      if (!parsedDate.ok) {
+        return errorJson(c, 400, "invalid_request", "invalid target_date", {
+          reason: "invalid_body",
+        });
+      }
+      patch.targetDate = parsedDate.date ?? null;
+    }
+    if (body["sort_order"] !== undefined) {
+      const sortOrder = parsePriority(body["sort_order"]);
+      if (sortOrder === undefined) {
+        return errorJson(c, 400, "invalid_request", "invalid sort_order", {
+          reason: "invalid_body",
+        });
+      }
+      patch.sortOrder = sortOrder;
+    }
+
+    const updated = await deps.store.updateMilestone(loaded.resource.id, patch);
+    if (!updated) {
+      return errorJson(c, 404, "not_found", "milestone not found");
+    }
+    await writeActivity(deps.store, actorActivityRef(loaded.actor), {
+      projectId: loaded.project.id,
+      objectType: "milestone",
+      objectId: updated.id,
+      verb: "update",
+      now: deps.clock.now(),
+    });
+    return c.json(presentMilestone(updated));
   });
 
   app.get("/v1/projects/:id/tasks", async (c) => {

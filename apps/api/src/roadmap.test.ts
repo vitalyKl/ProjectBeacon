@@ -144,6 +144,113 @@ describe("milestones and tasks", () => {
     expect(await got.json()).toMatchObject({ id: task.id, version: 1 });
   });
 
+  it("creates a milestone with status and target_date, then patches title status and dates", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "dates");
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/milestones`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Ship",
+        description: "first",
+        status: "open",
+        target_date: "2026-09-01",
+      }),
+    });
+    expect(created.status).toBe(201);
+    const milestone = (await created.json()) as {
+      id: string;
+      title: string;
+      status: string;
+      target_date: string | null;
+    };
+    expect(milestone).toMatchObject({
+      title: "Ship",
+      status: "open",
+      target_date: "2026-09-01",
+    });
+
+    const empty = await alice.app.request(`/v1/milestones/${milestone.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({
+      id: milestone.id,
+      title: "Ship",
+      status: "open",
+      target_date: "2026-09-01",
+    });
+
+    const patched = await alice.app.request(`/v1/milestones/${milestone.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Shipped",
+        status: "closed",
+        target_date: "2026-10-15",
+        description: "done",
+      }),
+    });
+    expect(patched.status).toBe(200);
+    expect(await patched.json()).toMatchObject({
+      id: milestone.id,
+      title: "Shipped",
+      status: "closed",
+      target_date: "2026-10-15",
+      description: "done",
+    });
+
+    const cleared = await alice.app.request(`/v1/milestones/${milestone.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ target_date: null }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({
+      id: milestone.id,
+      title: "Shipped",
+      target_date: null,
+    });
+  });
+
+  it("rejects invalid milestone patches and hides them from other users", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const bob = await registerUser(store, "bob");
+    const project = await createProject(alice.app, alice.token, "secret-ms");
+    const created = await alice.app.request(`/v1/projects/${project.id}/milestones`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ title: "Private" }),
+    });
+    const milestone = (await created.json()) as { id: string };
+
+    const badDate = await alice.app.request(`/v1/milestones/${milestone.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ target_date: "soon" }),
+    });
+    expect(badDate.status).toBe(400);
+
+    const badStatus = await alice.app.request(`/v1/milestones/${milestone.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ status: "ready" }),
+    });
+    expect(badStatus.status).toBe(400);
+
+    const hidden = await bob.app.request(`/v1/milestones/${milestone.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(bob.token), "content-type": "application/json" },
+      body: JSON.stringify({ title: "Stolen" }),
+    });
+    expect(hidden.status).toBe(404);
+  });
+
   it("returns 409 version_conflict with the current row", async () => {
     const store = new MemoryAuthStore();
     const alice = await registerUser(store, "alice");

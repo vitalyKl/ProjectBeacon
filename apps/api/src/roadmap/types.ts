@@ -50,6 +50,14 @@ export type MilestoneRecord = {
   createdAt: Date;
 };
 
+export type MilestonePatch = {
+  title?: string;
+  description?: string;
+  status?: MilestoneStatus;
+  targetDate?: string | null;
+  sortOrder?: number;
+};
+
 export type TaskRecord = {
   id: string;
   projectId: string;

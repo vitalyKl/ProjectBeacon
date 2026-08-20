@@ -13,7 +13,7 @@ import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, type OrgInviteRecord, type OrgInviteRole, type OrgKind, type OrgMemberRecord, type OrgRecord, type OrgRole, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import type { ContextSection } from "@beacon/api-spec";
 import { isConstraintKind, isConstraintStatus, isContextScopeType, isDecisionStatus, type CodeOwnerRecord, type ConstraintRecord, type ContextNodeRecord, type ContextRevisionRecord, type ContextRevisionTarget, type DecisionPatch, type DecisionRecord, type ProjectRepoRecord, type DecisionPathLink } from "../context/types.js";
-import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, UniqueViolationError } from "./store.js";
+import { BootstrapConsumedError, DependencyCycleError, GithubIdTakenError, LoginTakenError, OrgSlugTakenError, ProjectSlugTakenError, VersionConflictError, type ActivityEventRecord, type AuthStore, type MilestonePatch, type MilestoneRecord, type SessionRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord, type ApprovalRecord, type RateBucketRecord, type TokenRecord, type UserRecord, type ProjectRepoRef, UniqueViolationError } from "./store.js";
 import type { LabelPatch, LabelRecord, LabelStatus } from "../labels/types.js";
 import { isLabelStatus } from "../labels/types.js";
 import type { ApprovalStatus } from "../tokens/types.js";
@@ -1366,6 +1366,30 @@ export class DbAuthStore implements AuthStore {
       throw new Error("insert milestone returned no row");
     }
     return toMilestone(row);
+  }
+
+  async updateMilestone(id: string, patch: MilestonePatch): Promise<MilestoneRecord | undefined> {
+    const [current] = await this.db.select().from(milestones).where(eq(milestones.id, id)).limit(1);
+    if (!current) {
+      return undefined;
+    }
+    // Drizzle throws on .set({}) — empty PATCH is a no-op, not a 500.
+    const set = {
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+      ...(patch.sortOrder !== undefined ? { sortOrder: patch.sortOrder } : {}),
+    };
+    if (Object.keys(set).length === 0) {
+      return toMilestone(current);
+    }
+    const [row] = await this.db
+      .update(milestones)
+      .set(set)
+      .where(eq(milestones.id, id))
+      .returning();
+    return row ? toMilestone(row) : undefined;
   }
 
   async listMilestones(projectId: string): Promise<MilestoneRecord[]> {

@@ -1,5 +1,6 @@
 import type {
   ActivityEventRecord,
+  MilestonePatch,
   MilestoneRecord,
   TaskCommentRecord,
   TaskDependencyRecord,
@@ -9,6 +10,7 @@ import type {
 
 export interface RoadmapStore {
   createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord>;
+  updateMilestone(id: string, patch: MilestonePatch): Promise<MilestoneRecord | undefined>;
   listMilestones(projectId: string): Promise<MilestoneRecord[]>;
   findMilestoneById(id: string): Promise<MilestoneRecord | undefined>;
   createTask(task: TaskRecord, labelIds?: string[]): Promise<TaskRecord>;

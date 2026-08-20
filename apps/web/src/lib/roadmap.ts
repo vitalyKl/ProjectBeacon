@@ -14,8 +14,11 @@ export const TASK_STATUSES = [
 
 export const TASK_TYPES = ["epic", "story", "task", "bug"] as const;
 
+export const MILESTONE_STATUSES = ["open", "closed"] as const;
+
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskType = (typeof TASK_TYPES)[number];
+export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number];
 
 export type LinkedPath = {
   repo_id: string;
@@ -27,10 +30,38 @@ export type PublicMilestone = {
   project_id: string;
   title: string;
   description: string;
-  status: "open" | "closed";
+  status: MilestoneStatus;
   target_date: string | null;
   sort_order: number;
   created_at: string;
+};
+
+export type MilestoneDraft = {
+  title: string;
+  description: string;
+  status: MilestoneStatus;
+  targetDate: string;
+};
+
+export type MilestoneWriteInput = {
+  title: string;
+  description: string;
+  status: MilestoneStatus;
+  target_date: string | null;
+};
+
+export type CreateMilestoneInput = {
+  title: string;
+  description?: string;
+  status?: MilestoneStatus;
+  target_date?: string | null;
+};
+
+export type PatchMilestoneInput = {
+  title?: string;
+  description?: string;
+  status?: MilestoneStatus;
+  target_date?: string | null;
 };
 
 export type PublicTask = {
@@ -101,6 +132,97 @@ export type SessionBriefPreview = {
   milestone?: { title: string; status: string } | null;
   handoff?: { summary: string; next_steps: string } | null;
 };
+
+export function emptyMilestoneDraft(): MilestoneDraft {
+  return { title: "", description: "", status: "open", targetDate: "" };
+}
+
+export function draftFromMilestone(milestone: PublicMilestone): MilestoneDraft {
+  return {
+    title: milestone.title,
+    description: milestone.description,
+    status: milestone.status,
+    targetDate: milestone.target_date ?? "",
+  };
+}
+
+export function parseMilestoneTargetDate(value: string): string | null | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+export function milestoneWriteFromDraft(
+  draft: MilestoneDraft,
+): { ok: true; value: MilestoneWriteInput } | { ok: false; error: "title" | "target_date" } {
+  const title = draft.title.trim();
+  if (!title) {
+    return { ok: false, error: "title" };
+  }
+  const targetDate = parseMilestoneTargetDate(draft.targetDate);
+  if (targetDate === undefined) {
+    return { ok: false, error: "target_date" };
+  }
+  return {
+    ok: true,
+    value: {
+      title,
+      description: draft.description,
+      status: draft.status,
+      target_date: targetDate,
+    },
+  };
+}
+
+export function compareOptionalDates(left: string | null, right: string | null): number {
+  if (left && right) {
+    return left.localeCompare(right);
+  }
+  if (left) {
+    return -1;
+  }
+  if (right) {
+    return 1;
+  }
+  return 0;
+}
+
+export function sortMilestones(milestones: readonly PublicMilestone[]): PublicMilestone[] {
+  return [...milestones].sort((a, b) => {
+    const dateDelta = compareOptionalDates(a.target_date, b.target_date);
+    if (dateDelta !== 0) {
+      return dateDelta;
+    }
+    return a.sort_order - b.sort_order || a.title.localeCompare(b.title);
+  });
+}
+
+export function groupTasksByMilestone(tasks: readonly PublicTask[]): {
+  byMilestone: Map<string, PublicTask[]>;
+  unscheduled: PublicTask[];
+} {
+  const byMilestone = new Map<string, PublicTask[]>();
+  const unscheduled: PublicTask[] = [];
+  for (const task of tasks) {
+    if (!task.milestone_id) {
+      unscheduled.push(task);
+      continue;
+    }
+    const group = byMilestone.get(task.milestone_id) ?? [];
+    group.push(task);
+    byMilestone.set(task.milestone_id, group);
+  }
+  for (const group of byMilestone.values()) {
+    group.sort((a, b) => a.title.localeCompare(b.title));
+  }
+  unscheduled.sort((a, b) => a.title.localeCompare(b.title));
+  return { byMilestone, unscheduled };
+}
 
 export type CreateTaskInput = {
   title: string;
@@ -175,8 +297,7 @@ export async function fetchTaskActivity(
 
 export async function createMilestone(
   projectId: string,
-  title: string,
-  description = "",
+  input: CreateMilestoneInput,
   idempotencyKey?: string,
 ): Promise<PublicMilestone> {
   const headers: HeadersInit = {};
@@ -186,10 +307,29 @@ export async function createMilestone(
   const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/milestones`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ title, description }),
+    body: JSON.stringify({
+      title: input.title,
+      description: input.description ?? "",
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.target_date !== undefined ? { target_date: input.target_date } : {}),
+    }),
   });
   if (!res.ok) {
     throw await readApiError(res, "failed to create milestone");
+  }
+  return parseJson<PublicMilestone>(res);
+}
+
+export async function patchMilestone(
+  milestoneId: string,
+  input: PatchMilestoneInput,
+): Promise<PublicMilestone> {
+  const res = await apiFetch(`/v1/milestones/${encodeURIComponent(milestoneId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to update milestone");
   }
   return parseJson<PublicMilestone>(res);
 }
@@ -307,6 +447,6 @@ export function statusLabel(status: TaskStatus): string {
   return t(`status.${status}` as MessageKey);
 }
 
-export function milestoneStatusLabel(status: PublicMilestone["status"]): string {
+export function milestoneStatusLabel(status: MilestoneStatus): string {
   return t(status === "closed" ? "roadmap.closed" : "roadmap.open");
 }

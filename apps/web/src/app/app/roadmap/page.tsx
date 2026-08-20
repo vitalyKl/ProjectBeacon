@@ -9,8 +9,10 @@ import {
   fetchProjectDependencies,
   fetchProjectMilestones,
   fetchProjectTasks,
+  groupTasksByMilestone,
   isTaskLocked,
   milestoneStatusLabel,
+  sortMilestones,
   statusLabel,
   type DependencyType,
   type PublicDependency,
@@ -29,6 +31,7 @@ import { useSelectedProject } from "../project-context";
 import { useToast } from "../toast";
 import { useWorkFilters } from "../use-work-filters";
 import { WorkHeader } from "../work-header";
+import { CreateMilestoneForm, EditMilestoneForm } from "./milestone-form";
 
 const ROADMAP_POLL_MS = 10000;
 
@@ -112,7 +115,7 @@ export default function RoadmapPage() {
     projectId ? ROADMAP_POLL_MS : null,
   );
 
-  async function onCreated() {
+  async function onChanged() {
     requestSeq.current += 1;
     await reload({ silent: true });
   }
@@ -136,33 +139,40 @@ export default function RoadmapPage() {
         labelId={labelId}
         onLabelIdChange={setLabelId}
         actions={
-          <Segmented>
-            <button
-              className={segmentedItemClass(view === "timeline")}
-              type="button"
-              onClick={() => setView("timeline")}
-            >
-              {label("roadmap.timeline")}
-            </button>
-            <button
-              className={segmentedItemClass(view === "graph")}
-              type="button"
-              onClick={() => setView("graph")}
-            >
-              {label("roadmap.dependencies")}
-            </button>
-          </Segmented>
+          <>
+            <CreateMilestoneForm projectId={project.id} onCreated={() => void onChanged()} />
+            <Segmented>
+              <button
+                className={segmentedItemClass(view === "timeline")}
+                type="button"
+                onClick={() => setView("timeline")}
+              >
+                {label("roadmap.timeline")}
+              </button>
+              <button
+                className={segmentedItemClass(view === "graph")}
+                type="button"
+                onClick={() => setView("graph")}
+              >
+                {label("roadmap.dependencies")}
+              </button>
+            </Segmented>
+          </>
         }
       />
       {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
       {view === "timeline" ? (
-        <TimelineView milestones={milestones} tasks={tasks} />
+        <TimelineView
+          milestones={milestones}
+          tasks={tasks}
+          onUpdated={() => void onChanged()}
+        />
       ) : (
         <DependencyView
           tasks={tasks}
           dependencies={dependencies}
-          onCreated={() => void onCreated()}
+          onCreated={() => void onChanged()}
           onCycle={(message) => toast(message)}
         />
       )}
@@ -173,34 +183,15 @@ export default function RoadmapPage() {
 function TimelineView({
   milestones,
   tasks,
+  onUpdated,
 }: {
   milestones: PublicMilestone[];
   tasks: PublicTask[];
+  onUpdated: () => void;
 }) {
   const buckets = useMemo(() => {
-    const sorted = [...milestones].sort((a, b) => {
-      const dateDelta = compareOptionalDates(a.target_date, b.target_date);
-      if (dateDelta !== 0) {
-        return dateDelta;
-      }
-      return a.sort_order - b.sort_order || a.title.localeCompare(b.title);
-    });
-    const byMilestone = new Map<string, PublicTask[]>();
-    const unscheduled: PublicTask[] = [];
-    for (const task of tasks) {
-      if (!task.milestone_id) {
-        unscheduled.push(task);
-        continue;
-      }
-      const group = byMilestone.get(task.milestone_id) ?? [];
-      group.push(task);
-      byMilestone.set(task.milestone_id, group);
-    }
-    for (const group of byMilestone.values()) {
-      group.sort((a, b) => a.title.localeCompare(b.title));
-    }
-    unscheduled.sort((a, b) => a.title.localeCompare(b.title));
-    return { sorted, byMilestone, unscheduled };
+    const grouped = groupTasksByMilestone(tasks);
+    return { sorted: sortMilestones(milestones), ...grouped };
   }, [milestones, tasks]);
 
   const text = t;
@@ -228,6 +219,7 @@ function TimelineView({
                 {milestone.target_date ? <span>{milestone.target_date}</span> : null}
               </div>
             </header>
+            <EditMilestoneForm milestone={milestone} onUpdated={onUpdated} />
             <TaskList tasks={buckets.byMilestone.get(milestone.id) ?? []} empty={text("roadmap.noTasks")} />
           </article>
         </li>
@@ -637,19 +629,6 @@ function layoutGraph(tasks: PublicTask[], dependencies: PublicDependency[]) {
   const width = Math.max(...laidNodes.map((node) => node.x + node.width), nodeWidth) + padding;
   const height = Math.max(...laidNodes.map((node) => node.y + node.height), nodeHeight) + padding;
   return { nodes: laidNodes, edges, width, height };
-}
-
-function compareOptionalDates(left: string | null, right: string | null): number {
-  if (left && right) {
-    return left.localeCompare(right);
-  }
-  if (left) {
-    return -1;
-  }
-  if (right) {
-    return 1;
-  }
-  return 0;
 }
 
 function truncateLabel(value: string, max: number): string {

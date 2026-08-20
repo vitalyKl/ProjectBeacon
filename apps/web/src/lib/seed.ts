@@ -68,8 +68,10 @@ async function seedProject(projectId: string): Promise<void> {
   if (!milestone) {
     milestone = await createMilestone(
       projectId,
-      SEED_MILESTONE_TITLE,
-      "First human + agent loop on Beacon itself.",
+      {
+        title: SEED_MILESTONE_TITLE,
+        description: "First human + agent loop on Beacon itself.",
+      },
       seedKey(projectId, "milestone"),
     );
     const refreshed = await fetchProjectMilestones(projectId);

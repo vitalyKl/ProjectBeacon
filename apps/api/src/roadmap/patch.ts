@@ -1,4 +1,19 @@
-import type { TaskPatch, TaskRecord } from "./types.js";
+import type { MilestonePatch, MilestoneRecord, TaskPatch, TaskRecord } from "./types.js";
+
+export function applyMilestonePatch(
+  milestone: MilestoneRecord,
+  patch: MilestonePatch,
+): MilestoneRecord {
+  return {
+    ...milestone,
+    title: patch.title !== undefined ? patch.title : milestone.title,
+    description: patch.description !== undefined ? patch.description : milestone.description,
+    status: patch.status !== undefined ? patch.status : milestone.status,
+    targetDate: patch.targetDate !== undefined ? patch.targetDate : milestone.targetDate,
+    sortOrder: patch.sortOrder !== undefined ? patch.sortOrder : milestone.sortOrder,
+    createdAt: new Date(milestone.createdAt),
+  };
+}
 
 export function applyTaskPatch(task: TaskRecord, patch: TaskPatch): TaskRecord {
   return {

@@ -12,15 +12,15 @@ import type { LabelPatch, LabelRecord } from "../labels/types.js";
 import { slugCandidate, slugFromLogin } from "../slug.js";
 import { higherOrgRole, higherProjectRole, OrgSlugTakenError, ProjectSlugTakenError, type OrgInviteRecord, type OrgMemberRecord, type OrgRecord, type ProjectInviteRecord, type ProjectMemberRecord, type ProjectRecord } from "../orgs/types.js";
 import { wouldCreateCycle } from "../roadmap/cycle.js";
-import { applyTaskPatch } from "../roadmap/patch.js";
-import { DependencyCycleError, IDEMPOTENCY_TTL_MS, VersionConflictError, type ActivityEventRecord, type IdempotencyActorType, type MilestoneRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord } from "../roadmap/types.js";
+import { applyMilestonePatch, applyTaskPatch } from "../roadmap/patch.js";
+import { DependencyCycleError, IDEMPOTENCY_TTL_MS, VersionConflictError, type ActivityEventRecord, type IdempotencyActorType, type MilestonePatch, type MilestoneRecord, type TaskCommentRecord, type TaskDependencyRecord, type TaskPatch, type TaskRecord } from "../roadmap/types.js";
 import type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
 export type { OrgInviteRecord, OrgMemberRecord, OrgRecord, ProjectInviteRecord, ProjectMemberRecord, ProjectRecord } from "../orgs/types.js";
 export { InviteTargetRequiredError, OrgSlugTakenError, ProjectSlugTakenError } from "../orgs/types.js";
 export { DependencyCycleError, VersionConflictError } from "../roadmap/types.js";
 export type { CodeOwnerRecord, ConstraintRecord, ContextNodeRecord, ContextRevisionRecord, DecisionPatch, DecisionRecord, ProjectRepoRecord, DecisionPathLink } from "../context/types.js";
 export type { LabelPatch, LabelRecord } from "../labels/types.js";
-export type { ActivityEventRecord, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
+export type { ActivityEventRecord, MilestonePatch, MilestoneRecord, TaskCommentRecord, TaskDependencyRecord, TaskPatch, TaskRecord } from "../roadmap/types.js";
 export type { AgentSessionRef, ApprovalRecord, RateBucketRecord, TokenRecord } from "../tokens/types.js";
 import { InvalidReferenceError, isLockActive, LOCK_TTL_MS, SessionNotActiveError, TaskLockedError, finishWorkActivities, type AgentSessionRecord, type FinishWorkInput, type FinishWorkResult, type HandoffRecord, type StartWorkInput, type StartWorkWriteResult } from "../sessions/types.js";
 import type { ProjectReportRecord, ProjectReviewRecord } from "../reports/types.js";
@@ -609,6 +609,16 @@ export class MemoryAuthStore implements AuthStore {
   async createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord> {
     this.milestones.set(milestone.id, cloneMilestone(milestone));
     return cloneMilestone(milestone);
+  }
+
+  async updateMilestone(id: string, patch: MilestonePatch): Promise<MilestoneRecord | undefined> {
+    const milestone = this.milestones.get(id);
+    if (!milestone) {
+      return undefined;
+    }
+    const next = applyMilestonePatch(milestone, patch);
+    this.milestones.set(id, next);
+    return cloneMilestone(next);
   }
 
   async listMilestones(projectId: string): Promise<MilestoneRecord[]> {

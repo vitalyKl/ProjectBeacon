@@ -450,6 +450,12 @@ export const en = {
   "roadmap.failedLoad": "failed to load roadmap",
   "roadmap.open": "open",
   "roadmap.closed": "closed",
+  "roadmap.new": "New milestone",
+  "roadmap.edit": "Edit milestone",
+  "roadmap.targetDate": "Target date",
+  "roadmap.failedCreate": "failed to create milestone",
+  "roadmap.failedUpdate": "failed to update milestone",
+  "roadmap.invalidDate": "Enter a date as YYYY-MM-DD, or leave it empty.",
   "context.selectProject": "Select a project to edit its brief.",
   "context.intro":
     "This is the living brief. Agents compile it. AGENTS.md is an export for hosts that only read the repo. Import is a one-time bootstrap, not how you keep the brief current. What to do next lives on the board, not here.",
