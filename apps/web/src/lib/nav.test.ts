@@ -115,16 +115,12 @@ describe("auth paths", () => {
     expect(wizard).not.toContain("wizard.http");
     expect(wizard).not.toContain("hosted clone");
     expect(wizard).toContain("wizard.stdioHint");
-    expect(readWeb("app/app/agents/agents-view.tsx")).toContain("agents.ready");
-    expect(readWeb("app/app/agents/agents-view.tsx")).toContain("agents.intro");
-    expect(readWeb("app/app/agents/agents-view.tsx")).toContain("agents.offered");
     expect(readWeb("lib/i18n.ts")).toContain("start_work");
     expect(readWeb("lib/i18n.ts")).toContain("beacon setup");
     expect(readWeb("lib/i18n.ts")).toContain("setup.cmd");
     expect(readWeb("lib/i18n.ts")).toContain(
       "Home is a pulse: Goals and Definition of Done, a queue peek, open milestones, active agents, and index status.",
     );
-    expect(readWeb("app/app/agents/agents-view.tsx")).toContain("CopyableProjectId");
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("CopyableProjectId");
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("LanguagePicker");
     expect(readWeb("app/app/learn/page.tsx")).toContain("learn.startBody");
@@ -143,6 +139,26 @@ describe("auth paths", () => {
     expect(readWeb("app/app/context/context-editor.tsx")).not.toMatch(
       /const files = event\.target\.files;\s*event\.target\.value = "";/,
     );
+  });
+
+  it("keeps Agents as sessions, tokens, and activity with setup steps", () => {
+    const agents = readWeb("app/app/agents/agents-view.tsx");
+    const i18n = readWeb("lib/i18n.ts");
+    expect(agents).toContain("agents.intro");
+    expect(agents).toContain("agents.sessions");
+    expect(agents).toContain("agents.tokens");
+    expect(agents).toContain("agents.activity");
+    expect(agents).toContain('href="/app/board"');
+    expect(agents).toContain('href="/app/settings"');
+    expect(i18n).toContain("setup.cmd");
+    expect(i18n).toContain("./setup.sh");
+    expect(i18n).toContain("beacon setup");
+    expect(i18n).toContain("Ready lives on Board");
+    expect(i18n).toContain("project id lives in Settings");
+    expect(agents).not.toContain("agents.ready");
+    expect(agents).not.toContain("agents.offered");
+    expect(agents).not.toContain("CopyableProjectId");
+    expect(readWeb("app/app/settings/settings-view.tsx")).toContain("CopyableProjectId");
   });
 
   it("keeps Definition of Done and tech stack as first-class brief sections", () => {

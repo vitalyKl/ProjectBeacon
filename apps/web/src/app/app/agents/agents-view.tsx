@@ -16,24 +16,12 @@ import {
   type PublicAgentSession,
   type PublicApiToken,
   type PublicProject,
-  type PublicRepo,
   type TokenTtl,
 } from "@/lib/api";
-import { offeredTasks } from "@/lib/brief";
-import {
-  connectionLabel,
-  fetchDetailedProjectRepos,
-  formatIndexWhen,
-  indexModeLabel,
-  repoDisplayName,
-} from "@/lib/index-status";
+import { formatIndexWhen } from "@/lib/index-status";
 import { activityLine, t } from "@/lib/i18n";
 import { LIVE_POLL_MS } from "@/lib/poll";
-import { DEFAULT_TASK_PRIORITY, priorityLabel } from "@/lib/priority";
-import { fetchProjectTasks, statusLabel, type PublicTask } from "@/lib/roadmap";
 import { useT, useTf } from "@/lib/use-locale";
-
-import { CopyableProjectId } from "../copyable-project-id";
 
 const TOKEN_TTLS: { value: TokenTtl; labelKey: "agents.ttl7d" | "agents.ttl90d" | "agents.ttl1y" | "agents.ttlNone" }[] = [
   { value: "7d", labelKey: "agents.ttl7d" },
@@ -52,8 +40,6 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
   const [sessions, setSessions] = useState<PublicAgentSession[]>([]);
   const [activity, setActivity] = useState<PublicActivityEvent[]>([]);
   const [tokens, setTokens] = useState<PublicApiToken[]>([]);
-  const [tasks, setTasks] = useState<PublicTask[]>([]);
-  const [repos, setRepos] = useState<PublicRepo[] | null>([]);
   const [error, setError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(project));
@@ -68,17 +54,13 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
   const [canManageTokens, setCanManageTokens] = useState(true);
 
   const loadLive = useCallback(async (projectId: string) => {
-    const [nextSessions, nextActivity, nextRepos, nextTasks] = await Promise.all([
+    const [nextSessions, nextActivity] = await Promise.all([
       fetchProjectSessions(projectId),
       fetchProjectActivity(projectId),
-      fetchDetailedProjectRepos(projectId),
-      fetchProjectTasks(projectId),
     ]);
     return {
       sessions: nextSessions,
       activity: nextActivity,
-      repos: nextRepos,
-      tasks: nextTasks,
     };
   }, []);
 
@@ -113,8 +95,6 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
         setSessions(next.sessions);
         setActivity(next.activity);
         setTokens(next.tokens);
-        setRepos(next.repos);
-        setTasks(next.tasks);
         setCanManageTokens(next.canManageTokens);
       })
       .catch((caught: unknown) => {
@@ -141,8 +121,6 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
         .then((next) => {
           setSessions(next.sessions);
           setActivity(next.activity);
-          setRepos(next.repos);
-          setTasks(next.tasks);
         })
         .catch((caught: unknown) => {
           setError(caught instanceof ApiError ? caught.message : t("agents.failedRefresh"));
@@ -157,7 +135,6 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
     () => sessions.filter((session) => session.status === "active"),
     [sessions],
   );
-  const offered = useMemo(() => offeredTasks(tasks), [tasks]);
   const listedTokens = useMemo(() => tokens.filter((token) => !token.revoked_at), [tokens]);
 
   function resetCreateForm() {
@@ -245,69 +222,17 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{label("nav.agents")}</h1>
         <p className="text-sm text-muted">{label("agents.intro")}</p>
-        <CopyableProjectId projectId={project.id} />
+        <p className="flex flex-wrap gap-3 text-sm">
+          <Link className="underline" href="/app/board">
+            {label("nav.board")}
+          </Link>
+          <Link className="underline" href="/app/settings">
+            {label("nav.settings")}
+          </Link>
+        </p>
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{label("common.loading")}</p> : null}
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{label("index.title")}</h2>
-        {repos === null ? (
-          <p className="text-sm text-muted">{label("agents.noRepos")}</p>
-        ) : repos.length === 0 ? (
-          <p className="text-sm text-muted">{label("agents.noRepos")}</p>
-        ) : (
-          <ul className="space-y-2">
-            {repos.map((repo) => (
-              <li
-                key={repo.id}
-                className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-              >
-                <div className="font-medium">{repoDisplayName(repo)}</div>
-                <dl className="mt-2 grid gap-1 text-muted sm:grid-cols-2">
-                  <div>{format("agents.indexLine", { value: indexModeLabel(repo.index_mode) })}</div>
-                  <div>{format("agents.sidecarLine", { value: connectionLabel(repo.sidecar_connected) })}</div>
-                  <div>
-                    {format("agents.workerLine", { value: connectionLabel(repo.worker_index_connected) })}
-                  </div>
-                  <div>
-                    {format("agents.lastIndexedLine", { value: formatIndexWhen(repo.last_indexed_at) })}
-                  </div>
-                </dl>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{label("agents.ready")}</h2>
-        {offered.length === 0 ? (
-          <p className="text-sm text-muted">{label("agents.noReady")}</p>
-        ) : (
-          <ul className="space-y-2">
-            {offered.map((task) => (
-              <li
-                key={task.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm"
-              >
-                <div>
-                  <Link className="font-medium underline" href={`/app/tasks/${task.id}`}>
-                    {task.title}
-                  </Link>
-                  <p className="text-muted capitalize">
-                    {statusLabel(task.status)}
-                    {task.priority !== DEFAULT_TASK_PRIORITY
-                      ? ` · ${priorityLabel(task.priority)}`
-                      : ""}
-                  </p>
-                </div>
-                <span className="text-xs text-muted">{label("agents.offered")}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">{label("agents.sessions")}</h2>

@@ -109,7 +109,7 @@ const STRINGS = {
     "learn.files":
       "Files is a read-only tree of the connected repo. Attach a local path when none is connected. Open a file to see an excerpt when the local sidecar or bind-mount index is up.",
     "learn.agents":
-      "Agents is where you mint a project token and watch sessions. Beacon does not run a hosted coding agent.",
+      "Agents is where you mint a project token and watch sessions. Ready lives on Board. The project id lives in Settings. Beacon does not run a hosted coding agent.",
     "learn.decisions":
       "Decisions and constraints are the durable rules agents should not invent around.",
     "learn.reports":
