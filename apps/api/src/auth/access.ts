@@ -2,6 +2,7 @@ import { isUuid, type Scope } from "@beacon/shared";
 import type { Context } from "hono";
 
 import { errorJson } from "../errors.js";
+import { isResponse } from "../http/parse.js";
 import type { OrgStore } from "../orgs/store.js";
 import type { ProjectRecord, ProjectRole } from "../orgs/types.js";
 import type { TokenStore } from "../tokens/store.js";
@@ -134,10 +135,6 @@ export type ProjectAccess = {
   actor: AuthActor;
   role: ProjectRole | null;
 };
-
-function isResponse(value: AuthActor | Response): value is Response {
-  return value instanceof Response;
-}
 
 export async function requireActor(c: Context, deps: AccessDeps): Promise<AuthActor | Response> {
   const authorization = c.req.header("authorization");

@@ -6,13 +6,10 @@ import type { RoadmapStore } from "../roadmap/store.js";
 import type { ReportStore } from "./store.js";
 import { errorJson, isMissingSchemaError } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
-import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import { isResponse, parsePageQuery, parseText, writeActivity } from "../http/parse.js";
+import { paginateRecords } from "../roadmap/page.js";
 import { buildReportSnapshot, defaultReportTitle, reportMarkdown, reviewTitleFromBody } from "./build.js";
 import { presentReport, presentReview } from "./present.js";
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
 
 function schemaUnavailable(c: Parameters<typeof errorJson>[0]) {
   return errorJson(
@@ -22,19 +19,6 @@ function schemaUnavailable(c: Parameters<typeof errorJson>[0]) {
     "database schema is out of date; run pnpm --filter @beacon/db db:migrate",
     { reason: "missing_schema" },
   );
-}
-
-function parseText(value: unknown, max: number, allowEmpty = false): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "string" || value.length > max) {
-    return undefined;
-  }
-  if (!allowEmpty && value.trim().length === 0) {
-    return undefined;
-  }
-  return allowEmpty ? value : value.trim();
 }
 
 export type ReportDeps = AccessDeps & {
@@ -100,16 +84,13 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
         createdById: actor.id,
         createdAt: now,
       });
-      await deps.store.writeActivity({
-        id: uuidv7(now.getTime() + 1),
+      await writeActivity(deps.store, actor, {
         projectId: access.project.id,
         objectType: "report",
         objectId: report.id,
-        actorType: actor.type,
-        actorId: actor.id,
         verb: "create",
         payload: { title: report.title },
-        createdAt: now,
+        now,
       });
       return c.json(presentReport(report), 201);
     } catch (error) {
@@ -195,16 +176,13 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
         createdById: actor.id,
         createdAt: now,
       });
-      await deps.store.writeActivity({
-        id: uuidv7(now.getTime() + 1),
+      await writeActivity(deps.store, actor, {
         projectId: access.project.id,
         objectType: "review",
         objectId: review.id,
-        actorType: actor.type,
-        actorId: actor.id,
         verb: "import",
         payload: { title: review.title },
-        createdAt: now,
+        now,
       });
       return c.json(presentReview(review), 201);
     } catch (error) {

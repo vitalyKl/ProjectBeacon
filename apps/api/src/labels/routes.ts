@@ -10,16 +10,13 @@ import type { RoadmapStore } from "../roadmap/store.js";
 import type { ContextStore } from "../context/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
-import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import { isResponse, parsePageQuery, writeActivity } from "../http/parse.js";
+import { paginateRecords } from "../roadmap/page.js";
 import { presentTaskWithLabels } from "../roadmap/present.js";
 import { parseSlug } from "../slug.js";
 import { parseLabelIds } from "./parse.js";
 import { presentLabel } from "./present.js";
 import { isLabelStatus } from "./types.js";
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
 
 function slugFromName(name: string): string | undefined {
   return parseSlug(name.replace(/[^a-zA-Z0-9]+/g, "-"));
@@ -144,16 +141,13 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
         createdAt: now,
         paths: paths.paths,
       });
-      await deps.store.writeActivity({
-        id: uuidv7(now.getTime()),
+      await writeActivity(deps.store, actor, {
         projectId: access.project.id,
         objectType: "label",
         objectId: created.id,
-        actorType: actor.type,
-        actorId: actor.id,
         verb: created.status === "proposed" ? "propose" : "create",
         payload: { slug: created.slug, status: created.status },
-        createdAt: now,
+        now,
       });
       return c.json(presentLabel(created), 201);
     } catch (error) {
@@ -229,17 +223,13 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
       if (!updated) {
         return errorJson(c, 404, "not_found", "label not found");
       }
-      const actor = actorRef(access.actor);
-      await deps.store.writeActivity({
-        id: uuidv7(deps.clock.now().getTime()),
+      await writeActivity(deps.store, actorRef(access.actor), {
         projectId: existing.projectId,
         objectType: "label",
         objectId: updated.id,
-        actorType: actor.type,
-        actorId: actor.id,
         verb: "update",
         payload: { slug: updated.slug, status: updated.status },
-        createdAt: deps.clock.now(),
+        now: deps.clock.now(),
       });
       return c.json(presentLabel(updated));
     } catch (error) {

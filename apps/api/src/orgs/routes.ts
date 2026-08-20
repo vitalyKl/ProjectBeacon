@@ -12,6 +12,7 @@ import type { UserRecord } from "../auth/identity.js";
 import type { RepoStore } from "../repos/store.js";
 import { errorJson } from "../errors.js";
 import { parseEmail, parseOptionalString, readObject } from "../http.js";
+import { isResponse } from "../http/parse.js";
 import { mergeProjectSettings, parseProjectSettingsPatch } from "../github/settings.js";
 import { parseSlug } from "../slug.js";
 import {
@@ -51,10 +52,6 @@ export async function requireSession(c: Context, deps: AccessDeps): Promise<Auth
   }
   await deps.store.ensurePersonalOrg(resolved.user, deps.clock.now());
   return { user: resolved.user };
-}
-
-function isResponse(value: Authed | Response): value is Response {
-  return value instanceof Response;
 }
 
 async function resolveOrg(deps: AccessDeps, ref: string): Promise<OrgRecord | undefined> {

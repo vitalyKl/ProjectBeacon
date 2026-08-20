@@ -27,9 +27,10 @@ import {
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
+import { isResponse, parseIdempotencyKey, parsePageQuery } from "../http/parse.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { extraCompilePaths } from "../labels/scope.js";
-import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import { paginateRecords } from "../roadmap/page.js";
 import { fileLineCount, recordCodeAnomaly, recordGetFileAnomaly } from "../observability.js";
 import { parseLocalRootHint } from "./local-root.js";
 import { presentProjectRepo } from "./present.js";
@@ -39,18 +40,6 @@ const PROVIDERS = ["github", "local"] as const;
 
 type IndexMode = (typeof INDEX_MODES)[number];
 type Provider = (typeof PROVIDERS)[number];
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
-
-function parseIdempotencyKey(c: Context): string | undefined {
-  const header = c.req.header("idempotency-key")?.trim();
-  if (!header || header.length > 256) {
-    return undefined;
-  }
-  return header;
-}
 
 function parseProvider(value: unknown): Provider | undefined {
   if (typeof value !== "string") {

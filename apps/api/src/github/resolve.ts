@@ -10,15 +10,12 @@ import {
 import type { RepoStore } from "../repos/store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
+import { isResponse } from "../http/parse.js";
 import type { ProjectRecord } from "../orgs/types.js";
 
 export type GithubResolveDeps = AccessDeps & {
   store: RepoStore;
 };
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
 
 export async function resolveGithubRepo(
   c: Context,

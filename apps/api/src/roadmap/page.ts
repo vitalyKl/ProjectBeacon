@@ -1,39 +1,6 @@
-import {
-  encodeCursor,
-  PAGINATION_DEFAULT_LIMIT,
-  PAGINATION_MAX_LIMIT,
-  tryDecodeCursor,
-  type CursorPayload,
-} from "@beacon/shared";
-import type { Context } from "hono";
+import { encodeCursor, type CursorPayload } from "@beacon/shared";
 
-import { errorJson } from "../errors.js";
 import type { PageQuery } from "./types.js";
-
-export function parsePageQuery(c: Context): PageQuery | Response {
-  const limitRaw = c.req.query("limit");
-  let limit = PAGINATION_DEFAULT_LIMIT;
-  if (limitRaw !== undefined) {
-    if (!/^[0-9]+$/.test(limitRaw)) {
-      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_limit" });
-    }
-    const parsed = Number(limitRaw);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
-      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_limit" });
-    }
-    limit = parsed;
-  }
-
-  const cursorRaw = c.req.query("cursor");
-  if (cursorRaw === undefined || cursorRaw === "") {
-    return { limit };
-  }
-  const decoded = tryDecodeCursor(cursorRaw);
-  if (!decoded.ok) {
-    return errorJson(c, 400, "invalid_request", "invalid cursor", { reason: "invalid_cursor" });
-  }
-  return { limit, cursor: decoded.value };
-}
 
 export function keysetAfter(itemTime: Date, itemId: string, cursor: CursorPayload): boolean {
   const cursorTime = Date.parse(cursor.t);

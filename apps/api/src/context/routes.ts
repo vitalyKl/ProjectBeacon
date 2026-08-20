@@ -9,8 +9,8 @@ import type { WorkStore } from "../sessions/store.js";
 import type { ContextStore } from "./store.js";
 import { errorJson } from "../errors.js";
 import { readJson, readObject, parseOptionalString } from "../http.js";
-
-import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import { isResponse, parsePageQuery } from "../http/parse.js";
+import { paginateRecords } from "../roadmap/page.js";
 import { presentContextNode, sectionsText, toCompileNode, presentContextRevision, presentContextRevisionSummary } from "./present.js";
 import { compileProjectBrief } from "./compile-brief.js";
 import { type ContextNodeRecord, isContextReviewState, isContextScopeType, type ContextReviewState, type ContextScopeType } from "./types.js";
@@ -20,10 +20,6 @@ import type { CodeGateway } from "../code/gateway.js";
 const MAX_IMPORT_FILES = 200;
 const MAX_IMPORT_PATH = 1024;
 const MAX_IMPORT_CONTENT = 256_000;
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
 
 function parseImportFilesBody(body: unknown): ImportFile[] | undefined {
   const list = Array.isArray(body)

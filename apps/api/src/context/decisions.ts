@@ -1,6 +1,6 @@
 import { PatchDecisionSchema } from "@beacon/api-spec";
 import { isUuid, uuidv7 } from "@beacon/shared";
-import type { Context, Hono } from "hono";
+import type { Hono } from "hono";
 
 import {
   actorActivityRef,
@@ -20,7 +20,14 @@ import type { TokenStore } from "../tokens/store.js";
 import type { ContextStore } from "./store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
-import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import {
+  isResponse,
+  parseIdempotencyKey,
+  parsePageQuery,
+  parseText,
+  writeActivity,
+} from "../http/parse.js";
+import { paginateRecords } from "../roadmap/page.js";
 import { presentApproval } from "../tokens/present.js";
 import { presentConstraintRecord, presentDecisionRecord } from "./present.js";
 import {
@@ -32,31 +39,6 @@ import {
   type DecisionPathLink,
   type DecisionStatus,
 } from "./types.js";
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
-
-function parseIdempotencyKey(c: Context): string | undefined {
-  const header = c.req.header("idempotency-key")?.trim();
-  if (!header || header.length > 256) {
-    return undefined;
-  }
-  return header;
-}
-
-function parseText(value: unknown, max: number, allowEmpty = false): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "string" || value.length > max) {
-    return undefined;
-  }
-  if (!allowEmpty && value.trim().length === 0) {
-    return undefined;
-  }
-  return allowEmpty ? value : value.trim();
-}
 
 function parseRelatedTaskIds(value: unknown): { ok: true; ids: string[] } | { ok: false } {
   if (value === undefined) {
@@ -234,16 +216,13 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
           relatedPaths: relatedPaths.paths,
           relatedTaskIds: relatedTasks.ids,
         });
-        await deps.store.writeActivity({
-          id: uuidv7(now.getTime()),
+        await writeActivity(deps.store, actor, {
           projectId: access.project.id,
           objectType: "decision",
           objectId: decision.id,
-          actorType: actor.type,
-          actorId: actor.id,
           verb: "create",
           payload: { status: decision.status },
-          createdAt: now,
+          now,
         });
         return presentDecisionRecord(decision);
       },
@@ -307,16 +286,13 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
       return errorJson(c, 404, "not_found", "decision not found");
     }
     const actor = actorRef(access.actor);
-    await deps.store.writeActivity({
-      id: uuidv7(deps.clock.now().getTime()),
+    await writeActivity(deps.store, actor, {
       projectId: existing.projectId,
       objectType: "decision",
       objectId: updated.id,
-      actorType: actor.type,
-      actorId: actor.id,
       verb: "update",
       payload: { status: updated.status, superseded_by: updated.supersededBy },
-      createdAt: deps.clock.now(),
+      now: deps.clock.now(),
     });
     return c.json(presentDecisionRecord(updated));
   });
@@ -393,16 +369,13 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
           status,
           createdAt: now,
         });
-        await deps.store.writeActivity({
-          id: uuidv7(now.getTime()),
+        await writeActivity(deps.store, actor, {
           projectId: access.project.id,
           objectType: "constraint",
           objectId: constraint.id,
-          actorType: actor.type,
-          actorId: actor.id,
           verb: "create",
           payload: { kind: constraint.kind, status: constraint.status },
-          createdAt: now,
+          now,
         });
         return presentConstraintRecord(constraint);
       },
@@ -483,17 +456,13 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
         reason: "invalid_status",
       });
     }
-    const actorIds = actorRef(actor);
-    await deps.store.writeActivity({
-      id: uuidv7(now.getTime()),
+    await writeActivity(deps.store, actorRef(actor), {
       projectId: applied.projectId,
       objectType: "constraint",
       objectId: applied.id,
-      actorType: actorIds.type,
-      actorId: actorIds.id,
       verb: "apply",
       payload: { status: applied.status },
-      createdAt: now,
+      now,
     });
     return c.json(presentConstraintRecord(applied));
   });

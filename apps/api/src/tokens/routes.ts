@@ -21,11 +21,8 @@ import type { WorkStore } from "../sessions/store.js";
 import type { TokenStore } from "./store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
+import { isResponse } from "../http/parse.js";
 import { presentApproval, presentApiToken } from "./present.js";
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
 
 function parseScopes(value: unknown): Scope[] | undefined {
   if (value === undefined) {

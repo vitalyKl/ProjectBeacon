@@ -20,9 +20,10 @@ import type { GithubStore } from "./store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
+import { isResponse, parseIdempotencyKey, parsePageQuery } from "../http/parse.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { presentTask } from "../roadmap/present.js";
-import { paginateRecords, parsePageQuery } from "../roadmap/page.js";
+import { paginateRecords } from "../roadmap/page.js";
 import type { TaskRecord } from "../roadmap/types.js";
 import {
   createInstallationToken,
@@ -42,18 +43,6 @@ export type GithubDeps = AccessDeps & {
   store: GithubStore & RepoStore & RoadmapStore & WorkStore & OrgStore;
   jobs: JobQueue;
 };
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
-
-function parseIdempotencyKey(c: Context): string | undefined {
-  const header = c.req.header("idempotency-key")?.trim();
-  if (!header || header.length > 256) {
-    return undefined;
-  }
-  return header;
-}
 
 function parsePositiveInt(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isInteger(value) && value > 0) {

@@ -17,9 +17,16 @@ import type { RoadmapStore } from "../roadmap/store.js";
 import { compileProjectBrief } from "../context/compile-brief.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
-import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
+import {
+  isResponse,
+  parseIdempotencyKey,
+  parseLinkedPaths,
+  parsePageQuery,
+  writeActivity,
+} from "../http/parse.js";
+import { paginateRecords } from "../roadmap/page.js";
 import { presentTask } from "../roadmap/present.js";
-import { type LinkedPath, type TaskRecord } from "../roadmap/types.js";
+import { type TaskRecord } from "../roadmap/types.js";
 import { presentHandoffResource, presentSession } from "./present.js";
 import {
   HANDOFF_SUMMARY_MIN,
@@ -34,18 +41,6 @@ import {
   type FinishWorkStatus,
 } from "./types.js";
 import type { WorkStore } from "./store.js";
-
-function isResponse<T>(value: T | Response): value is Response {
-  return value instanceof Response;
-}
-
-function parseIdempotencyKey(c: Context): string | undefined {
-  const header = c.req.header("idempotency-key")?.trim();
-  if (!header || header.length > 256) {
-    return undefined;
-  }
-  return header;
-}
 
 function parseBoolean(value: unknown): boolean | undefined {
   if (value === undefined) {
@@ -65,37 +60,6 @@ function parseBudgetTokens(value: unknown): number | undefined | "invalid" {
     return value;
   }
   return "invalid";
-}
-
-function parseLinkedPaths(
-  value: unknown,
-): { ok: true; paths: LinkedPath[] } | { ok: false; reason: "invalid" | "repo_ambiguous" } {
-  if (value === undefined) {
-    return { ok: true, paths: [] };
-  }
-  if (!Array.isArray(value)) {
-    return { ok: false, reason: "invalid" };
-  }
-  const paths: LinkedPath[] = [];
-  for (const item of value) {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
-      return { ok: false, reason: "invalid" };
-    }
-    const record = item as Record<string, unknown>;
-    const path = parseOptionalString(record["path"], 1024);
-    if (!path) {
-      return { ok: false, reason: "invalid" };
-    }
-    const repoId = record["repo_id"];
-    if (repoId === undefined || repoId === null) {
-      return { ok: false, reason: "repo_ambiguous" };
-    }
-    if (typeof repoId !== "string" || !isUuid(repoId)) {
-      return { ok: false, reason: "invalid" };
-    }
-    paths.push({ repo_id: repoId, path });
-  }
-  return { ok: true, paths };
 }
 
 function parseOpenQuestions(value: unknown): string[] | undefined {
@@ -293,31 +257,25 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
             steal,
             now,
           });
-          await deps.store.writeActivity({
-            id: uuidv7(now.getTime()),
+          await writeActivity(deps.store, actor, {
             projectId: access.project.id,
             objectType: "session",
             objectId: started.session.id,
-            actorType: actor.type,
-            actorId: actor.id,
             verb: "start_work",
             payload: { task_id: task.id, steal },
-            createdAt: now,
+            now,
           });
           if (started.stolenFrom) {
-            await deps.store.writeActivity({
-              id: uuidv7(now.getTime()),
+            await writeActivity(deps.store, actor, {
               projectId: access.project.id,
               objectType: "task",
               objectId: task.id,
-              actorType: actor.type,
-              actorId: actor.id,
               verb: "lock_stolen",
               payload: {
                 from_session_id: started.stolenFrom,
                 to_session_id: started.session.id,
               },
-              createdAt: now,
+              now,
             });
           }
           return {
