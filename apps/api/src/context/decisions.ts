@@ -12,8 +12,12 @@ import {
   requireActor,
   requireProjectActor,
 } from "../auth/access.js";
-import type { AuthActor } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
+import type { AccessDeps, AuthActor } from "../auth/access.js";
+import type { RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { WorkStore } from "../sessions/store.js";
+import type { TokenStore } from "../tokens/store.js";
+import type { ContextStore } from "./store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
@@ -126,7 +130,11 @@ function wantsApproval(body: Record<string, unknown> | undefined): boolean {
   return body["request_approval"] === true || body["create_approval"] === true;
 }
 
-export function mountDecisions(app: Hono, deps: AuthDeps): void {
+export type DecisionDeps = AccessDeps & {
+  store: ContextStore & RoadmapStore & RepoStore & WorkStore & TokenStore;
+};
+
+export function mountDecisions(app: Hono, deps: DecisionDeps): void {
   app.get("/v1/projects/:id/decisions", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "decisions:read");
     if (isResponse(access)) {

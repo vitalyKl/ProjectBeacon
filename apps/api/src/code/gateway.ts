@@ -3,7 +3,8 @@ import { extractIdentifiers } from "@beacon/index-core";
 import { observeIndex } from "@beacon/shared";
 
 import type { AuthConfig } from "../auth/config.js";
-import type { AuthStore } from "../auth/store.js";
+import type { OrgStore } from "../orgs/store.js";
+import type { RepoStore } from "../repos/store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import type { TaskRecord } from "../roadmap/types.js";
 
@@ -171,7 +172,7 @@ type TunnelClient = {
 
 export function createCodeGateway(options: {
   config: Pick<AuthConfig, "indexRpcUrl" | "indexRpcToken">;
-  store: Pick<AuthStore, "findSidecarConnectionByRepoId">;
+  store: Pick<RepoStore, "findSidecarConnectionByRepoId">;
   now: () => Date;
   fetchImpl?: typeof fetch;
   rpc?: IndexRpcClient;
@@ -282,7 +283,7 @@ export function createCodeGateway(options: {
 }
 
 export async function resolveRepoForCode(
-  store: Pick<AuthStore, "findProjectRepoById" | "listProjectRepos" | "findProjectById">,
+  store: Pick<RepoStore & OrgStore, "findProjectRepoById" | "listProjectRepos" | "findProjectById">,
   projectId: string,
   requested: string | undefined,
 ): Promise<

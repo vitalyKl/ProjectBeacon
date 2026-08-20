@@ -6,6 +6,7 @@ import {
   requireActor,
   requireProjectActor,
   taskStatusOnCreate,
+  type AccessDeps,
 } from "../auth/access.js";
 import {
   DEFAULT_TOKEN_TTL,
@@ -16,7 +17,8 @@ import {
   tokenExpiresAt,
   type TokenTtl,
 } from "../auth/project-tokens.js";
-import type { AuthDeps } from "../auth/routes.js";
+import type { WorkStore } from "../sessions/store.js";
+import type { TokenStore } from "./store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { presentApproval, presentApiToken } from "./present.js";
@@ -62,7 +64,11 @@ function actorUserId(actor: Awaited<ReturnType<typeof requireActor>>): string | 
   return actor.user.id;
 }
 
-export function mountTokens(app: Hono, deps: AuthDeps): void {
+export type TokenDeps = AccessDeps & {
+  store: TokenStore & WorkStore;
+};
+
+export function mountTokens(app: Hono, deps: TokenDeps): void {
   app.get("/v1/projects/:id/tokens", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "admin");
     if (isResponse(access)) {
@@ -233,7 +239,7 @@ export function mountTokens(app: Hono, deps: AuthDeps): void {
 }
 
 /** Test-only stand-in until task create exists (PR 07). */
-export function mountTokenProbe(app: Hono, deps: AuthDeps): void {
+export function mountTokenProbe(app: Hono, deps: TokenDeps): void {
   app.post("/v1/projects/:id/token-probe", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {

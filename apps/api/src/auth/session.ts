@@ -7,7 +7,7 @@ import {
   ROLLING_REFRESH_AFTER_MS,
   SESSION_TTL_MS,
 } from "./tokens.js";
-import type { AuthStore, SessionRecord, UserRecord } from "./store.js";
+import type { IdentityStore, SessionRecord, UserRecord } from "./identity.js";
 
 export type PublicUser = {
   id: string;
@@ -58,7 +58,7 @@ export function toPublicMe(user: UserRecord, orgs: OrgRecord[]): PublicMe {
 }
 
 export async function issueSession(
-  store: AuthStore,
+  store: IdentityStore,
   user: UserRecord,
   now: Date,
   meta: { userAgent: string | null; ip: string | null },
@@ -80,7 +80,7 @@ export async function issueSession(
 }
 
 export async function lookupValidSession(
-  store: AuthStore,
+  store: IdentityStore,
   token: string | undefined,
   now: Date,
 ): Promise<{ user: UserRecord; session: SessionRecord } | undefined> {
@@ -102,7 +102,7 @@ export async function lookupValidSession(
 }
 
 export async function resolveSession(
-  store: AuthStore,
+  store: IdentityStore,
   token: string | undefined,
   now: Date,
 ): Promise<{ user: UserRecord; session: SessionRecord; rolled: boolean } | undefined> {

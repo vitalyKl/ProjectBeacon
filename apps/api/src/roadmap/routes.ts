@@ -1,8 +1,9 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
-import { authorizeProjectActor, isAdminActor, requireActor, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor, taskStatusOnCreate } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
-import { DependencyCycleError, VersionConflictError, type UserRecord } from "../auth/store.js";
+import { authorizeProjectActor, isAdminActor, requireActor, type AccessDeps, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor, taskStatusOnCreate } from "../auth/access.js";
+import type { UserRecord } from "../auth/identity.js";
+import type { ContextStore } from "../context/store.js";
+import type { WorkStore } from "../sessions/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parseLabelIds } from "../labels/parse.js";
@@ -12,7 +13,12 @@ import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { isTerminalTaskStatus } from "../sessions/types.js";
 import { parsePageQuery, paginateRecords, dependencyCursorId } from "./page.js";
 import { presentActivity, presentComment, presentDependency, presentMilestone, presentTask, presentTaskWithLabels } from "./present.js";
-import { isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, type DependencyType, type LinkedPath, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
+import { DependencyCycleError, isDependencyType, isMilestoneStatus, isTaskStatus, isTaskType, VersionConflictError, type DependencyType, type LinkedPath, type TaskPatch, type TaskRecord, type TaskStatus, type TaskType } from "./types.js";
+import type { RoadmapStore } from "./store.js";
+
+export type RoadmapDeps = AccessDeps & {
+  store: RoadmapStore & ContextStore & WorkStore;
+};
 
 function parseExpectedVersion(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isInteger(value) && value >= 1) {
@@ -110,7 +116,7 @@ function versionConflict(c: Context, task: TaskRecord) {
 
 async function requireTaskAccess(
   c: Context,
-  deps: AuthDeps,
+  deps: RoadmapDeps,
   user: UserRecord,
   taskId: string,
   needed: ProjectRole,
@@ -138,7 +144,7 @@ async function requireTaskAccess(
 
 async function requireTaskActor(
   c: Context,
-  deps: AuthDeps,
+  deps: RoadmapDeps,
   taskId: string,
   needed: "tasks:read" | "tasks:write" | "tasks:delete",
 ): Promise<
@@ -183,7 +189,7 @@ function shouldReleaseLockOnTaskWrite(
 }
 
 async function writeActivity(
-  writer: { writeActivity: AuthDeps["store"]["writeActivity"] },
+  writer: { writeActivity: RoadmapStore["writeActivity"] },
   input: {
     projectId: string;
     objectType: string;
@@ -210,7 +216,7 @@ async function writeActivity(
 
 async function requireAssignee(
   c: Context,
-  deps: AuthDeps,
+  deps: RoadmapDeps,
   projectId: string,
   userId: string | null,
 ): Promise<Response | undefined> {
@@ -232,7 +238,7 @@ async function requireAssignee(
   return undefined;
 }
 
-export function mountRoadmap(app: Hono, deps: AuthDeps): void {
+export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   app.get("/v1/projects/:id/milestones", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
     if (access instanceof Response) {

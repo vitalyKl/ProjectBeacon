@@ -10,8 +10,10 @@ import {
   requireProjectActor,
   type AuthActor,
 } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
-import { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../auth/store.js";
+import type { AccessDeps } from "../auth/access.js";
+import type { ContextStore } from "../context/store.js";
+import type { RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
 import type { CodeGateway } from "../code/gateway.js";
 import { compileProjectBrief } from "../context/compile-brief.js";
 import { errorJson } from "../errors.js";
@@ -27,8 +29,12 @@ import {
   isTerminalTaskStatus,
   lockExpiresAt,
   type AgentHost,
+  InvalidReferenceError,
+  SessionNotActiveError,
+  TaskLockedError,
   type FinishWorkStatus,
 } from "./types.js";
+import type { WorkStore } from "./store.js";
 
 function isResponse<T>(value: T | Response): value is Response {
   return value instanceof Response;
@@ -166,7 +172,8 @@ function taskLocked(c: Context, task: TaskRecord) {
   });
 }
 
-export type SessionDeps = AuthDeps & {
+export type SessionDeps = AccessDeps & {
+  store: WorkStore & RoadmapStore & ContextStore & RepoStore;
   codeGateway?: CodeGateway;
 };
 

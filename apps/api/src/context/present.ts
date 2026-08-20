@@ -6,7 +6,7 @@ import type {
   ContextRevisionRecord,
   DecisionRecord,
 } from "./types.js";
-import type { UserRecord } from "../auth/store.js";
+import type { UserRecord } from "../auth/identity.js";
 import type { MilestoneRecord, TaskRecord } from "../roadmap/types.js";
 
 export function presentConstraint(constraint: ConstraintRecord): ConstraintView {

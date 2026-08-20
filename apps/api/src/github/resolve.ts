@@ -1,11 +1,15 @@
 import { isUuid } from "@beacon/shared";
 import type { Context } from "hono";
 
-import { authorizeProjectActor, requireActor, type AuthActor } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
+import { authorizeProjectActor, requireActor, type AccessDeps, type AuthActor } from "../auth/access.js";
+import type { RepoStore } from "../repos/store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import type { ProjectRecord } from "../orgs/types.js";
+
+export type GithubResolveDeps = AccessDeps & {
+  store: RepoStore;
+};
 
 function isResponse<T>(value: T | Response): value is Response {
   return value instanceof Response;
@@ -13,7 +17,7 @@ function isResponse<T>(value: T | Response): value is Response {
 
 export async function resolveGithubRepo(
   c: Context,
-  deps: AuthDeps,
+  deps: GithubResolveDeps,
   actor: AuthActor,
   repoId: string | undefined,
   projectId: string | undefined,
@@ -52,7 +56,7 @@ export async function resolveGithubRepo(
 
 export async function requireGithubRepo(
   c: Context,
-  deps: AuthDeps,
+  deps: GithubResolveDeps,
   repoId: string,
   needed: "project:read" | "integrations:write" | "tasks:write",
 ): Promise<{ repo: ProjectRepoRecord; project: ProjectRecord; actor: AuthActor } | Response> {

@@ -2,10 +2,12 @@ import { uniqueScopePaths } from "@beacon/context";
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Hono } from "hono";
 
-import { actorActivityRef, isAdminActor, requireActor, requireProjectActor } from "../auth/access.js";
+import { actorActivityRef, isAdminActor, requireActor, requireProjectActor, type AccessDeps } from "../auth/access.js";
 import type { AuthActor } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
 import { UniqueViolationError } from "../auth/store.js";
+import type { RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { ContextStore } from "../context/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
@@ -36,8 +38,12 @@ function parseColor(value: unknown): string | null | undefined {
   return value.toLowerCase();
 }
 
+export type LabelDeps = AccessDeps & {
+  store: ContextStore & RoadmapStore & RepoStore;
+};
+
 async function parseLabelPaths(
-  store: AuthDeps["store"],
+  store: Pick<RepoStore, "findProjectRepo">,
   projectId: string,
   value: unknown,
 ): Promise<{ ok: true; paths: { repo_id: string; path: string }[] } | { ok: false; reason: string }> {
@@ -78,7 +84,7 @@ function actorRef(actor: AuthActor): { type: string; id: string } {
   return ref;
 }
 
-export function mountLabels(app: Hono, deps: AuthDeps): void {
+export function mountLabels(app: Hono, deps: LabelDeps): void {
   app.get("/v1/projects/:id/labels", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
     if (isResponse(access)) {

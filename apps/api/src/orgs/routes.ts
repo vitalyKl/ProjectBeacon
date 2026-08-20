@@ -1,11 +1,10 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
-import { requireActor, requireProjectActor } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
+import { requireActor, requireProjectActor, type AccessDeps } from "../auth/access.js";
 import { loadSession } from "../auth/routes.js";
-import type { UserRecord } from "../auth/store.js";
-import { OrgSlugTakenError, ProjectSlugTakenError } from "../auth/store.js";
+import type { UserRecord } from "../auth/identity.js";
+import type { RepoStore } from "../repos/store.js";
 import { errorJson } from "../errors.js";
 import { parseEmail, parseOptionalString, readObject } from "../http.js";
 import { mergeProjectSettings, parseProjectSettingsPatch } from "../github/settings.js";
@@ -21,13 +20,20 @@ import {
 import {
   isOrgInviteRole,
   isProjectRole,
+  OrgSlugTakenError,
   orgRoleAtLeast,
   projectRoleAtLeast,
+  ProjectSlugTakenError,
   type OrgInviteRole,
   type OrgRecord,
   type ProjectRecord,
   type ProjectRole,
 } from "./types.js";
+import type { OrgStore } from "./store.js";
+
+export type OrgDeps = AccessDeps & {
+  store: OrgStore & RepoStore;
+};
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -35,7 +41,7 @@ type Authed = {
   user: UserRecord;
 };
 
-export async function requireSession(c: Context, deps: AuthDeps): Promise<Authed | Response> {
+export async function requireSession(c: Context, deps: AccessDeps): Promise<Authed | Response> {
   const resolved = await loadSession(c, deps);
   if (!resolved) {
     return errorJson(c, 401, "unauthorized", "authentication required");
@@ -48,7 +54,7 @@ export function isResponse(value: Authed | Response): value is Response {
   return value instanceof Response;
 }
 
-async function resolveOrg(deps: AuthDeps, ref: string): Promise<OrgRecord | undefined> {
+async function resolveOrg(deps: AccessDeps, ref: string): Promise<OrgRecord | undefined> {
   if (isUuid(ref)) {
     const byId = await deps.store.findOrgById(ref);
     if (byId) {
@@ -100,7 +106,7 @@ function inviteMatchesUser(
 
 async function requireOrgMember(
   c: Context,
-  deps: AuthDeps,
+  deps: AccessDeps,
   user: UserRecord,
   orgRef: string,
   needed?: "admin" | "owner",
@@ -121,7 +127,7 @@ async function requireOrgMember(
 
 export async function requireProjectAccess(
   c: Context,
-  deps: AuthDeps,
+  deps: AccessDeps,
   user: UserRecord,
   projectId: string,
   needed: ProjectRole,
@@ -143,7 +149,7 @@ export async function requireProjectAccess(
   return { project, role: member.role };
 }
 
-export function mountOrgs(app: Hono, deps: AuthDeps): void {
+export function mountOrgs(app: Hono, deps: OrgDeps): void {
   app.post("/v1/orgs", async (c) => {
     const session = await requireSession(c, deps);
     if (isResponse(session)) {

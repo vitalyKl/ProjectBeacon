@@ -1,4 +1,4 @@
-import type { UserRecord } from "../auth/store.js";
+import type { UserRecord } from "../auth/identity.js";
 import type {
   OrgInviteRecord,
   OrgMemberRecord,

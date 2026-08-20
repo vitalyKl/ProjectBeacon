@@ -2,7 +2,11 @@ import type { BriefHandoff, ChangedScope, CompileInput, TreeCapsule } from "@bea
 import { compileSessionBrief, type CompileResult } from "@beacon/context";
 import { uuidv7 } from "@beacon/shared";
 
-import type { AuthStore } from "../auth/store.js";
+import type { OrgStore } from "../orgs/store.js";
+import type { RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { WorkStore } from "../sessions/store.js";
+import type { ContextStore } from "./store.js";
 import {
   presentChangedScope,
   presentTreeCapsule,
@@ -23,7 +27,7 @@ import {
 
 export async function compileProjectBrief(
   store: Pick<
-    AuthStore,
+    RoadmapStore & ContextStore & WorkStore & RepoStore & OrgStore,
     | "findTaskById"
     | "findMilestoneById"
     | "listContextNodes"

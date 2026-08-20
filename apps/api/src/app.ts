@@ -6,7 +6,17 @@ import { systemClock, type Clock } from "./auth/clock.js";
 import { DbAuthStore } from "./auth/db-store.js";
 import { DEFAULT_RATE_LIMITS, type RateLimitConfig } from "./auth/rate-limit.js";
 import { mountAuth } from "./auth/routes.js";
-import { MemoryAuthStore, type AuthStore } from "./auth/store.js";
+import type { IdentityStore } from "./auth/identity.js";
+import { MemoryAuthStore } from "./auth/store.js";
+import type { ContextStore } from "./context/store.js";
+import type { GithubStore } from "./github/store.js";
+import type { JobStore } from "./jobs/store.js";
+import type { OrgStore } from "./orgs/store.js";
+import type { ReportStore } from "./reports/store.js";
+import type { RepoStore } from "./repos/store.js";
+import type { RoadmapStore } from "./roadmap/store.js";
+import type { WorkStore } from "./sessions/store.js";
+import type { TokenStore } from "./tokens/store.js";
 import { isSidecarTunnelEnabled } from "./code/flags.js";
 import { createCodeGateway, type CodeGateway } from "./code/gateway.js";
 import { createSidecarTunnelHub, type SidecarTunnelHub } from "./code/tunnel.js";
@@ -30,9 +40,20 @@ export const packageName = "@beacon/api";
 
 export type ReadyCheck = () => Promise<boolean>;
 
+export type AppStore = IdentityStore &
+  OrgStore &
+  TokenStore &
+  RoadmapStore &
+  ContextStore &
+  WorkStore &
+  RepoStore &
+  GithubStore &
+  ReportStore &
+  JobStore;
+
 export type CreateAppOptions = {
   checkReady?: ReadyCheck;
-  store?: AuthStore;
+  store?: AppStore;
   config?: AuthConfig;
   clock?: Clock;
   githubFetch?: typeof fetch;
@@ -49,7 +70,7 @@ export type CreatedApp = Hono & {
   sidecarTunnel: SidecarTunnelHub;
   sidecarTunnelEnabled: () => boolean;
   authDeps: {
-    store: AuthStore;
+    store: AppStore;
     config: AuthConfig;
     clock: Clock;
     githubFetch: typeof fetch;
@@ -57,7 +78,7 @@ export type CreatedApp = Hono & {
   };
 };
 
-function resolveStore(options: CreateAppOptions): AuthStore {
+function resolveStore(options: CreateAppOptions): AppStore {
   if (options.store) {
     return options.store;
   }

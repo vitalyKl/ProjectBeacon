@@ -1,6 +1,8 @@
 import { actorHasCapability } from "../auth/access.js";
 import { hashProjectToken, isProjectTokenFormat } from "../auth/project-tokens.js";
 import type { AuthDeps } from "../auth/routes.js";
+import type { RepoStore } from "../repos/store.js";
+import type { TokenStore } from "../tokens/store.js";
 import { parseBearer } from "../auth/tokens.js";
 import { isSidecarTunnelEnabled } from "./flags.js";
 import {
@@ -52,7 +54,7 @@ function sendJson(ws: WsLike, body: unknown): void {
 export function attachSidecarTunnelSocket(options: {
   ws: WsLike;
   request: Request;
-  deps: AuthDeps;
+  deps: AuthDeps & { store: TokenStore & RepoStore };
   hub: SidecarTunnelHub;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;

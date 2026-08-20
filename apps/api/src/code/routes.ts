@@ -4,6 +4,8 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 
 import type { AuthDeps } from "../auth/routes.js";
+import type { RepoStore } from "../repos/store.js";
+import type { TokenStore } from "../tokens/store.js";
 import { isSidecarTunnelEnabled } from "./flags.js";
 import { SIDECAR_TUNNEL_PATH, type SidecarTunnelHub } from "./tunnel.js";
 import { attachSidecarTunnelSocket } from "./ws.js";
@@ -36,7 +38,7 @@ export function attachSidecarTunnelUpgrade(
       listener: (req: IncomingMessage, socket: Duplex, head: Buffer) => void,
     ): unknown;
   },
-  deps: AuthDeps,
+  deps: AuthDeps & { store: TokenStore & RepoStore },
   hub: SidecarTunnelHub,
   enabled: () => boolean = isSidecarTunnelEnabled,
 ): WebSocketServer {

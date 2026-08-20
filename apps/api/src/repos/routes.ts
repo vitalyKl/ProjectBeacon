@@ -8,8 +8,14 @@ import {
   requireProjectActor,
 } from "../auth/access.js";
 import { enforceRateLimit } from "../auth/rate-limit.js";
-import type { AuthDeps } from "../auth/routes.js";
+import type { AccessDeps } from "../auth/access.js";
 import { UniqueViolationError } from "../auth/store.js";
+import type { ContextStore } from "../context/store.js";
+import type { GithubStore } from "../github/store.js";
+import type { OrgStore } from "../orgs/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { WorkStore } from "../sessions/store.js";
+import type { RepoStore } from "./store.js";
 import {
   CodeGatewayError,
   SIDECAR_SEEN_MS,
@@ -81,7 +87,8 @@ function parseOptionalBigInt(value: unknown): bigint | null | undefined {
   return undefined;
 }
 
-export type RepoDeps = AuthDeps & {
+export type RepoDeps = AccessDeps & {
+  store: RepoStore & GithubStore & OrgStore & RoadmapStore & WorkStore & ContextStore;
   jobs: JobQueue;
   codeGateway?: CodeGateway;
 };

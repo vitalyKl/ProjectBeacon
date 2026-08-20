@@ -19,7 +19,7 @@ import {
 import type { Context, Hono } from "hono";
 
 import { SIDECAR_SEEN_MS } from "./code/gateway.js";
-import type { AuthStore } from "./auth/store.js";
+import type { JobStore } from "./jobs/store.js";
 
 export function metricsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return parseBoolEnv(env["BEACON_METRICS"]);
@@ -165,7 +165,7 @@ function startHttpSpan(c: Context, config: OtelConfig, traceId: string): Span {
 
 export async function refreshObservabilityGauges(
   store: Pick<
-    AuthStore,
+    JobStore,
     "listSidecarConnections" | "countPendingApprovals" | "githubSyncLagSeconds"
   >,
   now = new Date(),

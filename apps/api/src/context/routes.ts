@@ -2,7 +2,11 @@ import { CompileInputSchema, ContextSectionSchema, type ContextSection } from "@
 import { exportAgentsMd, mergeSections, parseImportFiles, selectNodes, type ImportFile } from "@beacon/context";
 import { isUuid, uuidv7, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT } from "@beacon/shared";
 import type { Context, Hono } from "hono";
-import type { AuthDeps } from "../auth/routes.js";
+import type { AccessDeps } from "../auth/access.js";
+import type { RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { WorkStore } from "../sessions/store.js";
+import type { ContextStore } from "./store.js";
 import { errorJson } from "../errors.js";
 import { readJson, readObject, parseOptionalString } from "../http.js";
 
@@ -52,7 +56,7 @@ function parseImportFilesBody(body: unknown): ImportFile[] | undefined {
 }
 
 async function resolveRepoId(
-  deps: AuthDeps,
+  deps: ContextDeps,
   projectId: string,
   requested: string | undefined,
 ): Promise<{ ok: true; repoId: string | null } | { ok: false; reason: "not_found" | "ambiguous" }> {
@@ -537,7 +541,7 @@ function contextWriter(actor: AuthActor, now: Date) {
 
 async function parseNativeCreate(
   c: Context,
-  deps: AuthDeps,
+  deps: ContextDeps,
   projectId: string,
   body: Record<string, unknown>,
   missingScope: "project" | "not_found",
@@ -638,7 +642,7 @@ async function parseNativeCreate(
 
 async function insertNativeNode(
   c: Context,
-  deps: AuthDeps,
+  deps: ContextDeps,
   access: { project: { id: string }; actor: AuthActor },
   parsed: NativeCreateFields,
   nodeId: string,
@@ -706,7 +710,7 @@ function normalizeNodePath(value: string): string | undefined {
   return path;
 }
 
-export type ContextDeps = AuthDeps & {
-
+export type ContextDeps = AccessDeps & {
+  store: ContextStore & RepoStore & RoadmapStore & WorkStore;
   codeGateway?: CodeGateway;
 };

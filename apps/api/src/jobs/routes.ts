@@ -3,6 +3,11 @@ import type { Context, Hono } from "hono";
 import type { AuthDeps } from "../auth/routes.js";
 import { parseBearer, tokenEquals } from "../auth/tokens.js";
 import { errorJson } from "../errors.js";
+import type { JobStore } from "./store.js";
+
+export type JobDeps = AuthDeps & {
+  store: JobStore;
+};
 
 function requireWorker(c: Context, deps: AuthDeps) {
   const expected = deps.config.workerToken;
@@ -13,7 +18,7 @@ function requireWorker(c: Context, deps: AuthDeps) {
   return null;
 }
 
-export function mountJobs(app: Hono, deps: AuthDeps): void {
+export function mountJobs(app: Hono, deps: JobDeps): void {
   app.post("/v1/jobs/retention", async (c) => {
     const denied = requireWorker(c, deps);
     if (denied) {

@@ -2,13 +2,19 @@ import { isUuid, type Scope } from "@beacon/shared";
 import type { Context } from "hono";
 
 import { errorJson } from "../errors.js";
+import type { OrgStore } from "../orgs/store.js";
 import type { ProjectRecord, ProjectRole } from "../orgs/types.js";
+import type { TokenStore } from "../tokens/store.js";
 import type { TokenRecord } from "../tokens/types.js";
 import { parseBearer, tokenEquals } from "./tokens.js";
 import { hashProjectToken, isProjectTokenFormat } from "./project-tokens.js";
 import { enforceRateLimit } from "./rate-limit.js";
 import { loadSession, type AuthDeps } from "./routes.js";
-import type { UserRecord } from "./store.js";
+import type { UserRecord } from "./identity.js";
+
+export type AccessDeps = AuthDeps & {
+  store: TokenStore & OrgStore;
+};
 
 export type AuthActor =
   { kind: "user"; user: UserRecord } | { kind: "token"; token: TokenRecord } | { kind: "worker" };
@@ -127,7 +133,7 @@ function isResponse(value: AuthActor | Response): value is Response {
   return value instanceof Response;
 }
 
-export async function requireActor(c: Context, deps: AuthDeps): Promise<AuthActor | Response> {
+export async function requireActor(c: Context, deps: AccessDeps): Promise<AuthActor | Response> {
   const authorization = c.req.header("authorization");
   if (authorization !== undefined) {
     const bearer = parseBearer(authorization);
@@ -200,7 +206,7 @@ export async function requireActor(c: Context, deps: AuthDeps): Promise<AuthActo
 
 export async function authorizeProjectActor(
   c: Context,
-  deps: AuthDeps,
+  deps: AccessDeps,
   actor: AuthActor,
   projectId: string,
   needed: Scope,
@@ -242,7 +248,7 @@ export async function authorizeProjectActor(
 
 export async function requireProjectActor(
   c: Context,
-  deps: AuthDeps,
+  deps: AccessDeps,
   projectId: string,
   needed: Scope,
 ): Promise<{ project: ProjectRecord; actor: AuthActor; role: ProjectRole | null } | Response> {

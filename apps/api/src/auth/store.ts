@@ -28,74 +28,30 @@ export type { AgentSessionRecord, FinishWorkResult, HandoffRecord } from "../ses
 export { InvalidReferenceError, SessionNotActiveError, TaskLockedError } from "../sessions/types.js";
 import { ACTIVITY_RETENTION_MS, BRIEF_RETENTION_PER_PROJECT, IDEMPOTENCY_RETENTION_MS, idsOlderThanKeep, isUserSessionPastRetention, type ExpireLocksCounts, type RetentionCounts, decideExpiredLocks } from "../jobs/policy.js";
 import type { GithubInstallationRecord, GithubSyncStateRecord } from "../github/types.js";
+import type { ContextStore } from "../context/store.js";
+import type { GithubStore } from "../github/store.js";
+import type { JobStore } from "../jobs/store.js";
+import type { OrgStore } from "../orgs/store.js";
+import type { ReportStore } from "../reports/store.js";
+import type { ProjectRepoRef, RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { IdempotentWrites, WorkStore } from "../sessions/store.js";
+import type { TokenStore } from "../tokens/store.js";
+import {
+  BootstrapConsumedError,
+  GithubIdTakenError,
+  LoginTakenError,
+  type IdentityStore,
+  type SessionRecord,
+  type UserRecord,
+} from "./identity.js";
 
-export type UserRecord = {
-
-  id: string;
-  githubId: bigint | null;
-  login: string;
-  email: string | null;
-  name: string | null;
-  avatarUrl: string | null;
-  passwordHash: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type SessionRecord = {
-
-  id: string;
-  userId: string;
-  tokenHash: Buffer;
-  createdAt: Date;
-  lastSeenAt: Date;
-  expiresAt: Date;
-  revokedAt: Date | null;
-  userAgent: string | null;
-  ip: string | null;
-};
-
-export type IdempotentWrites = {
-
-  createTask(task: TaskRecord): Promise<TaskRecord>;
-  createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
-  writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
-  startWork(input: StartWorkInput): Promise<StartWorkWriteResult>;
-  createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
-  createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
-  createMilestone?(milestone: MilestoneRecord): Promise<MilestoneRecord>;
-  setTaskLabels?(taskId: string, labelIds: string[]): Promise<LabelRecord[]>;
-};
-
-export class LoginTakenError extends Error {
-
-  override readonly name = "LoginTakenError";
-
-  constructor() {
-    super("login is already taken");
-  }
-}
-
-export class BootstrapConsumedError extends Error {
-
-  override readonly name = "BootstrapConsumedError";
-
-  constructor() {
-    super("bootstrap has already been consumed");
-  }
-}
-
-export class GithubIdTakenError extends Error {
-
-  override readonly name = "GithubIdTakenError";
-
-  constructor() {
-    super("github account is already linked");
-  }
-}
+export type { SessionRecord, UserRecord } from "./identity.js";
+export { BootstrapConsumedError, GithubIdTakenError, LoginTakenError } from "./identity.js";
+export type { IdempotentWrites } from "../sessions/store.js";
+export type { ProjectRepoRef } from "../repos/store.js";
 
 export class UniqueViolationError extends Error {
-
   override readonly name = "UniqueViolationError";
 
   constructor(constraint: string) {
@@ -103,204 +59,16 @@ export class UniqueViolationError extends Error {
   }
 }
 
-export interface AuthStore {
-
-  hasAnyUser(): Promise<boolean>;
-  findUserById(id: string): Promise<UserRecord | undefined>;
-  findUserByLogin(login: string): Promise<UserRecord | undefined>;
-  findUserByEmail(email: string): Promise<UserRecord | undefined>;
-  findUserByGithubId(githubId: bigint): Promise<UserRecord | undefined>;
-  createUser(user: UserRecord): Promise<UserRecord>;
-  createFirstUser(user: UserRecord): Promise<UserRecord>;
-  createSession(session: SessionRecord): Promise<SessionRecord>;
-  findSessionByTokenHash(tokenHash: Buffer): Promise<SessionRecord | undefined>;
-  updateSessionRolling(id: string, lastSeenAt: Date, expiresAt: Date): Promise<void>;
-  revokeSession(id: string, revokedAt: Date): Promise<void>;
-  revokeUserSessions(userId: string, revokedAt: Date): Promise<void>;
-  ensurePersonalOrg(user: UserRecord, now: Date): Promise<OrgRecord>;
-  listOrgsForUser(userId: string): Promise<OrgRecord[]>;
-  findOrgById(id: string): Promise<OrgRecord | undefined>;
-  findOrgBySlug(slug: string): Promise<OrgRecord | undefined>;
-  createTeamOrg(org: OrgRecord, ownerUserId: string): Promise<OrgRecord>;
-  listOrgMembers(orgId: string): Promise<OrgMemberRecord[]>;
-  findOrgMember(orgId: string, userId: string): Promise<OrgMemberRecord | undefined>;
-  upsertOrgMember(member: OrgMemberRecord): Promise<OrgMemberRecord>;
-  createOrgInvite(invite: OrgInviteRecord): Promise<OrgInviteRecord>;
-  findOrgInviteById(id: string): Promise<OrgInviteRecord | undefined>;
-  acceptOrgInvite(
-    id: string,
-    userId: string,
-    acceptedAt: Date,
-  ): Promise<OrgInviteRecord | undefined>;
-  createProject(project: ProjectRecord, creatorUserId: string): Promise<ProjectRecord>;
-  listProjectsForOrg(orgId: string, userId: string): Promise<ProjectRecord[]>;
-  findProjectById(id: string): Promise<ProjectRecord | undefined>;
-  updateProject(
-    id: string,
-    patch: { name?: string; description?: string; slug?: string },
-    updatedAt: Date,
-  ): Promise<ProjectRecord | undefined>;
-  softDeleteProject(id: string, deletedAt: Date): Promise<ProjectRecord | undefined>;
-  listProjectMembers(projectId: string): Promise<ProjectMemberRecord[]>;
-  findProjectMember(projectId: string, userId: string): Promise<ProjectMemberRecord | undefined>;
-  upsertProjectMember(member: ProjectMemberRecord): Promise<ProjectMemberRecord>;
-  createProjectInvite(invite: ProjectInviteRecord): Promise<ProjectInviteRecord>;
-  findProjectInviteById(id: string): Promise<ProjectInviteRecord | undefined>;
-  acceptProjectInvite(
-    id: string,
-    userId: string,
-    acceptedAt: Date,
-  ): Promise<ProjectInviteRecord | undefined>;
-  createApiToken(token: TokenRecord): Promise<TokenRecord>;
-  listApiTokens(projectId: string): Promise<TokenRecord[]>;
-  findApiTokenById(id: string): Promise<TokenRecord | undefined>;
-  findApiTokenByHash(tokenHash: Buffer): Promise<TokenRecord | undefined>;
-  touchApiToken(id: string, lastUsedAt: Date): Promise<void>;
-  revokeApiToken(id: string, revokedAt: Date): Promise<TokenRecord | undefined>;
-  createApproval(approval: ApprovalRecord): Promise<ApprovalRecord>;
-  listApprovals(projectId: string, status?: ApprovalRecord["status"]): Promise<ApprovalRecord[]>;
-  findApprovalById(id: string): Promise<ApprovalRecord | undefined>;
-  resolveApproval(
-    id: string,
-    decision: "approved" | "denied",
-    resolvedAt: Date,
-    resolvedBy: string | null,
-  ): Promise<ApprovalRecord | undefined>;
-  consumeRateBucket(input: {
-    bucketKey: string;
-    windowStart: Date;
-    countDelta: number;
-    bytesDelta: number;
-  }): Promise<RateBucketRecord>;
-  createMilestone(milestone: MilestoneRecord): Promise<MilestoneRecord>;
-  listMilestones(projectId: string): Promise<MilestoneRecord[]>;
-  findMilestoneById(id: string): Promise<MilestoneRecord | undefined>;
-  createTask(task: TaskRecord): Promise<TaskRecord>;
-  listTasks(projectId: string): Promise<TaskRecord[]>;
-  findTaskById(id: string): Promise<TaskRecord | undefined>;
-  updateTask(
-    id: string,
-    expectedVersion: number,
-    patch: TaskPatch,
-    updatedAt: Date,
-    options?: { releaseLock?: boolean },
-  ): Promise<{ task: TaskRecord; lockReleased: boolean } | undefined>;
-  softDeleteTask(id: string, deletedAt: Date): Promise<TaskRecord | undefined>;
-  createComment(comment: TaskCommentRecord): Promise<TaskCommentRecord>;
-  addDependency(dependency: TaskDependencyRecord): Promise<TaskDependencyRecord>;
-  writeActivity(event: ActivityEventRecord): Promise<ActivityEventRecord>;
-  listActivity(
-    projectId: string,
-    filters?: { objectType?: string; objectId?: string },
-  ): Promise<ActivityEventRecord[]>;
-  listContextNodes(projectId: string): Promise<ContextNodeRecord[]>;
-  findContextNodeById(id: string): Promise<ContextNodeRecord | undefined>;
-  findContextNodeByScope(scope: {
-    projectId: string;
-    scopeType: ContextNodeRecord["scopeType"];
-    repoId: string | null;
-    path: string;
-    taskId: string | null;
-  }): Promise<ContextNodeRecord | undefined>;
-  upsertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
-  insertContextNode(node: ContextNodeRecord): Promise<ContextNodeRecord>;
-  listActiveConstraints(projectId: string): Promise<ConstraintRecord[]>;
-  listConstraints(projectId: string): Promise<ConstraintRecord[]>;
-  insertConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
-  listAcceptedDecisions(projectId: string): Promise<DecisionRecord[]>;
-  insertContextRevision(revision: ContextRevisionRecord): Promise<ContextRevisionRecord>;
-  listContextRevisions(projectId: string): Promise<ContextRevisionRecord[]>;
-  findContextRevisionById(id: string): Promise<ContextRevisionRecord | undefined>;
-  listProjectRepos(projectId: string): Promise<ProjectRepoRecord[]>;
-  findProjectRepoById(id: string): Promise<ProjectRepoRecord | undefined>;
-  upsertCodeOwners(repoId: string, rows: CodeOwnerRecord[]): Promise<CodeOwnerRecord[]>;
-  listCodeOwners(repoId: string): Promise<CodeOwnerRecord[]>;
-  withIdempotency(
-    actorType: IdempotencyActorType,
-    actorId: string,
-    key: string,
-    now: Date,
-    produce: (writes: IdempotentWrites) => Promise<unknown>,
-  ): Promise<unknown>;
-  findAgentSessionById(id: string): Promise<AgentSessionRecord | undefined>;
-  listAgentSessions(projectId: string): Promise<AgentSessionRecord[]>;
-  heartbeatSession(id: string, now: Date): Promise<AgentSessionRecord | undefined>;
-  finishWork(input: FinishWorkInput): Promise<FinishWorkResult | undefined>;
-  findLatestHandoffByTaskId(taskId: string): Promise<HandoffRecord | undefined>;
-  findConstraintById(id: string): Promise<ConstraintRecord | undefined>;
-  createConstraint(constraint: ConstraintRecord): Promise<ConstraintRecord>;
-  applyConstraint(id: string, appliedAt: Date): Promise<ConstraintRecord | undefined>;
-  listDecisions(projectId: string): Promise<DecisionRecord[]>;
-  findDecisionById(id: string): Promise<DecisionRecord | undefined>;
-  createDecision(decision: DecisionRecord): Promise<DecisionRecord>;
-  updateDecision(id: string, patch: DecisionPatch): Promise<DecisionRecord | undefined>;
-  listLabels(projectId: string): Promise<LabelRecord[]>;
-  backfillEmptyProjectLabelCatalogs(): Promise<number>;
-  findLabelById(id: string): Promise<LabelRecord | undefined>;
-  createLabel(label: LabelRecord): Promise<LabelRecord>;
-  updateLabel(id: string, patch: LabelPatch): Promise<LabelRecord | undefined>;
-  listTaskLabels(taskId: string): Promise<LabelRecord[]>;
-  setTaskLabels(taskId: string, labelIds: string[]): Promise<LabelRecord[]>;
-  findProjectRepo(id: string): Promise<ProjectRepoRef | undefined>;
-  listComments(taskId: string): Promise<TaskCommentRecord[]>;
-  createProjectRepo(repo: ProjectRepoRecord): Promise<ProjectRepoRecord>;
-  setDefaultRepoIfEmpty(projectId: string, repoId: string, updatedAt: Date): Promise<ProjectRecord>;
-  runRetention(now: Date): Promise<RetentionCounts>;
-  expireLocks(now: Date): Promise<ExpireLocksCounts>;
-  findProjectRepoByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord | undefined>;
-  listProjectReposByGithubRepoId(githubRepoId: bigint): Promise<ProjectRepoRecord[]>;
-  findTaskByGithubIssueId(
-    projectId: string,
-    githubIssueId: bigint,
-  ): Promise<TaskRecord | undefined>;
-  findGithubInstallationByInstallationId(
-    installationId: bigint,
-  ): Promise<GithubInstallationRecord | undefined>;
-  upsertGithubInstallation(row: GithubInstallationRecord): Promise<GithubInstallationRecord>;
-  findGithubSyncState(repoId: string): Promise<GithubSyncStateRecord | undefined>;
-  upsertGithubSyncState(row: GithubSyncStateRecord): Promise<GithubSyncStateRecord>;
-  updateProjectSettings(
-    id: string,
-    settings: Record<string, unknown>,
-    updatedAt: Date,
-  ): Promise<ProjectRecord | undefined>;
-  listDependencies(projectId: string): Promise<(TaskDependencyRecord & { createdAt: Date })[]>;
-  updateProjectRepoIndex(
-    id: string,
-    patch: { lastIndexedSha?: string | null; lastIndexedAt?: Date | null },
-  ): Promise<ProjectRepoRecord | undefined>;
-  upsertSidecarConnection(input: {
-    id: string;
-    repoId: string;
-    tokenId: string;
-    now: Date;
-  }): Promise<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>;
-  findSidecarConnectionByRepoId(
-    repoId: string,
-  ): Promise<
-    { id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date } | undefined
-  >;
-  listDeletedProjects(): Promise<ProjectRecord[]>;
-  updateProjectRepo(
-    id: string,
-    patch: { indexMode?: ProjectRepoRecord["indexMode"] },
-  ): Promise<ProjectRepoRecord | undefined>;
-  consumeCloneInvalidation(
-    repoId: string,
-    now: Date,
-  ): Promise<{ id: string; repoId: string; sha: string | null; createdAt: Date } | undefined>;
-  listSidecarConnections(): Promise<
-    Array<{ id: string; repoId: string; tokenId: string; connectedAt: Date; lastSeenAt: Date }>
-  >;
-  countPendingApprovals(): Promise<number>;
-  githubSyncLagSeconds(now: Date): Promise<number>;
-  createReport(report: ProjectReportRecord): Promise<ProjectReportRecord>;
-  listReports(projectId: string): Promise<ProjectReportRecord[]>;
-  findReportById(id: string): Promise<ProjectReportRecord | undefined>;
-  createReview(review: ProjectReviewRecord): Promise<ProjectReviewRecord>;
-  listReviews(projectId: string): Promise<ProjectReviewRecord[]>;
-  findReviewById(id: string): Promise<ProjectReviewRecord | undefined>;
-}
+export type AuthStore = IdentityStore &
+  OrgStore &
+  TokenStore &
+  RoadmapStore &
+  ContextStore &
+  WorkStore &
+  RepoStore &
+  GithubStore &
+  ReportStore &
+  JobStore;
 
 function cloneUser(user: UserRecord): UserRecord {
   return { ...user };
@@ -2416,12 +2184,6 @@ function cloneHandoff(handoff: HandoffRecord): HandoffRecord {
     createdAt: new Date(handoff.createdAt),
   };
 }
-
-export type ProjectRepoRef = {
-
-  id: string;
-  projectId: string;
-};
 
 export class ProjectNotFoundError extends Error {
   override readonly name = "ProjectNotFoundError";

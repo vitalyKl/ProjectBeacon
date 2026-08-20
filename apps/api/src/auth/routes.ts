@@ -19,22 +19,28 @@ import {
   toPublicOrg,
   toPublicUser,
 } from "./session.js";
+import type { OrgStore } from "../orgs/store.js";
+import type { TokenStore } from "../tokens/store.js";
 import {
   BootstrapConsumedError,
   GithubIdTakenError,
+  type IdentityStore,
   LoginTakenError,
-  type AuthStore,
   type UserRecord,
-} from "./store.js";
+} from "./identity.js";
 import { parseBearer, tokenEquals } from "./tokens.js";
 import type { RateLimitConfig } from "./rate-limit.js";
 
 export type AuthDeps = {
-  store: AuthStore;
+  store: IdentityStore;
   config: AuthConfig;
   clock: Clock;
   githubFetch: typeof fetch;
   rateLimits: RateLimitConfig;
+};
+
+export type AuthRouteDeps = AuthDeps & {
+  store: OrgStore & TokenStore;
 };
 
 const LOGIN_TAKEN_MESSAGE = "login is already taken";
@@ -102,7 +108,11 @@ function newLocalUser(now: Date, login: string, passwordHash: string): UserRecor
   };
 }
 
-async function establishSession(c: Context, deps: AuthDeps, user: UserRecord): Promise<Response> {
+async function establishSession(
+  c: Context,
+  deps: AuthRouteDeps,
+  user: UserRecord,
+): Promise<Response> {
   const now = deps.clock.now();
   await deps.store.ensurePersonalOrg(user, now);
   const { token } = await issueSession(
@@ -127,7 +137,7 @@ export async function loadSession(c: Context, deps: AuthDeps) {
   return resolved;
 }
 
-export function mountAuth(app: Hono, deps: AuthDeps): void {
+export function mountAuth(app: Hono, deps: AuthRouteDeps): void {
   app.post("/v1/auth/bootstrap", async (c) => {
     const provided = parseBearer(c.req.header("authorization"));
     if (!tokenEquals(deps.config.bootstrapAdminToken, provided)) {

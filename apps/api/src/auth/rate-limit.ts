@@ -2,7 +2,7 @@ import { incRateLimited } from "@beacon/shared";
 import type { Context } from "hono";
 
 import { errorJson } from "../errors.js";
-import type { AuthStore } from "./store.js";
+import type { TokenStore } from "../tokens/store.js";
 
 export type RateLimitName = "overall" | "code" | "compile" | "bytes";
 export type RateActorKind = "token" | "user";
@@ -65,7 +65,7 @@ function retryAfterSeconds(now: Date, windowStart: Date, windowMs: number): numb
 export type ConsumeRateResult = { ok: true } | { ok: false; retryAfter: number };
 
 export async function consumeRateLimit(
-  store: AuthStore,
+  store: TokenStore,
   kind: RateActorKind,
   actorId: string,
   limits: RateLimitConfig,
@@ -113,7 +113,7 @@ export async function consumeRateLimit(
 
 export async function enforceRateLimit(
   c: Context,
-  store: AuthStore,
+  store: TokenStore,
   kind: RateActorKind,
   actorId: string,
   limits: RateLimitConfig,

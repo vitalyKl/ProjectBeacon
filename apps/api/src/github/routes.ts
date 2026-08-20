@@ -9,8 +9,14 @@ import {
   taskStatusOnCreate,
 } from "../auth/access.js";
 import { isGithubAppConfigured, type AuthConfig } from "../auth/config.js";
-import type { AuthDeps } from "../auth/routes.js";
-import { UniqueViolationError, VersionConflictError } from "../auth/store.js";
+import type { AccessDeps } from "../auth/access.js";
+import { UniqueViolationError } from "../auth/store.js";
+import type { OrgStore } from "../orgs/store.js";
+import type { RepoStore } from "../repos/store.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import { VersionConflictError } from "../roadmap/types.js";
+import type { WorkStore } from "../sessions/store.js";
+import type { GithubStore } from "./store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
@@ -32,7 +38,8 @@ import { resolveGithubRepo } from "./resolve.js";
 import { githubIssuesMode } from "./settings.js";
 import { verifyGithubWebhookSignature } from "./signature.js";
 
-export type GithubDeps = AuthDeps & {
+export type GithubDeps = AccessDeps & {
+  store: GithubStore & RepoStore & RoadmapStore & WorkStore & OrgStore;
   jobs: JobQueue;
 };
 

@@ -1,8 +1,9 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Hono } from "hono";
 
-import { actorActivityRef, requireProjectActor } from "../auth/access.js";
-import type { AuthDeps } from "../auth/routes.js";
+import { actorActivityRef, requireProjectActor, type AccessDeps } from "../auth/access.js";
+import type { RoadmapStore } from "../roadmap/store.js";
+import type { ReportStore } from "./store.js";
 import { errorJson, isMissingSchemaError } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
@@ -36,7 +37,11 @@ function parseText(value: unknown, max: number, allowEmpty = false): string | un
   return allowEmpty ? value : value.trim();
 }
 
-export function mountReports(app: Hono, deps: AuthDeps): void {
+export type ReportDeps = AccessDeps & {
+  store: ReportStore & RoadmapStore;
+};
+
+export function mountReports(app: Hono, deps: ReportDeps): void {
   app.get("/v1/projects/:id/reports", async (c) => {
     const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
     if (isResponse(access)) {
