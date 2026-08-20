@@ -218,7 +218,7 @@ describe("orgs and projects", () => {
       body: JSON.stringify({ slug: "open", name: "Open", visibility: "internal" }),
     });
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: { code: "unauthorized" } });
+    expect(await res.json()).toMatchObject({ error: { code: "invalid_request" } });
   });
 
   it("accepts a project invite and upserts project_members", async () => {

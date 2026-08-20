@@ -844,6 +844,7 @@
                 "type": "string",
                 "enum": [
                   "unauthorized",
+                  "invalid_request",
                   "forbidden",
                   "not_found",
                   "version_conflict",

@@ -177,7 +177,7 @@ describe("POST /v1/auth/bootstrap", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({
       error: {
-        code: "unauthorized",
+        code: "invalid_request",
         message: "password must be at least 10 characters",
         details: { reason: "password_policy" },
       },

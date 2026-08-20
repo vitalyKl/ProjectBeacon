@@ -148,12 +148,12 @@ export function mountAuth(app: Hono, deps: AuthRouteDeps): void {
     const login = parseLogin(body?.["login"]);
     const password = parsePassword(body?.["password"]);
     if (!login || password === undefined) {
-      return errorJson(c, 400, "unauthorized", "login and password are required", {
+      return errorJson(c, 400, "invalid_request", "login and password are required", {
         reason: "invalid_body",
       });
     }
     if (!isPasswordPolicyOk(password)) {
-      return errorJson(c, 400, "unauthorized", "password must be at least 10 characters", {
+      return errorJson(c, 400, "invalid_request", "password must be at least 10 characters", {
         reason: "password_policy",
       });
     }
@@ -183,12 +183,12 @@ export function mountAuth(app: Hono, deps: AuthRouteDeps): void {
     const login = parseLogin(body?.["login"]);
     const password = parsePassword(body?.["password"]);
     if (!login || password === undefined) {
-      return errorJson(c, 400, "unauthorized", "login and password are required", {
+      return errorJson(c, 400, "invalid_request", "login and password are required", {
         reason: "invalid_body",
       });
     }
     if (!isPasswordPolicyOk(password)) {
-      return errorJson(c, 400, "unauthorized", "password must be at least 10 characters", {
+      return errorJson(c, 400, "invalid_request", "password must be at least 10 characters", {
         reason: "password_policy",
       });
     }

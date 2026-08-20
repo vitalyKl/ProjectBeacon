@@ -1,14 +1,21 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
-import { authorizeProjectActor, isAdminActor, requireActor, type AccessDeps, type AuthActor, actorActivityRef, actorIdempotencyRef, requireProjectActor, taskStatusOnCreate } from "../auth/access.js";
-import type { UserRecord } from "../auth/identity.js";
+import {
+  actorActivityRef,
+  actorIdempotencyRef,
+  isAdminActor,
+  requireProject,
+  requireProjectResource,
+  taskStatusOnCreate,
+  type AccessDeps,
+  type AuthActor,
+} from "../auth/access.js";
 import type { ContextStore } from "../context/store.js";
 import type { WorkStore } from "../sessions/store.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
 import { parseLabelIds } from "../labels/parse.js";
-import { isResponse, requireProjectAccess, requireSession } from "../orgs/routes.js";
-import { projectRoleAtLeast, type ProjectRecord, type ProjectRole } from "../orgs/types.js";
+import { type ProjectRecord, type ProjectRole } from "../orgs/types.js";
 import { rejectAgentTerminalStatus } from "../sessions/routes.js";
 import { isTerminalTaskStatus } from "../sessions/types.js";
 import { parsePageQuery, paginateRecords, dependencyCursorId } from "./page.js";
@@ -114,34 +121,6 @@ function versionConflict(c: Context, task: TaskRecord) {
   });
 }
 
-async function requireTaskAccess(
-  c: Context,
-  deps: RoadmapDeps,
-  user: UserRecord,
-  taskId: string,
-  needed: ProjectRole,
-): Promise<{ task: TaskRecord; project: ProjectRecord; role: ProjectRole } | Response> {
-  if (!isUuid(taskId)) {
-    return errorJson(c, 404, "not_found", "task not found");
-  }
-  const task = await deps.store.findTaskById(taskId);
-  if (!task || task.deletedAt) {
-    return errorJson(c, 404, "not_found", "task not found");
-  }
-  const project = await deps.store.findProjectById(task.projectId);
-  if (!project || project.deletedAt) {
-    return errorJson(c, 404, "not_found", "task not found");
-  }
-  const member = await deps.store.findProjectMember(project.id, user.id);
-  if (!member) {
-    return errorJson(c, 404, "not_found", "task not found");
-  }
-  if (!projectRoleAtLeast(member.role, needed)) {
-    return errorJson(c, 403, "forbidden", "insufficient project role");
-  }
-  return { task, project, role: member.role };
-}
-
 async function requireTaskActor(
   c: Context,
   deps: RoadmapDeps,
@@ -151,25 +130,23 @@ async function requireTaskActor(
   | { task: TaskRecord; project: ProjectRecord; actor: AuthActor; role: ProjectRole | null }
   | Response
 > {
-  const actor = await requireActor(c, deps);
-  if (actor instanceof Response) {
-    return actor;
+  const loaded = await requireProjectResource(
+    c,
+    deps,
+    async () => {
+      if (!isUuid(taskId)) {
+        return null;
+      }
+      const task = await deps.store.findTaskById(taskId);
+      return task && !task.deletedAt ? task : null;
+    },
+    needed,
+    "task not found",
+  );
+  if (loaded instanceof Response) {
+    return loaded;
   }
-  if (!isUuid(taskId)) {
-    return errorJson(c, 404, "not_found", "task not found");
-  }
-  const task = await deps.store.findTaskById(taskId);
-  if (!task || task.deletedAt) {
-    return errorJson(c, 404, "not_found", "task not found");
-  }
-  const access = await authorizeProjectActor(c, deps, actor, task.projectId, needed);
-  if (access instanceof Response) {
-    if (access.status === 404) {
-      return errorJson(c, 404, "not_found", "task not found");
-    }
-    return access;
-  }
-  return { ...access, task };
+  return { ...loaded, task: loaded.resource };
 }
 
 function actorActivity(actor: AuthActor): { actorType: string; actorId: string } {
@@ -225,13 +202,13 @@ async function requireAssignee(
   }
   const user = await deps.store.findUserById(userId);
   if (!user) {
-    return errorJson(c, 400, "unauthorized", "invalid assignee_user_id", {
+    return errorJson(c, 400, "invalid_request", "invalid assignee_user_id", {
       reason: "invalid_body",
     });
   }
   const member = await deps.store.findProjectMember(projectId, userId);
   if (!member) {
-    return errorJson(c, 400, "unauthorized", "assignee is not a project member", {
+    return errorJson(c, 400, "invalid_request", "assignee is not a project member", {
       reason: "invalid_assignee",
     });
   }
@@ -240,7 +217,7 @@ async function requireAssignee(
 
 export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   app.get("/v1/projects/:id/milestones", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (access instanceof Response) {
       return access;
     }
@@ -257,7 +234,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   });
 
   app.post("/v1/projects/:id/milestones", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
@@ -272,7 +249,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     let targetDate: string | null = null;
     if (targetDateRaw !== undefined && targetDateRaw !== null) {
       if (typeof targetDateRaw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(targetDateRaw)) {
-        return errorJson(c, 400, "unauthorized", "invalid target_date", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid target_date", { reason: "invalid_body" });
       }
       targetDate = targetDateRaw;
     }
@@ -282,10 +259,10 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       typeof statusRaw !== "string" ||
       !isMilestoneStatus(statusRaw)
     ) {
-      return errorJson(c, 400, "unauthorized", "title is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "title is required", { reason: "invalid_body" });
     }
     if (sortOrder === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid sort_order", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid sort_order", { reason: "invalid_body" });
     }
 
     const now = deps.clock.now();
@@ -313,7 +290,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   });
 
   app.get("/v1/projects/:id/tasks", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (access instanceof Response) {
       return access;
     }
@@ -324,11 +301,11 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     const labelId = c.req.query("label_id")?.trim();
     if (labelId) {
       if (!isUuid(labelId)) {
-        return errorJson(c, 400, "unauthorized", "invalid label_id", { reason: "invalid_query" });
+        return errorJson(c, 400, "invalid_request", "invalid label_id", { reason: "invalid_query" });
       }
       const label = await deps.store.findLabelById(labelId);
       if (!label || label.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid label_id", { reason: "invalid_label" });
+        return errorJson(c, 400, "invalid_request", "invalid label_id", { reason: "invalid_label" });
       }
     }
     let records = await deps.store.listTasks(access.project.id);
@@ -351,11 +328,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   });
 
   app.get("/v1/projects/:id/dependencies", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (access instanceof Response) {
       return access;
     }
@@ -376,14 +349,14 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   });
 
   app.post("/v1/projects/:id/tasks", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:write");
     if (access instanceof Response) {
       return access;
     }
 
     const idempotencyKey = parseIdempotencyKey(c);
     if (!idempotencyKey) {
-      return errorJson(c, 400, "unauthorized", "Idempotency-Key is required", {
+      return errorJson(c, 400, "invalid_request", "Idempotency-Key is required", {
         reason: "missing_idempotency_key",
       });
     }
@@ -417,19 +390,19 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       if (linkedPaths.reason === "repo_ambiguous") {
         return errorJson(c, 400, "repo_ambiguous", "repo_id is required on linked_paths");
       }
-      return errorJson(c, 400, "unauthorized", "invalid linked_paths", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid linked_paths", { reason: "invalid_body" });
     }
     const labelIds =
       body?.["label_ids"] === undefined
         ? { ok: true as const, ids: [] }
         : parseLabelIds(body["label_ids"]);
     if (!labelIds.ok) {
-      return errorJson(c, 400, "unauthorized", "invalid label_ids", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid label_ids", { reason: "invalid_body" });
     }
     for (const labelId of labelIds.ids) {
       const label = await deps.store.findLabelById(labelId);
       if (!label || label.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid label_ids", {
+        return errorJson(c, 400, "invalid_request", "invalid label_ids", {
           reason: "invalid_label",
         });
       }
@@ -450,13 +423,13 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       agentBrief === undefined ||
       howToCheck === undefined
     ) {
-      return errorJson(c, 400, "unauthorized", "title is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "title is required", { reason: "invalid_body" });
     }
 
     if (milestoneId) {
       const milestone = await deps.store.findMilestoneById(milestoneId);
       if (!milestone || milestone.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid milestone_id", {
+        return errorJson(c, 400, "invalid_request", "invalid milestone_id", {
           reason: "invalid_body",
         });
       }
@@ -464,7 +437,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     if (parentId) {
       const parent = await deps.store.findTaskById(parentId);
       if (!parent || parent.deletedAt || parent.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid parent_id", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid parent_id", { reason: "invalid_body" });
       }
     }
     const assigneeError = await requireAssignee(c, deps, access.project.id, assigneeUserId);
@@ -539,11 +512,11 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
 
     const body = await readObject(c);
     if (!body) {
-      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid body", { reason: "invalid_body" });
     }
     const expectedVersion = parseExpectedVersion(body["expected_version"]);
     if (expectedVersion === undefined) {
-      return errorJson(c, 400, "unauthorized", "expected_version is required", {
+      return errorJson(c, 400, "invalid_request", "expected_version is required", {
         reason: "invalid_body",
       });
     }
@@ -552,20 +525,20 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     if (body["title"] !== undefined) {
       const title = parseOptionalString(body["title"], 200);
       if (!title) {
-        return errorJson(c, 400, "unauthorized", "invalid title", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid title", { reason: "invalid_body" });
       }
       patch.title = title;
     }
     if (body["description"] !== undefined) {
       const description = parseText(body["description"], 8000, true);
       if (description === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid description", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid description", { reason: "invalid_body" });
       }
       patch.description = description;
     }
     if (body["status"] !== undefined) {
       if (typeof body["status"] !== "string" || !isTaskStatus(body["status"])) {
-        return errorJson(c, 400, "unauthorized", "invalid status", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid status", { reason: "invalid_body" });
       }
       const terminal = rejectAgentTerminalStatus(c, access.actor, body["status"]);
       if (terminal) {
@@ -575,28 +548,28 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     }
     if (body["type"] !== undefined) {
       if (typeof body["type"] !== "string" || !isTaskType(body["type"])) {
-        return errorJson(c, 400, "unauthorized", "invalid type", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid type", { reason: "invalid_body" });
       }
       patch.type = body["type"];
     }
     if (body["priority"] !== undefined) {
       const priority = parsePriority(body["priority"]);
       if (priority === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid priority", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid priority", { reason: "invalid_body" });
       }
       patch.priority = priority;
     }
     if (body["milestone_id"] !== undefined) {
       const milestoneId = parseNullableUuid(body["milestone_id"]);
       if (milestoneId === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid milestone_id", {
+        return errorJson(c, 400, "invalid_request", "invalid milestone_id", {
           reason: "invalid_body",
         });
       }
       if (milestoneId) {
         const milestone = await deps.store.findMilestoneById(milestoneId);
         if (!milestone || milestone.projectId !== access.task.projectId) {
-          return errorJson(c, 400, "unauthorized", "invalid milestone_id", {
+          return errorJson(c, 400, "invalid_request", "invalid milestone_id", {
             reason: "invalid_body",
           });
         }
@@ -606,12 +579,12 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     if (body["parent_id"] !== undefined) {
       const parentId = parseNullableUuid(body["parent_id"]);
       if (parentId === undefined || parentId === access.task.id) {
-        return errorJson(c, 400, "unauthorized", "invalid parent_id", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid parent_id", { reason: "invalid_body" });
       }
       if (parentId) {
         const parent = await deps.store.findTaskById(parentId);
         if (!parent || parent.deletedAt || parent.projectId !== access.task.projectId) {
-          return errorJson(c, 400, "unauthorized", "invalid parent_id", { reason: "invalid_body" });
+          return errorJson(c, 400, "invalid_request", "invalid parent_id", { reason: "invalid_body" });
         }
       }
       patch.parentId = parentId;
@@ -619,7 +592,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     if (body["assignee_user_id"] !== undefined) {
       const assigneeUserId = parseNullableUuid(body["assignee_user_id"]);
       if (assigneeUserId === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid assignee_user_id", {
+        return errorJson(c, 400, "invalid_request", "invalid assignee_user_id", {
           reason: "invalid_body",
         });
       }
@@ -635,7 +608,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       } else {
         const name = parseOptionalString(body["assignee_agent_name"], 120);
         if (!name) {
-          return errorJson(c, 400, "unauthorized", "invalid assignee_agent_name", {
+          return errorJson(c, 400, "invalid_request", "invalid assignee_agent_name", {
             reason: "invalid_body",
           });
         }
@@ -645,14 +618,14 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     if (body["agent_brief"] !== undefined) {
       const agentBrief = parseText(body["agent_brief"], 8000, true);
       if (agentBrief === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid agent_brief", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid agent_brief", { reason: "invalid_body" });
       }
       patch.agentBrief = agentBrief;
     }
     if (body["how_to_check"] !== undefined) {
       const howToCheck = parseText(body["how_to_check"], 8000, true);
       if (howToCheck === undefined) {
-        return errorJson(c, 400, "unauthorized", "invalid how_to_check", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid how_to_check", { reason: "invalid_body" });
       }
       patch.howToCheck = howToCheck;
     }
@@ -662,7 +635,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
         if (linkedPaths.reason === "repo_ambiguous") {
           return errorJson(c, 400, "repo_ambiguous", "repo_id is required on linked_paths");
         }
-        return errorJson(c, 400, "unauthorized", "invalid linked_paths", {
+        return errorJson(c, 400, "invalid_request", "invalid linked_paths", {
           reason: "invalid_body",
         });
       }
@@ -709,11 +682,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   });
 
   app.delete("/v1/tasks/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireTaskAccess(c, deps, session.user, c.req.param("id"), "admin");
+    const access = await requireTaskActor(c, deps, c.req.param("id"), "tasks:delete");
     if (access instanceof Response) {
       return access;
     }
@@ -722,11 +691,13 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     if (!deleted) {
       return errorJson(c, 404, "not_found", "task not found");
     }
+    const actor = actorActivity(access.actor);
     await writeActivity(deps.store, {
       projectId: access.task.projectId,
       objectType: "task",
       objectId: deleted.id,
-      actorId: session.user.id,
+      actorId: actor.actorId,
+      actorType: actor.actorType,
       verb: "delete",
       now,
     });
@@ -758,7 +729,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
 
     const idempotencyKey = parseIdempotencyKey(c);
     if (!idempotencyKey) {
-      return errorJson(c, 400, "unauthorized", "Idempotency-Key is required", {
+      return errorJson(c, 400, "invalid_request", "Idempotency-Key is required", {
         reason: "missing_idempotency_key",
       });
     }
@@ -766,7 +737,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
     const body = await readObject(c);
     const commentBody = parseText(body?.["body"], 8000);
     if (!commentBody) {
-      return errorJson(c, 400, "unauthorized", "body is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "body is required", { reason: "invalid_body" });
     }
     const author = actorActivity(access.actor);
     const actor = author;
@@ -814,7 +785,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       !isTaskStatus(statusRaw) ||
       expectedVersion === undefined
     ) {
-      return errorJson(c, 400, "unauthorized", "status and expected_version are required", {
+      return errorJson(c, 400, "invalid_request", "status and expected_version are required", {
         reason: "invalid_body",
       });
     }
@@ -881,7 +852,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
       typeof typeRaw !== "string" ||
       !isDependencyType(typeRaw)
     ) {
-      return errorJson(c, 400, "unauthorized", "to_task_id and type are required", {
+      return errorJson(c, 400, "invalid_request", "to_task_id and type are required", {
         reason: "invalid_body",
       });
     }
@@ -921,11 +892,7 @@ export function mountRoadmap(app: Hono, deps: RoadmapDeps): void {
   });
 
   app.get("/v1/projects/:id/activity", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (access instanceof Response) {
       return access;
     }

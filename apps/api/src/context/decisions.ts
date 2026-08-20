@@ -10,7 +10,7 @@ import {
   decisionStatusOnCreate,
   isAdminActor,
   requireActor,
-  requireProjectActor,
+  requireProject,
 } from "../auth/access.js";
 import type { AccessDeps, AuthActor } from "../auth/access.js";
 import type { RepoStore } from "../repos/store.js";
@@ -136,7 +136,7 @@ export type DecisionDeps = AccessDeps & {
 
 export function mountDecisions(app: Hono, deps: DecisionDeps): void {
   app.get("/v1/projects/:id/decisions", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "decisions:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "decisions:read");
     if (isResponse(access)) {
       return access;
     }
@@ -153,14 +153,14 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
   });
 
   app.post("/v1/projects/:id/decisions", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "decisions:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "decisions:write");
     if (isResponse(access)) {
       return access;
     }
 
     const idempotencyKey = parseIdempotencyKey(c);
     if (!idempotencyKey) {
-      return errorJson(c, 400, "unauthorized", "Idempotency-Key is required", {
+      return errorJson(c, 400, "invalid_request", "Idempotency-Key is required", {
         reason: "missing_idempotency_key",
       });
     }
@@ -187,7 +187,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
       !relatedTasks.ok ||
       !relatedPaths.ok
     ) {
-      return errorJson(c, 400, "unauthorized", "title, context, and decision are required", {
+      return errorJson(c, 400, "invalid_request", "title, context, and decision are required", {
         reason: "invalid_body",
       });
     }
@@ -195,7 +195,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
     for (const taskId of relatedTasks.ids) {
       const task = await deps.store.findTaskById(taskId);
       if (!task || task.deletedAt || task.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid related_task_ids", {
+        return errorJson(c, 400, "invalid_request", "invalid related_task_ids", {
           reason: "invalid_related_task",
         });
       }
@@ -203,7 +203,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
     for (const path of relatedPaths.paths) {
       const repo = await deps.store.findProjectRepo(path.repoId);
       if (!repo || repo.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid related_paths", {
+        return errorJson(c, 400, "invalid_request", "invalid related_paths", {
           reason: "invalid_related_path",
         });
       }
@@ -260,7 +260,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
     if (!existing) {
       return errorJson(c, 404, "not_found", "decision not found");
     }
-    const access = await requireProjectActor(c, deps, existing.projectId, "decisions:write");
+    const access = await requireProject(c, deps, existing.projectId, "decisions:write");
     if (isResponse(access)) {
       return access;
     }
@@ -271,7 +271,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
     const raw = await readObject(c);
     const parsed = PatchDecisionSchema.safeParse(raw);
     if (!parsed.success) {
-      return errorJson(c, 400, "unauthorized", "invalid decision", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid decision", { reason: "invalid_body" });
     }
 
     const nextStatus = parsed.data.status;
@@ -279,18 +279,18 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
     if (nextStatus === "superseded") {
       const successorId = parsed.data.superseded_by;
       if (!successorId) {
-        return errorJson(c, 400, "unauthorized", "superseded_by is required", {
+        return errorJson(c, 400, "invalid_request", "superseded_by is required", {
           reason: "invalid_body",
         });
       }
       if (successorId === existing.id) {
-        return errorJson(c, 400, "unauthorized", "invalid superseded_by", {
+        return errorJson(c, 400, "invalid_request", "invalid superseded_by", {
           reason: "invalid_superseded_by",
         });
       }
       const successor = await deps.store.findDecisionById(successorId);
       if (!successor || successor.projectId !== existing.projectId) {
-        return errorJson(c, 400, "unauthorized", "invalid superseded_by", {
+        return errorJson(c, 400, "invalid_request", "invalid superseded_by", {
           reason: "invalid_superseded_by",
         });
       }
@@ -322,7 +322,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
   });
 
   app.get("/v1/projects/:id/constraints", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "decisions:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "decisions:read");
     if (isResponse(access)) {
       return access;
     }
@@ -339,14 +339,14 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
   });
 
   app.post("/v1/projects/:id/constraints", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "decisions:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "decisions:write");
     if (isResponse(access)) {
       return access;
     }
 
     const idempotencyKey = parseIdempotencyKey(c);
     if (!idempotencyKey) {
-      return errorJson(c, 400, "unauthorized", "Idempotency-Key is required", {
+      return errorJson(c, 400, "invalid_request", "Idempotency-Key is required", {
         reason: "missing_idempotency_key",
       });
     }
@@ -368,7 +368,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
       scopePath === undefined ||
       !isConstraintStatus(statusRaw)
     ) {
-      return errorJson(c, 400, "unauthorized", "kind and body are required", {
+      return errorJson(c, 400, "invalid_request", "kind and body are required", {
         reason: "invalid_body",
       });
     }
@@ -471,7 +471,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
       return c.json(presentConstraintRecord(constraint));
     }
     if (constraint.status !== "proposed") {
-      return errorJson(c, 400, "unauthorized", "constraint is not proposed", {
+      return errorJson(c, 400, "invalid_request", "constraint is not proposed", {
         reason: "invalid_status",
       });
     }
@@ -479,7 +479,7 @@ export function mountDecisions(app: Hono, deps: DecisionDeps): void {
     const now = deps.clock.now();
     const applied = await deps.store.applyConstraint(constraint.id, now);
     if (!applied) {
-      return errorJson(c, 400, "unauthorized", "constraint is not proposed", {
+      return errorJson(c, 400, "invalid_request", "constraint is not proposed", {
         reason: "invalid_status",
       });
     }

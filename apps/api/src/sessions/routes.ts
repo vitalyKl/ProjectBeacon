@@ -7,7 +7,7 @@ import {
   authorizeProjectActor,
   isAdminActor,
   requireActor,
-  requireProjectActor,
+  requireProject,
   type AuthActor,
 } from "../auth/access.js";
 import type { AccessDeps } from "../auth/access.js";
@@ -179,7 +179,7 @@ export type SessionDeps = AccessDeps & {
 
 export function mountSessions(app: Hono, deps: SessionDeps): void {
   app.get("/v1/projects/:id/sessions", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
       return access;
     }
@@ -196,14 +196,14 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
   });
 
   app.post("/v1/projects/:id/sessions", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "sessions:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "sessions:write");
     if (isResponse(access)) {
       return access;
     }
 
     const idempotencyKey = parseIdempotencyKey(c);
     if (!idempotencyKey) {
-      return errorJson(c, 400, "unauthorized", "Idempotency-Key is required", {
+      return errorJson(c, 400, "invalid_request", "Idempotency-Key is required", {
         reason: "missing_idempotency_key",
       });
     }
@@ -211,26 +211,26 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
     const body = await readObject(c);
     const taskIdRaw = body?.["task_id"];
     if (typeof taskIdRaw !== "string" || !isUuid(taskIdRaw)) {
-      return errorJson(c, 400, "unauthorized", "task_id is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "task_id is required", { reason: "invalid_body" });
     }
     const steal = parseBoolean(body?.["steal"]);
     if (steal === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid steal", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid steal", { reason: "invalid_body" });
     }
     if (steal && !actorHasCapability(access.actor, "tasks:write", access.role)) {
       return errorJson(c, 403, "forbidden", "steal requires tasks:write");
     }
     const budgetTokens = parseBudgetTokens(body?.["budget_tokens"]);
     if (budgetTokens === "invalid") {
-      return errorJson(c, 400, "unauthorized", "invalid budget_tokens", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid budget_tokens", { reason: "invalid_body" });
     }
     const path = body?.["path"] === undefined ? undefined : parseOptionalString(body["path"], 1024);
     if (body?.["path"] !== undefined && path === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid path", { reason: "invalid_body" });
     }
     const agent = parseAgent(body, access.actor);
     if (!agent) {
-      return errorJson(c, 400, "unauthorized", "invalid agent", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid agent", { reason: "invalid_body" });
     }
 
     const task = await deps.store.findTaskById(taskIdRaw);
@@ -396,21 +396,21 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
     const body = await readObject(c);
     const summary = parseOptionalString(body?.["summary"], 8000);
     if (!summary || summary.length < HANDOFF_SUMMARY_MIN) {
-      return errorJson(c, 400, "unauthorized", "summary must be at least 20 characters", {
+      return errorJson(c, 400, "invalid_request", "summary must be at least 20 characters", {
         reason: "invalid_body",
       });
     }
     let nextSteps = "";
     if (body?.["next_steps"] !== undefined) {
       if (typeof body["next_steps"] !== "string" || body["next_steps"].length > 8000) {
-        return errorJson(c, 400, "unauthorized", "invalid next_steps", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid next_steps", { reason: "invalid_body" });
       }
       nextSteps = body["next_steps"];
     }
     let howToCheck = "";
     if (body?.["how_to_check"] !== undefined) {
       if (typeof body["how_to_check"] !== "string" || body["how_to_check"].length > 8000) {
-        return errorJson(c, 400, "unauthorized", "invalid how_to_check", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid how_to_check", { reason: "invalid_body" });
       }
       howToCheck = body["how_to_check"];
     }
@@ -419,17 +419,17 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
       if (filesTouched.reason === "repo_ambiguous") {
         return errorJson(c, 400, "repo_ambiguous", "repo_id is required on files_touched");
       }
-      return errorJson(c, 400, "unauthorized", "invalid files_touched", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid files_touched", { reason: "invalid_body" });
     }
     const openQuestions = parseOpenQuestions(body?.["open_questions"]);
     if (openQuestions === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid open_questions", {
+      return errorJson(c, 400, "invalid_request", "invalid open_questions", {
         reason: "invalid_body",
       });
     }
     const statusRaw = body?.["status"] === undefined ? "done" : body["status"];
     if (typeof statusRaw !== "string" || !isFinishWorkStatus(statusRaw)) {
-      return errorJson(c, 400, "unauthorized", "invalid status", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid status", { reason: "invalid_body" });
     }
     const taskStatus: FinishWorkStatus = statusRaw;
 

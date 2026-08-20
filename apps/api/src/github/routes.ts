@@ -5,7 +5,7 @@ import {
   actorIdempotencyRef,
   authorizeProjectActor,
   requireActor,
-  requireProjectActor,
+  requireProject,
   taskStatusOnCreate,
 } from "../auth/access.js";
 import { isGithubAppConfigured, type AuthConfig } from "../auth/config.js";
@@ -291,7 +291,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     try {
       parsed = rawBody.length > 0 ? (JSON.parse(rawBody) as unknown) : {};
     } catch {
-      return errorJson(c, 400, "unauthorized", "invalid webhook payload", {
+      return errorJson(c, 400, "invalid_request", "invalid webhook payload", {
         reason: "invalid_body",
       });
     }
@@ -407,7 +407,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     const q = parseOptionalString(c.req.query("q"), 200);
     const path = githubListPath(remote, "issues", issueQuery(state, q), c.req.query("cursor"));
     if (!path) {
-      return errorJson(c, 400, "unauthorized", "invalid cursor", { reason: "invalid_cursor" });
+      return errorJson(c, 400, "invalid_request", "invalid cursor", { reason: "invalid_cursor" });
     }
     const result = await githubApiRequest(token, path, deps.githubFetch);
     if (!result.ok || !Array.isArray(result.body)) {
@@ -485,7 +485,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
       c.req.query("cursor"),
     );
     if (!path) {
-      return errorJson(c, 400, "unauthorized", "invalid cursor", { reason: "invalid_cursor" });
+      return errorJson(c, 400, "invalid_request", "invalid cursor", { reason: "invalid_cursor" });
     }
     const result = await githubApiRequest(token, path, deps.githubFetch);
     if (!result.ok || !Array.isArray(result.body)) {
@@ -530,7 +530,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
       return installed;
     }
     if (githubIssuesMode(resolved.project.settings) !== "import") {
-      return errorJson(c, 400, "unauthorized", "github issue import is off", {
+      return errorJson(c, 400, "invalid_request", "github issue import is off", {
         reason: "github_issues_off",
       });
     }
@@ -570,7 +570,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     const repoId =
       repoIdRaw === undefined ? undefined : typeof repoIdRaw === "string" ? repoIdRaw : "";
     if (!issueNumber) {
-      return errorJson(c, 400, "unauthorized", "issue_number is required", {
+      return errorJson(c, 400, "invalid_request", "issue_number is required", {
         reason: "invalid_body",
       });
     }
@@ -657,7 +657,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
       return errorJson(c, 404, "not_found", "repo not found");
     }
     if (githubIssuesMode(resolved.project.settings) !== "import") {
-      return errorJson(c, 400, "unauthorized", "github issue import is off", {
+      return errorJson(c, 400, "invalid_request", "github issue import is off", {
         reason: "github_issues_off",
       });
     }
@@ -665,7 +665,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
     const body = await readObject(c);
     const issuesRaw = body?.["issues"];
     if (!Array.isArray(issuesRaw)) {
-      return errorJson(c, 400, "unauthorized", "issues is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "issues is required", { reason: "invalid_body" });
     }
 
     const now = deps.clock.now();
@@ -683,7 +683,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
             ? issue["description"].slice(0, 8000)
             : "";
       if (!githubIssueId || !number || !title) {
-        return errorJson(c, 400, "unauthorized", "invalid imported issue", {
+        return errorJson(c, 400, "invalid_request", "invalid imported issue", {
           reason: "invalid_body",
         });
       }
@@ -826,7 +826,7 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
   });
 
   app.get("/v1/projects/:id/github/issues", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
       return access;
     }

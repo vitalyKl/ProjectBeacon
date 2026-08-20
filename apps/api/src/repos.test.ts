@@ -423,7 +423,7 @@ describe("project repos", () => {
       });
       expect(created.status).toBe(400);
       expect(await created.json()).toMatchObject({
-        error: { code: "unauthorized", message: "invalid index_mode" },
+        error: { code: "invalid_request", message: "invalid index_mode" },
       });
     } finally {
       if (previous === undefined) {

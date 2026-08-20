@@ -2,7 +2,7 @@ import { uniqueScopePaths } from "@beacon/context";
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Hono } from "hono";
 
-import { actorActivityRef, isAdminActor, requireActor, requireProjectActor, type AccessDeps } from "../auth/access.js";
+import { actorActivityRef, isAdminActor, requireActor, requireProject, type AccessDeps } from "../auth/access.js";
 import type { AuthActor } from "../auth/access.js";
 import { UniqueViolationError } from "../auth/store.js";
 import type { RepoStore } from "../repos/store.js";
@@ -86,7 +86,7 @@ function actorRef(actor: AuthActor): { type: string; id: string } {
 
 export function mountLabels(app: Hono, deps: LabelDeps): void {
   app.get("/v1/projects/:id/labels", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (isResponse(access)) {
       return access;
     }
@@ -103,7 +103,7 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
   });
 
   app.post("/v1/projects/:id/labels", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:write");
     if (isResponse(access)) {
       return access;
     }
@@ -125,7 +125,7 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
     const paths = await parseLabelPaths(deps.store, access.project.id, body?.["paths"]);
 
     if (!name || !slug || description === undefined || color === undefined || !paths.ok) {
-      return errorJson(c, 400, "unauthorized", "name is required", {
+      return errorJson(c, 400, "invalid_request", "name is required", {
         reason: paths.ok ? "invalid_body" : paths.reason,
       });
     }
@@ -175,7 +175,7 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
     if (!existing) {
       return errorJson(c, 404, "not_found", "label not found");
     }
-    const access = await requireProjectActor(c, deps, existing.projectId, "tasks:write");
+    const access = await requireProject(c, deps, existing.projectId, "tasks:write");
     if (isResponse(access)) {
       return access;
     }
@@ -186,7 +186,7 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
 
     const body = await readObject(c);
     if (!body) {
-      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid body", { reason: "invalid_body" });
     }
     const name = body["name"] === undefined ? undefined : parseOptionalString(body["name"], 80);
     const slug = body["slug"] === undefined ? undefined : parseSlug(body["slug"]);
@@ -212,7 +212,7 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
       (body["status"] !== undefined && !status) ||
       (paths && !paths.ok)
     ) {
-      return errorJson(c, 400, "unauthorized", "invalid label", {
+      return errorJson(c, 400, "invalid_request", "invalid label", {
         reason: paths && !paths.ok ? paths.reason : "invalid_body",
       });
     }
@@ -265,14 +265,14 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
     if (!task || task.deletedAt) {
       return errorJson(c, 404, "not_found", "task not found");
     }
-    const access = await requireProjectActor(c, deps, task.projectId, "tasks:write");
+    const access = await requireProject(c, deps, task.projectId, "tasks:write");
     if (isResponse(access)) {
       return access;
     }
     const body = await readObject(c);
     const parsed = parseLabelIds(body?.["label_ids"]);
     if (!parsed.ok) {
-      return errorJson(c, 400, "unauthorized", "label_ids is required", {
+      return errorJson(c, 400, "invalid_request", "label_ids is required", {
         reason: "invalid_body",
       });
     }
@@ -280,7 +280,7 @@ export function mountLabels(app: Hono, deps: LabelDeps): void {
     for (const labelId of unique) {
       const label = await deps.store.findLabelById(labelId);
       if (!label || label.projectId !== task.projectId) {
-        return errorJson(c, 400, "unauthorized", "invalid label_ids", {
+        return errorJson(c, 400, "invalid_request", "invalid label_ids", {
           reason: "invalid_label",
         });
       }

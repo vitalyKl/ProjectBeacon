@@ -1,7 +1,12 @@
 import { isUuid } from "@beacon/shared";
 import type { Context } from "hono";
 
-import { authorizeProjectActor, requireActor, type AccessDeps, type AuthActor } from "../auth/access.js";
+import {
+  authorizeProjectActor,
+  requireProjectResource,
+  type AccessDeps,
+  type AuthActor,
+} from "../auth/access.js";
 import type { RepoStore } from "../repos/store.js";
 import type { ProjectRepoRecord } from "../context/types.js";
 import { errorJson } from "../errors.js";
@@ -60,9 +65,20 @@ export async function requireGithubRepo(
   repoId: string,
   needed: "project:read" | "integrations:write" | "tasks:write",
 ): Promise<{ repo: ProjectRepoRecord; project: ProjectRecord; actor: AuthActor } | Response> {
-  const actor = await requireActor(c, deps);
-  if (isResponse(actor)) {
-    return actor;
+  const loaded = await requireProjectResource(
+    c,
+    deps,
+    async () => {
+      if (!isUuid(repoId)) {
+        return null;
+      }
+      return deps.store.findProjectRepoById(repoId);
+    },
+    needed,
+    "repo not found",
+  );
+  if (isResponse(loaded)) {
+    return loaded;
   }
-  return resolveGithubRepo(c, deps, actor, repoId, undefined, needed);
+  return { repo: loaded.resource, project: loaded.project, actor: loaded.actor };
 }

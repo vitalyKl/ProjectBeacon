@@ -4,7 +4,7 @@ import type { Hono } from "hono";
 import {
   authorizeProjectActor,
   requireActor,
-  requireProjectActor,
+  requireProject,
   taskStatusOnCreate,
   type AccessDeps,
 } from "../auth/access.js";
@@ -70,7 +70,7 @@ export type TokenDeps = AccessDeps & {
 
 export function mountTokens(app: Hono, deps: TokenDeps): void {
   app.get("/v1/projects/:id/tokens", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "admin");
+    const access = await requireProject(c, deps, c.req.param("id"), "admin");
     if (isResponse(access)) {
       return access;
     }
@@ -81,7 +81,7 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
   });
 
   app.post("/v1/projects/:id/tokens", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "admin");
+    const access = await requireProject(c, deps, c.req.param("id"), "admin");
     if (isResponse(access)) {
       return access;
     }
@@ -91,12 +91,12 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
     const scopes = parseScopes(body?.["scopes"]);
     const ttl = parseTtl(body);
     if (!name || !scopes || ttl === "invalid") {
-      return errorJson(c, 400, "unauthorized", "name and valid scopes are required", {
+      return errorJson(c, 400, "invalid_request", "name and valid scopes are required", {
         reason: "invalid_body",
       });
     }
     if (ttl === "none" && body?.["confirm"] !== true) {
-      return errorJson(c, 400, "unauthorized", "no-expiry tokens require confirm: true", {
+      return errorJson(c, 400, "invalid_request", "no-expiry tokens require confirm: true", {
         reason: "confirm_required",
       });
     }
@@ -144,7 +144,7 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
   });
 
   app.get("/v1/projects/:id/approvals", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "admin");
+    const access = await requireProject(c, deps, c.req.param("id"), "admin");
     if (isResponse(access)) {
       return access;
     }
@@ -155,14 +155,14 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
   });
 
   app.post("/v1/projects/:id/approvals", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "admin");
+    const access = await requireProject(c, deps, c.req.param("id"), "admin");
     if (isResponse(access)) {
       return access;
     }
     const body = await readObject(c);
     const action = parseOptionalString(body?.["action"], 120);
     if (!action) {
-      return errorJson(c, 400, "unauthorized", "action is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "action is required", { reason: "invalid_body" });
     }
     const payload =
       body?.["payload"] !== undefined &&
@@ -176,11 +176,11 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
     if (sessionIdRaw === undefined || sessionIdRaw === null) {
       sessionId = null;
     } else if (typeof sessionIdRaw !== "string" || !isUuid(sessionIdRaw)) {
-      return errorJson(c, 400, "unauthorized", "invalid session_id", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid session_id", { reason: "invalid_body" });
     } else {
       const session = await deps.store.findAgentSessionById(sessionIdRaw);
       if (!session || session.projectId !== access.project.id) {
-        return errorJson(c, 400, "unauthorized", "invalid session_id", {
+        return errorJson(c, 400, "invalid_request", "invalid session_id", {
           reason: "invalid_session",
         });
       }
@@ -221,7 +221,7 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
     const body = await readObject(c);
     const decision = body?.["decision"];
     if (decision !== "approved" && decision !== "denied") {
-      return errorJson(c, 400, "unauthorized", "decision must be approved or denied", {
+      return errorJson(c, 400, "invalid_request", "decision must be approved or denied", {
         reason: "invalid_body",
       });
     }
@@ -241,7 +241,7 @@ export function mountTokens(app: Hono, deps: TokenDeps): void {
 /** Test-only stand-in until task create exists (PR 07). */
 export function mountTokenProbe(app: Hono, deps: TokenDeps): void {
   app.post("/v1/projects/:id/token-probe", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
       return access;
     }

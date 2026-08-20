@@ -147,7 +147,7 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
     if (!sidecarTunnelEnabled()) {
       return errorJson(c, 404, "not_found", "not found");
     }
-    return errorJson(c, 400, "unauthorized", "websocket upgrade required");
+    return errorJson(c, 400, "invalid_request", "websocket upgrade required");
   });
 
   app.sidecarTunnel = sidecarTunnel;

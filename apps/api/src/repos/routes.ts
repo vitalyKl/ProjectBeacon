@@ -3,9 +3,9 @@ import type { Context, Hono } from "hono";
 
 import {
   actorHasCapability,
-  authorizeProjectActor,
   requireActor,
-  requireProjectActor,
+  requireProject,
+  requireProjectResource,
 } from "../auth/access.js";
 import { enforceRateLimit } from "../auth/rate-limit.js";
 import type { AccessDeps } from "../auth/access.js";
@@ -98,22 +98,23 @@ async function loadAuthorizedRepo(
   deps: RepoDeps,
   needed: "project:read" | "project:write" | "code:read",
 ) {
-  const id = c.req.param("id");
-  if (!id || !isUuid(id)) {
-    return errorJson(c, 404, "not_found", "repo not found");
+  const loaded = await requireProjectResource(
+    c,
+    deps,
+    async () => {
+      const id = c.req.param("id");
+      if (!id || !isUuid(id)) {
+        return null;
+      }
+      return deps.store.findProjectRepoById(id);
+    },
+    needed,
+    "repo not found",
+  );
+  if (isResponse(loaded)) {
+    return loaded;
   }
-  const repo = await deps.store.findProjectRepoById(id);
-  if (!repo) {
-    return errorJson(c, 404, "not_found", "repo not found");
-  }
-  const access = await requireProjectActor(c, deps, repo.projectId, needed);
-  if (isResponse(access)) {
-    if (access.status === 404) {
-      return errorJson(c, 404, "not_found", "repo not found");
-    }
-    return access;
-  }
-  return { ...access, repo };
+  return { ...loaded, repo: loaded.resource };
 }
 
 async function repoStatusExtras(deps: RepoDeps, repo: ProjectRepoRecord, gateway: CodeGateway) {
@@ -233,7 +234,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     });
 
   app.get("/v1/projects/:id/repos", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
     if (isResponse(access)) {
       return access;
     }
@@ -250,7 +251,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
   });
 
   app.post("/v1/projects/:id/repos", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "admin");
+    const access = await requireProject(c, deps, c.req.param("id"), "admin");
     if (isResponse(access)) {
       return access;
     }
@@ -260,7 +261,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     const requestedMode = body?.["index_mode"] ?? "sidecar";
     const indexMode = parseIndexMode(requestedMode);
     if (requestedMode !== undefined && indexMode === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid index_mode", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid index_mode", { reason: "invalid_body" });
     }
     const defaultBranch = parseOptionalString(body?.["default_branch"], 200) ?? "main";
     const remoteUrl =
@@ -274,7 +275,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     if (localRootRaw !== undefined && localRootRaw !== null) {
       const parsed = parseLocalRootHint(localRootRaw);
       if (!parsed) {
-        return errorJson(c, 400, "unauthorized", "invalid local_root_hint", {
+        return errorJson(c, 400, "invalid_request", "invalid local_root_hint", {
           reason: "invalid_body",
         });
       }
@@ -288,15 +289,15 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       githubRepoId === undefined ||
       installationId === undefined
     ) {
-      return errorJson(c, 400, "unauthorized", "provider is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "provider is required", { reason: "invalid_body" });
     }
     if (provider === "local" && !localRootHint) {
-      return errorJson(c, 400, "unauthorized", "local_root_hint is required for local repos", {
+      return errorJson(c, 400, "invalid_request", "local_root_hint is required for local repos", {
         reason: "invalid_body",
       });
     }
     if (provider === "github" && !remoteUrl) {
-      return errorJson(c, 400, "unauthorized", "remote_url is required for github repos", {
+      return errorJson(c, 400, "invalid_request", "remote_url is required for github repos", {
         reason: "invalid_body",
       });
     }
@@ -304,7 +305,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       (indexMode === "hosted_clone" || indexMode === "both") &&
       (provider !== "github" || !installationId)
     ) {
-      return errorJson(c, 400, "unauthorized", "hosted clone requires a GitHub App installation", {
+      return errorJson(c, 400, "invalid_request", "hosted clone requires a GitHub App installation", {
         reason: "invalid_body",
       });
     }
@@ -366,19 +367,19 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const body = await readObject(c);
     if (!body || body["index_mode"] === undefined) {
-      return errorJson(c, 400, "unauthorized", "index_mode is required", {
+      return errorJson(c, 400, "invalid_request", "index_mode is required", {
         reason: "invalid_body",
       });
     }
     const indexMode = parseIndexMode(body["index_mode"]);
     if (!indexMode) {
-      return errorJson(c, 400, "unauthorized", "invalid index_mode", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid index_mode", { reason: "invalid_body" });
     }
     if (
       (indexMode === "hosted_clone" || indexMode === "both") &&
       (loaded.repo.provider !== "github" || !loaded.repo.installationId)
     ) {
-      return errorJson(c, 400, "unauthorized", "hosted clone requires a GitHub App installation", {
+      return errorJson(c, 400, "invalid_request", "hosted clone requires a GitHub App installation", {
         reason: "invalid_body",
       });
     }
@@ -442,12 +443,12 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
       body?.["last_indexed_sha"] !== undefined &&
       body["last_indexed_sha"] !== null
     ) {
-      return errorJson(c, 400, "unauthorized", "invalid last_indexed_sha", {
+      return errorJson(c, 400, "invalid_request", "invalid last_indexed_sha", {
         reason: "invalid_body",
       });
     }
     if (lastIndexedAt === undefined && atRaw !== undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid last_indexed_at", {
+      return errorJson(c, 400, "invalid_request", "invalid last_indexed_at", {
         reason: "invalid_body",
       });
     }
@@ -487,7 +488,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const depth = parsePositiveInt(c.req.query("depth"), 2);
     if (depth === "invalid" || depth === undefined || depth < 1 || depth > 4) {
-      return errorJson(c, 400, "unauthorized", "invalid depth", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "invalid depth", { reason: "invalid_query" });
     }
     return runCodeQuery(
       c,
@@ -506,11 +507,11 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const q = c.req.query("q")?.trim();
     if (!q) {
-      return errorJson(c, 400, "unauthorized", "q is required", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "q is required", { reason: "invalid_query" });
     }
     const limit = parsePositiveInt(c.req.query("limit"), 50);
     if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
-      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_query" });
     }
     return runCodeQuery(
       c,
@@ -536,12 +537,12 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const path = c.req.query("path")?.trim();
     if (!path) {
-      return errorJson(c, 400, "unauthorized", "path is required", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "path is required", { reason: "invalid_query" });
     }
     const startLine = parsePositiveInt(c.req.query("start_line"));
     const endLine = parsePositiveInt(c.req.query("end_line"));
     if (startLine === "invalid" || endLine === "invalid") {
-      return errorJson(c, 400, "unauthorized", "invalid line range", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "invalid line range", { reason: "invalid_query" });
     }
     return runCodeQuery(
       c,
@@ -560,7 +561,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const name = c.req.query("name")?.trim();
     if (!name) {
-      return errorJson(c, 400, "unauthorized", "name is required", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "name is required", { reason: "invalid_query" });
     }
     return runCodeQuery(
       c,
@@ -579,7 +580,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const path = c.req.query("path")?.trim();
     if (!path) {
-      return errorJson(c, 400, "unauthorized", "path is required", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "path is required", { reason: "invalid_query" });
     }
     return runCodeQuery(
       c,
@@ -598,11 +599,11 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const path = c.req.query("path")?.trim();
     if (!path) {
-      return errorJson(c, 400, "unauthorized", "path is required", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "path is required", { reason: "invalid_query" });
     }
     const limit = parsePositiveInt(c.req.query("limit"), 50);
     if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
-      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_query" });
     }
     return runCodeQuery(
       c,
@@ -615,25 +616,24 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
   });
 
   app.get("/v1/tasks/:id/changed-scope", async (c) => {
-    const actor = await requireActor(c, deps);
-    if (isResponse(actor)) {
-      return actor;
+    const loaded = await requireProjectResource(
+      c,
+      deps,
+      async () => {
+        const taskId = c.req.param("id");
+        if (!isUuid(taskId)) {
+          return null;
+        }
+        const task = await deps.store.findTaskById(taskId);
+        return task && !task.deletedAt ? task : null;
+      },
+      "code:read",
+      "task not found",
+    );
+    if (isResponse(loaded)) {
+      return loaded;
     }
-    const taskId = c.req.param("id");
-    if (!isUuid(taskId)) {
-      return errorJson(c, 404, "not_found", "task not found");
-    }
-    const task = await deps.store.findTaskById(taskId);
-    if (!task || task.deletedAt) {
-      return errorJson(c, 404, "not_found", "task not found");
-    }
-    const access = await authorizeProjectActor(c, deps, actor, task.projectId, "code:read");
-    if (isResponse(access)) {
-      if (access.status === 404) {
-        return errorJson(c, 404, "not_found", "task not found");
-      }
-      return access;
-    }
+    const { resource: task, ...access } = loaded;
     if (!actorHasCapability(access.actor, "tasks:read", access.role)) {
       return errorJson(c, 403, "forbidden", "insufficient token scope");
     }
@@ -656,7 +656,7 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
     }
     const limit = parsePositiveInt(c.req.query("limit"), 50);
     if (limit === "invalid" || limit === undefined || limit < 1 || limit > 100) {
-      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_query" });
     }
     const attached = await deps.store.listTaskLabels(task.id);
     return runCodeQuery(
@@ -670,18 +670,12 @@ export function mountRepos(app: Hono, deps: RepoDeps): void {
   });
 
   app.post("/v1/repos/:id/detect", async (c) => {
-    const id = c.req.param("id");
-    if (!isUuid(id)) {
-      return errorJson(c, 404, "not_found", "repo not found");
+    const loaded = await loadAuthorizedRepo(c, deps, "project:write");
+    if (isResponse(loaded)) {
+      return loaded;
     }
-    const repo = await deps.store.findProjectRepoById(id);
-    if (!repo) {
-      return errorJson(c, 404, "not_found", "repo not found");
-    }
-    const access = await requireProjectActor(c, deps, repo.projectId, "project:write");
-    if (isResponse(access)) {
-      return access;
-    }
+    const { repo } = loaded;
+    const access = loaded;
 
     const enqueue = async (): Promise<{ id: string; status: "accepted" }> => {
       const jobId = await deps.jobs.enqueueDetect(

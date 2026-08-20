@@ -1,7 +1,7 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Hono } from "hono";
 
-import { actorActivityRef, requireProjectActor, type AccessDeps } from "../auth/access.js";
+import { actorActivityRef, requireProject, type AccessDeps } from "../auth/access.js";
 import type { RoadmapStore } from "../roadmap/store.js";
 import type { ReportStore } from "./store.js";
 import { errorJson, isMissingSchemaError } from "../errors.js";
@@ -43,7 +43,7 @@ export type ReportDeps = AccessDeps & {
 
 export function mountReports(app: Hono, deps: ReportDeps): void {
   app.get("/v1/projects/:id/reports", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (isResponse(access)) {
       return access;
     }
@@ -67,14 +67,14 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
   });
 
   app.post("/v1/projects/:id/reports", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:write");
     if (isResponse(access)) {
       return access;
     }
     const body = await readObject(c);
     const titleRaw = body?.["title"] === undefined ? undefined : parseOptionalString(body["title"], 200);
     if (body?.["title"] !== undefined && !titleRaw) {
-      return errorJson(c, 400, "unauthorized", "invalid title", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid title", { reason: "invalid_body" });
     }
     const now = deps.clock.now();
     try {
@@ -129,7 +129,7 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
     if (!report) {
       return errorJson(c, 404, "not_found", "report not found");
     }
-    const access = await requireProjectActor(c, deps, report.projectId, "tasks:read");
+    const access = await requireProject(c, deps, report.projectId, "tasks:read");
     if (isResponse(access)) {
       return access;
     }
@@ -137,7 +137,7 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
   });
 
   app.get("/v1/projects/:id/reviews", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "tasks:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
     if (isResponse(access)) {
       return access;
     }
@@ -161,14 +161,14 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
   });
 
   app.post("/v1/projects/:id/reviews", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:write");
     if (isResponse(access)) {
       return access;
     }
     const body = await readObject(c);
     const bodyMd = parseText(body?.["body_md"], 32_000);
     if (!bodyMd) {
-      return errorJson(c, 400, "unauthorized", "body_md is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "body_md is required", { reason: "invalid_body" });
     }
     const title = reviewTitleFromBody(
       typeof body?.["title"] === "string" ? body["title"] : undefined,
@@ -178,7 +178,7 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
     const sourcePath =
       body?.["source_path"] === undefined ? null : parseOptionalString(body["source_path"], 1024);
     if (body?.["source_path"] !== undefined && sourcePath === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid source_path", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid source_path", { reason: "invalid_body" });
     }
     const now = deps.clock.now();
     const actor = actorActivityRef(access.actor);
@@ -224,7 +224,7 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
     if (!review) {
       return errorJson(c, 404, "not_found", "review not found");
     }
-    const access = await requireProjectActor(c, deps, review.projectId, "tasks:read");
+    const access = await requireProject(c, deps, review.projectId, "tasks:read");
     if (isResponse(access)) {
       return access;
     }

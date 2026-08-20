@@ -1,7 +1,12 @@
 import { isUuid, uuidv7 } from "@beacon/shared";
 import type { Context, Hono } from "hono";
 
-import { requireActor, requireProjectActor, type AccessDeps } from "../auth/access.js";
+import {
+  requireActor,
+  requireProject,
+  type AccessDeps,
+  type ProjectAccess,
+} from "../auth/access.js";
 import { loadSession } from "../auth/routes.js";
 import type { UserRecord } from "../auth/identity.js";
 import type { RepoStore } from "../repos/store.js";
@@ -22,11 +27,9 @@ import {
   isProjectRole,
   OrgSlugTakenError,
   orgRoleAtLeast,
-  projectRoleAtLeast,
   ProjectSlugTakenError,
   type OrgInviteRole,
   type OrgRecord,
-  type ProjectRecord,
   type ProjectRole,
 } from "./types.js";
 import type { OrgStore } from "./store.js";
@@ -50,7 +53,7 @@ export async function requireSession(c: Context, deps: AccessDeps): Promise<Auth
   return { user: resolved.user };
 }
 
-export function isResponse(value: Authed | Response): value is Response {
+function isResponse(value: Authed | Response): value is Response {
   return value instanceof Response;
 }
 
@@ -125,28 +128,20 @@ async function requireOrgMember(
   return { org };
 }
 
-export async function requireProjectAccess(
+async function requireProjectUser(
   c: Context,
   deps: AccessDeps,
-  user: UserRecord,
   projectId: string,
-  needed: ProjectRole,
-): Promise<{ project: ProjectRecord; role: ProjectRole } | Response> {
-  if (!isUuid(projectId)) {
-    return errorJson(c, 404, "not_found", "project not found");
+  needed: "admin" | "project:read",
+): Promise<(ProjectAccess & { actor: { kind: "user"; user: UserRecord } }) | Response> {
+  const access = await requireProject(c, deps, projectId, needed);
+  if (access instanceof Response) {
+    return access;
   }
-  const project = await deps.store.findProjectById(projectId);
-  if (!project || project.deletedAt) {
-    return errorJson(c, 404, "not_found", "project not found");
+  if (access.actor.kind !== "user") {
+    return errorJson(c, 403, "forbidden", "insufficient token scope");
   }
-  const member = await deps.store.findProjectMember(project.id, user.id);
-  if (!member) {
-    return errorJson(c, 404, "not_found", "project not found");
-  }
-  if (!projectRoleAtLeast(member.role, needed)) {
-    return errorJson(c, 403, "forbidden", "insufficient project role");
-  }
-  return { project, role: member.role };
+  return { ...access, actor: access.actor };
 }
 
 export function mountOrgs(app: Hono, deps: OrgDeps): void {
@@ -160,7 +155,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
     const slug = parseSlug(body?.["slug"]);
     const name = parseOptionalString(body?.["name"], 120);
     if (!slug || !name) {
-      return errorJson(c, 400, "unauthorized", "slug and name are required", {
+      return errorJson(c, 400, "invalid_request", "slug and name are required", {
         reason: "invalid_body",
       });
     }
@@ -224,7 +219,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
       return errorJson(
         c,
         400,
-        "unauthorized",
+        "invalid_request",
         "email or github_login and a valid role are required",
         {
           reason: "invalid_body",
@@ -304,12 +299,12 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
     const description =
       body?.["description"] === undefined ? "" : parseOptionalString(body["description"], 2000);
     if (!slug || !name || description === undefined) {
-      return errorJson(c, 400, "unauthorized", "name and slug are required", {
+      return errorJson(c, 400, "invalid_request", "name and slug are required", {
         reason: "invalid_body",
       });
     }
     if (body?.["visibility"] !== undefined && body["visibility"] !== "private") {
-      return errorJson(c, 400, "unauthorized", "visibility must be private", {
+      return errorJson(c, 400, "invalid_request", "visibility must be private", {
         reason: "invalid_visibility",
       });
     }
@@ -342,7 +337,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.get("/v1/projects/:id", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
     if (access instanceof Response) {
       return access;
     }
@@ -350,48 +345,44 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.patch("/v1/projects/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "admin");
+    const access = await requireProjectUser(c, deps, c.req.param("id"), "admin");
     if (access instanceof Response) {
       return access;
     }
 
     const body = await readObject(c);
     if (!body) {
-      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid body", { reason: "invalid_body" });
     }
     const patch: { name?: string; description?: string; slug?: string } = {};
     if (body["name"] !== undefined) {
       const name = parseOptionalString(body["name"], 120);
       if (!name) {
-        return errorJson(c, 400, "unauthorized", "invalid name", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid name", { reason: "invalid_body" });
       }
       patch.name = name;
     }
     if (body["description"] !== undefined) {
       if (typeof body["description"] !== "string" || body["description"].length > 2000) {
-        return errorJson(c, 400, "unauthorized", "invalid description", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid description", { reason: "invalid_body" });
       }
       patch.description = body["description"];
     }
     if (body["slug"] !== undefined) {
       const slug = parseSlug(body["slug"]);
       if (!slug) {
-        return errorJson(c, 400, "unauthorized", "invalid slug", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid slug", { reason: "invalid_body" });
       }
       patch.slug = slug;
     }
     if (body["visibility"] !== undefined && body["visibility"] !== "private") {
-      return errorJson(c, 400, "unauthorized", "visibility must be private", {
+      return errorJson(c, 400, "invalid_request", "visibility must be private", {
         reason: "invalid_visibility",
       });
     }
     const settingsParsed = parseProjectSettingsPatch(body["settings"]);
     if (!settingsParsed.ok) {
-      return errorJson(c, 400, "unauthorized", settingsParsed.message, {
+      return errorJson(c, 400, "invalid_request", settingsParsed.message, {
         reason: settingsParsed.reason,
       });
     }
@@ -423,11 +414,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.delete("/v1/projects/:id", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "admin");
+    const access = await requireProjectUser(c, deps, c.req.param("id"), "admin");
     if (access instanceof Response) {
       return access;
     }
@@ -456,7 +443,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.get("/v1/projects/:id/hosted-clone-purge", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "project:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "project:read");
     if (access instanceof Response) {
       return access;
     }
@@ -472,11 +459,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.get("/v1/projects/:id/members", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "read");
+    const access = await requireProjectUser(c, deps, c.req.param("id"), "project:read");
     if (access instanceof Response) {
       return access;
     }
@@ -490,11 +473,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.post("/v1/projects/:id/members", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "admin");
+    const access = await requireProjectUser(c, deps, c.req.param("id"), "admin");
     if (access instanceof Response) {
       return access;
     }
@@ -502,7 +481,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
     const body = await readObject(c);
     const roleRaw = typeof body?.["role"] === "string" ? body["role"] : "read";
     if (!isProjectRole(roleRaw)) {
-      return errorJson(c, 400, "unauthorized", "invalid role", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid role", { reason: "invalid_body" });
     }
     const role: ProjectRole = roleRaw;
     const now = deps.clock.now();
@@ -510,7 +489,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
     const userId = typeof body?.["user_id"] === "string" ? body["user_id"] : undefined;
     if (userId) {
       if (!isUuid(userId)) {
-        return errorJson(c, 400, "unauthorized", "invalid user_id", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid user_id", { reason: "invalid_body" });
       }
       const target = await deps.store.findUserById(userId);
       if (!target) {
@@ -527,7 +506,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
 
     const target = parseInviteTarget(body);
     if (!target) {
-      return errorJson(c, 400, "unauthorized", "user_id, email, or github_login is required", {
+      return errorJson(c, 400, "invalid_request", "user_id, email, or github_login is required", {
         reason: "invalid_body",
       });
     }
@@ -537,7 +516,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
       email: target.email,
       githubLogin: target.githubLogin,
       role,
-      invitedBy: session.user.id,
+      invitedBy: access.actor.user.id,
       expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
       acceptedAt: null,
     });
@@ -545,11 +524,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
   });
 
   app.post("/v1/projects/:id/invites", async (c) => {
-    const session = await requireSession(c, deps);
-    if (isResponse(session)) {
-      return session;
-    }
-    const access = await requireProjectAccess(c, deps, session.user, c.req.param("id"), "admin");
+    const access = await requireProjectUser(c, deps, c.req.param("id"), "admin");
     if (access instanceof Response) {
       return access;
     }
@@ -561,7 +536,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
       return errorJson(
         c,
         400,
-        "unauthorized",
+        "invalid_request",
         "email or github_login and a valid role are required",
         {
           reason: "invalid_body",
@@ -575,7 +550,7 @@ export function mountOrgs(app: Hono, deps: OrgDeps): void {
       email: target.email,
       githubLogin: target.githubLogin,
       role: roleRaw,
-      invitedBy: session.user.id,
+      invitedBy: access.actor.user.id,
       expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
       acceptedAt: null,
     });

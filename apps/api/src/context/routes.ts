@@ -14,7 +14,7 @@ import { parsePageQuery, paginateRecords } from "../roadmap/page.js";
 import { presentContextNode, sectionsText, toCompileNode, presentContextRevision, presentContextRevisionSummary } from "./present.js";
 import { compileProjectBrief } from "./compile-brief.js";
 import { type ContextNodeRecord, isContextReviewState, isContextScopeType, type ContextReviewState, type ContextScopeType } from "./types.js";
-import { requireProjectActor, type AuthActor } from "../auth/access.js";
+import { requireProject, type AuthActor } from "../auth/access.js";
 import type { CodeGateway } from "../code/gateway.js";
 
 const MAX_IMPORT_FILES = 200;
@@ -82,7 +82,7 @@ async function resolveRepoId(
 
 export function mountContext(app: Hono, deps: ContextDeps): void {
   app.get("/v1/projects/:id/context/nodes", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
       return access;
     }
@@ -106,14 +106,14 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.post("/v1/projects/:id/context/nodes", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:write");
     if (isResponse(access)) {
       return access;
     }
 
     const body = await readObject(c);
     if (!body) {
-      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid body", { reason: "invalid_body" });
     }
 
     const parsed = await parseNativeCreate(c, deps, access.project.id, body, "project");
@@ -125,7 +125,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.put("/v1/projects/:id/context/nodes/:nodeId", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:write");
     if (isResponse(access)) {
       return access;
     }
@@ -137,7 +137,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
 
     const body = await readObject(c);
     if (!body) {
-      return errorJson(c, 400, "unauthorized", "invalid body", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid body", { reason: "invalid_body" });
     }
 
     const existing = await deps.store.findContextNodeById(nodeId);
@@ -152,7 +152,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
       const sections =
         body["sections"] === undefined ? existing.sections : parseSections(body["sections"]);
       if (!sections) {
-        return errorJson(c, 400, "unauthorized", "invalid sections", { reason: "invalid_body" });
+        return errorJson(c, 400, "invalid_request", "invalid sections", { reason: "invalid_body" });
       }
       let reviewState: ContextReviewState = existing.reviewState;
       if (body["review_state"] !== undefined) {
@@ -160,7 +160,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
           typeof body["review_state"] !== "string" ||
           !isContextReviewState(body["review_state"])
         ) {
-          return errorJson(c, 400, "unauthorized", "invalid review_state", {
+          return errorJson(c, 400, "invalid_request", "invalid review_state", {
             reason: "invalid_body",
           });
         }
@@ -184,7 +184,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.get("/v1/projects/:id/context/revisions", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
       return access;
     }
@@ -201,7 +201,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.get("/v1/projects/:id/context/revisions/:revId", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
       return access;
     }
@@ -217,14 +217,14 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.post("/v1/projects/:id/context/import", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:write");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:write");
     if (isResponse(access)) {
       return access;
     }
 
     const files = parseImportFilesBody(await readJson(c));
     if (!files) {
-      return errorJson(c, 400, "unauthorized", "files is required", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "files is required", { reason: "invalid_body" });
     }
 
     const repoQuery = c.req.query("repo_id");
@@ -366,14 +366,14 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.get("/v1/projects/:id/context/export/agents-md", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
       return access;
     }
 
     const path = c.req.query("path") ?? "";
     if (path.length > MAX_IMPORT_PATH) {
-      return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid path", { reason: "invalid_body" });
     }
     const resolved = await resolveRepoId(deps, access.project.id, c.req.query("repo_id"));
     if (!resolved.ok) {
@@ -427,7 +427,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.post("/v1/projects/:id/context/compile", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
       return access;
     }
@@ -438,11 +438,11 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
       project_id: typeof raw["project_id"] === "string" ? raw["project_id"] : access.project.id,
     });
     if (!parsed.success) {
-      return errorJson(c, 400, "unauthorized", "invalid compile input", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid compile input", { reason: "invalid_body" });
     }
     const input = parsed.data;
     if (input.project_id !== access.project.id) {
-      return errorJson(c, 400, "unauthorized", "project_id does not match path", {
+      return errorJson(c, 400, "invalid_request", "project_id does not match path", {
         reason: "invalid_body",
       });
     }
@@ -478,24 +478,24 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
   });
 
   app.get("/v1/projects/:id/context/search", async (c) => {
-    const access = await requireProjectActor(c, deps, c.req.param("id"), "context:read");
+    const access = await requireProject(c, deps, c.req.param("id"), "context:read");
     if (isResponse(access)) {
       return access;
     }
 
     const q = c.req.query("q")?.trim() ?? "";
     if (!q) {
-      return errorJson(c, 400, "unauthorized", "q is required", { reason: "invalid_query" });
+      return errorJson(c, 400, "invalid_request", "q is required", { reason: "invalid_query" });
     }
     const limitRaw = c.req.query("limit");
     let limit = PAGINATION_DEFAULT_LIMIT;
     if (limitRaw !== undefined) {
       if (!/^[0-9]+$/.test(limitRaw)) {
-        return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+        return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_limit" });
       }
       const parsed = Number(limitRaw);
       if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
-        return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+        return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_limit" });
       }
       limit = parsed;
     }
@@ -552,26 +552,26 @@ async function parseNativeCreate(
     return errorJson(c, 404, "not_found", "node not found");
   }
   if (typeof scopeRaw !== "string" || !isContextScopeType(scopeRaw)) {
-    return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
+    return errorJson(c, 400, "invalid_request", "invalid scope_type", { reason: "invalid_body" });
   }
   if (!NATIVE_CREATE_SCOPES.has(scopeRaw)) {
-    return errorJson(c, 400, "unauthorized", "invalid scope_type", { reason: "invalid_body" });
+    return errorJson(c, 400, "invalid_request", "invalid scope_type", { reason: "invalid_body" });
   }
   const pathRaw = body["path"] === undefined ? "" : body["path"];
   if (typeof pathRaw !== "string") {
-    return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+    return errorJson(c, 400, "invalid_request", "invalid path", { reason: "invalid_body" });
   }
   const path = normalizeNodePath(pathRaw);
   if (path === undefined) {
-    return errorJson(c, 400, "unauthorized", "invalid path", { reason: "invalid_body" });
+    return errorJson(c, 400, "invalid_request", "invalid path", { reason: "invalid_body" });
   }
   if (scopeRaw === "path" && path.length === 0) {
-    return errorJson(c, 400, "unauthorized", "path is required for path scope", {
+    return errorJson(c, 400, "invalid_request", "path is required for path scope", {
       reason: "invalid_body",
     });
   }
   if (scopeRaw !== "path" && path.length > 0) {
-    return errorJson(c, 400, "unauthorized", "path must be empty for this scope", {
+    return errorJson(c, 400, "invalid_request", "path must be empty for this scope", {
       reason: "invalid_body",
     });
   }
@@ -579,14 +579,14 @@ async function parseNativeCreate(
   let repoId: string | null = null;
   if (scopeRaw === "project") {
     if (body["repo_id"] !== undefined && body["repo_id"] !== null) {
-      return errorJson(c, 400, "unauthorized", "repo_id must be null for project scope", {
+      return errorJson(c, 400, "invalid_request", "repo_id must be null for project scope", {
         reason: "invalid_body",
       });
     }
   } else {
     const requested = parseNullableUuid(body["repo_id"]);
     if (requested === undefined) {
-      return errorJson(c, 400, "unauthorized", "invalid repo_id", { reason: "invalid_body" });
+      return errorJson(c, 400, "invalid_request", "invalid repo_id", { reason: "invalid_body" });
     }
     if (requested === null) {
       const resolved = await resolveRepoId(deps, projectId, undefined);
@@ -602,7 +602,7 @@ async function parseNativeCreate(
         return errorJson(c, 404, "not_found", "repo not found");
       }
       if (!resolved.repoId) {
-        return errorJson(c, 400, "unauthorized", "repo_id is required", {
+        return errorJson(c, 400, "invalid_request", "repo_id is required", {
           reason: "invalid_body",
         });
       }
@@ -618,12 +618,12 @@ async function parseNativeCreate(
 
   const sections = parseSections(body["sections"] ?? []);
   if (!sections) {
-    return errorJson(c, 400, "unauthorized", "invalid sections", { reason: "invalid_body" });
+    return errorJson(c, 400, "invalid_request", "invalid sections", { reason: "invalid_body" });
   }
   let reviewState: ContextReviewState = "reviewed";
   if (body["review_state"] !== undefined) {
     if (typeof body["review_state"] !== "string" || !isContextReviewState(body["review_state"])) {
-      return errorJson(c, 400, "unauthorized", "invalid review_state", {
+      return errorJson(c, 400, "invalid_request", "invalid review_state", {
         reason: "invalid_body",
       });
     }

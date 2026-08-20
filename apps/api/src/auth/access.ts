@@ -129,6 +129,12 @@ export function actorActivityRef(actor: AuthActor): { type: string; id: string }
   return { type: "system", id: WORKER_ACTOR_ID };
 }
 
+export type ProjectAccess = {
+  project: ProjectRecord;
+  actor: AuthActor;
+  role: ProjectRole | null;
+};
+
 function isResponse(value: AuthActor | Response): value is Response {
   return value instanceof Response;
 }
@@ -210,7 +216,7 @@ export async function authorizeProjectActor(
   actor: AuthActor,
   projectId: string,
   needed: Scope,
-): Promise<{ project: ProjectRecord; actor: AuthActor; role: ProjectRole | null } | Response> {
+): Promise<ProjectAccess | Response> {
   if (!isUuid(projectId)) {
     return errorJson(c, 404, "not_found", "project not found");
   }
@@ -246,15 +252,41 @@ export async function authorizeProjectActor(
   return { project, actor, role: member.role };
 }
 
-export async function requireProjectActor(
+export async function requireProject(
   c: Context,
   deps: AccessDeps,
   projectId: string,
   needed: Scope,
-): Promise<{ project: ProjectRecord; actor: AuthActor; role: ProjectRole | null } | Response> {
+): Promise<ProjectAccess | Response> {
   const actor = await requireActor(c, deps);
   if (isResponse(actor)) {
     return actor;
   }
   return authorizeProjectActor(c, deps, actor, projectId, needed);
+}
+
+/** Membership 404 is remapped so resource existence is not leaked. */
+export async function requireProjectResource<T extends { projectId: string }>(
+  c: Context,
+  deps: AccessDeps,
+  load: () => Promise<T | null | undefined>,
+  needed: Scope,
+  notFound: string,
+): Promise<(ProjectAccess & { resource: T }) | Response> {
+  const actor = await requireActor(c, deps);
+  if (isResponse(actor)) {
+    return actor;
+  }
+  const resource = await load();
+  if (!resource) {
+    return errorJson(c, 404, "not_found", notFound);
+  }
+  const access = await authorizeProjectActor(c, deps, actor, resource.projectId, needed);
+  if (access instanceof Response) {
+    if (access.status === 404) {
+      return errorJson(c, 404, "not_found", notFound);
+    }
+    return access;
+  }
+  return { ...access, resource };
 }

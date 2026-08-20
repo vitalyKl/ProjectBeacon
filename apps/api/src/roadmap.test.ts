@@ -518,7 +518,7 @@ describe("milestones and tasks", () => {
     });
     expect(created.status).toBe(400);
     expect(await created.json()).toMatchObject({
-      error: { code: "unauthorized", details: { reason: "missing_idempotency_key" } },
+      error: { code: "invalid_request", details: { reason: "missing_idempotency_key" } },
     });
 
     const taskRes = await createTask(
@@ -536,7 +536,21 @@ describe("milestones and tasks", () => {
     });
     expect(comment.status).toBe(400);
     expect(await comment.json()).toMatchObject({
-      error: { code: "unauthorized", details: { reason: "missing_idempotency_key" } },
+      error: { code: "invalid_request", details: { reason: "missing_idempotency_key" } },
+    });
+
+    const missingTitle = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(alice.token),
+        "content-type": "application/json",
+        "idempotency-key": "no-title",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(missingTitle.status).toBe(400);
+    expect(await missingTitle.json()).toMatchObject({
+      error: { code: "invalid_request", message: "title is required" },
     });
   });
 
@@ -842,7 +856,7 @@ describe("milestones and tasks", () => {
 
     const activity = await alice.app.request(
       `/v1/projects/${project.id}/activity?object_id=${task.id}`,
-      { headers: { cookie: cookieHeader(alice.token) } },
+      { headers: { authorization: `Bearer ${secret}` } },
     );
     expect(activity.status).toBe(200);
     const events = (await activity.json()) as { items: { verb: string; actor_type: string }[] };
@@ -861,6 +875,13 @@ describe("milestones and tasks", () => {
       body: JSON.stringify({ to_task_id: otherTask.id, type: "relates" }),
     });
     expect(dep.status).toBe(201);
+    const listedDeps = await alice.app.request(`/v1/projects/${project.id}/dependencies`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(listedDeps.status).toBe(200);
+    expect(await listedDeps.json()).toMatchObject({
+      items: [expect.objectContaining({ from_task_id: task.id, to_task_id: otherTask.id })],
+    });
 
     const missingCreate = await alice.app.request(`/v1/projects/${project.id}/tasks`, {
       method: "POST",
@@ -871,6 +892,44 @@ describe("milestones and tasks", () => {
     expect(await missingCreate.json()).toMatchObject({
       error: { details: { reason: "missing_idempotency_key" } },
     });
+  });
+
+  it("lets a tasks:read token get activity and dependencies", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice");
+    const project = await createProject(alice.app, alice.token, "read-board");
+    const aRes = await createTask(alice.app, alice.token, project.id, { title: "A" }, "read-a");
+    const bRes = await createTask(alice.app, alice.token, project.id, { title: "B" }, "read-b");
+    const a = (await aRes.json()) as TaskBody;
+    const b = (await bRes.json()) as TaskBody;
+    const linked = await alice.app.request(`/v1/tasks/${a.id}/dependencies`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ to_task_id: b.id, type: "relates" }),
+    });
+    expect(linked.status).toBe(201);
+    const minted = await alice.app.request(`/v1/projects/${project.id}/tokens`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({ name: "reader", scopes: ["tasks:read"] }),
+    });
+    const secret = ((await minted.json()) as { token: string }).token;
+    const auth = { authorization: `Bearer ${secret}` };
+
+    const activity = await alice.app.request(`/v1/projects/${project.id}/activity`, { headers: auth });
+    expect(activity.status).toBe(200);
+    const deps = await alice.app.request(`/v1/projects/${project.id}/dependencies`, {
+      headers: auth,
+    });
+    expect(deps.status).toBe(200);
+    expect(await deps.json()).toMatchObject({
+      items: [expect.objectContaining({ from_task_id: a.id, to_task_id: b.id })],
+    });
+    const denied = await alice.app.request(`/v1/tasks/${a.id}`, {
+      method: "DELETE",
+      headers: auth,
+    });
+    expect(denied.status).toBe(403);
   });
 
   it("keeps 403 for insufficient role and 404 for unauthorized tasks", async () => {
@@ -910,6 +969,14 @@ describe("milestones and tasks", () => {
     });
     expect(hidden.status).toBe(404);
     expect(await hidden.json()).toMatchObject({
+      error: { code: "not_found", message: "task not found" },
+    });
+    const hiddenDelete = await bob.app.request(`/v1/tasks/${task.id}`, {
+      method: "DELETE",
+      headers: { cookie: cookieHeader(bob.token) },
+    });
+    expect(hiddenDelete.status).toBe(404);
+    expect(await hiddenDelete.json()).toMatchObject({
       error: { code: "not_found", message: "task not found" },
     });
   });

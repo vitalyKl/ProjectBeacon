@@ -15,11 +15,11 @@ export function parsePageQuery(c: Context): PageQuery | Response {
   let limit = PAGINATION_DEFAULT_LIMIT;
   if (limitRaw !== undefined) {
     if (!/^[0-9]+$/.test(limitRaw)) {
-      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_limit" });
     }
     const parsed = Number(limitRaw);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > PAGINATION_MAX_LIMIT) {
-      return errorJson(c, 400, "unauthorized", "invalid limit", { reason: "invalid_limit" });
+      return errorJson(c, 400, "invalid_request", "invalid limit", { reason: "invalid_limit" });
     }
     limit = parsed;
   }
@@ -30,7 +30,7 @@ export function parsePageQuery(c: Context): PageQuery | Response {
   }
   const decoded = tryDecodeCursor(cursorRaw);
   if (!decoded.ok) {
-    return errorJson(c, 400, "unauthorized", "invalid cursor", { reason: "invalid_cursor" });
+    return errorJson(c, 400, "invalid_request", "invalid cursor", { reason: "invalid_cursor" });
   }
   return { limit, cursor: decoded.value };
 }
