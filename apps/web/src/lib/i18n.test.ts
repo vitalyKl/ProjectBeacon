@@ -58,4 +58,9 @@ describe("i18n", () => {
     }
     void english;
   });
+
+  it("falls back to English when a locale omits a key", () => {
+    expect(t("board.hint", "es")).toBe(t("board.hint", "en"));
+    expect(t("wizard.newProject", "ko")).toBe("New project");
+  });
 });

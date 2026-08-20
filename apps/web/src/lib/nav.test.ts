@@ -130,10 +130,10 @@ describe("auth paths", () => {
     expect(wizard).not.toContain("wizard.http");
     expect(wizard).not.toContain("hosted clone");
     expect(wizard).toContain("wizard.stdioHint");
-    expect(readWeb("lib/i18n.ts")).toContain("start_work");
-    expect(readWeb("lib/i18n.ts")).toContain("beacon setup");
-    expect(readWeb("lib/i18n.ts")).toContain("setup.cmd");
-    expect(readWeb("lib/i18n.ts")).toContain(
+    expect(readWeb("lib/locales/en.ts")).toContain("start_work");
+    expect(readWeb("lib/locales/en.ts")).toContain("beacon setup");
+    expect(readWeb("lib/locales/en.ts")).toContain("setup.cmd");
+    expect(readWeb("lib/locales/en.ts")).toContain(
       "Home is a pulse: Goals and Definition of Done, a queue peek, open milestones, active agents, and index status.",
     );
     expect(readWeb("app/app/settings/settings-view.tsx")).toContain("CopyableProjectId");
@@ -178,7 +178,7 @@ describe("auth paths", () => {
 
   it("keeps Agents as sessions, tokens, and activity with setup steps", () => {
     const agents = readWeb("app/app/agents/agents-view.tsx");
-    const i18n = readWeb("lib/i18n.ts");
+    const i18n = readWeb("lib/locales/en.ts");
     expect(agents).toContain("agents.intro");
     expect(agents).toContain("agents.sessions");
     expect(agents).toContain("agents.tokens");
