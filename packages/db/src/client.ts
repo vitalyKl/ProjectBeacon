@@ -2,9 +2,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema/index.js";
 
-export type Db = ReturnType<typeof createDb>;
-
 export function createDb(url: string) {
   const client = postgres(url);
-  return drizzle(client, { schema });
+  const db = drizzle(client, { schema });
+  return Object.assign(db, {
+    end: (options?: { timeout?: number }) => client.end(options),
+  });
 }
+
+export type Db = ReturnType<typeof createDb>;
