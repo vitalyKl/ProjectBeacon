@@ -12,6 +12,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
+    "test": "vitest run",
+    "drizzle:check": "drizzle-kit check",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",
     "db:migrate": "drizzle-kit migrate"
@@ -25,6 +27,7 @@
     "@types/node": "^22.18.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^3.2.4"
   }
 }

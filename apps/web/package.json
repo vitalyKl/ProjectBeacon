@@ -9,7 +9,8 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "i18n:check": "tsx src/lib/i18n-check.ts"
   },
   "dependencies": {
     "next": "16.3.1",

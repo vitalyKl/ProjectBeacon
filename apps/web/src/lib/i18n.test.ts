@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LOCALES, t } from "./i18n";
+import { localeKeyCoverage, LOCALES, missingLocaleKeys, t } from "./i18n";
 
 describe("i18n", () => {
   it("covers every locale key and falls back to English", () => {
@@ -62,5 +62,19 @@ describe("i18n", () => {
   it("falls back to English when a locale omits a key", () => {
     expect(t("board.hint", "es")).toBe(t("board.hint", "en"));
     expect(t("wizard.newProject", "ko")).toBe("New project");
+  });
+
+  it("reports missing keys against English without requiring complete catalogs", () => {
+    expect(missingLocaleKeys("en")).toEqual([]);
+    expect(missingLocaleKeys("es")).toContain("board.hint");
+    const coverage = localeKeyCoverage();
+    expect(coverage).toHaveLength(LOCALES.length);
+    const english = coverage.find((row) => row.locale === "en");
+    expect(english?.missing).toBe(0);
+    expect(english?.present).toBe(english?.total);
+    const spanish = coverage.find((row) => row.locale === "es");
+    expect(spanish).toBeDefined();
+    expect(spanish?.missing).toBeGreaterThan(0);
+    expect((spanish?.present ?? 0) + (spanish?.missing ?? 0)).toBe(spanish?.total);
   });
 });

@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { errorJson } from "../errors.js";
 import type { TokenStore } from "../tokens/store.js";
 
-export type RateLimitName = "overall" | "code" | "compile" | "bytes";
+export type RateLimitName = "overall" | "code" | "compile" | "bytes" | "login";
 export type RateActorKind = "token" | "user";
 
 export type RateLimitConfig = {
@@ -13,6 +13,7 @@ export type RateLimitConfig = {
   codePerMin: number;
   getFileBytesPerMin: number;
   compilePerMin: number;
+  loginPerMin: number;
   burstMultiplier: number;
 };
 
@@ -22,6 +23,7 @@ export const DEFAULT_RATE_LIMITS: RateLimitConfig = {
   codePerMin: 30,
   getFileBytesPerMin: 256 * 1024,
   compilePerMin: 60,
+  loginPerMin: 10,
   burstMultiplier: 2,
 };
 
@@ -54,6 +56,8 @@ function perMinuteCap(limits: RateLimitConfig, kind: RateActorKind, name: RateLi
       return limits.compilePerMin;
     case "bytes":
       return limits.getFileBytesPerMin;
+    case "login":
+      return limits.loginPerMin;
   }
 }
 
@@ -128,4 +132,32 @@ export async function enforceRateLimit(
   incRateLimited(name);
   c.header("Retry-After", String(result.retryAfter));
   return errorJson(c, 429, "rate_limited", "rate limit exceeded");
+}
+
+export async function enforceAuthAttemptLimit(
+  c: Context,
+  store: TokenStore,
+  limits: RateLimitConfig,
+  now: Date,
+  ip: string | null,
+  login: string | undefined,
+): Promise<Response | undefined> {
+  if (ip) {
+    const limited = await enforceRateLimit(
+      c,
+      store,
+      "token",
+      `auth-ip:${ip}`,
+      limits,
+      now,
+      "login",
+    );
+    if (limited) {
+      return limited;
+    }
+  }
+  if (login) {
+    return enforceRateLimit(c, store, "token", `auth-login:${login}`, limits, now, "login");
+  }
+  return undefined;
 }

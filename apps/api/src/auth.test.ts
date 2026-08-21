@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
 import type { AuthConfig } from "./auth/config.js";
+import { DEFAULT_RATE_LIMITS } from "./auth/rate-limit.js";
 import { parseGithubUserId } from "./auth/github.js";
 import { hashSessionToken, SESSION_TTL_MS } from "./auth/tokens.js";
 import {
@@ -219,6 +220,67 @@ describe("POST /v1/auth/login", () => {
     });
     expect(sessionCookie(res)).toBeUndefined();
   });
+
+  it("returns 429 after the per-login cap, before another 401", async () => {
+    const store = new MemoryAuthStore();
+    await bootstrapUser(store);
+    const app = createApp({
+      store,
+      config: testConfig(),
+      checkReady: async () => true,
+      rateLimits: { ...DEFAULT_RATE_LIMITS, loginPerMin: 2, burstMultiplier: 1 },
+    });
+    const body = JSON.stringify({ login: "admin", password: "wrong-password" });
+
+    const first = await app.request("/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+    const second = await app.request("/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+    const third = await app.request("/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+    expect(first.status).toBe(401);
+    expect(second.status).toBe(401);
+    expect(third.status).toBe(429);
+    expect(third.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
+    expect(await third.json()).toMatchObject({ error: { code: "rate_limited" } });
+  });
+
+  it("rate limits by IP across different logins when the proxy is trusted", async () => {
+    const store = new MemoryAuthStore();
+    await bootstrapUser(store);
+    const app = createApp({
+      store,
+      config: testConfig({ trustProxy: true }),
+      checkReady: async () => true,
+      rateLimits: { ...DEFAULT_RATE_LIMITS, loginPerMin: 2, burstMultiplier: 1 },
+    });
+
+    const attempt = (login: string) =>
+      app.request("/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "203.0.113.9",
+        },
+        body: JSON.stringify({ login, password: "wrong-password" }),
+      });
+
+    expect((await attempt("admin")).status).toBe(401);
+    expect((await attempt("nobody")).status).toBe(401);
+    const third = await attempt("other");
+    expect(third.status).toBe(429);
+    expect(third.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
+  });
 });
 
 describe("POST /v1/auth/logout and GET /v1/me", () => {
@@ -350,6 +412,32 @@ describe("POST /v1/auth/register", () => {
     });
     expect(collision.status).toBe(409);
     expect(await collision.json()).toMatchObject({ error: { code: "login_taken" } });
+  });
+
+  it("returns 429 after the register cap, before hashing another password", async () => {
+    const store = new MemoryAuthStore();
+    const app = createApp({
+      store,
+      config: testConfig({ authLocalInviteOnly: false, trustProxy: true }),
+      checkReady: async () => true,
+      rateLimits: { ...DEFAULT_RATE_LIMITS, loginPerMin: 2, burstMultiplier: 1 },
+    });
+    const attempt = (login: string) =>
+      app.request("/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "198.51.100.4",
+        },
+        body: JSON.stringify({ login, password: STRONG_PASSWORD }),
+      });
+
+    expect((await attempt("first")).status).toBe(200);
+    expect((await attempt("second")).status).toBe(200);
+    const third = await attempt("third");
+    expect(third.status).toBe(429);
+    expect(await third.json()).toMatchObject({ error: { code: "rate_limited" } });
+    expect(await store.findUserByLogin("third")).toBeUndefined();
   });
 });
 

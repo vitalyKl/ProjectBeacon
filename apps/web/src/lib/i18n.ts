@@ -60,6 +60,7 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 };
 
 type Catalog = Partial<Record<MessageKey, string>>;
+
 const CATALOGS: Record<Locale, Catalog> = {
   en,
   es,
@@ -78,6 +79,35 @@ const CATALOGS: Record<Locale, Catalog> = {
   kk,
   ko,
 };
+
+const ENGLISH_KEYS = Object.keys(en) as MessageKey[];
+
+export type LocaleKeyCoverage = {
+  locale: Locale;
+  present: number;
+  missing: number;
+  total: number;
+  missingKeys: MessageKey[];
+};
+
+export function missingLocaleKeys(locale: Locale): MessageKey[] {
+  const catalog = CATALOGS[locale];
+  return ENGLISH_KEYS.filter((key) => catalog[key] === undefined);
+}
+
+export function localeKeyCoverage(): LocaleKeyCoverage[] {
+  const total = ENGLISH_KEYS.length;
+  return LOCALES.map((locale) => {
+    const missingKeys = missingLocaleKeys(locale);
+    return {
+      locale,
+      present: total - missingKeys.length,
+      missing: missingKeys.length,
+      total,
+      missingKeys,
+    };
+  });
+}
 
 let currentLocale: Locale = "en";
 const listeners = new Set<() => void>();

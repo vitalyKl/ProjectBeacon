@@ -29,7 +29,7 @@ import {
   type UserRecord,
 } from "./identity.js";
 import { parseBearer, tokenEquals } from "./tokens.js";
-import type { RateLimitConfig } from "./rate-limit.js";
+import { enforceAuthAttemptLimit, type RateLimitConfig } from "./rate-limit.js";
 
 export type AuthDeps = {
   store: IdentityStore;
@@ -182,6 +182,17 @@ export function mountAuth(app: Hono, deps: AuthRouteDeps): void {
     const body = await readObject(c);
     const login = parseLogin(body?.["login"]);
     const password = parsePassword(body?.["password"]);
+    const limited = await enforceAuthAttemptLimit(
+      c,
+      deps.store,
+      deps.rateLimits,
+      deps.clock.now(),
+      requestIp(c, deps.config.trustProxy),
+      login,
+    );
+    if (limited) {
+      return limited;
+    }
     if (!login || password === undefined) {
       return errorJson(c, 400, "invalid_request", "login and password are required", {
         reason: "invalid_body",
@@ -210,6 +221,17 @@ export function mountAuth(app: Hono, deps: AuthRouteDeps): void {
     const body = await readObject(c);
     const login = parseLogin(body?.["login"]);
     const password = parsePassword(body?.["password"]);
+    const limited = await enforceAuthAttemptLimit(
+      c,
+      deps.store,
+      deps.rateLimits,
+      deps.clock.now(),
+      requestIp(c, deps.config.trustProxy),
+      login,
+    );
+    if (limited) {
+      return limited;
+    }
     if (!login || password === undefined) {
       return errorJson(c, 401, "unauthorized", "invalid login or password");
     }
