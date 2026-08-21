@@ -1,7 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createDb } from "@beacon/db";
+import { createDb, type ClosableDb } from "@beacon/db";
 import { uuidv7 } from "@beacon/shared";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -52,11 +52,11 @@ describePg("DbAuthStore against Postgres", () => {
     dirname(fileURLToPath(import.meta.url)),
     "../../../../packages/db/drizzle",
   );
-  let db: ReturnType<typeof createDb>;
+  let db: ClosableDb;
   let store: DbAuthStore;
 
   beforeAll(async () => {
-    db = createDb(databaseUrl);
+    db = createDb(databaseUrl) as ClosableDb;
     store = new DbAuthStore(db);
     await migrate(db, { migrationsFolder });
   }, 60_000);
