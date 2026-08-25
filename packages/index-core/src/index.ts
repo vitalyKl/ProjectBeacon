@@ -12,6 +12,8 @@ export {
   DEFAULT_INDEX_HTTP_HOST,
   DEFAULT_INDEX_HTTP_PORT,
   GET_FILE_MAX_LINES,
+  type IndexCoreWithFreshness,
+  type MtimeState,
 } from "./http.js";
 export { readFileExcerpt } from "./file.js";
 export { extractIdentifiers } from "./identifiers.js";

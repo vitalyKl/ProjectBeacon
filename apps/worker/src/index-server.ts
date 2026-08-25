@@ -163,14 +163,26 @@ export async function startWorkerIndexHttp(
     resolve: async (repoId) => {
       const existing = registry.get(repoId);
       if (existing) {
-        return existing;
+        return {
+          core: existing,
+          lastIndexedAt: registry.lastIndexedAt(repoId),
+          mtime: { rootMtime: 0, dirMtimes: new Map() },
+        };
       }
       try {
         await refreshBindMountIndex(api, registry, repoId);
       } catch {
         return undefined;
       }
-      return registry.get(repoId);
+      const refreshed = registry.get(repoId);
+      if (!refreshed) {
+        return undefined;
+      }
+      return {
+        core: refreshed,
+        lastIndexedAt: registry.lastIndexedAt(repoId),
+        mtime: { rootMtime: 0, dirMtimes: new Map() },
+      };
     },
   });
   return {

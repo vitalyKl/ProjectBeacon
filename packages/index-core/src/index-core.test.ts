@@ -255,4 +255,21 @@ describe("IndexCore", () => {
       core.searchContent({ q: "changed-size-value", useRipgrep: false }).length,
     ).toBeGreaterThan(0);
   });
+
+  it("returns lastIndexedAt after indexing", () => {
+    const core = openCore();
+    expect(core.lastIndexedAt()).toBeNull();
+    core.index();
+    const first = core.lastIndexedAt();
+    expect(first).not.toBeNull();
+    if (first) {
+      expect(first.getTime()).toBeGreaterThan(0);
+    }
+    // Second index should have a later timestamp
+    const second = core.lastIndexedAt();
+    expect(second).not.toBeNull();
+    if (first && second) {
+      expect(second.getTime()).toBeGreaterThanOrEqual(first.getTime());
+    }
+  });
 });

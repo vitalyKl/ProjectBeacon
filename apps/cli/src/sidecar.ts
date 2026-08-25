@@ -1,9 +1,15 @@
 import { randomBytes } from "node:crypto";
+import { lstatSync, readdirSync, statSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 
-import { IndexCore, handleIndexRequest } from "@beacon/index-core";
+import {
+  IndexCore,
+  handleIndexRequest,
+  type IndexCoreWithFreshness,
+  type MtimeState,
+} from "@beacon/index-core";
 
 import { apiGet } from "./api.js";
 import { resolveBeaconHome } from "./home.js";
@@ -58,6 +64,52 @@ export async function readSidecarFile(home: string): Promise<SidecarFile | undef
   } catch {
     return undefined;
   }
+}
+
+function buildMtimeState(repoRoot: string): MtimeState {
+  const state: MtimeState = { rootMtime: 0, dirMtimes: new Map() };
+  try {
+    const rootStat = statSync(repoRoot);
+    state.rootMtime = rootStat.mtimeMs;
+    const entries = readdirSync(repoRoot);
+    for (const entry of entries) {
+      try {
+        const entryPath = path.join(repoRoot, entry);
+        const st = lstatSync(entryPath);
+        if (st.isDirectory()) {
+          state.dirMtimes.set(entryPath, st.mtimeMs);
+        }
+      } catch {
+        // ignore unreadable entries
+      }
+    }
+  } catch {
+    // ignore errors during mtime scan
+  }
+  return state;
+}
+
+function hasMtimeChanged(repoRoot: string, state: MtimeState): boolean {
+  try {
+    const rootStat = statSync(repoRoot);
+    if (rootStat.mtimeMs !== state.rootMtime) {
+      return true;
+    }
+    for (const [dirPath, prevMtime] of state.dirMtimes) {
+      try {
+        const st = lstatSync(dirPath);
+        if (st.mtimeMs !== prevMtime) {
+          return true;
+        }
+      } catch {
+        // directory may have been deleted, reindex
+        return true;
+      }
+    }
+  } catch {
+    // root may have been moved/deleted, reindex
+  }
+  return false;
 }
 
 export async function writeSidecarFile(home: string, file: SidecarFile): Promise<void> {
@@ -127,9 +179,18 @@ export async function startSidecar(options: SidecarOptions): Promise<{
     throw new Error("sidecar must bind 127.0.0.1");
   }
   const token = randomBytes(24).toString("base64url");
-  const cores = new Map<string, IndexCore>();
+  const cores = new Map<string, IndexCoreWithFreshness>();
   const home = options.home || resolveBeaconHome();
   const defaultRepoId = options.projectId ? `local:${options.projectId}` : "local";
+
+  const createCore = (repoId: string): IndexCoreWithFreshness => {
+    const core = new IndexCore({
+      repoRoot: options.cwd,
+      dbPath: path.join(home, "index", `${repoId}.sqlite`),
+    });
+    core.index();
+    return { core, lastIndexedAt: core.lastIndexedAt(), mtime: buildMtimeState(options.cwd) };
+  };
 
   const server = createServer((req, res) => {
     handleIndexRequest(req, res, {
@@ -139,13 +200,18 @@ export async function startSidecar(options: SidecarOptions): Promise<{
         if (existing) {
           return existing;
         }
-        const core = new IndexCore({
-          repoRoot: options.cwd,
-          dbPath: path.join(home, "index", `${repoId}.sqlite`),
-        });
-        core.index();
+        const core = createCore(repoId);
         cores.set(repoId, core);
         return core;
+      },
+      onQuery: (coreState) => {
+        if (hasMtimeChanged(options.cwd, coreState.mtime)) {
+          coreState.core.index();
+          coreState.lastIndexedAt = coreState.core.lastIndexedAt();
+          const fresh = buildMtimeState(options.cwd);
+          coreState.mtime.rootMtime = fresh.rootMtime;
+          coreState.mtime.dirMtimes = fresh.dirMtimes;
+        }
       },
     });
   });
@@ -196,8 +262,8 @@ export async function startSidecar(options: SidecarOptions): Promise<{
       if (timer) {
         clearInterval(timer);
       }
-      for (const core of cores.values()) {
-        core.close();
+      for (const entry of cores.values()) {
+        entry.core.close();
       }
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {

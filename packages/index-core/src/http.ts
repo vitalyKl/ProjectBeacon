@@ -13,11 +13,23 @@ export type IndexHttpAuth = {
   token: string;
 };
 
+export type IndexCoreWithFreshness = {
+  core: IndexCore;
+  lastIndexedAt: Date | null;
+  mtime: MtimeState;
+};
+
+export type MtimeState = {
+  rootMtime: number;
+  dirMtimes: Map<string, number>;
+};
+
 export type IndexHttpOptions = {
   host?: string;
   port?: number;
   auth?: IndexHttpAuth;
-  resolve: (repoId: string) => IndexCore | undefined | Promise<IndexCore | undefined>;
+  resolve: (repoId: string) => IndexCoreWithFreshness | undefined | Promise<IndexCoreWithFreshness | undefined>;
+  onQuery?: (core: IndexCoreWithFreshness) => void | Promise<void>;
 };
 
 export type PresentedTree = {
@@ -64,6 +76,22 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify(body));
+}
+
+function jsonWithFreshness(
+  res: ServerResponse,
+  status: number,
+  core: IndexCoreWithFreshness,
+  body: unknown,
+): void {
+  const lastIndexedAt = core.lastIndexedAt?.toISOString() ?? null;
+  if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+    res.statusCode = status;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ...body, last_indexed_at: lastIndexedAt }));
+  } else {
+    json(res, status, body);
+  }
 }
 
 function errorBody(code: string, message: string, details: Record<string, unknown> = {}) {
@@ -145,7 +173,7 @@ function repoIdFrom(pathname: string): string | undefined {
 export function handleIndexRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  options: Pick<IndexHttpOptions, "auth" | "resolve">,
+  options: Pick<IndexHttpOptions, "auth" | "resolve" | "onQuery">,
 ): void {
   void handleIndexRequestAsync(req, res, options);
 }
@@ -153,7 +181,7 @@ export function handleIndexRequest(
 async function handleIndexRequestAsync(
   req: IncomingMessage,
   res: ServerResponse,
-  options: Pick<IndexHttpOptions, "auth" | "resolve">,
+  options: Pick<IndexHttpOptions, "auth" | "resolve" | "onQuery">,
 ): Promise<void> {
   if (req.method !== "GET") {
     json(res, 404, errorBody("not_found", "not found"));
@@ -175,7 +203,7 @@ async function handleIndexRequestAsync(
     json(res, 404, errorBody("not_found", "not found"));
     return;
   }
-  let core: IndexCore | undefined;
+  let core: IndexCoreWithFreshness | undefined;
   try {
     core = await options.resolve(repoId);
   } catch {
@@ -187,6 +215,14 @@ async function handleIndexRequestAsync(
     return;
   }
 
+  if (options.onQuery) {
+    try {
+      await options.onQuery(core);
+    } catch {
+      // onQuery failures are non-fatal; proceed with stale index
+    }
+  }
+
   const rest = url.pathname.slice(`/repos/${repoId}`.length) || "/";
   try {
     if (rest === "/tree") {
@@ -195,11 +231,11 @@ async function handleIndexRequestAsync(
         json(res, 400, errorBody("unauthorized", "invalid depth", { reason: "invalid_query" }));
         return;
       }
-      const tree = core.getTree({
+      const tree = core.core.getTree({
         root: first(url.searchParams.get("path")) ?? ".",
         depth: depthRaw,
       });
-      json(res, 200, { items: presentTree(tree) });
+      jsonWithFreshness(res, 200, core, { items: presentTree(tree) });
       return;
     }
 
@@ -219,10 +255,11 @@ async function handleIndexRequestAsync(
         json(res, 400, errorBody("unauthorized", "invalid limit", { reason: "invalid_query" }));
         return;
       }
-      json(
+      jsonWithFreshness(
         res,
         200,
-        core.search({
+        core,
+        core.core.search({
           q,
           mode,
           lang: first(url.searchParams.get("lang")),
@@ -252,12 +289,12 @@ async function handleIndexRequestAsync(
         );
         return;
       }
-      const excerpt = readFileExcerpt(core.repoRoot, filePath, {
+      const excerpt = readFileExcerpt(core.core.repoRoot, filePath, {
         startLine,
         endLine,
         indexed: (() => {
           try {
-            return core.readIndexedFileMetadata(filePath);
+            return core.core.readIndexedFileMetadata(filePath);
           } catch (error) {
             if (error instanceof PathEscapeError) {
               return null;
@@ -282,7 +319,7 @@ async function handleIndexRequestAsync(
         lang: excerpt.lang,
         bytes: excerpt.bytes,
       };
-      json(res, 200, body);
+      jsonWithFreshness(res, 200, core, body);
       return;
     }
 
@@ -292,7 +329,7 @@ async function handleIndexRequestAsync(
         json(res, 400, errorBody("unauthorized", "name is required", { reason: "invalid_query" }));
         return;
       }
-      const symbol = core.getSymbol({
+      const symbol = core.core.getSymbol({
         name,
         path: first(url.searchParams.get("path")),
       });
@@ -305,7 +342,7 @@ async function handleIndexRequestAsync(
         json(res, 404, errorBody("not_found", "symbol not found"));
         return;
       }
-      json(res, 200, presentSymbol(symbol));
+      jsonWithFreshness(res, 200, core, presentSymbol(symbol));
       return;
     }
 
@@ -315,8 +352,8 @@ async function handleIndexRequestAsync(
         json(res, 400, errorBody("unauthorized", "path is required", { reason: "invalid_query" }));
         return;
       }
-      const owners = ownersForPath(core.repoRoot, filePath);
-      json(res, 200, { path: filePath, owners });
+      const owners = ownersForPath(core.core.repoRoot, filePath);
+      jsonWithFreshness(res, 200, core, { path: filePath, owners });
       return;
     }
 
@@ -331,8 +368,8 @@ async function handleIndexRequestAsync(
         json(res, 400, errorBody("unauthorized", "invalid limit", { reason: "invalid_query" }));
         return;
       }
-      const edges = core.getRelatedFiles({ path: filePath }).slice(0, limit);
-      json(res, 200, { items: edges.map(presentEdge) });
+      const edges = core.core.getRelatedFiles({ path: filePath }).slice(0, limit);
+      jsonWithFreshness(res, 200, core, { items: edges.map(presentEdge) });
       return;
     }
 
@@ -345,13 +382,13 @@ async function handleIndexRequestAsync(
       const identifiers = collectParams(url.searchParams, "identifier");
       const linkedPaths = collectParams(url.searchParams, "linked_path");
       const pathPrefixes = collectParams(url.searchParams, "path_prefix");
-      const scope = core.getChangedScope({
+      const scope = core.core.getChangedScope({
         identifiers,
         linkedPaths,
         pathPrefixes,
         cap: limit,
       });
-      json(res, 200, {
+      jsonWithFreshness(res, 200, core, {
         paths: scope.paths,
         reasons: scope.reasons,
       });
