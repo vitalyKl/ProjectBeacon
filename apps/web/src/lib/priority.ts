@@ -1,13 +1,16 @@
 import { t, tf, type MessageKey } from "./i18n";
 
 export const TASK_PRIORITY_LEVELS = [
-  { id: "urgent", labelKey: "priority.urgent", value: 2 },
-  { id: "high", labelKey: "priority.high", value: 1 },
-  { id: "normal", labelKey: "priority.normal", value: 0 },
-  { id: "low", labelKey: "priority.low", value: -1 },
+  { id: "urgent", labelKey: "priority.urgent", value: 4 },
+  { id: "high", labelKey: "priority.high", value: 5 },
+  { id: "normal", labelKey: "priority.normal", value: 6 },
+  { id: "low", labelKey: "priority.low", value: 7 },
+  { id: "backlog", labelKey: "priority.backlog", value: 8 },
 ] as const satisfies ReadonlyArray<{ id: string; labelKey: MessageKey; value: number }>;
 
-export const DEFAULT_TASK_PRIORITY = 0;
+export const DEFAULT_TASK_PRIORITY = 5;
+
+export type TaskSortOption = "priority" | "name" | "updated";
 
 export type TaskPriorityLevel = (typeof TASK_PRIORITY_LEVELS)[number];
 
@@ -36,7 +39,7 @@ export function compareTaskPriority(
   right: { priority: number; updated_at: string; id?: string },
 ): number {
   if (left.priority !== right.priority) {
-    return right.priority - left.priority;
+    return left.priority - right.priority;
   }
   if (left.updated_at !== right.updated_at) {
     return left.updated_at < right.updated_at ? 1 : -1;
@@ -51,4 +54,22 @@ export function sortTasksByPriority<T extends { priority: number; updated_at: st
   tasks: readonly T[],
 ): T[] {
   return tasks.slice().sort(compareTaskPriority);
+}
+
+export function sortTasks<T extends { priority: number; updated_at: string; title: string; id?: string }>(
+  tasks: readonly T[],
+  sort: TaskSortOption,
+): T[] {
+  return tasks.slice().sort((left, right) => {
+    switch (sort) {
+      case "priority":
+        return compareTaskPriority(left, right);
+      case "name":
+        return left.title.localeCompare(right.title);
+      case "updated":
+        return right.updated_at < left.updated_at ? 1 : -1;
+      default:
+        return compareTaskPriority(left, right);
+    }
+  });
 }

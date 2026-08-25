@@ -9,13 +9,13 @@ import type { SetupPrompt } from "./prompt.js";
 import { isProjectTokenFormat } from "./token.js";
 
 export const SETUP_USAGE =
-  "Usage: beacon setup [--token <token>] [--project <id>] [--url <url>] [--cwd <dir>] [--client grok,cursor,claude]";
+  "Usage: beacon setup [--token <token>] [--project <id>] [--url <url>] [--cwd <dir>] [--client grok,cursor,claude,opencode]";
 
 export const SETUP_PROMPT_HINT =
   "With a terminal, omit --token and paste the project token when asked. Setup does not invent a token.";
 
 export const BEACON_MCP_SERVER_NAME = "beacon";
-export const DEFAULT_SETUP_CLIENTS = ["grok", "cursor", "claude"] as const;
+export const DEFAULT_SETUP_CLIENTS = ["grok", "cursor", "claude", "opencode"] as const;
 
 export type SetupClient = (typeof DEFAULT_SETUP_CLIENTS)[number];
 
@@ -107,8 +107,8 @@ export function parseSetupClients(raw: string | undefined): SetupClient[] | { er
     .filter((item) => item.length > 0);
   const unique: SetupClient[] = [];
   for (const item of wanted) {
-    if (item !== "grok" && item !== "cursor" && item !== "claude") {
-      return { error: `Unknown client: ${item}. Use grok, cursor, and/or claude.` };
+    if (item !== "grok" && item !== "cursor" && item !== "claude" && item !== "opencode") {
+      return { error: `Unknown client: ${item}. Use grok, cursor, claude, and opencode.` };
     }
     if (!unique.includes(item)) {
       unique.push(item);
@@ -247,6 +247,65 @@ export function upsertJsonMcpServer(
   return { text, changed: !same };
 }
 
+export function opencodeConfigPath(homeDir: string, env: NodeJS.ProcessEnv = process.env): string {
+  const xdg = env["XDG_CONFIG_HOME"]?.trim() || join(homeDir, ".config");
+  if (process.platform === "win32") {
+    const appData = env["APPDATA"]?.trim() || join(homeDir, "AppData", "Roaming");
+    const winPath = join(appData, "opencode", "opencode.json");
+    if (existsSync(winPath)) {
+      return winPath;
+    }
+  }
+  return join(xdg, "opencode", "opencode.json");
+}
+
+export function opencodeConfigTargets(
+  homeDir: string,
+  env: NodeJS.ProcessEnv = process.env,
+): { path: string; kind: "json" }[] {
+  const path = opencodeConfigPath(homeDir, env);
+  return [{ path, kind: "json" }];
+}
+
+export function upsertOpencodeMcpServer(
+  source: string,
+  name: string,
+  server: { command: string; args: string[] },
+): { text: string; changed: boolean } {
+  const parsed = source.trim().length === 0 ? {} : (JSON.parse(source) as Record<string, unknown>);
+  const root = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  const mcp =
+    root["mcp"] && typeof root["mcp"] === "object" && !Array.isArray(root["mcp"])
+      ? { ...(root["mcp"] as Record<string, unknown>) }
+      : {};
+  const prev = mcp[name];
+  const nextServer: Record<string, unknown> = {
+    command: [server.command, ...server.args],
+    enabled: true,
+    type: "local",
+  };
+  const prevCmd =
+    prev && typeof prev === "object" && !Array.isArray(prev)
+      ? (prev as Record<string, unknown>)["command"] as string[] | string | undefined
+      : undefined;
+  const prevEnabled =
+    prev && typeof prev === "object" && !Array.isArray(prev) ? (prev as Record<string, unknown>)["enabled"] : undefined;
+  const prevType =
+    prev && typeof prev === "object" && !Array.isArray(prev) ? (prev as Record<string, unknown>)["type"] : undefined;
+  const same =
+    prev &&
+    typeof prev === "object" &&
+    !Array.isArray(prev) &&
+    prevType === "local" &&
+    prevEnabled === true &&
+    Array.isArray(prevCmd) &&
+    JSON.stringify(prevCmd) === JSON.stringify([server.command, ...server.args]);
+  mcp[name] = nextServer;
+  const next = { ...root, mcp };
+  const text = `${JSON.stringify(next, null, 2)}\n`;
+  return { text, changed: !same };
+}
+
 export function isBeaconCheckout(root: string): boolean {
   return (
     existsSync(join(root, "pnpm-workspace.yaml")) &&
@@ -298,26 +357,32 @@ export function clientConfigTargets(
   homeDir: string,
   env: NodeJS.ProcessEnv = process.env,
 ): { path: string; kind: "toml" | "json" }[] {
+  if (client === "opencode") {
+    return opencodeConfigTargets(homeDir, env);
+  }
   if (client === "grok") {
     return [{ path: join(homeDir, ".grok", "config.toml"), kind: "toml" }];
   }
   if (client === "cursor") {
     return [{ path: join(homeDir, ".cursor", "mcp.json"), kind: "json" }];
   }
-  const targets = [
-    { path: join(homeDir, ".claude.json"), kind: "json" as const },
-    { path: join(homeDir, ".claude", "claude_desktop_config.json"), kind: "json" as const },
-    { path: claudeDesktopConfigPath(homeDir, env), kind: "json" as const },
-  ];
-  const seen = new Set<string>();
-  return targets.filter((target) => {
-    const key = target.path.toLowerCase();
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
+  if (client === "claude") {
+    const targets = [
+      { path: join(homeDir, ".claude.json"), kind: "json" as const },
+      { path: join(homeDir, ".claude", "claude_desktop_config.json"), kind: "json" as const },
+      { path: claudeDesktopConfigPath(homeDir, env), kind: "json" as const },
+    ];
+    const seen = new Set<string>();
+    return targets.filter((target) => {
+      const key = target.path.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+  return [];
 }
 
 export function nodeInvocation(home: string): { command: string; args: string[] } {
@@ -456,12 +521,13 @@ export async function setupMachine(options: SetupOptions): Promise<SetupResult> 
     .filter((file) => file.path !== launcher)
     .map((file) => `${file.action} ${file.path}`)
     .join("\n");
+  const clientsList = clients.map((c) => c.charAt(0).toUpperCase() + c.slice(1)).join(", ");
   const message = [
     connected.message,
     `Local MCP launcher: ${launcher}`,
     written.length === 0
       ? "Agent MCP configs were already current."
-      : `Wrote Beacon MCP into ${written.length} agent config file(s). Restart Grok, Cursor, or Claude so they reload MCP.`,
+      : `Wrote Beacon MCP into ${written.length} agent config file(s). Restart ${clientsList} so they reload MCP.`,
     configPaths,
     "The project token stays in BEACON_HOME/config.toml under [projects.\"<id>\"]. Agent configs only get the launcher command.",
     "Connect again for another Beacon project. mcp --project <id> or BEACON_PROJECT selects the default; tools may still pass project_id.",
@@ -484,6 +550,21 @@ async function writeClientConfig(
       return { path: target.path, action: "unchanged", detail: "Grok MCP snippet already present." };
     }
     return writeTextFile(target.path, next, 0o600);
+  }
+  if (target.path.endsWith("opencode.json")) {
+    try {
+      const updated = upsertOpencodeMcpServer(existing ?? "", BEACON_MCP_SERVER_NAME, invocation);
+      if (existing && !updated.changed) {
+        return { path: target.path, action: "unchanged", detail: "MCP server already present." };
+      }
+      return writeTextFile(target.path, updated.text, 0o600);
+    } catch {
+      return {
+        path: target.path,
+        action: "skipped",
+        detail: "Existing JSON is invalid; left untouched.",
+      };
+    }
   }
   try {
     const updated = upsertJsonMcpServer(existing ?? "", invocation);
@@ -528,5 +609,3 @@ async function readOptionalFile(path: string): Promise<string | undefined> {
     throw error;
   }
 }
-
-

@@ -1,5 +1,5 @@
 # Install local Beacon agent settings. Paste a project token when the console asks.
-# The token is hidden and is never written into Grok / Cursor / Claude configs.
+# The token is hidden and is never written into Grok / Cursor / Claude / opencode configs.
 # Double-click setup.cmd (not this file) so the window stays open.
 
 param(

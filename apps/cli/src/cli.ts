@@ -2,6 +2,7 @@ import type { InvokeContext } from "@beacon/mcp-tools";
 
 import { CONNECT_USAGE, connect } from "./connect.js";
 import { readConfigFile, resolveRuntimeConfig } from "./config.js";
+import { EVAL_HELP, EVAL_METRICS, runEvalCommand } from "./eval.js";
 import { createLocalCodeSource } from "./local-code.js";
 import { createSetupPrompt, isInteractiveIo, type PromptIo } from "./prompt.js";
 import { parseSetupArgs, setupMachine } from "./setup.js";
@@ -16,6 +17,7 @@ Commands:
   projects                         List saved project ids in BEACON_HOME
   mcp                              Start the stdio MCP server
   sidecar                          Start the local code index sidecar
+  eval <fixture>                   Run context-effectiveness evaluation
   help                             Show this help
 
 Options:
@@ -28,7 +30,10 @@ Options:
 BEACON_HOME defaults to ~/.beacon (Unix) or %USERPROFILE%\\.beacon (Windows).
 Connect again for each Beacon project. Tokens stay in BEACON_HOME/config.toml under [projects."<id>"].
 mcp --project <id> or BEACON_PROJECT selects the default. Agents may still pass project_id on a tool.
-setup writes Grok, Cursor, and Claude MCP configs. The token stays in BEACON_HOME. It does not mint tokens or start a hosted agent.`;
+setup writes Grok, Cursor, and Claude MCP configs. The token stays in BEACON_HOME. It does not mint tokens or start a hosted agent.
+
+eval metrics: ${EVAL_METRICS.join(", ")}
+`;
 
 export type CliIo = {
   stdout: { write(chunk: string): void };
@@ -278,6 +283,24 @@ export async function runCli(options: RunCliOptions = {}): Promise<number> {
     });
     io.stdout.write(`Sidecar listening on ${started.host}:${started.port}\n`);
     return 0;
+  }
+
+  if (command === "eval") {
+    if (rest.includes("--help") || rest.includes("-h")) {
+      io.stdout.write(`${EVAL_HELP}\n`);
+      return 0;
+    }
+    const fixturePath = rest.find((arg) => !arg.startsWith("--") && arg !== "eval");
+    if (!fixturePath) {
+      io.stderr.write(`${EVAL_HELP}\n`);
+      return 2;
+    }
+    const format = rest.includes("--json") ? "json" : "text";
+    const code = await runEvalCommand(
+      { filePath: fixturePath, format },
+      io,
+    );
+    return code;
   }
 
   io.stderr.write(`Unknown command: ${command}\n${USAGE}\n`);

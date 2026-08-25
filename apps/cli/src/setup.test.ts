@@ -14,6 +14,7 @@ import {
   resolveSetupCredentials,
   setupMachine,
   upsertJsonMcpServer,
+  upsertOpencodeMcpServer,
   upsertTomlTable,
 } from "./setup.js";
 
@@ -48,8 +49,9 @@ describe("beacon setup", () => {
       cwd: undefined,
       clients: "grok,cursor",
     });
-    expect(parseSetupClients(undefined)).toEqual(["grok", "cursor", "claude"]);
+    expect(parseSetupClients(undefined)).toEqual(["grok", "cursor", "claude", "opencode"]);
     expect(parseSetupClients("grok")).toEqual(["grok"]);
+    expect(parseSetupClients("opencode")).toEqual(["opencode"]);
     expect(parseSetupClients("nope")).toMatchObject({ error: expect.stringContaining("Unknown client") });
   });
 
@@ -84,6 +86,36 @@ describe("beacon setup", () => {
         beacon: { command: "node", args: ["/tmp/mcp.cjs"] },
       },
     });
+  });
+
+  it("upserts opencode MCP server config", () => {
+    const empty = upsertOpencodeMcpServer("", "beacon", { command: "node", args: ["C:/Users/test/.beacon/mcp.cjs"] });
+    expect(empty.changed).toBe(true);
+    const parsed = JSON.parse(empty.text);
+    expect(parsed.mcp.beacon).toMatchObject({
+      type: "local",
+      enabled: true,
+      command: ["node", "C:/Users/test/.beacon/mcp.cjs"],
+    });
+    const existing = upsertOpencodeMcpServer(
+      '{"mcp":{"headroom":{"type":"local","command":["headroom","mcp","serve"],"enabled":true}}}',
+      "beacon",
+      { command: "node", args: ["C:/Users/test/.beacon/mcp.cjs"] },
+    );
+    expect(existing.changed).toBe(true);
+    const parsed2 = JSON.parse(existing.text);
+    expect(parsed2.mcp.headroom).toBeDefined();
+    expect(parsed2.mcp.beacon).toMatchObject({
+      type: "local",
+      enabled: true,
+      command: ["node", "C:/Users/test/.beacon/mcp.cjs"],
+    });
+    const same = upsertOpencodeMcpServer(
+      '{"mcp":{"beacon":{"type":"local","command":["node","C:/Users/test/.beacon/mcp.cjs"],"enabled":true}}}',
+      "beacon",
+      { command: "node", args: ["C:/Users/test/.beacon/mcp.cjs"] },
+    );
+    expect(same.changed).toBe(false);
   });
 
   it("connects, writes a home launcher, and patches client configs without storing the token there", async () => {
@@ -133,6 +165,47 @@ describe("beacon setup", () => {
     expect(result.message).toContain("Wrote Beacon MCP");
     expect(result.files.some((file) => file.path.endsWith("config.toml"))).toBe(true);
     expect(result.files.some((file) => file.path.endsWith("mcp.json"))).toBe(true);
+  });
+
+  it("writes opencode MCP config alongside other clients", async () => {
+    const beaconHome = await mkdtemp(join(tmpdir(), "beacon-setup-opc-home-"));
+    const userHome = await mkdtemp(join(tmpdir(), "beacon-setup-opc-user-"));
+    const repo = await mkdtemp(join(tmpdir(), "beacon-setup-opc-repo-"));
+    await mkdir(join(repo, "apps", "cli", "src"), { recursive: true });
+    await mkdir(join(repo, "node_modules", "tsx", "dist"), { recursive: true });
+    await writeFile(join(repo, "pnpm-workspace.yaml"), "packages: []\n");
+    await writeFile(join(repo, "apps", "cli", "src", "index.ts"), "export {}\n");
+    await writeFile(join(repo, "node_modules", "tsx", "dist", "cli.mjs"), "export {}\n");
+
+    const xdg = join(userHome, ".config");
+    await mkdir(xdg, { recursive: true });
+    const opcConfig = join(xdg, "opencode", "opencode.json");
+
+    const result = await setupMachine({
+      token: TOKEN,
+      projectId: PROJECT_ID,
+      cwd: repo,
+      clients: "grok,cursor,claude,opencode",
+      env: { BEACON_HOME: beaconHome, BEACON_URL: "http://127.0.0.1:8080", XDG_CONFIG_HOME: xdg },
+      fetchImpl: mockFetch(),
+      homeDir: userHome,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("expected setup to succeed");
+    }
+
+    const opc = JSON.parse(await readFile(opcConfig, "utf8")) as {
+      mcp: { beacon: { command: string[]; type: string; enabled: boolean } };
+    };
+    expect(opc.mcp.beacon).toMatchObject({
+      type: "local",
+      enabled: true,
+    });
+    expect(opc.mcp.beacon.command[opc.mcp.beacon.command.length - 1]).toContain("mcp.cjs");
+
+    const targets = clientConfigTargets("opencode", userHome, { XDG_CONFIG_HOME: xdg });
+    expect(targets[0]!.path).toBe(opcConfig);
   });
 
   it("walks up from apps/cli to the checkout and writes Claude Code plus Desktop configs", async () => {

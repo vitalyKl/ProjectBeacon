@@ -53,7 +53,7 @@ Grok-style hosts already walk `AGENTS.md` from repo root down to CWD (deeper win
 
 ### Prior art (acknowledge, do not clone)
 
-- **Linear / Jira / GitHub Projects / Height** — interaction design for humans; not an agent OS.
+- **Linear / Jira / GitHub Projects / Height** — interaction design for humans; not an agent OS. [Why Beacon vs these](../positioning.md) explains the compiled brief advantage.
 - **AGENTS.md / CLAUDE.md / Cursor rules / Aider `CONVENTIONS.md`** — the compatibility surface we import/export (including `CONVENTIONS.md`).
 - **MCP (modelcontextprotocol.io)** — the agent tool transport we implement, not wrap as a black box.
 - **Devin, Sweep, mentat, Continue, Cody, Glean** — agent + code intel; we are the project control plane they should plug into, not a closed coding agent.

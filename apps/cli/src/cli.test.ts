@@ -171,4 +171,13 @@ describe("runCli", () => {
     expect(out.stdout).toContain(first);
     expect(out.stdout).toContain(`${second} *`);
   });
+
+  it("eval --help prints usage with the three metrics", async () => {
+    const out = capture();
+    const code = await runCli({ argv: ["eval", "--help"], io: out.io });
+    expect(code).toBe(0);
+    expect(out.stdout).toContain("tokens_before_edit");
+    expect(out.stdout).toContain("turns");
+    expect(out.stdout).toContain("pass/fail");
+  });
 });

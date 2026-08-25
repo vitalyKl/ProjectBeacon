@@ -1,0 +1,41 @@
+{
+  "task": {
+    "title": "Update the CLI help to include the eval command",
+    "acceptance": "The USAGE string in apps/cli/src/cli.ts must contain the word 'eval' and describe the three metrics (tokens_before_edit, turns, pass/fail)."
+  },
+  "brief": {
+    "project_name": "Beacon",
+    "sections": [
+      {
+        "id": "conventions",
+        "title": "Conventions",
+        "body": "Follow the surrounding package. Do not invent a new app or package."
+      },
+      {
+        "id": "commands",
+        "title": "Commands",
+        "body": "Workspace: pnpm install, pnpm typecheck, pnpm lint, pnpm test, pnpm build, pnpm dev. Scope with pnpm --filter @beacon/<pkg>."
+      },
+      {
+        "id": "custom",
+        "key": "tests",
+        "title": "Tests",
+        "body": "If the behavior can be covered by a unit test, add or update one. Put tests next to the code in the same package (*.test.ts), using that package's Vitest setup."
+      }
+    ]
+  },
+  "runs": {
+    "with_brief": {
+      "tokens_before_edit": 2000,
+      "turns": 5,
+      "passed": true,
+      "brief_source": "compiled"
+    },
+    "without_brief": {
+      "tokens_before_edit": 5600,
+      "turns": 10,
+      "passed": true,
+      "brief_source": "raw"
+    }
+  }
+}

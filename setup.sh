@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install local Beacon agent settings. Paste a project token when the console asks.
-# The token is hidden and is never written into Grok / Cursor / Claude configs.
+# The token is hidden and is never written into Grok / Cursor / Claude / opencode configs.
 
 set -euo pipefail
 cd "$(dirname "$0")"

@@ -1,7 +1,9 @@
 "use client";
 
+import { useCallback, useState } from "react";
+
 import { tf } from "@/lib/i18n";
-import { sortTasksByPriority } from "@/lib/priority";
+import { sortTasks, type TaskSortOption } from "@/lib/priority";
 import { statusLabel, TASK_STATUSES, type TaskStatus } from "@/lib/roadmap";
 import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
@@ -19,6 +21,14 @@ export default function BacklogPage() {
   const { project, tasks, milestones, error, loading, reload, moveTask } =
     useProjectWork(BACKLOG_POLL_MS);
   const { labelId, setLabelId, catalog } = useWorkFilters(project?.id ?? null);
+  const [sort, setSort] = useState<TaskSortOption>("priority");
+
+  const handleSortChange = useCallback(
+    (next: TaskSortOption) => {
+      setSort(next);
+    },
+    [],
+  );
 
   if (!project) {
     return (
@@ -30,8 +40,9 @@ export default function BacklogPage() {
   }
 
   const sorted = TASK_STATUSES.flatMap((status) =>
-    sortTasksByPriority(
+    sortTasks(
       tasks.filter((task) => task.status === status && taskMatchesArea(task, labelId)),
+      sort,
     ),
   );
 
@@ -44,6 +55,8 @@ export default function BacklogPage() {
         catalog={catalog}
         labelId={labelId}
         onLabelIdChange={setLabelId}
+        sort={sort}
+        onSortChange={handleSortChange}
         actions={
           <CreateTaskForm
             projectId={project.id}

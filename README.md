@@ -2,7 +2,7 @@
 
 Project operating system for mixed human + AI-agent development.
 
-TypeScript monorepo (pnpm workspaces + Turborepo). The web app (`apps/web`) is a Next.js App Router app with auth pages, a context editor, and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md). The living brief is Context; [AGENTS.md](AGENTS.md) is an export for hosts that only read the repo.
+TypeScript monorepo (pnpm workspaces + Turborepo). The web app (`apps/web`) is a Next.js App Router app with auth pages, a context editor, and a same-origin `/v1` rewrite. See [docs/design.md](docs/design.md). The product position — why Beacon vs Linear/Jira+MCP and vs editor AGENTS.md — is in [docs/positioning.md](docs/positioning.md). The living brief is Context; [AGENTS.md](AGENTS.md) is an export for hosts that only read the repo.
 
 ## Prerequisites
 

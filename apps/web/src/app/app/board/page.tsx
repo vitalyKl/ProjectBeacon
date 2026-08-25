@@ -1,10 +1,12 @@
 "use client";
 
+import { useCallback, useState } from "react";
+
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 
 import { isNewTaskQuery } from "@/lib/command-palette";
-import { sortTasksByPriority } from "@/lib/priority";
+import { sortTasks, type TaskSortOption } from "@/lib/priority";
 import { statusLabel, TASK_STATUSES, type PublicTask, type TaskStatus } from "@/lib/roadmap";
 import { FIELD_ERROR_CLASS } from "@/lib/ui";
 import { useT } from "@/lib/use-locale";
@@ -37,8 +39,16 @@ function BoardView() {
   const { project, tasks, milestones, error, loading, reload, moveTask } =
     useProjectWork(BOARD_POLL_MS);
   const { labelId, setLabelId, catalog } = useWorkFilters(project?.id ?? null);
+  const [sort, setSort] = useState<TaskSortOption>("priority");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(() => isNewTaskQuery(searchParams.toString()));
+
+  const handleSortChange = useCallback(
+    (next: TaskSortOption) => {
+      setSort(next);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isNewTaskQuery(searchParams.toString())) {
@@ -64,24 +74,26 @@ function BoardView() {
 
   return (
     <section className="space-y-4">
-      <WorkHeader
-        surface="board"
-        title={t("nav.board")}
-        description={t("board.hint")}
-        catalog={catalog}
-        labelId={labelId}
-        onLabelIdChange={setLabelId}
-        actions={
-          <CreateTaskForm
-            projectId={project.id}
-            milestones={milestones}
-            defaultStatus="ready"
-            open={createOpen}
-            onOpenChange={setCreateOpen}
-            onCreated={() => reload({ silent: true })}
+          <WorkHeader
+            surface="board"
+            title={t("nav.board")}
+            description={t("board.hint")}
+            catalog={catalog}
+            labelId={labelId}
+            onLabelIdChange={setLabelId}
+            sort={sort}
+            onSortChange={handleSortChange}
+            actions={
+              <CreateTaskForm
+                projectId={project.id}
+                milestones={milestones}
+                defaultStatus="ready"
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                onCreated={() => reload({ silent: true })}
+              />
+            }
           />
-        }
-      />
       {error ? <p className={FIELD_ERROR_CLASS}>{error}</p> : null}
       {loading ? <p className="text-sm text-muted">{t("common.loading")}</p> : null}
       <div className="flex min-h-[28rem] gap-3 overflow-x-auto pb-2">
@@ -89,8 +101,9 @@ function BoardView() {
           <BoardColumn
             key={status}
             status={status}
-            tasks={sortTasksByPriority(
+            tasks={sortTasks(
               tasks.filter((task) => task.status === status && taskMatchesArea(task, labelId)),
+              sort,
             )}
             active={draggingId !== null}
             onDropTask={(taskId) => {

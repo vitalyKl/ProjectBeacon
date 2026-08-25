@@ -9,6 +9,8 @@ import { PageHeader } from "@/lib/ui/page-header";
 import { Segmented } from "@/lib/ui/segmented";
 import { useT } from "@/lib/use-locale";
 
+import type { TaskSortOption } from "@/lib/priority";
+
 export type WorkSurface = "board" | "backlog" | "roadmap";
 
 export function WorkHeader({
@@ -18,6 +20,8 @@ export function WorkHeader({
   catalog,
   labelId,
   onLabelIdChange,
+  sort,
+  onSortChange,
   actions,
 }: {
   surface: WorkSurface;
@@ -26,6 +30,8 @@ export function WorkHeader({
   catalog: PublicLabel[];
   labelId: string;
   onLabelIdChange: (labelId: string) => void;
+  sort?: TaskSortOption;
+  onSortChange?: (sort: TaskSortOption) => void;
   actions?: ReactNode;
 }) {
   const t = useT();
@@ -70,6 +76,18 @@ export function WorkHeader({
                   {label.name}
                 </option>
               ))}
+            </select>
+          ) : null}
+          {onSortChange ? (
+            <select
+              className={FIELD_INPUT_CLASS}
+              aria-label={t("board.sort")}
+              value={sort}
+              onChange={(event) => onSortChange(event.target.value as TaskSortOption)}
+            >
+              <option value="priority">{t("board.sortByPriority")}</option>
+              <option value="name">{t("board.sortByName")}</option>
+              <option value="updated">{t("board.sortByUpdated")}</option>
             </select>
           ) : null}
           {actions}
