@@ -181,13 +181,14 @@ describe("POST /mcp", () => {
     const res = await rpc(app, "tools/list");
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      result: { tools: Array<{ name: string; inputSchema: Record<string, unknown> }> };
+      result: { tools: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }> };
     };
     const names = body.result.tools.map((tool) => tool.name);
     expect(names).toContain("get_project");
     expect(names).toContain("finish_work");
     expect(names).toContain("get_handoff");
     expect(names).not.toContain("write_handoff");
+    expect(body.result.tools.every((tool) => (tool.description ?? "").length > 8)).toBe(true);
   });
 
   it("forwards tools/call through invoke and rejects write_handoff as unknown", async () => {

@@ -505,6 +505,7 @@ export function ContextEditor() {
             <RevisionsTab
               revisions={revisions}
               openRevision={openRevision}
+              preview={preview}
               loading={revisionsLoading}
               onOpen={(revisionId) => void openStoredRevision(revisionId)}
             />

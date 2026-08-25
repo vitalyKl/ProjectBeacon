@@ -38,6 +38,7 @@ import { AttachLocalRepoForm } from "../attach-local-repo-form";
 import { CopyableProjectId } from "../copyable-project-id";
 import { LabelsCatalog } from "./labels-catalog";
 import { LanguagePicker } from "./language-picker";
+import { WebhooksSettings } from "./webhooks-settings";
 
 const PROJECT_ROLES: { value: ProjectRole; labelKey: "settings.roleAdmin" | "settings.roleWrite" | "settings.roleRead" }[] = [
   { value: "admin", labelKey: "settings.roleAdmin" },
@@ -510,6 +511,8 @@ export function SettingsView({
       </section>
 
       <LabelsCatalog projectId={project.id} repos={repos} canWrite={canWriteLabels} />
+
+      {project && isAdmin ? <WebhooksSettings projectId={project.id} /> : null}
 
       {sidecarTunnel ? (
         <section className="space-y-3">

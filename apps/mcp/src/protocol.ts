@@ -83,6 +83,7 @@ function handleToolsList(id: JsonRpcId) {
   return result(id, {
     tools: listToolDefinitions().map((tool) => ({
       name: tool.name,
+      description: tool.description,
       inputSchema: tool.inputSchema,
     })),
   });

@@ -301,6 +301,13 @@ export function sessionBriefMarkdown(brief: SessionBrief): string {
     }
     lines.push("");
   }
+  if (brief.task?.linked_paths.length ?? 0 > 0) {
+    lines.push("## Tools for this task");
+    lines.push(
+      "Relevant files for this task are listed above under Changed scope. Use `get_file`/`get_related_files` to read them.",
+      "",
+    );
+  }
   return `${lines.join("\n").trimEnd()}\n`;
 }
 

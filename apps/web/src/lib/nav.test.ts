@@ -26,10 +26,11 @@ const APP_NAV_HREFS = [
   "/app/board",
   "/app/backlog",
   "/app/roadmap",
-  "/app/context",
+  "/app/workspace",
   "/app/agents",
   "/app/decisions",
   "/app/reports",
+  "/app/context",
   "/app/files",
   "/app/learn",
   "/app/settings",
@@ -217,15 +218,21 @@ describe("auth paths", () => {
 
 describe("app nav grouping", () => {
   it("assigns a group to every item and keeps Backlog off the scroller", () => {
-    expect(APP_NAV).toHaveLength(11);
+    expect(APP_NAV).toHaveLength(12);
     expect(APP_NAV.every((item) => item.group)).toBe(true);
     const hidden = APP_NAV.filter((item) => !isNavVisible(item));
-    expect(hidden.map((item) => item.href)).toEqual(["/app/backlog"]);
+    expect(hidden.map((item) => item.href)).toEqual([
+      "/app/backlog",
+      "/app/context",
+      "/app/files",
+      "/app/learn",
+    ]);
     expect(APP_NAV_VISIBLE.map((item) => item.href)).toEqual(
-      APP_NAV_HREFS.filter((href) => href !== "/app/backlog"),
+      APP_NAV_HREFS.filter(
+        (href) => href !== "/app/backlog" && href !== "/app/context" && href !== "/app/files" && href !== "/app/learn",
+      ),
     );
-    expect(APP_NAV_VISIBLE.map((item) => item.href)).not.toContain("/app/backlog");
-    expect(APP_NAV.find((item) => item.href === "/app/files")?.group).toBe("utility");
+    expect(APP_NAV.find((item) => item.href === "/app/workspace")?.group).toBe("work");
     expect(APP_NAV.find((item) => item.href === "/app/decisions")?.group).toBe("record");
     expect(APP_NAV.find((item) => item.href === "/app/board")?.group).toBe("work");
   });
@@ -265,5 +272,8 @@ describe("app nav grouping", () => {
     expect(readWeb("app/app/backlog/page.tsx")).toContain("nav.backlog");
     expect(readWeb("app/app/backlog/page.tsx")).toContain('from="backlog"');
     expect(readWeb("app/app/task-card.tsx")).toContain("taskDetailHref");
+    expect(readWeb("app/app/workspace/page.tsx")).toContain("WorkspaceView");
+    expect(readWeb("app/app/workspace/workspace-view.tsx")).toContain("ContextEditor");
+    expect(readWeb("app/app/workspace/workspace-view.tsx")).toContain("FilesView");
   });
 });

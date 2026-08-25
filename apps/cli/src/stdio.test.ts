@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { TOOL_NAMES, type InvokeContext } from "@beacon/mcp-tools";
 
 import { unavailableCodeSource } from "./code-source.js";
-import { assertProjectRead, handleRpc, PROTOCOL_VERSION, serveStdio } from "./stdio.js";
+import { assertProjectRead, handleRpc, PROTOCOL_VERSION, serveStdio, STDIO_MCP_INSTRUCTIONS } from "./stdio.js";
 
 const PROJECT_ID = "01934567-89ab-7cde-89ab-0123456789ac";
 const TASK_ID = "01934567-89ab-7cde-89ab-0123456789ab";
@@ -109,7 +109,11 @@ describe("stdio MCP", () => {
       () => assertProjectRead(ctx(fetchImpl)),
     );
     expect(init).toMatchObject({
-      result: { protocolVersion: PROTOCOL_VERSION, capabilities: { tools: {} } },
+      result: {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: { tools: {} },
+        instructions: STDIO_MCP_INSTRUCTIONS,
+      },
     });
     expect(state.initialized).toBe(true);
 

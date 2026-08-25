@@ -7,6 +7,7 @@ import {
   DETECT_QUEUE,
   GITHUB_IMPORT_QUEUE,
   GITHUB_INVALIDATE_QUEUE,
+  WEBHOOK_DELIVERY_QUEUE,
   MemoryJobQueue,
   PgBossJobQueue,
   type JobQueue,
@@ -30,6 +31,7 @@ async function resolveJobs(): Promise<JobQueue> {
   await boss.createQueue(DETECT_QUEUE);
   await boss.createQueue(GITHUB_IMPORT_QUEUE);
   await boss.createQueue(GITHUB_INVALIDATE_QUEUE);
+  await boss.createQueue(WEBHOOK_DELIVERY_QUEUE);
   return new PgBossJobQueue((name, data, options) =>
     options ? boss.send(name, data, options) : boss.send(name, data),
   );

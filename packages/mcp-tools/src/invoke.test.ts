@@ -403,4 +403,51 @@ describe("invoke routing", () => {
   it("does not invent run_shell", () => {
     expect(TOOL_NAMES.includes("run_shell" as ToolName)).toBe(false);
   });
+
+  it("forwards include to compile and start_work", async () => {
+    const { fetchImpl, calls } = mockFetch((call) => {
+      if (call.method === "GET" && call.url.pathname === `/v1/tasks/${TASK_ID}`) {
+        return { body: { id: TASK_ID, project_id: PROJECT_ID } };
+      }
+      return { body: { ok: true } };
+    });
+
+    await invoke(
+      "get_context_pack",
+      { path: "src", include: { tree_capsule: true, changed_scope: true } },
+      ctx(fetchImpl),
+    );
+    const contextPackCall = calls.find(
+      (c) => c.url.pathname === `/v1/projects/${PROJECT_ID}/context/compile`,
+    );
+    expect(contextPackCall?.body).toEqual(
+      expect.objectContaining({ include: { tree_capsule: true, changed_scope: true } }),
+    );
+
+    calls.length = 0;
+    await invoke(
+      "get_task_brief",
+      { task_id: TASK_ID, include: { tree_capsule: true } },
+      ctx(fetchImpl),
+    );
+    const taskBriefCall = calls.find(
+      (c) => c.url.pathname === `/v1/projects/${PROJECT_ID}/context/compile`,
+    );
+    expect(taskBriefCall?.body).toEqual(
+      expect.objectContaining({ include: { tree_capsule: true } }),
+    );
+
+    calls.length = 0;
+    await invoke(
+      "start_work",
+      { task_id: TASK_ID, idempotency_key: "start-1", include: { changed_scope: true } },
+      ctx(fetchImpl),
+    );
+    const startWorkCall = calls.find(
+      (c) => c.url.pathname === `/v1/projects/${PROJECT_ID}/sessions`,
+    );
+    expect(startWorkCall?.body).toEqual(
+      expect.objectContaining({ include: { changed_scope: true } }),
+    );
+  });
 });

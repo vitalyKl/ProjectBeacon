@@ -12,11 +12,13 @@ import {
 } from "../auth/access.js";
 import type { AccessDeps } from "../auth/access.js";
 import type { ContextStore } from "../context/store.js";
+import type { JobQueue } from "../jobs/queue.js";
 import type { RepoStore } from "../repos/store.js";
 import type { RoadmapStore } from "../roadmap/store.js";
 import { compileProjectBrief } from "../context/compile-brief.js";
 import { errorJson } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
+import { isValidWebhookUrl, parseWebhookSettings } from "../github/settings.js";
 import {
   isResponse,
   parseIdempotencyKey,
@@ -26,7 +28,7 @@ import {
 } from "../http/parse.js";
 import { paginateRecords } from "../roadmap/page.js";
 import { presentTask } from "../roadmap/present.js";
-import { type TaskRecord } from "../roadmap/types.js";
+import { type TaskRecord, type TaskStatus } from "../roadmap/types.js";
 import { presentHandoffResource, presentSession } from "./present.js";
 import {
   HANDOFF_SUMMARY_MIN,
@@ -41,6 +43,7 @@ import {
   type FinishWorkStatus,
 } from "./types.js";
 import type { WorkStore } from "./store.js";
+import type { CodeGateway } from "../code/gateway.js";
 
 function parseBoolean(value: unknown): boolean | undefined {
   if (value === undefined) {
@@ -137,6 +140,8 @@ function taskLocked(c: Context, task: TaskRecord) {
 
 export type SessionDeps = AccessDeps & {
   store: WorkStore & RoadmapStore & ContextStore & RepoStore;
+  codeGateway?: CodeGateway;
+  jobs?: JobQueue;
 };
 
 export function mountSessions(app: Hono, deps: SessionDeps): void {
@@ -195,6 +200,18 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
       return errorJson(c, 400, "invalid_request", "invalid agent", { reason: "invalid_body" });
     }
 
+    const includeRaw = body?.["include"];
+    let include: { tree_capsule?: boolean; changed_scope?: boolean } | undefined;
+    if (includeRaw !== undefined) {
+      if (typeof includeRaw !== "object" || Array.isArray(includeRaw)) {
+        return errorJson(c, 400, "invalid_request", "invalid include", { reason: "invalid_body" });
+      }
+      const raw = includeRaw as Record<string, unknown>;
+      const treeCapsule = raw["tree_capsule"] === undefined ? undefined : Boolean(raw["tree_capsule"]);
+      const changedScope = raw["changed_scope"] === undefined ? undefined : Boolean(raw["changed_scope"]);
+      include = { tree_capsule: treeCapsule, changed_scope: changedScope };
+    }
+
     const task = await deps.store.findTaskById(taskIdRaw);
     if (!task || task.deletedAt || task.projectId !== access.project.id) {
       return errorJson(c, 404, "not_found", "task not found");
@@ -209,8 +226,10 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
         path,
         task_id: task.id,
         budget_tokens: budgetTokens,
+        include,
       },
       now,
+      deps.codeGateway,
     );
     if (!compiled.ok) {
       return errorJson(c, 404, "not_found", "task not found");
@@ -419,6 +438,7 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
     if (!finished) {
       return errorJson(c, 404, "not_found", "session not found");
     }
+    void enqueueBlockedWebhook(deps.jobs, deps.store, finished.session.projectId, finished.task, finished.previousStatus);
     return c.json({
       session: presentSession(finished.session),
       handoff: presentHandoffResource(finished.handoff),
@@ -452,6 +472,40 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
     }
     return c.json(presentHandoffResource(handoff));
   });
+}
+
+async function enqueueBlockedWebhook(
+  jobs: JobQueue | undefined,
+  store: { findProjectById(id: string): Promise<{ settings?: unknown } | undefined> },
+  projectId: string,
+  task: TaskRecord | null,
+  previousStatus: TaskStatus | null,
+): Promise<void> {
+  if (!jobs || !task) return;
+  if (task.status !== "blocked") return;
+  if (previousStatus === "blocked") return;
+  if (!task.assigneeAgentName) return;
+  try {
+    const project = await store.findProjectById(projectId);
+    if (!project || !project.settings) return;
+    const whSettings = (project.settings as Record<string, unknown>)["webhooks"];
+    const result = parseWebhookSettings(whSettings);
+    if (!result.ok || result.urls.length === 0) return;
+    for (const url of result.urls) {
+      if (isValidWebhookUrl(url)) {
+        await jobs.enqueueWebhookDelivery({
+          project_id: projectId,
+          task_id: task.id,
+          webhook_url: url,
+          previous_status: previousStatus ?? "ready",
+          new_status: "blocked",
+          agent_name: task.assigneeAgentName,
+        });
+      }
+    }
+  } catch {
+    // Webhook delivery is fire-and-forget; don't fail finish_work on errors
+  }
 }
 
 export function rejectAgentTerminalStatus(

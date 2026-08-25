@@ -10,17 +10,21 @@ import {
   createProjectRepo,
   createTask,
   fetchMe,
+  fetchProjectActivity,
   fetchProjectMilestones,
+  fetchProjectSessions,
   fetchProjectTasks,
   mintProjectToken,
   saveProjectBrief,
   requestRepoDetect,
+  type PublicActivityEvent,
+  type PublicAgentSession,
   type PublicProject,
   type PublicRepo,
   type PublicToken,
 } from "@/lib/api";
 import { wizardBriefSections } from "@/lib/context-sections";
-import { t } from "@/lib/i18n";
+import { activityLine, t } from "@/lib/i18n";
 import {
   fetchProjectLabels,
   sortLabels,
@@ -92,6 +96,8 @@ export function ProjectWizard({
   const [briefSaved, setBriefSaved] = useState(false);
   const [labels, setLabels] = useState<PublicLabel[]>([]);
   const [firstTaskLabelIds, setFirstTaskLabelIds] = useState<string[]>([]);
+  const [agentSessions, setAgentSessions] = useState<PublicAgentSession[]>([]);
+  const [agentActivity, setAgentActivity] = useState<PublicActivityEvent[]>([]);
 
   const derivedSlug = useMemo(
     () => (slugTouched ? slug : slugFromName(name)),
@@ -129,6 +135,26 @@ export function ProjectWizard({
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!project) return;
+    const projectId = project.id;
+    const loadActivity = async () => {
+      try {
+        const [sessions, activity] = await Promise.all([
+          fetchProjectSessions(projectId),
+          fetchProjectActivity(projectId),
+        ]);
+        setAgentSessions(sessions);
+        setAgentActivity(activity);
+      } catch {
+        // silently ignore — feed is non-critical
+      }
+    };
+    loadActivity();
+    const id = window.setInterval(loadActivity, 5000);
+    return () => window.clearInterval(id);
+  }, [project]);
 
   async function onCreateProject(event: FormEvent) {
     event.preventDefault();
@@ -563,6 +589,52 @@ export function ProjectWizard({
               </pre>
             )}
           </div>
+
+          {project ? (
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold">{label("wizard.mcpToolCallTail")}</h2>
+              <p className="text-xs leading-5 text-muted">{label("wizard.mcpToolCallTailHint")}</p>
+              {agentActivity.length === 0 ? (
+                <p className="text-sm text-muted">{label("wizard.noActivity")}</p>
+              ) : (
+                <ul className="space-y-2">
+                  {agentActivity.slice(0, 40).map((event) => (
+                    <li key={event.id} className="rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+                      <div className="font-medium">{activityLine(event.verb, event.object_type)}</div>
+                      <p className="text-muted">
+                        {new Date(event.created_at).toLocaleString()}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {agentSessions.length > 0 && (
+                <div className="pt-2">
+                  <h3 className="text-sm font-medium">
+                    {agentSessions.filter((s) => s.status === "active").length > 0
+                      ? `${agentSessions.filter((s) => s.status === "active").length} active session${agentSessions.filter((s) => s.status === "active").length !== 1 ? "s" : ""}`
+                      : "No active sessions"}
+                  </h3>
+                  {agentSessions.filter((s) => s.status === "active").length === 0 ? null : (
+                    <ul className="mt-2 space-y-2">
+                      {agentSessions
+                        .filter((s) => s.status === "active")
+                        .map((session) => (
+                          <li key={session.id} className="rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+                            <div className="font-medium">{session.agent.name}</div>
+                            <p className="text-muted">
+                              {session.agent.host} · last heartbeat{" "}
+                              {new Date(session.last_heartbeat_at).toLocaleString()}
+                            </p>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </section>
+          ) : null}
+
           <button
             className="h-11 w-fit rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
             type="button"

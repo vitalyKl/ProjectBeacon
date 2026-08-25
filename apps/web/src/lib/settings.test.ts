@@ -4,7 +4,7 @@ import { SETTINGS_JUMP_LINKS, SETTINGS_THEME_OPTIONS, THEME_OPTION_MESSAGES } fr
 import { THEMES } from "./theme";
 
 describe("settings jump links", () => {
-  it("lists Theme, Language, Project, Members, Repositories, and Areas as in-page ids", () => {
+  it("lists Theme, Language, Project, Members, Repositories, Areas, and Webhooks as in-page ids", () => {
     expect(SETTINGS_JUMP_LINKS.map((item) => item.id)).toEqual([
       "theme",
       "language",
@@ -12,6 +12,7 @@ describe("settings jump links", () => {
       "members",
       "repositories",
       "areas",
+      "webhooks",
     ]);
     expect(SETTINGS_JUMP_LINKS.every((item) => !item.id.includes("/"))).toBe(true);
   });

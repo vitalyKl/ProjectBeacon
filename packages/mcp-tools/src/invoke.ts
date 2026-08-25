@@ -144,6 +144,7 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
           path: data.path,
           task_id: data.task_id,
           budget_tokens: data.budget_tokens,
+          include: data.include,
         }),
       });
     }
@@ -171,6 +172,7 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
           task_id: data.task_id,
           path: data.path,
           budget_tokens: data.budget_tokens,
+          include: data.include,
         }),
       });
     }
@@ -380,6 +382,7 @@ async function invokeKnown(tool: ToolName, args: unknown, ctx: InvokeContext): P
           path: data.path,
           steal: data.steal,
           budget_tokens: data.budget_tokens,
+          include: data.include,
         }),
       });
     }

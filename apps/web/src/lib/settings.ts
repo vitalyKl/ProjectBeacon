@@ -8,6 +8,7 @@ export const SETTINGS_JUMP_LINKS = [
   { id: "members", message: "settings.members" },
   { id: "repositories", message: "settings.repositories" },
   { id: "areas", message: "labels.areas" },
+  { id: "webhooks", message: "webhooks.title" },
 ] as const satisfies ReadonlyArray<{ id: string; message: MessageKey }>;
 
 export const THEME_OPTION_MESSAGES = {

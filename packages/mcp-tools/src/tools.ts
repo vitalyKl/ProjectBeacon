@@ -93,6 +93,13 @@ const LimitSchema = z.coerce.number().int().min(1).max(PAGINATION_MAX_LIMIT).opt
 const CursorSchema = z.string().min(1).optional();
 const BudgetTokensSchema = z.number().int().positive().optional();
 
+const IncludeSchema = z
+  .object({
+    tree_capsule: z.boolean().optional(),
+    changed_scope: z.boolean().optional(),
+  })
+  .optional();
+
 export const GetProjectArgsSchema = z.object({
   project_id: OptionalProjectId,
 });
@@ -103,6 +110,7 @@ export const GetContextPackArgsSchema = z.object({
   path: OptionalPath,
   task_id: UuidSchema.optional(),
   budget_tokens: BudgetTokensSchema,
+  include: IncludeSchema,
 });
 
 export const SearchContextArgsSchema = z.object({
@@ -115,6 +123,7 @@ export const GetTaskBriefArgsSchema = z.object({
   task_id: UuidSchema,
   path: OptionalPath,
   budget_tokens: BudgetTokensSchema,
+  include: IncludeSchema,
 });
 
 export const ListMilestonesArgsSchema = z.object({
@@ -305,6 +314,7 @@ export const StartWorkArgsSchema = z.object({
   path: OptionalPath,
   steal: z.boolean().optional(),
   budget_tokens: BudgetTokensSchema,
+  include: IncludeSchema,
 });
 
 export const FinishWorkArgsSchema = z.object({
@@ -485,13 +495,13 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   get_constraints: "List project constraints.",
   create_constraint: "Propose a constraint.",
   apply_constraint: "Apply a proposed constraint.",
-  get_tree: "Get a repository tree summary.",
-  search_code: "Search code for symbols, paths, or content.",
-  get_file: "Read a source file excerpt.",
-  get_symbol: "Look up a symbol.",
-  get_owners: "Get owners for a path.",
-  get_related_files: "Get files related by imports.",
-  get_changed_scope: "Guess files in scope for a task.",
+  get_tree: "Get a repository tree summary. Prefer this over listing files yourself — it's pre-scoped to the indexed project.",
+  search_code: "Search the indexed codebase for symbols, paths, or content. Prefer this over generic file search — it's pre-scoped to the project and doesn't require walking the tree yourself.",
+  get_file: "Read a specific file from the indexed repo. Use this instead of native file read for files inside the indexed project.",
+  get_symbol: "Look up a symbol (class, function, variable) in the indexed codebase. Faster than grep for finding definitions and usages.",
+  get_owners: "Get owners for a path. Use this instead of manually reading CODEOWNERS files.",
+  get_related_files: "List files that import or are imported by the given file. Useful for understanding code relationships without manual grep.",
+  get_changed_scope: "Guess files in scope for a task. Use this before starting work to identify relevant files.",
   start_work: "Start work on a task and return a session brief.",
   finish_work:
     "Finish a work session and write a handoff. Set how_to_check so a human can verify the change in the app.",

@@ -30,6 +30,25 @@ export function mergeProjectSettings(
   ) {
     next["github"] = { ...currentGithub, ...patchGithub };
   }
+  const currentWebhooks = current["webhooks"];
+  const patchWebhooks = patch["webhooks"];
+  if (
+    currentWebhooks !== null &&
+    typeof currentWebhooks === "object" &&
+    !Array.isArray(currentWebhooks) &&
+    patchWebhooks !== null &&
+    typeof patchWebhooks === "object" &&
+    !Array.isArray(patchWebhooks)
+  ) {
+    const currentWh = currentWebhooks as Record<string, unknown>;
+    const patchWh = patchWebhooks as Record<string, unknown>;
+    if (Array.isArray(currentWh["urls"]) && Array.isArray(patchWh["urls"])) {
+      const mergedUrls = [...new Set([...currentWh["urls"], ...patchWh["urls"]])];
+      next["webhooks"] = { ...currentWebhooks, ...patchWebhooks, urls: mergedUrls };
+    } else {
+      next["webhooks"] = { ...currentWebhooks, ...patchWebhooks };
+    }
+  }
   return next;
 }
 
@@ -49,8 +68,19 @@ export function parseProjectSettingsPatch(
   }
   const record = settings as Record<string, unknown>;
   const keys = Object.keys(record);
-  if (keys.some((key) => key !== "github")) {
+  const allowedKeys = ["github", "webhooks"];
+  if (keys.some((key) => !allowedKeys.includes(key))) {
     return { ok: false, message: "invalid settings", reason: "invalid_body" };
+  }
+  const patch: Record<string, unknown> = {};
+  if (record["webhooks"] !== undefined) {
+    const result = parseWebhookSettings(record["webhooks"]);
+    if (!result.ok) {
+      return { ok: false, message: result.message, reason: "invalid_body" };
+    }
+    if (result.urls.length > 0) {
+      patch["webhooks"] = { urls: result.urls };
+    }
   }
   if (record["github"] === undefined) {
     return { ok: true, patch: {} };
@@ -65,10 +95,10 @@ export function parseProjectSettingsPatch(
   }
   const issues = githubRecord["issues"];
   if (issues === undefined) {
-    return { ok: true, patch: { github: {} } };
+    return { ok: true, patch: { ...patch, github: {} } };
   }
   if (issues === "off" || issues === "import") {
-    return { ok: true, patch: { github: { issues } } };
+    return { ok: true, patch: { ...patch, github: { issues } } };
   }
   if (issues === "two_way") {
     if (!isGithubTwoWayEnabled(env)) {
@@ -85,4 +115,43 @@ export function parseProjectSettingsPatch(
     };
   }
   return { ok: false, message: "github.issues must be off or import", reason: "invalid_body" };
+}
+
+export type WebhookConfig = {
+  url: string;
+  enabled: boolean;
+};
+
+export function isValidWebhookUrl(input: unknown): boolean {
+  if (typeof input !== "string") return false;
+  try {
+    const url = new URL(input);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function parseWebhookSettings(
+  settings: unknown,
+): { urls: string[]; ok: true } | { ok: false; message: string } {
+  if (settings === undefined || settings === null) {
+    return { urls: [], ok: true };
+  }
+  if (typeof settings !== "object" || Array.isArray(settings)) {
+    return { ok: false, message: "webhooks must be an array" };
+  }
+  const arr = settings as unknown[];
+  const urls: string[] = [];
+  for (const item of arr) {
+    if (typeof item === "string" && isValidWebhookUrl(item)) {
+      urls.push(item);
+    } else if (typeof item === "object" && item !== null && !Array.isArray(item)) {
+      const obj = item as Record<string, unknown>;
+      if (typeof obj["url"] === "string" && isValidWebhookUrl(obj["url"])) {
+        urls.push(obj["url"]);
+      }
+    }
+  }
+  return { urls, ok: true };
 }

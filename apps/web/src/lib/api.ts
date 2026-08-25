@@ -323,7 +323,7 @@ function withPageParams(path: string, cursor: string | null): string {
 
 export async function updateProject(
   projectId: string,
-  patch: { name?: string; description?: string },
+  patch: { name?: string; description?: string; settings?: Record<string, unknown> },
 ): Promise<PublicProject> {
   const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
@@ -333,6 +333,18 @@ export async function updateProject(
     throw await readApiError(res, "failed to update project");
   }
   return parseJson<PublicProject>(res);
+}
+
+export type PublicProjectWithSettings = PublicProject & { settings?: Record<string, unknown> };
+
+export async function fetchProject(projectId: string): Promise<PublicProjectWithSettings> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}`, {
+    method: "GET",
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load project");
+  }
+  return parseJson<PublicProjectWithSettings>(res);
 }
 
 export async function fetchProjectMembers(projectId: string): Promise<PublicProjectMember[]> {

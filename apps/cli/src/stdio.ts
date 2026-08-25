@@ -7,6 +7,8 @@ import { endSpan, isCodeToolName, loadOtelConfig, observeMcpTool, startSpan } fr
 export const PROTOCOL_VERSION = "2024-11-05";
 export const SERVER_NAME = "beacon";
 export const SERVER_VERSION = "0.0.0";
+export const STDIO_MCP_INSTRUCTIONS =
+  "Use Beacon tools (search_code, get_file, get_symbol, get_related_files) for anything in the indexed repo — they're pre-scoped to this project and faster than generic file search. Fall back to native file tools only for paths outside the repo or when a code tool returns code_index_unavailable.";
 
 const PARSE_ERROR = -32700;
 const INVALID_REQUEST = -32600;
@@ -154,6 +156,7 @@ function initializeResult() {
     protocolVersion: PROTOCOL_VERSION,
     capabilities: { tools: {} },
     serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+    instructions: STDIO_MCP_INSTRUCTIONS,
   };
 }
 
