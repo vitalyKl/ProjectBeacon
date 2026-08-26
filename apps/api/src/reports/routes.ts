@@ -4,12 +4,13 @@ import type { Hono } from "hono";
 import { actorActivityRef, requireProject, type AccessDeps } from "../auth/access.js";
 import type { RoadmapStore } from "../roadmap/store.js";
 import type { ReportStore } from "./store.js";
+import type { EvalMetricData } from "./types.js";
 import { errorJson, isMissingSchemaError } from "../errors.js";
 import { parseOptionalString, readObject } from "../http.js";
-import { isResponse, parsePageQuery, parseText, writeActivity } from "../http/parse.js";
+import { isResponse, parsePageQuery, parseText, readEvalReport, writeActivity } from "../http/parse.js";
 import { paginateRecords } from "../roadmap/page.js";
 import { buildReportSnapshot, defaultReportTitle, reportMarkdown, reviewTitleFromBody } from "./build.js";
-import { presentReport, presentReview } from "./present.js";
+import { presentEvalMetric, presentReport, presentReview } from "./present.js";
 
 function schemaUnavailable(c: Parameters<typeof errorJson>[0]) {
   return errorJson(
@@ -207,5 +208,105 @@ export function mountReports(app: Hono, deps: ReportDeps): void {
       return access;
     }
     return c.json(presentReview(review));
+  });
+
+  app.post("/v1/projects/:id/eval-metrics", async (c) => {
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:write");
+    if (isResponse(access)) {
+      return access;
+    }
+    const body = await readObject(c);
+    const evalReport = readEvalReport(body);
+    if (evalReport === null) {
+      return errorJson(c, 400, "invalid_request", "eval_report is required", { reason: "invalid_body" });
+    }
+    const now = deps.clock.now();
+    const actor = actorActivityRef(access.actor);
+    const fixtures = evalReport["fixtures"] && Array.isArray(evalReport["fixtures"]) ? evalReport["fixtures"] : [];
+    const title =
+      typeof body?.["title"] === "string" && body["title"].trim().length > 0
+        ? body["title"].trim().slice(0, 200)
+        : `Context eval report ${now.toISOString().slice(0, 10)}`;
+    try {
+      const totalsRaw = evalReport["totals"] && typeof evalReport["totals"] === "object" && !Array.isArray(evalReport["totals"])
+        ? (evalReport["totals"] as Record<string, unknown>)
+        : {};
+      const totals: EvalMetricData["totals"] = {
+        total_saved_tokens: typeof totalsRaw["total_saved_tokens"] === "number" ? totalsRaw["total_saved_tokens"] : 0,
+        total_saved_turns: typeof totalsRaw["total_saved_turns"] === "number" ? totalsRaw["total_saved_turns"] : 0,
+        with_brief_passes: typeof totalsRaw["with_brief_passes"] === "number" ? totalsRaw["with_brief_passes"] : 0,
+        without_brief_passes: typeof totalsRaw["without_brief_passes"] === "number" ? totalsRaw["without_brief_passes"] : 0,
+        with_brief_avg_turns: typeof totalsRaw["with_brief_avg_turns"] === "number" ? totalsRaw["with_brief_avg_turns"] : 0,
+        with_brief_avg_tokens: typeof totalsRaw["with_brief_avg_tokens"] === "number" ? totalsRaw["with_brief_avg_tokens"] : 0,
+      };
+      const record = await deps.store.createEvalMetric({
+        id: uuidv7(now.getTime()),
+        projectId: access.project.id,
+        title,
+        snapshot: {
+          schema_version: String(evalReport["schema_version"] ?? "1"),
+          generated_at: String(evalReport["generated_at"] ?? now.toISOString()),
+          fixtures: fixtures.map((f) => ({ ...f })),
+          totals,
+        },
+        createdByType: actor.type,
+        createdById: actor.id,
+        createdAt: now,
+      });
+      await writeActivity(deps.store, actor, {
+        projectId: access.project.id,
+        objectType: "eval_metric",
+        objectId: record.id,
+        verb: "ingest",
+        payload: { title: record.title, fixtures_count: record.snapshot.fixtures.length },
+        now,
+      });
+      return c.json(presentEvalMetric(record), 201);
+    } catch (error) {
+      if (isMissingSchemaError(error)) {
+        return schemaUnavailable(c);
+      }
+      throw error;
+    }
+  });
+
+  app.get("/v1/projects/:id/eval-metrics", async (c) => {
+    const access = await requireProject(c, deps, c.req.param("id"), "tasks:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    const page = parsePageQuery(c);
+    if (page instanceof Response) {
+      return page;
+    }
+    try {
+      const records = await deps.store.listEvalMetrics(access.project.id);
+      const result = paginateRecords(records, page, (item) => item.createdAt);
+      return c.json({
+        items: result.items.map(presentEvalMetric),
+        next_cursor: result.next_cursor,
+      });
+    } catch (error) {
+      if (isMissingSchemaError(error)) {
+        return schemaUnavailable(c);
+      }
+      throw error;
+    }
+  });
+
+  app.get("/v1/eval-metrics/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!isUuid(id)) {
+      return errorJson(c, 404, "not_found", "eval metric not found");
+    }
+    const record = await deps.store.findEvalMetricById(id);
+    if (!record) {
+      return errorJson(c, 404, "not_found", "eval metric not found");
+    }
+    const access = await requireProject(c, deps, record.projectId, "tasks:read");
+    if (isResponse(access)) {
+      return access;
+    }
+    return c.json(presentEvalMetric(record));
   });
 }

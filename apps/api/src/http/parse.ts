@@ -117,3 +117,22 @@ export async function writeActivity(
     createdAt: input.now,
   });
 }
+
+/**
+ * Read an optional eval_report from the request body.
+ * Returns null when no eval_report is provided.
+ */
+export function readEvalReport(body: Record<string, unknown> | undefined): Record<string, unknown> | null {
+  const raw = body?.["eval_report"];
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  if (typeof record["schema_version"] !== "string") {
+    return null;
+  }
+  return record;
+}

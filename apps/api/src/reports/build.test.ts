@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MilestoneRecord, TaskRecord } from "../roadmap/types.js";
 import { buildReportSnapshot, reportMarkdown, reviewTitleFromBody } from "./build.js";
-import type { ProjectReviewRecord } from "./types.js";
+import type { ProjectEvalMetricRecord, ProjectReviewRecord } from "./types.js";
 
 const NOW = new Date("2026-08-19T12:00:00.000Z");
 
@@ -104,5 +104,54 @@ describe("report snapshot", () => {
     expect(reviewTitleFromBody("Named", "# Ignored", "file.md")).toBe("Named");
     expect(reviewTitleFromBody(undefined, "# From heading\nBody", "file.md")).toBe("From heading");
     expect(reviewTitleFromBody(undefined, "plain", "docs/review.md")).toBe("review.md");
+  });
+});
+
+describe("eval metrics", () => {
+  it("builds an eval metric with fixture savings", () => {
+    const snapshot: ProjectEvalMetricRecord["snapshot"] = {
+      schema_version: "1",
+      generated_at: "2026-08-26T12:00:00.000Z",
+      fixtures: [
+        {
+          task: { title: "Update CLI help", acceptance: "Help text shows correct flags" },
+          brief_provided: true,
+          with_brief: { tokens_before_edit: 2000, turns: 5, passed: true },
+          without_brief: { tokens_before_edit: 5600, turns: 10, passed: false },
+          savings: { saved_tokens: 3600, saved_turns: 5, better_pass: true, worse_pass: false },
+        },
+      ],
+      totals: {
+        total_saved_tokens: 3600,
+        total_saved_turns: 5,
+        with_brief_passes: 1,
+        without_brief_passes: 0,
+        with_brief_avg_turns: 5,
+        with_brief_avg_tokens: 2000,
+      },
+    };
+    expect(snapshot.fixtures).toHaveLength(1);
+    expect(snapshot.totals.total_saved_tokens).toBe(3600);
+    expect(snapshot.totals.total_saved_turns).toBe(5);
+    expect(snapshot.fixtures[0]!.savings.saved_tokens).toBe(3600);
+    expect(snapshot.fixtures[0]!.savings.better_pass).toBe(true);
+  });
+
+  it("handles empty eval metrics", () => {
+    const snapshot: ProjectEvalMetricRecord["snapshot"] = {
+      schema_version: "1",
+      generated_at: "2026-08-26T12:00:00.000Z",
+      fixtures: [],
+      totals: {
+        total_saved_tokens: 0,
+        total_saved_turns: 0,
+        with_brief_passes: 0,
+        without_brief_passes: 0,
+        with_brief_avg_turns: 0,
+        with_brief_avg_tokens: 0,
+      },
+    };
+    expect(snapshot.fixtures).toHaveLength(0);
+    expect(snapshot.totals.total_saved_tokens).toBe(0);
   });
 });

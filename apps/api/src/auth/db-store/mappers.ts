@@ -27,6 +27,7 @@ import {
   projectRepos,
   projectReports,
   projectReviews,
+  projectEvalMetrics,
   projects,
   rateBuckets,
   taskComments,
@@ -100,7 +101,7 @@ import {
   type StartWorkWriteResult,
 } from "../../sessions/types.js";
 import type { GithubInstallationRecord, GithubSyncStateRecord } from "../../github/types.js";
-import type { ProjectReportRecord, ProjectReviewRecord, ReportSnapshot } from "../../reports/types.js";
+import type { ProjectEvalMetricRecord, ProjectReportRecord, ProjectReviewRecord, ReportSnapshot } from "../../reports/types.js";
 import { isReviewStatus } from "../../reports/types.js";
 
 export const BOOTSTRAP_LOCK_KEY = 8_811_201;
@@ -905,6 +906,92 @@ export function stringArray(value: unknown): string[] {
     return [];
   }
   return value.filter((item): item is string => typeof item === "string");
+}
+
+export function toEvalMetric(row: typeof projectEvalMetrics.$inferSelect): ProjectEvalMetricRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    title: row.title,
+    snapshot: asEvalMetricData(row.snapshot),
+    createdByType: row.createdByType,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+  };
+}
+
+export function asEvalMetricData(value: unknown): ProjectEvalMetricRecord["snapshot"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      schema_version: "1",
+      generated_at: new Date(0).toISOString(),
+      fixtures: [],
+      totals: {
+        total_saved_tokens: 0,
+        total_saved_turns: 0,
+        with_brief_passes: 0,
+        without_brief_passes: 0,
+        with_brief_avg_turns: 0,
+        with_brief_avg_tokens: 0,
+      },
+    };
+  }
+  const record = value as Record<string, unknown>;
+  const fixtures = Array.isArray(record["fixtures"])
+    ? (record["fixtures"] as Record<string, unknown>[]).map((f): ProjectEvalMetricRecord["snapshot"]["fixtures"][number] => {
+        const task = f["task"] && typeof f["task"] === "object" && !Array.isArray(f["task"])
+          ? (f["task"] as Record<string, unknown>)
+          : {};
+        const savings = f["savings"] && typeof f["savings"] === "object" && !Array.isArray(f["savings"])
+          ? (f["savings"] as Record<string, unknown>)
+          : {};
+        const withBrief = f["with_brief"] && typeof f["with_brief"] === "object" && !Array.isArray(f["with_brief"])
+          ? (f["with_brief"] as Record<string, unknown>)
+          : {};
+        const withoutBrief = f["without_brief"] && typeof f["without_brief"] === "object" && !Array.isArray(f["without_brief"])
+          ? (f["without_brief"] as Record<string, unknown>)
+          : {};
+        return {
+          task: {
+            title: typeof task["title"] === "string" ? task["title"] : "",
+            acceptance: typeof task["acceptance"] === "string" ? task["acceptance"] : "",
+          },
+          brief_provided: Boolean(f["brief_provided"]),
+          with_brief: {
+            tokens_before_edit: typeof withBrief["tokens_before_edit"] === "number" ? withBrief["tokens_before_edit"] : 0,
+            turns: typeof withBrief["turns"] === "number" ? withBrief["turns"] : 0,
+            passed: Boolean(withBrief["passed"]),
+          },
+          without_brief: {
+            tokens_before_edit: typeof withoutBrief["tokens_before_edit"] === "number" ? withoutBrief["tokens_before_edit"] : 0,
+            turns: typeof withoutBrief["turns"] === "number" ? withoutBrief["turns"] : 0,
+            passed: Boolean(withoutBrief["passed"]),
+          },
+          savings: {
+            saved_tokens: typeof savings["saved_tokens"] === "number" ? savings["saved_tokens"] : 0,
+            saved_turns: typeof savings["saved_turns"] === "number" ? savings["saved_turns"] : 0,
+            better_pass: Boolean(savings["better_pass"]),
+            worse_pass: Boolean(savings["worse_pass"]),
+          },
+        };
+      })
+    : [];
+  const totals = record["totals"] && typeof record["totals"] === "object" && !Array.isArray(record["totals"])
+    ? (record["totals"] as Record<string, unknown>)
+    : {};
+  return {
+    schema_version: typeof record["schema_version"] === "string" ? record["schema_version"] : "1",
+    generated_at: typeof record["generated_at"] === "string" ? record["generated_at"] : new Date(0).toISOString(),
+    fixtures,
+    totals: {
+      total_saved_tokens: typeof totals["total_saved_tokens"] === "number" ? totals["total_saved_tokens"] : 0,
+      total_saved_turns: typeof totals["total_saved_turns"] === "number" ? totals["total_saved_turns"] : 0,
+      with_brief_passes: typeof totals["with_brief_passes"] === "number" ? totals["with_brief_passes"] : 0,
+      without_brief_passes: typeof totals["without_brief_passes"] === "number" ? totals["without_brief_passes"] : 0,
+      with_brief_avg_turns: typeof totals["with_brief_avg_turns"] === "number" ? totals["with_brief_avg_turns"] : 0,
+      with_brief_avg_tokens: typeof totals["with_brief_avg_tokens"] === "number" ? totals["with_brief_avg_tokens"] : 0,
+    },
+  };
 }
 
 export async function startWorkInTx(tx: Tx, input: StartWorkInput): Promise<StartWorkWriteResult> {

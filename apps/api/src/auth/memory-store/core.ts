@@ -19,7 +19,7 @@ import type {
   ProjectMemberRecord,
   ProjectRecord,
 } from "../../orgs/types.js";
-import type { ProjectReportRecord, ProjectReviewRecord } from "../../reports/types.js";
+import type { ProjectEvalMetricRecord, ProjectReportRecord, ProjectReviewRecord } from "../../reports/types.js";
 import {
   IDEMPOTENCY_TTL_MS,
   type ActivityEventRecord,
@@ -74,6 +74,7 @@ export class MemoryStoreCore {
   >();
   readonly reports = new Map<string, ProjectReportRecord>();
   readonly reviews = new Map<string, ProjectReviewRecord>();
+  readonly evalMetrics = new Map<string, ProjectEvalMetricRecord>();
   writeTail: Promise<void> = Promise.resolve();
   readonly writeContext = new AsyncLocalStorage<true>();
 

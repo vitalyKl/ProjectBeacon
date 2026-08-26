@@ -1,4 +1,4 @@
-import type { ProjectReportRecord, ProjectReviewRecord } from "./types.js";
+import type { ProjectEvalMetricRecord, ProjectReportRecord, ProjectReviewRecord } from "./types.js";
 
 export interface ReportStore {
   createReport(report: ProjectReportRecord): Promise<ProjectReportRecord>;
@@ -7,4 +7,7 @@ export interface ReportStore {
   createReview(review: ProjectReviewRecord): Promise<ProjectReviewRecord>;
   listReviews(projectId: string): Promise<ProjectReviewRecord[]>;
   findReviewById(id: string): Promise<ProjectReviewRecord | undefined>;
+  createEvalMetric(record: ProjectEvalMetricRecord): Promise<ProjectEvalMetricRecord>;
+  listEvalMetrics(projectId: string): Promise<ProjectEvalMetricRecord[]>;
+  findEvalMetricById(id: string): Promise<ProjectEvalMetricRecord | undefined>;
 }

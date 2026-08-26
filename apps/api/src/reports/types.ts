@@ -38,3 +38,44 @@ export type ProjectReviewRecord = {
 export function isReviewStatus(value: string): value is ReviewStatus {
   return (REVIEW_STATUSES as readonly string[]).includes(value);
 }
+
+export type EvalFixtureSavings = {
+  saved_tokens: number;
+  saved_turns: number;
+  better_pass: boolean;
+  worse_pass: boolean;
+};
+
+export type EvalFixtureReport = {
+  task: { title: string; acceptance: string };
+  brief_provided: boolean;
+  with_brief: { tokens_before_edit: number; turns: number; passed: boolean };
+  without_brief: { tokens_before_edit: number; turns: number; passed: boolean };
+  savings: EvalFixtureSavings;
+};
+
+export type EvalTotals = {
+  total_saved_tokens: number;
+  total_saved_turns: number;
+  with_brief_passes: number;
+  without_brief_passes: number;
+  with_brief_avg_turns: number;
+  with_brief_avg_tokens: number;
+};
+
+export type EvalMetricData = {
+  schema_version: string;
+  generated_at: string;
+  fixtures: EvalFixtureReport[];
+  totals: EvalTotals;
+};
+
+export type ProjectEvalMetricRecord = {
+  id: string;
+  projectId: string;
+  title: string;
+  snapshot: EvalMetricData;
+  createdByType: string;
+  createdById: string;
+  createdAt: Date;
+};

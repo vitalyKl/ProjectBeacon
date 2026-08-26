@@ -1,6 +1,34 @@
 import { apiFetch, fetchAllPages, parseJson, readApiError } from "./api";
 import { t, type MessageKey } from "./i18n";
 
+export type PublicEvalMetric = {
+  id: string;
+  project_id: string;
+  title: string;
+  snapshot: {
+    schema_version: string;
+    generated_at: string;
+    fixtures: Array<{
+      task: { title: string; acceptance: string };
+      brief_provided: boolean;
+      with_brief: { tokens_before_edit: number; turns: number; passed: boolean };
+      without_brief: { tokens_before_edit: number; turns: number; passed: boolean };
+      savings: { saved_tokens: number; saved_turns: number; better_pass: boolean; worse_pass: boolean };
+    }>;
+    totals: {
+      total_saved_tokens: number;
+      total_saved_turns: number;
+      with_brief_passes: number;
+      without_brief_passes: number;
+      with_brief_avg_turns: number;
+      with_brief_avg_tokens: number;
+    };
+  };
+  created_by_type: string;
+  created_by_id: string;
+  created_at: string;
+};
+
 export type PublicReport = {
   id: string;
   project_id: string;
@@ -73,4 +101,29 @@ export async function importProjectReview(
     throw await readApiError(res, "failed to import review");
   }
   return parseJson<PublicReview>(res);
+}
+
+export async function fetchProjectEvalMetrics(projectId: string): Promise<PublicEvalMetric[]> {
+  return fetchAllPages<PublicEvalMetric>(
+    `/v1/projects/${encodeURIComponent(projectId)}/eval-metrics`,
+    "failed to load eval metrics",
+  );
+}
+
+export async function ingestEvalReport(
+  projectId: string,
+  input: { eval_report: Record<string, unknown>; title?: string },
+): Promise<PublicEvalMetric> {
+  const res = await apiFetch(`/v1/projects/${encodeURIComponent(projectId)}/eval-metrics`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      eval_report: input.eval_report,
+      ...(input.title ? { title: input.title } : {}),
+    }),
+  });
+  if (!res.ok) {
+    throw await readApiError(res, "failed to ingest eval report");
+  }
+  return parseJson<PublicEvalMetric>(res);
 }

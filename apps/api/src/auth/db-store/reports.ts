@@ -1,7 +1,7 @@
-import { projectReports, projectReviews } from "@beacon/db";
+import { projectEvalMetrics, projectReports, projectReviews } from "@beacon/db";
 import { desc, eq } from "drizzle-orm";
-import type { ProjectReportRecord, ProjectReviewRecord } from "../../reports/types.js";
-import { toReport, toReview } from "./mappers.js";
+import type { ProjectEvalMetricRecord, ProjectReportRecord, ProjectReviewRecord } from "../../reports/types.js";
+import { toEvalMetric, toReport, toReview } from "./mappers.js";
 import type { Ctor } from "./ctor.js";
 import { DbStoreCore } from "./core.js";
 import type { ReportStore } from "../../reports/store.js";
@@ -78,6 +78,43 @@ export function withDbReports<TBase extends Ctor<DbStoreCore>>(
   async findReviewById(id: string): Promise<ProjectReviewRecord | undefined> {
     const [row] = await this.db.select().from(projectReviews).where(eq(projectReviews.id, id)).limit(1);
     return row ? toReview(row) : undefined;
+  }
+
+  async createEvalMetric(record: ProjectEvalMetricRecord): Promise<ProjectEvalMetricRecord> {
+    const [row] = await this.db
+      .insert(projectEvalMetrics)
+      .values({
+        id: record.id,
+        projectId: record.projectId,
+        title: record.title,
+        snapshot: record.snapshot,
+        createdByType: record.createdByType,
+        createdById: record.createdById,
+        createdAt: record.createdAt,
+      })
+      .returning();
+    if (!row) {
+      throw new Error("insert eval metric returned no row");
+    }
+    return toEvalMetric(row);
+  }
+
+  async listEvalMetrics(projectId: string): Promise<ProjectEvalMetricRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(projectEvalMetrics)
+      .where(eq(projectEvalMetrics.projectId, projectId))
+      .orderBy(desc(projectEvalMetrics.createdAt), desc(projectEvalMetrics.id));
+    return rows.map(toEvalMetric);
+  }
+
+  async findEvalMetricById(id: string): Promise<ProjectEvalMetricRecord | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(projectEvalMetrics)
+      .where(eq(projectEvalMetrics.id, id))
+      .limit(1);
+    return row ? toEvalMetric(row) : undefined;
   }
   } as TBase & Ctor<ReportStore>;
 }

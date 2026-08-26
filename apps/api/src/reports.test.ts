@@ -179,4 +179,77 @@ describe("reports and reviews", () => {
     const after = await store.findTaskById(task.id);
     expect(after?.howToCheck).toBe("Open /app/tasks and confirm the notes render.");
   });
+
+  it("ingests an eval report and lists it back", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice-eval");
+    const project = await createProject(alice.app, alice.token, "eval-reports");
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/eval-metrics`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({
+        eval_report: {
+          schema_version: "1",
+          generated_at: "2026-08-26T12:00:00.000Z",
+          fixtures: [
+            {
+              task: { title: "Fix login", acceptance: "Login page loads" },
+              brief_provided: true,
+              with_brief: { tokens_before_edit: 2000, turns: 5, passed: true },
+              without_brief: { tokens_before_edit: 5600, turns: 10, passed: false },
+              savings: { saved_tokens: 3600, saved_turns: 5, better_pass: true, worse_pass: false },
+            },
+          ],
+          totals: {
+            total_saved_tokens: 3600,
+            total_saved_turns: 5,
+            with_brief_passes: 1,
+            without_brief_passes: 0,
+            with_brief_avg_turns: 5,
+            with_brief_avg_tokens: 2000,
+          },
+        },
+      }),
+    });
+    expect(created.status).toBe(201);
+    const metric = (await created.json()) as {
+      id: string;
+      title: string;
+      snapshot: { schema_version: string; totals: { total_saved_tokens: number } };
+    };
+    expect(metric.title).toContain("Context eval report");
+    expect(metric.snapshot.schema_version).toBe("1");
+    expect(metric.snapshot.totals.total_saved_tokens).toBe(3600);
+
+    const listed = await alice.app.request(`/v1/projects/${project.id}/eval-metrics`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(listed.status).toBe(200);
+    const page = (await listed.json()) as { items: { id: string; title: string }[] };
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]!.id).toBe(metric.id);
+
+    const fetched = await alice.app.request(`/v1/eval-metrics/${metric.id}`, {
+      headers: { cookie: cookieHeader(alice.token) },
+    });
+    expect(fetched.status).toBe(200);
+    const detail = (await fetched.json()) as { snapshot: { totals: { total_saved_tokens: number } } };
+    expect(detail.snapshot.totals.total_saved_tokens).toBe(3600);
+  });
+
+  it("rejects eval metrics ingest without eval_report body", async () => {
+    const store = new MemoryAuthStore();
+    const alice = await registerUser(store, "alice-eval-bad");
+    const project = await createProject(alice.app, alice.token, "eval-bad");
+
+    const created = await alice.app.request(`/v1/projects/${project.id}/eval-metrics`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(alice.token), "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(created.status).toBe(400);
+    const err = await created.json() as { error: { code: string } };
+    expect(err.error.code).toBe("invalid_request");
+  });
 });

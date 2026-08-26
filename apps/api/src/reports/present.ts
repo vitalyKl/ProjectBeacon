@@ -1,4 +1,4 @@
-import type { ProjectReportRecord, ProjectReviewRecord } from "./types.js";
+import type { ProjectEvalMetricRecord, ProjectReportRecord, ProjectReviewRecord } from "./types.js";
 
 export function presentReport(report: ProjectReportRecord) {
   return {
@@ -25,5 +25,17 @@ export function presentReview(review: ProjectReviewRecord) {
     created_by_type: review.createdByType,
     created_by_id: review.createdById,
     created_at: review.createdAt.toISOString(),
+  };
+}
+
+export function presentEvalMetric(record: ProjectEvalMetricRecord) {
+  return {
+    id: record.id,
+    project_id: record.projectId,
+    title: record.title,
+    snapshot: record.snapshot,
+    created_by_type: record.createdByType,
+    created_by_id: record.createdById,
+    created_at: record.createdAt.toISOString(),
   };
 }

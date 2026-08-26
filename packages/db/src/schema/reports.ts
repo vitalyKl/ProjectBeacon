@@ -41,3 +41,19 @@ export const projectReviews = pgTable(
     check("project_reviews_status_check", sql`${t.status} IN ('needs_review','reviewed')`),
   ],
 );
+
+export const projectEvalMetrics = pgTable(
+  "project_eval_metrics",
+  {
+    id: uuid("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id),
+    title: text("title").notNull(),
+    snapshot: jsonb("snapshot").notNull().default(sql`'{}'::jsonb`),
+    createdByType: text("created_by_type").notNull(),
+    createdById: text("created_by_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("project_eval_metrics_project_time").on(t.projectId, t.createdAt.desc())],
+);
