@@ -654,6 +654,16 @@ export const en = {
   "activity.line": "{verb} · {object}",
   "context.scopePathEmpty": "(path)",
   "context.scopeRepoWithPath": "repo / {path}",
+  "lint.unlinkedSupersede": "Unlinked supersede",
+  "lint.unlinkedSupersedeHint": "This decision is marked as superseded but the superseding decision is not linked.",
+  "lint.milestoneOrphanedTasks": "Orphaned milestone tasks",
+  "lint.milestoneOrphanedTasksHint": "Completed tasks are still bound to this milestone.",
+  "lint.constraintContradiction": "Contradicting constraints",
+  "lint.constraintContradictionHint": "Two active constraints in the same scope have opposing rules.",
+  "lint.warningsTitle": "Lint warnings",
+  "lint.warningsHint": "Warnings are shown when the compile detects drift in decisions, milestones, or constraints.",
+  "lint.badge": "{count} warnings",
+  "lint.noWarnings": "No lint warnings detected.",
 } as const;
 
 export type MessageKey = keyof typeof en;

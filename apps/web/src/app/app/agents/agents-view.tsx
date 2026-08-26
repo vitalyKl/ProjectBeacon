@@ -247,6 +247,9 @@ export function AgentsView({ project }: { project: PublicProject | null }) {
                 className="rounded-lg border border-border bg-surface px-4 py-3 text-sm"
               >
                 <div className="font-medium">{session.agent.name}</div>
+                {session.task_title ? (
+                  <p className="text-muted">{session.task_title}</p>
+                ) : null}
                 <p className="text-muted">
                   {format("agents.lastSeen", {
                     host: session.agent.host,

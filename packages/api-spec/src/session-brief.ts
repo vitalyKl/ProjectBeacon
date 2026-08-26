@@ -4,6 +4,7 @@ import { z } from "zod";
 import { LinkedPathSchema, UuidSchema } from "./common.js";
 import {
   ConstraintKindSchema,
+  DecisionStatusSchema,
   MilestoneStatusSchema,
   ScopeTypeSchema,
   TaskStatusSchema,
@@ -65,9 +66,10 @@ export const ConstraintViewSchema = z.object({
 export const DecisionSummarySchema = z.object({
   id: UuidSchema,
   title: z.string(),
-  status: z.literal("accepted"),
+  status: DecisionStatusSchema,
   decision: z.string(),
   related_paths: z.array(z.string()),
+  superseded_by: UuidSchema.nullable(),
 });
 
 export const BriefHandoffSchema = z.object({
@@ -137,6 +139,12 @@ export const BriefSourceSchema = z.object({
   path: z.string(),
 });
 
+export const LintWarningSchema = z.object({
+  code: z.enum(["unlinked_supersede", "milestone_orphaned_tasks", "constraint_contradiction"]),
+  title: z.string(),
+  detail: z.string(),
+});
+
 export const SessionBriefSchema = z.object({
   schema_version: z.literal("1"),
   compiler_version: z.string().min(1),
@@ -155,6 +163,12 @@ export const SessionBriefSchema = z.object({
   tree_capsule: TreeCapsuleSchema.nullable(),
   budget: BriefBudgetSchema,
   sources: z.array(BriefSourceSchema),
+  lint_warnings: z.array(LintWarningSchema).optional(),
+});
+
+export const CompileResultSchema = z.object({
+  brief: SessionBriefSchema,
+  lint_warnings: z.array(LintWarningSchema),
 });
 
 export const CompileIncludeSchema = z.object({
@@ -190,4 +204,6 @@ export type BriefHandoff = z.infer<typeof BriefHandoffSchema>;
 export type ChangedScope = z.infer<typeof ChangedScopeSchema>;
 export type TreeCapsule = z.infer<typeof TreeCapsuleSchema>;
 export type SessionBrief = z.infer<typeof SessionBriefSchema>;
+export type CompileResult = z.infer<typeof CompileResultSchema>;
 export type CompileInput = z.infer<typeof CompileInputSchema>;
+export type LintWarning = z.infer<typeof LintWarningSchema>;

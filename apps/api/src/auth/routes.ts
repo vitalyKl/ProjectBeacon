@@ -37,6 +37,7 @@ export type AuthDeps = {
   clock: Clock;
   githubFetch: typeof fetch;
   rateLimits: RateLimitConfig;
+  setOrgId: (orgId: string | null) => void;
 };
 
 export type AuthRouteDeps = AuthDeps & {

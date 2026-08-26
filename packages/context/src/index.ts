@@ -56,3 +56,10 @@ export {
   type MatchingLabel,
   type ScopePath,
 } from "./label-scope.js";
+
+export {
+  lintContradictingConstraints,
+  lintMilestoneOrphans,
+  lintSupersedeLinks,
+  type LintWarning,
+} from "./lint.js";

@@ -35,9 +35,10 @@ export function presentDecision(decision: DecisionRecord): DecisionSummary {
   return {
     id: decision.id,
     title: decision.title,
-    status: "accepted",
+    status: decision.status as "proposed" | "accepted" | "superseded" | "deprecated",
     decision: decision.decision,
     related_paths: decision.relatedPaths.map((path) => path.path),
+    superseded_by: decision.supersededBy,
   };
 }
 

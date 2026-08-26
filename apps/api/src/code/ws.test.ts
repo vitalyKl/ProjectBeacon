@@ -100,6 +100,7 @@ function attach(store: MemoryAuthStore, socket: ReturnType<typeof fakeSocket>) {
       clock: { now: () => NOW },
       githubFetch: fetch,
       rateLimits: DEFAULT_RATE_LIMITS,
+      setOrgId: (() => {}) as (orgId: string | null) => void,
     },
     hub: createSidecarTunnelHub({ log: () => undefined }),
     env: { FF_SIDECAR_TUNNEL: "true" },

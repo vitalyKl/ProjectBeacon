@@ -228,6 +228,7 @@ export type PublicAgentSession = {
   id: string;
   project_id: string;
   task_id: string | null;
+  task_title: string | null;
   agent: {
     id: string;
     name: string;
@@ -594,6 +595,7 @@ export type SessionBrief = {
     dropped: string[];
   };
   sources: { node_id: string; scope_type: string; path: string }[];
+  lint_warnings?: { code: string; title: string; detail: string }[];
 };
 
 export type ContextRevision = ContextRevisionSummary & {

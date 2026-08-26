@@ -516,7 +516,12 @@
                 },
                 "status": {
                   "type": "string",
-                  "const": "accepted"
+                  "enum": [
+                    "proposed",
+                    "accepted",
+                    "superseded",
+                    "deprecated"
+                  ]
                 },
                 "decision": {
                   "type": "string"
@@ -526,6 +531,18 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "superseded_by": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -533,7 +550,8 @@
                 "title",
                 "status",
                 "decision",
-                "related_paths"
+                "related_paths",
+                "superseded_by"
               ],
               "additionalProperties": false
             }
@@ -807,6 +825,34 @@
                 "node_id",
                 "scope_type",
                 "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "lint_warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "unlinked_supersede",
+                    "milestone_orphaned_tasks",
+                    "constraint_contradiction"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "title",
+                "detail"
               ],
               "additionalProperties": false
             }
@@ -1516,7 +1562,12 @@
                       },
                       "status": {
                         "type": "string",
-                        "const": "accepted"
+                        "enum": [
+                          "proposed",
+                          "accepted",
+                          "superseded",
+                          "deprecated"
+                        ]
                       },
                       "decision": {
                         "type": "string"
@@ -1526,6 +1577,18 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "superseded_by": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -1533,7 +1596,8 @@
                       "title",
                       "status",
                       "decision",
-                      "related_paths"
+                      "related_paths",
+                      "superseded_by"
                     ],
                     "additionalProperties": false
                   }
@@ -1807,6 +1871,34 @@
                       "node_id",
                       "scope_type",
                       "path"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "lint_warnings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "unlinked_supersede",
+                          "milestone_orphaned_tasks",
+                          "constraint_contradiction"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "detail": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "title",
+                      "detail"
                     ],
                     "additionalProperties": false
                   }

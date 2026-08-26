@@ -7,11 +7,14 @@ import type {
   ConstraintView,
   ContextSection,
   DecisionSummary,
+  LintWarning,
   SessionBrief,
   TaskSummary,
   TreeCapsule,
 } from "@beacon/api-spec";
 import { jsLengthDiv4, TOKENIZER_ID } from "@beacon/shared";
+
+import { lintContradictingConstraints, lintMilestoneOrphans, lintSupersedeLinks } from "./lint.js";
 
 export const COMPILER_VERSION = "1.0.0";
 export const SCHEMA_VERSION = "1";
@@ -73,6 +76,7 @@ export type CompileDocument = {
 export type CompileResult = {
   brief: SessionBrief;
   markdown: string;
+  lint_warnings: LintWarning[];
 };
 
 function sectionKey(section: ContextSection): string {
@@ -632,5 +636,21 @@ export function compileSessionBrief(input: CompileInput, document: CompileDocume
     ...hashed,
     compiled_hash: hashCompiledBrief(withoutHash),
   };
-  return { brief, markdown: sessionBriefMarkdown(brief) };
+  const warnings: LintWarning[] = [
+    ...lintSupersedeLinks(document.decisions),
+    ...lintContradictingConstraints(document.constraints),
+  ];
+  if (document.milestone && document.task) {
+    warnings.push(
+      ...lintMilestoneOrphans(document.milestone.id, [
+        {
+          id: document.task.id,
+          milestoneId: document.task.milestone_id,
+          status: document.task.status,
+          deletedAt: null,
+        },
+      ]),
+    );
+  }
+  return { brief, markdown: sessionBriefMarkdown(brief), lint_warnings: warnings };
 }

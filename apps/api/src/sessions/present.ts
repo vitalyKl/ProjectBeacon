@@ -2,11 +2,12 @@ import type { BriefHandoff } from "@beacon/api-spec";
 
 import type { AgentSessionRecord, HandoffRecord } from "./types.js";
 
-export function presentSession(session: AgentSessionRecord) {
+export function presentSession(session: AgentSessionRecord, taskTitle?: string | null) {
   return {
     id: session.id,
     project_id: session.projectId,
     task_id: session.taskId,
+    task_title: taskTitle ?? null,
     agent: {
       id: session.tokenId ?? session.id,
       name: session.agentName,

@@ -69,6 +69,7 @@ function session(overrides: Partial<PublicAgentSession> = {}): PublicAgentSessio
     id: "sess-1",
     project_id: "proj-1",
     task_id: null,
+    task_title: null,
     agent: { id: "agent-1", name: "local", host: "dev" },
     status: "active",
     context_revision_id: null,

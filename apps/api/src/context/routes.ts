@@ -474,7 +474,7 @@ export function mountContext(app: Hono, deps: ContextDeps): void {
       createdAt: now,
     });
 
-    return c.json(brief);
+    return c.json({ ...brief, lint_warnings: compiled.compiled.lint_warnings });
   });
 
   app.get("/v1/projects/:id/context/search", async (c) => {

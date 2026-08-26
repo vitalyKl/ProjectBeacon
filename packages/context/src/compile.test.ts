@@ -82,6 +82,7 @@ function document(nodes: CompileNode[], extras?: Partial<CompileDocument>): Comp
         status: "accepted",
         decision: "Generate OpenAPI from Zod.",
         related_paths: ["packages/api-spec"],
+        superseded_by: null,
       },
     ],
     task: {

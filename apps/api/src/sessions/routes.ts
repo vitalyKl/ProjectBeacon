@@ -155,9 +155,19 @@ export function mountSessions(app: Hono, deps: SessionDeps): void {
       return page;
     }
     const records = await deps.store.listAgentSessions(access.project.id);
+    const taskIds = records
+      .map((r) => r.taskId)
+      .filter((id): id is string => id !== null);
+    const taskMap = new Map<string, string>();
+    if (taskIds.length > 0) {
+      const tasks = await deps.store.listTasks(access.project.id);
+      for (const task of tasks) {
+        taskMap.set(task.id, task.title);
+      }
+    }
     const result = paginateRecords(records, page, (item) => item.startedAt);
     return c.json({
-      items: result.items.map(presentSession),
+      items: result.items.map((item) => presentSession(item, taskMap.get(item.taskId ?? "") ?? null)),
       next_cursor: result.next_cursor,
     });
   });

@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { type AuthConfig, loadAuthConfig } from "./auth/config.js";
 import { systemClock, type Clock } from "./auth/clock.js";
 import { DbAuthStore } from "./auth/db-store.js";
+import { withRlsOrgContext } from "./auth/rls-middleware.js";
 import { DEFAULT_RATE_LIMITS, type RateLimitConfig } from "./auth/rate-limit.js";
 import { mountAuth } from "./auth/routes.js";
 import type { IdentityStore } from "./auth/identity.js";
@@ -75,6 +76,7 @@ export type CreatedApp = Hono & {
     clock: Clock;
     githubFetch: typeof fetch;
     rateLimits: RateLimitConfig;
+    setOrgId: (orgId: string | null) => void;
   };
 };
 
@@ -110,13 +112,23 @@ export function createApp(options: CreateAppOptions = {}): CreatedApp {
     return c.json({ status: "unavailable" }, 503);
   });
 
+  const store = resolveStore(options);
   const authDeps = {
-    store: resolveStore(options),
+    store,
     config: options.config ?? loadAuthConfig(),
     clock: options.clock ?? systemClock,
     githubFetch: options.githubFetch ?? fetch,
     rateLimits: options.rateLimits ?? DEFAULT_RATE_LIMITS,
+    setOrgId:
+      "setOrgId" in store
+        ? (orgId: string | null) => (store as { setOrgId: (orgId: string | null) => void }).setOrgId(orgId)
+        : (() => {}) as (orgId: string | null) => void,
   };
+
+  // Set `app.actor_org_id` on the DB session before any route handler runs,
+  // so Postgres RLS is active for every query in the request.
+  app.use("*", withRlsOrgContext(authDeps));
+
   const jobs = options.jobs ?? new MemoryJobQueue();
   const codeGateway =
     options.codeGateway ??
