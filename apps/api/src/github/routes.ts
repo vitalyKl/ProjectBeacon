@@ -29,10 +29,12 @@ import {
   createInstallationToken,
   decodeGithubPageCursor,
   encodeGithubPageCursor,
+  getGithubPullFiles,
   githubApiRequest,
   parseGithubRemote,
   presentGithubIssue,
   presentGithubPull,
+  presentGithubPullWithDiff,
 } from "./app.js";
 import { presentGithubLink, presentGithubSyncState } from "./present.js";
 import { resolveGithubRepo } from "./resolve.js";
@@ -481,6 +483,169 @@ export function mountGithub(app: Hono, deps: GithubDeps): void {
       items,
       next_cursor: result.nextUrl ? encodeGithubPageCursor(result.nextUrl) : null,
     });
+  });
+
+  app.get("/v1/tasks/:id/github-prs", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (isResponse(actor)) {
+      return actor;
+    }
+    const taskId = c.req.param("id");
+    if (!isUuid(taskId)) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    const task = await deps.store.findTaskById(taskId);
+    if (!task || task.deletedAt || !task.projectId) {
+      return errorJson(c, 404, "not_found", "task not found");
+    }
+    if (task.githubIssueId === null) {
+      return c.json({ items: [], next_cursor: null });
+    }
+    const repos = await deps.store.listProjectRepos(task.projectId);
+    const githubRepo = repos.find((r) => r.installationId !== null);
+    if (!githubRepo) {
+      return errorJson(c, 404, "not_found", "no connected repo");
+    }
+    const installed = await resolveGithubRepo(
+      c,
+      deps,
+      actor,
+      githubRepo.id,
+      undefined,
+      "project:read",
+    );
+    if (isResponse(installed)) {
+      return installed;
+    }
+    const remote = parseGithubRemote(githubRepo.remoteUrl);
+    if (!remote) {
+      return errorJson(c, 503, "integration_unavailable", "invalid remote");
+    }
+    const token = githubRepo.installationId
+      ? await installationTokenFor(deps, githubRepo.installationId)
+      : undefined;
+    if (!token) {
+      return errorJson(c, 503, "integration_unavailable", "github not connected");
+    }
+    const issueNumber = await issueNumberForGithubId(
+      token,
+      remote,
+      task.githubIssueId,
+      deps.githubFetch,
+    );
+    if (!issueNumber) {
+      return c.json({ items: [], next_cursor: null });
+    }
+    const path = githubListPath(remote, "pulls", "state=all", undefined);
+    if (!path) {
+      return errorJson(c, 400, "invalid_request", "invalid cursor", { reason: "invalid_cursor" });
+    }
+    const result = await githubApiRequest(token, path, deps.githubFetch);
+    if (!result.ok || !Array.isArray(result.body)) {
+      return errorJson(c, 503, "integration_unavailable", "github request failed");
+    }
+    const rawItems = result.body
+      .map((item) => presentGithubPull(item))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const withDiff = await Promise.all(
+      rawItems.map((item) => presentGithubPullWithDiff(item, remote, token, deps.githubFetch)),
+    );
+    const withFiles = await Promise.all(
+      withDiff.map(async (item) => {
+        if (!item) return undefined;
+        const filesChanged = await getGithubPullFiles(remote, item.number, token, deps.githubFetch);
+        return { ...item, files_changed: filesChanged };
+      }),
+    );
+    const linkedPaths = task.linkedPaths || [];
+    const items = withFiles.filter((item): item is NonNullable<typeof item> => Boolean(item)).filter(
+      (item) => mentionsIssue(`${item.title}\n${item.body}`, issueNumber),
+    ).map((item) => {
+      const matched: string[] = [];
+      for (const file of item.files_changed ?? []) {
+        for (const lp of linkedPaths) {
+          if (file.startsWith(lp.path)) {
+            matched.push(file);
+            break;
+          }
+        }
+      }
+      return { ...item, matched_files: matched };
+    });
+    return c.json({
+      items,
+      next_cursor: result.nextUrl ? encodeGithubPageCursor(result.nextUrl) : null,
+    });
+  });
+
+  app.get("/v1/repos/:id/github/pulls/:number/tasks", async (c) => {
+    const actor = await requireActor(c, deps);
+    if (isResponse(actor)) {
+      return actor;
+    }
+    const repoId = c.req.param("id");
+    const pullNumberRaw = c.req.param("number");
+    const pullNumber = parsePositiveInt(pullNumberRaw);
+    if (!pullNumber) {
+      return errorJson(c, 400, "invalid_request", "pull_number must be a positive integer", {
+        reason: "invalid_path",
+      });
+    }
+    const resolved = await resolveGithubRepo(
+      c,
+      deps,
+      actor,
+      repoId,
+      undefined,
+      "project:read",
+    );
+    if (isResponse(resolved)) {
+      return resolved;
+    }
+    const remote = parseGithubRemote(resolved.repo.remoteUrl);
+    if (!remote) {
+      return errorJson(c, 503, "integration_unavailable", "invalid remote");
+    }
+    const token = resolved.repo.installationId
+      ? await installationTokenFor(deps, resolved.repo.installationId)
+      : undefined;
+    if (!token) {
+      return errorJson(c, 503, "integration_unavailable", "github not connected");
+    }
+    const filesResult = await getGithubPullFiles(remote, pullNumber, token, deps.githubFetch);
+    const tasks = await deps.store.listTasks(resolved.project.id);
+    const activeTasks = tasks.filter(
+      (task) => !task.deletedAt && task.linkedPaths.length > 0,
+    );
+    const matched: {
+      task_id: string;
+      title: string;
+      status: string;
+      linked_paths: { repo_id: string; path: string }[];
+      matched_files: string[];
+    }[] = [];
+    for (const task of activeTasks) {
+      const linkedPaths = task.linkedPaths;
+      const taskMatched: string[] = [];
+      for (const file of filesResult) {
+        for (const lp of linkedPaths) {
+          if (file.startsWith(lp.path)) {
+            taskMatched.push(file);
+            break;
+          }
+        }
+      }
+      if (taskMatched.length > 0) {
+        matched.push({
+          task_id: task.id,
+          title: task.title,
+          status: task.status,
+          linked_paths: linkedPaths.map((p) => ({ repo_id: p.repo_id, path: p.path })),
+          matched_files: taskMatched,
+        });
+      }
+    }
+    return c.json({ items: matched, next_cursor: null });
   });
 
   app.post("/v1/repos/:id/github/sync", async (c) => {

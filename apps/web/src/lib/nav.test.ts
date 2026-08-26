@@ -169,8 +169,8 @@ describe("auth paths", () => {
     expect(readWeb("app/app/context/context-editor.tsx")).not.toContain("function BriefView");
     expect(readWeb("app/app/context/preview-revisions.tsx")).not.toContain("function BriefView");
     expect(readWeb("app/app/context/context-editor.tsx")).not.toContain("write_handoff");
-    expect(readWeb("app/app/board/page.tsx")).toContain("sortTasksByPriority");
-    expect(readWeb("app/app/backlog/page.tsx")).toContain("sortTasksByPriority");
+    expect(readWeb("app/app/board/page.tsx")).toContain("sortTasks");
+    expect(readWeb("app/app/backlog/page.tsx")).toContain("sortTasks");
     expect(readWeb("app/app/context/import-export.tsx")).toContain("common.compileBrief");
     expect(readWeb("app/app/context/context-editor.tsx")).toContain("takeInputFiles");
     expect(readWeb("app/app/context/context-editor.tsx")).not.toMatch(

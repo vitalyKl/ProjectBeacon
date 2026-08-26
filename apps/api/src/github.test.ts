@@ -792,4 +792,182 @@ describe("GitHub webhooks and import", () => {
       items: [expect.objectContaining({ number: 3, title: "Fix login" })],
     });
   });
+
+  it("returns matched_files on /v1/tasks/:id/github-prs", async () => {
+    const store = new MemoryAuthStore();
+    const app = createApp({
+      store,
+      config: testConfig(),
+      checkReady: async () => true,
+      githubFetch: githubFetchImplWithFiles(),
+    });
+    const registered = await app.request("/v1/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: "bob", password: STRONG_PASSWORD }),
+    });
+    const token = sessionCookie(registered)!;
+    const project = await createProject(app, token, "matched-files");
+    const repo = await createGithubRepo(app, token, project.id, { issues: "import" });
+    const taskRes = await app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(token),
+        "content-type": "application/json",
+        "idempotency-key": "task-with-linked",
+      },
+      body: JSON.stringify({
+        title: "Update API handler",
+      }),
+    });
+    const task = (await taskRes.json()) as { id: string };
+    expect(taskRes.status).toBe(201);
+    // Update task with linked_paths
+    await app.request(`/v1/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ linked_paths: [{ path: "src/handlers", repo_id: repo.id }], expected_version: 1 }),
+    });
+    await app.request(`/v1/tasks/${task.id}/github-issue`, {
+      method: "POST",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ issue_number: 5, repo_id: repo.id }),
+    });
+    const res = await app.request(`/v1/tasks/${task.id}/github-prs`, {
+      headers: { cookie: cookieHeader(token) },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: { matched_files?: string[]; files_changed?: string[]; number: number; body?: string }[] };
+    // Verify the response has data
+    expect(body.items.length).toBeGreaterThanOrEqual(1);
+    const pr = body.items[0]!;
+    expect(pr.number).toBe(5);
+    expect(pr.files_changed).toContain("src/handlers/api.ts");
+    expect(pr.matched_files).toContain("src/handlers/api.ts");
+    expect(pr.matched_files).not.toContain("src/utils/helpers.ts");
+  });
+
+  it("returns diff-aware tasks for a PR via /v1/repos/:id/github/pulls/:number/tasks", async () => {
+    const store = new MemoryAuthStore();
+    const app = createApp({
+      store,
+      config: testConfig(),
+      checkReady: async () => true,
+      githubFetch: githubFetchImplWithFiles(),
+    });
+    const registered = await app.request("/v1/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ login: "charlie", password: STRONG_PASSWORD }),
+    });
+    const token = sessionCookie(registered)!;
+    const project = await createProject(app, token, "diff-aware");
+    const repo = await createGithubRepo(app, token, project.id, { issues: "import" });
+    // Create task with linked_paths matching PR files
+    const taskRes = await app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(token),
+        "content-type": "application/json",
+        "idempotency-key": "diff-task-1",
+      },
+      body: JSON.stringify({ title: "Handler refactor" }),
+    });
+    const task = (await taskRes.json()) as { id: string };
+    expect(taskRes.status).toBe(201);
+    await app.request(`/v1/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ linked_paths: [{ path: "src/handlers", repo_id: repo.id }], expected_version: 1 }),
+    });
+    // Create a second task with linked_paths NOT matching PR files
+    const task2Res = await app.request(`/v1/projects/${project.id}/tasks`, {
+      method: "POST",
+      headers: {
+        cookie: cookieHeader(token),
+        "content-type": "application/json",
+        "idempotency-key": "diff-task-2",
+      },
+      body: JSON.stringify({ title: "Frontend polish" }),
+    });
+    const task2 = (await task2Res.json()) as { id: string };
+    expect(task2Res.status).toBe(201);
+    await app.request(`/v1/tasks/${task2.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookieHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({ linked_paths: [{ path: "src/frontend", repo_id: repo.id }], expected_version: 1 }),
+    });
+    // Query PR tasks — only the task matching "src/handlers" should be returned
+    const res = await app.request(`/v1/repos/${repo.id}/github/pulls/5/tasks`, {
+      headers: { cookie: cookieHeader(token) },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: { task_id: string; title: string; status: string; matched_files: string[] }[]; next_cursor: string | null };
+    expect(body.next_cursor).toBeNull();
+    expect(body.items.length).toBe(1);
+    const matched = body.items[0]!;
+    expect(matched.task_id).toBe(task.id);
+    expect(matched.title).toBe("Handler refactor");
+    expect(matched.status).toBe("backlog");
+    expect(matched.matched_files).toContain("src/handlers/api.ts");
+    expect(matched.matched_files).not.toContain("src/utils/helpers.ts");
+  });
 });
+
+function githubFetchImplWithFiles(): typeof fetch {
+  const issues = [
+    {
+      id: 8001,
+      number: 5,
+      title: "Update API handler",
+      body: "fix the handler logic",
+      state: "open",
+      html_url: "https://github.com/acme/demo/issues/5",
+    },
+  ];
+  const pulls = [
+    {
+      id: 7001,
+      number: 5,
+      title: "Update API handler",
+      body: "Closes #5",
+      state: "open",
+      html_url: "https://github.com/acme/demo/pull/5",
+      pull_request: {},
+    },
+  ];
+  const files = [
+    { filename: "src/handlers/api.ts" },
+    { filename: "src/utils/helpers.ts" },
+  ];
+  return async (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url.includes("/app/installations/") && method === "POST") {
+      return Response.json({ token: "ghs_install" });
+    }
+    if (url.includes("/issues/") && method === "GET" && !url.includes("?")) {
+      const number = Number(url.split("/issues/")[1]);
+      const issue = issues.find((item) => item["number"] === number);
+      if (!issue) {
+        return Response.json({ message: "Not Found" }, { status: 404 });
+      }
+      return Response.json(issue);
+    }
+    if (url.includes("/pulls") && method === "GET" && !url.includes("/files")) {
+      return Response.json(
+        pulls.filter((item) => item["pull_request"]).map((item) => ({ ...item, draft: false })),
+      );
+    }
+    if (url.includes("/pulls/") && url.includes("/files") && method === "GET") {
+      return Response.json(files);
+    }
+    if (url.includes("/issues") && method === "GET") {
+      return Response.json(issues);
+    }
+    if (method !== "GET") {
+      throw new Error(`unexpected GitHub write ${method} ${url}`);
+    }
+    return Response.json({ message: "Not Found" }, { status: 404 });
+  };
+}

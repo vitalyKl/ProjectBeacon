@@ -17,6 +17,12 @@ export type GithubPullView = {
   state: "open" | "closed";
   html_url: string;
   draft: boolean;
+  diff_url?: string;
+  files?: number;
+  additions?: number;
+  deletions?: number;
+  files_changed?: string[];
+  matched_files?: string[];
 };
 
 function base64urlJson(value: unknown): string {
@@ -126,6 +132,58 @@ export function presentGithubPull(value: unknown): GithubPullView | undefined {
   };
 }
 
+export async function presentGithubPullWithDiff(
+  value: unknown,
+  remote: { owner: string; repo: string },
+  token: string,
+  fetcher: typeof fetch,
+): Promise<GithubPullView | undefined> {
+  const base = presentGithubPull(value);
+  if (!base) return undefined;
+  const diffPath = `/repos/${remote.owner}/${remote.repo}/pulls/${base.number}/diff`;
+  try {
+    const diffResult = await githubApiRequestRaw(token, diffPath, fetcher);
+    if (diffResult.ok && typeof diffResult.body === "string") {
+      const diffBody = diffResult.body;
+      const fileMatches = [...diffBody.matchAll(/^diff --git a\/.+ b\/(.+)$/gm)];
+      const addedMatches = [...diffBody.matchAll(/^\+[^+].*$/gm)];
+      const removedMatches = [...diffBody.matchAll(/^-[^-].*$/gm)];
+      return {
+        ...base,
+        diff_url: diffPath,
+        files: fileMatches.length,
+        additions: addedMatches.length,
+        deletions: removedMatches.length,
+      };
+    }
+  } catch {
+    // Silently ignore — diff is optional
+  }
+  return base;
+}
+
+export async function getGithubPullFiles(
+  remote: { owner: string; repo: string },
+  number: number,
+  token: string,
+  fetcher: typeof fetch,
+): Promise<string[]> {
+  const path = `/repos/${remote.owner}/${remote.repo}/pulls/${number}/files`;
+  const result = await githubApiRequest(token, path, fetcher);
+  if (!result.ok || !Array.isArray(result.body)) {
+    return [];
+  }
+  const filenames: string[] = [];
+  for (const item of result.body) {
+    const record = asRecord(item);
+    const filename = typeof record?.["filename"] === "string" ? record["filename"] : undefined;
+    if (filename) {
+      filenames.push(filename);
+    }
+  }
+  return filenames;
+}
+
 export async function createInstallationToken(
   installationId: bigint,
   appId: string,
@@ -214,5 +272,27 @@ export async function githubApiRequest(
     status: res.status,
     body: parsed,
     nextUrl: parseGithubNextLink(res.headers.get("link")),
+  };
+}
+
+export async function githubApiRequestRaw(
+  token: string,
+  pathOrUrl: string,
+  githubFetch: typeof fetch,
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `https://api.github.com${pathOrUrl}`;
+  const res = await githubFetch(url, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "projectbeacon",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  const text = await res.text();
+  return {
+    ok: res.ok,
+    status: res.status,
+    body: text,
   };
 }

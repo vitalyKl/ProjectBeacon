@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
-import { ApiError, newIdempotencyKey } from "@/lib/api";
+import { ApiError, newIdempotencyKey, fetchTaskGithubPrs, type PublicGithubPull } from "@/lib/api";
 import { isOfferedToAgents } from "@/lib/brief";
 import { briefDroppedItems } from "@/lib/brief-preview";
 import { activityVerbLabel, t } from "@/lib/i18n";
@@ -84,6 +84,7 @@ function TaskDetailView() {
   const [commentPending, setCommentPending] = useState(false);
   const [catalog, setCatalog] = useState<PublicLabel[]>([]);
   const [labelPending, setLabelPending] = useState(false);
+  const [githubPrs, setGithubPrs] = useState<PublicGithubPull[]>([]);
   const savedText = useRef({ title: "", description: "", howToCheck: "" });
   const draftText = useRef({ title: "", description: "", howToCheck: "" });
   const requestSeq = useRef(0);
@@ -169,6 +170,14 @@ function TaskDetailView() {
       setComments(nextComments);
       setActivity(nextActivity.filter((item) => item.object_id === selectedId));
       setCatalog(nextLabels);
+      try {
+        const prs = await fetchTaskGithubPrs(next.id);
+        if (seq === requestSeq.current && next.id === selectedId) {
+          setGithubPrs(prs);
+        }
+      } catch {
+        // PR fetch is non-critical
+      }
       setError(null);
     } catch (caught) {
       if (seq === requestSeq.current) {
@@ -592,6 +601,60 @@ function TaskDetailView() {
         </article>
 
         <div className="grid gap-4 lg:col-span-2 lg:grid-cols-2">
+          <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
+            <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.githubPrs")}</h2>
+            <p className="text-xs text-muted">{label("task.githubPrsHint")}</p>
+            {githubPrs.length === 0 ? (
+              <p className="text-sm text-muted">{label("task.githubPrsEmpty")}</p>
+            ) : (
+              <ul className="space-y-2">
+                {githubPrs.map((pr) => (
+                  <li key={pr.id} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <a
+                        className="font-medium hover:underline"
+                        href={pr.html_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        #{pr.number} {pr.title}
+                      </a>
+                      <span className="text-xs text-muted">{pr.state}</span>
+                    </div>
+                    {pr.files !== undefined ? (
+                      <p className="mt-1 text-xs text-muted">
+                        {pr.files} {label("task.githubPrsFiles")} ·{" "}
+                        {pr.additions !== undefined && pr.additions > 0
+                          ? `${pr.additions} ${label("task.githubPrsAdditions")}`
+                          : ""}
+                        {pr.deletions !== undefined && pr.deletions > 0
+                          ? ` · ${pr.deletions} ${label("task.githubPrsDeletions")}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    {pr.matched_files && pr.matched_files.length > 0 ? (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-accent">
+                          {pr.matched_files.length} {label("task.githubPrsMatched")}: {pr.matched_files.slice(0, 5).join(", ")}{pr.matched_files.length > 5 ? ` (+${pr.matched_files.length - 5})` : ""}
+                        </p>
+                      </div>
+                    ) : null}
+                    {pr.diff_url ? (
+                      <a
+                        className="mt-1 block text-xs font-mono text-accent hover:underline"
+                        href={`https://github.com${pr.diff_url}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {label("task.githubPrsDiff")}
+                      </a>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+
           <article className="space-y-3 rounded-lg border border-border bg-surface p-4">
             <h2 className="text-sm font-semibold tracking-wide uppercase">{label("task.comments")}</h2>
             {comments.length === 0 ? <p className="text-sm text-muted">{label("task.noComments")}</p> : null}

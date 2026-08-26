@@ -5,6 +5,7 @@ import {
   isGithubTwoWayEnabled,
   mergeProjectSettings,
   parseProjectSettingsPatch,
+  parseWebhookSettings,
 } from "./settings.js";
 
 describe("github settings", () => {
@@ -40,6 +41,44 @@ describe("github settings", () => {
     ).toMatchObject({
       ok: false,
       reason: "github_two_way_unavailable",
+    });
+  });
+
+  it("parses webhook urls from the urls key", () => {
+    expect(parseWebhookSettings(undefined)).toEqual({ urls: [], ok: true });
+    expect(parseWebhookSettings(null)).toEqual({ urls: [], ok: true });
+    expect(parseWebhookSettings({ urls: ["https://hooks.slack.com/xyz"] })).toEqual({
+      urls: ["https://hooks.slack.com/xyz"],
+      ok: true,
+    });
+    expect(
+      parseWebhookSettings({
+        urls: ["https://hooks.slack.com/abc", "https://example.com/hook"],
+      }),
+    ).toEqual({
+      urls: ["https://hooks.slack.com/abc", "https://example.com/hook"],
+      ok: true,
+    });
+    expect(parseWebhookSettings({ urls: [] })).toEqual({ urls: [], ok: true });
+  });
+
+  it("rejects invalid webhook urls and malformed input", () => {
+    expect(parseWebhookSettings({ urls: ["not-a-url"] })).toEqual({ urls: [], ok: true });
+    expect(parseWebhookSettings({ urls: ["http://localhost/hook"] })).toEqual({
+      urls: [],
+      ok: true,
+    });
+    expect(parseWebhookSettings({ webhooks: ["https://x.com"] })).toMatchObject({
+      ok: false,
+      message: "webhooks.urls must be an array",
+    });
+    expect(parseWebhookSettings([])).toMatchObject({
+      ok: false,
+      message: "webhooks must be an object",
+    });
+    expect(parseWebhookSettings("https://x.com")).toMatchObject({
+      ok: false,
+      message: "webhooks must be an object",
     });
   });
 });

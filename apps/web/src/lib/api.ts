@@ -42,6 +42,30 @@ export type PublicRepo = {
   last_indexed_sha?: string | null;
 };
 
+export type PublicGithubPull = {
+  id: string;
+  number: number;
+  title: string;
+  body: string;
+  state: "open" | "closed";
+  html_url: string;
+  draft: boolean;
+  diff_url?: string;
+  files?: number;
+  additions?: number;
+  deletions?: number;
+  files_changed?: string[];
+  matched_files?: string[];
+};
+
+export type PublicGithubPullTask = {
+  task_id: string;
+  title: string;
+  status: string;
+  linked_paths: { repo_id: string; path: string }[];
+  matched_files: string[];
+};
+
 export type PublicToken = {
   id: string;
   project_id: string;
@@ -468,6 +492,13 @@ export async function fetchRepo(repoId: string): Promise<PublicRepo | null> {
   return parseJson<PublicRepo>(res);
 }
 
+export async function fetchTaskGithubPrs(taskId: string): Promise<PublicGithubPull[]> {
+  return fetchAllPages<PublicGithubPull>(
+    `/v1/tasks/${encodeURIComponent(taskId)}/github-prs`,
+    "failed to load pull requests",
+  );
+}
+
 export async function updateRepoIndexMode(
   repoId: string,
   indexMode: IndexMode,
@@ -747,4 +778,18 @@ export async function createTask(
   },
 ): Promise<PublicTask> {
   return createRoadmapTask(projectId, input, newIdempotencyKey());
+}
+
+export async function fetchPullTasks(
+  repoId: string,
+  pullNumber: number,
+): Promise<PublicGithubPullTask[]> {
+  const res = await apiFetch(
+    `/v1/repos/${encodeURIComponent(repoId)}/github/pulls/${pullNumber}/tasks`,
+  );
+  if (!res.ok) {
+    throw await readApiError(res, "failed to load PR tasks");
+  }
+  const body = await parseJson<{ items: PublicGithubPullTask[] }>(res);
+  return body.items ?? [];
 }

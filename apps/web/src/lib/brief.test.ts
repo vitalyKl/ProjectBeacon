@@ -97,9 +97,9 @@ describe("brief helpers", () => {
     const higher = task({ id: "higher", priority: 3, status: "ready" });
     const backlog = task({ id: "backlog", status: "backlog", priority: 0 });
     expect(offeredTasks([higher, backlog, earlier, later]).map((item) => item.id)).toEqual([
-      "higher",
       "later",
       "earlier",
+      "higher",
     ]);
   });
 

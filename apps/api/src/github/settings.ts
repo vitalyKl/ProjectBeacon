@@ -139,18 +139,17 @@ export function parseWebhookSettings(
     return { urls: [], ok: true };
   }
   if (typeof settings !== "object" || Array.isArray(settings)) {
-    return { ok: false, message: "webhooks must be an array" };
+    return { ok: false, message: "webhooks must be an object" };
   }
-  const arr = settings as unknown[];
+  const obj = settings as Record<string, unknown>;
+  const rawUrls = obj["urls"];
+  if (!Array.isArray(rawUrls)) {
+    return { ok: false, message: "webhooks.urls must be an array" };
+  }
   const urls: string[] = [];
-  for (const item of arr) {
+  for (const item of rawUrls) {
     if (typeof item === "string" && isValidWebhookUrl(item)) {
       urls.push(item);
-    } else if (typeof item === "object" && item !== null && !Array.isArray(item)) {
-      const obj = item as Record<string, unknown>;
-      if (typeof obj["url"] === "string" && isValidWebhookUrl(obj["url"])) {
-        urls.push(obj["url"]);
-      }
     }
   }
   return { urls, ok: true };

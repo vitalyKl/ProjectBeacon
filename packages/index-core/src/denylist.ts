@@ -16,6 +16,7 @@ const DENIED_DIR_NAMES = new Set([
   ".venv",
   "venv",
   "build",
+  ".idea",
 ]);
 
 const DENIED_FILE_NAMES = new Set([
@@ -29,6 +30,10 @@ const DENIED_FILE_NAMES = new Set([
   "id_dsa",
   "id_ecdsa",
   "id_ed25519",
+  ".npmrc",
+  ".gitconfig",
+  ".netrc",
+  "service-account.json",
 ]);
 
 const DENIED_FILE_SUFFIXES = [".pem", ".key", ".p12", ".pfx", ".keystore"];

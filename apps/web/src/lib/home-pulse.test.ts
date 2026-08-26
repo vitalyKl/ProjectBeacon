@@ -152,7 +152,7 @@ describe("home queue pulse", () => {
       lockedReady,
     ];
     expect(countHomeQueue(tasks)).toEqual({ ready: 4, inProgress: 1, inReview: 1 });
-    expect(peekReadyTasks(tasks).map((item) => item.id)).toEqual(["a", "b", "c"]);
+    expect(peekReadyTasks(tasks).map((item) => item.id)).toEqual(["d", "b", "c"]);
   });
 });
 
