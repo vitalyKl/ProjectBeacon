@@ -14,25 +14,37 @@ public sealed class TenantIsolationMiddleware
 
     public async Task InvokeAsync(HttpContext ctx, BeaconDbContext db)
     {
-        var projectId = ExtractGuid(ctx, "projectId", "X-Project-Id", "project_id");
-        var orgId = ExtractGuid(ctx, "orgId", "X-Org-Id", "org_id");
+        var fromRoute = FromRoute(ctx, "projectId");
+        var fromHeader = FromHeader(ctx, "X-Project-Id");
+        var fromOrgRoute = FromRoute(ctx, "orgId");
+        var fromOrgHeader = FromHeader(ctx, "X-Org-Id");
+        var projectId = fromRoute ?? fromHeader ?? FromClaim(ctx, "project_id");
+        var orgId = fromOrgRoute ?? fromOrgHeader ?? FromClaim(ctx, "org_id");
 
         var isAdmin = bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var adminFlag) && adminFlag;
 
-        if (projectId is null && ctx.User.Identity?.IsAuthenticated == true
-            && Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        if (ctx.User.Identity?.IsAuthenticated == true
+            && Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
+            && fromRoute is null && fromHeader is null)
         {
-            var member = await db.ProjectMembers.IgnoreQueryFilters()
+            var members = await db.ProjectMembers.IgnoreQueryFilters()
                 .Include(m => m.Project)
                 .Where(m => m.UserId == userId)
                 .OrderBy(m => m.JoinedAt)
-                .FirstOrDefaultAsync();
-            if (member is not null)
+                .ToListAsync();
+            if (members.Count > 0)
             {
-                projectId = member.ProjectId;
-                orgId ??= member.Project.OrgId;
+                projectId = members[0].ProjectId;
+                if (fromOrgRoute is null && fromOrgHeader is null)
+                    orgId = members[0].Project.OrgId;
             }
-            else if (isAdmin)
+            else if (!isAdmin)
+            {
+                projectId = Guid.Empty;
+                if (fromOrgRoute is null && fromOrgHeader is null)
+                    orgId = Guid.Empty;
+            }
+            else if (projectId is null)
             {
                 var project = await db.Projects.IgnoreQueryFilters()
                     .OrderBy(p => p.CreatedAt)
@@ -61,20 +73,21 @@ public sealed class TenantIsolationMiddleware
         }
     }
 
-    private static Guid? ExtractGuid(HttpContext ctx, string routeKey, string header, string claimType)
+    private static Guid? FromRoute(HttpContext ctx, string routeKey)
     {
         var route = ctx.GetRouteValue(routeKey) as string;
-        if (route is not null && Guid.TryParse(route, out var fromRoute))
-            return fromRoute;
+        return route is not null && Guid.TryParse(route, out var id) ? id : null;
+    }
 
-        var headerValue = ctx.Request.Headers[header].ToString();
-        if (!string.IsNullOrEmpty(headerValue) && Guid.TryParse(headerValue, out var fromHeader))
-            return fromHeader;
+    private static Guid? FromHeader(HttpContext ctx, string header)
+    {
+        var value = ctx.Request.Headers[header].ToString();
+        return !string.IsNullOrEmpty(value) && Guid.TryParse(value, out var id) ? id : null;
+    }
 
+    private static Guid? FromClaim(HttpContext ctx, string claimType)
+    {
         var claim = ctx.User.FindFirst(claimType);
-        if (claim is not null && Guid.TryParse(claim.Value, out var fromClaim))
-            return fromClaim;
-
-        return null;
+        return claim is not null && Guid.TryParse(claim.Value, out var id) ? id : null;
     }
 }
