@@ -6,8 +6,10 @@
 @using ProjectBeacon.Web.Theme
 @using ProjectBeacon.Web.Resources
 @using ProjectBeacon.Web.Shared
+@using ProjectBeacon.Application.Identity
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
+@inject TenantContextBinder TenantBinder
 
 <MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
 <MudDialogProvider />
@@ -84,7 +86,16 @@
     {
         Navigation.LocationChanged += OnLocationChanged;
         RebuildCrumbs();
+        await BindTenant();
         await LoadInitials();
+    }
+
+    private async Task BindTenant()
+    {
+        if (AuthState is null)
+            return;
+        var state = await AuthState;
+        await TenantBinder.BindUserAsync(state.User);
     }
 
     private async Task LoadInitials()

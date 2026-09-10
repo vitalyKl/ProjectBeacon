@@ -5,6 +5,7 @@ using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 public sealed class TenantIsolationMiddleware
 {
@@ -76,6 +77,9 @@ public sealed class TenantIsolationMiddleware
                 .Select(p => (Guid?)p.OrgId)
                 .FirstOrDefaultAsync();
         }
+
+        ctx.RequestServices?.GetService<ITenantContext>()
+            ?.Assign(projectId, orgId, unscoped: false);
 
         IDisposable? projectScope = projectId is { } pid ? TenantScope.EnterProjectScope(pid) : null;
         IDisposable? orgScope = orgId is { } oid ? TenantScope.EnterOrgScope(oid) : null;

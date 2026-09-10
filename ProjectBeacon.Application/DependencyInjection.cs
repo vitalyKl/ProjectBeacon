@@ -60,6 +60,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetCurrentProjectHandler>();
         services.AddTransient<GetDashboardCountsHandler>();
         services.AddTransient<ListLabelsHandler>();
+        services.AddScoped<TenantContextBinder>();
 
         services.AddTransient<UpsertContextNodeHandler>();
         services.AddTransient<ListContextNodesHandler>();

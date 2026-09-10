@@ -30,11 +30,18 @@ public class BeaconDbContext : DbContext
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
 
-    public BeaconDbContext(DbContextOptions<BeaconDbContext> options) : base(options) { }
+    private readonly ITenantContext? _tenant;
 
-    public Guid? FilterProjectId => TenantScope.CurrentProjectId;
-    public Guid? FilterOrgId => TenantScope.CurrentOrgId;
-    public bool FilterUnscoped => TenantScope.IsUnscoped;
+    public BeaconDbContext(DbContextOptions<BeaconDbContext> options) : this(options, null) { }
+
+    public BeaconDbContext(DbContextOptions<BeaconDbContext> options, ITenantContext? tenant) : base(options)
+    {
+        _tenant = tenant;
+    }
+
+    public Guid? FilterProjectId => _tenant?.ProjectId ?? TenantScope.CurrentProjectId;
+    public Guid? FilterOrgId => _tenant?.OrgId ?? TenantScope.CurrentOrgId;
+    public bool FilterUnscoped => (_tenant?.Unscoped ?? false) || TenantScope.IsUnscoped;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
