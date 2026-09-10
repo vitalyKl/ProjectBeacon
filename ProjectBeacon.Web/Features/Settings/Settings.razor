@@ -1,9 +1,11 @@
 @page "/settings"
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Projects
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
+@inject AuthenticationStateProvider Auth
 @inject ListLabelsHandler ListLabels
 
 <PageTitle>@L["Settings"]</PageTitle>
@@ -33,7 +35,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync();
+        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         if (current.Value is null)
             return;
         var listed = await ListLabels.HandleAsync(new ListLabelsRequest(current.Value.Id));

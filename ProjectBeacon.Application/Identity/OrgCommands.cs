@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Identity;
 
 using Application.Common;
 
-public record CreateOrgRequest(string Name, string? Description);
+public record CreateOrgRequest(string Name, string? Description, Guid? CreatedByUserId = null);
 
 public record CreateOrgCommand(CreateOrgRequest Request) : ICommand<Result<OrgDto>>;
 

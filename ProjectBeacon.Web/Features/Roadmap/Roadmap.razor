@@ -1,11 +1,13 @@
 @page "/roadmap"
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
+@inject AuthenticationStateProvider Auth
 @inject ListProjectMilestonesHandler ListMilestones
 @inject ListProjectTasksHandler ListTasks
 @inject CreateMilestoneHandler CreateMilestoneHandler
@@ -118,7 +120,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync();
+        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         _project = current.Value;
         await Reload();
         _loading = false;

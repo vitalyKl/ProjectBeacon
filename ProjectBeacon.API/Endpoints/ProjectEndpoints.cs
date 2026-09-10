@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using System.Security.Claims;
 using Application.Common;
 using Application.Projects;
 using Infrastructure.Data;
@@ -35,7 +36,8 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> CreateProject([FromBody] CreateProjectRequest request, HttpContext ctx, CreateProjectHandler handler, BeaconDbContext db)
     {
-        var result = await handler.HandleAsync(new CreateProjectCommand(request));
+        var createdBy = ActorUserId(ctx);
+        var result = await handler.HandleAsync(new CreateProjectCommand(request with { CreatedByUserId = createdBy }));
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value))
@@ -146,4 +148,7 @@ public static class ProjectEndpoints
 
     private static ApiTokenDto MapTokenResponse(ApiTokenDto dto) =>
         new(dto.Id, dto.Name, dto.TokenPrefix, dto.ProjectId, dto.Capabilities, dto.ExpiresAt, dto.LastUsedAt, dto.CreatedAt);
+
+    private static Guid? ActorUserId(HttpContext ctx) =>
+        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 }

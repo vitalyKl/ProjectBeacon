@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Projects;
 
 using Application.Common;
 using Domain.Entities.Projects;
+using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,9 +18,15 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         if (!orgExists)
             return Result.Failure<ProjectDto>("Org not found.");
 
+        if (command.Request.CreatedByUserId is { } userId
+            && !await _db.Users.AnyAsync(u => u.Id == userId, ct))
+            return Result.Failure<ProjectDto>("User not found.");
+
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, command.Request.OrgId);
 
         _db.Projects.Add(project);
+        if (command.Request.CreatedByUserId is { } ownerId)
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(project.Id);
         await _db.SaveChangesAsync(ct);
 

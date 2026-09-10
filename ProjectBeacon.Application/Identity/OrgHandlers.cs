@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Identity;
 
 using Application.Common;
 using Domain.Entities.Identity;
+using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,9 +14,15 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
     {
+        if (command.Request.CreatedByUserId is { } userId
+            && !await _db.Users.AnyAsync(u => u.Id == userId, ct))
+            return Result.Failure<OrgDto>("User not found.");
+
         var org = Org.Create(command.Request.Name, command.Request.Description);
 
         _db.Orgs.Add(org);
+        if (command.Request.CreatedByUserId is { } ownerId)
+            _db.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
         await _db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));

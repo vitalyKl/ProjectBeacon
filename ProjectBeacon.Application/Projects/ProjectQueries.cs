@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Projects;
 
+using System.Security.Claims;
 using Application.Common;
+using Application.Identity;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -13,15 +15,48 @@ public class GetCurrentProjectHandler
 
     public GetCurrentProjectHandler(BeaconDbContext db) => _db = db;
 
-    public async Task<Result<ProjectDto?>> HandleAsync(CancellationToken ct = default)
+    public Task<Result<ProjectDto?>> HandleAsync(CancellationToken ct = default)
+        => HandleAsync(userId: null, isAdmin: false, ct);
+
+    public Task<Result<ProjectDto?>> HandleAsync(ClaimsPrincipal? user, CancellationToken ct = default)
     {
+        Guid? userId = null;
+        var isAdmin = false;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+                userId = id;
+            isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
+        }
+
+        return HandleAsync(userId, isAdmin, ct);
+    }
+
+    public async Task<Result<ProjectDto?>> HandleAsync(Guid? userId, bool isAdmin, CancellationToken ct = default)
+    {
+        if (userId is { } uid)
+        {
+            var (projectId, _) = await CurrentProjectLookup.ForUserAsync(_db, uid, isAdmin, ct);
+            if (projectId is null)
+                return Result.Ok<ProjectDto?>(null);
+
+            var found = await _db.Projects.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.Id == projectId.Value, ct);
+            if (found is null)
+                return Result.Ok<ProjectDto?>(null);
+
+            return Result.Ok<ProjectDto?>(MapToDto(found));
+        }
+
         var project = await _db.Projects.OrderBy(p => p.CreatedAt).FirstOrDefaultAsync(ct);
         if (project is null)
             return Result.Ok<ProjectDto?>(null);
 
-        return Result.Ok<ProjectDto?>(new ProjectDto(
-            project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt));
+        return Result.Ok<ProjectDto?>(MapToDto(project));
     }
+
+    private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 }
 
 public record DashboardCountsDto(int Projects, int Tasks, int InProgress, int Done);

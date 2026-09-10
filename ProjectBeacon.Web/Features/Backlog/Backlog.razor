@@ -1,12 +1,14 @@
 @page "/backlog"
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
+@inject AuthenticationStateProvider Auth
 @inject ListProjectTasksHandler ListTasks
 @inject CreateTaskHandler CreateTaskHandler
 @inject DeleteTaskHandler DeleteTaskHandler
@@ -68,7 +70,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync();
+        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         _project = current.Value;
         await LoadTasks();
     }

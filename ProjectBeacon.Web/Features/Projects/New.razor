@@ -1,11 +1,14 @@
 @page "/projects/new"
 @layout MainLayout
 @attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject CreateOrgHandler CreateOrg
 @inject CreateProjectHandler CreateProject
+@inject AuthenticationStateProvider Auth
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -37,7 +40,10 @@
         _saving = true;
         try
         {
-            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(_orgName, null)));
+            var user = (await Auth.GetAuthenticationStateAsync()).User;
+            Guid? userId = Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
+
+            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(_orgName, null, userId)));
             if (!org.Success)
             {
                 _error = org.Error;
@@ -45,7 +51,7 @@
             }
 
             var project = await CreateProject.HandleAsync(new CreateProjectCommand(new CreateProjectRequest(
-                _projectName, _description, org.Value.Id)));
+                _projectName, _description, org.Value.Id, userId)));
             if (!project.Success)
             {
                 _error = project.Error;
@@ -53,7 +59,7 @@
             }
 
             Snackbar.Add(L["ProjectCreated"].Value, Severity.Success);
-            Navigation.NavigateTo("/board");
+            Navigation.NavigateTo("/board", forceLoad: true);
         }
         finally
         {

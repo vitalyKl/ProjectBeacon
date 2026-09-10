@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using System.Security.Claims;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
@@ -23,7 +24,8 @@ public static class OrgEndpoints
 
     private static async Task<IResult> CreateOrg([FromBody] CreateOrgRequest request, HttpContext ctx, CreateOrgHandler handler)
     {
-        var result = await handler.HandleAsync(command: new CreateOrgCommand(request));
+        var createdBy = ActorUserId(ctx);
+        var result = await handler.HandleAsync(command: new CreateOrgCommand(request with { CreatedByUserId = createdBy }));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value))
@@ -60,4 +62,7 @@ public static class OrgEndpoints
 
     private static OrgDto MapOrgResponse(OrgDto dto) =>
         new(dto.Id, dto.Name, dto.Description, dto.CreatedAt, dto.UpdatedAt);
+
+    private static Guid? ActorUserId(HttpContext ctx) =>
+        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 }

@@ -16,8 +16,10 @@ member/token/task HTTP create-read-list. Culture cookie via `GET /culture`.
 API-only host serves `/v1` (401 without auth). Wizard handlers create
 org+project+starter labels. `PATCH /v1/tasks/{id}/status` goes through
 `ChangeTaskStatusHandler`; missing review notes → 400. Env: `.env` load +
-`POSTGRES_PASSWORD`. Phase 4 whole-phase stays 🟡 until Task Detail meter
-is clicked in a browser. Reports/Board UI not browser-verified.
+`POSTGRES_PASSWORD`. Wizard now adds the creating user as org/project Owner.
+Task Detail meter verified in Edge (52/8000 after Compile brief). Reports
+Generate produced a board snapshot. Board kanban + New Task work; MudBlazor
+DnD did not move a card in the same pass. Tree/ChangedScope still stubbed.
 
 ## 0. Status legend
 
@@ -65,7 +67,7 @@ project.
 |---|---|---|---|
 | 1 | API project split | ✅ | `/v1/*` responds with only `ProjectBeacon.API` running (`ApiHost_V1RequiresAuth_AndAssemblyIsApi`) |
 | 2 | `UserSession`; lockout columns | ✅ | Schema has `LastLoginAt`, `FailedLoginAttempts`, `LockedUntil` |
-| 3 | JWT for API, cookie for Blazor | 🟡 | Bearer `/v1/*` works without cookie; Blazor page load works without bearer. HTTP: JWT login 200, cookie-login 302 + `BeaconAuth` (`CookieLoginHttpTests`). Browser circuit not exercised. |
+| 3 | JWT for API, cookie for Blazor | ✅ | Bearer `/v1/*` works without cookie; Blazor page load works without bearer. HTTP: JWT login 200, cookie-login 302 + `BeaconAuth` (`CookieLoginHttpTests`). Edge Playwright: cookie-login → Blazor circuit (wizard, New Task, Compile brief, Generate report) with no bearer. |
 | 4 | Rate limiting bootstrap/login/register | ✅ | N+1th auth request from same IP in the window returns 429 (`AuthHttpTests.AuthEndpoints_RateLimited`) |
 | 5 | Bootstrap random password, BCrypt in Infrastructure | ✅ | No `admin123`; bootstrap uses random 32-char password; BCrypt package only in Infrastructure |
 | 6 | Login/Bootstrap/auth guard | ✅ | Anonymous `/board` redirects to login |
@@ -116,8 +118,9 @@ acceptance from design-doc §4:
 | 8 | Budget uses real tokenizer | ✅ | SharpToken `cl100k_base` |
 | 9 | Never-drop under tiny budget | ✅ | Task desc + DoD + security remain |
 
-Phase 4 whole-phase ✅ also requires Task Detail context panel with a visible
-non-zero budget meter, verified in a browser.
+Phase 4 whole-phase also requires Task Detail context panel with a visible
+non-zero budget meter: verified in Edge 2026-09-10 (`Token budget: 52 / 8000`
+after Compile brief). Parent stays mixed because Tree/ChangedScope is still 🟡.
 
 ## 7. Phase 5 — MCP write path
 
@@ -136,7 +139,7 @@ deny-native-tools: `.net project docs/mcp-host.md`. HTTP MCP not shipped.
 | 3 | Shared PathMatcher | ✅ | Unit tests for `apps/api` vs `apps/api-legacy`; used by AutoLabel and LabelPath |
 | 4 | Milestone orphan lint | ✅ | `ClosedAt` + `MilestoneOrphanLint.OpenTasksOnClosed`. Roadmap shows a warning. |
 | 5 | Decision consequences in brief | ✅ | See Phase 4.2 |
-| 6 | Labels/Decisions/Reports/Agents screens | 🟡 | Decisions CRUD + accept via handlers. Reports generate/list board snapshots. Settings lists labels. Agents empty-state is honest. Browser pass still required. |
+| 6 | Labels/Decisions/Reports/Agents screens | 🟡 | Decisions CRUD + accept via handlers. Reports generate/list verified in Edge (snapshot with Todo count). Settings/Agents/Context/Decisions visited after wizard. Board DnD not proven. |
 
 ## 9. Phase 7–9
 

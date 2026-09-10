@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Projects;
 
 using Application.Common;
 
-public record CreateProjectRequest(string Name, string? Description, Guid OrgId);
+public record CreateProjectRequest(string Name, string? Description, Guid OrgId, Guid? CreatedByUserId = null);
 
 public record CreateProjectCommand(CreateProjectRequest Request) : ICommand<Result<ProjectDto>>;
 

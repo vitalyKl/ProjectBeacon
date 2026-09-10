@@ -1,10 +1,12 @@
 @page "/reports"
 @layout MainLayout
 @attribute [Authorize]
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Reports
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
+@inject AuthenticationStateProvider Auth
 @inject ListReportsHandler ListReports
 @inject GenerateReportHandler GenerateReport
 @inject ISnackbar Snackbar
@@ -50,7 +52,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync();
+        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         _project = current.Value;
         await Reload();
     }

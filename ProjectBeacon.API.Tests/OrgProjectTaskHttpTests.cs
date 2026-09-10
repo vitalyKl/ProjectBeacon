@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Domain.Entities.Identity;
 using Infrastructure.Data;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,15 +37,29 @@ public sealed class OrgProjectTaskHttpTests
 
         var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
         var userId = me.GetProperty("id").GetGuid();
+        var members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members");
+        Assert.True(members.GetArrayLength() >= 1);
+        Assert.Equal(userId, members[0].GetProperty("userId").GetGuid());
+
+        Guid extraUserId;
+        await using (var seed = factory.Services.CreateAsyncScope())
+        {
+            var db = seed.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            var extra = User.Create("member2", "member2@beacon.local", "hash");
+            db.Users.Add(extra);
+            await db.SaveChangesAsync();
+            extraUserId = extra.Id;
+        }
+
         var member = await PostJson(client, $"/v1/projects/{projectId}/members", new
         {
             projectId,
-            userId,
-            role = 0
+            userId = extraUserId,
+            role = 2
         });
-        Assert.Equal(userId, member.GetProperty("userId").GetGuid());
-        var members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members");
-        Assert.True(members.GetArrayLength() >= 1);
+        Assert.Equal(extraUserId, member.GetProperty("userId").GetGuid());
+        members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members");
+        Assert.True(members.GetArrayLength() >= 2);
 
         var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
         {
