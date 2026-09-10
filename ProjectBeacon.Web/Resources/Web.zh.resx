@@ -90,6 +90,12 @@
   <data name="Projects" xml:space="preserve">
     <value>项目</value>
   </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>任务</value>
+  </data>
+  <data name="GoToBoard" xml:space="preserve">
+    <value>前往看板</value>
+  </data>
   <data name="Save" xml:space="preserve">
     <value>保存</value>
   </data>

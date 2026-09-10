@@ -90,6 +90,12 @@
   <data name="Projects" xml:space="preserve">
     <value>Проекты</value>
   </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>Задачи</value>
+  </data>
+  <data name="GoToBoard" xml:space="preserve">
+    <value>К доске</value>
+  </data>
   <data name="Save" xml:space="preserve">
     <value>Сохранить</value>
   </data>

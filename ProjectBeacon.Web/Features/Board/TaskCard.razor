@@ -4,9 +4,10 @@
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
 
 <MudPaper Class="pa-3 mb-2 beacon-card-interactive" Elevation="0" Outlined="true">
-    <MudLink Href="@($"/task/{Task.Id}")" Typo="Typo.subtitle2" Underline="Underline.Hover" Color="Color.Default">@Task.Title</MudLink>
+    <MudText Typo="Typo.subtitle2" Class="beacon-card-title" tabindex="0" @onclick="Open" @onkeydown="OnTitleKey">@Task.Title</MudText>
     @if (!string.IsNullOrEmpty(Task.Description))
     {
         <MudText Typo="Typo.body2" Class="text-truncate mt-1">@Task.Description</MudText>
@@ -30,6 +31,14 @@
 
 @code {
     [Parameter] public TaskItemDto Task { get; set; } = null!;
+
+    private void Open() => Navigation.NavigateTo($"/task/{Task.Id}");
+
+    private void OnTitleKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+            Open();
+    }
 
     private string StatusLabel(string status) => status switch
     {

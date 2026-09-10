@@ -90,6 +90,12 @@
   <data name="Projects" xml:space="preserve">
     <value>Projekte</value>
   </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>Aufgaben</value>
+  </data>
+  <data name="GoToBoard" xml:space="preserve">
+    <value>Zum Board</value>
+  </data>
   <data name="Save" xml:space="preserve">
     <value>Speichern</value>
   </data>

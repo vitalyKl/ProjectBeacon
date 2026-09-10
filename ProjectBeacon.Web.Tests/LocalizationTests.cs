@@ -71,6 +71,13 @@ public sealed class LocalizationTests
     }
 
     [Fact]
+    public void ResourceManager_TasksAndGoToBoard_Russian()
+    {
+        Assert.Equal("Задачи", _rm.GetString("Tasks", new System.Globalization.CultureInfo("ru")));
+        Assert.Equal("К доске", _rm.GetString("GoToBoard", new System.Globalization.CultureInfo("ru")));
+    }
+
+    [Fact]
     public void ResourceManager_Dashboard_German()
     {
         var value = _rm.GetString("Dashboard", new System.Globalization.CultureInfo("de"));

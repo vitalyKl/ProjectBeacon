@@ -18,8 +18,9 @@ org+project+starter labels. `PATCH /v1/tasks/{id}/status` goes through
 `ChangeTaskStatusHandler`; missing review notes → 400. Env: `.env` load +
 `POSTGRES_PASSWORD`. Wizard now adds the creating user as org/project Owner.
 Task Detail meter verified in Edge (52/8000 after Compile brief). Reports
-Generate produced a board snapshot. Board kanban + New Task work; MudBlazor
-DnD did not move a card in the same pass. Tree/ChangedScope still stubbed.
+Generate produced a board snapshot. Board DnD Todo→InProgress verified
+(snackbar + column count). Decisions create+accept verified. Tree/ChangedScope
+still stubbed until Phase 7.
 
 ## 0. Status legend
 
@@ -94,7 +95,7 @@ project.
 | 1 | Milestone/dependency/comment | ✅ | Entities + Domain.Tests + HTTP comments/dependencies |
 | 2 | Atomic claim | ✅ | `FOR UPDATE SKIP LOCKED` in a transaction. Testcontainers Postgres 16: 3 concurrent claims → 1 success (Todo→InProgress), 2 fail "already claimed". Sequential second claim fails. |
 | 3 | Task API | ✅ | CRUD + comments + dependencies (`Task_CrudCommentsAndDependencies`) |
-| 4 | Board/Backlog/Roadmap/TaskDetail | 🟡 | DnD goes through `ChangeTaskStatusHandler` (`TransitionTo`); missing review notes return a warning and reload. Browser pass still required. |
+| 4 | Board/Backlog/Roadmap/TaskDetail | ✅ | Edge Playwright: drag `.mud-drop-item` Todo→InProgress calls `ChangeTaskStatusHandler`; snackbar "Task moved to InProgress"; dashboard In Progress count 1. Missing review notes still fail in handler tests. |
 | 5 | Cold-diff gate InProgress→Done | ✅ | Domain rejects without review notes; `finish_work` requires structured review for `done` |
 | 6 | Nav | ✅ | Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Reports, Settings |
 
@@ -139,7 +140,7 @@ deny-native-tools: `.net project docs/mcp-host.md`. HTTP MCP not shipped.
 | 3 | Shared PathMatcher | ✅ | Unit tests for `apps/api` vs `apps/api-legacy`; used by AutoLabel and LabelPath |
 | 4 | Milestone orphan lint | ✅ | `ClosedAt` + `MilestoneOrphanLint.OpenTasksOnClosed`. Roadmap shows a warning. |
 | 5 | Decision consequences in brief | ✅ | See Phase 4.2 |
-| 6 | Labels/Decisions/Reports/Agents screens | 🟡 | Decisions CRUD + accept via handlers. Reports generate/list verified in Edge (snapshot with Todo count). Settings/Agents/Context/Decisions visited after wizard. Board DnD not proven. |
+| 6 | Labels/Decisions/Reports/Agents screens | ✅ | Edge: Reports generate/list snapshot; Decisions create+accept ("Ship DnD" → Accepted); Settings/Agents visited; Board DnD Todo→InProgress. |
 
 ## 9. Phase 7–9
 
