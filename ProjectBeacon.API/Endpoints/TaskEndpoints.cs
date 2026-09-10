@@ -47,7 +47,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new CreateTaskCommand(request));
 
         return result.Success
-            ? Results.Created($"/v1/tasks/{result.Value.Id}", MapTaskResponse(result.Value))
+            ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value.Id}", MapTaskResponse(result.Value))
             : Results.BadRequest(new { error = result.Error });
     }
 

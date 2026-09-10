@@ -25,6 +25,8 @@ public static class ProjectEndpoints
 
         app.MapPost("/v1/projects/{projectId:guid}/tokens", CreateToken).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
+        app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
 

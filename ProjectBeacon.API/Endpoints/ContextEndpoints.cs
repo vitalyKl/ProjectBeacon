@@ -16,6 +16,10 @@ public static class ContextEndpoints
         app.MapPost("/v1/projects/{projectId}/context/import", ImportFiles).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId}/context/export/agents-md", ExportAgentsMd).RequireAuthorization().DisableAntiforgery();
         app.MapPost("/v1/projects/{projectId}/context/compile", CompileBrief).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/projects/{projectId:guid}/constraints", ListConstraints).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/constraints", CreateConstraint).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}/activate", ActivateConstraint).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/constraints/{constraintId:guid}/reject", RejectConstraint).RequireAuthorization().DisableAntiforgery();
 
         return app;
     }
@@ -131,6 +135,38 @@ public static class ContextEndpoints
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error });
     }
+
+    private static async Task<IResult> ListConstraints(Guid projectId, ListConstraintsHandler handler)
+    {
+        var result = await handler.HandleAsync(projectId);
+        return Results.Ok(result.Value);
+    }
+
+    private static async Task<IResult> CreateConstraint(Guid projectId, [FromBody] CreateConstraintBody body, CreateConstraintHandler handler)
+    {
+        var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind));
+        return result.Success
+            ? Results.Created($"/v1/projects/{projectId}/constraints", result.Value)
+            : Results.BadRequest(new { error = result.Error });
+    }
+
+    private static async Task<IResult> ActivateConstraint(Guid projectId, Guid constraintId, ActivateConstraintHandler handler)
+    {
+        var result = await handler.HandleAsync(constraintId);
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, RejectConstraintHandler handler)
+    {
+        var result = await handler.HandleAsync(constraintId);
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    public record CreateConstraintBody(string Body, ConstraintKind Kind);
 
     public record UpsertNodeRequest(
         string Title,

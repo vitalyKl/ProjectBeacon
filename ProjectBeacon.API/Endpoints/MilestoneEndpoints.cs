@@ -12,10 +12,15 @@ public static class MilestoneEndpoints
     public static IEndpointRouteBuilder MapMilestoneEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/milestones", CreateMilestone).RequireAuthorization().DisableAntiforgery();
+        app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery();
         app.MapPut("/v1/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery();
+        app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/milestones", ListMilestones).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close", CloseMilestone).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen", ReopenMilestone).RequireAuthorization().DisableAntiforgery();
 
         return app;
     }
@@ -28,7 +33,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new CreateMilestoneCommand(request));
 
         return result.Success
-            ? Results.Created($"/v1/milestones/{result.Value.Id}", MapMilestoneResponse(result.Value))
+            ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value.Id}", MapMilestoneResponse(result.Value))
             : Results.BadRequest(new { error = result.Error });
     }
 
@@ -66,6 +71,22 @@ public static class MilestoneEndpoints
     {
         var result = await handler.HandleAsync(new GetMilestoneCommand(new GetMilestoneRequest(milestoneId)));
 
+        return result.Success
+            ? Results.Ok(MapMilestoneResponse(result.Value))
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> CloseMilestone(Guid projectId, Guid milestoneId, CloseMilestoneHandler handler)
+    {
+        var result = await handler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestoneId)));
+        return result.Success
+            ? Results.Ok(MapMilestoneResponse(result.Value))
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> ReopenMilestone(Guid projectId, Guid milestoneId, ReopenMilestoneHandler handler)
+    {
+        var result = await handler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestoneId)));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value))
             : Results.NotFound(new { error = result.Error });

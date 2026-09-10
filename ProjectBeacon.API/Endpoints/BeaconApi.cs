@@ -13,6 +13,7 @@ public static class BeaconApi
         app.MapContextEndpoints();
         app.MapLabelEndpoints();
         app.MapReportEndpoints();
+        app.MapDecisionEndpoints();
         return app;
     }
 }

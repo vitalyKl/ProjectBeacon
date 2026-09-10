@@ -46,7 +46,10 @@ public class AddLabelPathHandler
         if (label is null)
             return Result.Failure<LabelDto>("Label not found.");
 
-        label.AddPath(path);
+        if (!label.Paths.Any(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase)))
+            _db.LabelPaths.Add(LabelPath.Create(label.Id, path, label.ProjectId));
+        if (string.IsNullOrWhiteSpace(label.PathPrefix))
+            label.SetPathPrefix(path);
         await _db.SaveChangesAsync(ct);
         return Result.Ok(new LabelDto(label.Id, label.Name, label.Color, label.PathPrefix, label.ProjectId));
     }
