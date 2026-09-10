@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.Json.Serialization;
 using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
@@ -92,6 +93,10 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddAuthorization();
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        });
         services.AddCascadingAuthenticationState();
         services.AddMudServices();
         services.AddRazorComponents().AddInteractiveServerComponents();

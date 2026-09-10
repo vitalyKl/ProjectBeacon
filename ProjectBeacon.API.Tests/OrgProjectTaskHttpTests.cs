@@ -106,12 +106,12 @@ public sealed class OrgProjectTaskHttpTests
         var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks");
         Assert.True(listed.GetArrayLength() >= 2);
 
-        var toProgress = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = 1 });
+        var toProgress = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = "InProgress" });
         Assert.True(toProgress.IsSuccessStatusCode, await toProgress.Content.ReadAsStringAsync());
-        var missingReview = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = 2 });
+        var missingReview = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = "Done" });
         Assert.Equal(HttpStatusCode.BadRequest, missingReview.StatusCode);
 
-        var updated = await client.PutAsJsonAsync($"/v1/tasks/{taskId}", new
+        var updated = await client.PutAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}", new
         {
             taskId,
             title = "A2",
@@ -125,7 +125,7 @@ public sealed class OrgProjectTaskHttpTests
 
         var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
         var userId = me.GetProperty("id").GetGuid();
-        var comment = await client.PostAsJsonAsync($"/v1/tasks/{taskId}/comments", new
+        var comment = await client.PostAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/comments", new
         {
             taskId,
             content = "hello",
@@ -133,7 +133,7 @@ public sealed class OrgProjectTaskHttpTests
         });
         Assert.True(comment.IsSuccessStatusCode, await comment.Content.ReadAsStringAsync());
 
-        var deps = await client.PutAsJsonAsync($"/v1/tasks/{taskId}/dependencies", new
+        var deps = await client.PutAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/dependencies", new
         {
             taskId,
             dependentTaskIds = new[] { otherId }
@@ -142,9 +142,9 @@ public sealed class OrgProjectTaskHttpTests
         var withDeps = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}");
         Assert.Equal(otherId, withDeps.GetProperty("dependencies")[0].GetGuid());
 
-        var deleteDependent = await client.DeleteAsync($"/v1/tasks/{taskId}");
+        var deleteDependent = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{taskId}");
         Assert.Equal(HttpStatusCode.NoContent, deleteDependent.StatusCode);
-        var delete = await client.DeleteAsync($"/v1/tasks/{otherId}");
+        var delete = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{otherId}");
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
     }
 

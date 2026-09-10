@@ -16,17 +16,24 @@ public static class TaskEndpoints
     public static IEndpointRouteBuilder MapTaskEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/tasks", CreateTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
+        app.MapPut("/v1/projects/{projectId:guid}/tasks/{taskId:guid}", UpdateTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapPut("/v1/tasks/{taskId:guid}", UpdateTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
+        app.MapDelete("/v1/projects/{projectId:guid}/tasks/{taskId:guid}", DeleteTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapDelete("/v1/tasks/{taskId:guid}", DeleteTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapGet("/v1/projects/{projectId:guid}/tasks", ListTasks).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}", GetTaskInProject).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/tasks/{taskId:guid}", GetTask).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/status", ChangeStatusInProject).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/status", ChangeStatus).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
+        app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery();
+        app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery();
         app.MapPost("/v1/tasks/{taskId:guid}/comments", AddComment).RequireAuthorization().DisableAntiforgery();
+        app.MapPut("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery();
         app.MapPut("/v1/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery();
+        app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery();
 
         return app;

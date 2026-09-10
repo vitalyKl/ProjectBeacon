@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json.Serialization;
 
 EnvFile.Load();
 
@@ -43,6 +44,10 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 var rateLimitPerWindow = int.TryParse(
     Environment.GetEnvironmentVariable("RATE_LIMIT_PER_WINDOW"), out var perWindow)
@@ -64,6 +69,7 @@ app.UseMiddleware<TenantIsolationMiddleware>();
 app.UseAuthorization();
 
 app.MapBeaconApi();
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
 

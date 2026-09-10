@@ -44,6 +44,8 @@ public sealed class AuthHttpTests
         Assert.Equal("ProjectBeacon.API", typeof(Program).Assembly.GetName().Name);
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
+        var health = await client.GetAsync("/health");
+        Assert.True(health.IsSuccessStatusCode, await health.Content.ReadAsStringAsync());
         var orgs = await client.GetAsync("/v1/orgs");
         Assert.Equal(HttpStatusCode.Unauthorized, orgs.StatusCode);
     }
