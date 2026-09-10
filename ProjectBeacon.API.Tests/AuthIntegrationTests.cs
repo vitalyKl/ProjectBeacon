@@ -10,6 +10,7 @@ public sealed class AuthIntegrationTests : IDisposable
 {
     private readonly BeaconDbContext _db;
     private readonly SqliteConnection _connection;
+    private readonly IDisposable _unscoped;
 
     public AuthIntegrationTests()
     {
@@ -21,11 +22,13 @@ public sealed class AuthIntegrationTests : IDisposable
             .Options;
 
         _db = new BeaconDbContext(options);
+        _unscoped = TenantScope.EnterUnscoped();
         _db.Database.EnsureCreated();
     }
 
     public void Dispose()
     {
+        _unscoped.Dispose();
         _db.Dispose();
         _connection.Close();
         _connection.Dispose();

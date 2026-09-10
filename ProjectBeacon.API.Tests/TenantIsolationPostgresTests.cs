@@ -60,9 +60,44 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
             Assert.DoesNotContain(taskA, visible);
         }
 
-        var unscoped = await db.Tasks.Select(t => t.Id).ToListAsync();
-        Assert.Contains(taskA, unscoped);
-        Assert.Contains(taskB, unscoped);
+        var none = await db.Tasks.Select(t => t.Id).ToListAsync();
+        Assert.DoesNotContain(taskA, none);
+        Assert.DoesNotContain(taskB, none);
+        Assert.Empty(none);
+    }
+
+    [Fact]
+    public async Task NoScope_ProjectScopedQuery_ReturnsEmpty()
+    {
+        Guid taskA;
+        Guid taskB;
+
+        await using (var seed = _postgres.CreateContext())
+        {
+            var orgA = Org.Create("Empty Scope Org A");
+            var orgB = Org.Create("Empty Scope Org B");
+            seed.Orgs.AddRange(orgA, orgB);
+            await seed.SaveChangesAsync();
+            var pA = Project.Create("Empty Scope A", null, orgA.Id);
+            var pB = Project.Create("Empty Scope B", null, orgB.Id);
+            seed.Projects.AddRange(pA, pB);
+            await seed.SaveChangesAsync();
+            var tA = TaskItem.Create("Keep", pA.Id);
+            var tB = TaskItem.Create("Secret", pB.Id);
+            seed.Tasks.AddRange(tA, tB);
+            await seed.SaveChangesAsync();
+            taskA = tA.Id;
+            taskB = tB.Id;
+        }
+
+        await using var db = _postgres.CreateContext();
+        Assert.Empty(await db.Tasks.Select(t => t.Id).ToListAsync());
+        using (TenantScope.EnterUnscoped())
+        {
+            var all = await db.Tasks.Select(t => t.Id).ToListAsync();
+            Assert.Contains(taskA, all);
+            Assert.Contains(taskB, all);
+        }
     }
 
     [Fact]

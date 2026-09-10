@@ -74,10 +74,13 @@ public sealed class OrgProjectTaskHttpTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
-            var stored = await db.ApiTokens.FindAsync([tokenId]);
-            Assert.NotNull(stored);
-            Assert.DoesNotContain("bcn_", stored.TokenHash);
-            Assert.NotEqual(raw, stored.TokenHash);
+            using (TenantScope.EnterUnscoped())
+            {
+                var stored = await db.ApiTokens.FindAsync([tokenId]);
+                Assert.NotNull(stored);
+                Assert.DoesNotContain("bcn_", stored.TokenHash);
+                Assert.NotEqual(raw, stored.TokenHash);
+            }
         }
 
         var tokens = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens");
@@ -217,6 +220,44 @@ public sealed class OrgProjectTaskHttpTests
         });
         Assert.Contains("## Tools for this task", compile.GetProperty("briefMarkdown").GetString());
         Assert.True(compile.GetProperty("tokenEstimate").GetInt32() > 0);
+    }
+
+    [Fact]
+    public async Task NonMember_CannotListForeignProjectTasks()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        await PostJson(client, $"/v1/projects/{projectId}/tasks", new
+        {
+            title = "secret",
+            projectId,
+            priority = 1,
+            type = 3
+        });
+
+        var register = await client.PostAsJsonAsync("/v1/auth/register", new
+        {
+            login = "outsider",
+            email = "outsider@beacon.local",
+            password = "Passw0rd!x"
+        });
+        Assert.True(register.IsSuccessStatusCode, await register.Content.ReadAsStringAsync());
+        var login = await client.PostAsJsonAsync("/v1/auth/login", new { login = "outsider", password = "Passw0rd!x" });
+        Assert.True(login.IsSuccessStatusCode, await login.Content.ReadAsStringAsync());
+        var outsiderJwt = (await login.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("token").GetString();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+
+        var listed = await client.GetAsync($"/v1/projects/{projectId}/tasks");
+        Assert.True(listed.IsSuccessStatusCode, await listed.Content.ReadAsStringAsync());
+        var tasks = await listed.Content.ReadFromJsonAsync<JsonElement>(Json);
+        Assert.Equal(0, tasks.GetArrayLength());
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)

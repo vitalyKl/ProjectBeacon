@@ -24,33 +24,42 @@ public sealed class TenantIsolationMiddleware
         var isAdmin = bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var adminFlag) && adminFlag;
 
         if (ctx.User.Identity?.IsAuthenticated == true
-            && Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
-            && fromRoute is null && fromHeader is null)
+            && Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
         {
             var members = await db.ProjectMembers.IgnoreQueryFilters()
                 .Include(m => m.Project)
                 .Where(m => m.UserId == userId)
                 .OrderBy(m => m.JoinedAt)
                 .ToListAsync();
-            if (members.Count > 0)
-            {
-                projectId = members[0].ProjectId;
-                if (fromOrgRoute is null && fromOrgHeader is null)
-                    orgId = members[0].Project.OrgId;
-            }
-            else if (!isAdmin)
+            var requested = fromRoute ?? fromHeader;
+            if (requested is { } rid && !isAdmin && members.TrueForAll(m => m.ProjectId != rid))
             {
                 projectId = Guid.Empty;
                 if (fromOrgRoute is null && fromOrgHeader is null)
                     orgId = Guid.Empty;
             }
-            else if (projectId is null)
+            else if (fromRoute is null && fromHeader is null)
             {
-                var project = await db.Projects.IgnoreQueryFilters()
-                    .OrderBy(p => p.CreatedAt)
-                    .FirstOrDefaultAsync();
-                projectId = project?.Id;
-                orgId ??= project?.OrgId;
+                if (members.Count > 0)
+                {
+                    projectId = members[0].ProjectId;
+                    if (fromOrgRoute is null && fromOrgHeader is null)
+                        orgId = members[0].Project.OrgId;
+                }
+                else if (!isAdmin)
+                {
+                    projectId = Guid.Empty;
+                    if (fromOrgRoute is null && fromOrgHeader is null)
+                        orgId = Guid.Empty;
+                }
+                else if (projectId is null)
+                {
+                    var project = await db.Projects.IgnoreQueryFilters()
+                        .OrderBy(p => p.CreatedAt)
+                        .FirstOrDefaultAsync();
+                    projectId = project?.Id;
+                    orgId ??= project?.OrgId;
+                }
             }
         }
 
@@ -58,6 +67,14 @@ public sealed class TenantIsolationMiddleware
         {
             projectId ??= Guid.Empty;
             orgId ??= Guid.Empty;
+        }
+
+        if (projectId is { } resolvedProject && resolvedProject != Guid.Empty && orgId is null)
+        {
+            orgId = await db.Projects.IgnoreQueryFilters()
+                .Where(p => p.Id == resolvedProject)
+                .Select(p => (Guid?)p.OrgId)
+                .FirstOrDefaultAsync();
         }
 
         IDisposable? projectScope = projectId is { } pid ? TenantScope.EnterProjectScope(pid) : null;

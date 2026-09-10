@@ -8,25 +8,19 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using ProjectBeacon.Application.Tests;
 
 public sealed class CompileBriefTests : IDisposable
 {
     private readonly BeaconDbContext _db;
     private readonly SqliteConnection _connection;
+    private readonly IDisposable _unscoped;
     private Guid _orgId;
     private Guid _projectId;
 
     public CompileBriefTests()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<BeaconDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _db = new BeaconDbContext(options);
-        _db.Database.EnsureCreated();
+        (_connection, _db, _unscoped) = HandlerSqlite.Open();
 
         var org = Org.Create("Test Org", null);
         _db.Orgs.Add(org);
@@ -41,6 +35,7 @@ public sealed class CompileBriefTests : IDisposable
 
     public void Dispose()
     {
+        _unscoped.Dispose();
         _db.Dispose();
         _connection.Close();
         _connection.Dispose();

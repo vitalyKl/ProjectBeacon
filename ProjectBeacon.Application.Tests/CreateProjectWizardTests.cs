@@ -12,17 +12,16 @@ public sealed class CreateProjectWizardTests : IDisposable
 {
     private readonly BeaconDbContext _db;
     private readonly SqliteConnection _connection;
+    private readonly IDisposable _unscoped;
 
     public CreateProjectWizardTests()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _db = new BeaconDbContext(new DbContextOptionsBuilder<BeaconDbContext>().UseSqlite(_connection).Options);
-        _db.Database.EnsureCreated();
+        (_connection, _db, _unscoped) = HandlerSqlite.Open();
     }
 
     public void Dispose()
     {
+        _unscoped.Dispose();
         _db.Dispose();
         _connection.Dispose();
     }

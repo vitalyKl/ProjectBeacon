@@ -166,7 +166,7 @@ deny-native-tools: `.net project docs/mcp-host.md`. HTTP MCP not shipped.
 | Real rate limiting on auth entry points | ✅ |
 | No hardcoded DB passwords in config | 🟡 JWT secret only in Development appsettings / `JWT__Secret` env; production appsettings has none |
 | BCrypt only from Infrastructure | ✅ |
-| Cross-tenant isolation proven | ✅ Postgres tests pass for query filters. Hosted multi-tenant stays off. |
+| Cross-tenant isolation proven | ✅ Fail-closed filters (`null` → empty, not all rows). `TenantIsolationPostgresTests` + `TenantFilterTests` + `NonMember_CannotListForeignProjectTasks`. Hosted multi-tenant stays off. |
 | Cold-diff gate | ✅ domain + finish_work review |
 | Constraint Kind structured | ✅ contradiction compile path |
 | Decision Consequences | ✅ |

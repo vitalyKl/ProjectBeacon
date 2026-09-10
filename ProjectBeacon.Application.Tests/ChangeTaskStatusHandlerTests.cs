@@ -12,14 +12,12 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly BeaconDbContext _db;
+    private readonly IDisposable _unscoped;
     private readonly Guid _projectId;
 
     public ChangeTaskStatusHandlerTests()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
-        _connection.Open();
-        _db = new BeaconDbContext(new DbContextOptionsBuilder<BeaconDbContext>().UseSqlite(_connection).Options);
-        _db.Database.EnsureCreated();
+        (_connection, _db, _unscoped) = HandlerSqlite.Open();
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
         _db.SaveChanges();
@@ -31,6 +29,7 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
 
     public void Dispose()
     {
+        _unscoped.Dispose();
         _db.Dispose();
         _connection.Dispose();
     }

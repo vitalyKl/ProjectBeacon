@@ -5,6 +5,7 @@ using Application.Tasks;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
+using Infrastructure.Data;
 
 [Collection("postgres-serial")]
 public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
@@ -70,7 +71,10 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     private async Task<Application.Common.Result<TaskItemDto>> ClaimTaskAsync(Guid taskId)
     {
         await using var ctx = _postgres.CreateContext();
-        var handler = new ClaimTaskHandler(ctx);
-        return await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.NewGuid())));
+        using (TenantScope.EnterUnscoped())
+        {
+            var handler = new ClaimTaskHandler(ctx);
+            return await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.NewGuid())));
+        }
     }
 }

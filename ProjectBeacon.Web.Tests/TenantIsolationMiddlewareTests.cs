@@ -134,4 +134,37 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         await mw.InvokeAsync(http, _db);
         Assert.Equal(Guid.Empty, scoped);
     }
+
+    [Fact]
+    public async Task ForeignRouteProjectId_IgnoredForNonMember()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+        var foreign = Project.Create("A", null, org.Id);
+        _db.Projects.Add(foreign);
+        var user = User.Create("alice", "alice@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        Guid? scoped = null;
+        var mw = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("isAdmin", "false")
+            ], "Cookies"))
+        };
+        http.Request.RouteValues["projectId"] = foreign.Id.ToString();
+
+        await mw.InvokeAsync(http, _db);
+        Assert.Equal(Guid.Empty, scoped);
+    }
 }

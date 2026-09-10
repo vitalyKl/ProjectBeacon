@@ -9,6 +9,7 @@ public static class TenantScope
 {
     private static readonly AsyncLocal<Guid?> _currentOrgId = new();
     private static readonly AsyncLocal<Guid?> _currentProjectId = new();
+    private static readonly AsyncLocal<bool> _unscoped = new();
 
     public static Guid? CurrentOrgId
     {
@@ -22,18 +23,40 @@ public static class TenantScope
         internal set => _currentProjectId.Value = value;
     }
 
+    public static bool IsUnscoped => _unscoped.Value;
+
+    // Null FilterProjectId is fail-closed. This flag is the only bypass (bootstrap, tests, migrations).
+    public static IDisposable EnterUnscoped()
+    {
+        var previous = _unscoped.Value;
+        _unscoped.Value = true;
+        return new ScopeReset(() => _unscoped.Value = previous);
+    }
+
     public static IDisposable EnterOrgScope(Guid orgId)
     {
-        var previous = _currentOrgId.Value;
+        var previousId = _currentOrgId.Value;
+        var previousUnscoped = _unscoped.Value;
         _currentOrgId.Value = orgId;
-        return new ScopeReset(() => _currentOrgId.Value = previous);
+        _unscoped.Value = false;
+        return new ScopeReset(() =>
+        {
+            _currentOrgId.Value = previousId;
+            _unscoped.Value = previousUnscoped;
+        });
     }
 
     public static IDisposable EnterProjectScope(Guid projectId)
     {
-        var previous = _currentProjectId.Value;
+        var previousId = _currentProjectId.Value;
+        var previousUnscoped = _unscoped.Value;
         _currentProjectId.Value = projectId;
-        return new ScopeReset(() => _currentProjectId.Value = previous);
+        _unscoped.Value = false;
+        return new ScopeReset(() =>
+        {
+            _currentProjectId.Value = previousId;
+            _unscoped.Value = previousUnscoped;
+        });
     }
 
     public static IDisposable EnterScope(Guid tenantId) => EnterProjectScope(tenantId);
@@ -77,13 +100,15 @@ internal static class TenantScopedQueryFilterConvention
         where T : class, IProjectScoped
     {
         modelBuilder.Entity<T>().HasQueryFilter(e =>
-            context.FilterProjectId == null || e.ProjectId == context.FilterProjectId);
+            context.FilterUnscoped
+            || (context.FilterProjectId != null && e.ProjectId == context.FilterProjectId));
     }
 
     private static void SetOrgFilter<T>(ModelBuilder modelBuilder, BeaconDbContext context)
         where T : class, IOrgScoped
     {
         modelBuilder.Entity<T>().HasQueryFilter(e =>
-            context.FilterOrgId == null || e.OrgId == context.FilterOrgId);
+            context.FilterUnscoped
+            || (context.FilterOrgId != null && e.OrgId == context.FilterOrgId));
     }
 }

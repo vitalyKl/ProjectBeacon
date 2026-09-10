@@ -94,9 +94,12 @@ public sealed class CapabilityAndWorkHttpTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
-            var entity = await db.Tasks.FindAsync([taskId]);
-            Assert.NotNull(entity);
-            Assert.Equal(Domain.Enums.TaskItemStatus.Done, entity.Status);
+            using (TenantScope.EnterUnscoped())
+            {
+                var entity = await db.Tasks.FindAsync([taskId]);
+                Assert.NotNull(entity);
+                Assert.Equal(Domain.Enums.TaskItemStatus.Done, entity.Status);
+            }
         }
     }
 

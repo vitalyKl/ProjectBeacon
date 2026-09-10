@@ -34,6 +34,7 @@ public class BeaconDbContext : DbContext
 
     public Guid? FilterProjectId => TenantScope.CurrentProjectId;
     public Guid? FilterOrgId => TenantScope.CurrentOrgId;
+    public bool FilterUnscoped => TenantScope.IsUnscoped;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

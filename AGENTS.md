@@ -96,6 +96,7 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - Labels are project-scoped areas with optional path prefixes, not free-form chips. New projects start with an editable starter catalog (API, Web, CLI, Visual, UX). Agents may propose; only active labels expand compile and `get_changed_scope`.
 - Continue Beacon work from the living board and the compiled Context brief. Do not invent hosted clone, outbound WSS, `write_handoff`, or live HTTP MCP as available.
 - The API worker actor is a root credential across all projects (`actor.kind === "worker"` → admin). Do not treat it as a per-project token.
+- Tenant query filters are fail-closed: a null `FilterProjectId`/`FilterOrgId` returns no rows. `Guid.Empty` matches no tenants. Use `TenantScope.EnterUnscoped()` only for bootstrap, migrations, and tests.
 - Browser tools: exercise the flow end to end. A single screenshot is not enough. If no browser tools are available, use the closest substitute (tests, dotnet run + curl) and say what was not verified.
 - `POST /v1/work/finish_work` accepts TaskId, Result (done/failed/skipped/partial), Output, ActorId — used by MCP agents to complete tasks.
 - Context compilation (`POST /v1/projects/:id/context/compile`) merges sections by scope type, applies token budget (default 8000), never-drops non_goals/security/definition_of_done. Returns brief markdown with hash and revision ID.
