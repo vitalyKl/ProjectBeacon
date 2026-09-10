@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
 
-public record GetTaskRequest(Guid TaskId);
+public record GetTaskRequest(Guid TaskId, Guid? ProjectId = null);
 
 public record GetTaskCommand(GetTaskRequest Request) : ICommand<Result<TaskItemDto>>;
 

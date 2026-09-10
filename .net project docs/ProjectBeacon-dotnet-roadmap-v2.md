@@ -41,12 +41,12 @@ A parent is only ✅ if every child is ✅.
 | # | Item | Status | Acceptance criterion |
 |---|---|---|---|
 | 1 | `Entity.New()` / `Create()` | ✅ | Domain.Tests factory calls cover every entity including DecisionTask, LabelPath, Report (62 passed 2026-09-10) |
-| 2 | `.gitignore` | 🟡 | `bin/`, `obj/`, `.env`, `TestResults/` ignored; `.env.example` tracked; `global.json` still untracked until committed |
-| 3 | .NET scaffold committed | ⏳ | `git log` shows a commit containing the .NET solution |
+| 2 | `.gitignore` | ✅ | `bin/`, `obj/`, `.env`, `TestResults/` ignored; `global.json` and `.env.example` tracked |
+| 3 | .NET scaffold committed | ✅ | `git log` shows commits containing the .NET solution |
 | 4 | EF ModelSnapshot | ✅ | `Migrations/BeaconDbContextModelSnapshot.cs` exists; `dotnet ef migrations has-pending-model-changes` reports none |
 | 5 | DB migrate at startup | ✅ | Fresh Postgres + `dotnet run` creates tables |
 | 6 | xUnit only | ✅ | No `[TestMethod]` remains; `dotnet test` is xUnit |
-| 7 | `global.json` pins SDK | 🟡 | File exists (`10.0.401` / `latestPatch`); still untracked until committed. CI reads `global-json-file: global.json`. |
+| 7 | `global.json` pins SDK | ✅ | File exists (`10.0.401` / `latestPatch`) and is tracked. CI reads `global-json-file: global.json`. |
 | 8 | CI build+test | 🟡 | Workflow installs SDK from `global.json` and runs `dotnet test`; default-branch green not yet proven. |
 | 9 | AGENTS.md conventions-only | 🟡 | No DoD section; no task-specific instructions |
 | 10 | `TaskItemStatus` | ✅ | `dotnet build` has no CS0104 `TaskStatus` clash |
@@ -158,7 +158,7 @@ deny-native-tools: `.net project docs/mcp-host.md`. HTTP MCP not shipped.
 | Requirement | Status |
 |---|---|
 | Real rate limiting on auth entry points | ✅ |
-| No hardcoded DB passwords in config | 🟡 JWT secret still in appsettings for local dev |
+| No hardcoded DB passwords in config | 🟡 JWT secret only in Development appsettings / `JWT__Secret` env; production appsettings has none |
 | BCrypt only from Infrastructure | ✅ |
 | Cross-tenant isolation proven | ✅ Postgres tests pass for query filters. Hosted multi-tenant stays off. |
 | Cold-diff gate | ✅ domain + finish_work review |

@@ -115,7 +115,7 @@ public sealed class OrgProjectTaskHttpTests
             type = 3
         });
         Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync());
-        var got = await client.GetFromJsonAsync<JsonElement>($"/v1/tasks/{taskId}");
+        var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}");
         Assert.Equal("A2", got.GetProperty("title").GetString());
 
         var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
@@ -134,7 +134,7 @@ public sealed class OrgProjectTaskHttpTests
             dependentTaskIds = new[] { otherId }
         });
         Assert.True(deps.IsSuccessStatusCode, await deps.Content.ReadAsStringAsync());
-        var withDeps = await client.GetFromJsonAsync<JsonElement>($"/v1/tasks/{taskId}");
+        var withDeps = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}");
         Assert.Equal(otherId, withDeps.GetProperty("dependencies")[0].GetGuid());
 
         var deleteDependent = await client.DeleteAsync($"/v1/tasks/{taskId}");
@@ -186,6 +186,17 @@ public sealed class OrgProjectTaskHttpTests
 
         var reports = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/reports");
         Assert.True(reports.GetArrayLength() >= 1);
+
+        var compile = await PostJson(client, $"/v1/projects/{projectId}/context/compile", new
+        {
+            projectId,
+            budgetTokens = 8000,
+            includeHandoff = false,
+            includeChangedScope = false,
+            includeTreeCapsule = false
+        });
+        Assert.Contains("## Tools for this task", compile.GetProperty("briefMarkdown").GetString());
+        Assert.True(compile.GetProperty("tokenEstimate").GetInt32() > 0);
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)

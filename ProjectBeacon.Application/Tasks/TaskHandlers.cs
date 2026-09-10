@@ -332,10 +332,14 @@ public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto
 
     public async Task<Result<TaskItemDto>> HandleAsync(GetTaskCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks
+        var query = _db.Tasks
             .Include(t => t.Comments)
             .Include(t => t.Dependencies)
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            .AsQueryable();
+        if (command.Request.ProjectId is Guid projectId)
+            query = query.Where(t => t.ProjectId == projectId);
+
+        var task = await query.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
 
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");

@@ -19,6 +19,7 @@ public static class TaskEndpoints
         app.MapPut("/v1/tasks/{taskId:guid}", UpdateTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapDelete("/v1/tasks/{taskId:guid}", DeleteTask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapGet("/v1/projects/{projectId:guid}/tasks", ListTasks).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskRead);
+        app.MapGet("/v1/projects/{projectId:guid}/tasks/{taskId:guid}", GetTaskInProject).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/tasks/{taskId:guid}", GetTask).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/tasks/{taskId:guid}/substage", ChangeSubStage).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/tasks/{taskId:guid}/claim", ClaimTask).RequireAuthorization().DisableAntiforgery();
@@ -81,6 +82,15 @@ public static class TaskEndpoints
     private static async Task<IResult> GetTask(Guid taskId, GetTaskHandler handler)
     {
         var result = await handler.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
+
+        return result.Success
+            ? Results.Ok(MapTaskResponse(result.Value))
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> GetTaskInProject(Guid projectId, Guid taskId, GetTaskHandler handler)
+    {
+        var result = await handler.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId, projectId)));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
