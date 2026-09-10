@@ -1,0 +1,8 @@
+@page "/agents"
+@layout MainLayout
+@attribute [Authorize]
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<PageTitle>@L["Agents"]</PageTitle>
+<MudText Typo="Typo.h4">@L["Agents"]</MudText>
+<MudAlert Severity="Severity.Info" Class="mt-4">@L["AgentsEmpty"]</MudAlert>

@@ -1,18 +1,93 @@
-node_modules
-dist
-.turbo
-.env
-.env.*
-!.env.example
-coverage
-*.tsbuildinfo
-.next
-out
-.vercel
-.cache
-*.log
-.DS_Store
-Thumbs.db
-desktop.ini
+# Visual Studio
 .vs/
 .vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+TestResults/
+
+# .NET
+*.csproj.user
+*.dotnet-tools.json
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# TypeScript (legacy)
+typescript/
+
+# OpenCode
+.opencode/
+
+# NuGet
+nuget.config
+nuget.dev.config
+nuget.error.config
+nuget.exception.config
+nuget.metadata.config
+nuget.publish.config
+NuGetKeys.pfx
+*.nupkg
+*/*/*.nupkg
+*/*/*/*.nupkg
+snk/
+
+# SonarQube
+.sonarqube/
+SonarQube.ReferenceAssembly/
+sonar/
+
+# Test
+TestResults/
+*.coveragereport
+[Cc]overage/
+
+# Generated
+Generated_Code/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*.swn
+
+# Mac
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker
+.docker/
+
+# Miscellaneous
+*.log
+*.tmp
+*.temp

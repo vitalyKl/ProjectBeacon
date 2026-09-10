@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  check:
+  build-test:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -25,20 +25,17 @@ jobs:
           --health-retries 10
     env:
       BEACON_TEST_DATABASE_URL: postgres://beacon:beacon@localhost:5432/beacon
+      POSTGRES_PASSWORD: beacon
+      JWT__Secret: ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          node-version: 22
-      - name: Enable pnpm
-        run: corepack enable
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @beacon/db drizzle:check
-      - name: Migrate Postgres
-        run: pnpm --filter @beacon/db db:migrate
-        env:
-          DATABASE_URL: postgres://beacon:beacon@localhost:5432/beacon
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm build
-      - run: pnpm test
+          global-json-file: global.json
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore
+      - name: Test
+        run: dotnet test --no-build --verbosity normal

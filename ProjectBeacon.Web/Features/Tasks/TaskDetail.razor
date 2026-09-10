@@ -1,0 +1,212 @@
+@page "/task/{taskId:guid}"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Theme
+@using Microsoft.AspNetCore.Components.Authorization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetTaskHandler GetTask
+@inject CompileBriefHandler CompileBrief
+@inject AddCommentHandler AddComment
+@inject AddReviewNotesHandler AddReviewNotes
+@inject AuthenticationStateProvider Auth
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@L["TaskDetail"]</PageTitle>
+
+<MudGrid>
+    <MudItem>
+        <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo("/board"))">
+            @L["BackToBoard"]
+        </MudButton>
+    </MudItem>
+</MudGrid>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_task is null)
+{
+    <MudText Typo="Typo.h6">@L["TaskNotFound"]</MudText>
+}
+else
+{
+    <MudCard Class="pa-6">
+        <MudText Typo="Typo.h4">@_task.Title</MudText>
+        @if (!string.IsNullOrEmpty(_task.Description))
+        {
+            <MudText Typo="Typo.body1" Class="mt-2">@_task.Description</MudText>
+        }
+        <MudStack Row="true" Spacing="2" Class="mt-4">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(_task.Status)">
+                @StatusLabel(_task.Status)
+            </MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(_task.Priority)">
+                @L["Priority"]: @_task.Priority
+            </MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(_task.Type)">
+                @L["Type"]: @_task.Type
+            </MudChip>
+        </MudStack>
+        @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
+        {
+            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4" Height="6" />
+            <MudText Typo="Typo.caption" Class="mt-1">@_task.SubStage</MudText>
+        }
+        @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["Done"] @_task.CompletedAt.Value.ToShortDateString()</MudText>
+        }
+        <MudText Typo="Typo.caption" Class="mt-2">@L["CreatedAt"] @_task.CreatedAt.ToShortDateString()</MudText>
+        @if (!string.IsNullOrEmpty(_task.ReviewNotes))
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ReviewNotes"]</MudText>
+            <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_task.ReviewNotes</MudText>
+        }
+        <MudTextField @bind-Value="_reviewDraft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Class="mt-2" />
+        <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveReview">@L["Save"]</MudButton>
+    </MudCard>
+
+    <MudCard Class="pa-6 mt-4">
+        <MudText Typo="Typo.h6">@L["Comments"]</MudText>
+        @if (_task.Comments.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["NoCommentsYet"]</MudText>
+        }
+        @foreach (var comment in _task.Comments.OrderBy(c => c.CreatedAt))
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">@comment.Content</MudText>
+            <MudText Typo="Typo.caption">@comment.CreatedAt.ToShortDateString()</MudText>
+        }
+        <MudTextField @bind-Value="_commentDraft" Label="@L["WriteAComment"]" Lines="2" Variant="Variant.Outlined" Class="mt-2" />
+        <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveComment">@L["AddComment"]</MudButton>
+    </MudCard>
+
+    <MudCard Class="pa-6 mt-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.h6">@L["CompiledBrief"]</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Compile" Disabled="_compiling">
+                @L["CompileBrief"]
+            </MudButton>
+        </MudStack>
+        @{
+            var pct = Math.Min(100, (int)Math.Round(_briefTokens * 100.0 / _briefBudget));
+        }
+        <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_briefTokens / @_briefBudget</MudText>
+        <MudProgressLinear Value="pct" Color="Color.Default" Class="mt-1" Height="6" />
+        @if (!string.IsNullOrEmpty(_briefError))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-2">@_briefError</MudAlert>
+        }
+        @if (!string.IsNullOrEmpty(_briefMarkdown))
+        {
+            <MudText Typo="Typo.body2" Class="mt-4" Style="white-space: pre-wrap; font-family: monospace;">@_briefMarkdown</MudText>
+        }
+    </MudCard>
+}
+
+@code {
+    [Parameter] public Guid TaskId { get; set; }
+    private TaskItemDto? _task;
+    private bool _loading = true;
+    private string? _briefMarkdown;
+    private string? _briefError;
+    private int _briefTokens;
+    private int _briefBudget = 8000;
+    private bool _compiling;
+    private string _commentDraft = string.Empty;
+    private string _reviewDraft = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _loading = false;
+        if (_task is not null)
+            await Compile();
+    }
+
+    private async Task Reload()
+    {
+        var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
+        _task = result.Success ? result.Value : null;
+        _reviewDraft = _task?.ReviewNotes ?? string.Empty;
+    }
+
+    private string StatusLabel(string status) => status switch
+    {
+        "Todo" => L["Todo"].Value,
+        "InProgress" => L["InProgress"].Value,
+        "Done" => L["Done"].Value,
+        _ => status
+    };
+
+    private async Task SaveComment()
+    {
+        if (_task is null || string.IsNullOrWhiteSpace(_commentDraft))
+            return;
+        var auth = await Auth.GetAuthenticationStateAsync();
+        Guid.TryParse(auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var userId);
+        var result = await AddComment.HandleAsync(new AddCommentCommand(new AddCommentRequest(_task.Id, _commentDraft.Trim(), userId)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _commentDraft = string.Empty;
+        await Reload();
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+    }
+
+    private async Task SaveReview()
+    {
+        if (_task is null || string.IsNullOrWhiteSpace(_reviewDraft))
+            return;
+        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(_task.Id, _reviewDraft.Trim())));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        await Reload();
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+    }
+
+    private async Task Compile()
+    {
+        if (_task is null) return;
+        _compiling = true;
+        _briefError = null;
+        try
+        {
+            var result = await CompileBrief.HandleAsync(new CompileBriefCommand(new CompileBriefRequest(
+                _task.ProjectId, null, null, _task.Id, _briefBudget, false, false, false)));
+            if (!result.Success)
+            {
+                _briefError = result.Error;
+                return;
+            }
+            _briefMarkdown = result.Value.BriefMarkdown;
+            _briefTokens = result.Value.TokenEstimate;
+        }
+        finally
+        {
+            _compiling = false;
+        }
+    }
+
+    private int SubStageToPercent(TaskSubStage stage) => stage switch
+    {
+        TaskSubStage.RequirementGathering => 10,
+        TaskSubStage.Estimation => 20,
+        TaskSubStage.IntermediateResult => 40,
+        TaskSubStage.Review => 60,
+        TaskSubStage.Corrections => 75,
+        TaskSubStage.ReviewCorrections => 90,
+        TaskSubStage.Complete => 100,
+        _ => 0
+    };
+}

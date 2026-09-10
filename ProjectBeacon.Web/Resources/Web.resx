@@ -1,0 +1,655 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AnErrorOccurred" xml:space="preserve">
+    <value>An error has occurred.</value>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="BootstrapAlreadyCompleted" xml:space="preserve">
+    <value>Bootstrap already completed.</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Confirm" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Create" xml:space="preserve">
+    <value>Create</value>
+  </data>
+  <data name="Dashboard" xml:space="preserve">
+    <value>Dashboard</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="First" xml:space="preserve">
+    <value>First</value>
+  </data>
+  <data name="Healthy" xml:space="preserve">
+    <value>healthy</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Last" xml:space="preserve">
+    <value>Last</value>
+  </data>
+  <data name="Loading" xml:space="preserve">
+    <value>Loading...</value>
+  </data>
+  <data name="Next" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="NoData" xml:space="preserve">
+    <value>No data available</value>
+  </data>
+  <data name="Page" xml:space="preserve">
+    <value>Page</value>
+  </data>
+  <data name="PageNotFound" xml:space="preserve">
+    <value>Page not found</value>
+  </data>
+  <data name="Previous" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="ProjectBeacon" xml:space="preserve">
+    <value>ProjectBeacon</value>
+  </data>
+  <data name="Projects" xml:space="preserve">
+    <value>Projects</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Submit" xml:space="preserve">
+    <value>Submit</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="of" xml:space="preserve">
+    <value>of</value>
+  </data>
+  <data name="WelcomeBack" xml:space="preserve">
+    <value>Welcome back.</value>
+  </data>
+  <data name="Lang_en" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="Lang_ru" xml:space="preserve">
+    <value>Русский</value>
+  </data>
+  <data name="Lang_de" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="Lang_fr" xml:space="preserve">
+    <value>Français</value>
+  </data>
+  <data name="Lang_es" xml:space="preserve">
+    <value>Español</value>
+  </data>
+  <data name="Lang_it" xml:space="preserve">
+    <value>Italiano</value>
+  </data>
+  <data name="Lang_pt" xml:space="preserve">
+    <value>Português</value>
+  </data>
+  <data name="Lang_nl" xml:space="preserve">
+    <value>Nederlands</value>
+  </data>
+  <data name="Lang_pl" xml:space="preserve">
+    <value>Polski</value>
+  </data>
+  <data name="Lang_cs" xml:space="preserve">
+    <value>Čeština</value>
+  </data>
+  <data name="Lang_hu" xml:space="preserve">
+    <value>Magyar</value>
+  </data>
+  <data name="Lang_ro" xml:space="preserve">
+    <value>Română</value>
+  </data>
+  <data name="Lang_bg" xml:space="preserve">
+    <value>Български</value>
+  </data>
+  <data name="Lang_hr" xml:space="preserve">
+    <value>Hrvatski</value>
+  </data>
+  <data name="Lang_sk" xml:space="preserve">
+    <value>Slovenčina</value>
+  </data>
+  <data name="Lang_sl" xml:space="preserve">
+    <value>Slovenščina</value>
+  </data>
+  <data name="Lang_lt" xml:space="preserve">
+    <value>Lietuvių</value>
+  </data>
+  <data name="Lang_lv" xml:space="preserve">
+    <value>Latviešu</value>
+  </data>
+  <data name="Lang_et" xml:space="preserve">
+    <value>Eesti</value>
+  </data>
+  <data name="Lang_fi" xml:space="preserve">
+    <value>Suomi</value>
+  </data>
+  <data name="Lang_sv" xml:space="preserve">
+    <value>Svenska</value>
+  </data>
+  <data name="Lang_no" xml:space="preserve">
+    <value>Norsk</value>
+  </data>
+  <data name="Lang_da" xml:space="preserve">
+    <value>Dansk</value>
+  </data>
+  <data name="Lang_el" xml:space="preserve">
+    <value>Ελληνικά</value>
+  </data>
+  <data name="Lang_tr" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="Lang_zh" xml:space="preserve">
+    <value>中文</value>
+  </data>
+  <data name="Lang_ja" xml:space="preserve">
+    <value>日本語</value>
+  </data>
+  <data name="Lang_ko" xml:space="preserve">
+    <value>한국어</value>
+  </data>
+  <data name="Lang_ar" xml:space="preserve">
+    <value>العربية</value>
+  </data>
+  <data name="Lang_hi" xml:space="preserve">
+    <value>हिन्दī</value>
+  </data>
+  <data name="Lang_th" xml:space="preserve">
+    <value>ไทย</value>
+  </data>
+  <data name="Lang_vi" xml:space="preserve">
+    <value>Tiếng Việt</value>
+  </data>
+  <data name="Lang_id" xml:space="preserve">
+    <value>Bahasa Indonesia</value>
+  </data>
+  <data name="Lang_ms" xml:space="preserve">
+    <value>Bahasa Melayu</value>
+  </data>
+  <data name="Lang_tl" xml:space="preserve">
+    <value>Filipino</value>
+  </data>
+  <data name="Lang_uk" xml:space="preserve">
+    <value>Українська</value>
+  </data>
+  <data name="Lang_be" xml:space="preserve">
+    <value>Беларуская</value>
+  </data>
+  <data name="Lang_mk" xml:space="preserve">
+    <value>Македонски</value>
+  </data>
+  <data name="Lang_sr" xml:space="preserve">
+    <value>Српски</value>
+  </data>
+  <data name="Lang_bs" xml:space="preserve">
+    <value>Bosanski</value>
+  </data>
+  <data name="Lang_ca" xml:space="preserve">
+    <value>Català</value>
+  </data>
+  <data name="Lang_gl" xml:space="preserve">
+    <value>Galego</value>
+  </data>
+  <data name="Lang_eu" xml:space="preserve">
+    <value>Euskara</value>
+  </data>
+  <data name="Lang_is" xml:space="preserve">
+    <value>Íslenska</value>
+  </data>
+  <data name="Lang_ga" xml:space="preserve">
+    <value>Gaeilge</value>
+  </data>
+  <data name="Lang_cy" xml:space="preserve">
+    <value>Cymraeg</value>
+  </data>
+  <data name="Login" xml:space="preserve">
+    <value>Login</value>
+  </data>
+  <data name="Password" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Logout" xml:space="preserve">
+    <value>Logout</value>
+  </data>
+  <data name="InvalidCredentials" xml:space="preserve">
+    <value>Invalid login or password.</value>
+  </data>
+  <data name="Bootstrap" xml:space="preserve">
+    <value>Bootstrap</value>
+  </data>
+  <data name="BootstrapDescription" xml:space="preserve">
+    <value>Create the initial administrator account. This can only be done once.</value>
+  </data>
+  <data name="BootstrapSuccess" xml:space="preserve">
+    <value>Admin account created. Save this password — it will not be shown again.</value>
+  </data>
+  <data name="ClickToCopy" xml:space="preserve">
+    <value>Click to copy</value>
+  </data>
+  <data name="GoToLogin" xml:space="preserve">
+    <value>Go to Login</value>
+  </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>Tasks</value>
+  </data>
+  <data name="Board" xml:space="preserve">
+    <value>Board</value>
+  </data>
+  <data name="Backlog" xml:space="preserve">
+    <value>Backlog</value>
+  </data>
+  <data name="GoToBoard" xml:space="preserve">
+    <value>Go to Board</value>
+  </data>
+  <data name="ProjectBeaconWelcome" xml:space="preserve">
+    <value>Welcome to ProjectBeacon.</value>
+  </data>
+  <data name="Roadmap" xml:space="preserve">
+    <value>Roadmap</value>
+  </data>
+  <data name="Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Priority" xml:space="preserve">
+    <value>Priority</value>
+  </data>
+  <data name="Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="SubStage" xml:space="preserve">
+    <value>Sub-stage</value>
+  </data>
+  <data name="Milestone" xml:space="preserve">
+    <value>Milestone</value>
+  </data>
+  <data name="Todo" xml:space="preserve">
+    <value>To Do</value>
+  </data>
+  <data name="InProgress" xml:space="preserve">
+    <value>In Progress</value>
+  </data>
+  <data name="Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Low" xml:space="preserve">
+    <value>Low</value>
+  </data>
+  <data name="Medium" xml:space="preserve">
+    <value>Medium</value>
+  </data>
+  <data name="High" xml:space="preserve">
+    <value>High</value>
+  </data>
+  <data name="Critical" xml:space="preserve">
+    <value>Critical</value>
+  </data>
+  <data name="Feature" xml:space="preserve">
+    <value>Feature</value>
+  </data>
+  <data name="Bug" xml:space="preserve">
+    <value>Bug</value>
+  </data>
+  <data name="Improvement" xml:space="preserve">
+    <value>Improvement</value>
+  </data>
+  <data name="Task" xml:space="preserve">
+    <value>Task</value>
+  </data>
+  <data name="TaskMoved" xml:space="preserve">
+    <value>Task moved to {0}</value>
+  </data>
+  <data name="RequirementGathering" xml:space="preserve">
+    <value>Requirements</value>
+  </data>
+  <data name="Estimation" xml:space="preserve">
+    <value>Estimation</value>
+  </data>
+  <data name="IntermediateResult" xml:space="preserve">
+    <value>Progress</value>
+  </data>
+  <data name="Review" xml:space="preserve">
+    <value>Review</value>
+  </data>
+  <data name="Corrections" xml:space="preserve">
+    <value>Fixes</value>
+  </data>
+  <data name="ReviewCorrections" xml:space="preserve">
+    <value>Review Fixes</value>
+  </data>
+  <data name="Complete" xml:space="preserve">
+    <value>Complete</value>
+  </data>
+  <data name="CreateTask" xml:space="preserve">
+    <value>Create Task</value>
+  </data>
+  <data name="UpdateTask" xml:space="preserve">
+    <value>Update Task</value>
+  </data>
+  <data name="DeleteTask" xml:space="preserve">
+    <value>Delete Task</value>
+  </data>
+  <data name="CreateMilestone" xml:space="preserve">
+    <value>Create Milestone</value>
+  </data>
+  <data name="UpdateMilestone" xml:space="preserve">
+    <value>Update Milestone</value>
+  </data>
+  <data name="DeleteMilestone" xml:space="preserve">
+    <value>Delete Milestone</value>
+  </data>
+  <data name="ReviewNotes" xml:space="preserve">
+    <value>Review Notes</value>
+  </data>
+  <data name="Comments" xml:space="preserve">
+    <value>Comments</value>
+  </data>
+  <data name="Dependencies" xml:space="preserve">
+    <value>Dependencies</value>
+  </data>
+  <data name="AddTask" xml:space="preserve">
+    <value>Add Task</value>
+  </data>
+  <data name="AddComment" xml:space="preserve">
+    <value>Add Comment</value>
+  </data>
+  <data name="AddDependency" xml:space="preserve">
+    <value>Add Dependency</value>
+  </data>
+  <data name="TaskCreated" xml:space="preserve">
+    <value>Task created successfully.</value>
+  </data>
+  <data name="TaskUpdated" xml:space="preserve">
+    <value>Task updated successfully.</value>
+  </data>
+  <data name="TaskDeleted" xml:space="preserve">
+    <value>Task deleted successfully.</value>
+  </data>
+  <data name="TaskClaimed" xml:space="preserve">
+    <value>Task claimed successfully.</value>
+  </data>
+  <data name="MilestoneCreated" xml:space="preserve">
+    <value>Milestone created successfully.</value>
+  </data>
+  <data name="MilestoneUpdated" xml:space="preserve">
+    <value>Milestone updated successfully.</value>
+  </data>
+  <data name="MilestoneDeleted" xml:space="preserve">
+    <value>Milestone deleted successfully.</value>
+  </data>
+  <data name="TaskTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="SaveChanges" xml:space="preserve">
+    <value>Save Changes</value>
+  </data>
+  <data name="NoTasks" xml:space="preserve">
+    <value>No tasks found.</value>
+  </data>
+  <data name="NoMilestones" xml:space="preserve">
+    <value>No milestones defined yet.</value>
+  </data>
+  <data name="NewTask" xml:space="preserve">
+    <value>New Task</value>
+  </data>
+  <data name="NewMilestone" xml:space="preserve">
+    <value>New Milestone</value>
+  </data>
+  <data name="TaskDetail" xml:space="preserve">
+    <value>Task Detail</value>
+  </data>
+  <data name="BackToBoard" xml:space="preserve">
+    <value>Back to Board</value>
+  </data>
+  <data name="BackToBacklog" xml:space="preserve">
+    <value>Back to Backlog</value>
+  </data>
+  <data name="TaskNotFound" xml:space="preserve">
+    <value>Task not found.</value>
+  </data>
+  <data name="MilestoneName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="TaskCount" xml:space="preserve">
+    <value>Tasks</value>
+  </data>
+  <data name="Order" xml:space="preserve">
+    <value>Order</value>
+  </data>
+  <data name="CreatedBy" xml:space="preserve">
+    <value>Created By</value>
+  </data>
+  <data name="CreatedAt" xml:space="preserve">
+    <value>Created At</value>
+  </data>
+  <data name="Updated" xml:space="preserve">
+    <value>Updated</value>
+  </data>
+  <data name="FilterByStatus" xml:space="preserve">
+    <value>Filter by status</value>
+  </data>
+  <data name="FilterByPriority" xml:space="preserve">
+    <value>Filter by priority</value>
+  </data>
+  <data name="SortBy" xml:space="preserve">
+    <value>Sort by</value>
+  </data>
+  <data name="SortByCreated" xml:space="preserve">
+    <value>Created date</value>
+  </data>
+  <data name="SortByPriority" xml:space="preserve">
+    <value>Priority</value>
+  </data>
+  <data name="SortByTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Content" xml:space="preserve">
+    <value>Content</value>
+  </data>
+  <data name="WriteAComment" xml:space="preserve">
+    <value>Write a comment...</value>
+  </data>
+  <data name="NoCommentsYet" xml:space="preserve">
+    <value>No comments yet.</value>
+  </data>
+  <data name="NoProjectAvailable" xml:space="preserve">
+    <value>No project available. Create a project first.</value>
+  </data>
+  <data name="Context" xml:space="preserve">
+    <value>Context</value>
+  </data>
+  <data name="Agents" xml:space="preserve">
+    <value>Agents</value>
+  </data>
+  <data name="Reports" xml:space="preserve">
+    <value>Reports</value>
+  </data>
+  <data name="CompiledBrief" xml:space="preserve">
+    <value>Compiled brief</value>
+  </data>
+  <data name="CompileBrief" xml:space="preserve">
+    <value>Compile brief</value>
+  </data>
+  <data name="TokenBudget" xml:space="preserve">
+    <value>Token budget</value>
+  </data>
+  <data name="CreateProject" xml:space="preserve">
+    <value>Create project</value>
+  </data>
+  <data name="OrgName" xml:space="preserve">
+    <value>Organization name</value>
+  </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>Project name</value>
+  </data>
+  <data name="ProjectCreated" xml:space="preserve">
+    <value>Project created.</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>Saved.</value>
+  </data>
+  <data name="Section" xml:space="preserve">
+    <value>Section</value>
+  </data>
+  <data name="Sections" xml:space="preserve">
+    <value>Sections</value>
+  </data>
+  <data name="Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Labels" xml:space="preserve">
+    <value>Labels</value>
+  </data>
+  <data name="AgentsEmpty" xml:space="preserve">
+    <value>No live agent sessions yet. The local daemon lands in Phase 7.</value>
+  </data>
+  <data name="ReportsEmpty" xml:space="preserve">
+    <value>No reports yet. Generate a board snapshot.</value>
+  </data>
+  <data name="GenerateReport" xml:space="preserve">
+    <value>Generate report</value>
+  </data>
+  <data name="Decisions" xml:space="preserve">
+    <value>Decisions</value>
+  </data>
+  <data name="Constraints" xml:space="preserve">
+    <value>Constraints</value>
+  </data>
+  <data name="Activate" xml:space="preserve">
+    <value>Activate</value>
+  </data>
+  <data name="Reject" xml:space="preserve">
+    <value>Reject</value>
+  </data>
+  <data name="Accept" xml:space="preserve">
+    <value>Accept</value>
+  </data>
+  <data name="Kind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Consequences" xml:space="preserve">
+    <value>Consequences</value>
+  </data>
+  <data name="CloseMilestone" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ReopenMilestone" xml:space="preserve">
+    <value>Reopen</value>
+  </data>
+  <data name="OrphanWarning" xml:space="preserve">
+    <value>Closed milestone still has {0} open task(s).</value>
+  </data>
+  <data name="ConstraintBody" xml:space="preserve">
+    <value>Constraint</value>
+  </data>
+  <data name="Username" xml:space="preserve">
+    <value>Username</value>
+  </data>
+  <data name="Completed" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="KindMust" xml:space="preserve">
+    <value>Must</value>
+  </data>
+  <data name="KindMustNot" xml:space="preserve">
+    <value>Must not</value>
+  </data>
+  <data name="KindSecurity" xml:space="preserve">
+    <value>Security</value>
+  </data>
+  <data name="KindCompliance" xml:space="preserve">
+    <value>Compliance</value>
+  </data>
+  <data name="BootstrapToken" xml:space="preserve">
+    <value>Bootstrap token</value>
+  </data>
+</root>

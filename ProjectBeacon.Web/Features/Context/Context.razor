@@ -1,0 +1,183 @@
+@page "/context"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject UpsertContextNodeHandler Upsert
+@inject ListContextNodesHandler ListNodes
+@inject CompileBriefHandler CompileBrief
+@inject CreateConstraintHandler CreateConstraint
+@inject ListConstraintsHandler ListConstraints
+@inject ActivateConstraintHandler ActivateConstraintHandler
+@inject RejectConstraintHandler RejectConstraintHandler
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["Context"]</PageTitle>
+<MudText Typo="Typo.h4">@L["Context"]</MudText>
+
+@if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Href="/projects/new">@L["CreateProject"]</MudButton>
+}
+else
+{
+    <MudText Typo="Typo.caption" Class="mt-2">@_project.Name</MudText>
+
+    <MudGrid Class="mt-4">
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="_title" Label="@L["Title"]" />
+            <MudSelect T="string" @bind-Value="_sectionId" Label="@L["Section"]" Class="mt-2">
+                <MudSelectItem Value="@("goals")">goals</MudSelectItem>
+                <MudSelectItem Value="@("non_goals")">non_goals</MudSelectItem>
+                <MudSelectItem Value="@("security")">security</MudSelectItem>
+                <MudSelectItem Value="@("definition_of_done")">definition_of_done</MudSelectItem>
+                <MudSelectItem Value="@("architecture")">architecture</MudSelectItem>
+                <MudSelectItem Value="@("conventions")">conventions</MudSelectItem>
+            </MudSelect>
+            <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="8" Class="mt-2" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Save">@L["Save"]</MudButton>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudButton Variant="Variant.Outlined" OnClick="Compile">@L["CompileBrief"]</MudButton>
+            <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_tokens / 8000</MudText>
+            <MudProgressLinear Value="@Math.Min(100, _tokens * 100 / 8000)" Class="mt-1" Height="6" />
+            @if (!string.IsNullOrEmpty(_preview))
+            {
+                <MudText Typo="Typo.body2" Class="mt-4" Style="white-space: pre-wrap; font-family: monospace;">@_preview</MudText>
+            }
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" Class="mt-6">@L["Sections"]</MudText>
+    <MudList T="string" Dense="true">
+        @foreach (var node in _nodes)
+        {
+            <MudListItem T="string">@node.SectionId — @node.Title</MudListItem>
+        }
+    </MudList>
+
+    <MudText Typo="Typo.h6" Class="mt-6">@L["Constraints"]</MudText>
+    <MudTextField @bind-Value="_constraintBody" Label="@L["ConstraintBody"]" Class="mt-2" />
+    <MudSelect T="ConstraintKind" @bind-Value="_constraintKind" Label="@L["Kind"]" Class="mt-2">
+        <MudSelectItem Value="ConstraintKind.Must">@L["KindMust"]</MudSelectItem>
+        <MudSelectItem Value="ConstraintKind.MustNot">@L["KindMustNot"]</MudSelectItem>
+        <MudSelectItem Value="ConstraintKind.Security">@L["KindSecurity"]</MudSelectItem>
+        <MudSelectItem Value="ConstraintKind.Compliance">@L["KindCompliance"]</MudSelectItem>
+    </MudSelect>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="AddConstraint">@L["Create"]</MudButton>
+    <MudList T="string" Dense="true" Class="mt-2">
+        @foreach (var c in _constraints)
+        {
+            <MudListItem T="string">
+                [@c.Kind] @c.Body — @c.Status
+                @if (c.Status == ConstraintStatus.Proposed)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ActivateConstraint(c)">@L["Activate"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RejectConstraint(c)">@L["Reject"]</MudButton>
+                }
+            </MudListItem>
+        }
+    </MudList>
+}
+
+@code {
+    private ProjectDto? _project;
+    private List<ContextSectionDto> _nodes = [];
+    private string _title = string.Empty;
+    private string _sectionId = "goals";
+    private string _body = string.Empty;
+    private string? _preview;
+    private int _tokens;
+    private List<ConstraintDto> _constraints = [];
+    private string _constraintBody = string.Empty;
+    private ConstraintKind _constraintKind = ConstraintKind.Must;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync();
+        _project = current.Value;
+        if (_project is not null)
+            await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (_project is null) return;
+        var nodes = await ListNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
+        _nodes = nodes.Success ? nodes.Value!.ToList() : [];
+        var constraints = await ListConstraints.HandleAsync(_project.Id);
+        _constraints = constraints.Success ? constraints.Value!.ToList() : [];
+    }
+
+    private async Task Save()
+    {
+        if (_project is null) return;
+        var result = await Upsert.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
+            _project.Id, _title, _body, _sectionId, ContextScopeType.Project,
+            null, null, null, null, ContextSource.Native, null)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task Compile()
+    {
+        if (_project is null) return;
+        var result = await CompileBrief.HandleAsync(new CompileBriefCommand(new CompileBriefRequest(
+            _project.Id, null, null, null, 8000, false, false, false)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _preview = result.Value.BriefMarkdown;
+        _tokens = result.Value.TokenEstimate;
+    }
+
+    private async Task AddConstraint()
+    {
+        if (_project is null || string.IsNullOrWhiteSpace(_constraintBody))
+            return;
+        var result = await CreateConstraint.HandleAsync(new CreateConstraintRequest(_project.Id, _constraintBody.Trim(), _constraintKind));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _constraintBody = string.Empty;
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task ActivateConstraint(ConstraintDto constraint)
+    {
+        var result = await ActivateConstraintHandler.HandleAsync(constraint.Id);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task RejectConstraint(ConstraintDto constraint)
+    {
+        var result = await RejectConstraintHandler.HandleAsync(constraint.Id);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+}

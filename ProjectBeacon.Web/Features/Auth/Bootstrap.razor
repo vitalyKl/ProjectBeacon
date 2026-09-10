@@ -1,0 +1,124 @@
+@page "/bootstrap"
+@layout AuthLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@using Microsoft.Extensions.Localization
+@using MudBlazor
+@using ProjectBeacon.Web.Resources
+@inject IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@using System.Net.Http.Json
+@implements IDisposable
+
+<PageTitle>@L["Bootstrap"]</PageTitle>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card" Style="max-width: 500px;">
+    <MudText Typo="Typo.h4" Class="text-center mb-6">@L["Bootstrap"]</MudText>
+
+    <MudText Typo="Typo.body1" Class="mb-4">
+        @L["BootstrapDescription"]
+    </MudText>
+
+    @if (_success)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4" variant="Variant.Text">
+            <MudText Typo="Typo.body2">
+                @L["BootstrapSuccess"]
+            </MudText>
+            <MudTextField @bind-Value="_password" T="string" ReadOnly="true" Class="mt-2" />
+        </MudAlert>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => Navigation.NavigateTo("/login"))"
+                   Class="w-100">
+            @L["GoToLogin"]
+        </MudButton>
+    }
+    else
+    {
+        <MudTextField @bind-Value="_token"
+                      Label="@L["BootstrapToken"]"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Class="mb-4" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@HandleBootstrap" Disabled="@_loading"
+                   Class="w-100">
+            @(_loading ? L["Loading"] : L["Bootstrap"])
+        </MudButton>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4" variant="Variant.Text">
+            @_error
+        </MudAlert>
+    }
+</MudPaper>
+
+@code {
+    private bool _success;
+    private string _password = string.Empty;
+    private string _token = string.Empty;
+    private string? _error;
+    private bool _loading;
+
+    private async Task HandleBootstrap()
+    {
+        _error = null;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
+            request.Content = JsonContent.Create(new { });
+            if (!string.IsNullOrWhiteSpace(_token))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token.Trim());
+            var response = await Http.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = string.IsNullOrWhiteSpace(body) ? response.StatusCode.ToString() : body;
+                return;
+            }
+
+            var result = System.Text.Json.JsonSerializer.Deserialize<BootstrapResult>(body,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (result is null || string.IsNullOrEmpty(result.Password))
+            {
+                _error = L["Error"].Value;
+                return;
+            }
+
+            _success = true;
+            _password = result.Password;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _success = false;
+        _password = string.Empty;
+        _error = null;
+    }
+
+    public class BootstrapResult
+    {
+        public Guid UserId { get; set; }
+        public string Login { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public bool IsAdmin { get; set; }
+        public string Password { get; set; } = string.Empty;
+    }
+}

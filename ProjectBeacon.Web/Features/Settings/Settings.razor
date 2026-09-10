@@ -1,0 +1,42 @@
+@page "/settings"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Projects
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject ListLabelsHandler ListLabels
+
+<PageTitle>@L["Settings"]</PageTitle>
+<MudText Typo="Typo.h4">@L["Settings"]</MudText>
+
+<MudText Typo="Typo.h6" Class="mt-4">@L["Labels"]</MudText>
+@if (_labels.Count == 0)
+{
+    <MudText Typo="Typo.body2" Class="mt-2">@L["NoData"]</MudText>
+}
+else
+{
+    <MudList T="string" Dense="true">
+        @foreach (var label in _labels)
+        {
+            <MudListItem T="string">@label.Name (@label.PathPrefix)</MudListItem>
+        }
+    </MudList>
+}
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">
+    @L["CreateProject"]
+</MudButton>
+
+@code {
+    private List<LabelDto> _labels = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync();
+        if (current.Value is null)
+            return;
+        var listed = await ListLabels.HandleAsync(new ListLabelsRequest(current.Value.Id));
+        _labels = listed.Success ? listed.Value!.ToList() : [];
+    }
+}

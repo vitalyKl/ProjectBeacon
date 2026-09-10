@@ -18,6 +18,8 @@ public class BeaconDbContext : DbContext
     public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
     public DbSet<Label> Labels => Set<Label>();
+    public DbSet<LabelPath> LabelPaths => Set<LabelPath>();
+    public DbSet<Report> Reports => Set<Report>();
     public DbSet<Milestone> Milestones => Set<Milestone>();
     public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
@@ -25,7 +27,13 @@ public class BeaconDbContext : DbContext
     public DbSet<Decision> Decisions => Set<Decision>();
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();
 
+    public DbSet<ContextSection> ContextSections => Set<ContextSection>();
+    public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
+
     public BeaconDbContext(DbContextOptions<BeaconDbContext> options) : base(options) { }
+
+    public Guid? FilterProjectId => TenantScope.CurrentProjectId;
+    public Guid? FilterOrgId => TenantScope.CurrentOrgId;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -276,7 +284,7 @@ public class BeaconDbContext : DbContext
             entity.HasOne(e => e.DependentTask)
                 .WithMany()
                 .HasForeignKey(e => e.DependentTaskId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(e => new { e.TaskId, e.DependentTaskId }).IsUnique();
         });
@@ -306,6 +314,34 @@ public class BeaconDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Color).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.PathPrefix).HasMaxLength(500).HasDefaultValue("");
+            entity.HasMany(e => e.Paths)
+                .WithOne(e => e.Label)
+                .HasForeignKey(e => e.LabelId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LabelPath>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Path).IsRequired().HasMaxLength(500);
+            entity.HasIndex(e => new { e.LabelId, e.Path }).IsUnique();
+        });
+
+        modelBuilder.Entity<Report>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.BodyMarkdown).IsRequired();
+            entity.Property(e => e.SnapshotJson).IsRequired();
+            entity.Property(e => e.CreatedByType).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.CreatedById).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.ProjectId, e.CreatedAt });
+            entity.HasOne(e => e.Project)
+                .WithMany()
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Constraint>(entity =>
@@ -348,8 +384,6 @@ public class BeaconDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Apply tenant isolation to ITenantScoped entities
-        // Temporarily disabled due to EF Core model resolution issue with SQLite in-memory
-        // TenantScopedQueryFilterConvention.Apply(modelBuilder);
+        TenantScopedQueryFilterConvention.Apply(modelBuilder, this);
     }
 }

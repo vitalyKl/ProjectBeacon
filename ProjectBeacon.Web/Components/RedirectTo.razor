@@ -1,0 +1,10 @@
+@using Microsoft.AspNetCore.Components
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+}

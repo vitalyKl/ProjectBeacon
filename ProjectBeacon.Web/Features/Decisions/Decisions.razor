@@ -1,0 +1,102 @@
+@page "/decisions"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Decisions
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject CreateDecisionHandler CreateDecision
+@inject ListDecisionsHandler ListDecisions
+@inject AcceptDecisionHandler AcceptDecision
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["Decisions"]</PageTitle>
+<MudText Typo="Typo.h4">@L["Decisions"]</MudText>
+
+@if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else
+{
+    <MudTextField @bind-Value="_title" Label="@L["Title"]" Class="mt-4" />
+    <MudTextField @bind-Value="_context" Label="@L["Context"]" Lines="2" Class="mt-2" />
+    <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="3" Class="mt-2" />
+    <MudTextField @bind-Value="_consequences" Label="@L["Consequences"]" Lines="2" Class="mt-2" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
+
+    <MudTable Items="_decisions" Hover="true" Class="mt-4" Dense="true">
+        <HeaderContent>
+            <MudTh>@L["Title"]</MudTh>
+            <MudTh>@L["Status"]</MudTh>
+            <MudTh>@L["Consequences"]</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Title</MudTd>
+            <MudTd>@context.Status</MudTd>
+            <MudTd>@context.Consequences</MudTd>
+            <MudTd>
+                @if (context.Status == DecisionStatus.Proposed)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Accept(context)">@L["Accept"]</MudButton>
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private ProjectDto? _project;
+    private List<DecisionDto> _decisions = [];
+    private string _title = string.Empty;
+    private string _context = string.Empty;
+    private string _body = string.Empty;
+    private string _consequences = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync();
+        _project = current.Value;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (_project is null)
+        {
+            _decisions = [];
+            return;
+        }
+        var listed = await ListDecisions.HandleAsync(_project.Id);
+        _decisions = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private async Task Add()
+    {
+        if (_project is null) return;
+        var result = await CreateDecision.HandleAsync(new CreateDecisionRequest(
+            _project.Id, _title, _context, _body, _consequences));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _title = _context = _body = _consequences = string.Empty;
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task Accept(DecisionDto decision)
+    {
+        var result = await AcceptDecision.HandleAsync(decision.Id);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+}

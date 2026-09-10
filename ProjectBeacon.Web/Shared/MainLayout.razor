@@ -1,0 +1,154 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@using ProjectBeacon.Web.Theme
+@using ProjectBeacon.Web.Resources
+@using ProjectBeacon.Web.Shared
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="0" Class="beacon-appbar">
+        <MudBreadcrumbs Items="_crumbs" Separator="›" Class="beacon-breadcrumbs" />
+        <MudSpacer />
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
+            <ActivatorContent>
+                <MudAvatar Size="Size.Small" Color="Color.Primary" Class="beacon-avatar">@_initials</MudAvatar>
+            </ActivatorContent>
+            <ChildContent>
+                <MudMenuItem OnClick="@Logout">@L["Logout"]</MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </MudAppBar>
+    <MudDrawer Open="true" ClipMode="DrawerClipMode.Never" Elevation="0" Width="240px" Variant="DrawerVariant.Persistent" Class="beacon-drawer">
+        <div class="beacon-drawer-inner">
+            <MudDrawerHeader Class="beacon-drawer-header">
+                <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
+            </MudDrawerHeader>
+            <MudNavMenu Dense="true" Class="beacon-nav">
+                <MudNavLink Href="/dashboard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard">
+                    @L["Dashboard"]
+                </MudNavLink>
+                <MudNavLink Href="/board" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Apps">
+                    @L["Board"]
+                </MudNavLink>
+                <MudNavLink Href="/backlog" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">
+                    @L["Backlog"]
+                </MudNavLink>
+                <MudNavLink Href="/roadmap" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.EventNote">
+                    @L["Roadmap"]
+                </MudNavLink>
+                <MudNavLink Href="/context" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Description">
+                    @L["Context"]
+                </MudNavLink>
+                <MudNavLink Href="/decisions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Gavel">
+                    @L["Decisions"]
+                </MudNavLink>
+                <MudNavLink Href="/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">
+                    @L["Agents"]
+                </MudNavLink>
+                <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assessment">
+                    @L["Reports"]
+                </MudNavLink>
+                <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+                    @L["Settings"]
+                </MudNavLink>
+            </MudNavMenu>
+            <div class="beacon-drawer-footer">
+                <LanguageSwitcher />
+            </div>
+        </div>
+    </MudDrawer>
+    <MudMainContent>
+        <div class="pa-4">
+            @Body
+        </div>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<BreadcrumbItem> _crumbs = [];
+    private string _initials = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        RebuildCrumbs();
+        await LoadInitials();
+    }
+
+    private async Task LoadInitials()
+    {
+        if (AuthState is null)
+            return;
+
+        var state = await AuthState;
+        var name = state.User.Identity?.Name
+            ?? state.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? string.Empty;
+        _initials = InitialsFrom(name);
+    }
+
+    private static string InitialsFrom(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "·";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[1][0])}";
+
+        var value = parts[0];
+        return value.Length >= 2
+            ? value[..2].ToUpperInvariant()
+            : value.ToUpperInvariant();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        RebuildCrumbs();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void RebuildCrumbs()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        var segment = path.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        var home = new BreadcrumbItem(L["ProjectBeacon"], "/dashboard");
+
+        _crumbs = segment switch
+        {
+            "" or "dashboard" => [home, Current(L["Dashboard"])],
+            "board" => [home, Current(L["Board"])],
+            "backlog" => [home, Current(L["Backlog"])],
+            "roadmap" => [home, Current(L["Roadmap"])],
+            "context" => [home, Current(L["Context"])],
+            "decisions" => [home, Current(L["Decisions"])],
+            "agents" => [home, Current(L["Agents"])],
+            "reports" => [home, Current(L["Reports"])],
+            "settings" => [home, Current(L["Settings"])],
+            "task" => [new BreadcrumbItem(L["Board"], "/board"), Current(L["TaskDetail"])],
+            "projects" => [home, Current(L["CreateProject"])],
+            _ => [home]
+        };
+    }
+
+    private static BreadcrumbItem Current(string text) => new(text, href: string.Empty, disabled: true);
+
+    private void Logout() => Navigation.NavigateTo("/logout", forceLoad: true);
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
-public class TaskItem : Entity, ITenantScoped
+public class TaskItem : Entity, IProjectScoped
 {
     public TaskItem() { }
 
@@ -101,5 +101,42 @@ public class TaskItem : Entity, ITenantScoped
             throw new ArgumentException("Review notes cannot be empty when moving to review.", nameof(notes));
 
         ReviewNotes = notes;
+    }
+
+    public void ResetToTodo()
+    {
+        Status = TaskItemStatus.Todo;
+        CompletedAt = null;
+    }
+
+    public void TransitionTo(TaskItemStatus target)
+    {
+        if (Status == target)
+            return;
+
+        switch (target)
+        {
+            case TaskItemStatus.Todo:
+                ResetToTodo();
+                return;
+            case TaskItemStatus.InProgress:
+                if (Status == TaskItemStatus.Done)
+                    ResetToTodo();
+                if (Status == TaskItemStatus.Todo)
+                    MoveToNextStatus();
+                return;
+            case TaskItemStatus.Done:
+                if (string.IsNullOrWhiteSpace(ReviewNotes))
+                    throw new InvalidOperationException(
+                        "Cannot move task to Done without review notes. " +
+                        "Use SetReviewNotes() to provide review information, or " +
+                        "complete the sub-stage workflow via MoveToSubStage(TaskSubStage.Complete).");
+                if (Status == TaskItemStatus.Todo)
+                    MoveToNextStatus();
+                MoveToNextStatus();
+                return;
+            default:
+                throw new InvalidOperationException($"Unknown status: {target}");
+        }
     }
 }

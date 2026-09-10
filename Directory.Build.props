@@ -1,0 +1,6 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'ProjectBeacon.Domain' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Domain.Tests' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Infrastructure' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Cli' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Cli.Tests'">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.8" />
+  </ItemGroup>
+</Project>

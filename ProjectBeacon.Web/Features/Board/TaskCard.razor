@@ -1,0 +1,53 @@
+@namespace ProjectBeacon.Web.Features.Board
+
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Theme
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudPaper Class="pa-3 mb-2 beacon-card-interactive" Elevation="0" Outlined="true">
+    <MudLink Href="@($"/task/{Task.Id}")" Typo="Typo.subtitle2" Underline="Underline.Hover" Color="Color.Default">@Task.Title</MudLink>
+    @if (!string.IsNullOrEmpty(Task.Description))
+    {
+        <MudText Typo="Typo.body2" Class="text-truncate mt-1">@Task.Description</MudText>
+    }
+    @if (Task.Status == "InProgress" && Task.SubStage.HasValue)
+    {
+        <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Info" Class="mt-2" Height="4" />
+    }
+    <MudStack Row="true" Spacing="2" Class="mt-2">
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(Task.Status)">
+            @StatusLabel(Task.Status)
+        </MudChip>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(Task.Priority)">
+            @Task.Priority
+        </MudChip>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(Task.Type)">
+            @Task.Type
+        </MudChip>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public TaskItemDto Task { get; set; } = null!;
+
+    private string StatusLabel(string status) => status switch
+    {
+        "Todo" => L["Todo"].Value,
+        "InProgress" => L["InProgress"].Value,
+        "Done" => L["Done"].Value,
+        _ => status
+    };
+
+    private int SubStageToPercent(TaskSubStage stage) => stage switch
+    {
+        TaskSubStage.RequirementGathering => 10,
+        TaskSubStage.Estimation => 20,
+        TaskSubStage.IntermediateResult => 40,
+        TaskSubStage.Review => 60,
+        TaskSubStage.Corrections => 75,
+        TaskSubStage.ReviewCorrections => 90,
+        TaskSubStage.Complete => 100,
+        _ => 0
+    };
+}

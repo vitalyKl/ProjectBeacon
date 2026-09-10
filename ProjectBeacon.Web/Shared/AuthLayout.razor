@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+@using MudBlazor
+@using ProjectBeacon.Web.Theme
+@using ProjectBeacon.Web.Shared
+
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<div class="auth-shell">
+    <div class="auth-toolbar">
+        <LanguageSwitcher />
+    </div>
+    <div class="auth-body">
+        @Body
+    </div>
+</div>

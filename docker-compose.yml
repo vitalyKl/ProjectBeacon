@@ -1,111 +1,15 @@
-# Postgres + API + web + worker.
-# API :8080 is published so host liveness (/health) works.
-# Worker index HTTP stays on the Compose network (7744). It is not published.
-# apps/mcp HTTP is a stub; local agents use `beacon mcp` (stdio).
-
-name: beacon
-
 services:
   postgres:
-    image: postgres:18-bookworm
+    image: postgres:16-bookworm
     container_name: beacon-postgres
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_USER: beacon
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: beacon
-    volumes:
-      - pgdata:/var/lib/postgresql
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U beacon -d beacon"]
       interval: 5s
       timeout: 5s
       retries: 10
-    # Postgres is not published to the host by default.
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      HOST: "0.0.0.0"
-      PORT: "8080"
-      DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
-      BOOTSTRAP_ADMIN_TOKEN: ${BOOTSTRAP_ADMIN_TOKEN:-}
-      AUTH_LOCAL: ${AUTH_LOCAL:-true}
-      AUTH_LOCAL_INVITE_ONLY: ${AUTH_LOCAL_INVITE_ONLY:-true}
-      AUTH_GITHUB: ${AUTH_GITHUB:-false}
-      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
-      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
-      BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
-      INDEX_RPC_URL: http://worker:7744
-      INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
-      FF_HOSTED_CLONE: ${FF_HOSTED_CLONE:-false}
-      FF_SIDECAR_TUNNEL: ${FF_SIDECAR_TUNNEL:-false}
-    ports:
-      - "8080:8080"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-      args:
-        BEACON_API_URL: http://api:8080
-    depends_on:
-      api:
-        condition: service_healthy
-    environment:
-      HOST: "0.0.0.0"
-      PORT: "3000"
-      BEACON_API_URL: http://api:8080
-      BEACON_PUBLIC_URL: ${BEACON_PUBLIC_URL:-http://localhost:3000}
-      AUTH_GITHUB: ${AUTH_GITHUB:-false}
-      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
-    ports:
-      - "3000:3000"
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      api:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://beacon:${POSTGRES_PASSWORD}@postgres:5432/beacon
-      BEACON_API_URL: http://api:8080
-      BEACON_WORKER_TOKEN: ${BEACON_WORKER_TOKEN}
-      BEACON_WORKSPACE: ${BEACON_WORKSPACE:-/workspace}
-      INDEX_RPC_HOST: 0.0.0.0
-      INDEX_RPC_PORT: "7744"
-      INDEX_RPC_TOKEN: ${INDEX_RPC_TOKEN}
-      BEACON_INDEX_DIR: /var/lib/beacon/index
-      BEACON_CLONE_DIR: /var/lib/beacon/clones
-      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
-      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
-    # Index HTTP stays on the Compose network (7744). It is not published.
-    volumes:
-      - ${BEACON_WORKSPACE:-./workspace}:/workspace:ro
-      - workerdata:/var/lib/beacon
-
-volumes:
-  pgdata:
-  workerdata:

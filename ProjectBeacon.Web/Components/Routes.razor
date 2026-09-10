@@ -1,0 +1,53 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Localization
+@using MudBlazor
+@using ProjectBeacon.Web.Resources
+@using ProjectBeacon.Web.Shared
+@inject IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="typeof(App).Assembly">
+        <Found Context="routeData">
+            <ErrorBoundary @key="Navigation.Uri">
+                <ErrorContent>
+                    <MudAlert Severity="Severity.Error">@L["AnErrorOccurred"]</MudAlert>
+                    <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo(Navigation.Uri, forceLoad: true))">
+                        @L["Back"]
+                    </MudButton>
+                </ErrorContent>
+                <ChildContent>
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(AuthLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        <RedirectTo "/" />
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
+                </NotAuthorized>
+                <Authorizing>
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+                </Authorizing>
+            </AuthorizeRouteView>
+                </ChildContent>
+            </ErrorBoundary>
+        </Found>
+        <NotFound>
+            <AuthorizeView>
+                <Authorized>
+                    <LayoutView Layout="typeof(MainLayout)">
+                        <MudText Typo="Typo.h5">@L["PageNotFound"]</MudText>
+                    </LayoutView>
+                </Authorized>
+                <NotAuthorized>
+                    <LayoutView Layout="typeof(AuthLayout)">
+                        <MudText Typo="Typo.h5">@L["PageNotFound"]</MudText>
+                    </LayoutView>
+                </NotAuthorized>
+            </AuthorizeView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
-public class Decision : Entity, ITenantScoped
+public class Decision : Entity, IProjectScoped
 {
     public Decision() { }
 

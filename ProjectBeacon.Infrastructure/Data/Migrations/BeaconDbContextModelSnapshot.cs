@@ -278,6 +278,132 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("Constraints");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.ContextRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BriefJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BriefMarkdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompiledHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompilerVersion")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SessionId")
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<Guid[]>("SourceNodeIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<string>("TargetPath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TargetRepoId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TargetTaskId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("TokenEstimate")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ContextRevisions");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.ContextSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BodyMarkdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RepoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ReviewState")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ScopeType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SectionId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SectionsText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourcePath")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedById")
+                        .HasColumnType("text");
+
+                    b.Property<string>("UpdatedByType")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("RepoId");
+
+                    b.ToTable("ContextSections");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Decision", b =>
                 {
                     b.Property<Guid>("Id")
@@ -356,6 +482,13 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("PathPrefix")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
@@ -366,11 +499,39 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("Labels");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.LabelPath", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LabelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LabelId", "Path")
+                        .IsUnique();
+
+                    b.ToTable("LabelPaths");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Milestone", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -499,6 +660,48 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ProjectMembers");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Report", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BodyMarkdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedById")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CreatedByType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "CreatedAt");
+
+                    b.ToTable("Reports");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.TaskComment", b =>
@@ -676,6 +879,34 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.ContextRevision", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.ContextSection", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Repo")
+                        .WithMany()
+                        .HasForeignKey("RepoId");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Repo");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Decision", b =>
                 {
                     b.HasOne("ProjectBeacon.Domain.Entities.Projects.Decision", "SupersededBy")
@@ -714,6 +945,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.LabelPath", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Label", "Label")
+                        .WithMany("Paths")
+                        .HasForeignKey("LabelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Label");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Milestone", b =>
@@ -773,6 +1015,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Report", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.TaskComment", b =>
                 {
                     b.HasOne("ProjectBeacon.Domain.Entities.Projects.TaskItem", "Task")
@@ -797,7 +1050,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasOne("ProjectBeacon.Domain.Entities.Projects.TaskItem", "DependentTask")
                         .WithMany()
                         .HasForeignKey("DependentTaskId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ProjectBeacon.Domain.Entities.Projects.TaskItem", "Task")
@@ -857,6 +1110,8 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.Label", b =>
                 {
+                    b.Navigation("Paths");
+
                     b.Navigation("Tasks");
                 });
 

@@ -6,13 +6,15 @@ public abstract class Entity
 
     protected Entity() { }
 
-    protected Entity(Guid id)
-    {
-        Id = id;
-    }
-
     public static T New<T>() where T : Entity, new()
     {
-        return new T();
+        var instance = new T();
+        instance.Init();
+        return instance;
+    }
+
+    protected void Init()
+    {
+        Id = Guid.CreateVersion7();
     }
 }

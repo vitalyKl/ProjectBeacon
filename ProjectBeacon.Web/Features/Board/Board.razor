@@ -1,0 +1,153 @@
+@page "/board"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject ListProjectTasksHandler ListTasks
+@inject CreateTaskHandler CreateTaskHandler
+@inject ChangeTaskStatusHandler ChangeStatus
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Board"]</PageTitle>
+<MudGrid>
+    <MudItem>
+        <MudText Typo="Typo.h4">@L["Board"]</MudText>
+    </MudItem>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateTask">@L["NewTask"]</MudButton>
+    </MudItem>
+</MudGrid>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else
+{
+    <MudDropContainer Items="_allTasks"
+        ItemsSelector="@( (task, zoneId) => task.Status == GetStatusFromZone(zoneId) )"
+        ItemRenderer="@RenderTaskCard"
+        ItemDropped="OnItemDropped"
+        T="TaskItemDto"
+        Class="kanban-board">
+
+        <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
+            <MudDropZone Identifier="Todo" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">
+                    @L["Todo"] (@_todoCount)
+                </MudText>
+            </MudDropZone>
+        </MudPaper>
+
+        <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
+            <MudDropZone Identifier="InProgress" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">
+                    @L["InProgress"] (@_inProgressCount)
+                </MudText>
+            </MudDropZone>
+        </MudPaper>
+
+        <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
+            <MudDropZone Identifier="Done" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">
+                    @L["Done"] (@_doneCount)
+                </MudText>
+            </MudDropZone>
+        </MudPaper>
+    </MudDropContainer>
+}
+
+@code {
+    private List<TaskItemDto> _allTasks = [];
+    private ProjectDto? _project;
+    private bool _loading = true;
+    private int _todoCount => _allTasks.Count(t => t.Status == "Todo");
+    private int _inProgressCount => _allTasks.Count(t => t.Status == "InProgress");
+    private int _doneCount => _allTasks.Count(t => t.Status == "Done");
+
+    private RenderFragment<TaskItemDto> RenderTaskCard = task => builder =>
+    {
+        builder.OpenComponent<TaskCard>(0);
+        builder.AddAttribute(1, nameof(TaskCard.Task), task);
+        builder.CloseComponent();
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync();
+        _project = current.Value;
+        await ReloadTasks();
+        _loading = false;
+    }
+
+    private string GetStatusFromZone(string zoneId) => zoneId switch
+    {
+        "Todo" => "Todo",
+        "InProgress" => "InProgress",
+        "Done" => "Done",
+        _ => "Todo"
+    };
+
+    private static TaskItemStatus ParseStatus(string zoneId) => zoneId switch
+    {
+        "InProgress" => TaskItemStatus.InProgress,
+        "Done" => TaskItemStatus.Done,
+        _ => TaskItemStatus.Todo
+    };
+
+    private async Task OnItemDropped(MudItemDropInfo<TaskItemDto> dropInfo)
+    {
+        if (dropInfo.Item is null) return;
+        var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
+            new ChangeTaskStatusRequest(dropInfo.Item.Id, ParseStatus(dropInfo.DropzoneIdentifier))));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+            await ReloadTasks();
+            return;
+        }
+
+        await ReloadTasks();
+        Snackbar.Add(string.Format(L["TaskMoved"].Value, dropInfo.DropzoneIdentifier), Severity.Info);
+    }
+
+    private async Task ReloadTasks()
+    {
+        if (_project is null)
+        {
+            _allTasks = [];
+            return;
+        }
+
+        var listed = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
+        _allTasks = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private async Task CreateTask()
+    {
+        if (_project is null)
+        {
+            Snackbar.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            return;
+        }
+
+        var created = await CreateTaskHandler.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
+            L["NewTask"].Value, null, _project.Id, TaskPriority.Medium, TaskType.Task, null, null)));
+        if (!created.Success)
+        {
+            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+
+        Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
+        Navigation.NavigateTo($"/task/{created.Value!.Id}");
+    }
+}

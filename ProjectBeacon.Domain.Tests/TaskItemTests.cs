@@ -20,7 +20,6 @@ public sealed class TaskItemTests
         Assert.Null(task.LabelId);
         Assert.Null(task.MilestoneId);
         Assert.Null(task.ReviewNotes);
-        Assert.NotNull(task.CreatedAt);
     }
 
     [Fact]
@@ -205,5 +204,52 @@ public sealed class TaskItemTests
         var task = TaskItem.Create("Test", Guid.NewGuid());
 
         Assert.Throws<ArgumentException>(() => task.SetReviewNotes("   "));
+    }
+
+    [Fact]
+    public void TransitionTo_DoneToTodo_DoesNotHang()
+    {
+        var task = TaskItem.Create("Test", Guid.NewGuid());
+        task.MoveToNextStatus();
+        task.SetReviewNotes("ok");
+        task.MoveToNextStatus();
+
+        task.TransitionTo(TaskItemStatus.Todo);
+
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Null(task.CompletedAt);
+    }
+
+    [Fact]
+    public void TransitionTo_DoneToInProgress()
+    {
+        var task = TaskItem.Create("Test", Guid.NewGuid());
+        task.MoveToNextStatus();
+        task.SetReviewNotes("ok");
+        task.MoveToNextStatus();
+
+        task.TransitionTo(TaskItemStatus.InProgress);
+
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+    }
+
+    [Fact]
+    public void TransitionTo_TodoToDone_RequiresReviewNotes()
+    {
+        var task = TaskItem.Create("Test", Guid.NewGuid());
+
+        Assert.Throws<InvalidOperationException>(() => task.TransitionTo(TaskItemStatus.Done));
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+    }
+
+    [Fact]
+    public void TransitionTo_TodoToDone_WithNotes()
+    {
+        var task = TaskItem.Create("Test", Guid.NewGuid());
+        task.SetReviewNotes("ok");
+        task.TransitionTo(TaskItemStatus.Done);
+
+        Assert.Equal(TaskItemStatus.Done, task.Status);
+        Assert.NotNull(task.CompletedAt);
     }
 }

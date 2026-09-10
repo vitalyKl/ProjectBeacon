@@ -1,0 +1,81 @@
+@page "/reports"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Reports
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject ListReportsHandler ListReports
+@inject GenerateReportHandler GenerateReport
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["Reports"]</PageTitle>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+    <MudText Typo="Typo.h4">@L["Reports"]</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Generate" Disabled="_project is null || _busy">
+        @L["GenerateReport"]
+    </MudButton>
+</MudStack>
+
+@if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else if (_reports.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["ReportsEmpty"]</MudAlert>
+}
+else
+{
+    <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true">
+        <HeaderContent>
+            <MudTh>@L["CreatedAt"]</MudTh>
+            <MudTh>@L["Title"]</MudTh>
+            <MudTh>@L["Content"]</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
+            <MudTd>@context.Title</MudTd>
+            <MudTd>
+                <MudText Typo="Typo.caption" Style="white-space: pre-wrap; font-family: monospace;">@context.BodyMarkdown</MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private ProjectDto? _project;
+    private List<ReportDto> _reports = [];
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync();
+        _project = current.Value;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (_project is null)
+            return;
+        var listed = await ListReports.HandleAsync(new ListReportsRequest(_project.Id));
+        _reports = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private async Task Generate()
+    {
+        if (_project is null)
+            return;
+        _busy = true;
+        var result = await GenerateReport.HandleAsync(new GenerateReportCommand(
+            new GenerateReportRequest(_project.Id, "user", "web")));
+        _busy = false;
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["AnErrorOccurred"], Severity.Error);
+            return;
+        }
+        await Reload();
+    }
+}

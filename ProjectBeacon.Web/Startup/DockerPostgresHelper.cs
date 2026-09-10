@@ -26,7 +26,7 @@ public class DockerPostgresHelper
     {
         try
         {
-            var status = RunDockerCommand($"ps --filter name={config.ContainerName} --format {{.Status}}");
+            var status = RunDockerCommand($"ps --filter name={config.ContainerName} --format {{{{.Status}}}}");
             if (!string.IsNullOrEmpty(status) && status.Contains("Up"))
             {
                 _logger.LogInformation("Docker container '{Container}' is already running.", config.ContainerName);
@@ -62,10 +62,10 @@ public class DockerPostgresHelper
     {
         for (var i = 0; i < maxRetries; i++)
         {
-            var status = RunDockerCommand($"inspect --format='{{{{.State.Status}}}}' {config.ContainerName}");
+            var status = RunDockerCommand($"inspect --format={{{{.State.Status}}}} {config.ContainerName}");
             if (status?.Trim() == "running")
             {
-                var health = RunDockerCommand($"inspect --format='{{{{.State.Health.Status}}}}' {config.ContainerName}");
+                var health = RunDockerCommand($"inspect --format={{{{.State.Health.Status}}}} {config.ContainerName}");
                 if (health?.Trim() == "healthy")
                 {
                     _logger.LogInformation("Docker container '{Container}' is healthy.", config.ContainerName);
@@ -74,8 +74,8 @@ public class DockerPostgresHelper
 
                 if (string.IsNullOrEmpty(health) || health.Trim() == "none")
                 {
-                    Thread.Sleep(delayMs);
-                    continue;
+                    _logger.LogInformation("Docker container '{Container}' is running (no healthcheck configured).", config.ContainerName);
+                    return true;
                 }
             }
 

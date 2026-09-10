@@ -1,0 +1,56 @@
+@page "/login"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.WebUtilities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Login"]</PageTitle>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
+    <MudText Typo="Typo.h4" Class="text-center mb-6">@L["Login"]</MudText>
+
+    @if (_error)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@L["InvalidCredentials"]</MudAlert>
+    }
+
+    <form method="post" action="/v1/auth/cookie-login">
+        <MudTextField T="string"
+                      Label="@L["Username"]"
+                      Required="true"
+                      Margin="Margin.Dense"
+                      Variant="Variant.Outlined"
+                      UserAttributes="@LoginFieldAttrs" />
+        <MudTextField T="string"
+                      Label="@L["Password"]"
+                      InputType="InputType.Password"
+                      Required="true"
+                      Margin="Margin.Dense"
+                      Variant="Variant.Outlined"
+                      UserAttributes="@PasswordFieldAttrs" />
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-6 w-100">
+            @L["Login"]
+        </MudButton>
+    </form>
+</MudPaper>
+
+@code {
+    private static readonly Dictionary<string, object> LoginFieldAttrs = new()
+    {
+        ["name"] = "login",
+        ["autocomplete"] = "username"
+    };
+    private static readonly Dictionary<string, object> PasswordFieldAttrs = new()
+    {
+        ["name"] = "password",
+        ["autocomplete"] = "current-password"
+    };
+    private bool _error;
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        _error = QueryHelpers.ParseQuery(uri.Query).ContainsKey("error");
+    }
+}

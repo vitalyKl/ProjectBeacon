@@ -1,0 +1,55 @@
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@using System.Resources
+@using System.Globalization
+
+<MudMenu Icon="@Icons.Material.Filled.Language"
+         Variant="Variant.Text"
+         Dense="true">
+    @foreach (var culture in SupportedCultures)
+    {
+        <MudMenuItem OnClick="@(() => OnSelect(culture.Culture))">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>@culture.Flag</span>
+                <span>@GetLanguageName(culture.Culture)</span>
+                @if (SelectedCulture == culture.Culture)
+                {
+                    <span style="flex-grow: 1;"></span>
+                    <span>✓</span>
+                }
+            </div>
+        </MudMenuItem>
+    }
+</MudMenu>
+
+@code {
+    private static readonly ResourceManager ResourceManager = new(
+        "ProjectBeacon.Web.Resources.Web",
+        typeof(Web).Assembly);
+
+    private string GetLanguageName(string cultureCode)
+    {
+        var culture = CultureInfo.GetCultureInfo(cultureCode);
+        return ResourceManager.GetString($"Lang_{cultureCode}", culture)
+            ?? culture.EnglishName;
+    }
+
+    private string SelectedCulture => CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+
+    private void OnSelect(string culture)
+    {
+        var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        if (string.IsNullOrEmpty(returnUrl))
+            returnUrl = "dashboard";
+        Navigation.NavigateTo($"/culture?culture={Uri.EscapeDataString(culture)}&returnUrl={Uri.EscapeDataString("/" + returnUrl)}", forceLoad: true);
+    }
+
+    private readonly (string Culture, string DisplayName, string Flag)[] SupportedCultures =
+    [
+        ("en", "English", "🇺🇸"),
+        ("ru", "Русский", "🇷🇺"),
+        ("de", "Deutsch", "🇩🇪"),
+        ("ja", "日本語", "🇯🇵"),
+        ("zh", "中文", "🇨🇳")
+    ];
+}

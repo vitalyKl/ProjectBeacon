@@ -1,0 +1,237 @@
+@page "/roadmap"
+@layout MainLayout
+@attribute [Authorize]
+@using ProjectBeacon.Application.Milestones
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Tasks
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject ListProjectMilestonesHandler ListMilestones
+@inject ListProjectTasksHandler ListTasks
+@inject CreateMilestoneHandler CreateMilestoneHandler
+@inject UpdateMilestoneHandler UpdateMilestoneHandler
+@inject DeleteMilestoneHandler DeleteMilestoneHandler
+@inject CloseMilestoneHandler CloseMilestoneHandler
+@inject ReopenMilestoneHandler ReopenMilestoneHandler
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["Roadmap"]</PageTitle>
+<MudGrid>
+    <MudItem>
+        <MudText Typo="Typo.h4">@L["Roadmap"]</MudText>
+    </MudItem>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ShowCreateForm">@L["NewMilestone"]</MudButton>
+    </MudItem>
+</MudGrid>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_milestones.Count == 0 && !_showCreateForm)
+{
+    <MudText Typo="Typo.body1" Class="text-center mt-6">@L["NoMilestones"]</MudText>
+}
+else
+{
+    @if (_showCreateForm)
+    {
+        <MudCard Class="mt-4 pa-4">
+            <MudText Typo="Typo.h6">@L["CreateMilestone"]</MudText>
+            <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_newOrder" Label="@L["Order"]" InputType="InputType.Number" Class="mt-2 mb-2" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateMilestone" Class="mt-2">@L["Create"]</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@HideCreateForm" Class="mt-2">@L["Cancel"]</MudButton>
+        </MudCard>
+    }
+
+    @if (_editingId is not null)
+    {
+        <MudCard Class="mt-4 pa-4">
+            <MudText Typo="Typo.h6">@L["UpdateMilestone"]</MudText>
+            <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_editOrder" Label="@L["Order"]" InputType="InputType.Number" Class="mt-2 mb-2" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveMilestone" Class="mt-2">@L["Save"]</MudButton>
+            <MudButton Variant="Variant.Text" OnClick="@CancelEdit" Class="mt-2">@L["Cancel"]</MudButton>
+        </MudCard>
+    }
+
+    <MudGrid Class="mt-4">
+        @foreach (var milestone in _milestones.OrderBy(m => m.Order))
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Class="pa-4">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6">@milestone.Name</MudText>
+                        @if (!string.IsNullOrEmpty(milestone.Description))
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">@milestone.Description</MudText>
+                        }
+                        <MudText Typo="Typo.caption" Class="mt-2">
+                            @L["TaskCount"]: @(_tasks.Count(t => t.MilestoneId == milestone.Id))
+                        </MudText>
+                        @if (milestone.ClosedAt is not null)
+                        {
+                            var orphans = MilestoneOrphanLint.OpenTaskCount(
+                                milestone.ClosedAt, milestone.Id,
+                                _tasks.Select(t => (t.MilestoneId, t.Status)));
+                            if (orphans > 0)
+                            {
+                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                    @string.Format(L["OrphanWarning"].Value, orphans)
+                                </MudAlert>
+                            }
+                        }
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => StartEditMilestone(milestone)">@L["Edit"]</MudButton>
+                        @if (milestone.ClosedAt is null)
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="() => CloseMilestone(milestone)">@L["CloseMilestone"]</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Text" OnClick="() => ReopenMilestone(milestone)">@L["ReopenMilestone"]</MudButton>
+                        }
+                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteMilestone(milestone)">@L["Delete"]</MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<MilestoneDto> _milestones = [];
+    private List<TaskItemDto> _tasks = [];
+    private ProjectDto? _project;
+    private bool _loading = true;
+    private bool _showCreateForm;
+    private Guid? _editingId;
+    private string? _editName;
+    private string? _editDescription;
+    private int _editOrder;
+    private int _newOrder;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync();
+        _project = current.Value;
+        await Reload();
+        _loading = false;
+    }
+
+    private async Task Reload()
+    {
+        if (_project is null)
+        {
+            _milestones = [];
+            _tasks = [];
+            return;
+        }
+
+        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id)));
+        _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        var tasks = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
+        _tasks = tasks.Success ? tasks.Value!.ToList() : [];
+    }
+
+    private void ShowCreateForm()
+    {
+        _newOrder = _milestones.Count + 1;
+        _showCreateForm = true;
+        _editingId = null;
+    }
+
+    private void HideCreateForm() => _showCreateForm = false;
+
+    private async Task CreateMilestone()
+    {
+        if (_project is null)
+        {
+            Snackbar.Add(L["NoProjectAvailable"].Value, Severity.Error);
+            return;
+        }
+
+        var created = await CreateMilestoneHandler.HandleAsync(new CreateMilestoneCommand(new CreateMilestoneRequest(
+            string.IsNullOrWhiteSpace(_editName) ? L["Milestone"].Value : _editName,
+            _editDescription,
+            _project.Id,
+            _newOrder)));
+        if (!created.Success)
+        {
+            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+
+        _showCreateForm = false;
+        _editName = _editDescription = null;
+        Snackbar.Add(L["MilestoneCreated"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private void StartEditMilestone(MilestoneDto milestone)
+    {
+        _editingId = milestone.Id;
+        _editName = milestone.Name;
+        _editDescription = milestone.Description;
+        _editOrder = milestone.Order;
+        _showCreateForm = false;
+    }
+
+    private async Task SaveMilestone()
+    {
+        if (_editingId is null) return;
+        var updated = await UpdateMilestoneHandler.HandleAsync(new UpdateMilestoneCommand(new UpdateMilestoneRequest(
+            _editingId.Value, _editName, _editDescription, _editOrder)));
+        if (!updated.Success)
+        {
+            Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _editingId = null;
+        Snackbar.Add(L["MilestoneUpdated"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private void CancelEdit() => _editingId = null;
+
+    private async Task CloseMilestone(MilestoneDto milestone)
+    {
+        var result = await CloseMilestoneHandler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task ReopenMilestone(MilestoneDto milestone)
+    {
+        var result = await ReopenMilestoneHandler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestone.Id)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task DeleteMilestone(MilestoneDto milestone)
+    {
+        var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["MilestoneDeleted"].Value, Severity.Success);
+        await Reload();
+    }
+}
