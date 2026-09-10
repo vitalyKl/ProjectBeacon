@@ -106,9 +106,9 @@ public sealed class OrgProjectTaskHttpTests
         var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks");
         Assert.True(listed.GetArrayLength() >= 2);
 
-        var toProgress = await client.PatchAsJsonAsync($"/v1/tasks/{taskId}/status", new { status = 1 });
+        var toProgress = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = 1 });
         Assert.True(toProgress.IsSuccessStatusCode, await toProgress.Content.ReadAsStringAsync());
-        var missingReview = await client.PatchAsJsonAsync($"/v1/tasks/{taskId}/status", new { status = 2 });
+        var missingReview = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = 2 });
         Assert.Equal(HttpStatusCode.BadRequest, missingReview.StatusCode);
 
         var updated = await client.PutAsJsonAsync($"/v1/tasks/{taskId}", new

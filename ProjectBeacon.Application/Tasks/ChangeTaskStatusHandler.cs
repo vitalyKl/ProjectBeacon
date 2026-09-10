@@ -13,7 +13,10 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
 
     public async Task<Result<TaskItemDto>> HandleAsync(ChangeTaskStatusCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks.FindAsync([command.Request.TaskId], ct);
+        var query = _db.Tasks.AsQueryable();
+        if (command.Request.ProjectId is Guid projectId)
+            query = query.Where(t => t.ProjectId == projectId);
+        var task = await query.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
 

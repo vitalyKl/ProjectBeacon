@@ -55,7 +55,7 @@ Four pieces (per design-doc-v2 §3):
 - Status enums live in `ProjectBeacon.Domain.Enums` to avoid BCL name collisions.
 - Password hashing uses `PasswordHasher` in Infrastructure (BCrypt).
 - Comments explain a non-obvious constraint. Do not narrate implementation history.
-- Do not edit `docs/design.md` unless the task says to.
+- Do not edit `.net project docs/ProjectBeacon-design-doc-v2.md` unless the task says to.
 - User-facing web chrome goes through `IStringLocalizer<Web>` (resx). Add the English key first; other locales fall back to English.
 - Do not hardcode English chrome in Razor components. Leave user-authored content (project names, task titles, descriptions, comments) in the language they were written. Filenames and CLI commands stay English.
 - A change is not done until the acceptance criterion in `.net project docs/ProjectBeacon-dotnet-roadmap-v2.md` for that row is met.

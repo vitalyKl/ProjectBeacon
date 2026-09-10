@@ -46,7 +46,7 @@ public record AddReviewNotesRequest(Guid TaskId, string ReviewNotes);
 
 public record AddReviewNotesCommand(AddReviewNotesRequest Request) : ICommand<Result<TaskItemDto>>;
 
-public record ChangeTaskStatusRequest(Guid TaskId, TaskItemStatus Status);
+public record ChangeTaskStatusRequest(Guid TaskId, TaskItemStatus Status, Guid? ProjectId = null);
 
 public record ChangeTaskStatusCommand(ChangeTaskStatusRequest Request) : ICommand<Result<TaskItemDto>>;
 
