@@ -93,11 +93,8 @@ else
                 @L["CompileBrief"]
             </MudButton>
         </MudStack>
-        @{
-            var pct = Math.Min(100, (int)Math.Round(_briefTokens * 100.0 / _briefBudget));
-        }
         <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_briefTokens / @_briefBudget</MudText>
-        <MudProgressLinear Value="pct" Color="Color.Default" Class="mt-1" Height="6" />
+        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="Color.Default" Class="mt-1" Height="6" />
         @if (!string.IsNullOrEmpty(_briefError))
         {
             <MudAlert Severity="Severity.Error" Class="mt-2">@_briefError</MudAlert>

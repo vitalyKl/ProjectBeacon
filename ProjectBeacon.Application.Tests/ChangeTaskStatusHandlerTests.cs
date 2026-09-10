@@ -51,4 +51,22 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         Assert.True(result.Success, result.Error);
         Assert.Equal("Todo", result.Value!.Status);
     }
+
+    [Fact]
+    public async Task InProgressToDone_WithoutReviewNotes_FailsAndReloads()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        task.TransitionTo(TaskItemStatus.InProgress);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var handler = new ChangeTaskStatusHandler(_db);
+        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
+
+        Assert.False(result.Success);
+        Assert.Contains("review notes", result.Error, StringComparison.OrdinalIgnoreCase);
+        var stored = await _db.Tasks.FindAsync([task.Id]);
+        Assert.Equal(TaskItemStatus.InProgress, stored!.Status);
+    }
 }

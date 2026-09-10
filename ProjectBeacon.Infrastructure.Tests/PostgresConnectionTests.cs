@@ -32,4 +32,31 @@ public sealed class PostgresConnectionTests
             Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", previousPassword);
         }
     }
+
+    [Fact]
+    public void Resolve_UsesPostgresPasswordEnv()
+    {
+        var previousEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var previousPassword = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");
+        try
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Production");
+            Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "from-env");
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:Default"] = "Host=localhost;Port=5432;Database=beacon;Username=beacon;"
+                })
+                .Build();
+
+            var connectionString = PostgresConnection.Resolve(configuration);
+            Assert.Contains("Password=from-env", connectionString, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", previousEnv);
+            Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", previousPassword);
+        }
+    }
 }

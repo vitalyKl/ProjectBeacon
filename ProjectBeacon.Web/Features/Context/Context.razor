@@ -44,7 +44,7 @@ else
         <MudItem xs="12" md="6">
             <MudButton Variant="Variant.Outlined" OnClick="Compile">@L["CompileBrief"]</MudButton>
             <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_tokens / 8000</MudText>
-            <MudProgressLinear Value="@Math.Min(100, _tokens * 100 / 8000)" Class="mt-1" Height="6" />
+            <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, 8000)" Class="mt-1" Height="6" />
             @if (!string.IsNullOrEmpty(_preview))
             {
                 <MudText Typo="Typo.body2" Class="mt-4" Style="white-space: pre-wrap; font-family: monospace;">@_preview</MudText>

@@ -12,10 +12,12 @@ and LabelPath entities + EF migrations. Auto-label is a live API tool
 (`GET …/labels/match`, create-task `path`). Generate/list reports. Live
 stdio MCP process harness (`dotnet exec beacon.dll mcp`) covers `tools/list`
 write + `../` reject. Cookie-login HTTP: 302 + `BeaconAuth`. Org/project/
-member/token/task HTTP create-read-list. `dotnet test` 172 passed.
-`has-pending-model-changes` reports none. Phase 4 whole-phase stays 🟡
-until Task Detail meter is clicked in a browser. Reports UI not
-browser-verified. `global.json` still untracked until committed.
+member/token/task HTTP create-read-list. Culture cookie via `GET /culture`.
+API-only host serves `/v1` (401 without auth). Wizard handlers create
+org+project+starter labels. `PATCH /v1/tasks/{id}/status` goes through
+`ChangeTaskStatusHandler`; missing review notes → 400. Env: `.env` load +
+`POSTGRES_PASSWORD`. Phase 4 whole-phase stays 🟡 until Task Detail meter
+is clicked in a browser. Reports/Board UI not browser-verified.
 
 ## 0. Status legend
 
@@ -50,7 +52,7 @@ A parent is only ✅ if every child is ✅.
 | 8 | CI build+test | 🟡 | Workflow installs SDK from `global.json` and runs `dotnet test`; default-branch green not yet proven. |
 | 9 | AGENTS.md conventions-only | 🟡 | No DoD section; no task-specific instructions |
 | 10 | `TaskItemStatus` | ✅ | `dotnet build` has no CS0104 `TaskStatus` clash |
-| 11 | resx + LanguageSwitcher | 🟡 | Locales en/ru/de/ja/zh. Culture cookie via `GET /culture`; no custom JS; no `Thread.CurrentThread` mutation. |
+| 11 | resx + LanguageSwitcher | ✅ | Locales en/ru/de/ja/zh. `GET /culture` sets `.AspNetCore.Culture` (`CookieLoginHttpTests.Culture_SetsCookie_AndRejectsUnknown`). No custom JS; no `Thread.CurrentThread` mutation. |
 
 CQRS split (handlers in Application, thin API endpoints) is in place. Web
 screens under `Features/` call those handlers; Razor must not inject
@@ -61,7 +63,7 @@ project.
 
 | # | Item | Status | Acceptance criterion |
 |---|---|---|---|
-| 1 | API project split | 🟡 | `/v1/*` responds with only `ProjectBeacon.API` running |
+| 1 | API project split | ✅ | `/v1/*` responds with only `ProjectBeacon.API` running (`ApiHost_V1RequiresAuth_AndAssemblyIsApi`) |
 | 2 | `UserSession`; lockout columns | ✅ | Schema has `LastLoginAt`, `FailedLoginAttempts`, `LockedUntil` |
 | 3 | JWT for API, cookie for Blazor | 🟡 | Bearer `/v1/*` works without cookie; Blazor page load works without bearer. HTTP: JWT login 200, cookie-login 302 + `BeaconAuth` (`CookieLoginHttpTests`). Browser circuit not exercised. |
 | 4 | Rate limiting bootstrap/login/register | ✅ | N+1th auth request from same IP in the window returns 429 (`AuthHttpTests.AuthEndpoints_RateLimited`) |
@@ -78,7 +80,7 @@ project.
 | 2 | Domain in `Identity/` + `Projects/` | ✅ | No entity files in `Domain/Entities` root |
 | 3 | API for orgs/projects/members/tokens | ✅ | Create/read/list HTTP tests (`OrgProjectTaskHttpTests`) including `GET …/tokens` |
 | 4 | Capabilities 403 | ✅ | `task:read` token gets 403 on write (`TaskReadToken_CannotCreateTask`) |
-| 5 | Create-project wizard | 🟡 | `/projects/new` creates org+project through handlers |
+| 5 | Create-project wizard | ✅ | `/projects/new` creates org+project through handlers (`CreateProjectWizardTests`) |
 | 6 | Token hashing, shown once | ✅ | Raw `bcn_` not persisted; list/get return prefix only |
 | 7 | Cross-tenant query filters | ✅ | `IOrgScoped`/`IProjectScoped` filters parameterized via `BeaconDbContext`. Postgres tests pass: other-project tasks hidden; `IgnoreQueryFilters` still sees them. Hosted multi-tenant flag stays off. |
 
@@ -86,7 +88,7 @@ project.
 
 | # | Item | Status | Acceptance criterion |
 |---|---|---|---|
-| A | DB credentials from env | 🟡 | `.env` loaded at startup; `ConnectionStrings:Default` and/or `POSTGRES_PASSWORD`. Development falls back to `beacon` if both missing. |
+| A | DB credentials from env | ✅ | `.env` loaded at startup (`EnvFileTests`); `ConnectionStrings:Default` and/or `POSTGRES_PASSWORD`. Development falls back to `beacon` if both missing. |
 | 1 | Milestone/dependency/comment | ✅ | Entities + Domain.Tests + HTTP comments/dependencies |
 | 2 | Atomic claim | ✅ | `FOR UPDATE SKIP LOCKED` in a transaction. Testcontainers Postgres 16: 3 concurrent claims → 1 success (Todo→InProgress), 2 fail "already claimed". Sequential second claim fails. |
 | 3 | Task API | ✅ | CRUD + comments + dependencies (`Task_CrudCommentsAndDependencies`) |
@@ -132,7 +134,7 @@ deny-native-tools: `.net project docs/mcp-host.md`. HTTP MCP not shipped.
 | 1 | Decision/LabelPath/Report entities | ✅ | Decision+DecisionTask, LabelPath, Report. Migrations `AddReportAndLabelPath`. |
 | 2 | Auto-label by path | ✅ | `AutoLabel` + `PathMatcher`; live `GET /v1/projects/{id}/labels/match` and create-task `path` |
 | 3 | Shared PathMatcher | ✅ | Unit tests for `apps/api` vs `apps/api-legacy`; used by AutoLabel and LabelPath |
-| 4 | Milestone orphan lint | 🟡 | `ClosedAt` + `MilestoneOrphanLint.OpenTasksOnClosed`. Roadmap shows a warning. |
+| 4 | Milestone orphan lint | ✅ | `ClosedAt` + `MilestoneOrphanLint.OpenTasksOnClosed`. Roadmap shows a warning. |
 | 5 | Decision consequences in brief | ✅ | See Phase 4.2 |
 | 6 | Labels/Decisions/Reports/Agents screens | 🟡 | Decisions CRUD + accept via handlers. Reports generate/list board snapshots. Settings lists labels. Agents empty-state is honest. Browser pass still required. |
 

@@ -32,6 +32,39 @@ public sealed class CookieLoginHttpTests
         Assert.Equal("/dashboard", response.Headers.Location?.ToString());
         Assert.Contains(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith("BeaconAuth=", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task Culture_SetsCookie_AndRejectsUnknown()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var ru = await client.GetAsync("/culture?culture=ru&returnUrl=/dashboard");
+        Assert.Equal(HttpStatusCode.Redirect, ru.StatusCode);
+        Assert.Equal("/dashboard", ru.Headers.Location?.ToString());
+        Assert.Contains(ru.Headers.GetValues("Set-Cookie"),
+            c => c.Contains(".AspNetCore.Culture", StringComparison.Ordinal) && c.Contains("ru", StringComparison.OrdinalIgnoreCase));
+
+        var bad = await client.GetAsync("/culture?culture=xx&returnUrl=/dashboard");
+        Assert.Equal(HttpStatusCode.Redirect, bad.StatusCode);
+        Assert.Contains(bad.Headers.GetValues("Set-Cookie"),
+            c => c.Contains(".AspNetCore.Culture", StringComparison.Ordinal) && c.Contains("en", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task AnonymousBoard_ChallengesToLogin()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var response = await client.GetAsync("/board");
+        Assert.True(
+            response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Unauthorized or HttpStatusCode.OK,
+            response.StatusCode.ToString());
+        if (response.StatusCode == HttpStatusCode.Redirect)
+            Assert.Contains("/login", response.Headers.Location?.ToString(), StringComparison.OrdinalIgnoreCase);
+        else if (response.StatusCode == HttpStatusCode.OK)
+            Assert.Contains("login", (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
+    }
 }
 
 public sealed class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.Dashboard.Dashboard>
