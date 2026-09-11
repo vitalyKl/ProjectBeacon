@@ -70,7 +70,10 @@
     </MudDrawer>
     <MudMainContent>
         <div class="pa-4">
-            @Body
+            @if (_bodyReady)
+            {
+                @Body
+            }
         </div>
     </MudMainContent>
 </MudLayout>
@@ -81,6 +84,7 @@
 
     private List<BreadcrumbItem> _crumbs = [];
     private string _initials = string.Empty;
+    private bool _bodyReady;
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,6 +92,8 @@
         RebuildCrumbs();
         await BindTenant();
         await LoadInitials();
+        _bodyReady = true;
+        StateHasChanged();
     }
 
     private async Task BindTenant()
