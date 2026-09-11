@@ -15,6 +15,11 @@ Or after publish, `beacon mcp --root <project-root>`.
 - `read_file` `{ path }`
 - `write_file` `{ path, content }`
 - `apply_patch` `{ path, oldText, newText }` — one exact occurrence; otherwise error, no partial write
+- `get_tree` `{ path?, maxEntries? }` — re-scans the working tree; skips `node_modules`, `.git`, `bin`, `obj`, etc.
+- `search_code` `{ query, path?, maxMatches? }` — literal substring search over text files, case-insensitive
+- `get_changed_scope` `{ path?, maxFiles? }` — changed files from `git status`; the root must be a git repository
+
+For `search_code` and `get_changed_scope`, `path` is a comma-separated list of path prefixes; an empty or omitted value means the whole tree.
 
 Paths are resolved inside the project root. `../` and other escapes are rejected. There is no shell tool.
 
