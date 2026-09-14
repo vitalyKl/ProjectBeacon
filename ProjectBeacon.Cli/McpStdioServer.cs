@@ -254,57 +254,37 @@ public static class McpStdioServer
 
     private static async Task<JsonNode?> ReadMessageAsync(Stream stream)
     {
-        var length = -1;
         while (true)
         {
-            var line = await ReadAsciiLineAsync(stream);
+            var line = await ReadUtf8LineAsync(stream);
             if (line is null)
                 return null;
             if (line.Length == 0)
-                break;
-            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                length = int.Parse(line["Content-Length:".Length..].Trim());
+                continue;
+            return JsonNode.Parse(line);
         }
-
-        if (length < 0)
-            return null;
-
-        var buffer = new byte[length];
-        var read = 0;
-        while (read < length)
-        {
-            var n = await stream.ReadAsync(buffer.AsMemory(read, length - read));
-            if (n == 0)
-                return null;
-            read += n;
-        }
-
-        return JsonNode.Parse(Encoding.UTF8.GetString(buffer));
     }
 
-    private static async Task<string?> ReadAsciiLineAsync(Stream stream)
+    private static async Task<string?> ReadUtf8LineAsync(Stream stream)
     {
-        var bytes = new List<byte>(64);
+        var bytes = new List<byte>(256);
         while (true)
         {
             var b = stream.ReadByte();
             if (b < 0)
-                return bytes.Count == 0 ? null : Encoding.ASCII.GetString(bytes.ToArray());
+                return bytes.Count == 0 ? null : Encoding.UTF8.GetString(bytes.ToArray());
             if (b == '\n')
                 break;
             if (b != '\r')
                 bytes.Add((byte)b);
         }
 
-        return Encoding.ASCII.GetString(bytes.ToArray());
+        return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
     private static async Task WriteMessageAsync(Stream stream, JsonNode message)
     {
-        var json = message.ToJsonString(Json);
-        var body = Encoding.UTF8.GetBytes(json);
-        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
-        await stream.WriteAsync(header);
+        var body = Encoding.UTF8.GetBytes(message.ToJsonString(Json) + "\n");
         await stream.WriteAsync(body);
         await stream.FlushAsync();
     }

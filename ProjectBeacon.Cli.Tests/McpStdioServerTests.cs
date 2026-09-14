@@ -117,9 +117,7 @@ public sealed class McpStdioServerTests
 
     private static void WriteFrame(Stream stream, string json)
     {
-        var body = Encoding.UTF8.GetBytes(json);
-        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
-        stream.Write(header);
+        var body = Encoding.UTF8.GetBytes(json + "\n");
         stream.Write(body);
     }
 
@@ -129,25 +127,12 @@ public sealed class McpStdioServerTests
         var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
         while (true)
         {
-            var length = -1;
-            while (true)
-            {
-                var line = await reader.ReadLineAsync();
-                if (line is null)
-                    return frames;
-                if (line.Length == 0)
-                    break;
-                if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                    length = int.Parse(line["Content-Length:".Length..].Trim());
-            }
-
-            if (length < 0)
+            var line = await reader.ReadLineAsync();
+            if (line is null)
                 return frames;
-            var buf = new char[length];
-            var n = await reader.ReadBlockAsync(buf, 0, length);
-            if (n == 0)
-                return frames;
-            var node = JsonNode.Parse(new string(buf, 0, n));
+            if (line.Length == 0)
+                continue;
+            var node = JsonNode.Parse(line);
             if (node is not null)
                 frames.Add(node);
         }

@@ -59,9 +59,7 @@ public sealed class McpLiveProcessTests
 
     private static async Task WriteFrameAsync(Stream stream, string json)
     {
-        var body = Encoding.UTF8.GetBytes(json);
-        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
-        await stream.WriteAsync(header);
+        var body = Encoding.UTF8.GetBytes(json + "\n");
         await stream.WriteAsync(body);
         await stream.FlushAsync();
     }
@@ -73,25 +71,12 @@ public sealed class McpLiveProcessTests
         while (frames.Count < count)
         {
             ct.ThrowIfCancellationRequested();
-            var length = -1;
-            while (true)
-            {
-                var line = await reader.ReadLineAsync(ct);
-                if (line is null)
-                    return frames;
-                if (line.Length == 0)
-                    break;
-                if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                    length = int.Parse(line["Content-Length:".Length..].Trim());
-            }
-
-            if (length < 0)
+            var line = await reader.ReadLineAsync(ct);
+            if (line is null)
                 return frames;
-            var buf = new char[length];
-            var n = await reader.ReadBlockAsync(buf, 0, length);
-            if (n == 0)
-                return frames;
-            var node = JsonNode.Parse(new string(buf, 0, n));
+            if (line.Length == 0)
+                continue;
+            var node = JsonNode.Parse(line);
             if (node is not null)
                 frames.Add(node);
         }
