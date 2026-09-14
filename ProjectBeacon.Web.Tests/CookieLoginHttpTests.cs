@@ -34,6 +34,15 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
+    public async Task RecoverPage_AccessibleToAnonymous()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient();
+        var response = await client.GetAsync("/recover");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Culture_SetsCookie_AndRejectsUnknown()
     {
         await using var factory = new WebTestFactory();

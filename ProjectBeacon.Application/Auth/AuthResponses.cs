@@ -5,3 +5,5 @@ public record LoginResponse(Guid UserId, string Login, string Email, bool IsAdmi
 public record RegisterResponse(Guid UserId, string Login, string Email);
 
 public record BootstrapResponse(Guid UserId, string Login, string Email, bool IsAdmin, string Password);
+
+public record RecoverAdminResponse(Guid UserId, string Login, string Email, bool IsAdmin, string Password);

@@ -1,0 +1,132 @@
+@page "/recover"
+@layout AuthLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@using Microsoft.Extensions.Localization
+@using MudBlazor
+@using ProjectBeacon.Web.Resources
+@inject IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@implements IDisposable
+
+<PageTitle>@L["RecoverPassword"]</PageTitle>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card" Style="max-width: 500px;">
+    <MudText Typo="Typo.h4" Class="text-center mb-6">@L["RecoverPassword"]</MudText>
+
+    <MudText Typo="Typo.body1" Class="mb-4">
+        @L["RecoverDescription"]
+    </MudText>
+
+    @if (_success)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4" variant="Variant.Text">
+            <MudText Typo="Typo.body2">
+                @L["RecoverSuccess"]
+            </MudText>
+            <MudTextField @bind-Value="_password" T="string" ReadOnly="true" Label="@L["NewPassword"]" Class="mt-2" />
+        </MudAlert>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => Navigation.NavigateTo("/login"))"
+                   Class="w-100">
+            @L["GoToLogin"]
+        </MudButton>
+    }
+    else
+    {
+        <MudTextField @bind-Value="_token"
+                      Label="@L["BootstrapToken"]"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Class="mb-4" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@HandleRecover" Disabled="@_loading"
+                   Class="w-100">
+            @(_loading ? L["Loading"] : L["RecoverPassword"])
+        </MudButton>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4" variant="Variant.Text">
+            @_error
+        </MudAlert>
+    }
+</MudPaper>
+
+@code {
+    private bool _success;
+    private string _password = string.Empty;
+    private string _token = string.Empty;
+    private string? _error;
+    private bool _loading;
+
+    private async Task HandleRecover()
+    {
+        _error = null;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/recover-admin");
+            if (!string.IsNullOrWhiteSpace(_token))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token.Trim());
+            var response = await Http.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var json = System.Text.Json.JsonSerializer.Deserialize<ErrorResult>(body,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                _error = string.IsNullOrEmpty(json?.Error)
+                    ? (string.IsNullOrWhiteSpace(body) ? response.StatusCode.ToString() : body)
+                    : json!.Error;
+                return;
+            }
+
+            var result = System.Text.Json.JsonSerializer.Deserialize<RecoverResult>(body,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (result is null || string.IsNullOrEmpty(result.Password))
+            {
+                _error = L["Error"].Value;
+                return;
+            }
+
+            _success = true;
+            _password = result.Password;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _success = false;
+        _password = string.Empty;
+        _token = string.Empty;
+        _error = null;
+    }
+
+    public class RecoverResult
+    {
+        public Guid UserId { get; set; }
+        public string Login { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public bool IsAdmin { get; set; }
+        public string Password { get; set; } = string.Empty;
+    }
+
+    public class ErrorResult
+    {
+        public string? Error { get; set; }
+    }
+}

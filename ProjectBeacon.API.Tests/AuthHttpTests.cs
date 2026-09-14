@@ -1,7 +1,9 @@
 namespace ProjectBeacon.API.Tests;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -17,7 +19,8 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        await client.PostAsJsonAsync("/v1/auth/bootstrap", new { });
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        bootstrap.EnsureSuccessStatusCode();
 
         var fail = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = "nope" });
         Assert.Equal(HttpStatusCode.Unauthorized, fail.StatusCode);
@@ -49,23 +52,95 @@ public sealed class AuthHttpTests
         var orgs = await client.GetAsync("/v1/orgs");
         Assert.Equal(HttpStatusCode.Unauthorized, orgs.StatusCode);
     }
+
+    [Fact]
+    public async Task RecoverAdmin_ValidToken_ResetsPassword()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        bootstrap.EnsureSuccessStatusCode();
+        var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>();
+        var oldPassword = bootJson.GetProperty("password").GetString()!;
+
+        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken));
+        recover.EnsureSuccessStatusCode();
+        var recoverJson = await recover.Content.ReadFromJsonAsync<JsonElement>();
+        var newPassword = recoverJson.GetProperty("password").GetString()!;
+        Assert.NotEqual(oldPassword, newPassword);
+
+        var oldLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = oldPassword });
+        Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+
+        var newLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = newPassword });
+        Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoverAdmin_InvalidToken_Unauthorized()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        bootstrap.EnsureSuccessStatusCode();
+
+        var response = await client.SendAsync(RecoverRequest("wrong-token"));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoverAdmin_NoAdmin_BadRequest()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoverAdmin_TokenNotConfigured_Unauthorized()
+    {
+        await using var factory = new AuthApiFactory(false);
+        var client = factory.CreateClient();
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    private static HttpRequestMessage BootstrapRequest(string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
+        request.Content = JsonContent.Create(new { });
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
+
+    private static HttpRequestMessage RecoverRequest(string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/recover-admin");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return request;
+    }
 }
 
 public sealed class AuthApiFactory : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection _connection = new("Data Source=:memory:");
+    public const string BootstrapToken = "test-bootstrap-token";
 
-    public AuthApiFactory()
+    private readonly SqliteConnection _connection = new("Data Source=:memory:");
+    private readonly bool _configureBootstrapToken;
+
+    public AuthApiFactory(bool configureBootstrapToken = true)
     {
+        _configureBootstrapToken = configureBootstrapToken;
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
-        Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", "");
+        Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
         _connection.Open();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
-        builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", "");
+        builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())

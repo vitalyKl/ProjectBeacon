@@ -42,5 +42,12 @@ public class User : Entity
         }
     }
 
+    public void ResetPassword(string passwordHash)
+    {
+        PasswordHash = passwordHash;
+        FailedLoginAttempts = 0;
+        LockedUntil = null;
+    }
+
     public bool IsLockedOut => LockedUntil.HasValue && LockedUntil.Value > DateTime.UtcNow;
 }

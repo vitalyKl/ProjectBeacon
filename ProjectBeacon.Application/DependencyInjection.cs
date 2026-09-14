@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationHandlers(this IServiceCollection services)
     {
         services.AddTransient<BootstrapHandler>();
+        services.AddTransient<RecoverAdminHandler>();
         services.AddTransient<LoginHandler>();
         services.AddTransient<RegisterHandler>();
 

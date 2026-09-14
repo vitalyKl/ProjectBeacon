@@ -105,7 +105,10 @@ public sealed class CapabilityAndWorkHttpTests
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
-        var boot = await client.PostAsJsonAsync("/v1/auth/bootstrap", new { });
+        var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
+        bootRequest.Content = JsonContent.Create(new { });
+        bootRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthApiFactory.BootstrapToken);
+        var boot = await client.SendAsync(bootRequest);
         boot.EnsureSuccessStatusCode();
         var bootJson = await boot.Content.ReadFromJsonAsync<JsonElement>(Json);
         var password = bootJson.GetProperty("password").GetString();

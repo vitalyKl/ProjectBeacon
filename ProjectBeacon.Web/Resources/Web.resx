@@ -652,4 +652,16 @@
   <data name="BootstrapToken" xml:space="preserve">
     <value>Bootstrap token</value>
   </data>
+  <data name="RecoverPassword" xml:space="preserve">
+    <value>Recover password</value>
+  </data>
+  <data name="RecoverDescription" xml:space="preserve">
+    <value>Enter the bootstrap token to reset the administrator password. The new password is shown once.</value>
+  </data>
+  <data name="RecoverSuccess" xml:space="preserve">
+    <value>Admin password reset. Save this password — it will not be shown again.</value>
+  </data>
+  <data name="NewPassword" xml:space="preserve">
+    <value>New password</value>
+  </data>
 </root>

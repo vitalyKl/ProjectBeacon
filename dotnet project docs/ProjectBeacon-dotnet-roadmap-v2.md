@@ -22,6 +22,13 @@ Generate produced a board snapshot. Board DnD Todo→InProgress verified
 (snackbar + column count). Decisions create+accept verified. Tree/ChangedScope
 still stubbed until Phase 7.
 
+Follow-up 2026-09-14: admin password recovery shipped. `POST
+/v1/auth/recover-admin` (bootstrap token via Bearer, rate-limited,
+fail-closed) resets the admin password and clears lockout; `/recover` page
+linked from `/login`. Bootstrap endpoint status codes corrected: 409 only
+for "Bootstrap already completed.", 401 for invalid/missing token. API test
+factories fixed to send the bootstrap Bearer token.
+
 ## 0. Status legend
 
 | Mark | Means |
@@ -74,6 +81,7 @@ project.
 | 6 | Login/Bootstrap/auth guard | ✅ | Anonymous `/board` redirects to login |
 | 7 | Auth integration tests | ✅ | Handler tests on SQLite + HTTP factory tests (`AuthIntegrationTests`, `AuthHttpTests`) |
 | 8 | Cross-tenant isolation proven | ✅ | Query filters on; `TenantIsolationPostgresTests` pass |
+| 9 | Admin password recovery | ✅ | `POST /v1/auth/recover-admin` (bootstrap token, rate-limited, fail-closed) resets admin password + lockout; `/recover` page. HTTP: `RecoverAdmin_ValidToken_ResetsPassword`, `RecoverAdmin_InvalidToken_Unauthorized`, `RecoverAdmin_NoAdmin_BadRequest`, `RecoverAdmin_TokenNotConfigured_Unauthorized` (28/28 API tests passed 2026-09-14) |
 
 ## 4. Phase 2 — Projects, members, API tokens
 

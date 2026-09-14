@@ -14,6 +14,7 @@ public static class AuthEndpoints
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/auth/bootstrap", Bootstrap).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
+        app.MapPost("/v1/auth/recover-admin", RecoverAdmin).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/login", Login).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/register", Register).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/logout", Logout).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
@@ -31,16 +32,45 @@ public static class AuthEndpoints
 
         var result = await handler.HandleAsync(providedToken);
 
-        return result.Success
-            ? Results.Ok(new
+        if (result.Success)
+            return Results.Ok(new
             {
                 result.Value.UserId,
                 result.Value.Login,
                 result.Value.Email,
                 result.Value.IsAdmin,
                 result.Value.Password
-            })
-            : Results.Conflict(result.Error);
+            });
+
+        var statusCode = result.Error == "Bootstrap already completed."
+            ? 409
+            : 401;
+        return Results.Json(new { error = result.Error }, statusCode: statusCode);
+    }
+
+    private static async Task<IResult> RecoverAdmin(RecoverAdminHandler handler, HttpContext ctx)
+    {
+        var authHeader = ctx.Request.Headers["Authorization"].ToString();
+        var providedToken = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? authHeader.Substring(7).Trim()
+            : string.Empty;
+
+        var result = await handler.HandleAsync(providedToken);
+
+        if (result.Success)
+            return Results.Ok(new
+            {
+                result.Value.UserId,
+                result.Value.Login,
+                result.Value.Email,
+                result.Value.IsAdmin,
+                result.Value.Password
+            });
+
+        var statusCode = result.Error is "Invalid bootstrap token." or "Bootstrap token is not configured."
+            ? 401
+            : 400;
+        return Results.Json(new { error = result.Error }, statusCode: statusCode);
     }
 
     private static async Task<IResult> Login([FromBody] LoginRequest request, LoginHandler handler)

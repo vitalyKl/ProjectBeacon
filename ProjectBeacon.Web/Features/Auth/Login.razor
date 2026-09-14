@@ -33,6 +33,11 @@
             @L["Login"]
         </MudButton>
     </form>
+
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4 w-100"
+               OnClick="@(() => Navigation.NavigateTo("/recover"))">
+        @L["RecoverPassword"]
+    </MudButton>
 </MudPaper>
 
 @code {
