@@ -176,13 +176,13 @@
 
 ## 4. Блок B — Task-пайплайн
 
-### B1. Domain
+### B1. Domain — выполнено
 - Enums: `TaskPipelineStage`, `SubtaskStatus { Pending, InProgress, Done, Failed }`, `SessionStatus`, `ReviewVerdictKind { Approve, ReopenSubtask }`.
 - Сущности: `Subtask.cs`, `PipelineSession.cs`, `ReviewVerdict.cs` (D2, D3).
 - `TaskItem`: `+ PipelineStage?` + методы переходов (D1): `StartPipeline()` (→Planning), `EnterExecuting()`, `EnterReview()`, `SetApproved()`, `ReopenForRevision()`, `ClosePipeline(string reviewNotes)` (→Closed, `TransitionTo(Done)` + ReviewNotes).
 - Проверка: `dotnet build`; домен-тесты переходов (включая: `None` не мешает обычному workflow, cold-diff гейт не сломан).
 
-### B2. Infrastructure: миграция
+### B2. Infrastructure: миграция — выполнено
 - DbSets `Subtasks`, `PipelineSessions`, `ReviewVerdicts`; конфигурация (enum'ы → string, индексы `(TaskId)`, `(TaskId, CreatedAt)` по verdict'ам, cascade от `TaskItem`).
 - `dotnet ef migrations add AddTaskPipeline`.
 - Проверка: apply на локальной БД, `dotnet test` зелёный.

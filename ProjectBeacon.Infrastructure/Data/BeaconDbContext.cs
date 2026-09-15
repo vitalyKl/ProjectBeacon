@@ -28,6 +28,9 @@ public class BeaconDbContext : DbContext
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();
     public DbSet<LocalModelBackend> LocalModelBackends => Set<LocalModelBackend>();
     public DbSet<RoleBinding> RoleBindings => Set<RoleBinding>();
+    public DbSet<Subtask> Subtasks => Set<Subtask>();
+    public DbSet<PipelineSession> PipelineSessions => Set<PipelineSession>();
+    public DbSet<ReviewVerdict> ReviewVerdicts => Set<ReviewVerdict>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -238,6 +241,7 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.ReviewNotes).HasMaxLength(2000);
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.CompletedAt);
+            entity.Property(e => e.PipelineStage).HasConversion<string>();
 
             entity.HasOne(e => e.Project)
                 .WithMany(e => e.Tasks)
@@ -416,6 +420,52 @@ public class BeaconDbContext : DbContext
             entity.HasOne(e => e.ModelBackend)
                 .WithMany()
                 .HasForeignKey(e => e.ModelBackendId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Subtask>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Instructions).IsRequired().HasMaxLength(5000);
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entity.Property(e => e.DiffRef).HasMaxLength(500);
+            entity.Property(e => e.Summary).HasMaxLength(5000);
+            entity.Ignore(e => e.AllowedMcpTools);
+            entity.Ignore(e => e.AllowedPaths);
+            entity.Property(e => e.AllowedMcpToolsJson).IsRequired();
+            entity.Property(e => e.AllowedPathsJson).IsRequired();
+            entity.HasIndex(e => e.TaskId);
+            entity.HasOne(e => e.Task)
+                .WithMany(e => e.Subtasks)
+                .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PipelineSession>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Role).HasConversion<string>().IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entity.Property(e => e.ExternalSessionId).HasMaxLength(200);
+            entity.Property(e => e.LaunchSpec).HasMaxLength(1000);
+            entity.Property(e => e.PromptContext).IsRequired();
+            entity.HasIndex(e => e.TaskId);
+            entity.HasOne(e => e.Task)
+                .WithMany()
+                .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReviewVerdict>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Kind).HasConversion<string>().IsRequired();
+            entity.Property(e => e.Note).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.TaskId, e.CreatedAt });
+            entity.HasOne(e => e.Task)
+                .WithMany()
+                .HasForeignKey(e => e.TaskId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

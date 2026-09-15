@@ -19,12 +19,14 @@ public class TaskItem : Entity, IProjectScoped
     public string? ReviewNotes { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
+    public TaskPipelineStage? PipelineStage { get; private set; }
 
     public Project Project { get; private set; } = null!;
     public Label? Label { get; private set; }
     public Milestone? Milestone { get; private set; }
     public ICollection<TaskComment> Comments { get; private set; } = [];
     public ICollection<TaskDependency> Dependencies { get; private set; } = [];
+    public ICollection<Subtask> Subtasks { get; private set; } = [];
 
     public static TaskItem Create(string title, Guid projectId, TaskPriority priority = TaskPriority.Medium, TaskType type = TaskType.Task)
     {
@@ -138,5 +140,67 @@ public class TaskItem : Entity, IProjectScoped
             default:
                 throw new InvalidOperationException($"Unknown status: {target}");
         }
+    }
+
+    private string StageName => PipelineStage?.ToString() ?? TaskPipelineStage.None.ToString();
+
+    public void StartPipeline()
+    {
+        if (PipelineStage is not null)
+            throw new InvalidOperationException($"Pipeline is already started (stage: {StageName})");
+        PipelineStage = TaskPipelineStage.Planning;
+        TransitionTo(TaskItemStatus.InProgress);
+    }
+
+    public void EnterExecuting()
+    {
+        if (PipelineStage == TaskPipelineStage.Executing)
+            return;
+        if (PipelineStage != TaskPipelineStage.Planning)
+            throw new InvalidOperationException($"Cannot enter executing from stage {StageName}");
+        PipelineStage = TaskPipelineStage.Executing;
+        TransitionTo(TaskItemStatus.InProgress);
+    }
+
+    public void EnterReview()
+    {
+        if (PipelineStage != TaskPipelineStage.Executing)
+            throw new InvalidOperationException($"Cannot enter review from stage {StageName}");
+        PipelineStage = TaskPipelineStage.Reviewing;
+    }
+
+    public void SetApproved()
+    {
+        if (PipelineStage != TaskPipelineStage.Reviewing)
+            throw new InvalidOperationException($"Cannot approve from stage {StageName}");
+        PipelineStage = TaskPipelineStage.Approved;
+        // D1: Approved maps to the board as Done; the pipeline review replaces the cold-diff gate here.
+        if (Status != TaskItemStatus.Done)
+        {
+            Status = TaskItemStatus.Done;
+            CompletedAt ??= DateTime.UtcNow;
+        }
+    }
+
+    public void ReopenForRevision()
+    {
+        if (PipelineStage != TaskPipelineStage.Approved)
+            throw new InvalidOperationException($"Cannot reopen for revision from stage {StageName}");
+        PipelineStage = TaskPipelineStage.ReopenedForRevision;
+        TransitionTo(TaskItemStatus.InProgress);
+    }
+
+    public void ClosePipeline(string reviewNotes)
+    {
+        if (string.IsNullOrWhiteSpace(reviewNotes))
+            throw new ArgumentException("Review notes cannot be empty when closing the pipeline.", nameof(reviewNotes));
+        if (PipelineStage is not (TaskPipelineStage.Approved or TaskPipelineStage.ReopenedForRevision))
+            throw new InvalidOperationException($"Cannot close pipeline from stage {StageName}");
+        ReviewNotes = reviewNotes;
+        PipelineStage = TaskPipelineStage.Closed;
+        if (Status != TaskItemStatus.Done)
+            TransitionTo(TaskItemStatus.Done);
+        else
+            CompletedAt ??= DateTime.UtcNow;
     }
 }
