@@ -26,6 +26,8 @@ public class BeaconDbContext : DbContext
     public DbSet<Constraint> Constraints => Set<Constraint>();
     public DbSet<Decision> Decisions => Set<Decision>();
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();
+    public DbSet<LocalModelBackend> LocalModelBackends => Set<LocalModelBackend>();
+    public DbSet<RoleBinding> RoleBindings => Set<RoleBinding>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -389,6 +391,31 @@ public class BeaconDbContext : DbContext
             entity.HasOne(e => e.Task)
                 .WithMany()
                 .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LocalModelBackend>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.BackendType).HasConversion<string>().IsRequired();
+            entity.Property(e => e.LaunchCommand).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.ContextSize).IsRequired();
+            entity.Property(e => e.Ttl).IsRequired();
+            entity.Ignore(e => e.ExtraFlags);
+            entity.Property(e => e.ExtraFlagsJson).IsRequired();
+            entity.Property(e => e.UpdatedAt);
+            entity.HasIndex(e => e.ProjectId);
+        });
+
+        modelBuilder.Entity<RoleBinding>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Role).HasConversion<string>().IsRequired();
+            entity.HasIndex(e => new { e.ProjectId, e.Role }).IsUnique();
+            entity.HasOne(e => e.ModelBackend)
+                .WithMany()
+                .HasForeignKey(e => e.ModelBackendId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
