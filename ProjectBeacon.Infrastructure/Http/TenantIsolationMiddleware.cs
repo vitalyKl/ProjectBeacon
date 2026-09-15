@@ -96,6 +96,21 @@ public sealed class TenantIsolationMiddleware
             }
         }
 
+        // If a specific project was requested (route/header) but no explicit
+        // org was given, derive the org from the project.  This prevents the
+        // stale `org_id` claim in the JWT from pinning the scope to the
+        // org the user was "on" at login time, which would mismatch the
+        // explicitly requested project and cause "Project not found."
+        if (fromOrgRoute is null && fromOrgHeader is null
+            && (fromRoute is { } || fromHeader is { })
+            && projectId is { } pid && pid != Guid.Empty)
+        {
+            orgId = await db.Projects.IgnoreQueryFilters()
+                .Where(p => p.Id == pid)
+                .Select(p => (Guid?)p.OrgId)
+                .FirstOrDefaultAsync() ?? orgId;
+        }
+
         if (ctx.User.Identity?.IsAuthenticated == true && !isAdmin)
         {
             projectId ??= Guid.Empty;
@@ -113,7 +128,7 @@ public sealed class TenantIsolationMiddleware
         ctx.RequestServices?.GetService<ITenantContext>()
             ?.Assign(projectId, orgId, unscoped: false);
 
-        IDisposable? projectScope = projectId is { } pid ? TenantScope.EnterProjectScope(pid) : null;
+        IDisposable? projectScope = projectId is { } projectPid ? TenantScope.EnterProjectScope(projectPid) : null;
         IDisposable? orgScope = orgId is { } oid ? TenantScope.EnterOrgScope(oid) : null;
         try
         {

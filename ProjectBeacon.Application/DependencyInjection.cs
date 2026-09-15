@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application;
 
+using Application.Agents;
 using Application.Auth;
 using Application.Identity;
 using Application.Projects;
@@ -89,6 +90,16 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListProjectMilestonesHandler>();
         services.AddTransient<CloseMilestoneHandler>();
         services.AddTransient<ReopenMilestoneHandler>();
+
+        services.AddTransient<ILlamaSwapProxy, UnavailableLlamaSwapProxy>();
+        services.AddTransient<UpsertLocalModelBackendHandler>();
+        services.AddTransient<DeleteLocalModelBackendHandler>();
+        services.AddTransient<SetRoleBindingHandler>();
+        services.AddTransient<RemoveRoleBindingHandler>();
+        services.AddTransient<GetModelRegistryHandler>();
+        services.AddTransient<GetProxyStatusHandler>();
+        services.AddTransient<ReloadProxyHandler>();
+        services.AddTransient<UnloadProxyHandler>();
 
         return services;
     }

@@ -14,6 +14,7 @@ public static class BeaconApi
         app.MapLabelEndpoints();
         app.MapReportEndpoints();
         app.MapDecisionEndpoints();
+        app.MapModelEndpoints();
         return app;
     }
 }

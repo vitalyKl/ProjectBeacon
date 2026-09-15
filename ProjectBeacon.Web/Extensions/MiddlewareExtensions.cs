@@ -28,6 +28,7 @@ public static class MiddlewareExtensions
         app.UseHttpsRedirection();
         app.UseStaticFiles();
         app.MapStaticAssets();
+        app.UseRouting();
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseMiddleware<ProjectBeacon.API.Auth.ApiTokenAuthMiddleware>();

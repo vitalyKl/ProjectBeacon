@@ -128,7 +128,7 @@
 - `dotnet ef migrations add AddLocalModelRegistry` (ModelSnapshot регенерируется).
 - Проверка: миграция applies на локальном Postgres, `dotnet test` не краснеет.
 
-### A3. Application/Agents (хэндлеры)
+### A3. Application/Agents (хэндлеры) — выполнено
 Файл: `Application/Agents/ModelBackendCommands.cs` (команды/запросы) + `ModelBackendHandlers.cs`.
 - `UpsertLocalModelBackendCommand` (create+update одним), `DeleteLocalModelBackendCommand` (если задан `RoleBinding` → ошибка с указанием роли).
 - `SetRoleBindingCommand(role, backendId)`, `RemoveRoleBindingCommand(role)`.
@@ -147,7 +147,7 @@
 - Регистрация `IHostedService` + `ILlamaSwapProxy` в `ProjectBeacon.Web/Extensions/ServiceCollectionExtensions.cs`.
 - Проверка: с фейковым бинарником (bash-скрипт/`net cat`-заглушка) процесс стартует, `/health` ОК; без бинарника Web поднимается, статус «unavailable».
 
-### A5. API
+### A5. API — выполнено
 - `ProjectBeacon.API/Endpoints/ModelEndpoints.cs` (тонко, по образцу `TaskEndpoints.cs`, `RequireCapability`):
   - `GET /v1/models`, `POST /v1/models` (upsert), `DELETE /v1/models/{id}`
   - `POST /v1/models/bind`, `DELETE /v1/models/bind/{role}`
