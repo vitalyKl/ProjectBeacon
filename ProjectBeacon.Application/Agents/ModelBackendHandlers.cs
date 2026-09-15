@@ -4,6 +4,7 @@ using Application.Common;
 using Domain.Enums;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
+using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 
 public static class ModelProjectScope

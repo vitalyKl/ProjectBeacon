@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
 using Domain.Enums;
+using Infrastructure.LlamaSwap;
 
 public record LocalModelBackendDto(
     Guid Id,
@@ -24,14 +25,6 @@ public record ModelRegistryDto(
     Guid ProjectId,
     IReadOnlyList<LocalModelBackendDto> Backends,
     IReadOnlyList<RoleBindingDto> Bindings);
-
-public record LlamaSwapStatusDto(
-    bool Available,
-    bool Healthy,
-    string? LoadedModel,
-    string? Memory,
-    DateTime? LastSwap,
-    string? Error);
 
 public record UpsertLocalModelBackendRequest(
     Guid? Id,
@@ -63,20 +56,3 @@ public record GetProxyStatusCommand : ICommand<Result<LlamaSwapStatusDto>>;
 public record ReloadProxyCommand : ICommand<Result<LlamaSwapStatusDto>>;
 
 public record UnloadProxyCommand : ICommand<Result<LlamaSwapStatusDto>>;
-
-public interface ILlamaSwapProxy
-{
-    Task<LlamaSwapStatusDto> GetStatusAsync(CancellationToken ct = default);
-    Task<bool> ReloadAsync(CancellationToken ct = default);
-    Task<bool> UnloadAsync(CancellationToken ct = default);
-}
-
-public sealed class UnavailableLlamaSwapProxy : ILlamaSwapProxy
-{
-    public Task<LlamaSwapStatusDto> GetStatusAsync(CancellationToken ct = default)
-        => Task.FromResult(new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap supervisor is not running."));
-
-    public Task<bool> ReloadAsync(CancellationToken ct = default) => Task.FromResult(false);
-
-    public Task<bool> UnloadAsync(CancellationToken ct = default) => Task.FromResult(false);
-}

@@ -139,13 +139,14 @@
 - Регистрация в `DependencyInjection.cs`.
 - Проверка: юнит-тесты на SQLite (паттерн `HandlerSqlite`).
 
-### A4. Супервизор llama-swap
-**Шаг 0 (блокирующий): проверить API llama-swap** — схема `config.yaml`, наличие `GET /health`, `GET /metrics`, reload/unload endpoint'ов в целевой версии. Если бинарника нет локально — развивать по контракту с mock HTTP-сервером в тестах.
-- `Infrastructure/LlamaSwap/LLamaSwapOptions.cs` — env `BEACON_LLAMASWAP_BIN`, `BEACON_LLAMASWAP_PORT`, `BEACON_LLAMASWAP_CONFIG`.
-- `LlamaSwapConfigGenerator.cs` — config.yaml из реестра (модели → backends; `Ttl` → idle unload; `ContextSize`/`ExtraFlags` → флаги).
-- `LlamaSwapSupervisor : IHostedService, ILlamaSwapProxy` — старт при старте Web, стоп при выходе, health-поллинг, `/metrics`, перегенерация+reload при изменении `MAX(UpdatedAt)`, graceful degradation (NFR-A3).
-- Регистрация `IHostedService` + `ILlamaSwapProxy` в `ProjectBeacon.Web/Extensions/ServiceCollectionExtensions.cs`.
-- Проверка: с фейковым бинарником (bash-скрипт/`net cat`-заглушка) процесс стартует, `/health` ОК; без бинарника Web поднимается, статус «unavailable».
+### A4. Супервизор llama-swap — выполнено
+**Шаг 0 (закрыт): API llama-swap проверен по исходникам/документации** — `config.yaml` (`models.<id>`: `cmd` обязателен, `${PORT}`, `ttl` = idle-unload сек), `GET /health` → `OK`, `GET /running` (массив с `model`/`state`), `GET /metrics` (Prometheus, может 503), `POST /api/models/unload`. CLI: `llama-swap -config <path> -listen <host:port>`.
+- `Infrastructure/LlamaSwap/LlamaSwapOptions.cs` — env `BEACON_LLAMASWAP_BIN`, `BEACON_LLAMASWAP_PORT` (8080), `BEACON_LLAMASWAP_CONFIG` (default `%LOCALAPPDATA%/ProjectBeacon/llama-swap/config.yaml`), `BEACON_PROJECT_ID`; `IsConfigured` = бинарник + проект.
+- `LlamaSwapConfigGenerator.cs` — чистый генератор config.yaml из реестра: `Ttl` → idle unload, `ContextSize` → `--ctx-size` (не дублируется, если уже в команде), `ExtraFlags` дописываются в `cmd`; ключ модели = имя, дубли суффиксом `-2`; детерминированный `\n`.
+- Контракт `ILlamaSwapProxy` + `LlamaSwapStatusDto` + `UnavailableLlamaSwapProxy` — в `Infrastructure/LlamaSwap/LlamaSwapProxy.cs` (Application ссылается на Infrastructure, обратный reference не введён).
+- `LlamaSwapSupervisor : BackgroundService, ILlamaSwapProxy` — старт при старте Web, стоп (kill process tree) при выходе; поллинг реестра каждые 5 c (hash реестра → перегенерация config, атомарная запись через `.tmp`); crash-loop guard 5/60 с; health-поллинг `/health`, `/running`, `/metrics`; `LastSwap` при смене набора загруженных моделей; `ReloadAsync` — перегенерация config; `UnloadAsync` — `POST /api/models/unload`.
+- Регистрация в `ProjectBeacon.Web/Extensions/ServiceCollectionExtensions.cs` (переопределяет fallback из `AddApplicationHandlers`).
+- Проверка (живой смоук с фейковым бинарником, .NET-заглушка `/health`+`/running`+`/metrics`+`/api/models/unload`): процесс стартует с `-config`/`-listen 127.0.0.1:<port>`; config.yaml сгенерирован корректно (ctx-size, ttl, extra-флаги, сортировка); `GET /v1/models/proxy/status` — healthy, loaded model, memory, lastSwap; `POST .../reload` перегенерирует config; `POST .../unload` → `loadedModel=null`; изменение реестра через API → авто-перегенерация config на следующем тике; килл процесса → авто-рестарт; без конфигурации — Web работает, статус `available=false`, reload/unload → 503 (NFR-A3). Юнит-тесты генератора — `Infrastructure.Tests/LlamaSwapConfigGeneratorTests.cs`.
 
 ### A5. API — выполнено
 - `ProjectBeacon.API/Endpoints/ModelEndpoints.cs` (тонко, по образцу `TaskEndpoints.cs`, `RequireCapability`):
@@ -273,7 +274,7 @@
 
 ## 7. Риски и открытые пункты
 
-- **Схема config.yaml и reload endpoint'ы llama-swap** — проверить версию до A4 (шаг 0 A4); без бинарника — разработка по контракту + mock.
+- ~~**Схема config.yaml и reload endpoint'ы llama-swap**~~ — закрыто в A4 (шаг 0: контракт подтверждён по исходникам; смоук с фейковым бинарником).
 - **JSON-текст для `string[]`** — проверить на SQLite-тестах (B7/A8): без Npgsql-JSONB-конвертера текст работает на обоих провайдерах.
-- **Поллинт реестра** — интервал (предложение: 5 c) — не критично, уточнить при A4.
+- ~~**Поллинт реестра**~~ — интервал зафиксирован в A4: 5 c (hash реестра → перегенерация config).
 - Порт Web-хоста для внешнего MCP-клиента не нужен: CLI ходит в Postgres напрямую (D6).

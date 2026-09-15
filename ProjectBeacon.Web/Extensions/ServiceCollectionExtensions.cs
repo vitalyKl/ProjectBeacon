@@ -14,6 +14,7 @@ using System.Text.Json.Serialization;
 using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
+using ProjectBeacon.Infrastructure.LlamaSwap;
 using ProjectBeacon.Web.Startup;
 
 namespace ProjectBeacon.Web.Extensions;
@@ -103,6 +104,12 @@ public static class ServiceCollectionExtensions
         services.AddLocalization();
         services.AddInfrastructure(connectionString);
         services.AddApplicationHandlers();
+
+        // Overrides the UnavailableLlamaSwapProxy fallback from AddApplicationHandlers.
+        services.AddSingleton(_ => LlamaSwapOptions.FromEnvironment());
+        services.AddSingleton<LlamaSwapSupervisor>();
+        services.AddHostedService(sp => sp.GetRequiredService<LlamaSwapSupervisor>());
+        services.AddSingleton<ILlamaSwapProxy>(sp => sp.GetRequiredService<LlamaSwapSupervisor>());
         services.AddHttpContextAccessor();
         services.AddScoped(sp =>
         {
