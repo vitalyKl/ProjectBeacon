@@ -41,10 +41,19 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public BeaconDbContext CreateContext()
     {
-        var options = new DbContextOptionsBuilder<BeaconDbContext>()
+        return new BeaconDbContext(CreateOptions());
+    }
+
+    public IDbContextFactory<BeaconDbContext> CreateFactory()
+    {
+        return new BeaconDbFactory(CreateOptions(), null);
+    }
+
+    private DbContextOptions<BeaconDbContext> CreateOptions()
+    {
+        return new DbContextOptionsBuilder<BeaconDbContext>()
             .UseNpgsql(ConnectionString)
             .Options;
-        return new BeaconDbContext(options);
     }
 
     private static string ToNpgsql(string url)

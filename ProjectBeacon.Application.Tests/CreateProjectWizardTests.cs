@@ -29,15 +29,15 @@ public sealed class CreateProjectWizardTests : IDisposable
     [Fact]
     public async Task Wizard_CreatesOrgProjectAndStarterLabels()
     {
-        var org = await new CreateOrgHandler(_db).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null)));
+        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null)));
         Assert.True(org.Success, org.Error);
 
-        var project = await new CreateProjectHandler(_db).HandleAsync(new CreateProjectCommand(
+        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateProjectCommand(
             new CreateProjectRequest("Beacon", "desc", org.Value!.Id)));
         Assert.True(project.Success, project.Error);
         Assert.Equal(org.Value.Id, project.Value!.OrgId);
 
-        var labels = await new ListLabelsHandler(_db).HandleAsync(new ListLabelsRequest(project.Value.Id));
+        var labels = await new ListLabelsHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new ListLabelsRequest(project.Value.Id));
         Assert.True(labels.Success);
         Assert.Equal(5, labels.Value!.Count);
         Assert.Contains(labels.Value, l => l.Name == "API" && l.PathPrefix == "ProjectBeacon.API");
@@ -52,11 +52,11 @@ public sealed class CreateProjectWizardTests : IDisposable
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        var org = await new CreateOrgHandler(_db).HandleAsync(
+        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
             new CreateOrgCommand(new CreateOrgRequest("Acme", null, user.Id)));
         Assert.True(org.Success, org.Error);
 
-        var project = await new CreateProjectHandler(_db).HandleAsync(new CreateProjectCommand(
+        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateProjectCommand(
             new CreateProjectRequest("Beacon", "desc", org.Value!.Id, user.Id)));
         Assert.True(project.Success, project.Error);
 
@@ -71,10 +71,10 @@ public sealed class CreateProjectWizardTests : IDisposable
         using (TenantScope.EnterProjectScope(Guid.Empty))
         using (TenantScope.EnterOrgScope(Guid.Empty))
         {
-            var missed = await new GetCurrentProjectHandler(_db).HandleAsync();
+            var missed = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync();
             Assert.Null(missed.Value);
 
-            var current = await new GetCurrentProjectHandler(_db).HandleAsync(user.Id, isAdmin: false);
+            var current = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(user.Id, isAdmin: false);
             Assert.True(current.Success);
             Assert.NotNull(current.Value);
             Assert.Equal(project.Value.Id, current.Value.Id);

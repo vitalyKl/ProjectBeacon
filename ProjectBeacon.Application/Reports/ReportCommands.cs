@@ -41,20 +41,21 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GenerateReportHandler(BeaconDbContext db) => _db = db;
+    public GenerateReportHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ReportDto>> HandleAsync(GenerateReportCommand command, CancellationToken ct = default)
     {
-        var project = await _db.Projects.FindAsync([command.Request.ProjectId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
             return Result.Failure<ReportDto>("Project not found.");
 
-        var tasks = await _db.Tasks
+        var tasks = await db.Tasks
             .Where(t => t.ProjectId == command.Request.ProjectId)
             .ToListAsync(ct);
-        var milestones = await _db.Milestones
+        var milestones = await db.Milestones
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .ToListAsync(ct);
 
@@ -90,8 +91,8 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
             project.Id,
             createdByType,
             createdById);
-        _db.Reports.Add(report);
-        await _db.SaveChangesAsync(ct);
+        db.Reports.Add(report);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(Map(report));
     }
 
@@ -141,13 +142,14 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
 
 public class ListReportsHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListReportsHandler(BeaconDbContext db) => _db = db;
+    public ListReportsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ReportDto>>> HandleAsync(ListReportsRequest request, CancellationToken ct = default)
     {
-        var items = await _db.Reports
+        await using var db = _dbFactory.CreateDbContext();
+        var items = await db.Reports
             .Where(r => r.ProjectId == request.ProjectId)
             .OrderByDescending(r => r.CreatedAt)
             .Select(r => new ReportDto(
@@ -160,13 +162,14 @@ public class ListReportsHandler
 
 public class GetReportHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetReportHandler(BeaconDbContext db) => _db = db;
+    public GetReportHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ReportDto>> HandleAsync(GetReportRequest request, CancellationToken ct = default)
     {
-        var report = await _db.Reports
+        await using var db = _dbFactory.CreateDbContext();
+        var report = await db.Reports
             .FirstOrDefaultAsync(r => r.Id == request.ReportId && r.ProjectId == request.ProjectId, ct);
         if (report is null)
             return Result.Failure<ReportDto>("Report not found.");

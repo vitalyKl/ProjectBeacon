@@ -48,7 +48,7 @@ public sealed class TenantContextBinderTests : IDisposable
         await _db.SaveChangesAsync();
 
         var tenant = new TenantContext();
-        var binder = new TenantContextBinder(_db, tenant);
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
         await binder.BindUserAsync(Principal(user.Id, isAdmin: false));
 
@@ -73,7 +73,7 @@ public sealed class TenantContextBinderTests : IDisposable
         await _db.SaveChangesAsync();
 
         var tenant = new TenantContext();
-        var binder = new TenantContextBinder(_db, tenant);
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
         await binder.BindUserAsync(Principal(user.Id, isAdmin: true));
 
@@ -90,13 +90,69 @@ public sealed class TenantContextBinderTests : IDisposable
         await _db.SaveChangesAsync();
 
         var tenant = new TenantContext();
-        var binder = new TenantContextBinder(_db, tenant);
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
         await binder.BindUserAsync(Principal(user.Id, isAdmin: false));
 
         Assert.Null(tenant.ProjectId);
         Assert.Null(tenant.OrgId);
         Assert.False(tenant.Unscoped);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_HonorsValidProjectClaim()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+
+        var first = Project.Create("First", null, org.Id);
+        var second = Project.Create("Second", null, org.Id);
+        _db.Projects.AddRange(first, second);
+        await _db.SaveChangesAsync();
+
+        var user = User.Create("erin", "erin@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        _db.ProjectMembers.Add(ProjectMember.Create(first.Id, user.Id, MemberRole.Member));
+        _db.ProjectMembers.Add(ProjectMember.Create(second.Id, user.Id, MemberRole.Member));
+        await _db.SaveChangesAsync();
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Principal(user.Id, isAdmin: false, projectClaim: second.Id));
+
+        Assert.Equal(second.Id, tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
+    }
+
+    [Fact]
+    public async Task BindUserAsync_IgnoresStaleProjectClaim()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+
+        var first = Project.Create("First", null, org.Id);
+        _db.Projects.Add(first);
+        await _db.SaveChangesAsync();
+
+        var user = User.Create("frank", "frank@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        _db.ProjectMembers.Add(ProjectMember.Create(first.Id, user.Id, MemberRole.Member));
+        await _db.SaveChangesAsync();
+
+        var tenant = new TenantContext();
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
+
+        await binder.BindUserAsync(Principal(user.Id, isAdmin: false, projectClaim: Guid.NewGuid()));
+
+        Assert.Equal(first.Id, tenant.ProjectId);
+        Assert.Equal(org.Id, tenant.OrgId);
     }
 
     [Fact]
@@ -110,7 +166,7 @@ public sealed class TenantContextBinderTests : IDisposable
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        var binder = new TenantContextBinder(_db, tenant);
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
         await binder.BindUserAsync(Principal(user.Id, isAdmin: true));
 
@@ -128,7 +184,7 @@ public sealed class TenantContextBinderTests : IDisposable
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        var binder = new TenantContextBinder(_db, tenant);
+        var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
         await binder.BindUserAsync(Principal(user.Id, isAdmin: true));
 
@@ -137,7 +193,7 @@ public sealed class TenantContextBinderTests : IDisposable
         Assert.True(tenant.Unscoped);
     }
 
-    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin)
+    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin, Guid? projectClaim = null)
     {
         var claims = new List<Claim>
         {
@@ -145,6 +201,8 @@ public sealed class TenantContextBinderTests : IDisposable
         };
         if (isAdmin)
             claims.Add(new Claim("isAdmin", "true"));
+        if (projectClaim is { } pc)
+            claims.Add(new Claim("project_id", pc.ToString()));
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
     }

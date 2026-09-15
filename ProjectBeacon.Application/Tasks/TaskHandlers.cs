@@ -8,26 +8,27 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CreateTaskHandler(BeaconDbContext db) => _db = db;
+    public CreateTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(CreateTaskCommand command, CancellationToken ct = default)
     {
-        var projectExists = await _db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var projectExists = await db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<TaskItemDto>("Project not found.");
 
         Guid? labelId = command.Request.LabelId;
         if (labelId is not null)
         {
-            var labelExists = await _db.Labels.AnyAsync(l => l.Id == labelId && l.ProjectId == command.Request.ProjectId, ct);
+            var labelExists = await db.Labels.AnyAsync(l => l.Id == labelId && l.ProjectId == command.Request.ProjectId, ct);
             if (!labelExists)
                 return Result.Failure<TaskItemDto>("Label not found.");
         }
         else if (!string.IsNullOrWhiteSpace(command.Request.Path))
         {
-            var labels = await _db.Labels
+            var labels = await db.Labels
                 .Include(l => l.Paths)
                 .Where(l => l.ProjectId == command.Request.ProjectId)
                 .ToListAsync(ct);
@@ -36,7 +37,7 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
 
         if (command.Request.MilestoneId is not null)
         {
-            var milestoneExists = await _db.Milestones.AnyAsync(m => m.Id == command.Request.MilestoneId && m.ProjectId == command.Request.ProjectId, ct);
+            var milestoneExists = await db.Milestones.AnyAsync(m => m.Id == command.Request.MilestoneId && m.ProjectId == command.Request.ProjectId, ct);
             if (!milestoneExists)
                 return Result.Failure<TaskItemDto>("Milestone not found.");
         }
@@ -46,8 +47,8 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
         task.AssignLabel(labelId);
         task.SetMilestone(command.Request.MilestoneId);
 
-        _db.Tasks.Add(task);
-        await _db.SaveChangesAsync(ct);
+        db.Tasks.Add(task);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(task));
     }
@@ -73,13 +74,14 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
 
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public UpdateTaskHandler(BeaconDbContext db) => _db = db;
+    public UpdateTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(UpdateTaskCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks
             .Include(t => t.Project)
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
 
@@ -88,14 +90,14 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 
         if (command.Request.LabelId is not null)
         {
-            var labelExists = await _db.Labels.AnyAsync(l => l.Id == command.Request.LabelId && l.ProjectId == task.ProjectId, ct);
+            var labelExists = await db.Labels.AnyAsync(l => l.Id == command.Request.LabelId && l.ProjectId == task.ProjectId, ct);
             if (!labelExists)
                 return Result.Failure<TaskItemDto>("Label not found.");
         }
 
         if (command.Request.MilestoneId is not null)
         {
-            var milestoneExists = await _db.Milestones.AnyAsync(m => m.Id == command.Request.MilestoneId && m.ProjectId == task.ProjectId, ct);
+            var milestoneExists = await db.Milestones.AnyAsync(m => m.Id == command.Request.MilestoneId && m.ProjectId == task.ProjectId, ct);
             if (!milestoneExists)
                 return Result.Failure<TaskItemDto>("Milestone not found.");
         }
@@ -104,7 +106,7 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
         task.AssignLabel(command.Request.LabelId);
         task.SetMilestone(command.Request.MilestoneId);
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(task));
     }
@@ -130,18 +132,19 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 
 public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result<bool>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public DeleteTaskHandler(BeaconDbContext db) => _db = db;
+    public DeleteTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<bool>> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks.FindAsync([command.Request.TaskId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<bool>("Task not found.");
 
-        _db.Tasks.Remove(task);
-        await _db.SaveChangesAsync(ct);
+        db.Tasks.Remove(task);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(true);
     }
@@ -149,13 +152,14 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result<bool>
 
 public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ChangeSubStageHandler(BeaconDbContext db) => _db = db;
+    public ChangeSubStageHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(ChangeSubStageCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks.FindAsync([command.Request.TaskId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
 
@@ -168,7 +172,7 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
             return Result.Failure<TaskItemDto>(ex.Message);
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(task));
     }
@@ -194,20 +198,21 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
 
 public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskCommentDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public AddCommentHandler(BeaconDbContext db) => _db = db;
+    public AddCommentHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskCommentDto>> HandleAsync(AddCommentCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks.FindAsync([command.Request.TaskId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskCommentDto>("Task not found.");
 
         var userId = command.Request.UserId == Guid.Empty ? Guid.Empty : command.Request.UserId;
         var comment = Domain.Entities.Projects.TaskComment.Create(command.Request.Content, command.Request.TaskId, userId);
-        _db.TaskComments.Add(comment);
-        await _db.SaveChangesAsync(ct);
+        db.TaskComments.Add(comment);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(comment));
     }
@@ -218,13 +223,14 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
 
 public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public SetDependenciesHandler(BeaconDbContext db) => _db = db;
+    public SetDependenciesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(SetDependenciesCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks
             .Include(t => t.Dependencies)
             .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
 
@@ -239,7 +245,7 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
         {
             var dep = task.Dependencies.FirstOrDefault(d => d.DependentTaskId == id);
             if (dep is not null)
-                _db.TaskDependencies.Remove(dep);
+                db.TaskDependencies.Remove(dep);
         }
 
         foreach (var id in toAdd)
@@ -247,15 +253,15 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
             if (id == task.Id)
                 return Result.Failure<TaskItemDto>("A task cannot depend on itself.");
 
-            var depTaskExists = await _db.Tasks.AnyAsync(t => t.Id == id && t.ProjectId == task.ProjectId, ct);
+            var depTaskExists = await db.Tasks.AnyAsync(t => t.Id == id && t.ProjectId == task.ProjectId, ct);
             if (!depTaskExists)
                 return Result.Failure<TaskItemDto>($"Dependent task {id} not found.");
 
-            _db.TaskDependencies.Add(Domain.Entities.Projects.TaskDependency.Create(task.Id, id));
+            db.TaskDependencies.Add(Domain.Entities.Projects.TaskDependency.Create(task.Id, id));
         }
 
-        await _db.SaveChangesAsync(ct);
-        await _db.Entry(task).Collection(t => t.Dependencies).LoadAsync(ct);
+        await db.SaveChangesAsync(ct);
+        await db.Entry(task).Collection(t => t.Dependencies).LoadAsync(ct);
 
         return Result.Ok(MapToDto(task));
     }
@@ -281,13 +287,14 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
 
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public AddReviewNotesHandler(BeaconDbContext db) => _db = db;
+    public AddReviewNotesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(AddReviewNotesCommand command, CancellationToken ct = default)
     {
-        var task = await _db.Tasks.FindAsync([command.Request.TaskId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
 
@@ -300,7 +307,7 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
             return Result.Failure<TaskItemDto>(ex.Message);
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(task));
     }
@@ -326,13 +333,14 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
 
 public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetTaskHandler(BeaconDbContext db) => _db = db;
+    public GetTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(GetTaskCommand command, CancellationToken ct = default)
     {
-        var query = _db.Tasks
+        await using var db = _dbFactory.CreateDbContext();
+        var query = db.Tasks
             .Include(t => t.Comments)
             .Include(t => t.Dependencies)
             .AsQueryable();
@@ -365,13 +373,14 @@ public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto
 
 public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, Result<IList<TaskItemDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListProjectTasksHandler(BeaconDbContext db) => _db = db;
+    public ListProjectTasksHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskItemDto>>> HandleAsync(ListProjectTasksCommand command, CancellationToken ct = default)
     {
-        var tasks = await _db.Tasks
+        await using var db = _dbFactory.CreateDbContext();
+        var tasks = await db.Tasks
             .Where(t => t.ProjectId == command.Request.ProjectId)
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
@@ -390,13 +399,14 @@ public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, 
 
 public class ListTasksByStatusHandler : ICommandHandler<ListTasksByStatusCommand, Result<IList<TaskItemDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListTasksByStatusHandler(BeaconDbContext db) => _db = db;
+    public ListTasksByStatusHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskItemDto>>> HandleAsync(ListTasksByStatusCommand command, CancellationToken ct = default)
     {
-        var tasks = await _db.Tasks
+        await using var db = _dbFactory.CreateDbContext();
+        var tasks = await db.Tasks
             .Where(t => t.ProjectId == command.Request.ProjectId && t.Status.ToString().Equals(command.Request.Status, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)

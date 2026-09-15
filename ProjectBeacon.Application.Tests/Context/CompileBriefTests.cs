@@ -46,7 +46,7 @@ public sealed class CompileBriefTests : IDisposable
     {
         AddSection("goals", "Goals", "Build a great product");
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
 
         var result = await handler.HandleAsync(command);
@@ -64,7 +64,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("security", "Security", "No hardcoded passwords");
         AddSection("goals", "Goals " + new string('x', 8000), "Build something " + new string('y', 8000));
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 40, false, false, false));
 
         var result = await handler.HandleAsync(command);
@@ -87,7 +87,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals", "Ship features");
         AddSection("architecture", "Architecture", "Clean architecture");
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 15, false, false, false));
 
         var result = await handler.HandleAsync(command);
@@ -109,7 +109,7 @@ public sealed class CompileBriefTests : IDisposable
         repoNode.Update(bodyMarkdown: "Updated goals from repo node");
         await _db.SaveChangesAsync();
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
 
         var result = await handler.HandleAsync(command);
@@ -123,7 +123,7 @@ public sealed class CompileBriefTests : IDisposable
     {
         AddSection("goals", "Goals", "Test goals");
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
 
         var result = await handler.HandleAsync(command);
@@ -143,7 +143,7 @@ public sealed class CompileBriefTests : IDisposable
     {
         AddSection("goals", "Goals", "Consistent test");
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var command1 = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
         var result1 = await handler.HandleAsync(command1);
 
@@ -156,7 +156,7 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task UpsertContextNode_CreatesNewSection()
     {
-        var handler = new UpsertContextNodeHandler(_db);
+        var handler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
         var command = new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId,
             "Goals",
@@ -184,7 +184,7 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task UpsertContextNode_UpdatesExistingSection()
     {
-        var upsertHandler = new UpsertContextNodeHandler(_db);
+        var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
         await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId,
@@ -221,7 +221,7 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task ListContextNodes_ReturnsAllSections()
     {
-        var upsertHandler = new UpsertContextNodeHandler(_db);
+        var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
         await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId, "Goals", "Text 1", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)));
@@ -229,7 +229,7 @@ public sealed class CompileBriefTests : IDisposable
         await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId, "Architecture", "Text 2", "architecture", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)));
 
-        var listHandler = new ListContextNodesHandler(_db);
+        var listHandler = new ListContextNodesHandler(HandlerSqlite.Factory(_connection));
         var command = new ListContextNodesCommand(new ListContextNodesRequest(_projectId));
 
         var result = await listHandler.HandleAsync(command);
@@ -241,12 +241,12 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task DeleteContextNode_RemovesSection()
     {
-        var upsertHandler = new UpsertContextNodeHandler(_db);
+        var upsertHandler = new UpsertContextNodeHandler(HandlerSqlite.Factory(_connection));
 
         var createResult = await upsertHandler.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _projectId, "Goals", "Text", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)));
 
-        var deleteHandler = new DeleteContextNodeHandler(_db);
+        var deleteHandler = new DeleteContextNodeHandler(HandlerSqlite.Factory(_connection));
         var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(_projectId, createResult.Value.Id));
 
         var result = await deleteHandler.HandleAsync(command);
@@ -297,7 +297,7 @@ public sealed class CompileBriefTests : IDisposable
         _db.Decisions.Add(decision);
         _db.SaveChanges();
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
             new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)));
 
@@ -315,7 +315,7 @@ public sealed class CompileBriefTests : IDisposable
         _db.Constraints.AddRange(must, mustNot);
         _db.SaveChanges();
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
             new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)));
 
@@ -335,7 +335,7 @@ public sealed class CompileBriefTests : IDisposable
         AddSection("goals", "Goals", new string('G', 20000));
         _db.SaveChanges();
 
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
             new CompileBriefRequest(_projectId, null, null, task.Id, 50, false, false, false)));
 
@@ -349,7 +349,7 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task CompileBrief_IncludesTreeWhenRepoLinked()
     {
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
             new CompileBriefRequest(_projectId, Guid.NewGuid(), null, null, 8000, false, false, false)));
 
@@ -362,7 +362,7 @@ public sealed class CompileBriefTests : IDisposable
     public async Task CompileBrief_RevisionIdMatchesStoredEntity()
     {
         AddSection("goals", "Goals", "x");
-        var handler = new CompileBriefHandler(_db);
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CompileBriefCommand(
             new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)));
 
@@ -374,7 +374,7 @@ public sealed class CompileBriefTests : IDisposable
     [Fact]
     public async Task ImportFiles_UsesRouteProjectId()
     {
-        var handler = new ImportFilesHandler(_db);
+        var handler = new ImportFilesHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ImportFilesCommand(_projectId, [
             new ImportFileRequest("AGENTS.md", "# Hello", "/tmp/AGENTS.md")
         ]));

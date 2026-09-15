@@ -7,21 +7,22 @@ using Microsoft.EntityFrameworkCore;
 
 public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, Result<ProjectMemberDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public AddProjectMemberHandler(BeaconDbContext db) => _db = db;
+    public AddProjectMemberHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectMemberDto>> HandleAsync(AddProjectMemberCommand command, CancellationToken ct = default)
     {
-        var alreadyMember = await _db.ProjectMembers
+        await using var db = _dbFactory.CreateDbContext();
+        var alreadyMember = await db.ProjectMembers
             .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
         if (alreadyMember)
             return Result.Failure<ProjectMemberDto>("User is already a member of this project.");
 
         var member = ProjectMember.Create(command.Request.ProjectId, command.Request.UserId, command.Request.Role);
 
-        _db.ProjectMembers.Add(member);
-        await _db.SaveChangesAsync(ct);
+        db.ProjectMembers.Add(member);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(member));
     }
@@ -32,19 +33,20 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
 
 public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCommand, Result<bool>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public RemoveProjectMemberHandler(BeaconDbContext db) => _db = db;
+    public RemoveProjectMemberHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<bool>> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
     {
-        var member = await _db.ProjectMembers
+        await using var db = _dbFactory.CreateDbContext();
+        var member = await db.ProjectMembers
             .FirstOrDefaultAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
         if (member is null)
             return Result.Failure<bool>("Project member not found.");
 
-        _db.ProjectMembers.Remove(member);
-        await _db.SaveChangesAsync(ct);
+        db.ProjectMembers.Remove(member);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(true);
     }
@@ -52,13 +54,14 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
 
 public class GetProjectMembersHandler : ICommandHandler<GetProjectMembersCommand, Result<IList<ProjectMemberDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetProjectMembersHandler(BeaconDbContext db) => _db = db;
+    public GetProjectMembersHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ProjectMemberDto>>> HandleAsync(GetProjectMembersCommand command, CancellationToken ct = default)
     {
-        var members = await _db.ProjectMembers
+        await using var db = _dbFactory.CreateDbContext();
+        var members = await db.ProjectMembers
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderByDescending(m => m.JoinedAt)
             .Select(m => new ProjectMemberDto(m.Id, m.UserId, m.Role, m.JoinedAt))

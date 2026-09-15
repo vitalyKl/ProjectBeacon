@@ -9,6 +9,7 @@ using ProjectBeacon.Domain.Entities.Identity;
 public sealed class AuthIntegrationTests : IDisposable
 {
     private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
     private readonly SqliteConnection _connection;
     private readonly IDisposable _unscoped;
 
@@ -21,6 +22,7 @@ public sealed class AuthIntegrationTests : IDisposable
             .UseSqlite(_connection)
             .Options;
 
+        _dbFactory = new BeaconDbFactory(options, null);
         _db = new BeaconDbContext(options);
         _unscoped = TenantScope.EnterUnscoped();
         _db.Database.EnsureCreated();
@@ -36,7 +38,7 @@ public sealed class AuthIntegrationTests : IDisposable
 
     private string SeedBootstrap()
     {
-        var handler = new BootstrapHandler(_db, null!);
+        var handler = new BootstrapHandler(_dbFactory, null!);
         var result = handler.HandleAsync(string.Empty).Result;
 
         return result.Value.Password;
@@ -45,7 +47,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public void Bootstrap_CreatesAdminUser()
     {
-        var handler = new BootstrapHandler(_db, null!);
+        var handler = new BootstrapHandler(_dbFactory, null!);
         var result = handler.HandleAsync(string.Empty).Result;
 
         Assert.True(result.Success);
@@ -64,7 +66,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public void Bootstrap_AlreadyCompleted_ReturnsFailure()
     {
-        var handler = new BootstrapHandler(_db, null!);
+        var handler = new BootstrapHandler(_dbFactory, null!);
         handler.HandleAsync(string.Empty).Wait();
 
         var result = handler.HandleAsync(string.Empty).Result;
@@ -78,7 +80,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var password = SeedBootstrap();
 
-        var handler = new LoginHandler(_db);
+        var handler = new LoginHandler(_dbFactory);
         var result = handler.HandleAsync(
             new LoginCommand(new LoginRequest("admin", "wrong-password"))).Result;
 
@@ -95,7 +97,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var password = SeedBootstrap();
 
-        var handler = new LoginHandler(_db);
+        var handler = new LoginHandler(_dbFactory);
         var result = handler.HandleAsync(
             new LoginCommand(new LoginRequest("admin", password))).Result;
 
@@ -114,7 +116,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var correctPassword = SeedBootstrap();
 
-        var handler = new LoginHandler(_db);
+        var handler = new LoginHandler(_dbFactory);
 
         for (var i = 0; i < 5; i++)
         {
@@ -137,7 +139,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public void Register_CreatesUser()
     {
-        var handler = new RegisterHandler(_db);
+        var handler = new RegisterHandler(_dbFactory);
         var result = handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password"))).Result;
 
@@ -152,7 +154,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public void Register_DuplicateLogin_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_db);
+        var handler = new RegisterHandler(_dbFactory);
         handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password"))).Wait();
 
@@ -166,7 +168,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public void Register_DuplicateEmail_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_db);
+        var handler = new RegisterHandler(_dbFactory);
         handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password"))).Wait();
 

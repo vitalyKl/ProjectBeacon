@@ -7,13 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Result<MilestoneDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CreateMilestoneHandler(BeaconDbContext db) => _db = db;
+    public CreateMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<MilestoneDto>> HandleAsync(CreateMilestoneCommand command, CancellationToken ct = default)
     {
-        var projectExists = await _db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var projectExists = await db.Projects.AnyAsync(p => p.Id == command.Request.ProjectId, ct);
         if (!projectExists)
             return Result.Failure<MilestoneDto>("Project not found.");
 
@@ -23,8 +24,8 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
             command.Request.ProjectId,
             command.Request.Order);
 
-        _db.Milestones.Add(milestone);
-        await _db.SaveChangesAsync(ct);
+        db.Milestones.Add(milestone);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(milestone));
     }
@@ -35,18 +36,19 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
 
 public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Result<MilestoneDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public UpdateMilestoneHandler(BeaconDbContext db) => _db = db;
+    public UpdateMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<MilestoneDto>> HandleAsync(UpdateMilestoneCommand command, CancellationToken ct = default)
     {
-        var milestone = await _db.Milestones.FindAsync([command.Request.MilestoneId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
 
         milestone.Update(command.Request.Name, command.Request.Description, command.Request.Order);
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(milestone));
     }
@@ -57,18 +59,19 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
 
 public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Result<bool>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public DeleteMilestoneHandler(BeaconDbContext db) => _db = db;
+    public DeleteMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<bool>> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
     {
-        var milestone = await _db.Milestones.FindAsync([command.Request.MilestoneId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<bool>("Milestone not found.");
 
-        _db.Milestones.Remove(milestone);
-        await _db.SaveChangesAsync(ct);
+        db.Milestones.Remove(milestone);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(true);
     }
@@ -76,13 +79,14 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
 
 public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<MilestoneDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetMilestoneHandler(BeaconDbContext db) => _db = db;
+    public GetMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<MilestoneDto>> HandleAsync(GetMilestoneCommand command, CancellationToken ct = default)
     {
-        var milestone = await _db.Milestones.FindAsync([command.Request.MilestoneId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
 
@@ -95,13 +99,14 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
 
 public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestonesCommand, Result<IList<MilestoneDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListProjectMilestonesHandler(BeaconDbContext db) => _db = db;
+    public ListProjectMilestonesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<MilestoneDto>>> HandleAsync(ListProjectMilestonesCommand command, CancellationToken ct = default)
     {
-        var milestones = await _db.Milestones
+        await using var db = _dbFactory.CreateDbContext();
+        var milestones = await db.Milestones
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderBy(m => m.Order)
             .Select(m => new MilestoneDto(
@@ -114,17 +119,18 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
 
 public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Result<MilestoneDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CloseMilestoneHandler(BeaconDbContext db) => _db = db;
+    public CloseMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<MilestoneDto>> HandleAsync(CloseMilestoneCommand command, CancellationToken ct = default)
     {
-        var milestone = await _db.Milestones.FindAsync([command.Request.MilestoneId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
         milestone.Close();
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
             milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt));
@@ -133,17 +139,18 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
 
 public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Result<MilestoneDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ReopenMilestoneHandler(BeaconDbContext db) => _db = db;
+    public ReopenMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<MilestoneDto>> HandleAsync(ReopenMilestoneCommand command, CancellationToken ct = default)
     {
-        var milestone = await _db.Milestones.FindAsync([command.Request.MilestoneId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
             return Result.Failure<MilestoneDto>("Milestone not found.");
         milestone.Reopen();
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(new MilestoneDto(
             milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
             milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt));

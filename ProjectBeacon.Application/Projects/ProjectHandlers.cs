@@ -8,27 +8,28 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CreateProjectHandler(BeaconDbContext db) => _db = db;
+    public CreateProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
     {
-        var orgExists = await _db.Orgs.AnyAsync(o => o.Id == command.Request.OrgId, ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var orgExists = await db.Orgs.AnyAsync(o => o.Id == command.Request.OrgId, ct);
         if (!orgExists)
             return Result.Failure<ProjectDto>("Org not found.");
 
         if (command.Request.CreatedByUserId is { } userId
-            && !await _db.Users.AnyAsync(u => u.Id == userId, ct))
+            && !await db.Users.AnyAsync(u => u.Id == userId, ct))
             return Result.Failure<ProjectDto>("User not found.");
 
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, command.Request.OrgId);
 
-        _db.Projects.Add(project);
+        db.Projects.Add(project);
         if (command.Request.CreatedByUserId is { } ownerId)
-            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
-        SeedStarterLabels(project.Id);
-        await _db.SaveChangesAsync(ct);
+            db.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
+        SeedStarterLabels(db, project.Id);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
     }
@@ -36,7 +37,7 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
         new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 
-    private void SeedStarterLabels(Guid projectId)
+    private static void SeedStarterLabels(BeaconDbContext db, Guid projectId)
     {
         (string Name, string Color, string Prefix)[] catalog =
         [
@@ -48,24 +49,25 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         ];
 
         foreach (var (name, color, prefix) in catalog)
-            _db.Labels.Add(Label.Create(name, color, projectId, prefix));
+            db.Labels.Add(Label.Create(name, color, projectId, prefix));
     }
 }
 
 public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result<ProjectDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public UpdateProjectHandler(BeaconDbContext db) => _db = db;
+    public UpdateProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
     {
-        var project = await _db.Projects.FindAsync([command.Request.ProjectId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
             return Result.Failure<ProjectDto>("Project not found.");
 
         project.Update(command.Request.Name, command.Request.Description);
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
     }
@@ -76,13 +78,14 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 
 public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<ProjectDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetProjectHandler(BeaconDbContext db) => _db = db;
+    public GetProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectDto>> HandleAsync(GetProjectCommand command, CancellationToken ct = default)
     {
-        var project = await _db.Projects.FindAsync([command.Request.ProjectId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
             return Result.Failure<ProjectDto>("Project not found.");
 
@@ -95,13 +98,14 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
 
 public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<IList<ProjectDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListProjectsHandler(BeaconDbContext db) => _db = db;
+    public ListProjectsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {
-        var query = _db.Projects.AsQueryable();
+        await using var db = _dbFactory.CreateDbContext();
+        var query = db.Projects.AsQueryable();
         if (command.Request.OrgId is { } orgId)
             query = query.Where(p => p.OrgId == orgId);
 

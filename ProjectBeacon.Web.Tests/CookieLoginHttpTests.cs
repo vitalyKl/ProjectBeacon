@@ -108,6 +108,7 @@ public sealed class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Fea
             }
 
             services.AddDbContext<BeaconDbContext>(o => o.UseSqlite(_connection));
+            services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>();
             using var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             scope.ServiceProvider.GetRequiredService<BeaconDbContext>().Database.EnsureCreated();

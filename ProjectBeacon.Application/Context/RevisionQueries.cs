@@ -8,13 +8,14 @@ public record ContextRevisionDto(Guid Id, DateTime CreatedAt, int TokenEstimate,
 
 public class ListContextRevisionsHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListContextRevisionsHandler(BeaconDbContext db) => _db = db;
+    public ListContextRevisionsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ContextRevisionDto>>> HandleAsync(CancellationToken ct = default)
     {
-        var items = await _db.ContextRevisions
+        await using var db = _dbFactory.CreateDbContext();
+        var items = await db.ContextRevisions
             .OrderByDescending(r => r.CreatedAt)
             .Take(50)
             .Select(r => new ContextRevisionDto(r.Id, r.CreatedAt, r.TokenEstimate, r.CompiledHash))

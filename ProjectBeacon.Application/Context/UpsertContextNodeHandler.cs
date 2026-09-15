@@ -8,17 +8,18 @@ using Microsoft.EntityFrameworkCore;
 
 public class UpsertContextNodeHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public UpsertContextNodeHandler(BeaconDbContext db) => _db = db;
+    public UpsertContextNodeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ContextSectionDto>> HandleAsync(UpsertContextNodeCommand command, CancellationToken ct = default)
     {
+        await using var db = _dbFactory.CreateDbContext();
         var path = command.Request.Path ?? string.Empty;
         var sectionId = command.Request.SectionId
             ?? command.Request.Title.ToLowerInvariant().Replace(" ", "_");
 
-        var existing = await _db.ContextSections
+        var existing = await db.ContextSections
             .FirstOrDefaultAsync(s =>
                 s.ProjectId == command.Request.ProjectId &&
                 s.ScopeType == command.Request.ScopeType &&
@@ -57,13 +58,13 @@ public class UpsertContextNodeHandler
                 updatedByType: command.Request.Source == ContextSource.Native ? "user" : "system",
                 updatedById: command.Request.SourcePath);
 
-            _db.ContextSections.Add(section);
+            db.ContextSections.Add(section);
             savedId = section.Id;
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
-        var savedSection = await _db.ContextSections.FirstOrDefaultAsync(s => s.Id == savedId, ct);
+        var savedSection = await db.ContextSections.FirstOrDefaultAsync(s => s.Id == savedId, ct);
 
         if (savedSection is null)
             return Result.Failure<ContextSectionDto>("Failed to retrieve saved section.");

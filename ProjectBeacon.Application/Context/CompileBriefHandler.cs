@@ -36,13 +36,14 @@ public class CompileBriefHandler
     private static readonly string[] NeverDropSections =
         ["non_goals", "security", "definition_of_done"];
 
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CompileBriefHandler(BeaconDbContext db) => _db = db;
+    public CompileBriefHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<CompileBriefResult>> HandleAsync(CompileBriefCommand command, CancellationToken ct = default)
     {
-        var project = await _db.Projects
+        await using var db = _dbFactory.CreateDbContext();
+        var project = await db.Projects
             .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
 
         if (project is null)
@@ -50,7 +51,7 @@ public class CompileBriefHandler
 
         var budget = command.Request.BudgetTokens ?? 8000;
 
-        var nodes = await _db.ContextSections
+        var nodes = await db.ContextSections
             .Where(s =>
                 s.ProjectId == command.Request.ProjectId &&
                 (command.Request.RepoId == null || s.RepoId == command.Request.RepoId || s.RepoId == null))
@@ -62,14 +63,14 @@ public class CompileBriefHandler
         TaskItem? task = null;
         if (command.Request.TaskId is { } taskId)
         {
-            task = await _db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == command.Request.ProjectId, ct);
+            task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId && t.ProjectId == command.Request.ProjectId, ct);
         }
 
-        var constraints = await _db.Constraints
+        var constraints = await db.Constraints
             .Where(c => c.ProjectId == command.Request.ProjectId && c.Status == ConstraintStatus.Active)
             .ToListAsync(ct);
 
-        var decisions = await _db.Decisions
+        var decisions = await db.Decisions
             .Where(d => d.ProjectId == command.Request.ProjectId && d.Status == DecisionStatus.Accepted)
             .ToListAsync(ct);
 
@@ -167,8 +168,8 @@ public class CompileBriefHandler
             targetPath: command.Request.Path,
             targetTaskId: command.Request.TaskId?.ToString());
 
-        _db.ContextRevisions.Add(revision);
-        await _db.SaveChangesAsync(ct);
+        db.ContextRevisions.Add(revision);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(new CompileBriefResult(
             SchemaVersion: "1",

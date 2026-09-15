@@ -8,12 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 public class ImportFilesHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ImportFilesHandler(BeaconDbContext db) => _db = db;
+    public ImportFilesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<int>> HandleAsync(ImportFilesCommand command, CancellationToken ct = default)
     {
+        await using var db = _dbFactory.CreateDbContext();
         var createdCount = 0;
 
         foreach (var file in command.Files)
@@ -22,7 +23,7 @@ public class ImportFilesHandler
 
             foreach (var section in contextSections)
             {
-                var existing = await _db.ContextSections
+                var existing = await db.ContextSections
                     .FirstOrDefaultAsync(s =>
                         s.ProjectId == section.ProjectId &&
                         s.ScopeType == section.ScopeType &&
@@ -32,7 +33,7 @@ public class ImportFilesHandler
 
                 if (existing is null)
                 {
-                    _db.ContextSections.Add(section);
+                    db.ContextSections.Add(section);
                     createdCount++;
                 }
                 else
@@ -46,7 +47,7 @@ public class ImportFilesHandler
             }
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(createdCount);
     }
 

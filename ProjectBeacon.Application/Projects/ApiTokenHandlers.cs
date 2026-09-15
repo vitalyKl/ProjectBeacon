@@ -10,18 +10,19 @@ using Microsoft.Extensions.Configuration;
 
 public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Result<ApiTokenDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
     private readonly IConfiguration _config;
 
-    public CreateApiTokenHandler(BeaconDbContext db, IConfiguration config)
+    public CreateApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory, IConfiguration config)
     {
-        _db = db;
+        _dbFactory = dbFactory;
         _config = config;
     }
 
     public async Task<Result<ApiTokenDto>> HandleAsync(CreateApiTokenCommand command, CancellationToken ct = default)
     {
-        var project = await _db.Projects.FindAsync([command.Request.ProjectId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
             return Result.Failure<ApiTokenDto>("Project not found.");
 
@@ -38,8 +39,8 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
             command.Request.ExpiresAt,
             command.Request.CreatedByUserId);
 
-        _db.ApiTokens.Add(token);
-        await _db.SaveChangesAsync(ct);
+        db.ApiTokens.Add(token);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(new ApiTokenDto(
             token.Id,
@@ -68,18 +69,19 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
 
 public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Result<bool>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public RevokeApiTokenHandler(BeaconDbContext db) => _db = db;
+    public RevokeApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<bool>> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
     {
-        var token = await _db.ApiTokens.FindAsync([command.Request.TokenId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var token = await db.ApiTokens.FindAsync([command.Request.TokenId], ct);
         if (token is null)
             return Result.Failure<bool>("API token not found.");
 
-        _db.ApiTokens.Remove(token);
-        await _db.SaveChangesAsync(ct);
+        db.ApiTokens.Remove(token);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(true);
     }
@@ -87,13 +89,14 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
 
 public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<ApiTokenDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetApiTokenHandler(BeaconDbContext db) => _db = db;
+    public GetApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ApiTokenDto>> HandleAsync(GetApiTokenCommand command, CancellationToken ct = default)
     {
-        var token = await _db.ApiTokens.FindAsync([command.Request.TokenId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var token = await db.ApiTokens.FindAsync([command.Request.TokenId], ct);
         if (token is null)
             return Result.Failure<ApiTokenDto>("API token not found.");
 
@@ -111,13 +114,14 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
 
 public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result<IList<ApiTokenDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListApiTokensHandler(BeaconDbContext db) => _db = db;
+    public ListApiTokensHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ApiTokenDto>>> HandleAsync(ListApiTokensCommand command, CancellationToken ct = default)
     {
-        var tokens = await _db.ApiTokens
+        await using var db = _dbFactory.CreateDbContext();
+        var tokens = await db.ApiTokens
             .Where(t => t.ProjectId == command.Request.ProjectId)
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new ApiTokenDto(

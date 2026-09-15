@@ -664,4 +664,28 @@
   <data name="NewPassword" xml:space="preserve">
     <value>New password</value>
   </data>
+  <data name="MyProjects" xml:space="preserve">
+    <value>My projects</value>
+  </data>
+  <data name="NoProjectsYet" xml:space="preserve">
+    <value>No projects yet. Create one to get started.</value>
+  </data>
+  <data name="NoProjects" xml:space="preserve">
+    <value>No projects</value>
+  </data>
+  <data name="RecentActivity" xml:space="preserve">
+    <value>Recent activity</value>
+  </data>
+  <data name="NoRecentActivity" xml:space="preserve">
+    <value>No recent activity.</value>
+  </data>
+  <data name="LastActivity" xml:space="preserve">
+    <value>Last activity</value>
+  </data>
+  <data name="Active" xml:space="preserve">
+    <value>Active</value>
+  </data>
+  <data name="SwitchProject" xml:space="preserve">
+    <value>Switch project</value>
+  </data>
 </root>

@@ -8,22 +8,23 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CreateOrgHandler(BeaconDbContext db) => _db = db;
+    public CreateOrgHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
     {
+        await using var db = _dbFactory.CreateDbContext();
         if (command.Request.CreatedByUserId is { } userId
-            && !await _db.Users.AnyAsync(u => u.Id == userId, ct))
+            && !await db.Users.AnyAsync(u => u.Id == userId, ct))
             return Result.Failure<OrgDto>("User not found.");
 
         var org = Org.Create(command.Request.Name, command.Request.Description);
 
-        _db.Orgs.Add(org);
+        db.Orgs.Add(org);
         if (command.Request.CreatedByUserId is { } ownerId)
-            _db.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
-        await _db.SaveChangesAsync(ct);
+            db.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
     }
@@ -34,18 +35,19 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 
 public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public UpdateOrgHandler(BeaconDbContext db) => _db = db;
+    public UpdateOrgHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<OrgDto>> HandleAsync(UpdateOrgCommand command, CancellationToken ct = default)
     {
-        var org = await _db.Orgs.FindAsync([command.Request.OrgId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var org = await db.Orgs.FindAsync([command.Request.OrgId], ct);
         if (org is null)
             return Result.Failure<OrgDto>("Org not found.");
 
         org.Update(command.Request.Name, command.Request.Description);
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
     }
@@ -56,13 +58,14 @@ public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>
 
 public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetOrgHandler(BeaconDbContext db) => _db = db;
+    public GetOrgHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<OrgDto>> HandleAsync(GetOrgCommand command, CancellationToken ct = default)
     {
-        var org = await _db.Orgs.FindAsync([command.Request.OrgId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var org = await db.Orgs.FindAsync([command.Request.OrgId], ct);
         if (org is null)
             return Result.Failure<OrgDto>("Org not found.");
 
@@ -75,13 +78,14 @@ public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 
 public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<OrgDto>>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListOrgsHandler(BeaconDbContext db) => _db = db;
+    public ListOrgsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<OrgDto>>> HandleAsync(ListOrgsCommand command, CancellationToken ct = default)
     {
-        var orgs = await _db.Orgs
+        await using var db = _dbFactory.CreateDbContext();
+        var orgs = await db.Orgs
             .OrderByDescending(o => o.CreatedAt)
             .Select(o => new OrgDto(o.Id, o.Name, o.Description, o.CreatedAt, o.UpdatedAt))
             .ToListAsync(ct);

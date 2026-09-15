@@ -43,7 +43,7 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
-        var handler = new ChangeTaskStatusHandler(_db);
+        var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
             new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Todo)));
 
@@ -59,7 +59,7 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
-        var handler = new ChangeTaskStatusHandler(_db);
+        var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
             new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
 

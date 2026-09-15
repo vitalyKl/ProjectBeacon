@@ -48,7 +48,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
-        var handler = new FinishWorkHandler(_db);
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
             task.Id.ToString(),
             "done",
@@ -57,6 +57,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
             new FinishWorkReview(true, 0, 0))));
 
         Assert.True(result.Success, result.Error);
-        Assert.Equal(TaskItemStatus.Done, (await _db.Tasks.FindAsync([task.Id]))!.Status);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Done, task.Status);
     }
 }

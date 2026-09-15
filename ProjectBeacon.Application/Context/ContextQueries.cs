@@ -7,13 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 public class ListContextNodesHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListContextNodesHandler(BeaconDbContext db) => _db = db;
+    public ListContextNodesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ContextSectionDto>>> HandleAsync(ListContextNodesCommand command, CancellationToken ct = default)
     {
-        var sections = await _db.ContextSections
+        await using var db = _dbFactory.CreateDbContext();
+        var sections = await db.ContextSections
             .Where(s => s.ProjectId == command.Request.ProjectId)
             .OrderByDescending(s => s.UpdatedAt)
             .ToListAsync(ct);
@@ -24,13 +25,14 @@ public class ListContextNodesHandler
 
 public class GetContextNodeHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public GetContextNodeHandler(BeaconDbContext db) => _db = db;
+    public GetContextNodeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ContextSectionDto>> HandleAsync(GetContextNodeCommand command, CancellationToken ct = default)
     {
-        var section = await _db.ContextSections
+        await using var db = _dbFactory.CreateDbContext();
+        var section = await db.ContextSections
             .FirstOrDefaultAsync(s => s.Id == command.Request.NodeId && s.ProjectId == command.Request.ProjectId, ct);
 
         if (section is null)
@@ -42,20 +44,21 @@ public class GetContextNodeHandler
 
 public class DeleteContextNodeHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public DeleteContextNodeHandler(BeaconDbContext db) => _db = db;
+    public DeleteContextNodeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<bool>> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
     {
-        var section = await _db.ContextSections
+        await using var db = _dbFactory.CreateDbContext();
+        var section = await db.ContextSections
             .FirstOrDefaultAsync(s => s.Id == command.Request.NodeId && s.ProjectId == command.Request.ProjectId, ct);
 
         if (section is null)
             return Result.Failure<bool>("Context node not found.");
 
-        _db.ContextSections.Remove(section);
-        await _db.SaveChangesAsync(ct);
+        db.ContextSections.Remove(section);
+        await db.SaveChangesAsync(ct);
 
         return Result.Ok(true);
     }

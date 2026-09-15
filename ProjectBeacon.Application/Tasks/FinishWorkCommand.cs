@@ -10,22 +10,23 @@ using System.Text;
 
 public class FinishWorkHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public FinishWorkHandler(BeaconDbContext db) => _db = db;
+    public FinishWorkHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<bool>> HandleAsync(FinishWorkCommand command, CancellationToken ct = default)
     {
         if (!Guid.TryParse(command.Request.TaskId, out var taskId))
             return Result.Failure<bool>("Invalid task ID format.");
 
-        var task = await _db.Tasks
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks
             .FirstOrDefaultAsync(t => t.Id == taskId, ct);
 
         if (task is null)
             return Result.Failure<bool>("Task not found.");
 
-        if (!await ActorHasAccess(command.Request.ActorId, task.ProjectId, ct))
+        if (!await ActorHasAccess(db, command.Request.ActorId, task.ProjectId, ct))
             return Result.Failure<bool>("Actor does not have access to this project.");
 
         var resultType = command.Request.Result.ToLowerInvariant();
@@ -72,18 +73,18 @@ public class FinishWorkHandler
 
         if (Guid.TryParse(command.Request.ActorId, out var userId))
         {
-            _db.TaskComments.Add(TaskComment.Create(
+            db.TaskComments.Add(TaskComment.Create(
                 $"Work finished: {command.Request.Result}" +
                 (command.Request.Output != null ? $"\nOutput: {command.Request.Output}" : ""),
                 taskId,
                 userId));
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(true);
     }
 
-    private async Task<bool> ActorHasAccess(string actorId, Guid projectId, CancellationToken ct)
+    private static async Task<bool> ActorHasAccess(BeaconDbContext db, string actorId, Guid projectId, CancellationToken ct)
     {
         var workerToken = Environment.GetEnvironmentVariable("BEACON_WORKER_TOKEN");
         if (!string.IsNullOrEmpty(workerToken) && FixedTimeEquals(actorId, workerToken))
@@ -92,8 +93,8 @@ public class FinishWorkHandler
         if (!Guid.TryParse(actorId, out var userId))
             return false;
 
-        return await _db.ProjectMembers.AnyAsync(m => m.ProjectId == projectId && m.UserId == userId, ct)
-            || await _db.Users.AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
+        return await db.ProjectMembers.AnyAsync(m => m.ProjectId == projectId && m.UserId == userId, ct)
+            || await db.Users.AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
     }
 
     private static string FormatReview(FinishWorkReview review, string? output)

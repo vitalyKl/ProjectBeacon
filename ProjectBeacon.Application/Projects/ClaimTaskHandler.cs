@@ -9,19 +9,20 @@ using Microsoft.EntityFrameworkCore;
 
 public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskItemDto>>
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ClaimTaskHandler(BeaconDbContext db) => _db = db;
+    public ClaimTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(ClaimTaskCommand command, CancellationToken ct = default)
     {
+        await using var db = _dbFactory.CreateDbContext();
         var taskId = command.Request.TaskId;
-        var strategy = _db.Database.CreateExecutionStrategy();
+        var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-            var task = await _db.Tasks
+            var task = await db.Tasks
                 .FromSqlRaw(
                     "SELECT * FROM \"Tasks\" WHERE \"Id\" = {0} AND \"Status\" = 'Todo' LIMIT 1 FOR UPDATE SKIP LOCKED",
                     taskId)
@@ -34,7 +35,7 @@ public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskIte
             }
 
             task.MoveToNextStatus();
-            await _db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
             return Result.Ok(MapToDto(task));

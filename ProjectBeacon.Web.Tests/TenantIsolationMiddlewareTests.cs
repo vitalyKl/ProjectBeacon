@@ -66,7 +66,7 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     }
 
     [Fact]
-    public async Task CookieProjectId_IgnoredInFavorOfOldestMembership()
+    public async Task ValidClaimProjectId_HonoredOverOldestMembership()
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
@@ -99,7 +99,74 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         };
 
         await mw.InvokeAsync(http, _db);
-        Assert.Equal(first.Id, scoped);
+        Assert.Equal(second.Id, scoped);
+    }
+
+    [Fact]
+    public async Task AdminClaimProjectId_HonoredWhenProjectExists()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+        var project = Project.Create("A", null, org.Id);
+        _db.Projects.Add(project);
+        var user = User.Create("admin", "admin@example.com", "hash", true);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        Guid? scoped = null;
+        var mw = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("isAdmin", "true"),
+                new Claim("project_id", project.Id.ToString())
+            ], "Cookies"))
+        };
+
+        await mw.InvokeAsync(http, _db);
+        Assert.Equal(project.Id, scoped);
+    }
+
+    [Fact]
+    public async Task AdminStaleClaim_FallsBackToOldestProject()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+        var oldest = Project.Create("A", null, org.Id);
+        var newer = Project.Create("B", null, org.Id);
+        _db.Projects.AddRange(oldest, newer);
+        var user = User.Create("admin", "admin@example.com", "hash", true);
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        Guid? scoped = null;
+        var mw = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("isAdmin", "true"),
+                new Claim("project_id", Guid.NewGuid().ToString())
+            ], "Cookies"))
+        };
+
+        await mw.InvokeAsync(http, _db);
+        Assert.Equal(oldest.Id, scoped);
     }
 
     [Fact]

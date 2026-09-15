@@ -38,7 +38,7 @@ public sealed class CreateTaskAutoLabelTests : IDisposable
     [Fact]
     public async Task CreateTask_WithPath_AssignsMatchingLabel()
     {
-        var handler = new CreateTaskHandler(_db);
+        var handler = new CreateTaskHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
             "Fix API",
             null,

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Localization;
 using ProjectBeacon.API.Endpoints;
 using ProjectBeacon.Application.Auth;
@@ -55,6 +56,38 @@ public static class EndpointExtensions
             await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
             return Results.Redirect("/dashboard");
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
+
+        app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
+        {
+            if (ctx.User.Identity?.IsAuthenticated != true
+                || !Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid)
+                || !Guid.TryParse(ctx.Request.Query["projectId"].ToString(), out var target))
+                return Results.Redirect("/dashboard");
+
+            var isAdmin = bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var adminFlag) && adminFlag;
+            var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, uid, isAdmin, target);
+            if (projectId != target)
+                return Results.Redirect("/dashboard");
+
+            var identity = new ClaimsIdentity(
+                ctx.User.Claims.Where(c => c.Type != "project_id" && c.Type != "org_id"),
+                CookieAuthenticationDefaults.AuthenticationScheme);
+            identity.AddClaim(new Claim("project_id", target.ToString()));
+            if (orgId is { } oid)
+                identity.AddClaim(new Claim("org_id", oid.ToString()));
+
+            await ctx.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                new ClaimsPrincipal(identity),
+                new AuthenticationProperties { IsPersistent = true });
+
+            var returnUrl = ctx.Request.Query["returnUrl"].ToString();
+            if (string.IsNullOrWhiteSpace(returnUrl)
+                || !returnUrl.StartsWith("/", StringComparison.Ordinal)
+                || returnUrl.StartsWith("//", StringComparison.Ordinal))
+                return Results.Redirect("/dashboard");
+            return Results.Redirect(returnUrl);
+        }).RequireAuthorization();
 
         return app;
     }

@@ -1,0 +1,56 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Projects
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Auth
+@inject ListMyProjectsHandler MyProjects
+
+<MudSelect T="Guid" Value="_selected" ValueChanged="OnSelected"
+           Label="@L["Project"]" Dense="true" Variant="Variant.Outlined"
+           Class="@SelectClass" Disabled="@(_projects.Count == 0)">
+    @foreach (var p in _projects)
+    {
+        <MudSelectItem Value="p.Id">@p.Name</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+
+    private Guid _selected = Guid.Empty;
+    private List<ProjectSummaryDto> _projects = [];
+
+    private string SelectClass
+        => string.IsNullOrWhiteSpace(Class) ? "beacon-project-select" : $"beacon-project-select {Class}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Auth.GetAuthenticationStateAsync();
+        var user = state.User;
+        if (user.Identity?.IsAuthenticated != true
+            || !Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
+            return;
+
+        var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
+        var result = await MyProjects.HandleAsync(uid, isAdmin);
+        if (!result.Success || result.Value is null)
+            return;
+
+        _projects = [.. result.Value.Projects.OrderBy(p => p.Name)];
+        if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var activeId)
+            && _projects.Any(p => p.Id == activeId))
+            _selected = activeId;
+    }
+
+    private void OnSelected(Guid projectId)
+    {
+        if (projectId == Guid.Empty)
+            return;
+
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+        if (string.IsNullOrWhiteSpace(path))
+            path = "/dashboard";
+        Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl={Uri.EscapeDataString(path)}", forceLoad: true);
+    }
+}

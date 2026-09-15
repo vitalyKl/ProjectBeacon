@@ -1,11 +1,15 @@
 @page "/dashboard"
 @layout MainLayout
 @attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
-@inject GetDashboardCountsHandler DashboardCounts
+@inject AuthenticationStateProvider Auth
+@inject ListMyProjectsHandler MyProjects
 
 <PageTitle>@L["Dashboard"]</PageTitle>
 
@@ -18,7 +22,7 @@
         <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
             <MudText Typo="Typo.h5">@L["Projects"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@projectsCount</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@(_data?.TotalProjects ?? 0)</MudChip>
             </MudText>
         </MudPaper>
     </MudItem>
@@ -26,7 +30,7 @@
         <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
             <MudText Typo="Typo.h5">@L["Tasks"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@tasksCount</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@(_data?.TotalTasks ?? 0)</MudChip>
             </MudText>
         </MudPaper>
     </MudItem>
@@ -34,7 +38,7 @@
         <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
             <MudText Typo="Typo.h5">@L["InProgress"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@inProgressCount</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@(_data?.InProgress ?? 0)</MudChip>
             </MudText>
         </MudPaper>
     </MudItem>
@@ -42,9 +46,73 @@
         <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
             <MudText Typo="Typo.h5">@L["Completed"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@doneCount</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@(_data?.Done ?? 0)</MudChip>
             </MudText>
         </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Spacing="3" Class="mt-2">
+    <MudItem xs="12" md="8">
+        <MudText Typo="Typo.h6" Class="mb-3">@L["MyProjects"]</MudText>
+        @if (_data is null || _data.Projects.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">@L["NoProjectsYet"]</MudAlert>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @foreach (var p in _data.Projects)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-4 h-100 beacon-card-interactive"
+                                  @onclick="@(() => SwitchProject(p.Id))">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
+                                <MudText Typo="Typo.h6" Class="grow beacon-ellipsis">@p.Name</MudText>
+                                @if (p.Id == _activeProjectId)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">@L["Active"]</MudChip>
+                                }
+                            </MudStack>
+                            @if (!string.IsNullOrWhiteSpace(p.Description))
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis">@p.Description</MudText>
+                            }
+                            <MudStack Row="true" Class="mt-3" Wrap="Wrap.Wrap">
+                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Todo")" Variant="Variant.Filled">@L["Todo"]: @p.Todo</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@L["InProgress"]: @p.InProgress</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@L["Done"]: @p.Done</MudChip>
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Class="mt-2">@L["LastActivity"]: @p.LastActivity.ToString("dd.MM.yyyy")</MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudText Typo="Typo.h6" Class="mb-3">@L["RecentActivity"]</MudText>
+        @if (_data is null || _data.RecentTasks.Count == 0)
+        {
+            <MudText Typo="Typo.body2">@L["NoRecentActivity"]</MudText>
+        }
+        else
+        {
+            <MudPaper Elevation="0" Outlined="true">
+                <MudList T="string" Dense="true">
+                    @foreach (var t in _data.RecentTasks)
+                    {
+                        <MudListItem T="string">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
+                                <MudText Typo="Typo.body2" Class="grow beacon-ellipsis">@t.Title</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus(t.Status.ToString())" Variant="Variant.Filled">@StatusText(t.Status)</MudChip>
+                            </MudStack>
+                            <MudText Typo="Typo.caption">@t.ProjectName · @t.ActivityAt.ToString("dd.MM HH:mm")</MudText>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+        }
     </MudItem>
 </MudGrid>
 
@@ -55,24 +123,33 @@
 </MudButton>
 
 @code {
-    private int projectsCount;
-    private int tasksCount;
-    private int inProgressCount;
-    private int doneCount;
+    private ListMyProjectsDto? _data;
+    private Guid? _activeProjectId;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadDashboardData();
+        var state = await Auth.GetAuthenticationStateAsync();
+        var user = state.User;
+        if (user.Identity?.IsAuthenticated != true
+            || !Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
+            return;
+
+        if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var active))
+            _activeProjectId = active;
+
+        var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
+        var result = await MyProjects.HandleAsync(uid, isAdmin);
+        if (result.Success)
+            _data = result.Value;
     }
 
-    private async Task LoadDashboardData()
+    private string StatusText(TaskItemStatus status) => status switch
     {
-        var counts = await DashboardCounts.HandleAsync();
-        if (!counts.Success || counts.Value is null)
-            return;
-        projectsCount = counts.Value.Projects;
-        tasksCount = counts.Value.Tasks;
-        inProgressCount = counts.Value.InProgress;
-        doneCount = counts.Value.Done;
-    }
+        TaskItemStatus.InProgress => L["InProgress"].Value,
+        TaskItemStatus.Done => L["Done"].Value,
+        _ => L["Todo"].Value
+    };
+
+    private void SwitchProject(Guid projectId) =>
+        Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl=/dashboard", forceLoad: true);
 }

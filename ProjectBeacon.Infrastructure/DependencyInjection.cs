@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddDbContext<BeaconDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null)));
+        services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>();
 
         return services;
     }

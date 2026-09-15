@@ -19,23 +19,24 @@ public record CreateDecisionRequest(Guid ProjectId, string Title, string Context
 
 public class CreateDecisionHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public CreateDecisionHandler(BeaconDbContext db) => _db = db;
+    public CreateDecisionHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<DecisionDto>> HandleAsync(CreateDecisionRequest request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Body))
             return Result.Failure<DecisionDto>("Title and body are required.");
 
+        await using var db = _dbFactory.CreateDbContext();
         var decision = Decision.Create(
             request.Title.Trim(),
             request.Context.Trim(),
             request.Body.Trim(),
             request.ProjectId,
             string.IsNullOrWhiteSpace(request.Consequences) ? null : request.Consequences.Trim());
-        _db.Decisions.Add(decision);
-        await _db.SaveChangesAsync(ct);
+        db.Decisions.Add(decision);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(Map(decision));
     }
 
@@ -45,13 +46,14 @@ public class CreateDecisionHandler
 
 public class ListDecisionsHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ListDecisionsHandler(BeaconDbContext db) => _db = db;
+    public ListDecisionsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<DecisionDto>>> HandleAsync(Guid projectId, CancellationToken ct = default)
     {
-        var items = await _db.Decisions
+        await using var db = _dbFactory.CreateDbContext();
+        var items = await db.Decisions
             .Where(d => d.ProjectId == projectId)
             .OrderByDescending(d => d.CreatedAt)
             .Select(d => new DecisionDto(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId))
@@ -62,17 +64,18 @@ public class ListDecisionsHandler
 
 public class AcceptDecisionHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public AcceptDecisionHandler(BeaconDbContext db) => _db = db;
+    public AcceptDecisionHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, CancellationToken ct = default)
     {
-        var decision = await _db.Decisions.FindAsync([decisionId], ct);
+        await using var db = _dbFactory.CreateDbContext();
+        var decision = await db.Decisions.FindAsync([decisionId], ct);
         if (decision is null)
             return Result.Failure<DecisionDto>("Decision not found.");
         decision.Accept();
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
             decision.Id, decision.Title, decision.Context, decision.DecisionBody,
             decision.Consequences, decision.Status, decision.ProjectId));

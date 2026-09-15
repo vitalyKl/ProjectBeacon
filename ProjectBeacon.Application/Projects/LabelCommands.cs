@@ -11,13 +11,14 @@ public record AddLabelPathRequest(Guid ProjectId, Guid LabelId, string Path);
 
 public class MatchLabelHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public MatchLabelHandler(BeaconDbContext db) => _db = db;
+    public MatchLabelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LabelDto?>> HandleAsync(MatchLabelRequest request, CancellationToken ct = default)
     {
-        var labels = await _db.Labels
+        await using var db = _dbFactory.CreateDbContext();
+        var labels = await db.Labels
             .Include(l => l.Paths)
             .Where(l => l.ProjectId == request.ProjectId)
             .ToListAsync(ct);
@@ -30,27 +31,28 @@ public class MatchLabelHandler
 
 public class AddLabelPathHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public AddLabelPathHandler(BeaconDbContext db) => _db = db;
+    public AddLabelPathHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LabelDto>> HandleAsync(AddLabelPathRequest request, CancellationToken ct = default)
     {
+        await using var db = _dbFactory.CreateDbContext();
         var path = PathMatcher.Normalize(request.Path);
         if (string.IsNullOrWhiteSpace(path))
             return Result.Failure<LabelDto>("Path is required.");
 
-        var label = await _db.Labels
+        var label = await db.Labels
             .Include(l => l.Paths)
             .FirstOrDefaultAsync(l => l.Id == request.LabelId && l.ProjectId == request.ProjectId, ct);
         if (label is null)
             return Result.Failure<LabelDto>("Label not found.");
 
         if (!label.Paths.Any(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase)))
-            _db.LabelPaths.Add(LabelPath.Create(label.Id, path, label.ProjectId));
+            db.LabelPaths.Add(LabelPath.Create(label.Id, path, label.ProjectId));
         if (string.IsNullOrWhiteSpace(label.PathPrefix))
             label.SetPathPrefix(path);
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return Result.Ok(new LabelDto(label.Id, label.Name, label.Color, label.PathPrefix, label.ProjectId));
     }
 }

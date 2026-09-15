@@ -8,13 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 public class ExportAgentsMdHandler
 {
-    private readonly BeaconDbContext _db;
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
-    public ExportAgentsMdHandler(BeaconDbContext db) => _db = db;
+    public ExportAgentsMdHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<string>> HandleAsync(ExportAgentsMdCommand command, CancellationToken ct = default)
     {
-        var sections = await _db.ContextSections
+        await using var db = _dbFactory.CreateDbContext();
+        var sections = await db.ContextSections
             .Where(s =>
                 s.ProjectId == command.Request.ProjectId &&
                 (command.Request.RepoId == null || s.RepoId == command.Request.RepoId))
