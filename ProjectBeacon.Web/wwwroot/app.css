@@ -1,13 +1,16 @@
 :root {
     --color-bg-app: #181818;
-    --color-bg-sidebar: #141414;
+    --color-surface-1: #141414;
+    --color-surface-2: #1A1A1A;
+    --color-bg-sidebar: var(--color-surface-1);
     --color-bg-header: #181818;
-    --color-bg-surface: #1A1A1A;
+    --color-bg-surface: var(--color-surface-2);
     --color-bg-surface-hover: #202020;
-    --color-bg-surface-active: #1a2740;
+    --color-bg-accent: #1a2740;
     --color-border: #2A2A2A;
     --color-border-subtle: #222222;
     --color-border-strong: #333333;
+    --color-border-accent: var(--color-accent);
     --color-text-primary: #F5F5F5;
     --color-text-secondary: #B5B5B5;
     --color-text-muted: #8A8A8A;
@@ -33,12 +36,20 @@
     --space-10: 40px;
     --space-12: 48px;
     --space-16: 64px;
+    --radius-panel: 12px;
+    --radius-small: 8px;
+    --radius-pill: 9999px;
+    --border-hairline: 0.5px;
 }
 
 .d-flex { display: flex; }
 .justify-end { justify-content: flex-end; }
 .mb-4 { margin-bottom: 16px; }
 .ml-2 { margin-left: 8px; }
+.text-center { text-align: center; }
+.text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-100 { height: 100%; }
+.grow { flex-grow: 1; }
 
 .auth-shell {
     min-height: 100vh;
@@ -72,8 +83,12 @@
 
 .beacon-appbar.mud-appbar {
     background-color: var(--color-bg-header) !important;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: var(--border-hairline) solid var(--color-border);
     box-shadow: none !important;
+}
+
+.beacon-appbar.mud-appbar .mud-toolbar-appbar {
+    padding: 0.85rem 1.25rem;
 }
 
 .beacon-breadcrumbs.mud-breadcrumbs {
@@ -99,9 +114,9 @@
 
 .beacon-avatar {
     cursor: pointer;
-    width: 32px;
-    height: 32px;
-    font-size: 12px;
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
     transition: box-shadow 160ms ease;
 }
 
@@ -110,8 +125,8 @@
 }
 
 .beacon-drawer.mud-drawer {
-    background-color: var(--color-bg-sidebar);
-    border-right: 1px solid var(--color-border);
+    background-color: var(--color-surface-1);
+    border-right: var(--border-hairline) solid var(--color-border);
 }
 
 .beacon-drawer-inner {
@@ -122,7 +137,7 @@
 }
 
 .beacon-drawer-header {
-    padding: 16px 20px 12px;
+    padding: 16px 12px 12px;
 }
 
 .beacon-brand {
@@ -137,33 +152,40 @@
 .beacon-drawer-footer {
     margin-top: auto;
     padding: 8px 12px 16px;
-    border-top: 1px solid var(--color-border-subtle);
+    border-top: var(--border-hairline) solid var(--color-border-subtle);
 }
 
-.beacon-nav .mud-nav-link {
+.beacon-nav.mud-navmenu .mud-nav-link {
     color: var(--color-text-secondary);
     background-color: transparent;
-    border-radius: 12px;
+    border-radius: var(--radius-small);
+    padding: 7px 8px;
     margin: 2px 0;
+    font-size: 13px;
     transition: color 160ms ease, background-color 160ms ease;
 }
 
-.beacon-nav .mud-nav-link .mud-nav-link-icon,
-.beacon-nav .mud-nav-link .mud-icon-root {
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
+.beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-text {
+    margin-left: 8px;
+    margin-inline-start: 8px;
+}
+
+.beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-icon,
+.beacon-nav.mud-navmenu .mud-nav-link .mud-icon-root {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
     color: var(--color-text-muted);
     transition: color 160ms ease;
 }
 
-.beacon-nav .mud-nav-link:hover:not(.mud-nav-link-disabled) {
+.beacon-nav.mud-navmenu .mud-nav-link:hover:not(.mud-nav-link-disabled) {
     color: var(--color-text-primary);
     background-color: var(--color-bg-surface-hover);
 }
 
-.beacon-nav .mud-nav-link:hover:not(.mud-nav-link-disabled) .mud-nav-link-icon,
-.beacon-nav .mud-nav-link:hover:not(.mud-nav-link-disabled) .mud-icon-root {
+.beacon-nav.mud-navmenu .mud-nav-link:hover:not(.mud-nav-link-disabled) .mud-nav-link-icon,
+.beacon-nav.mud-navmenu .mud-nav-link:hover:not(.mud-nav-link-disabled) .mud-icon-root {
     color: var(--color-text-primary);
 }
 
@@ -171,7 +193,7 @@
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled):hover:not(.mud-nav-link-disabled),
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled):focus-visible:not(.mud-nav-link-disabled) {
     color: var(--color-text-primary);
-    background-color: var(--color-bg-surface-active);
+    background-color: var(--color-bg-accent);
     border-inline-end-width: 0;
 }
 
@@ -193,6 +215,43 @@
 .beacon-card-interactive:active,
 .beacon-card-interactive:focus-within {
     border-color: var(--color-accent) !important;
+}
+
+.beacon-card {
+    background-color: var(--color-surface-1);
+    border-radius: var(--radius-small);
+}
+
+.beacon-board-card {
+    padding: 10px;
+}
+
+.beacon-board-card .beacon-card-title {
+    font-size: 13px;
+}
+
+.beacon-board-card .mud-typography-body2 {
+    font-size: 13px;
+}
+
+.beacon-panel {
+    background-color: var(--color-surface-2);
+    border-radius: var(--radius-panel);
+    padding: 1rem 1.25rem;
+}
+
+.beacon-track {
+    border-radius: var(--radius-pill);
+    background-color: var(--color-surface-1);
+    overflow: hidden;
+}
+
+.beacon-track .mud-progress-linear-bars {
+    border-radius: var(--radius-pill);
+}
+
+.beacon-board-card .beacon-track {
+    background-color: var(--color-border);
 }
 
 .mud-chip.mud-chip-filled.mud-chip-color-success {
@@ -221,12 +280,19 @@
     color: var(--color-text-secondary) !important;
 }
 
+.mud-chip.mud-chip-size-small {
+    height: auto;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: var(--radius-small);
+}
+
 .kanban-board.mud-drop-container,
 .kanban-board {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    gap: 16px;
+    gap: 12px;
     width: 100%;
     overflow-x: auto;
 }
@@ -234,12 +300,27 @@
 .kanban-column {
     flex: 1 1 0;
     min-width: 240px;
-    background: var(--color-bg-surface);
 }
 
 .kanban-zone {
     min-height: 60vh;
     height: 100%;
+    padding: 1rem 1.25rem;
+}
+
+.kanban-header {
+    gap: 6px;
+}
+
+.kanban-header .mud-typography {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.kanban-header .kanban-header-count {
+    font-size: 12px;
+    color: var(--color-text-muted);
 }
 
 .mud-drop-item {
@@ -281,8 +362,13 @@
     color: white;
 }
 
+.mud-paper-outlined {
+    border: var(--border-hairline) solid var(--color-border);
+}
+
 .mud-input-outlined .mud-input-outlined-border {
-    border-radius: 6px;
+    border-width: var(--border-hairline);
+    border-radius: var(--radius-small);
 }
 
 .blazor-error-boundary::after {

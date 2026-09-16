@@ -19,7 +19,7 @@
 
 <MudGrid>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
             <MudText Typo="Typo.h5">@L["Projects"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
                 <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@(_data?.TotalProjects ?? 0)</MudChip>
@@ -27,7 +27,7 @@
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
             <MudText Typo="Typo.h5">@L["Tasks"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
                 <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@(_data?.TotalTasks ?? 0)</MudChip>
@@ -35,7 +35,7 @@
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
             <MudText Typo="Typo.h5">@L["InProgress"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
                 <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@(_data?.InProgress ?? 0)</MudChip>
@@ -43,7 +43,7 @@
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="pa-4 text-center">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
             <MudText Typo="Typo.h5">@L["Completed"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2">
                 <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@(_data?.Done ?? 0)</MudChip>
@@ -65,7 +65,7 @@
                 @foreach (var p in _data.Projects)
                 {
                     <MudItem xs="12" sm="6">
-                        <MudPaper Elevation="0" Outlined="true" Class="pa-4 h-100 beacon-card-interactive"
+                        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100 beacon-card-interactive"
                                   @onclick="@(() => SwitchProject(p.Id))">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
                                 <MudText Typo="Typo.h6" Class="grow beacon-ellipsis">@p.Name</MudText>
@@ -98,7 +98,7 @@
         }
         else
         {
-            <MudPaper Elevation="0" Outlined="true">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
                 <MudList T="string" Dense="true">
                     @foreach (var t in _data.RecentTasks)
                     {

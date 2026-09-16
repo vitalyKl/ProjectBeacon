@@ -29,12 +29,12 @@
             </ChildContent>
         </MudMenu>
     </MudAppBar>
-    <MudDrawer Open="true" ClipMode="DrawerClipMode.Never" Elevation="0" Width="240px" Variant="DrawerVariant.Persistent" Class="beacon-drawer">
+    <MudDrawer Open="true" ClipMode="DrawerClipMode.Never" Elevation="0" Width="168px" Variant="DrawerVariant.Persistent" Class="beacon-drawer">
         <div class="beacon-drawer-inner">
             <MudDrawerHeader Class="beacon-drawer-header">
                 <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
             </MudDrawerHeader>
-            <ProjectSwitcher Class="mb-2 px-4" />
+            <ProjectSwitcher Class="mb-2 px-3" />
             <MudNavMenu Dense="true" Class="beacon-nav">
                 <MudNavLink Href="/dashboard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard">
                     @L["Dashboard"]
@@ -70,7 +70,7 @@
         </div>
     </MudDrawer>
     <MudMainContent>
-        <div class="pa-4">
+        <div class="pa-8">
             @if (_bodyReady)
             {
                 @Body

@@ -43,25 +43,28 @@ else
         <ChildContent>
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="Todo" AllowReorder="true" T="TaskItemDto" Class="kanban-zone zone-todo">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">
-                        @L["Todo"] (@_todoCount)
-                    </MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
+                        <MudText Typo="Typo.subtitle1">@L["Todo"]</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_todoCount)</MudText>
+                    </MudStack>
                 </MudDropZone>
             </MudPaper>
 
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="InProgress" AllowReorder="true" T="TaskItemDto" Class="kanban-zone zone-inprogress">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">
-                        @L["InProgress"] (@_inProgressCount)
-                    </MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
+                        <MudText Typo="Typo.subtitle1">@L["InProgress"]</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_inProgressCount)</MudText>
+                    </MudStack>
                 </MudDropZone>
             </MudPaper>
 
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="Done" AllowReorder="true" T="TaskItemDto" Class="kanban-zone zone-done">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">
-                        @L["Done"] (@_doneCount)
-                    </MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
+                        <MudText Typo="Typo.subtitle1">@L["Done"]</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_doneCount)</MudText>
+                    </MudStack>
                 </MudDropZone>
             </MudPaper>
         </ChildContent>

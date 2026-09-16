@@ -191,15 +191,15 @@ Approximate proportions:
 └───────────────────────┘
 ```
 
-Suggested desktop width:
+Desktop width:
 
 ```text
-240–320px
+168px
 ```
 
-The exact width must be determined according to the existing application.
+Sidebar padding: `1rem 0.75rem` (16px vertical / 12px horizontal).
 
-Do not force a fixed width if the current application has a responsive navigation system.
+Do not force a fixed width if the current application has a responsive navigation system; 168px is the expanded desktop width.
 
 ---
 
@@ -251,36 +251,41 @@ The active item should be clearly visible but still fit the dark theme.
 
 Use a layered dark palette rather than a single black value.
 
-Suggested semantic tokens:
+## Surface hierarchy
+
+Two surface levels plus an accent level (transcribed from mockup source):
+
+| Level | Used for |
+|---|---|
+| Surface 2 | Floating panels: context brief, changed scope, chat panel |
+| Surface 1 | Sidebar background, board cards, non-human chat message bubbles, budget track background |
+| Accent background | Human chat message bubble, active navigation item background |
+
+Required semantic tokens:
 
 ```text
---color-bg-app
---color-bg-sidebar
---color-bg-header
---color-bg-surface
---color-bg-surface-hover
---color-bg-surface-active
---color-border
---color-border-subtle
+--color-bg-app         application background
+--color-surface-1      sidebar, board cards, non-human bubbles, budget track
+--color-surface-2      floating panels (context brief, changed scope, chat)
+--color-bg-accent      active nav item, human chat bubble
+--color-border         hairline borders
+--color-border-accent  active board card border
 ```
 
-Approximate visual direction:
+The mockup source defines the surface levels as tokens; the hex values below remain an approximate visual direction until validated against the reference:
 
 ```text
 Application background:
 #181818
 
-Sidebar:
+Sidebar / Surface 1:
 #141414
 
-Surface/card:
+Surface / panel:
 #171717 / #1A1A1A
 
 Border:
 #2A2A2A
-
-Strong border:
-#333333
 ```
 
 Exact values must be validated against the reference and adjusted globally through design tokens.
@@ -299,12 +304,11 @@ At minimum define:
 
 ```text
 background
-background-secondary
-surface
-surface-hover
-surface-active
+surface-1
+surface-2
+bg-accent
 border
-border-subtle
+border-accent
 
 text-primary
 text-secondary
@@ -330,9 +334,7 @@ info-background
 
 ## Spacing
 
-Use a consistent spacing scale.
-
-Recommended conceptual scale:
+Use a consistent base scale:
 
 ```text
 4
@@ -347,7 +349,35 @@ Recommended conceptual scale:
 64
 ```
 
-Components should use the spacing scale rather than arbitrary values.
+Panel and component padding is per-context, not a single flat value:
+
+| Context | Padding |
+|---|---|
+| Panel body (context brief, chat, changed scope) | `1rem 1.25rem` (16px / 20px) |
+| Board column area | `1rem 1.25rem` (16px / 20px) |
+| Sidebar | `1rem 0.75rem` (16px / 12px) |
+| Topbar / breadcrumb row | `0.85rem 1.25rem` (13.6px / 20px) |
+| Board card | `10px` (flat) |
+| Nav item, command-palette hint | `7px 8px` |
+| Chat message bubble | `8px 12px` |
+| Tool-call chip | `4px 8px` |
+| Badge / pill | `2px 8px` |
+
+Gaps:
+
+| Context | Gap |
+|---|---|
+| Context-brief section rows (icon–label–count) | `10px` |
+| Changed-scope file rows | `2px` (rows are separated by a bottom border, not whitespace) |
+| Chat message list | `14px` |
+| Board column gap | `12px` |
+| Board card stack within a column | `8px` |
+| Nav item icon-to-label | `8px` |
+| Column header (title-to-count) | `6px` |
+| Chat header (dot–name–status) | `8px` |
+| Tool-call chip (icon-to-text) | `6px` |
+
+Components should use the per-context values above rather than arbitrary ones.
 
 ---
 
@@ -368,27 +398,14 @@ caption
 label
 ```
 
-Recommended hierarchy:
+Type scale (transcribed from actual mockup usages; supersedes any earlier 14–32px hierarchy):
 
-```text
-Page title:
-28–32px
-
-Section title:
-22–26px
-
-Card title:
-18–20px
-
-Body:
-14–16px
-
-Secondary:
-13–14px
-
-Caption:
-12–13px
-```
+| Size | Used for |
+|---|---|
+| `11px` | Badge/pill text, small status text on active card |
+| `12px` | Muted secondary text, counts, tool-chip text, command-palette hint |
+| `13px` | Body text on cards, code snippets, nav item labels, column headers |
+| `14px` | Section-row labels, chat sender name |
 
 Use font weights primarily in the range:
 
@@ -417,6 +434,7 @@ The global header should resemble the reference:
 Characteristics:
 
 - approximately 64–72px height;
+- padding `0.85rem 1.25rem` (13.6px / 20px — the transcribed value is not a round number; keep it as-is);
 - dark background;
 - subtle bottom border;
 - horizontally aligned content;
@@ -452,6 +470,8 @@ The user control should follow the visual language of the reference:
 - dark/blue accent;
 - initials or existing user representation;
 - subtle hover state.
+
+Exact geometry: `26px × 26px`, `border-radius: 50%`, `11px` initials text.
 
 Example:
 
@@ -514,11 +534,11 @@ Cards are one of the primary visual primitives.
 
 Reference characteristics:
 
-- dark surface;
-- subtle border;
-- 12–16px radius;
+- dark surface (board cards sit on surface 1);
+- subtle hairline border;
+- 8px radius (small tier, see section 25);
 - minimal/no shadow;
-- internal padding;
+- internal padding (board card: `10px` flat);
 - clear title;
 - secondary metadata;
 - semantic badges where necessary.
@@ -567,6 +587,8 @@ hover    → slightly brighter border/background
 active   → accent border
 ```
 
+The active card border is `0.5px solid` in the accent border color — the same hairline weight as every other border, only the color changes.
+
 Avoid large scale animations.
 
 ---
@@ -608,8 +630,8 @@ Blue text on dark blue background.
 
 Badges should be:
 
-- compact;
-- rounded;
+- compact (`2px 8px` padding, `11px` text);
+- rounded (small tier);
 - readable;
 - visually secondary to the main content.
 
@@ -728,9 +750,9 @@ Overlay:
 dark translucent layer
 
 Dialog:
-dark surface
+dark surface (surface 2)
 subtle border
-12–16px radius
+12px radius (panel tier)
 ```
 
 The dialog must have:
@@ -774,12 +796,12 @@ Icons should generally be:
 - compact;
 - visually subordinate to labels.
 
-Recommended sizes:
+Sizes (transcribed from mockup usages):
 
 ```text
-Navigation: 18–20px
-Button:     16–18px
-Inline:     14–16px
+Section-row icons (context brief), nav icons, send-button icon:  16px
+Changed-scope file-row icons:                                    15px
+Tool-call chip icon:                                             14px
 ```
 
 If the project already contains an icon system, reuse it.
@@ -790,29 +812,79 @@ Do not introduce a second icon library without a clear reason.
 
 # 25. Border Radius
 
-Use a consistent radius system.
+Two tiers, transcribed from mockup source:
 
-Suggested:
+| Tier | Value | Used for |
+|---|---|---|
+| Panel tier | `12px` | Panels (context brief, chat, changed scope), outer app-shell frame, dialogs |
+| Small tier | `8px` | Cards, nav items, badges, message bubbles, tool-call chips, command-palette hint |
+| Pill | `9999px` | Budget track (6px-tall bar, fully rounded), status dots |
 
-```text
-small:
-6–8px
-
-medium:
-10–12px
-
-large:
-14–16px
-
-pill:
-9999px
-```
-
-Cards and major surfaces should generally use the medium/large radius.
+The mockup source references the small tier as an internal design token whose resolved pixel value was not available. `8px` is an explicit decision (within the 6–8px range suggested for a value sitting comfortably below the panel tier's 12px), not a value transcribed from the source. It is fixed from this point on.
 
 ---
 
-# 26. Shadows
+# 26. Component Geometry
+
+Per-component values transcribed from the mockup source. Values not covered here fall back to the token tables in sections 8–10 and 25.
+
+## Border weight
+
+Every border is `0.5px solid` — a deliberate hairline weight, never the browser default. One color exception: the currently-active board card uses `0.5px solid` in the accent border color (a highlighted variant, not a different weight).
+
+## Panels (context brief, changed scope, chat)
+
+- Background: surface 2.
+- Radius: 12px.
+- Body padding: `1rem 1.25rem` (16px vertical / 20px horizontal — not equal).
+
+## Sidebar
+
+- Width: `168px`; background: surface 1.
+- Padding: `1rem 0.75rem` (16px / 12px).
+- Nav items: `7px 8px` padding, `8px` icon-to-label gap, `16px` icon, `13px` label text, small radius tier.
+- Active nav item: accent background, bright text, accent icon.
+
+## Board
+
+- Column area padding: `1rem 1.25rem`.
+- Column gap: `12px`; card stack gap within a column: `8px`.
+- Column header (title-to-count): `6px` gap, `13px` text.
+- Card: surface 1 background, `10px` flat padding, small radius tier, `13px` body text.
+- Active card: `0.5px solid` accent border.
+- Status dot: `8px` (the mockup used `8px` in the chat header and `6px` on board cards; the chat-header size is adopted as the single value).
+
+## Context brief
+
+- Section rows: `10px` gap between icon, label, and count.
+- Icon `16px`; label `14px`; count `12px` muted.
+
+## Changed scope
+
+- File rows: `2px` gap; rows are separated by a bottom border, not whitespace.
+- Row icon: `15px`.
+
+## Chat
+
+- Header: `8px` gap between dot, name, and status; status dot `8px`.
+- Message list gap: `14px`.
+- Bubble: `8px 12px` padding, small radius tier; non-human bubbles on surface 1, human bubbles on the accent background.
+- Sender name: `14px`.
+- Tool-call chip: `4px 8px` padding, `6px` icon-to-text gap, `14px` icon, `12px` text, small radius tier.
+- Send button: `36px × 36px` square, icon-only (`16px` icon), `padding: 0`.
+- Avatar: `26px × 26px`, `border-radius: 50%`, `11px` initials.
+
+## Budget track
+
+- `6px` tall, pill radius; background: surface 1.
+
+## Command palette
+
+- Hint row: `7px 8px` padding, `12px` text, small radius tier.
+
+---
+
+# 27. Shadows
 
 The reference relies primarily on contrast and borders rather than shadows.
 
@@ -832,7 +904,7 @@ Even there, keep them subtle.
 
 ---
 
-# 27. Motion
+# 28. Motion
 
 Animations must be restrained.
 
@@ -861,7 +933,7 @@ The application should feel fast and utilitarian.
 
 ---
 
-# 28. Responsive Behavior
+# 29. Responsive Behavior
 
 Desktop is the primary visual reference, but the design must be responsive.
 
@@ -896,7 +968,7 @@ Define explicit responsive behavior for each major component.
 
 ---
 
-# 29. Component Hierarchy
+# 30. Component Hierarchy
 
 The final component architecture should approximately resemble:
 
@@ -931,7 +1003,7 @@ Do not blindly create all components if some are not required.
 
 ---
 
-# 30. Existing Pages
+# 31. Existing Pages
 
 Agents must classify every existing page into one of these categories:
 
@@ -965,7 +1037,7 @@ Then apply the design system.
 
 ---
 
-# 31. Migration Strategy
+# 32. Migration Strategy
 
 Do not migrate every page simultaneously.
 
@@ -1024,7 +1096,7 @@ Run responsive/accessibility regression checks.
 
 ---
 
-# 32. Agent Rules
+# 33. Agent Rules
 
 Agents must follow these rules during implementation.
 
@@ -1076,7 +1148,7 @@ Build and test after:
 
 ---
 
-# 33. Visual Acceptance Criteria
+# 34. Visual Acceptance Criteria
 
 The UI migration is successful when:
 
@@ -1097,7 +1169,7 @@ The UI migration is successful when:
 
 ---
 
-# 34. Reference Comparison
+# 35. Reference Comparison
 
 Agents should periodically compare the implementation against the reference using these dimensions:
 
@@ -1115,7 +1187,7 @@ Agents should periodically compare the implementation against the reference usin
 | Error | Red |
 | Typography | Clean / modern |
 | Icons | Minimal line icons |
-| Radius | Medium rounded |
+| Radius | 12px panels, 8px small elements |
 | Animation | Subtle |
 | Content spacing | Generous |
 
@@ -1123,7 +1195,7 @@ The goal is consistency of the visual language, not pixel-level reproduction.
 
 ---
 
-# 35. Definition of Done
+# 36. Definition of Done
 
 The migration is complete only when:
 
@@ -1152,7 +1224,7 @@ The migration is complete only when:
 
 ---
 
-# 36. Important Agent Instruction
+# 37. Important Agent Instruction
 
 The reference image defines the **visual direction**, not an exact implementation.
 

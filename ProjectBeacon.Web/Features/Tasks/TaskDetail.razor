@@ -35,7 +35,7 @@ else if (_task is null)
 }
 else
 {
-    <MudCard Class="pa-6">
+    <MudCard Class="beacon-panel">
         <MudText Typo="Typo.h4">@_task.Title</MudText>
         @if (!string.IsNullOrEmpty(_task.Description))
         {
@@ -54,7 +54,7 @@ else
         </MudStack>
         @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
         {
-            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4" Height="6" />
+            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4 beacon-track" Height="6" />
             <MudText Typo="Typo.caption" Class="mt-1">@_task.SubStage</MudText>
         }
         @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
@@ -71,7 +71,7 @@ else
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveReview">@L["Save"]</MudButton>
     </MudCard>
 
-    <MudCard Class="pa-6 mt-4">
+    <MudCard Class="beacon-panel mt-4">
         <MudText Typo="Typo.h6">@L["Comments"]</MudText>
         @if (_task.Comments.Count == 0)
         {
@@ -86,7 +86,7 @@ else
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveComment">@L["AddComment"]</MudButton>
     </MudCard>
 
-    <MudCard Class="pa-6 mt-4">
+    <MudCard Class="beacon-panel mt-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
             <MudText Typo="Typo.h6">@L["CompiledBrief"]</MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Compile" Disabled="_compiling">
@@ -94,7 +94,7 @@ else
             </MudButton>
         </MudStack>
         <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_briefTokens / @_briefBudget</MudText>
-        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="Color.Default" Class="mt-1" Height="6" />
+        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="Color.Default" Class="mt-1 beacon-track" Height="6" />
         @if (!string.IsNullOrEmpty(_briefError))
         {
             <MudAlert Severity="Severity.Error" Class="mt-2">@_briefError</MudAlert>

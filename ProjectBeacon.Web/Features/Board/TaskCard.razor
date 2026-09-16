@@ -6,7 +6,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
 
-<MudPaper Class="pa-3 mb-2 beacon-card-interactive" Elevation="0" Outlined="true">
+<MudPaper Class="mb-2 beacon-card beacon-board-card beacon-card-interactive" Elevation="0" Outlined="true">
     <MudText Typo="Typo.subtitle2" Class="beacon-card-title" tabindex="0" @onclick="Open" @onkeydown="OnTitleKey">@Task.Title</MudText>
     @if (!string.IsNullOrEmpty(Task.Description))
     {
@@ -14,7 +14,7 @@
     }
     @if (Task.Status == "InProgress" && Task.SubStage.HasValue)
     {
-        <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Info" Class="mt-2" Height="4" />
+        <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Info" Class="mt-2 beacon-track" Height="6" />
     }
     <MudStack Row="true" Spacing="2" Class="mt-2">
         <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(Task.Status)">
