@@ -106,6 +106,17 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void ForceFail(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Force-fail reason cannot be empty.", nameof(reason));
+        if (Status == SubtaskStatus.Failed)
+            return;
+        Status = SubtaskStatus.Failed;
+        Summary = reason;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void Reopen(string note)
     {
         if (string.IsNullOrWhiteSpace(note))

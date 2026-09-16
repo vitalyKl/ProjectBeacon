@@ -104,6 +104,82 @@ public sealed class PipelineTransitionTests
     }
 
     [Fact]
+    public void EnterExecuting_FromReopenedForRevision_Resumes()
+    {
+        var task = TaskAtReviewing();
+        task.SetApproved();
+        task.ReopenForRevision();
+
+        task.EnterExecuting();
+
+        Assert.Equal(TaskPipelineStage.Executing, task.PipelineStage);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+    }
+
+    [Fact]
+    public void EnterExecuting_FromApproved_Throws()
+    {
+        var task = TaskAtReviewing();
+        task.SetApproved();
+
+        Assert.Throws<InvalidOperationException>(() => task.EnterExecuting());
+    }
+
+    private static Subtask NewSubtask()
+    {
+        var task = TaskItem.Create("Test", Guid.NewGuid());
+        return Subtask.Create("Do it", task.Id, task.ProjectId);
+    }
+
+    [Fact]
+    public void ForceFail_FromPending_SetsFailedWithReason()
+    {
+        var subtask = NewSubtask();
+
+        subtask.ForceFail("Reopen limit reached");
+
+        Assert.Equal(SubtaskStatus.Failed, subtask.Status);
+        Assert.Equal("Reopen limit reached", subtask.Summary);
+        Assert.NotNull(subtask.UpdatedAt);
+    }
+
+    [Fact]
+    public void ForceFail_FromDone_SetsFailedWithReason()
+    {
+        var subtask = NewSubtask();
+        subtask.Start();
+        subtask.ReportResult("diff-1", "done");
+
+        subtask.ForceFail("Reopen limit reached");
+
+        Assert.Equal(SubtaskStatus.Failed, subtask.Status);
+        Assert.Equal("Reopen limit reached", subtask.Summary);
+    }
+
+    [Fact]
+    public void ForceFail_FromFailed_IsIdempotent()
+    {
+        var subtask = NewSubtask();
+        subtask.ForceFail("first reason");
+        var updated = subtask.UpdatedAt;
+
+        subtask.ForceFail("second reason");
+
+        Assert.Equal(SubtaskStatus.Failed, subtask.Status);
+        Assert.Equal("first reason", subtask.Summary);
+        Assert.Equal(updated, subtask.UpdatedAt);
+    }
+
+    [Fact]
+    public void ForceFail_EmptyReason_Throws()
+    {
+        var subtask = NewSubtask();
+
+        Assert.Throws<ArgumentException>(() => subtask.ForceFail("  "));
+        Assert.Equal(SubtaskStatus.Pending, subtask.Status);
+    }
+
+    [Fact]
     public void EnterReview_FromExecuting_SetsReviewing()
     {
         var task = NewTask();

@@ -60,6 +60,21 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<FinishWorkHandler>();
 
+        if (services.All(d => d.ServiceType != typeof(LlamaSwapOptions)))
+            services.AddSingleton(_ => LlamaSwapOptions.FromEnvironment());
+        services.AddTransient<ISessionSpawner, ManualSessionSpawner>();
+        services.AddTransient<StartPipelineHandler>();
+        services.AddTransient<CreateSubtaskHandler>();
+        services.AddTransient<StartActorSessionHandler>();
+        services.AddTransient<LaunchSessionHandler>();
+        services.AddTransient<ReportSubtaskResultHandler>();
+        services.AddTransient<FailSubtaskHandler>();
+        services.AddTransient<StartReviewHandler>();
+        services.AddTransient<RecordReviewVerdictHandler>();
+        services.AddTransient<ApprovePipelineHandler>();
+        services.AddTransient<ForceClosePipelineHandler>();
+        services.AddTransient<GetPipelineHandler>();
+
         services.AddTransient<GetCurrentProjectHandler>();
         services.AddTransient<GetDashboardCountsHandler>();
         services.AddTransient<ListMyProjectsHandler>();

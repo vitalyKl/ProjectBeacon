@@ -189,7 +189,7 @@
 - `dotnet ef migrations add AddTaskPipeline`.
 - Проверка: apply на локальной БД, `dotnet test` зелёный.
 
-### B3. Application/Tasks — пайплайн-хэндлеры
+### B3. Application/Tasks — пайплайн-хэндлеры — выполнено
 Файлы: `PipelineCommands.cs`, `PipelineHandlers.cs`, `ISessionSpawner.cs` (+`ManualSessionSpawner`), `SessionPrompts.cs` (сборка PromptContext'ов, FR-B1).
 - `StartPipelineCommand` — task → Planning; `PlannerSession` (Ready, модель из `RoleBinding.planner`, PromptContext: задача + проект; обзор кода — через file-тулзы агента, §2.3.1).
 - `CreateSubtaskCommand` (planner, через MCP) — валидация stage=Planning; subtask Pending; task → Executing (первый subtask).
@@ -208,7 +208,7 @@
 - Регистрация в `DependencyInjection.cs`; `ManualSessionSpawner` — scoped/transient.
 - Проверка: тесты на SQLite — happy path, reopen+лимит, force close, изоляция контекста (в PromptContext review нет транскрипта planner'а), fail-closed tenancy.
 
-### B4. API
+### B4. API — выполнено
 - `ProjectBeacon.API/Endpoints/PipelineEndpoints.cs` (тонкие, `RequireCapability`):
   - `GET /v1/tasks/{id}/pipeline`
   - `POST /v1/tasks/{id}/pipeline/start`

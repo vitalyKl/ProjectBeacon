@@ -156,7 +156,7 @@ public class TaskItem : Entity, IProjectScoped
     {
         if (PipelineStage == TaskPipelineStage.Executing)
             return;
-        if (PipelineStage != TaskPipelineStage.Planning)
+        if (PipelineStage is not (TaskPipelineStage.Planning or TaskPipelineStage.ReopenedForRevision))
             throw new InvalidOperationException($"Cannot enter executing from stage {StageName}");
         PipelineStage = TaskPipelineStage.Executing;
         TransitionTo(TaskItemStatus.InProgress);
