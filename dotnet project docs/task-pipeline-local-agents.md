@@ -155,13 +155,14 @@
   - `GET /v1/models/proxy/status`, `POST /v1/models/proxy/reload`, `POST /v1/models/proxy/unload`
 - Проверка: `dotnet test` (API.Tests), curl по живому хосту.
 
-### A6. Web UI — страница Agents
+### A6. Web UI — страница Agents — выполнено
 - Перезапись `ProjectBeacon.Web/Features/Agents/Agents.razor`:
   - MudTable реестра (name, type, command, context, ttl) + диалог add/edit + delete.
   - Блок role bindings: 3 селекта planner/actor/review → backend.
   - Карточка прокси: healthy, loaded model, VRAM/RAM, last swap, кнопки Reload/Unload (FR-A6).
+- `BackendDialog.razor` — диалог add/edit (MudBlazor 9.9: без `MudDialogContent`/`MudDialogActions`, без `For=`-строк).
 - Resx: en-ключи первыми (`ModelsAdd`, `ModelsEdit`, `RoleBindingPlanner`, `ProxyStatus`, …).
-- Проверка: браузерный прогон CRUD + bind (скриншот не считается верификацией — прогнать поток).
+- Проверка: `dotnet build` (Web, 0 ошибок), `dotnet test` 306/306 (Domain, Application, Infrastructure, API, Web; Cli.Tests исключён — файл-лок beacon MCP-процесса), HTTP-прогон по живому хосту :5083 (bootstrap → login JWT → org/project → полный CRUD `/v1/models` + bind + proxy status — 13/13 PASS). Браузерного CRUD в UI нет (нет browser-инструмента) — UI-часть прогнана на уровне сборки + API.
 
 ### A7. CLI MCP — model-тулзы
 - `McpStdioServer.cs`: добавляем `model_bind`, `model_status` + DB-bootstrap (EnvFile → PostgresConnection → scoped `BeaconDbContext` → `TenantScope.EnterProjectScope`).

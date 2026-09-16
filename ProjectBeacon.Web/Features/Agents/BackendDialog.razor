@@ -1,0 +1,73 @@
+@using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject UpsertLocalModelBackendHandler SaveBackend
+@inject ISnackbar Snackbar
+
+<MudTextField @bind-Value="_name" Label="@L["ModelName"]" />
+<MudSelect T="ModelBackendType" @bind-Value="_type" Label="@L["Type"]" Class="mt-3">
+    <MudSelectItem Value="ModelBackendType.FreeToken">@L["BackendFreeToken"]</MudSelectItem>
+    <MudSelectItem Value="ModelBackendType.LlamaCpp">@L["BackendLlamaCpp"]</MudSelectItem>
+    <MudSelectItem Value="ModelBackendType.OpenAiCompatible">@L["BackendOpenAiCompatible"]</MudSelectItem>
+</MudSelect>
+<MudTextField @bind-Value="_launchCommand" Label="@L["LaunchCommand"]" Class="mt-3" HelperText="@L["LaunchCommandHint"]" />
+<MudNumericField T="int" @bind-Value="_contextSize" Label="@L["ContextSize"]" Class="mt-3" Min="0" />
+<MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Class="mt-3" Min="0" />
+<MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Class="mt-3" />
+<div Class="d-flex justify-content-end gap-2 mt-4">
+    <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">@L["Save"]</MudButton>
+</div>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? Dialog { get; set; }
+    [Parameter] public LocalModelBackendDto? Backend { get; set; }
+
+    private string _name = string.Empty;
+    private ModelBackendType _type = ModelBackendType.FreeToken;
+    private string _launchCommand = string.Empty;
+    private int _contextSize = 4096;
+    private int _ttl = 300;
+    private string _extraFlags = string.Empty;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Backend is { } backend)
+        {
+            _name = backend.Name;
+            _type = backend.BackendType;
+            _launchCommand = backend.LaunchCommand;
+            _contextSize = backend.ContextSize;
+            _ttl = backend.Ttl;
+            _extraFlags = string.Join(", ", backend.ExtraFlags);
+        }
+    }
+
+    private void Cancel() => Dialog?.Cancel();
+
+    private async Task Save()
+    {
+        if (_saving) return;
+        _saving = true;
+        try
+        {
+            var flags = _extraFlags
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+            var result = await SaveBackend.HandleAsync(new UpsertLocalModelBackendCommand(new UpsertLocalModelBackendRequest(
+                Backend?.Id, _name, _type, _launchCommand, _contextSize, _ttl,
+                flags.Count > 0 ? flags : null)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Dialog?.Close(result.Value);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -589,8 +589,104 @@
   <data name="Labels" xml:space="preserve">
     <value>Labels</value>
   </data>
-  <data name="AgentsEmpty" xml:space="preserve">
-    <value>No live agent sessions yet. The local daemon lands in Phase 7.</value>
+  <data name="ModelRegistry" xml:space="preserve">
+    <value>Model registry</value>
+  </data>
+  <data name="ModelsAdd" xml:space="preserve">
+    <value>Add model</value>
+  </data>
+  <data name="ModelsEdit" xml:space="preserve">
+    <value>Edit model</value>
+  </data>
+  <data name="ModelName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="LaunchCommand" xml:space="preserve">
+    <value>Launch command</value>
+  </data>
+  <data name="LaunchCommandHint" xml:space="preserve">
+    <value>Command line used to start the model backend.</value>
+  </data>
+  <data name="ContextSize" xml:space="preserve">
+    <value>Context size</value>
+  </data>
+  <data name="Ttl" xml:space="preserve">
+    <value>TTL (seconds)</value>
+  </data>
+  <data name="ExtraFlags" xml:space="preserve">
+    <value>Extra flags</value>
+  </data>
+  <data name="NoModels" xml:space="preserve">
+    <value>No model backends registered yet.</value>
+  </data>
+  <data name="BackendFreeToken" xml:space="preserve">
+    <value>free-token</value>
+  </data>
+  <data name="BackendLlamaCpp" xml:space="preserve">
+    <value>llama.cpp</value>
+  </data>
+  <data name="BackendOpenAiCompatible" xml:space="preserve">
+    <value>OpenAI compatible</value>
+  </data>
+  <data name="RoleBindings" xml:space="preserve">
+    <value>Role bindings</value>
+  </data>
+  <data name="RoleBindingPlanner" xml:space="preserve">
+    <value>Planner</value>
+  </data>
+  <data name="RoleBindingActor" xml:space="preserve">
+    <value>Actor</value>
+  </data>
+  <data name="Unbound" xml:space="preserve">
+    <value>Unbound</value>
+  </data>
+  <data name="BindingSaved" xml:space="preserve">
+    <value>Role binding saved.</value>
+  </data>
+  <data name="BindingRemoved" xml:space="preserve">
+    <value>Role binding removed.</value>
+  </data>
+  <data name="ModelSaved" xml:space="preserve">
+    <value>Model saved.</value>
+  </data>
+  <data name="ModelDeleted" xml:space="preserve">
+    <value>Model deleted.</value>
+  </data>
+  <data name="DeleteModelConfirm" xml:space="preserve">
+    <value>Delete this model backend?</value>
+  </data>
+  <data name="ProxyStatus" xml:space="preserve">
+    <value>Proxy status</value>
+  </data>
+  <data name="Unavailable" xml:space="preserve">
+    <value>unavailable</value>
+  </data>
+  <data name="Unhealthy" xml:space="preserve">
+    <value>unhealthy</value>
+  </data>
+  <data name="LoadedModel" xml:space="preserve">
+    <value>Loaded model</value>
+  </data>
+  <data name="Memory" xml:space="preserve">
+    <value>Memory</value>
+  </data>
+  <data name="LastSwap" xml:space="preserve">
+    <value>Last swap</value>
+  </data>
+  <data name="Reload" xml:space="preserve">
+    <value>Reload</value>
+  </data>
+  <data name="Unload" xml:space="preserve">
+    <value>Unload</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="ProxyReloaded" xml:space="preserve">
+    <value>Proxy reloaded.</value>
+  </data>
+  <data name="ProxyUnloaded" xml:space="preserve">
+    <value>Proxy unloaded.</value>
   </data>
   <data name="ReportsEmpty" xml:space="preserve">
     <value>No reports yet. Generate a board snapshot.</value>

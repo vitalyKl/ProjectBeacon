@@ -1,8 +1,342 @@
 @page "/agents"
 @layout MainLayout
 @attribute [Authorize]
+@using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Infrastructure.LlamaSwap
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject GetCurrentProjectHandler CurrentProject
+@inject GetModelRegistryHandler GetRegistry
+@inject DeleteLocalModelBackendHandler DeleteBackend
+@inject SetRoleBindingHandler SetBinding
+@inject RemoveRoleBindingHandler RemoveBinding
+@inject GetProxyStatusHandler GetStatus
+@inject ReloadProxyHandler ReloadProxy
+@inject UnloadProxyHandler UnloadProxy
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Agents"]</PageTitle>
 <MudText Typo="Typo.h4">@L["Agents"]</MudText>
-<MudAlert Severity="Severity.Info" Class="mt-4">@L["AgentsEmpty"]</MudAlert>
+
+@if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else
+{
+    <MudCard Class="mt-4">
+        <MudCardHeader>
+            <CardHeaderContent>@L["ModelRegistry"]</CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_backends.Count == 0)
+            {
+                <MudText Typo="Typo.body2">@L["NoModels"]</MudText>
+            }
+            else
+            {
+                <MudTable Items="_backends" Hover="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>@L["ModelName"]</MudTh>
+                        <MudTh>@L["Type"]</MudTh>
+                        <MudTh>@L["LaunchCommand"]</MudTh>
+                        <MudTh>@L["ContextSize"]</MudTh>
+                        <MudTh>@L["Ttl"]</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="@L["ModelName"]">@context.Name</MudTd>
+                        <MudTd DataLabel="@L["Type"]">@L["Backend" + context.BackendType].Value</MudTd>
+                        <MudTd DataLabel="@L["LaunchCommand"]">@context.LaunchCommand</MudTd>
+                        <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
+                        <MudTd DataLabel="@L["Ttl"]">@context.Ttl</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditModel(context)">@L["Edit"]</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteModel(context)">@L["Delete"]</MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+
+    <MudCard Class="mt-4">
+        <MudCardHeader>
+            <CardHeaderContent>@L["RoleBindings"]</CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" Value="_planner" ValueChanged="OnPlannerBindingChanged" Label="@L["RoleBindingPlanner"]" Disabled="_busy">
+                        <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                        @foreach (var backend in _backends)
+                        {
+                            <MudSelectItem Value="@backend.Id">@backend.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" Value="_actor" ValueChanged="OnActorBindingChanged" Label="@L["RoleBindingActor"]" Disabled="_busy">
+                        <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                        @foreach (var backend in _backends)
+                        {
+                            <MudSelectItem Value="@backend.Id">@backend.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="Guid?" Value="_review" ValueChanged="OnReviewBindingChanged" Label="@L["Review"]" Disabled="_busy">
+                        <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                        @foreach (var backend in _backends)
+                        {
+                            <MudSelectItem Value="@backend.Id">@backend.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <MudCard Class="mt-4">
+        <MudCardHeader>
+            <CardHeaderContent>@L["ProxyStatus"]</CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="RefreshStatus">@L["Refresh"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="Reload">@L["Reload"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload">@L["Unload"]</MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_status is null)
+            {
+                <MudText Typo="Typo.body2">@L["Loading"]</MudText>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@StatusColor">@StatusText</MudChip>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LoadedModel"]: @(_status.LoadedModel ?? "-")</MudText>
+                <MudText Typo="Typo.body2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
+                <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
+                @if (_status.Error is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mt-2">@_status.Error</MudAlert>
+                }
+            }
+        </MudCardContent>
+    </MudCard>
+}
+
+@code {
+    private ProjectDto? _project;
+    private List<LocalModelBackendDto> _backends = [];
+    private Guid? _planner;
+    private Guid? _actor;
+    private Guid? _review;
+    private LlamaSwapStatusDto? _status;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
+        _project = current.Value;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _backends = [];
+        _planner = _actor = _review = null;
+        _status = null;
+        if (_project is null) return;
+        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand());
+        if (registry.Success)
+        {
+            var value = registry.Value!;
+            _backends = value.Backends.ToList();
+            foreach (var binding in value.Bindings)
+            {
+                switch (binding.Role)
+                {
+                    case PipelineRole.Planner:
+                        _planner = binding.ModelBackendId;
+                        break;
+                    case PipelineRole.Actor:
+                        _actor = binding.ModelBackendId;
+                        break;
+                    case PipelineRole.Review:
+                        _review = binding.ModelBackendId;
+                        break;
+                }
+            }
+        }
+        else
+        {
+            Snackbar.Add(registry.Error ?? L["Error"].Value, Severity.Error);
+        }
+        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+        if (status.Success)
+            _status = status.Value;
+    }
+
+    private async Task AddModel()
+    {
+        var reference = await Dialogs.ShowAsync(
+            typeof(BackendDialog), L["ModelsAdd"].Value,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await reference.Result;
+        if (result.Data is LocalModelBackendDto)
+        {
+            Snackbar.Add(L["ModelSaved"].Value, Severity.Success);
+            await ReloadAsync();
+        }
+    }
+
+    private async Task EditModel(LocalModelBackendDto backend)
+    {
+        var parameters = new DialogParameters { { nameof(BackendDialog.Backend), backend } };
+        var reference = await Dialogs.ShowAsync(
+            typeof(BackendDialog), L["ModelsEdit"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await reference.Result;
+        if (result.Data is LocalModelBackendDto)
+        {
+            Snackbar.Add(L["ModelSaved"].Value, Severity.Success);
+            await ReloadAsync();
+        }
+    }
+
+    private async Task DeleteModel(LocalModelBackendDto backend)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteModelConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var deleted = await DeleteBackend.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id)));
+        if (!deleted.Success)
+        {
+            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["ModelDeleted"].Value, Severity.Success);
+        await ReloadAsync();
+    }
+
+    private Guid? BindingFor(PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => _planner,
+        PipelineRole.Actor => _actor,
+        _ => _review
+    };
+
+    private void SetBindingLocal(PipelineRole role, Guid? value)
+    {
+        switch (role)
+        {
+            case PipelineRole.Planner:
+                _planner = value;
+                break;
+            case PipelineRole.Actor:
+                _actor = value;
+                break;
+            default:
+                _review = value;
+                break;
+        }
+    }
+
+    private async Task BindingChanged(PipelineRole role, Guid? backendId)
+    {
+        if (_project is null) return;
+        var previous = BindingFor(role);
+        SetBindingLocal(role, backendId);
+        if (backendId == previous || _busy) return;
+        _busy = true;
+        try
+        {
+            bool ok;
+            string? error = null;
+            if (backendId is { } id)
+            {
+                var set = await SetBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, id)));
+                ok = set.Success;
+                error = set.Error;
+            }
+            else
+            {
+                var removed = await RemoveBinding.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(role)));
+                ok = removed.Success;
+                error = removed.Error;
+            }
+            if (!ok)
+            {
+                Snackbar.Add(error ?? L["Error"].Value, Severity.Error);
+                SetBindingLocal(role, previous);
+                StateHasChanged();
+                return;
+            }
+            Snackbar.Add(backendId is null ? L["BindingRemoved"].Value : L["BindingSaved"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task OnPlannerBindingChanged(Guid? value) => BindingChanged(PipelineRole.Planner, value);
+    private Task OnActorBindingChanged(Guid? value) => BindingChanged(PipelineRole.Actor, value);
+    private Task OnReviewBindingChanged(Guid? value) => BindingChanged(PipelineRole.Review, value);
+
+    private Color StatusColor => _status is null
+        ? Color.Default
+        : !_status.Available
+            ? Color.Error
+            : !_status.Healthy
+                ? Color.Warning
+                : Color.Success;
+
+    private string StatusText => _status is null
+        ? L["Loading"].Value
+        : !_status.Available
+            ? L["Unavailable"].Value
+            : !_status.Healthy
+                ? L["Unhealthy"].Value
+                : L["Healthy"].Value;
+
+    private async Task RefreshStatus()
+    {
+        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+        if (status.Success)
+            _status = status.Value;
+    }
+
+    private async Task Reload()
+    {
+        var result = await ReloadProxy.HandleAsync(new ReloadProxyCommand());
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _status = result.Value;
+        Snackbar.Add(L["ProxyReloaded"].Value, Severity.Success);
+    }
+
+    private async Task Unload()
+    {
+        var result = await UnloadProxy.HandleAsync(new UnloadProxyCommand());
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _status = result.Value;
+        Snackbar.Add(L["ProxyUnloaded"].Value, Severity.Success);
+    }
+}
