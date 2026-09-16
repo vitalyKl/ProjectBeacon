@@ -77,7 +77,7 @@ else
                         <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
                         @foreach (var backend in _backends)
                         {
-                            <MudSelectItem Value="@backend.Id">@backend.Name</MudSelectItem>
+                            <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -86,7 +86,7 @@ else
                         <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
                         @foreach (var backend in _backends)
                         {
-                            <MudSelectItem Value="@backend.Id">@backend.Name</MudSelectItem>
+                            <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -95,7 +95,7 @@ else
                         <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
                         @foreach (var backend in _backends)
                         {
-                            <MudSelectItem Value="@backend.Id">@backend.Name</MudSelectItem>
+                            <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
