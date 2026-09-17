@@ -14,7 +14,7 @@
 <MudNumericField T="int" @bind-Value="_contextSize" Label="@L["ContextSize"]" Class="mt-3" Min="0" />
 <MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Class="mt-3" Min="0" />
 <MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Class="mt-3" />
-<div Class="d-flex justify-content-end gap-2 mt-4">
+<div Class="d-flex justify-end gap-2 mt-4">
     <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">@L["Save"]</MudButton>
 </div>

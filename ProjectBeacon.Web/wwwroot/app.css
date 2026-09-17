@@ -49,6 +49,7 @@
 .text-center { text-align: center; }
 .text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-100 { height: 100%; }
+.w-100 { width: 100%; }
 .grow { flex-grow: 1; }
 
 .auth-shell {
@@ -250,10 +251,6 @@
     border-radius: var(--radius-pill);
 }
 
-.beacon-board-card .beacon-track {
-    background-color: var(--color-border);
-}
-
 .mud-chip.mud-chip-filled.mud-chip-color-success {
     background-color: var(--color-success-background) !important;
     color: var(--color-success) !important;
@@ -332,28 +329,34 @@
     cursor: pointer;
 }
 
+.beacon-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.beacon-card-title-row .beacon-card-title {
+    flex-grow: 1;
+}
+
+.beacon-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-accent);
+    visibility: hidden;
+    flex-shrink: 0;
+}
+
+.beacon-card-interactive:active .beacon-status-dot,
+.beacon-card-interactive:focus-within .beacon-status-dot {
+    visibility: visible;
+}
+
 .beacon-ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.beacon-switcher-btn {
-    width: 100%;
-    justify-content: flex-start;
-    color: var(--color-text-secondary);
-}
-
-.beacon-switcher-btn:hover {
-    color: var(--color-text-primary);
-}
-
-.beacon-switcher-row {
-    min-width: 160px;
-}
-
-.beacon-switcher-check {
-    color: var(--color-accent);
 }
 
 .blazor-error-boundary {

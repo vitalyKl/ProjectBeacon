@@ -7,7 +7,10 @@
 @inject NavigationManager Navigation
 
 <MudPaper Class="mb-2 beacon-card beacon-board-card beacon-card-interactive" Elevation="0" Outlined="true">
-    <MudText Typo="Typo.subtitle2" Class="beacon-card-title" tabindex="0" @onclick="Open" @onkeydown="OnTitleKey">@Task.Title</MudText>
+    <div class="beacon-card-title-row">
+        <MudText Typo="Typo.subtitle2" Class="beacon-card-title" tabindex="0" @onclick="Open" @onkeydown="OnTitleKey">@Task.Title</MudText>
+        <span class="beacon-status-dot"></span>
+    </div>
     @if (!string.IsNullOrEmpty(Task.Description))
     {
         <MudText Typo="Typo.body2" Class="text-truncate mt-1">@Task.Description</MudText>

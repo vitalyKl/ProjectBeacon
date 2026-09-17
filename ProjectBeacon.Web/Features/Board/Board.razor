@@ -42,7 +42,7 @@ else
         Class="kanban-board">
         <ChildContent>
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
-                <MudDropZone Identifier="Todo" AllowReorder="true" T="TaskItemDto" Class="kanban-zone zone-todo">
+                <MudDropZone Identifier="Todo" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["Todo"]</MudText>
                         <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_todoCount)</MudText>
@@ -51,7 +51,7 @@ else
             </MudPaper>
 
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
-                <MudDropZone Identifier="InProgress" AllowReorder="true" T="TaskItemDto" Class="kanban-zone zone-inprogress">
+                <MudDropZone Identifier="InProgress" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["InProgress"]</MudText>
                         <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_inProgressCount)</MudText>
@@ -60,7 +60,7 @@ else
             </MudPaper>
 
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
-                <MudDropZone Identifier="Done" AllowReorder="true" T="TaskItemDto" Class="kanban-zone zone-done">
+                <MudDropZone Identifier="Done" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["Done"]</MudText>
                         <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_doneCount)</MudText>

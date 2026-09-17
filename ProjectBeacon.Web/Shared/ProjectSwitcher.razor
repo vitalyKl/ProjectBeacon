@@ -8,7 +8,7 @@
 
 <MudSelect T="Guid" Value="_selected" ValueChanged="OnSelected"
            Label="@L["Project"]" Dense="true" Variant="Variant.Outlined"
-           Class="@SelectClass" Disabled="@(_projects.Count == 0)">
+           Class="@Class" Disabled="@(_projects.Count == 0)">
     @foreach (var p in _projects)
     {
         <MudSelectItem Value="p.Id">@p.Name</MudSelectItem>
@@ -20,9 +20,6 @@
 
     private Guid _selected = Guid.Empty;
     private List<ProjectSummaryDto> _projects = [];
-
-    private string SelectClass
-        => string.IsNullOrWhiteSpace(Class) ? "beacon-project-select" : $"beacon-project-select {Class}";
 
     protected override async Task OnInitializedAsync()
     {
