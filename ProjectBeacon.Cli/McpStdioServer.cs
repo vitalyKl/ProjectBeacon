@@ -3,8 +3,18 @@ namespace ProjectBeacon.Cli;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Application;
+using Application.Agents;
 using Application.CodeIndex;
 using Application.Mcp;
+using Application.Tasks;
+using Domain.Enums;
+using Infrastructure;
+using Infrastructure.Data;
+using Infrastructure.LlamaSwap;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 public static class McpStdioServer
 {
@@ -12,6 +22,16 @@ public static class McpStdioServer
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
+
+    private static readonly JsonSerializerOptions JsonDb = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
+
+    private static readonly object DbLock = new();
+    private static ServiceProvider? _dbProvider;
 
     public static Task<int> RunAsync(string root)
         => RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput());
@@ -27,13 +47,13 @@ public static class McpStdioServer
             if (message is null)
                 return 0;
 
-            JsonNode? response = Handle(message, workspace, index);
+            var response = await HandleAsync(message, workspace, index);
             if (response is not null)
                 await WriteMessageAsync(output, response);
         }
     }
 
-    private static JsonNode? Handle(JsonNode message, FileWorkspace workspace, CodeIndex index)
+    private static async Task<JsonNode?> HandleAsync(JsonNode message, FileWorkspace workspace, CodeIndex index)
     {
         var method = message["method"]?.GetValue<string>();
         var id = message["id"];
@@ -56,7 +76,7 @@ public static class McpStdioServer
                 ["serverInfo"] = new JsonObject { ["name"] = "beacon", ["version"] = "1.0.0" }
             }),
             "tools/list" => Result(id, new JsonObject { ["tools"] = Tools() }),
-            "tools/call" => CallTool(id, message["params"], workspace, index),
+            "tools/call" => await CallToolAsync(id, message["params"], workspace, index),
             "ping" => Result(id, new JsonObject()),
             _ => Error(id, -32601, $"Unknown method: {method}")
         };
@@ -75,10 +95,22 @@ public static class McpStdioServer
         Tool("search_code", "Literal substring search over text files in the working tree.",
             Props(("query", "string", true), ("path", "string", false), ("maxMatches", "integer", false))),
         Tool("get_changed_scope", "List working-tree changed files from git status, optionally filtered by a path prefix.",
-            Props(("path", "string", false), ("maxFiles", "integer", false)))
+            Props(("path", "string", false), ("maxFiles", "integer", false))),
+        Tool("model_bind", "Bind a pipeline role (planner, actor, review) to a local model backend. Requires BEACON_PROJECT_ID.",
+            Props(("role", "string", true), ("modelBackendId", "string", true))),
+        Tool("model_status", "Show local model backends, role bindings and llama-swap proxy status. Requires BEACON_PROJECT_ID.",
+            Props()),
+        Tool("task_create_subtask", "Create a subtask on the session task. Requires BEACON_PROJECT_ID and BEACON_TASK_ID.",
+            Props(("instructions", "string", true), ("allowedMcpTools", "string", false), ("allowedPaths", "string", false))),
+        Tool("subtask_report_result", "Report the result of an in-progress subtask on the session task. Requires BEACON_PROJECT_ID and BEACON_TASK_ID.",
+            Props(("subtaskId", "string", true), ("diffRef", "string", true), ("summary", "string", true))),
+        Tool("task_review_verdict", "Record a review verdict (approve, reopen_subtask) on the session task. Requires BEACON_PROJECT_ID and BEACON_TASK_ID.",
+            Props(("verdict", "string", true), ("note", "string", true), ("subtaskId", "string", false))),
+        Tool("task_pipeline_status", "Show the pipeline state (subtasks, sessions, verdicts) of the session task. Requires BEACON_PROJECT_ID and BEACON_TASK_ID.",
+            Props())
     ];
 
-    private static JsonObject CallTool(JsonNode id, JsonNode? args, FileWorkspace workspace, CodeIndex index)
+    private static async Task<JsonObject> CallToolAsync(JsonNode id, JsonNode? args, FileWorkspace workspace, CodeIndex index)
     {
         var name = args?["name"]?.GetValue<string>();
         JsonObject? arguments = args?["arguments"] as JsonObject;
@@ -108,6 +140,12 @@ public static class McpStdioServer
                 "get_changed_scope" => TextResult(id, index.GetChangedScope(
                     SplitPrefixes(OptArg(arguments, "path")),
                     OptInt(arguments, "maxFiles") ?? CodeIndex.DefaultMaxFiles), FormatFileList),
+                "model_bind" => await ModelBindAsync(id, arguments),
+                "model_status" => await ModelStatusAsync(id),
+                "task_create_subtask" => await TaskCreateSubtaskAsync(id, arguments),
+                "subtask_report_result" => await SubtaskReportResultAsync(id, arguments),
+                "task_review_verdict" => await TaskReviewVerdictAsync(id, arguments),
+                "task_pipeline_status" => await TaskPipelineStatusAsync(id),
                 _ => ToolError(id, $"Unknown tool: {name}")
             };
         }
@@ -116,6 +154,227 @@ public static class McpStdioServer
             return ToolError(id, ex.Message);
         }
     }
+
+    private readonly record struct McpScope(IServiceProvider Services, Guid ProjectId, Guid? TaskId);
+
+    private static ServiceProvider GetDbServiceProvider()
+    {
+        lock (DbLock)
+        {
+            if (_dbProvider is null)
+            {
+                EnvFile.Load();
+                var configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+                var connectionString = PostgresConnection.Resolve(configuration);
+                _dbProvider = new ServiceCollection()
+                    .AddInfrastructure(connectionString)
+                    .AddApplicationHandlers()
+                    .BuildServiceProvider();
+            }
+            return _dbProvider;
+        }
+    }
+
+    private static async Task<JsonObject> WithDbAsync(JsonNode id, bool requiresTask, Func<McpScope, Task<JsonObject>> invoke)
+    {
+        if (!TryParseScope(out var projectId, out var taskId, out var error))
+            return ToolError(id, error!);
+        if (requiresTask && taskId is null)
+            return ToolError(id, "BEACON_TASK_ID is not set. Set it to the task GUID for this MCP session.");
+
+        ServiceProvider provider;
+        try
+        {
+            provider = GetDbServiceProvider();
+        }
+        catch (Exception ex)
+        {
+            return ToolError(id, $"database is not configured: {ex.Message}");
+        }
+
+        using var scope = provider.CreateScope();
+        using var _ = TenantScope.EnterProjectScope(projectId);
+        try
+        {
+            return await invoke(new McpScope(scope.ServiceProvider, projectId, taskId));
+        }
+        catch (Exception ex)
+        {
+            return ToolError(id, ex.Message);
+        }
+    }
+
+    private static bool TryParseScope(out Guid projectId, out Guid? taskId, out string? error)
+    {
+        projectId = Guid.Empty;
+        taskId = null;
+        var projectRaw = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
+        if (string.IsNullOrWhiteSpace(projectRaw) || !Guid.TryParse(projectRaw, out projectId))
+        {
+            error = "BEACON_PROJECT_ID is not set (or is not a GUID). Set it to the project GUID for this MCP session.";
+            return false;
+        }
+
+        var taskRaw = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+        if (string.IsNullOrWhiteSpace(taskRaw))
+        {
+            taskId = null;
+            error = null;
+            return true;
+        }
+        if (!Guid.TryParse(taskRaw, out var task))
+        {
+            taskId = null;
+            error = "BEACON_TASK_ID is set but is not a GUID.";
+            return false;
+        }
+        taskId = task;
+        error = null;
+        return true;
+    }
+
+    private static JsonObject DbResult<T>(JsonNode id, Application.Common.Result<T> result)
+        => result.Success
+            ? Result(id, Content(JsonSerializer.Serialize(result.Value!, JsonDb)))
+            : ToolError(id, result.Error ?? "error");
+
+    private static PipelineRole? ParseRole(JsonObject? args)
+    {
+        var raw = OptArg(args, "role");
+        if (string.Equals(raw, "planner", StringComparison.OrdinalIgnoreCase))
+            return PipelineRole.Planner;
+        if (string.Equals(raw, "actor", StringComparison.OrdinalIgnoreCase))
+            return PipelineRole.Actor;
+        if (string.Equals(raw, "review", StringComparison.OrdinalIgnoreCase))
+            return PipelineRole.Review;
+        return null;
+    }
+
+    private static ReviewVerdictKind? ParseVerdict(JsonObject? args)
+    {
+        var raw = OptArg(args, "verdict");
+        if (string.Equals(raw, "approve", StringComparison.OrdinalIgnoreCase))
+            return ReviewVerdictKind.Approve;
+        if (string.Equals(raw, "reopen_subtask", StringComparison.OrdinalIgnoreCase))
+            return ReviewVerdictKind.ReopenSubtask;
+        return null;
+    }
+
+    private static Guid? ParseGuid(JsonObject? args, string key)
+    {
+        var raw = OptArg(args, key);
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        return Guid.TryParse(raw, out var value) ? value : (Guid?)null;
+    }
+
+    private static async Task<JsonObject> ModelBindAsync(JsonNode id, JsonObject? args)
+    {
+        var role = ParseRole(args);
+        if (role is null)
+            return ToolError(id, "missing or invalid 'role' (expected planner, actor or review)");
+        var modelId = ParseGuid(args, "modelBackendId");
+        if (modelId is null)
+            return ToolError(id, "missing or invalid 'modelBackendId' (expected a GUID)");
+
+        return await WithDbAsync(id, requiresTask: false, async scope =>
+        {
+            var handler = scope.Services.GetRequiredService<SetRoleBindingHandler>();
+            var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role.Value, modelId.Value)));
+            return DbResult(id, result);
+        });
+    }
+
+    private static async Task<JsonObject> ModelStatusAsync(JsonNode id)
+        => await WithDbAsync(id, requiresTask: false, async scope =>
+        {
+            var registry = await scope.Services
+                .GetRequiredService<GetModelRegistryHandler>()
+                .HandleAsync(new GetModelRegistryCommand());
+            if (!registry.Success)
+                return ToolError(id, registry.Error ?? "error");
+
+            var proxy = await scope.Services
+                .GetRequiredService<GetProxyStatusHandler>()
+                .HandleAsync(new GetProxyStatusCommand());
+
+            var status = new JsonObject
+            {
+                ["projectId"] = registry.Value!.ProjectId,
+                ["backends"] = JsonSerializer.SerializeToNode(registry.Value.Backends, JsonDb) ?? new JsonArray(),
+                ["bindings"] = JsonSerializer.SerializeToNode(registry.Value.Bindings, JsonDb) ?? new JsonArray(),
+                ["proxy"] = proxy.Success
+                    ? JsonSerializer.SerializeToNode(proxy.Value, JsonDb)
+                    : new JsonObject { ["available"] = false, ["error"] = proxy.Error ?? "unknown proxy error" }
+            };
+            return Result(id, Content(status.ToJsonString()));
+        });
+
+    private static async Task<JsonObject> TaskCreateSubtaskAsync(JsonNode id, JsonObject? args)
+    {
+        var instructions = OptArg(args, "instructions");
+        if (string.IsNullOrWhiteSpace(instructions))
+            return ToolError(id, "missing 'instructions'");
+
+        return await WithDbAsync(id, requiresTask: true, async scope =>
+        {
+            var handler = scope.Services.GetRequiredService<CreateSubtaskHandler>();
+            var result = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
+                scope.TaskId!.Value,
+                instructions,
+                SplitPrefixes(OptArg(args, "allowedMcpTools")),
+                SplitPrefixes(OptArg(args, "allowedPaths")))));
+            return DbResult(id, result);
+        });
+    }
+
+    private static async Task<JsonObject> SubtaskReportResultAsync(JsonNode id, JsonObject? args)
+    {
+        var subtaskId = ParseGuid(args, "subtaskId");
+        if (subtaskId is null)
+            return ToolError(id, "missing or invalid 'subtaskId' (expected a GUID)");
+        var diffRef = OptArg(args, "diffRef");
+        if (string.IsNullOrWhiteSpace(diffRef))
+            return ToolError(id, "missing 'diffRef'");
+        var summary = OptArg(args, "summary");
+        if (string.IsNullOrWhiteSpace(summary))
+            return ToolError(id, "missing 'summary'");
+
+        return await WithDbAsync(id, requiresTask: true, async scope =>
+        {
+            var handler = scope.Services.GetRequiredService<ReportSubtaskResultHandler>();
+            var result = await handler.HandleAsync(new ReportSubtaskResultCommand(
+                new ReportSubtaskResultRequest(scope.TaskId!.Value, subtaskId.Value, diffRef, summary)));
+            return DbResult(id, result);
+        });
+    }
+
+    private static async Task<JsonObject> TaskReviewVerdictAsync(JsonNode id, JsonObject? args)
+    {
+        var kind = ParseVerdict(args);
+        if (kind is null)
+            return ToolError(id, "missing or invalid 'verdict' (expected approve or reopen_subtask)");
+        var note = OptArg(args, "note");
+        if (string.IsNullOrWhiteSpace(note))
+            return ToolError(id, "missing 'note'");
+        var subtaskId = ParseGuid(args, "subtaskId");
+
+        return await WithDbAsync(id, requiresTask: true, async scope =>
+        {
+            var handler = scope.Services.GetRequiredService<RecordReviewVerdictHandler>();
+            var result = await handler.HandleAsync(new RecordReviewVerdictCommand(
+                new RecordReviewVerdictRequest(scope.TaskId!.Value, kind.Value, note, subtaskId)));
+            return DbResult(id, result);
+        });
+    }
+
+    private static async Task<JsonObject> TaskPipelineStatusAsync(JsonNode id)
+        => await WithDbAsync(id, requiresTask: true, async scope =>
+        {
+            var handler = scope.Services.GetRequiredService<GetPipelineHandler>();
+            var result = await handler.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(scope.TaskId!.Value)));
+            return DbResult(id, result);
+        });
 
     private static IReadOnlyList<string> SplitPrefixes(string? path)
     {

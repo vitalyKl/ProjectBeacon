@@ -164,10 +164,11 @@
 - Resx: en-ключи первыми (`ModelsAdd`, `ModelsEdit`, `RoleBindingPlanner`, `ProxyStatus`, …).
 - Проверка: `dotnet build` (Web, 0 ошибок), `dotnet test` 306/306 (Domain, Application, Infrastructure, API, Web; Cli.Tests исключён — файл-лок beacon MCP-процесса), HTTP-прогон по живому хосту :5083 (bootstrap → login JWT → org/project → полный CRUD `/v1/models` + bind + proxy status — 13/13 PASS). Браузерного CRUD в UI нет (нет browser-инструмента) — UI-часть прогнана на уровне сборки + API.
 
-### A7. CLI MCP — model-тулзы
+### A7. CLI MCP — model-тулзы — выполнено
 - `McpStdioServer.cs`: добавляем `model_bind`, `model_status` + DB-bootstrap (EnvFile → PostgresConnection → scoped `BeaconDbContext` → `TenantScope.EnterProjectScope`).
 - Без `BEACON_PROJECT_ID`/DB → `isError` (D6).
 - Проверка: `dotnet run --project ProjectBeacon.Cli -- mcp --root .` — `tools/list` содержит новые тулзы; `tools/call` по live Postgres.
+- Сделано: live-прогон stdio MCP: `model_status` — реальный реестр (пустые backends/bindings, proxy «unavailable» без супервизора); write-path `model_bind` с несуществующим backend → `isError` «Model backend not found.», без мутации; без `BEACON_PROJECT_ID`/DB → `isError` (процесс не падает). `dotnet build` 0/0, `dotnet test` 333/333.
 
 ### A8. Тесты Блока A
 - `Application.Tests`: CRUD бэкендов, валидация биндингов, реестр (SQLite).
@@ -223,10 +224,11 @@
   - `POST /v1/tasks/{id}/pipeline/force-close` — `RequireCapability(Admin)` + проверка `IsAdmin`/worker в хэндлере (D13); остальные pipeline-endpoint'ы — `TaskWrite`
 - Проверка: curl-прогон всего флоу по живому хосту.
 
-### B5. CLI MCP — pipeline-тулзы
+### B5. CLI MCP — pipeline-тулзы — выполнено
 - `McpStdioServer.cs`: `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status` (D6, env `BEACON_PROJECT_ID`/`BEACON_TASK_ID`/`BEACON_ACTOR_ID`).
 - Обновить `dotnet project docs/mcp-host.md`: список tool'ов + env (HTTP MCP по-прежнему запрещён).
 - Проверка: stdio-прогон `tools/list` + `tools/call` против live Postgres; без DB — `isError`.
+- Сделано: live-прогон stdio MCP: `tools/list` = 12 тулз (6 file + 6 новых); `task_pipeline_status` — реальные данные live Postgres; `task_create_subtask` для задачи вне пайплайна → `isError` «Pipeline is not started.», без мутации; file-тулзы не пострадали (`read_file` работает); env `BEACON_TASK_ID`/DB отсутствуют → `isError`. `dotnet build` 0/0, `dotnet test` 333/333.
 
 ### B6. Web UI — пайплайн в TaskDetail
 - `ProjectBeacon.Web/Features/Tasks/TaskDetail.razor`: секция Pipeline:
