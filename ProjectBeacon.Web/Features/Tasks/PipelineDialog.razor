@@ -1,0 +1,152 @@
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject CreateSubtaskHandler CreateSubtask
+@inject ReportSubtaskResultHandler ReportResult
+@inject FailSubtaskHandler FailSubtask
+@inject RecordReviewVerdictHandler RecordVerdict
+@inject ApprovePipelineHandler ApprovePipeline
+@inject ForceClosePipelineHandler ForceClosePipeline
+@inject ISnackbar Snackbar
+
+@switch (Params.Mode)
+{
+    case PipelineDialogMode.CreateSubtask:
+        <MudTextField @bind-Value="_instructions" Label="@L["Instructions"]" Lines="3" />
+        break;
+    case PipelineDialogMode.ReportResult:
+        <MudTextField @bind-Value="_diffRef" Label="@L["DiffRef"]" />
+        <MudTextField @bind-Value="_summary" Label="@L["Summary"]" Lines="2" Class="mt-3" />
+        break;
+    case PipelineDialogMode.FailSubtask:
+        <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" />
+        break;
+    case PipelineDialogMode.ReviewApprove:
+        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" />
+        break;
+    case PipelineDialogMode.ReviewReopen:
+        <MudSelect T="SubtaskDto" @bind-Value="_reopenTarget" Label="@L["Subtask"]">
+            @foreach (var subtask in Reopenable)
+            {
+                <MudSelectItem Value="@subtask">@SubtaskLabel(subtask)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" Class="mt-3" />
+        break;
+    case PipelineDialogMode.ConfirmClose:
+        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" HelperText="@L["ConfirmCloseHint"]" />
+        break;
+    case PipelineDialogMode.ForceClose:
+        <MudAlert Severity="Severity.Warning">@L["ForceCloseWarning"]</MudAlert>
+        <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" Class="mt-3" />
+        break;
+}
+
+<div Class="d-flex justify-end gap-2 mt-4">
+    <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="@(Params.Mode == PipelineDialogMode.ForceClose ? Color.Error : Color.Primary)" OnClick="Save" Disabled="_saving">
+        @ConfirmLabel
+    </MudButton>
+</div>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? Dialog { get; set; }
+    [Parameter] public PipelineDialogParams Params { get; set; } = default!;
+
+    private string _instructions = string.Empty;
+    private string _diffRef = string.Empty;
+    private string _summary = string.Empty;
+    private string _reason = string.Empty;
+    private string _note = string.Empty;
+    private SubtaskDto? _reopenTarget;
+    private bool _saving;
+
+    private string ConfirmLabel => Params.Mode == PipelineDialogMode.CreateSubtask ? L["Create"].Value : L["Confirm"].Value;
+
+    private IReadOnlyList<SubtaskDto> Reopenable =>
+        Params.Subtasks?.Where(s => s.Status is SubtaskStatus.Done or SubtaskStatus.Failed).ToList()
+        ?? new List<SubtaskDto>();
+
+    private static string SubtaskLabel(SubtaskDto subtask) =>
+        $"{subtask.Id.ToString("N")[..6]} {subtask.Instructions}";
+
+    private void Cancel() => Dialog?.Cancel();
+
+    private bool IsValid => Params.Mode switch
+    {
+        PipelineDialogMode.CreateSubtask => !string.IsNullOrWhiteSpace(_instructions),
+        PipelineDialogMode.ReportResult => !string.IsNullOrWhiteSpace(_diffRef) && !string.IsNullOrWhiteSpace(_summary),
+        PipelineDialogMode.FailSubtask => !string.IsNullOrWhiteSpace(_reason),
+        PipelineDialogMode.ReviewApprove => !string.IsNullOrWhiteSpace(_note),
+        PipelineDialogMode.ReviewReopen => !string.IsNullOrWhiteSpace(_note) && _reopenTarget is not null,
+        PipelineDialogMode.ConfirmClose => true,
+        PipelineDialogMode.ForceClose => !string.IsNullOrWhiteSpace(_reason),
+        _ => false
+    };
+
+    private async Task Save()
+    {
+        if (_saving || !IsValid) return;
+        _saving = true;
+        try
+        {
+            (bool Ok, string? Error, string Success) outcome;
+            switch (Params.Mode)
+            {
+                case PipelineDialogMode.CreateSubtask:
+                {
+                    var result = await CreateSubtask.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(Params.TaskId, _instructions.Trim())));
+                    outcome = (result.Success, result.Error, L["SubtaskCreated"].Value);
+                    break;
+                }
+                case PipelineDialogMode.ReportResult:
+                {
+                    var result = await ReportResult.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(Params.TaskId, Params.Subtask!.Id, _diffRef.Trim(), _summary.Trim())));
+                    outcome = (result.Success, result.Error, L["ResultReported"].Value);
+                    break;
+                }
+                case PipelineDialogMode.FailSubtask:
+                {
+                    var result = await FailSubtask.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(Params.TaskId, Params.Subtask!.Id, _reason.Trim())));
+                    outcome = (result.Success, result.Error, L["SubtaskFailedMsg"].Value);
+                    break;
+                }
+                case PipelineDialogMode.ReviewApprove:
+                {
+                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.Approve, _note.Trim())));
+                    outcome = (result.Success, result.Error, L["VerdictRecorded"].Value);
+                    break;
+                }
+                case PipelineDialogMode.ReviewReopen:
+                {
+                    var result = await RecordVerdict.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(Params.TaskId, ReviewVerdictKind.ReopenSubtask, _note.Trim(), _reopenTarget!.Id)));
+                    outcome = (result.Success, result.Error, L["SubtaskReopened"].Value);
+                    break;
+                }
+                case PipelineDialogMode.ConfirmClose:
+                {
+                    var result = await ApprovePipeline.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(Params.TaskId, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim())));
+                    outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
+                    break;
+                }
+                default:
+                {
+                    var result = await ForceClosePipeline.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(Params.TaskId, Params.ActorId ?? string.Empty, _reason.Trim())));
+                    outcome = (result.Success, result.Error, L["PipelineClosed"].Value);
+                    break;
+                }
+            }
+            if (!outcome.Ok)
+            {
+                Snackbar.Add(outcome.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(outcome.Success, Severity.Success);
+            Dialog?.Close(true);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

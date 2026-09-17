@@ -784,4 +784,154 @@
   <data name="SwitchProject" xml:space="preserve">
     <value>Switch project</value>
   </data>
+  <data name="Pipeline" xml:space="preserve">
+    <value>Pipeline</value>
+  </data>
+  <data name="PipelineNotStarted" xml:space="preserve">
+    <value>Pipeline not started.</value>
+  </data>
+  <data name="StagePlanning" xml:space="preserve">
+    <value>Planning</value>
+  </data>
+  <data name="StageExecuting" xml:space="preserve">
+    <value>Executing</value>
+  </data>
+  <data name="StageReviewing" xml:space="preserve">
+    <value>Reviewing</value>
+  </data>
+  <data name="StageApproved" xml:space="preserve">
+    <value>Approved</value>
+  </data>
+  <data name="StageReopenedForRevision" xml:space="preserve">
+    <value>Reopened for revision</value>
+  </data>
+  <data name="Subtasks" xml:space="preserve">
+    <value>Subtasks</value>
+  </data>
+  <data name="NoSubtasksYet" xml:space="preserve">
+    <value>No subtasks yet.</value>
+  </data>
+  <data name="Instructions" xml:space="preserve">
+    <value>Instructions</value>
+  </data>
+  <data name="DiffRef" xml:space="preserve">
+    <value>Diff ref</value>
+  </data>
+  <data name="Summary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Reopens" xml:space="preserve">
+    <value>Reopens</value>
+  </data>
+  <data name="Pending" xml:space="preserve">
+    <value>Pending</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Sessions" xml:space="preserve">
+    <value>Sessions</value>
+  </data>
+  <data name="NoSessionsYet" xml:space="preserve">
+    <value>No sessions yet.</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="Closed" xml:space="preserve">
+    <value>Closed</value>
+  </data>
+  <data name="Launched" xml:space="preserve">
+    <value>Launched</value>
+  </data>
+  <data name="Verdicts" xml:space="preserve">
+    <value>Verdicts</value>
+  </data>
+  <data name="NoVerdictsYet" xml:space="preserve">
+    <value>No verdicts yet.</value>
+  </data>
+  <data name="VerdictApprove" xml:space="preserve">
+    <value>Approve</value>
+  </data>
+  <data name="VerdictReopenSubtask" xml:space="preserve">
+    <value>Reopen subtask</value>
+  </data>
+  <data name="StartPipeline" xml:space="preserve">
+    <value>Start pipeline</value>
+  </data>
+  <data name="CreateSubtask" xml:space="preserve">
+    <value>Create subtask</value>
+  </data>
+  <data name="StartActorSession" xml:space="preserve">
+    <value>Start actor session</value>
+  </data>
+  <data name="LaunchSession" xml:space="preserve">
+    <value>Launch</value>
+  </data>
+  <data name="ReportResult" xml:space="preserve">
+    <value>Report result</value>
+  </data>
+  <data name="FailSubtask" xml:space="preserve">
+    <value>Fail</value>
+  </data>
+  <data name="StartReview" xml:space="preserve">
+    <value>Start review</value>
+  </data>
+  <data name="Approve" xml:space="preserve">
+    <value>Approve</value>
+  </data>
+  <data name="ReopenSubtask" xml:space="preserve">
+    <value>Reopen subtask</value>
+  </data>
+  <data name="ConfirmClose" xml:space="preserve">
+    <value>Confirm close</value>
+  </data>
+  <data name="ConfirmCloseHint" xml:space="preserve">
+    <value>Optional. Falls back to the latest approve verdict note.</value>
+  </data>
+  <data name="ForceClose" xml:space="preserve">
+    <value>Force close</value>
+  </data>
+  <data name="ForceCloseWarning" xml:space="preserve">
+    <value>This closes the pipeline without a review verdict and cannot be undone.</value>
+  </data>
+  <data name="Reason" xml:space="preserve">
+    <value>Reason</value>
+  </data>
+  <data name="Note" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="Subtask" xml:space="preserve">
+    <value>Subtask</value>
+  </data>
+  <data name="PipelineStarted" xml:space="preserve">
+    <value>Pipeline started.</value>
+  </data>
+  <data name="SubtaskCreated" xml:space="preserve">
+    <value>Subtask created.</value>
+  </data>
+  <data name="SessionStarted" xml:space="preserve">
+    <value>Session started.</value>
+  </data>
+  <data name="SessionLaunched" xml:space="preserve">
+    <value>Session launched.</value>
+  </data>
+  <data name="ResultReported" xml:space="preserve">
+    <value>Result reported.</value>
+  </data>
+  <data name="SubtaskFailedMsg" xml:space="preserve">
+    <value>Subtask failed.</value>
+  </data>
+  <data name="ReviewStarted" xml:space="preserve">
+    <value>Review started.</value>
+  </data>
+  <data name="VerdictRecorded" xml:space="preserve">
+    <value>Verdict recorded.</value>
+  </data>
+  <data name="SubtaskReopened" xml:space="preserve">
+    <value>Subtask reopened for revision.</value>
+  </data>
+  <data name="PipelineClosed" xml:space="preserve">
+    <value>Pipeline closed.</value>
+  </data>
 </root>

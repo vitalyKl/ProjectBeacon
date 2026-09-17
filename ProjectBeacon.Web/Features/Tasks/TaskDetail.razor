@@ -11,6 +11,12 @@
 @inject CompileBriefHandler CompileBrief
 @inject AddCommentHandler AddComment
 @inject AddReviewNotesHandler AddReviewNotes
+@inject GetPipelineHandler GetPipeline
+@inject StartPipelineHandler StartPipeline
+@inject StartActorSessionHandler StartActorSession
+@inject LaunchSessionHandler LaunchSession
+@inject StartReviewHandler StartReview
+@inject IDialogService Dialogs
 @inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
@@ -72,6 +78,157 @@ else
     </MudCard>
 
     <MudCard Class="beacon-panel mt-4">
+        <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
+        @if (_pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
+        {
+            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-2">
+                @for (var i = 0; i < StageChips.Length; i++)
+                {
+                    var current = pipeline.Stage;
+                    var label = current == TaskPipelineStage.ReopenedForRevision && i == 1
+                        ? L["StageReopenedForRevision"].Value
+                        : L[StageChips[i]].Value;
+                    var color = i < StageIndex(current)
+                        ? Color.Success
+                        : (i == StageIndex(current)
+                            ? (current == TaskPipelineStage.ReopenedForRevision ? Color.Warning : Color.Primary)
+                            : Color.Default);
+                    var variant = i <= StageIndex(current) ? Variant.Filled : Variant.Outlined;
+                    <MudChip T="string" Size="Size.Small" Color="@color" Variant="@variant">@label</MudChip>
+                    @if (i < StageChips.Length - 1)
+                    {
+                        <MudText Typo="Typo.caption" Class="mx-1">→</MudText>
+                    }
+                }
+            </MudStack>
+
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
+                @switch (pipeline.Stage)
+                {
+                    case TaskPipelineStage.Planning:
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
+                        break;
+                    case TaskPipelineStage.Executing:
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy">@L["StartReview"]</MudButton>
+                        break;
+                    case TaskPipelineStage.ReopenedForRevision:
+                        @if (_isAdmin)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
+                        }
+                        break;
+                    case TaskPipelineStage.Reviewing:
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewApprove))" Disabled="_busy">@L["Approve"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewReopen))" Disabled="_busy">@L["ReopenSubtask"]</MudButton>
+                        break;
+                    case TaskPipelineStage.Approved:
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ConfirmClose))" Disabled="_busy">@L["ConfirmClose"]</MudButton>
+                        @if (_isAdmin)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
+                        }
+                        break;
+                    case TaskPipelineStage.Closed:
+                        <MudText Typo="Typo.caption">@L["PipelineClosed"]</MudText>
+                        break;
+                }
+            </MudStack>
+
+            @if (pipeline.Stage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Subtasks"]</MudText>
+                @if (pipeline.Subtasks.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mt-1">@L["NoSubtasksYet"]</MudText>
+                }
+                @foreach (var subtask in pipeline.Subtasks)
+                {
+                    <MudCard Class="mb-2">
+                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@subtask.Instructions</MudText>
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@SubtaskStatusColor(subtask.Status)">@SubtaskStatusLabel(subtask.Status)</MudChip>
+                            @if (subtask.ReopenCount > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@L["Reopens"]: @subtask.ReopenCount</MudChip>
+                            }
+                        </MudStack>
+                        @if (subtask.DiffRef is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="mt-2">@L["DiffRef"]: @subtask.DiffRef</MudText>
+                        }
+                        @if (subtask.Summary is not null)
+                        {
+                            <MudText Typo="Typo.caption">@L["Summary"]: @subtask.Summary</MudText>
+                        }
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+                            @if (subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnStartActorSession(subtask))" Disabled="_busy">@L["StartActorSession"]</MudButton>
+                            }
+                            @if (subtask.Status == SubtaskStatus.InProgress)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))" Disabled="_busy">@L["ReportResult"]</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))" Disabled="_busy">@L["FailSubtask"]</MudButton>
+                            }
+                        </MudStack>
+                    </MudCard>
+                }
+            }
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Sessions"]</MudText>
+            @if (pipeline.Sessions.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
+            }
+            @foreach (var session in pipeline.Sessions)
+            {
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled">@RoleLabel(session.Role)</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@SessionStatusColor(session.Status)">@SessionStatusLabel(session.Status)</MudChip>
+                    @if (session.LaunchedAt is not null)
+                    {
+                        <MudText Typo="Typo.caption">@L["Launched"]: @session.LaunchedAt.Value.ToShortDateString()</MudText>
+                    }
+                    @if (session.ClosedAt is not null)
+                    {
+                        <MudText Typo="Typo.caption">@L["Closed"]: @session.ClosedAt.Value.ToShortDateString()</MudText>
+                    }
+                    @if (session.Status == SessionStatus.Ready)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunchSession(session))" Disabled="_busy">@L["LaunchSession"]</MudButton>
+                    }
+                </MudStack>
+                @if (!string.IsNullOrEmpty(session.LaunchSpec))
+                {
+                    <MudText Typo="Typo.caption" Style="max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@session.LaunchSpec</MudText>
+                }
+            }
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Verdicts"]</MudText>
+            @if (pipeline.Verdicts.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="mt-1">@L["NoVerdictsYet"]</MudText>
+            }
+            @foreach (var verdict in pipeline.Verdicts)
+            {
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)">
+                        @(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)
+                    </MudChip>
+                    <MudText Typo="Typo.body2" Class="flex-grow-1" Style="white-space: pre-wrap;">@verdict.Note</MudText>
+                    <MudText Typo="Typo.caption">@verdict.CreatedAt.ToShortDateString()</MudText>
+                </MudStack>
+            }
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineNotStarted"]</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
+        }
+    </MudCard>
+
+    <MudCard Class="beacon-panel mt-4">
         <MudText Typo="Typo.h6">@L["Comments"]</MudText>
         @if (_task.Comments.Count == 0)
         {
@@ -107,9 +264,15 @@ else
 }
 
 @code {
+    private static readonly string[] StageChips = { "StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed" };
+
     [Parameter] public Guid TaskId { get; set; }
     private TaskItemDto? _task;
     private bool _loading = true;
+    private PipelineStateDto? _pipeline;
+    private bool _busy;
+    private bool _isAdmin;
+    private string? _userId;
     private string? _briefMarkdown;
     private string? _briefError;
     private int _briefTokens;
@@ -120,10 +283,16 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await Auth.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _isAdmin = bool.TryParse(auth.User.FindFirst("isAdmin")?.Value, out var adminFlag) && adminFlag;
         await Reload();
         _loading = false;
         if (_task is not null)
+        {
+            await ReloadPipeline();
             await Compile();
+        }
     }
 
     private async Task Reload()
@@ -140,6 +309,108 @@ else
         "Done" => L["Done"].Value,
         _ => status
     };
+
+    private async Task ReloadPipeline()
+    {
+        var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)));
+        _pipeline = result.Success ? result.Value : null;
+    }
+
+    private static int StageIndex(TaskPipelineStage? stage) => stage switch
+    {
+        TaskPipelineStage.Planning => 0,
+        TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision => 1,
+        TaskPipelineStage.Reviewing => 2,
+        TaskPipelineStage.Approved => 3,
+        TaskPipelineStage.Closed => 4,
+        _ => -1
+    };
+
+    private async Task OnStartPipeline()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["PipelineStarted"].Value, Severity.Success);
+            await Reload();
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnStartActorSession(SubtaskDto subtask)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await StartActorSession.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(TaskId, subtask.Id)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["SessionStarted"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnLaunchSession(PipelineSessionDto session)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await LaunchSession.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnStartReview()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ReviewStarted"].Value, Severity.Success);
+            await Reload();
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private async Task SaveComment()
     {
@@ -194,6 +465,62 @@ else
             _compiling = false;
         }
     }
+
+    private IReadOnlyList<SubtaskDto> ReopenableSubtasks =>
+        _pipeline?.Subtasks.Where(s => s.Status is SubtaskStatus.Done or SubtaskStatus.Failed).ToList()
+        ?? new List<SubtaskDto>();
+
+    private async Task OpenPipelineDialog(PipelineDialogMode mode, SubtaskDto? subtask = null)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var parameters = new DialogParameters
+            {
+                { nameof(PipelineDialog.Params), new PipelineDialogParams(mode, TaskId, subtask, ReopenableSubtasks, _userId) }
+            };
+            var reference = await Dialogs.ShowAsync<PipelineDialog>(parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+            var result = await reference.Result;
+            if (result?.Data is true)
+            {
+                await ReloadPipeline();
+                await Reload();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string SubtaskStatusLabel(SubtaskStatus status) => L[status.ToString()].Value;
+
+    private Color SubtaskStatusColor(SubtaskStatus status) => status switch
+    {
+        SubtaskStatus.Done => Color.Success,
+        SubtaskStatus.InProgress => Color.Info,
+        SubtaskStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+
+    private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
+
+    private Color SessionStatusColor(SessionStatus status) => status switch
+    {
+        SessionStatus.Active => Color.Info,
+        SessionStatus.Closed => Color.Success,
+        SessionStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+
+    private string RoleLabel(PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => L["RoleBindingPlanner"].Value,
+        PipelineRole.Actor => L["RoleBindingActor"].Value,
+        PipelineRole.Review => L["Review"].Value,
+        _ => role.ToString()
+    };
 
     private int SubStageToPercent(TaskSubStage stage) => stage switch
     {

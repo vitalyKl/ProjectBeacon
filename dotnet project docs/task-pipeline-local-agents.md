@@ -230,7 +230,7 @@
 - Проверка: stdio-прогон `tools/list` + `tools/call` против live Postgres; без DB — `isError`.
 - Сделано: live-прогон stdio MCP: `tools/list` = 12 тулз (6 file + 6 новых); `task_pipeline_status` — реальные данные live Postgres; `task_create_subtask` для задачи вне пайплайна → `isError` «Pipeline is not started.», без мутации; file-тулзы не пострадали (`read_file` работает); env `BEACON_TASK_ID`/DB отсутствуют → `isError`. `dotnet build` 0/0, `dotnet test` 333/333.
 
-### B6. Web UI — пайплайн в TaskDetail
+### B6. Web UI — пайплайн в TaskDetail — выполнено
 - `ProjectBeacon.Web/Features/Tasks/TaskDetail.razor`: секция Pipeline:
   - Степпер стадий (Planning → Executing [N subtasks] → Reviewing → Approved → Closed), текущая стадия подсвечена.
   - Таблица subtasks: статус, instructions, diff/summary (expandable), reopen count.
@@ -238,6 +238,7 @@
   - История вердиктов (список `ReviewVerdict`).
 - Resx: en-ключи первыми.
 - Проверка: браузерный прогон полного флоу end-to-end (AGENTS.md: один скриншот — не верификация).
+- Сделано: `dotnet build` 0/0; `dotnet test` зелёный (Web 44, Application 116, API 32, Infrastructure 17, CLI 7). Браузерного инструмента нет — по AGENTS.md применён ближайший суррогат: live-прогон полного флоу через curl на работающем хосте (admin cookie) против тех же Application-хэндлеров, которые инжектит UI: `GET /v1/tasks/{id}/pipeline` (stage пуст) → `pipeline/start` (Planning, авто Planner-session Ready) → `subtasks` (Pending) → `subtasks/{id}/session` (Actor Ready, prompt только о subtask) → `sessions/{id}/launch` (Active) → `subtasks/{id}/result` (subtask Done, task → InProgress/Executing, actor-сессия автозакрыта) → `pipeline/review/start` (Reviewing + Review-session, prompt только артефакты) → `pipeline/verdict` Approve (Approved, task → Done) → `pipeline/force-close` (Closed, ReviewNotes «force-closed without review», все сессии закрыты). UI: 7 режимов диалога (create subtask, report result, fail subtask, approve, reopen, confirm-close, force-close c confirm) + степпер + таблицы subtasks/sessions/verdicts; текст — только resx; Razor без DbContext. Не верифицировано браузером: визуальный рендер степпера и диалогов.
 
 ### B7. Тесты Блока B
 - `Application.Tests`: полный happy path (start → 2 subtasks → results → review → approve → task `Done` + ReviewNotes), reopen-цикл и лимит 3, force close, force close **отклонён для обычного `ProjectMember` (D13)**, **двойной переход (`EnterExecuting` дважды / `StartReview` vs `Approve`) → второй получает ошибку, а не перезапись (D14)**, изоляция контекста (Failed-subtasks помечены статусом в review-контексте), tenancy (null scope → пусто), валидация переходов (verdict без review-сессии и т.п.).
