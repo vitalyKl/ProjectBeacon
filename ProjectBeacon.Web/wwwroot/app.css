@@ -186,16 +186,10 @@
     color: var(--color-text-primary);
 }
 
-.beacon-avatar {
-    cursor: pointer;
-    width: 26px;
-    height: 26px;
-    font-size: 11px;
-    transition: box-shadow 160ms ease;
-}
-
-.beacon-avatar:hover {
-    box-shadow: 0 0 0 2px var(--color-accent);
+.beacon-profile {
+    color: var(--color-text-primary) !important;
+    text-transform: none;
+    min-width: auto;
 }
 
 .beacon-drawer.mud-drawer {

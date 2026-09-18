@@ -23,10 +23,15 @@
         <MudSpacer />
         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
             <ActivatorContent>
-                <MudAvatar Size="Size.Small" Color="Color.Primary" Class="beacon-avatar">@_initials</MudAvatar>
+                <MudButton Variant="Variant.Text" Color="Color.Inherit"
+                           StartIcon="@Icons.Material.Filled.AccountCircle"
+                           OnClick="@(() => context.ToggleAsync())"
+                           Class="beacon-profile">
+                    @(_displayName)
+                </MudButton>
             </ActivatorContent>
             <ChildContent>
-                <MudMenuItem OnClick="@Logout">@L["Logout"]</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="@Logout">@L["Logout"]</MudMenuItem>
             </ChildContent>
         </MudMenu>
     </MudAppBar>
@@ -86,7 +91,7 @@
     private Task<AuthenticationState>? AuthState { get; set; }
 
     private List<BreadcrumbItem> _crumbs = [];
-    private string _initials = string.Empty;
+    private string _displayName = string.Empty;
     private bool _bodyReady;
 
     protected override async Task OnInitializedAsync()
@@ -94,7 +99,7 @@
         Navigation.LocationChanged += OnLocationChanged;
         RebuildCrumbs();
         await BindTenant();
-        await LoadInitials();
+        await LoadProfile();
         _bodyReady = true;
         StateHasChanged();
     }
@@ -107,7 +112,7 @@
         await TenantBinder.BindUserAsync(state.User);
     }
 
-    private async Task LoadInitials()
+    private async Task LoadProfile()
     {
         if (AuthState is null)
             return;
@@ -116,22 +121,7 @@
         var name = state.User.Identity?.Name
             ?? state.User.FindFirst(ClaimTypes.Name)?.Value
             ?? string.Empty;
-        _initials = InitialsFrom(name);
-    }
-
-    private static string InitialsFrom(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return "·";
-
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 2)
-            return $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[1][0])}";
-
-        var value = parts[0];
-        return value.Length >= 2
-            ? value[..2].ToUpperInvariant()
-            : value.ToUpperInvariant();
+        _displayName = string.IsNullOrWhiteSpace(name) ? L["Account"].Value : name;
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
