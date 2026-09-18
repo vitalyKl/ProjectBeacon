@@ -1,14 +1,20 @@
 using ProjectBeacon.Cli;
+using ProjectBeacon.Cli.Client;
 
 if (args.Length == 0 || args[0] is "-h" or "--help")
 {
     Console.Error.WriteLine("beacon mcp [--root <path>]");
+    Console.Error.WriteLine("beacon client [--url <api>] [--token <bcd_>]");
+    Console.Error.WriteLine("beacon client enroll --url <api> --login <user> --password <pass> [--name <device>]");
     return 1;
 }
 
+if (string.Equals(args[0], "client", StringComparison.OrdinalIgnoreCase))
+    return await ClientHost.RunAsync(args);
+
 if (!string.Equals(args[0], "mcp", StringComparison.OrdinalIgnoreCase))
 {
-    Console.Error.WriteLine("Unknown command. Use: beacon mcp");
+    Console.Error.WriteLine("Unknown command. Use: beacon mcp | beacon client");
     return 1;
 }
 

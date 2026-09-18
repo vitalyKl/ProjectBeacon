@@ -3,6 +3,7 @@ namespace ProjectBeacon.API.Auth;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Application.Devices;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,19 @@ public sealed class ApiTokenAuthMiddleware
                 identity.AddClaim(new Claim("token_id", token.Id.ToString()));
                 identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
                 identity.AddClaim(new Claim("capabilities", ((long)token.Capabilities).ToString()));
+                ctx.User = new ClaimsPrincipal(identity);
+            }
+        }
+        else if (header.StartsWith("Bearer bcd_", StringComparison.OrdinalIgnoreCase))
+        {
+            var raw = header["Bearer ".Length..].Trim();
+            var hash = DeviceToken.Hash(raw);
+            var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.TokenHash == hash && d.RevokedAt == null);
+            if (device is not null)
+            {
+                var identity = new ClaimsIdentity("DeviceToken", ClaimTypes.Name, ClaimTypes.Role);
+                identity.AddClaim(new Claim("device_id", device.Id.ToString()));
+                identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, device.UserId.ToString()));
                 ctx.User = new ClaimsPrincipal(identity);
             }
         }

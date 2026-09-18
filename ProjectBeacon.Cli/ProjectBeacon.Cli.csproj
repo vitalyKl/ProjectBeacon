@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ProjectBeacon.Application\ProjectBeacon.Application.csproj" />
+    <ProjectReference Include="..\ProjectBeacon.Domain\ProjectBeacon.Domain.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,12 +1,20 @@
 @page "/settings"
 @layout MainLayout
 @attribute [Authorize]
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
 @inject ListLabelsHandler ListLabels
+@inject ListDevicesHandler ListDevices
+@inject CreateDeviceHandler CreateDevice
+@inject RevokeDeviceHandler RevokeDevice
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Settings"]</PageTitle>
 <PageHeader Title="@L["Settings"]">
@@ -14,6 +22,46 @@
         @L["CreateProject"]
     </MudButton>
 </PageHeader>
+
+<MudText Typo="Typo.h6" Class="mb-3">@L["Devices"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
+        <MudTextField @bind-Value="_deviceName" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy">@L["AddDevice"]</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="ReloadDevices" Disabled="_busy">@L["Refresh"]</MudButton>
+    </MudStack>
+    @if (!string.IsNullOrEmpty(_deviceToken))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3">@string.Format(L["DeviceTokenOnce"].Value, Navigation.BaseUri.TrimEnd('/'), _deviceToken)</MudAlert>
+    }
+    @if (_devices.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">@L["NoDevicesYet"]</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_devices" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>@L["DeviceName"]</MudTh>
+                <MudTh>@L["Status"]</MudTh>
+                <MudTh>@L["LastSeen"]</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Online ? Color.Success : Color.Default)">
+                        @(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)
+                    </MudChip>
+                </MudTd>
+                <MudTd>@(context.LastHeartbeatAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["Delete"]</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["Labels"]</MudText>
 @if (_projectMissing)
@@ -38,17 +86,74 @@ else
 
 @code {
     private List<LabelDto> _labels = [];
+    private List<DaemonDeviceDto> _devices = [];
     private bool _projectMissing;
+    private string _deviceName = string.Empty;
+    private string? _deviceToken;
+    private bool _busy;
+    private Guid _userId;
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        var current = await CurrentProject.HandleAsync(user);
         if (current.Value is null)
-        {
             _projectMissing = true;
+        else
+        {
+            var listed = await ListLabels.HandleAsync(new ListLabelsRequest(current.Value.Id));
+            _labels = listed.Success ? listed.Value!.ToList() : [];
+        }
+        await ReloadDevices();
+    }
+
+    private async Task ReloadDevices()
+    {
+        if (_userId == Guid.Empty) return;
+        var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+        _devices = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private async Task AddDevice()
+    {
+        if (_userId == Guid.Empty || _busy) return;
+        _busy = true;
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(_deviceName) ? Environment.MachineName : _deviceName.Trim();
+            var result = await CreateDevice.HandleAsync(new CreateDeviceCommand(
+                new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _deviceToken = result.Value!.Token;
+            _deviceName = string.Empty;
+            Snackbar.Add(L["DeviceCreated"].Value, Severity.Success);
+            await ReloadDevices();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Revoke(DaemonDeviceDto device)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["RevokeDeviceConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await RevokeDevice.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(device.Id, _userId)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
-        var listed = await ListLabels.HandleAsync(new ListLabelsRequest(current.Value.Id));
-        _labels = listed.Success ? listed.Value!.ToList() : [];
+        Snackbar.Add(L["DeviceRevoked"].Value, Severity.Success);
+        await ReloadDevices();
     }
 }

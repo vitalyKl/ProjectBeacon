@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
+using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -31,6 +32,9 @@ public class BeaconDbContext : DbContext
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<PipelineSession> PipelineSessions => Set<PipelineSession>();
     public DbSet<ReviewVerdict> ReviewVerdicts => Set<ReviewVerdict>();
+    public DbSet<DaemonDevice> DaemonDevices => Set<DaemonDevice>();
+    public DbSet<WorkstationCommand> WorkstationCommands => Set<WorkstationCommand>();
+    public DbSet<ProjectRuntime> ProjectRuntimes => Set<ProjectRuntime>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -466,6 +470,55 @@ public class BeaconDbContext : DbContext
             entity.HasOne(e => e.Task)
                 .WithMany()
                 .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DaemonDevice>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Fingerprint).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.TokenHash).IsRequired();
+            entity.Property(e => e.TokenPrefix).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.ProbeJson).IsRequired();
+            entity.Property(e => e.WorkstationJson).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.Fingerprint });
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WorkstationCommand>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Kind).HasConversion<string>().IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entity.Property(e => e.PayloadJson).IsRequired();
+            entity.Property(e => e.Error).HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.DeviceId, e.Status, e.CreatedAt });
+            entity.HasOne<DaemonDevice>()
+                .WithMany()
+                .HasForeignKey(e => e.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProjectRuntime>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.LocalRoot).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.ProjectId, e.DeviceId }).IsUnique();
+            entity.HasOne<Project>()
+                .WithMany()
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<DaemonDevice>()
+                .WithMany()
+                .HasForeignKey(e => e.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

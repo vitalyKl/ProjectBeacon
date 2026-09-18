@@ -8,6 +8,13 @@ dotnet run --project ProjectBeacon.Cli -- mcp --root <project-root>
 
 Or after publish, `beacon mcp --root <project-root>`.
 
+Local workstation client (outbound HTTPS to the control plane; no inbound port, no WSS file tunnel):
+
+```
+dotnet run --project ProjectBeacon.Cli -- client --url <api> --token <bcd_…>
+dotnet run --project ProjectBeacon.Cli -- client enroll --url <api> --login <user> --password <pass>
+```
+
 `BEACON_PROJECT_ROOT` overrides the working directory when `--root` is omitted.
 
 ## Tools

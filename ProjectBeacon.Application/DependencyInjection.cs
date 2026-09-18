@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application;
 
 using Application.Agents;
 using Application.Auth;
+using Application.Devices;
 using Application.Identity;
 using Application.Projects;
 using Application.Tasks;
@@ -106,6 +107,18 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListProjectMilestonesHandler>();
         services.AddTransient<CloseMilestoneHandler>();
         services.AddTransient<ReopenMilestoneHandler>();
+
+        services.AddTransient<CreateDeviceHandler>();
+        services.AddTransient<ListDevicesHandler>();
+        services.AddTransient<RevokeDeviceHandler>();
+        services.AddTransient<HeartbeatDeviceHandler>();
+        services.AddTransient<EnqueueCommandHandler>();
+        services.AddTransient<ClaimNextCommandHandler>();
+        services.AddTransient<CompleteCommandHandler>();
+        services.AddTransient<GetCommandHandler>();
+        services.AddTransient<AttachRuntimeHandler>();
+        services.AddTransient<ListRuntimesHandler>();
+        services.AddTransient<DetachRuntimeHandler>();
 
         services.AddTransient<ILlamaSwapProxy, UnavailableLlamaSwapProxy>();
         services.AddTransient<UpsertLocalModelBackendHandler>();

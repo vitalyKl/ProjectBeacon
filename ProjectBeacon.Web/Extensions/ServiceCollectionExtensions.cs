@@ -60,7 +60,8 @@ public static class ServiceCollectionExtensions
             options.ForwardDefaultSelector = ctx =>
             {
                 var header = ctx.Request.Headers.Authorization.ToString();
-                if (header.StartsWith("Bearer bcn_", StringComparison.OrdinalIgnoreCase))
+                if (header.StartsWith("Bearer bcn_", StringComparison.OrdinalIgnoreCase)
+                    || header.StartsWith("Bearer bcd_", StringComparison.OrdinalIgnoreCase))
                     return CookieAuthenticationDefaults.AuthenticationScheme;
                 if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                     return JwtBearerDefaults.AuthenticationScheme;

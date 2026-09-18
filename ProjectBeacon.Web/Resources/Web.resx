@@ -976,4 +976,76 @@
   <data name="NoSectionsYet" xml:space="preserve">
     <value>No sections yet.</value>
   </data>
+  <data name="Devices" xml:space="preserve">
+    <value>Devices</value>
+  </data>
+  <data name="AddDevice" xml:space="preserve">
+    <value>Add device</value>
+  </data>
+  <data name="DeviceName" xml:space="preserve">
+    <value>Device name</value>
+  </data>
+  <data name="NoDevicesYet" xml:space="preserve">
+    <value>No devices yet. Add one and run beacon client with the token.</value>
+  </data>
+  <data name="DeviceOffline" xml:space="preserve">
+    <value>Not connected</value>
+  </data>
+  <data name="DeviceOnline" xml:space="preserve">
+    <value>Connected</value>
+  </data>
+  <data name="DeviceTokenOnce" xml:space="preserve">
+    <value>Save this token. It is shown once. Run: beacon client --url {0} --token {1}</value>
+  </data>
+  <data name="DeviceCreated" xml:space="preserve">
+    <value>Device created.</value>
+  </data>
+  <data name="DeviceRevoked" xml:space="preserve">
+    <value>Device revoked.</value>
+  </data>
+  <data name="RevokeDeviceConfirm" xml:space="preserve">
+    <value>Revoke this device? The client will stop receiving commands.</value>
+  </data>
+  <data name="LastSeen" xml:space="preserve">
+    <value>Last seen</value>
+  </data>
+  <data name="RuntimeDevice" xml:space="preserve">
+    <value>Runtime device</value>
+  </data>
+  <data name="ProjectDirectory" xml:space="preserve">
+    <value>Project directory</value>
+  </data>
+  <data name="Browse" xml:space="preserve">
+    <value>Browse</value>
+  </data>
+  <data name="InitializeOnDevice" xml:space="preserve">
+    <value>Initialize on device (.gitignore, opencode.json)</value>
+  </data>
+  <data name="ParentDirectory" xml:space="preserve">
+    <value>Up</value>
+  </data>
+  <data name="SelectFolder" xml:space="preserve">
+    <value>Select this folder</value>
+  </data>
+  <data name="DeviceRequiredForBrowse" xml:space="preserve">
+    <value>Connect a device to browse folders.</value>
+  </data>
+  <data name="McpServers" xml:space="preserve">
+    <value>MCP servers</value>
+  </data>
+  <data name="AgentMode" xml:space="preserve">
+    <value>Agent mode</value>
+  </data>
+  <data name="AgentModeSolo" xml:space="preserve">
+    <value>Solo</value>
+  </data>
+  <data name="AgentModePipeline" xml:space="preserve">
+    <value>Pipeline</value>
+  </data>
+  <data name="ApplyOnDevice" xml:space="preserve">
+    <value>Apply on device</value>
+  </data>
+  <data name="ModelsRoot" xml:space="preserve">
+    <value>Local models directory</value>
+  </data>
 </root>

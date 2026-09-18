@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Domain.Tests;
 
+using ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Enums;
@@ -75,5 +76,8 @@ public sealed class EntityTests
         var link = DecisionTask.Create(Guid.NewGuid(), Guid.NewGuid());
         Assert.NotEqual(Guid.Empty, link.DecisionId);
         Assert.NotEqual(Guid.Empty, link.TaskId);
+        Assert.NotEqual(Guid.Empty, DaemonDevice.Create("d", userId, "fp", "h", "bcd_xx").Id);
+        Assert.NotEqual(Guid.Empty, WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.Probe).Id);
+        Assert.NotEqual(Guid.Empty, ProjectRuntime.Create(projectId, Guid.NewGuid(), "/repo").Id);
     }
 }

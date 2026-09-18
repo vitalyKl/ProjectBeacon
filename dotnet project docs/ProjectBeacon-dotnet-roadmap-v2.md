@@ -166,8 +166,17 @@ acceptance criterion was run.
 
 ## 9. Phase 7–9
 
-⬜ Local daemon / code index, worker jobs, eval harness. Postgres-only
-`docker-compose.yml` exists (not full product Compose). Not this slice.
+| # | Item | Status | Acceptance criterion |
+|---|---|---|---|
+| C0 | Device enroll + heartbeat + long-poll | 🟡 | `POST /v1/devices` returns `bcd_` once; heartbeat + `GET /v1/devices/me/commands`; `DeviceHandlerTests` + `DeviceHttpTests` |
+| C1 | `list_dir` + `ProjectRuntime` | 🟡 | Wizard picks an online device and attaches `LocalRoot` per (project, device) |
+| C2 | `init_project` | 🟡 | Client writes `.gitignore` + merge `opencode.json` + `.opencode/data`; token not in git |
+| C3 | MCP apply | 🟡 | Init payload installs beacon MCP; `ApplyOpencode` merges extra servers |
+| C4 | Solo / Pipeline models | ⬜ | OpenCode `model` / `agent.*` + RoleBinding from UI |
+| C5 | probe + install | 🟡 | Probe in heartbeat; install allowlist (git/node/docker) via winget after Confirm |
+| C6 | llama-swap on client | ⬜ | Web supervisor stays until client-owned process is proven; probe reports llama-swap |
+
+Code index, worker jobs, eval harness still ⬜. Hosted clone and `ff.sidecar_tunnel` stay off. Postgres-only `docker-compose.yml` exists (not full product Compose).
 
 ## 10. Open decisions
 

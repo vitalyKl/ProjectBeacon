@@ -16,6 +16,7 @@ public static class BeaconApi
         app.MapReportEndpoints();
         app.MapDecisionEndpoints();
         app.MapModelEndpoints();
+        app.MapDeviceEndpoints();
         return app;
     }
 }
