@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli;
 
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -73,7 +74,7 @@ public static class McpStdioServer
             {
                 ["protocolVersion"] = "2024-11-05",
                 ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
-                ["serverInfo"] = new JsonObject { ["name"] = "beacon", ["version"] = "1.0.0" }
+                ["serverInfo"] = new JsonObject { ["name"] = "beacon", ["version"] = AssemblyVersion() }
             }),
             "tools/list" => Result(id, new JsonObject { ["tools"] = Tools() }),
             "tools/call" => await CallToolAsync(id, message["params"], workspace, index),
@@ -547,4 +548,9 @@ public static class McpStdioServer
         await stream.WriteAsync(body);
         await stream.FlushAsync();
     }
+
+    private static string AssemblyVersion() =>
+        typeof(McpStdioServer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(McpStdioServer).Assembly.GetName().Version?.ToString()
+        ?? "0";
 }

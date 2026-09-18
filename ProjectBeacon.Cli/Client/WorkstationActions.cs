@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -19,7 +20,9 @@ public static class WorkstationActions
             ["dotnet"] = Which("dotnet"),
             ["os"] = Environment.OSVersion.ToString(),
             ["machine"] = Environment.MachineName,
-            ["clientVersion"] = typeof(WorkstationActions).Assembly.GetName().Version?.ToString() ?? "0"
+            ["clientVersion"] = typeof(WorkstationActions).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                ?? typeof(WorkstationActions).Assembly.GetName().Version?.ToString()
+                ?? "0"
         };
         if (llamaSwapStatus is not null)
             probe["llamaSwapStatus"] = llamaSwapStatus;

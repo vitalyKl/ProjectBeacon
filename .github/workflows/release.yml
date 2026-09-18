@@ -22,6 +22,8 @@ jobs:
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "owner=${owner}" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${owner}/projectbeacon-web:${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -37,6 +39,7 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/projectbeacon-web:latest
           build-args: |
             BEACON_GIT_SHA=${{ github.sha }}
+            BEACON_VERSION=${{ steps.meta.outputs.version }}
 
   deploy:
     needs: image

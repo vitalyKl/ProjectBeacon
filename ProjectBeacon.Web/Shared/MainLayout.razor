@@ -7,6 +7,7 @@
 @using ProjectBeacon.Web.Resources
 @using ProjectBeacon.Web.Shared
 @using ProjectBeacon.Application.Identity
+@using ProjectBeacon.API.Endpoints
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
 @inject TenantContextBinder TenantBinder
@@ -65,6 +66,7 @@
                 </MudNavLink>
             </MudNavMenu>
             <div class="beacon-drawer-footer">
+                <MudText Typo="Typo.caption" Class="px-3 mb-1">@AppVersion.Informational</MudText>
                 <LanguageSwitcher />
             </div>
         </div>
