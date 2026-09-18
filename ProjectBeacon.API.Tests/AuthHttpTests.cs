@@ -42,6 +42,17 @@ public sealed class AuthHttpTests
     }
 
     [Fact]
+    public async Task Version_Anonymous_Ok()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var response = await client.GetAsync("/v1/version");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("version").GetString()));
+    }
+
+    [Fact]
     public async Task ApiHost_V1RequiresAuth_AndAssemblyIsApi()
     {
         Assert.Equal("ProjectBeacon.API", typeof(Program).Assembly.GetName().Name);

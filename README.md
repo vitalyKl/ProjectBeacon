@@ -37,3 +37,7 @@ dotnet run --project ProjectBeacon.Cli -- mcp --root .
 ```
 
 See `.net project docs/mcp-host.md`. Hosted clone, outbound WSS, HTTP MCP, and `write_handoff` are not shipped.
+
+## Kubernetes
+
+Blue-green for the Web host: `deploy/README.md`. Tag `v*` builds `ghcr.io/<org>/projectbeacon-web`. `beacon client` is not auto-updated.

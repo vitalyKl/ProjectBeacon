@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: beacon-migrate
+  namespace: beacon
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/OWNER/projectbeacon-web:latest
+          envFrom:
+            - secretRef:
+                name: beacon-web
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: BEACON_MIGRATE_ON_START
+              value: "true"
+            - name: BEACON_MIGRATE_THEN_EXIT
+              value: "true"

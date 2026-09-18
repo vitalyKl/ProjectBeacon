@@ -176,7 +176,9 @@ acceptance criterion was run.
 | C5 | probe + install | 🟡 | Probe in heartbeat; Settings shows tools and Install git/node/docker via winget after Confirm |
 | C6 | llama-swap on client | 🟡 | Web no longer hosts llama-swap; client writes config from `/v1/devices/me/llamaswap-config` and reports status in heartbeat; Agents proxy uses device probe. `DeviceLlamaSwapProxyTests` |
 
-Code index, worker jobs, eval harness still ⬜. Hosted clone and `ff.sidecar_tunnel` stay off. Postgres-only `docker-compose.yml` exists (not full product Compose).
+| O1 | K8s blue-green Web image | 🟡 | `Dockerfile` publishes Web; `deploy/k8s` blue/green + Service switch; migrate Job; `GET /v1/version`; release workflow on `v*` tags. Client auto-update is out of scope. |
+
+Code index, worker jobs, eval harness still ⬜. Hosted clone and `ff.sidecar_tunnel` stay off. Postgres-only `docker-compose.yml` exists for local DB. Production Web image is separate (`Dockerfile`).
 
 ## 10. Open decisions
 

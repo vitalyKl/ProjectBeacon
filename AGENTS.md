@@ -68,7 +68,7 @@ C# 12, `Nullable enable`, `ImplicitUsings enable`. No comments unless the code i
 
 Workspace: `dotnet build`, `dotnet test`, `dotnet format`. Solution: `ProjectBeacon.sln`.
 
-Self-host: copy `.env.example` to `.env`, set `POSTGRES_PASSWORD` and/or `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, `JWT__Secret`. Web loads `.env` from the repo root on startup. `docker compose up -d` starts Postgres only. Then `dotnet run --project ProjectBeacon.Web --launch-profile http`. Web is `:5083` (http) / `:7118` (https).
+Self-host: copy `.env.example` to `.env`, set `POSTGRES_PASSWORD` and/or `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, `JWT__Secret`. Web loads `.env` from the repo root on startup. `docker compose up -d` starts Postgres only. Then `dotnet run --project ProjectBeacon.Web --launch-profile http`. Web is `:5083` (http) / `:7118` (https). Kubernetes blue-green: `deploy/README.md`. Production pods set `BEACON_MIGRATE_ON_START=false`; schema changes run as a Job, not in every replica.
 
 Local MCP: `dotnet run --project ProjectBeacon.Cli -- mcp --root .` (stdio). See `.net project docs/mcp-host.md`.
 

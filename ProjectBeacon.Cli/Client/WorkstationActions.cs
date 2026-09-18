@@ -18,7 +18,8 @@ public static class WorkstationActions
             ["docker"] = Which("docker"),
             ["dotnet"] = Which("dotnet"),
             ["os"] = Environment.OSVersion.ToString(),
-            ["machine"] = Environment.MachineName
+            ["machine"] = Environment.MachineName,
+            ["clientVersion"] = typeof(WorkstationActions).Assembly.GetName().Version?.ToString() ?? "0"
         };
         if (llamaSwapStatus is not null)
             probe["llamaSwapStatus"] = llamaSwapStatus;
