@@ -1,0 +1,120 @@
+@page "/invite"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Net.Http.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject AuthenticationStateProvider Auth
+
+<PageTitle>@L["InviteTitle"]</PageTitle>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
+    <MudText Typo="Typo.h4" Class="text-center mb-6">@L["InviteTitle"]</MudText>
+
+    @if (_accepted)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">@L["InviteAccepted"]</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => Navigation.NavigateTo("/dashboard"))"
+                   Class="w-100">
+            @L["Dashboard"]
+        </MudButton>
+    }
+    else if (_preview is not null)
+    {
+        <MudText Typo="Typo.body1" Class="mb-4">
+            @string.Format(L["InviteDescription"].Value, _preview.TargetName, _preview.Role)
+        </MudText>
+        @if (_signedIn)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Accept" Disabled="_loading" Class="w-100">
+                @(_loading ? L["Loading"] : L["InviteAccept"])
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="w-100"
+                       OnClick="@(() => Navigation.NavigateTo($"/register?token={Uri.EscapeDataString(_token)}&email={Uri.EscapeDataString(_preview.Email)}"))">
+                @L["Register"]
+            </MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-3 w-100"
+                       OnClick="@(() => Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/invite?token=" + _token)}"))">
+                @L["Login"]
+            </MudButton>
+            <MudText Typo="Typo.caption" Class="mt-3">@L["AlreadyHaveAccount"]</MudText>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    private string _token = string.Empty;
+    private InvitePreview? _preview;
+    private bool _signedIn;
+    private bool _accepted;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var query = QueryHelpers.ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        if (query.TryGetValue("token", out var token))
+            _token = token.ToString();
+        var state = await Auth.GetAuthenticationStateAsync();
+        _signedIn = state.User.Identity?.IsAuthenticated == true;
+        if (string.IsNullOrEmpty(_token))
+        {
+            _error = L["Error"].Value;
+            return;
+        }
+
+        var response = await Http.GetAsync($"/v1/invites/{Uri.EscapeDataString(_token)}");
+        if (!response.IsSuccessStatusCode)
+        {
+            _error = L["Error"].Value;
+            return;
+        }
+        _preview = await response.Content.ReadFromJsonAsync<InvitePreview>();
+    }
+
+    private async Task Accept()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var response = await Http.PostAsync($"/v1/invites/{Uri.EscapeDataString(_token)}/accept", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = L["Error"].Value;
+                return;
+            }
+            _accepted = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private sealed class InvitePreview
+    {
+        public string Kind { get; set; } = string.Empty;
+        public Guid TargetId { get; set; }
+        public string TargetName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public DateTime ExpiredAt { get; set; }
+    }
+}

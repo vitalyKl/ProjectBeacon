@@ -1183,4 +1183,79 @@
   <data name="ProbeLlamaSwap" xml:space="preserve">
     <value>llama-swap</value>
   </data>
+  <data name="Register" xml:space="preserve">
+    <value>Create account</value>
+  </data>
+  <data name="Email" xml:space="preserve">
+    <value>Email</value>
+  </data>
+  <data name="ForgotPassword" xml:space="preserve">
+    <value>Forgot password</value>
+  </data>
+  <data name="ForgotDescription" xml:space="preserve">
+    <value>Enter your email. If an account exists, a reset link will be sent.</value>
+  </data>
+  <data name="ForgotSuccess" xml:space="preserve">
+    <value>If that email is registered, a reset link is on its way.</value>
+  </data>
+  <data name="ResetPasswordTitle" xml:space="preserve">
+    <value>Set a new password</value>
+  </data>
+  <data name="ResetSuccess" xml:space="preserve">
+    <value>Password updated. You can log in now.</value>
+  </data>
+  <data name="InviteTitle" xml:space="preserve">
+    <value>Invitation</value>
+  </data>
+  <data name="InviteDescription" xml:space="preserve">
+    <value>You were invited to {0} as {1}.</value>
+  </data>
+  <data name="InviteAccept" xml:space="preserve">
+    <value>Accept invitation</value>
+  </data>
+  <data name="InviteAccepted" xml:space="preserve">
+    <value>Invitation accepted.</value>
+  </data>
+  <data name="AlreadyHaveAccount" xml:space="preserve">
+    <value>Already have an account? Log in, then reopen this link.</value>
+  </data>
+  <data name="Members" xml:space="preserve">
+    <value>Members</value>
+  </data>
+  <data name="InviteMember" xml:space="preserve">
+    <value>Invite</value>
+  </data>
+  <data name="PendingInvites" xml:space="preserve">
+    <value>Pending invites</value>
+  </data>
+  <data name="InviteSent" xml:space="preserve">
+    <value>Invite created. Save this link — it is shown once.</value>
+  </data>
+  <data name="RevokeInvite" xml:space="preserve">
+    <value>Revoke</value>
+  </data>
+  <data name="ChangePassword" xml:space="preserve">
+    <value>Change password</value>
+  </data>
+  <data name="CurrentPassword" xml:space="preserve">
+    <value>Current password</value>
+  </data>
+  <data name="PasswordChanged" xml:space="preserve">
+    <value>Password changed.</value>
+  </data>
+  <data name="Role" xml:space="preserve">
+    <value>Role</value>
+  </data>
+  <data name="NoMembersYet" xml:space="preserve">
+    <value>No members yet.</value>
+  </data>
+  <data name="RoleMember" xml:space="preserve">
+    <value>Member</value>
+  </data>
+  <data name="RoleAdmin" xml:space="preserve">
+    <value>Admin</value>
+  </data>
+  <data name="RoleOwner" xml:space="preserve">
+    <value>Owner</value>
+  </data>
 </root>

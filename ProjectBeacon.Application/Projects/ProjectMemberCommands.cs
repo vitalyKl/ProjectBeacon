@@ -19,4 +19,6 @@ public record ProjectMemberDto(
     Guid Id,
     Guid UserId,
     MemberRole Role,
-    DateTime JoinedAt);
+    DateTime JoinedAt,
+    string? Login = null,
+    string? Email = null);

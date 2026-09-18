@@ -37,6 +37,10 @@ public static class EndpointExtensions
             if (!result.Success)
                 return Results.Redirect("/login?error=1");
 
+            var returnUrl = form["returnUrl"].ToString();
+            if (string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith('/') || returnUrl.StartsWith("//") || returnUrl.Contains('\\'))
+                returnUrl = "/dashboard";
+
             var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
                 db, result.Value.UserId, result.Value.IsAdmin);
 
@@ -54,7 +58,7 @@ public static class EndpointExtensions
 
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-            return Results.Redirect("/dashboard");
+            return Results.Redirect(returnUrl);
         }).AllowAnonymous().RequireRateLimiting("auth").DisableAntiforgery();
 
         app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>

@@ -13,6 +13,7 @@ public class BeaconDbContext : DbContext
     public DbSet<Org> Orgs => Set<Org>();
     public DbSet<OrgMember> OrgMembers => Set<OrgMember>();
     public DbSet<OrgInvite> OrgInvites => Set<OrgInvite>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<ProjectInvite> ProjectInvites => Set<ProjectInvite>();
@@ -140,13 +141,28 @@ public class BeaconDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.TokenHash).IsRequired();
             entity.Property(e => e.Status).HasConversion<string>().IsRequired();
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ExpiredAt).IsRequired();
             entity.HasIndex(e => new { e.OrgId, e.Email });
+            entity.HasIndex(e => e.TokenHash).IsUnique();
             entity.HasOne(e => e.Org)
                 .WithMany(e => e.Invites)
                 .HasForeignKey(e => e.OrgId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TokenHash).IsRequired();
+            entity.Property(e => e.ExpiresAt).IsRequired();
+            entity.HasIndex(e => e.TokenHash).IsUnique();
+            entity.HasIndex(e => e.UserId);
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -208,10 +224,12 @@ public class BeaconDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.TokenHash).IsRequired();
             entity.Property(e => e.Status).HasConversion<string>().IsRequired();
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ExpiredAt).IsRequired();
             entity.HasIndex(e => new { e.ProjectId, e.Email });
+            entity.HasIndex(e => e.TokenHash).IsUnique();
             entity.HasOne(e => e.Project)
                 .WithMany(e => e.Invites)
                 .HasForeignKey(e => e.ProjectId)

@@ -26,4 +26,6 @@ public class UserSession : Entity
         session.IsActive = true;
         return session;
     }
+
+    public void Deactivate() => IsActive = false;
 }

@@ -1,0 +1,116 @@
+@page "/register"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Net.Http.Json
+@using ProjectBeacon.Application.Auth
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
+
+<PageTitle>@L["Register"]</PageTitle>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
+    <MudText Typo="Typo.h4" Class="text-center mb-6">@L["Register"]</MudText>
+
+    @if (_success)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">@L["GoToLogin"]</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => Navigation.NavigateTo("/login"))"
+                   Class="w-100">
+            @L["GoToLogin"]
+        </MudButton>
+    }
+    else
+    {
+        <MudTextField @bind-Value="_login" Label="@L["Username"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_email" Label="@L["Email"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_password" Label="@L["Password"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="_loading" Class="w-100">
+            @(_loading ? L["Loading"] : L["Register"])
+        </MudButton>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+    }
+
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4 w-100"
+               OnClick="@(() => Navigation.NavigateTo("/login"))">
+        @L["Login"]
+    </MudButton>
+</MudPaper>
+
+@code {
+    private string _login = string.Empty;
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string? _invite;
+    private string? _error;
+    private bool _loading;
+    private bool _success;
+
+    protected override void OnInitialized()
+    {
+        var query = QueryHelpers.ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        if (query.TryGetValue("token", out var token))
+            _invite = token.ToString();
+        if (query.TryGetValue("email", out var email))
+            _email = email.ToString();
+        if (string.IsNullOrEmpty(_invite) && LocalAuthOptions.InviteOnly(Config))
+            Navigation.NavigateTo("/login");
+    }
+
+    private async Task Submit()
+    {
+        _error = null;
+        _loading = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/v1/auth/register", new
+            {
+                login = _login,
+                email = _email,
+                password = _password,
+                inviteToken = _invite
+            });
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = ErrorText(body, response.StatusCode.ToString());
+                return;
+            }
+            _success = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ErrorText(string body, string fallback)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Deserialize<ErrorResult>(body,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return string.IsNullOrEmpty(json?.Error) ? (string.IsNullOrWhiteSpace(body) ? fallback : body) : json!.Error;
+        }
+        catch
+        {
+            return string.IsNullOrWhiteSpace(body) ? fallback : body;
+        }
+    }
+
+    private sealed class ErrorResult
+    {
+        public string? Error { get; set; }
+    }
+}

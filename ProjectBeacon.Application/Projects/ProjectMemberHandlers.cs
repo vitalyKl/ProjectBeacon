@@ -64,9 +64,16 @@ public class GetProjectMembersHandler : ICommandHandler<GetProjectMembersCommand
         var members = await db.ProjectMembers
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderByDescending(m => m.JoinedAt)
-            .Select(m => new ProjectMemberDto(m.Id, m.UserId, m.Role, m.JoinedAt))
             .ToListAsync(ct);
+        var userIds = members.Select(m => m.UserId).ToList();
+        var users = await db.Users.Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, ct);
+        IList<ProjectMemberDto> dtos = members.Select(m =>
+        {
+            users.TryGetValue(m.UserId, out var user);
+            return new ProjectMemberDto(m.Id, m.UserId, m.Role, m.JoinedAt, user?.Login, user?.Email);
+        }).ToList();
 
-        return Result.Ok((IList<ProjectMemberDto>)members);
+        return Result.Ok(dtos);
     }
 }

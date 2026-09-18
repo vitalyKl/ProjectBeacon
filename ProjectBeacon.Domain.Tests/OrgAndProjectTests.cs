@@ -70,11 +70,12 @@ public sealed class OrgInviteTests
     {
         var orgId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId);
+        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId, "hash");
 
         Assert.NotEqual(Guid.Empty, invite.Id);
         Assert.Equal(orgId, invite.OrgId);
         Assert.Equal("test@example.com", invite.Email);
+        Assert.Equal("hash", invite.TokenHash);
         Assert.Equal(MemberRole.Member, invite.Role);
         Assert.Equal(InviteStatus.Pending, invite.Status);
         Assert.True(invite.ExpiredAt > invite.CreatedAt);
@@ -85,7 +86,7 @@ public sealed class OrgInviteTests
     {
         var orgId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId);
+        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId, "hash");
 
         var result = invite.TryAccept();
 
@@ -99,7 +100,7 @@ public sealed class OrgInviteTests
     {
         var orgId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId);
+        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId, "hash");
         invite.TryAccept();
 
         var result = invite.TryAccept();
@@ -112,7 +113,7 @@ public sealed class OrgInviteTests
     {
         var orgId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId);
+        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId, "hash");
 
         invite.Expire();
 
@@ -124,7 +125,7 @@ public sealed class OrgInviteTests
     {
         var orgId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId);
+        var invite = OrgInvite.Create(orgId, "test@example.com", MemberRole.Member, userId, "hash");
 
         invite.Revoke();
 
@@ -155,7 +156,7 @@ public sealed class ProjectInviteTests
     {
         var projectId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = ProjectInvite.Create(projectId, "test@example.com", MemberRole.Member, userId);
+        var invite = ProjectInvite.Create(projectId, "test@example.com", MemberRole.Member, userId, "hash");
 
         Assert.NotEqual(Guid.Empty, invite.Id);
         Assert.Equal(projectId, invite.ProjectId);
@@ -167,7 +168,7 @@ public sealed class ProjectInviteTests
     {
         var projectId = Guid.CreateVersion7();
         var userId = Guid.CreateVersion7();
-        var invite = ProjectInvite.Create(projectId, "test@example.com", MemberRole.Member, userId);
+        var invite = ProjectInvite.Create(projectId, "test@example.com", MemberRole.Member, userId, "hash");
 
         var result = invite.TryAccept();
 

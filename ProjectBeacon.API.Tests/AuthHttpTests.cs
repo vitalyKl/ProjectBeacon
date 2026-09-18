@@ -49,7 +49,84 @@ public sealed class AuthHttpTests
         var response = await client.GetAsync("/v1/version");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("version").GetString()));
+        var version = json.GetProperty("version").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(version));
+        Assert.Contains('.', version);
+    }
+
+    [Fact]
+    public async Task Register_Open_CreatesUser()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/v1/auth/register", new
+        {
+            login = "bob",
+            email = "bob@test.com",
+            password = "password1"
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ForgotPassword_AlwaysOk()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/v1/auth/forgot-password", new { email = "nobody@test.com" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProjectInvite_CreateAndAcceptViaRegister()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapJwt(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await client.PostAsJsonAsync("/v1/orgs", new { name = "Org" });
+        org.EnsureSuccessStatusCode();
+        var orgJson = await org.Content.ReadFromJsonAsync<JsonElement>();
+        var orgId = orgJson.GetProperty("id").GetGuid();
+        var project = await client.PostAsJsonAsync("/v1/projects", new { name = "P", orgId });
+        project.EnsureSuccessStatusCode();
+        var projectId = (await project.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var invite = await client.PostAsJsonAsync($"/v1/projects/{projectId}/invites", new
+        {
+            email = "bob@test.com",
+            role = "Member"
+        });
+        invite.EnsureSuccessStatusCode();
+        var inviteJson = await invite.Content.ReadFromJsonAsync<JsonElement>();
+        var token = inviteJson.GetProperty("token").GetString();
+        Assert.StartsWith("bci_", token);
+
+        client.DefaultRequestHeaders.Authorization = null;
+        var preview = await client.GetAsync($"/v1/invites/{token}");
+        preview.EnsureSuccessStatusCode();
+
+        var registered = await client.PostAsJsonAsync("/v1/auth/register", new
+        {
+            login = "bob",
+            email = "bob@test.com",
+            password = "password1",
+            inviteToken = token
+        });
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+    }
+
+    private static async Task<string> BootstrapJwt(HttpClient client)
+    {
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        bootstrap.EnsureSuccessStatusCode();
+        var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>();
+        var password = bootJson.GetProperty("password").GetString();
+        var login = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = password });
+        login.EnsureSuccessStatusCode();
+        var json = await login.Content.ReadFromJsonAsync<JsonElement>();
+        return json.GetProperty("token").GetString()!;
     }
 
     [Fact]
@@ -152,6 +229,7 @@ public sealed class AuthApiFactory : WebApplicationFactory<Program>
     {
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", _configureBootstrapToken ? BootstrapToken : "");
+        builder.UseSetting("AUTH_LOCAL_INVITE_ONLY", "false");
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())

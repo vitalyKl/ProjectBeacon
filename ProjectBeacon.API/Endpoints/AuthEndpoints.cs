@@ -2,6 +2,7 @@ namespace ProjectBeacon.API.Endpoints;
 
 using Application.Auth;
 using Application.Common;
+using Application.Identity;
 using Application.Projects;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
@@ -17,8 +18,14 @@ public static class AuthEndpoints
         app.MapPost("/v1/auth/recover-admin", RecoverAdmin).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/login", Login).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/register", Register).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
+        app.MapPost("/v1/auth/forgot-password", ForgotPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
+        app.MapPost("/v1/auth/reset-password", ResetPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
+        app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/logout", Logout).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapGet("/v1/auth/me", GetMe).RequireAuthorization();
+        app.MapGet("/v1/auth/options", AuthOptions).AllowAnonymous();
+        app.MapGet("/v1/invites/{token}", GetInvite).AllowAnonymous().RequireRateLimiting("auth");
+        app.MapPost("/v1/invites/{token}/accept", AcceptInvite).RequireAuthorization().DisableAntiforgery();
 
         return app;
     }
@@ -100,8 +107,58 @@ public static class AuthEndpoints
                 result.Value.Login,
                 result.Value.Email
             })
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Invite required." ? 403 : 400);
+    }
+
+    private static async Task<IResult> ForgotPassword([FromBody] ForgotPasswordRequest request, ForgotPasswordHandler handler)
+    {
+        await handler.HandleAsync(request);
+        return Results.Ok();
+    }
+
+    private static async Task<IResult> ResetPassword([FromBody] ResetPasswordRequest request, ResetPasswordHandler handler)
+    {
+        var result = await handler.HandleAsync(request);
+        return result.Success
+            ? Results.Ok()
             : Results.Json(new { error = result.Error }, statusCode: 400);
     }
+
+    private static async Task<IResult> ChangePassword([FromBody] ChangePasswordBody body, ChangePasswordHandler handler, HttpContext ctx)
+    {
+        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        if (!Guid.TryParse(userIdStr, out var userId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new ChangePasswordRequest(userId, body.CurrentPassword, body.NewPassword));
+        return result.Success
+            ? Results.Ok()
+            : Results.Json(new { error = result.Error }, statusCode: 400);
+    }
+
+    private static IResult AuthOptions(IConfiguration configuration) =>
+        Results.Ok(new { inviteOnly = LocalAuthOptions.InviteOnly(configuration) });
+
+    private static async Task<IResult> GetInvite(string token, GetInviteHandler handler)
+    {
+        var result = await handler.HandleAsync(token);
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.Json(new { error = result.Error }, statusCode: 404);
+    }
+
+    private static async Task<IResult> AcceptInvite(string token, AcceptInviteHandler handler, HttpContext ctx)
+    {
+        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        if (!Guid.TryParse(userIdStr, out var userId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new AcceptInviteRequest(token, userId));
+        if (result.Success)
+            return Results.Ok();
+        var status = result.Error == "Email does not match invite." ? 403 : 400;
+        return Results.Json(new { error = result.Error }, statusCode: status);
+    }
+
+    public record ChangePasswordBody(string CurrentPassword, string NewPassword);
 
     private static async Task<IResult> Logout([FromBody] LogoutRequest request, BeaconDbContext db)
     {

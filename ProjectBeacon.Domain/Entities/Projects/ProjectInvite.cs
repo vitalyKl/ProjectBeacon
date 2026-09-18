@@ -12,20 +12,22 @@ public class ProjectInvite : Entity, IProjectScoped
     public MemberRole Role { get; private set; }
     public InviteStatus Status { get; private set; }
     public Guid? InvitedByUserId { get; private set; }
+    public string TokenHash { get; private set; } = string.Empty;
     public DateTime? AcceptedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime ExpiredAt { get; private set; }
 
     public Project Project { get; private set; } = null!;
 
-    public static ProjectInvite Create(Guid projectId, string email, MemberRole role, Guid invitedByUserId)
+    public static ProjectInvite Create(Guid projectId, string email, MemberRole role, Guid invitedByUserId, string tokenHash)
     {
         var invite = Entity.New<ProjectInvite>();
         invite.ProjectId = projectId;
-        invite.Email = email;
+        invite.Email = NormalizeEmail(email);
         invite.Role = role;
         invite.Status = InviteStatus.Pending;
         invite.InvitedByUserId = invitedByUserId;
+        invite.TokenHash = tokenHash;
         invite.CreatedAt = DateTime.UtcNow;
         invite.ExpiredAt = DateTime.UtcNow + TimeSpan.FromDays(7);
         return invite;
@@ -50,4 +52,6 @@ public class ProjectInvite : Entity, IProjectScoped
     {
         Status = InviteStatus.Revoked;
     }
+
+    public static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 }

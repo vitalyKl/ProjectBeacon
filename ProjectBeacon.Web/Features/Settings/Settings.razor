@@ -4,12 +4,19 @@
 @using System.Security.Claims
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Auth
 @using ProjectBeacon.Application.Devices
+@using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
+@inject GetProjectMembersHandler ListMembers
+@inject CreateProjectInviteHandler CreateInvite
+@inject ListProjectInvitesHandler ListInvites
+@inject RevokeProjectInviteHandler RevokeInvite
+@inject ChangePasswordHandler ChangePassword
 @inject ListLabelsHandler ListLabels
 @inject CreateLabelHandler CreateLabel
 @inject UpdateLabelHandler UpdateLabel
@@ -109,6 +116,79 @@
     </MudPaper>
 }
 
+<MudText Typo="Typo.h6" Class="mb-3">@L["Members"]</MudText>
+@if (_projectMissing)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
+            <MudTextField @bind-Value="_inviteEmail" Label="@L["Email"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="MemberRole" @bind-Value="_inviteRole" Label="@L["Role"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="@MemberRole.Member">@L["RoleMember"]</MudSelectItem>
+                <MudSelectItem Value="@MemberRole.Admin">@L["RoleAdmin"]</MudSelectItem>
+                <MudSelectItem Value="@MemberRole.Owner">@L["RoleOwner"]</MudSelectItem>
+            </MudSelect>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendInvite" Disabled="_busy">@L["InviteMember"]</MudButton>
+        </MudStack>
+        @if (!string.IsNullOrEmpty(_inviteUrl))
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-3">@L["InviteSent"] @_inviteUrl</MudAlert>
+        }
+        @if (_members.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">@L["NoMembersYet"]</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_members" Dense="true" Hover="true" Class="mb-3">
+                <HeaderContent>
+                    <MudTh>@L["Username"]</MudTh>
+                    <MudTh>@L["Email"]</MudTh>
+                    <MudTh>@L["Role"]</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Login</MudTd>
+                    <MudTd>@context.Email</MudTd>
+                    <MudTd>@context.Role</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        @if (_invites.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@L["PendingInvites"]</MudText>
+            <MudTable Items="_invites" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>@L["Email"]</MudTh>
+                    <MudTh>@L["Role"]</MudTh>
+                    <MudTh>@L["Status"]</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Email</MudTd>
+                    <MudTd>@context.Role</MudTd>
+                    <MudTd>@context.Status</MudTd>
+                    <MudTd>
+                        @if (context.Status == "Pending")
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["RevokeInvite"]</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+}
+
+<MudText Typo="Typo.h6" Class="mb-3">@L["ChangePassword"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <MudTextField @bind-Value="_currentPassword" Label="@L["CurrentPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudTextField @bind-Value="_newPassword" Label="@L["NewPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SavePassword" Disabled="_busy">@L["ChangePassword"]</MudButton>
+</MudPaper>
+
 <MudText Typo="Typo.h6" Class="mb-3">@L["Labels"]</MudText>
 @if (_projectMissing)
 {
@@ -155,6 +235,8 @@ else
 
 @code {
     private List<LabelDto> _labels = [];
+    private List<ProjectMemberDto> _members = [];
+    private List<InviteListDto> _invites = [];
     private List<DaemonDeviceDto> _devices = [];
     private bool _projectMissing;
     private Guid? _projectId;
@@ -165,6 +247,12 @@ else
     private string? _deviceToken;
     private bool _busy;
     private Guid _userId;
+    private bool _isAdmin;
+    private string _inviteEmail = string.Empty;
+    private MemberRole _inviteRole = MemberRole.Member;
+    private string? _inviteUrl;
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
     private Guid? _wsDeviceId;
     private string _modelsRoot = string.Empty;
     private string _historyDir = string.Empty;
@@ -182,6 +270,7 @@ else
         var user = (await Auth.GetAuthenticationStateAsync()).User;
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
+        _isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var adminFlag) && adminFlag;
         var current = await CurrentProject.HandleAsync(user);
         if (current.Value is null)
             _projectMissing = true;
@@ -189,6 +278,7 @@ else
         {
             _projectId = current.Value.Id;
             await ReloadLabels();
+            await ReloadMembers();
         }
         await ReloadDevices();
     }
@@ -341,6 +431,79 @@ else
             await Task.Delay(500);
         }
         return null;
+    }
+
+    private async Task ReloadMembers()
+    {
+        if (_projectId is not { } projectId || _userId == Guid.Empty)
+            return;
+        var listed = await ListMembers.HandleAsync(new GetProjectMembersCommand(new GetProjectMembersRequest(projectId)));
+        _members = listed.Success ? listed.Value!.ToList() : [];
+        var invites = await ListInvites.HandleAsync(new ListInvitesRequest(projectId, _userId, _isAdmin));
+        _invites = invites.Success ? invites.Value!.ToList() : [];
+    }
+
+    private async Task SendInvite()
+    {
+        if (_projectId is not { } projectId || string.IsNullOrWhiteSpace(_inviteEmail) || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            var created = await CreateInvite.HandleAsync(new CreateProjectInviteRequest(
+                projectId, _inviteEmail.Trim(), _inviteRole, _userId, _isAdmin));
+            if (!created.Success)
+            {
+                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _inviteUrl = created.Value!.Url;
+            _inviteEmail = string.Empty;
+            Snackbar.Add(L["InviteSent"].Value, Severity.Success);
+            await ReloadMembers();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Revoke(InviteListDto invite)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["RevokeInvite"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await RevokeInvite.HandleAsync(new RevokeInviteRequest(invite.Id, _userId, _isAdmin));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await ReloadMembers();
+    }
+
+    private async Task SavePassword()
+    {
+        if (_userId == Guid.Empty || _busy) return;
+        _busy = true;
+        try
+        {
+            var result = await ChangePassword.HandleAsync(new ChangePasswordRequest(_userId, _currentPassword, _newPassword));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _currentPassword = string.Empty;
+            _newPassword = string.Empty;
+            Snackbar.Add(L["PasswordChanged"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task ReloadLabels()

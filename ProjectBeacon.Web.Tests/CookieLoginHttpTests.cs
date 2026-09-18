@@ -43,6 +43,17 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
+    public async Task RegisterForgotResetInvitePages_AccessibleToAnonymous()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/register")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/forgot")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/reset")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/invite")).StatusCode);
+    }
+
+    [Fact]
     public async Task Culture_SetsCookie_AndRejectsUnknown()
     {
         await using var factory = new WebTestFactory();

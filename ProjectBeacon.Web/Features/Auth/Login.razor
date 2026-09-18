@@ -2,8 +2,10 @@
 @layout AuthLayout
 @attribute [AllowAnonymous]
 @using Microsoft.AspNetCore.WebUtilities
+@using ProjectBeacon.Application.Auth
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
 
 <PageTitle>@L["Login"]</PageTitle>
 
@@ -16,6 +18,7 @@
     }
 
     <form method="post" action="/v1/auth/cookie-login">
+        <input type="hidden" name="returnUrl" value="@_returnUrl" />
         <MudTextField T="string"
                       Label="@L["Username"]"
                       Required="true"
@@ -35,6 +38,17 @@
     </form>
 
     <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-4 w-100"
+               OnClick="@(() => Navigation.NavigateTo("/forgot"))">
+        @L["ForgotPassword"]
+    </MudButton>
+    @if (!_inviteOnly)
+    {
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="w-100"
+                   OnClick="@(() => Navigation.NavigateTo("/register"))">
+            @L["Register"]
+        </MudButton>
+    }
+    <MudButton Variant="Variant.Text" Color="Color.Default" Class="w-100"
                OnClick="@(() => Navigation.NavigateTo("/recover"))">
         @L["RecoverPassword"]
     </MudButton>
@@ -52,10 +66,15 @@
         ["autocomplete"] = "current-password"
     };
     private bool _error;
+    private bool _inviteOnly;
+    private string _returnUrl = "/dashboard";
 
     protected override void OnInitialized()
     {
-        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        _error = QueryHelpers.ParseQuery(uri.Query).ContainsKey("error");
+        var query = QueryHelpers.ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        _error = query.ContainsKey("error");
+        _inviteOnly = LocalAuthOptions.InviteOnly(Config);
+        if (query.TryGetValue("returnUrl", out var returnUrl))
+            _returnUrl = returnUrl.ToString();
     }
 }

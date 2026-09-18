@@ -1,0 +1,79 @@
+@page "/reset"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Net.Http.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject HttpClient Http
+
+<PageTitle>@L["ResetPasswordTitle"]</PageTitle>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
+    <MudText Typo="Typo.h4" Class="text-center mb-6">@L["ResetPasswordTitle"]</MudText>
+
+    @if (_success)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">@L["ResetSuccess"]</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="@(() => Navigation.NavigateTo("/login"))"
+                   Class="w-100">
+            @L["GoToLogin"]
+        </MudButton>
+    }
+    else
+    {
+        <MudTextField @bind-Value="_password" Label="@L["NewPassword"]" InputType="InputType.Password"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="_loading || string.IsNullOrEmpty(_token)" Class="w-100">
+            @(_loading ? L["Loading"] : L["ResetPasswordTitle"])
+        </MudButton>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    private string _token = string.Empty;
+    private string _password = string.Empty;
+    private bool _success;
+    private bool _loading;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        var query = QueryHelpers.ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        if (query.TryGetValue("token", out var token))
+            _token = token.ToString();
+        if (string.IsNullOrEmpty(_token))
+            _error = L["Error"].Value;
+    }
+
+    private async Task Submit()
+    {
+        _error = null;
+        _loading = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/v1/auth/reset-password", new { token = _token, password = _password });
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = string.IsNullOrWhiteSpace(body) ? L["Error"].Value : body;
+                return;
+            }
+            _success = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

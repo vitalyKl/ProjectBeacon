@@ -57,7 +57,7 @@ public sealed class EntityTests
 
         Assert.NotEqual(Guid.Empty, org.Id);
         Assert.NotEqual(Guid.Empty, OrgMember.Create(org.Id, userId, MemberRole.Owner).Id);
-        Assert.NotEqual(Guid.Empty, OrgInvite.Create(org.Id, "a@b.c", MemberRole.Member, userId).Id);
+        Assert.NotEqual(Guid.Empty, OrgInvite.Create(org.Id, "a@b.c", MemberRole.Member, userId, "hash").Id);
         Assert.NotEqual(Guid.Empty, UserSession.Create(userId, "127.0.0.1").Id);
         Assert.NotEqual(Guid.Empty, Milestone.Create("M", null, projectId, 0).Id);
         Assert.NotEqual(Guid.Empty, Constraint.Create("must", ConstraintKind.Must, projectId).Id);
@@ -66,7 +66,8 @@ public sealed class EntityTests
         Assert.NotEqual(Guid.Empty, ContextRevision.Create("h", "#", "{}", 1, projectId, []).Id);
         Assert.NotEqual(Guid.Empty, ApiToken.Create("t", "hash", "bcn_xx", projectId, ApiTokenCapability.TaskRead, null, null).Id);
         Assert.NotEqual(Guid.Empty, ProjectMember.Create(projectId, userId, MemberRole.Member).Id);
-        Assert.NotEqual(Guid.Empty, ProjectInvite.Create(projectId, "a@b.c", MemberRole.Member, userId).Id);
+        Assert.NotEqual(Guid.Empty, ProjectInvite.Create(projectId, "a@b.c", MemberRole.Member, userId, "hash").Id);
+        Assert.NotEqual(Guid.Empty, PasswordResetToken.Create(userId, "hash").Id);
         Assert.NotEqual(Guid.Empty, TaskComment.Create("hi", Guid.NewGuid(), userId).Id);
         Assert.NotEqual(Guid.Empty, TaskDependency.Create(Guid.NewGuid(), Guid.NewGuid()).Id);
         var label = Label.Create("API", "#000", projectId, "ProjectBeacon.API");

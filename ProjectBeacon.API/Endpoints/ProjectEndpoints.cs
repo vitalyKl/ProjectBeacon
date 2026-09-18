@@ -2,7 +2,9 @@ namespace ProjectBeacon.API.Endpoints;
 
 using System.Security.Claims;
 using Application.Common;
+using Application.Identity;
 using Application.Projects;
+using Domain.Enums;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -23,6 +25,9 @@ public static class ProjectEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/members", AddMember).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/projects/{projectId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/members", ListMembers).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/projects/{projectId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery();
+        app.MapDelete("/v1/projects/{projectId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery();
 
         app.MapPost("/v1/projects/{projectId:guid}/tokens", CreateToken).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery();
@@ -111,7 +116,7 @@ public static class ProjectEndpoints
     }
 
     private static ProjectMemberDto MapMemberResponse(ProjectMemberDto dto) =>
-        new(dto.Id, dto.UserId, dto.Role, dto.JoinedAt);
+        new(dto.Id, dto.UserId, dto.Role, dto.JoinedAt, dto.Login, dto.Email);
 
     private static async Task<IResult> CreateToken(Guid projectId, [FromBody] CreateApiTokenRequest request, [FromServices] IConfiguration config, CreateApiTokenHandler handler)
     {
@@ -149,6 +154,48 @@ public static class ProjectEndpoints
     private static ApiTokenDto MapTokenResponse(ApiTokenDto dto) =>
         new(dto.Id, dto.Name, dto.TokenPrefix, dto.ProjectId, dto.Capabilities, dto.ExpiresAt, dto.LastUsedAt, dto.CreatedAt);
 
+    private static async Task<IResult> CreateInvite(
+        Guid projectId, [FromBody] CreateInviteBody body, CreateProjectInviteHandler handler, HttpContext ctx)
+    {
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new CreateProjectInviteRequest(
+            projectId, body.Email, body.Role, actor.Value, ActorIsAdmin(ctx)));
+        if (result.Success)
+            return Results.Ok(result.Value);
+        var status = result.Error == "Forbidden." ? 403 : 400;
+        return Results.Json(new { error = result.Error }, statusCode: status);
+    }
+
+    private static async Task<IResult> ListInvites(Guid projectId, ListProjectInvitesHandler handler, HttpContext ctx)
+    {
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new ListInvitesRequest(projectId, actor.Value, ActorIsAdmin(ctx)));
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 400);
+    }
+
+    private static async Task<IResult> RevokeInvite(
+        Guid projectId, Guid inviteId, RevokeProjectInviteHandler handler, HttpContext ctx)
+    {
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor.Value, ActorIsAdmin(ctx)));
+        return result.Success
+            ? Results.NoContent()
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
+    }
+
+    public record CreateInviteBody(string Email, MemberRole Role);
+
     private static Guid? ActorUserId(HttpContext ctx) =>
         Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+
+    private static bool ActorIsAdmin(HttpContext ctx) =>
+        bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var flag) && flag;
 }

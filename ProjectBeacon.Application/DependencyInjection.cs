@@ -21,6 +21,17 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RecoverAdminHandler>();
         services.AddTransient<LoginHandler>();
         services.AddTransient<RegisterHandler>();
+        services.AddTransient<ForgotPasswordHandler>();
+        services.AddTransient<ResetPasswordHandler>();
+        services.AddTransient<ChangePasswordHandler>();
+        services.AddTransient<CreateOrgInviteHandler>();
+        services.AddTransient<CreateProjectInviteHandler>();
+        services.AddTransient<GetInviteHandler>();
+        services.AddTransient<AcceptInviteHandler>();
+        services.AddTransient<ListOrgInvitesHandler>();
+        services.AddTransient<ListProjectInvitesHandler>();
+        services.AddTransient<RevokeOrgInviteHandler>();
+        services.AddTransient<RevokeProjectInviteHandler>();
 
         services.AddTransient<CreateOrgHandler>();
         services.AddTransient<UpdateOrgHandler>();

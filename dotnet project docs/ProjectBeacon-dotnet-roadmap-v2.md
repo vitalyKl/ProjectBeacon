@@ -82,6 +82,9 @@ project.
 | 7 | Auth integration tests | ✅ | Handler tests on SQLite + HTTP factory tests (`AuthIntegrationTests`, `AuthHttpTests`) |
 | 8 | Cross-tenant isolation proven | ✅ | Query filters on; `TenantIsolationPostgresTests` pass |
 | 9 | Admin password recovery | ✅ | `POST /v1/auth/recover-admin` (bootstrap token, rate-limited, fail-closed) resets admin password + lockout; `/recover` page. HTTP: `RecoverAdmin_ValidToken_ResetsPassword`, `RecoverAdmin_InvalidToken_Unauthorized`, `RecoverAdmin_NoAdmin_BadRequest`, `RecoverAdmin_TokenNotConfigured_Unauthorized` (28/28 API tests passed 2026-09-14) |
+| 10 | Register + invites | 🟡 | Open `POST /v1/auth/register` or invite-only via `AUTH_LOCAL_INVITE_ONLY`. Org/project invites (`bci_` once, hashed). `/register`, `/invite`, Settings members. |
+| 11 | Email password reset | 🟡 | `POST /v1/auth/forgot-password` (always 200) + `POST /v1/auth/reset-password`; `/forgot` `/reset`. SMTP via `MAIL__*`. `/recover` remains break-glass. Change-password in Settings. |
+| 12 | Product version | 🟡 | `Version` in `Directory.Build.props`; `GET /v1/version` `{version, gitSha}`; drawer footer; MCP/clientVersion from assembly. Docker stamps `BEACON_VERSION` not SHA. |
 
 ## 4. Phase 2 — Projects, members, API tokens
 

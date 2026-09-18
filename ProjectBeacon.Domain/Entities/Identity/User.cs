@@ -19,8 +19,8 @@ public class User : Entity
     public static User Create(string login, string email, string passwordHash, bool isAdmin = false)
     {
         var user = Entity.New<User>();
-        user.Login = login;
-        user.Email = email;
+        user.Login = login.Trim();
+        user.Email = email.Trim().ToLowerInvariant();
         user.PasswordHash = passwordHash;
         user.IsAdmin = isAdmin;
         return user;

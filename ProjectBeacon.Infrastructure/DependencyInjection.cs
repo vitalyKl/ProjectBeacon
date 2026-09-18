@@ -3,6 +3,7 @@ namespace ProjectBeacon.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Mail;
 
 public static class ServiceCollectionExtensions
 {
@@ -12,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<BeaconDbContext>(options =>
             options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null)));
         services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>();
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
     }
