@@ -1,0 +1,47 @@
+@inherits LayoutComponentBase
+@using MudBlazor
+@using ProjectBeacon.API.Endpoints
+@using ProjectBeacon.Application.Auth
+@using ProjectBeacon.Web.Theme
+@using ProjectBeacon.Web.Shared
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
+
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<div class="landing-shell">
+    <header class="landing-nav">
+        <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
+        <MudSpacer />
+        <LanguageSwitcher />
+        @if (!_inviteOnly)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/register">@L["Register"]</MudButton>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">@L["Login"]</MudButton>
+    </header>
+    <main class="landing-main">
+        @Body
+    </main>
+    <footer class="landing-footer">
+        <MudText Typo="Typo.caption">@AppVersion.Informational</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/login">@L["Login"]</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/forgot">@L["ForgotPassword"]</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/recover">@L["RecoverPassword"]</MudButton>
+        </MudStack>
+    </footer>
+</div>
+
+@code {
+    private bool _inviteOnly;
+
+    protected override void OnInitialized()
+    {
+        _inviteOnly = LocalAuthOptions.InviteOnly(Config);
+    }
+}

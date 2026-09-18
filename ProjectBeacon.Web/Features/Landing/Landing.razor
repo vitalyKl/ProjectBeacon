@@ -1,0 +1,207 @@
+@page "/"
+@layout LandingLayout
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Auth
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Auth
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
+
+<PageTitle>@L["ProjectBeacon"]</PageTitle>
+
+<section class="landing-section landing-hero">
+    <MudText Typo="Typo.h3" Class="landing-title">@L["LandingHeroTitle"]</MudText>
+    <MudText Typo="Typo.h6" Class="landing-lead">@L["LandingHeroLead"]</MudText>
+    <MudStack Row="true" Spacing="2" Class="mt-6" Wrap="Wrap.Wrap">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">@L["Login"]</MudButton>
+        @if (!_inviteOnly)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/register">@L["Register"]</MudButton>
+        }
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/bootstrap">@L["Bootstrap"]</MudButton>
+    </MudStack>
+</section>
+
+<section class="landing-section">
+    <MudText Typo="Typo.h5" Class="mb-3">@L["LandingProblemTitle"]</MudText>
+    <MudText Typo="Typo.body1">@L["LandingProblemBody"]</MudText>
+</section>
+
+<section class="landing-section">
+    <MudText Typo="Typo.h5" Class="mb-4">@L["LandingHowTitle"]</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel h-100">
+                <MudText Typo="Typo.subtitle1">1</MudText>
+                <MudText Typo="Typo.body1" Class="mt-2">@L["LandingHow1"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel h-100">
+                <MudText Typo="Typo.subtitle1">2</MudText>
+                <MudText Typo="Typo.body1" Class="mt-2">@L["LandingHow2"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel h-100">
+                <MudText Typo="Typo.subtitle1">3</MudText>
+                <MudText Typo="Typo.body1" Class="mt-2">@L["LandingHow3"]</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</section>
+
+<section class="landing-section">
+    <MudText Typo="Typo.h5" Class="mb-4">@L["LandingFeaturesTitle"]</MudText>
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudText Typo="Typo.subtitle1">@L["Context"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LandingFeatureContext"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudText Typo="Typo.subtitle1">@L["Board"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LandingFeatureBoard"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudText Typo="Typo.subtitle1">@L["Decisions"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LandingFeatureDecisions"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudText Typo="Typo.subtitle1">@L["Agents"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LandingFeatureAgents"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudText Typo="Typo.subtitle1">@L["Devices"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LandingFeatureDevices"]</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudText Typo="Typo.subtitle1">@L["LandingFeatureMcpTitle"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-2">@L["LandingFeatureMcp"]</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</section>
+
+<section class="landing-section">
+    <MudText Typo="Typo.h5" Class="mb-4">@L["LandingCompareTitle"]</MudText>
+    <MudSimpleTable Dense="true" Hover="true" Class="landing-table">
+        <thead>
+            <tr>
+                <th></th>
+                <th>@L["LandingCompareChat"]</th>
+                <th>@L["LandingCompareCloud"]</th>
+                <th>@L["ProjectBeacon"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>@L["LandingCompareBrief"]</td>
+                <td>@L["LandingNo"]</td>
+                <td>@L["LandingMaybe"]</td>
+                <td>@L["LandingYes"]</td>
+            </tr>
+            <tr>
+                <td>@L["LandingCompareHardware"]</td>
+                <td>@L["LandingMaybe"]</td>
+                <td>@L["LandingNo"]</td>
+                <td>@L["LandingYes"]</td>
+            </tr>
+            <tr>
+                <td>@L["LandingCompareRecord"]</td>
+                <td>@L["LandingNo"]</td>
+                <td>@L["LandingMaybe"]</td>
+                <td>@L["LandingYes"]</td>
+            </tr>
+            <tr>
+                <td>@L["LandingCompareExecutes"]</td>
+                <td>@L["LandingYes"]</td>
+                <td>@L["LandingYes"]</td>
+                <td>@L["LandingNo"]</td>
+            </tr>
+        </tbody>
+    </MudSimpleTable>
+</section>
+
+<section class="landing-section">
+    <MudText Typo="Typo.h5" Class="mb-4">@L["LandingVisualTitle"]</MudText>
+    <div class="landing-mock">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel landing-mock-board">
+            <MudText Typo="Typo.caption" Class="mb-3">@L["Board"]</MudText>
+            <div class="landing-mock-cols">
+                <div class="landing-mock-col">
+                    <MudText Typo="Typo.caption">@L["Todo"]</MudText>
+                    <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-2 mt-2">
+                        <MudText Typo="Typo.body2">@L["LandingMockTodo"]</MudText>
+                    </MudPaper>
+                </div>
+                <div class="landing-mock-col">
+                    <MudText Typo="Typo.caption">@L["InProgress"]</MudText>
+                    <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-2 mt-2">
+                        <MudText Typo="Typo.body2">@L["LandingMockDoing"]</MudText>
+                    </MudPaper>
+                </div>
+            </div>
+        </MudPaper>
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel landing-mock-brief">
+            <MudText Typo="Typo.caption" Class="mb-3">@L["Context"]</MudText>
+            <MudText Typo="Typo.body2" Class="beacon-pre">@L["LandingMockBrief"]</MudText>
+        </MudPaper>
+    </div>
+</section>
+
+<section class="landing-section">
+    <MudText Typo="Typo.h5" Class="mb-4">@L["LandingFaqTitle"]</MudText>
+    <MudExpansionPanels Elevation="0">
+        <MudExpansionPanel Text="@L["LandingFaq1Q"]">
+            <MudText Typo="Typo.body2">@L["LandingFaq1A"]</MudText>
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="@L["LandingFaq2Q"]">
+            <MudText Typo="Typo.body2">@L["LandingFaq2A"]</MudText>
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="@L["LandingFaq3Q"]">
+            <MudText Typo="Typo.body2">@L["LandingFaq3A"]</MudText>
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="@L["LandingFaq4Q"]">
+            <MudText Typo="Typo.body2">@L["LandingFaq4A"]</MudText>
+        </MudExpansionPanel>
+        <MudExpansionPanel Text="@L["LandingFaq5Q"]">
+            <MudText Typo="Typo.body2">@L["LandingFaq5A"]</MudText>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+</section>
+
+<section class="landing-section landing-cta">
+    <MudText Typo="Typo.h5" Class="mb-3">@L["LandingCtaTitle"]</MudText>
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">@L["Login"]</MudButton>
+        @if (!_inviteOnly)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/register">@L["Register"]</MudButton>
+        }
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/bootstrap">@L["Bootstrap"]</MudButton>
+    </MudStack>
+</section>
+
+@code {
+    private bool _inviteOnly;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _inviteOnly = LocalAuthOptions.InviteOnly(Config);
+        var state = await Auth.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+            Navigation.NavigateTo("/dashboard");
+    }
+}

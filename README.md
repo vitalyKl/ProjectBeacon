@@ -9,7 +9,9 @@ Authoritative product docs: `.net project docs/ProjectBeacon-design-doc-v2.md` (
 1. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD` and/or `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, and `JWT__Secret`.
 2. Start Postgres: `docker compose up -d` (or let `DockerPostgresHelper` start `beacon-postgres` on first Web run).
 3. `dotnet run --project ProjectBeacon.Web --launch-profile http` — Web loads `.env` from the repo root.
-4. Open `http://localhost:5083/bootstrap`, then `/login`.
+4. Open `http://localhost:5083/` (landing). Bootstrap at `/bootstrap`, then `/login`. Logged-in `/` goes to the dashboard.
+5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from Settings (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.
+6. Product version lives in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows the assembly version.
 
 Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Reports, Settings. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers.
 
@@ -43,4 +45,4 @@ See `.net project docs/mcp-host.md`. Hosted clone, outbound WSS, HTTP MCP, and `
 
 ## Kubernetes
 
-Blue-green for the Web host: `deploy/README.md`. Tag `v*` builds `ghcr.io/<org>/projectbeacon-web`. `beacon client` is not auto-updated.
+Blue-green for the Web host: `deploy/README.md`. Tag `v*` builds `ghcr.io/<org>/projectbeacon-web` with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. `beacon client` is not auto-updated.

@@ -29,6 +29,18 @@ linked from `/login`. Bootstrap endpoint status codes corrected: 409 only
 for "Bootstrap already completed.", 401 for invalid/missing token. API test
 factories fixed to send the bootstrap Bearer token.
 
+Follow-up 2026-09-18: user registration, org/project invites, email
+password reset, product version, and a public landing at `/` (anonymous
+200; logged-in users go to dashboard). `AUTH_LOCAL_INVITE_ONLY` gates
+`POST /v1/auth/register`. Invites persist `TokenHash` only (`bci_` shown
+once). Forgot-password is always 200; reset consumes a one-hour token
+and deactivates sessions. SMTP via `MAIL__*` (`IEmailSender`); missing
+mail logs the link in Development. Product version is `0.1.0` in
+`Directory.Build.props`; `GET /v1/version` is `{ version, gitSha }`;
+Docker/release stamp `BEACON_VERSION` separately from SHA. Handler +
+HTTP tests green; Postgres migrate of `AddAuthInvitesAndPasswordReset`
+not yet run on a live host — rows 10–13 stay 🟡.
+
 ## 0. Status legend
 
 | Mark | Means |
@@ -85,6 +97,7 @@ project.
 | 10 | Register + invites | 🟡 | Open `POST /v1/auth/register` or invite-only via `AUTH_LOCAL_INVITE_ONLY`. Org/project invites (`bci_` once, hashed). `/register`, `/invite`, Settings members. |
 | 11 | Email password reset | 🟡 | `POST /v1/auth/forgot-password` (always 200) + `POST /v1/auth/reset-password`; `/forgot` `/reset`. SMTP via `MAIL__*`. `/recover` remains break-glass. Change-password in Settings. |
 | 12 | Product version | 🟡 | `Version` in `Directory.Build.props`; `GET /v1/version` `{version, gitSha}`; drawer footer; MCP/clientVersion from assembly. Docker stamps `BEACON_VERSION` not SHA. |
+| 13 | Public landing | 🟡 | Anonymous `GET /` is 200 (not 301 to dashboard). Logged-in `/` goes to dashboard. `CookieLoginHttpTests.Landing_Anonymous_Ok_NotPermanentRedirect`. |
 
 ## 4. Phase 2 — Projects, members, API tokens
 

@@ -5,8 +5,12 @@ Ships **Web** (Blazor + `/v1`) as one image. Postgres is shared and is not blue-
 ## Image
 
 ```
-docker build -t ghcr.io/<org>/projectbeacon-web:<tag> --build-arg BEACON_GIT_SHA=$(git rev-parse --short HEAD) .
+docker build -t ghcr.io/<org>/projectbeacon-web:<tag> \
+  --build-arg BEACON_VERSION=0.1.0 \
+  --build-arg BEACON_GIT_SHA=$(git rev-parse --short HEAD) .
 ```
+
+`BEACON_VERSION` becomes the assembly `Version`. `BEACON_GIT_SHA` is a runtime env var, not `InformationalVersion`.
 
 Replace `OWNER` in `deploy/k8s/*.yaml` with the GHCR owner.
 
@@ -35,8 +39,8 @@ Breaking schema changes need expand/contract across two releases. Additive EF mi
 
 ## CI
 
-Tag `v*` runs `.github/workflows/release.yml`: build/push GHCR. Deploy job runs only if `KUBECONFIG` is set on the `production` environment.
+Tag `v*` runs `.github/workflows/release.yml`: build/push GHCR with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. Deploy job runs only if `KUBECONFIG` is set on the `production` environment.
 
 ## Client
 
-Workstation clients keep their installed `beacon` binary. Heartbeat `probeJson.clientVersion` shows the assembly version. `GET /v1/version` reports control-plane version and `BEACON_GIT_SHA`.
+Workstation clients keep their installed `beacon` binary. Heartbeat `probeJson.clientVersion` shows the assembly informational version. `GET /v1/version` reports `{ version, gitSha }` — version from the assembly, `gitSha` from `BEACON_GIT_SHA`.

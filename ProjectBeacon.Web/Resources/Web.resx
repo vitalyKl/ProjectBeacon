@@ -1258,4 +1258,134 @@
   <data name="RoleOwner" xml:space="preserve">
     <value>Owner</value>
   </data>
+  <data name="LandingHeroTitle" xml:space="preserve">
+    <value>Context that survives the next session.</value>
+  </data>
+  <data name="LandingHeroLead" xml:space="preserve">
+    <value>A control plane for mixed human + local-agent work. Beacon compiles the brief once so agents stop rediscovering what was already decided.</value>
+  </data>
+  <data name="LandingProblemTitle" xml:space="preserve">
+    <value>Agents start cold</value>
+  </data>
+  <data name="LandingProblemBody" xml:space="preserve">
+    <value>Every new session, an agent greps around for decisions, constraints, and the files that matter. Beacon is the system of record that hands over a budgeted brief instead.</value>
+  </data>
+  <data name="LandingHowTitle" xml:space="preserve">
+    <value>How it works</value>
+  </data>
+  <data name="LandingHow1" xml:space="preserve">
+    <value>Compile a budgeted brief from context, decisions, and constraints.</value>
+  </data>
+  <data name="LandingHow2" xml:space="preserve">
+    <value>Claim work on the board. Status, review notes, and pipeline stay in one place.</value>
+  </data>
+  <data name="LandingHow3" xml:space="preserve">
+    <value>Run the agent on your machine with beacon mcp and beacon client. Beacon never executes the turn.</value>
+  </data>
+  <data name="LandingFeaturesTitle" xml:space="preserve">
+    <value>What ships</value>
+  </data>
+  <data name="LandingFeatureContext" xml:space="preserve">
+    <value>Scoped briefs with a token budget. Never-drop security and definition of done.</value>
+  </data>
+  <data name="LandingFeatureBoard" xml:space="preserve">
+    <value>Board, backlog, and roadmap for mixed human and agent work.</value>
+  </data>
+  <data name="LandingFeatureDecisions" xml:space="preserve">
+    <value>Decisions carry consequences, so agents have a reason to respect them.</value>
+  </data>
+  <data name="LandingFeatureAgents" xml:space="preserve">
+    <value>Solo and pipeline models on hardware you control. llama-swap stays on the workstation.</value>
+  </data>
+  <data name="LandingFeatureDevices" xml:space="preserve">
+    <value>Outbound HTTPS from beacon client. The Web host does not read your disk.</value>
+  </data>
+  <data name="LandingFeatureMcpTitle" xml:space="preserve">
+    <value>stdio MCP</value>
+  </data>
+  <data name="LandingFeatureMcp" xml:space="preserve">
+    <value>Local file tools and pipeline tools over stdio. HTTP MCP is not shipped.</value>
+  </data>
+  <data name="LandingCompareTitle" xml:space="preserve">
+    <value>Compared with</value>
+  </data>
+  <data name="LandingCompareChat" xml:space="preserve">
+    <value>Chat-only agent</value>
+  </data>
+  <data name="LandingCompareCloud" xml:space="preserve">
+    <value>Hosted coding cloud</value>
+  </data>
+  <data name="LandingCompareBrief" xml:space="preserve">
+    <value>Persistent brief</value>
+  </data>
+  <data name="LandingCompareHardware" xml:space="preserve">
+    <value>Your hardware</value>
+  </data>
+  <data name="LandingCompareRecord" xml:space="preserve">
+    <value>System of record</value>
+  </data>
+  <data name="LandingCompareExecutes" xml:space="preserve">
+    <value>Executes the agent turn</value>
+  </data>
+  <data name="LandingYes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="LandingNo" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="LandingMaybe" xml:space="preserve">
+    <value>Maybe</value>
+  </data>
+  <data name="LandingVisualTitle" xml:space="preserve">
+    <value>Board and brief, together</value>
+  </data>
+  <data name="LandingMockTodo" xml:space="preserve">
+    <value>Compile the task brief</value>
+  </data>
+  <data name="LandingMockDoing" xml:space="preserve">
+    <value>Claim and implement</value>
+  </data>
+  <data name="LandingMockBrief" xml:space="preserve">
+    <value>## Goals
+Keep context current for mixed human + agent work.
+
+## Non-goals
+No Beacon-hosted coding agent.</value>
+  </data>
+  <data name="LandingFaqTitle" xml:space="preserve">
+    <value>Questions</value>
+  </data>
+  <data name="LandingFaq1Q" xml:space="preserve">
+    <value>Does Beacon run the coding agent?</value>
+  </data>
+  <data name="LandingFaq1A" xml:space="preserve">
+    <value>No. Beacon relays and orchestrates. The agent process always runs on hardware you control.</value>
+  </data>
+  <data name="LandingFaq2Q" xml:space="preserve">
+    <value>Where does the code live?</value>
+  </data>
+  <data name="LandingFaq2A" xml:space="preserve">
+    <value>On your machine. beacon client talks outbound HTTPS. The Web host does not browse the working tree.</value>
+  </data>
+  <data name="LandingFaq3Q" xml:space="preserve">
+    <value>Is this hosted SaaS?</value>
+  </data>
+  <data name="LandingFaq3A" xml:space="preserve">
+    <value>Self-host is the v1 path. Hosted multi-tenant stays a later, gated phase.</value>
+  </data>
+  <data name="LandingFaq4Q" xml:space="preserve">
+    <value>How do I add people?</value>
+  </data>
+  <data name="LandingFaq4A" xml:space="preserve">
+    <value>Open registration, or invite-only via AUTH_LOCAL_INVITE_ONLY. Invite from Settings; the link is shown once.</value>
+  </data>
+  <data name="LandingFaq5Q" xml:space="preserve">
+    <value>How do I reset a password?</value>
+  </data>
+  <data name="LandingFaq5A" xml:space="preserve">
+    <value>Use Forgot password. /recover is bootstrap-token admin break-glass, not user reset.</value>
+  </data>
+  <data name="LandingCtaTitle" xml:space="preserve">
+    <value>Start on your own host</value>
+  </data>
 </root>

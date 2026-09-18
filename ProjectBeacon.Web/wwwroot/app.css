@@ -78,6 +78,79 @@
     max-width: 400px;
 }
 
+.landing-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-app);
+}
+
+.landing-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+.landing-main {
+    flex: 1;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 20px 64px;
+}
+
+.landing-section {
+    margin-bottom: 64px;
+}
+
+.landing-hero {
+    padding-top: 24px;
+}
+
+.landing-title {
+    max-width: 18ch;
+}
+
+.landing-lead {
+    color: var(--color-text-secondary);
+    max-width: 42ch;
+    margin-top: 16px;
+}
+
+.landing-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 20px;
+    border-top: var(--border-hairline) solid var(--color-border);
+}
+
+.landing-table {
+    width: 100%;
+}
+
+.landing-mock {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 16px;
+}
+
+.landing-mock-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 800px) {
+    .landing-mock,
+    .landing-mock-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
 .mud-main-content {
     padding-top: var(--mud-appbar-height, 64px);
 }

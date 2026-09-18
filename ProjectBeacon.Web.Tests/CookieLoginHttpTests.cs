@@ -34,6 +34,16 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
+    public async Task Landing_Anonymous_Ok_NotPermanentRedirect()
+    {
+        await using var factory = new WebTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var response = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    [Fact]
     public async Task RecoverPage_AccessibleToAnonymous()
     {
         await using var factory = new WebTestFactory();

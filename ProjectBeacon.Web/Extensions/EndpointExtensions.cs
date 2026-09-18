@@ -14,9 +14,6 @@ public static class EndpointExtensions
 {
     public static WebApplication MapEndpoints(this WebApplication app)
     {
-        app.MapWhen(ctx => ctx.Request.Path == "/",
-            builder => builder.Run(async ctx => { ctx.Response.Redirect("/dashboard", permanent: true); }));
-
         app.MapGet("/health", async (BeaconDbContext db) =>
         {
             var ok = await db.Database.CanConnectAsync();

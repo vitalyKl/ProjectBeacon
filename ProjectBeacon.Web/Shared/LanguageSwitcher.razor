@@ -39,8 +39,6 @@
     private void OnSelect(string culture)
     {
         var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
-        if (string.IsNullOrEmpty(returnUrl))
-            returnUrl = "dashboard";
         Navigation.NavigateTo($"/culture?culture={Uri.EscapeDataString(culture)}&returnUrl={Uri.EscapeDataString("/" + returnUrl)}", forceLoad: true);
     }
 
