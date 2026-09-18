@@ -410,6 +410,7 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.LaunchCommand).IsRequired().HasMaxLength(1000);
             entity.Property(e => e.ContextSize).IsRequired();
             entity.Property(e => e.Ttl).IsRequired();
+            entity.Property(e => e.Concurrent).IsRequired();
             entity.Ignore(e => e.ExtraFlags);
             entity.Property(e => e.ExtraFlagsJson).IsRequired();
             entity.Property(e => e.UpdatedAt);

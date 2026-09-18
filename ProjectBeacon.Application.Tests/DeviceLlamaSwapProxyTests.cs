@@ -37,6 +37,21 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
     }
 
     [Fact]
+    public void ParseProbe_ReadsLoadedModelsAndHostLoad()
+    {
+        var status = DeviceLlamaSwapProxy.ParseProbe(
+            """{"llamaSwapStatus":{"available":true,"healthy":true,"loadedModel":"qwen, embed","loadedModels":[{"name":"qwen","state":"ready"},{"name":"embed","state":"starting"}]},"hostLoad":{"cpuPercent":12.5,"ramUsedBytes":1024,"ramTotalBytes":4096,"gpu":{"name":"RTX","utilizationPercent":40,"memoryUsedBytes":100,"memoryTotalBytes":200},"sampledAt":"2026-09-18T12:00:00Z"}}""");
+        Assert.NotNull(status);
+        Assert.Equal(2, status!.LoadedModels!.Count);
+        Assert.Equal("qwen", status.LoadedModels[0].Name);
+        Assert.Equal("starting", status.LoadedModels[1].State);
+        Assert.Equal(12.5, status.Host!.CpuPercent);
+        Assert.Equal(1024, status.Host.RamUsedBytes);
+        Assert.Equal("RTX", status.Host.Gpu!.Name);
+        Assert.Equal(40, status.Host.Gpu.UtilizationPercent);
+    }
+
+    [Fact]
     public async Task GetStatus_UsesOnlineDeviceProbe()
     {
         Guid projectId;
@@ -84,7 +99,7 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            _db.LocalModelBackends.Add(LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, project.Id));
+            _db.LocalModelBackends.Add(LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, project.Id, concurrent: true));
             await _db.SaveChangesAsync();
             var created = await new CreateDeviceHandler(HandlerSqlite.Factory(_connection))
                 .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
@@ -98,6 +113,8 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
         Assert.True(result.Success, result.Error);
         Assert.Contains("qwen", result.Value!.Yaml);
         Assert.Contains("llama-server", result.Value.Yaml);
+        Assert.Contains("groups:", result.Value.Yaml);
+        Assert.Contains("resident:", result.Value.Yaml);
         Assert.Equal(8080, result.Value.Port);
     }
 }

@@ -367,7 +367,7 @@ public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigComma
                 .OrderBy(b => b.Name)
                 .ToListAsync(ct);
         var specs = backends
-            .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags))
+            .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags, b.Concurrent))
             .ToList();
         return Result.Ok(new LlamaSwapConfigDto(LlamaSwapConfigGenerator.Generate(specs), 8080));
     }

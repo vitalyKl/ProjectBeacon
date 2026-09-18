@@ -1,0 +1,76 @@
+@using ProjectBeacon.Infrastructure.LlamaSwap
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+@if (Status is not null)
+{
+    @if (Status.Host is { } host)
+    {
+        @if (host.SampledAt is { } at)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@string.Format(L["ReportedAt"].Value, at.ToLocalTime().ToString("g"))</MudText>
+        }
+        @if (host.CpuPercent is { } cpu)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["Cpu"] @cpu.ToString("0")%</MudText>
+            <MudProgressLinear Value="@cpu" Color="Color.Info" Size="Size.Small" />
+        }
+        @if (RamPercent(host) is { } ram)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["Ram"] @Bytes(host.RamUsedBytes) / @Bytes(host.RamTotalBytes)</MudText>
+            <MudProgressLinear Value="@ram" Color="Color.Info" Size="Size.Small" />
+        }
+        @if (host.Gpu is { } gpu)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["Gpu"] @(gpu.Name ?? "-") @(gpu.UtilizationPercent is { } u ? u.ToString("0") + "%" : "")</MudText>
+            @if (gpu.UtilizationPercent is { } util)
+            {
+                <MudProgressLinear Value="@util" Color="Color.Warning" Size="Size.Small" />
+            }
+            @if (gpu.MemoryUsedBytes is not null && gpu.MemoryTotalBytes is not null)
+            {
+                <MudText Typo="Typo.caption">@L["Vram"] @Bytes(gpu.MemoryUsedBytes) / @Bytes(gpu.MemoryTotalBytes)</MudText>
+            }
+        }
+    }
+    @if (Status.LoadedModels is { Count: > 0 } models)
+    {
+        <MudText Typo="Typo.caption" Class="mt-3">@L["LoadedModels"]</MudText>
+        <MudTable Items="@models" Dense="true" Hover="false" Elevation="0" Class="mt-1">
+            <HeaderContent>
+                <MudTh>@L["ModelName"]</MudTh>
+                <MudTh>@L["Status"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.State</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mt-2">@L["LoadedModel"]: @(Status.LoadedModel ?? "-")</MudText>
+    }
+}
+
+@code {
+    [Parameter] public LlamaSwapStatusDto? Status { get; set; }
+
+    private static double? RamPercent(HostLoadDto host) =>
+        host.RamTotalBytes is > 0 && host.RamUsedBytes is { } used
+            ? Math.Clamp(100d * used / host.RamTotalBytes.Value, 0, 100)
+            : null;
+
+    private static string Bytes(long? value)
+    {
+        if (value is null)
+            return "-";
+        var n = (double)value.Value;
+        const double mb = 1024d * 1024d;
+        const double gb = mb * 1024d;
+        if (n >= gb)
+            return (n / gb).ToString("0.00") + " GB";
+        if (n >= mb)
+            return (n / mb).ToString("0.00") + " MB";
+        return n.ToString("0") + " B";
+    }
+}

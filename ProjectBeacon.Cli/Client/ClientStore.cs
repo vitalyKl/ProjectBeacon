@@ -8,6 +8,11 @@ public sealed class ClientStore
     public string Token { get; set; } = "";
     public Guid DeviceId { get; set; }
 
+    public bool HasCredentials =>
+        !string.IsNullOrWhiteSpace(Url) && !string.IsNullOrWhiteSpace(Token);
+
+    public static bool NeedsWizard(ClientStore store) => !store.HasCredentials;
+
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon", "client.json");
 

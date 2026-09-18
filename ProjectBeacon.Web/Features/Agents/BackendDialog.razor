@@ -30,6 +30,8 @@
 }
 <MudNumericField T="int" @bind-Value="_contextSize" Label="@L["ContextSize"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
 <MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
+<MudSwitch @bind-Value="_concurrent" Label="@L["LoadWithOthers"]" Color="Color.Primary" Class="mt-3" />
+<MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LoadWithOthersHint"]</MudText>
 <MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
 <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
     <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
@@ -47,6 +49,7 @@
     private string _launchCommand = string.Empty;
     private int _contextSize = 4096;
     private int _ttl = 300;
+    private bool _concurrent;
     private string _extraFlags = string.Empty;
     private bool _saving;
     private string? _gguf;
@@ -61,6 +64,7 @@
             _launchCommand = backend.LaunchCommand;
             _contextSize = backend.ContextSize;
             _ttl = backend.Ttl;
+            _concurrent = backend.Concurrent;
             _extraFlags = string.Join(", ", backend.ExtraFlags);
         }
     }
@@ -137,7 +141,7 @@
                 .ToList();
             var result = await SaveBackend.HandleAsync(new UpsertLocalModelBackendCommand(new UpsertLocalModelBackendRequest(
                 Backend?.Id, _name, _type, _launchCommand, _contextSize, _ttl,
-                flags.Count > 0 ? flags : null)));
+                flags.Count > 0 ? flags : null, _concurrent)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

@@ -54,6 +54,7 @@ else
                     <MudTh>@L["LaunchCommand"]</MudTh>
                     <MudTh>@L["ContextSize"]</MudTh>
                     <MudTh>@L["Ttl"]</MudTh>
+                    <MudTh>@L["LoadWithOthers"]</MudTh>
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
@@ -62,6 +63,7 @@ else
                     <MudTd DataLabel="@L["LaunchCommand"]">@context.LaunchCommand</MudTd>
                     <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
                     <MudTd DataLabel="@L["Ttl"]">@context.Ttl</MudTd>
+                    <MudTd DataLabel="@L["LoadWithOthers"]">@(context.Concurrent ? L["Yes"].Value : L["No"].Value)</MudTd>
                     <MudTd>
                         <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditModel(context)">@L["Edit"]</MudButton>
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteModel(context)">@L["Delete"]</MudButton>
@@ -178,8 +180,8 @@ else
         else
         {
             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@StatusColor">@StatusText</MudChip>
-            <MudText Typo="Typo.body2" Class="mt-2">@L["LoadedModel"]: @(_status.LoadedModel ?? "-")</MudText>
-            <MudText Typo="Typo.body2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
+            <HostLoadView Status="_status" />
+            <MudText Typo="Typo.body2" Class="mt-2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
             <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
             @if (_status.Error is not null)
             {

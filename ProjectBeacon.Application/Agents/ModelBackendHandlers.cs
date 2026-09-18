@@ -24,7 +24,7 @@ internal static class ModelBackendMappers
 {
     public static LocalModelBackendDto ToDto(LocalModelBackend backend) =>
         new(backend.Id, backend.Name, backend.BackendType, backend.LaunchCommand,
-            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.ProjectId, backend.UpdatedAt);
+            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.ProjectId, backend.UpdatedAt, backend.Concurrent);
 
     public static RoleBindingDto ToDto(RoleBinding binding) =>
         new(binding.Id, binding.Role, binding.ModelBackendId, binding.ProjectId);
@@ -56,13 +56,13 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             var existing = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == id, ct);
             if (existing is null)
                 return Result.Failure<LocalModelBackendDto>("Model backend not found.");
-            existing.Update(name, request.BackendType, request.LaunchCommand, request.ContextSize, request.Ttl, request.ExtraFlags);
+            existing.Update(name, request.BackendType, request.LaunchCommand, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent);
             await db.SaveChangesAsync(ct);
             return Result.Ok(ModelBackendMappers.ToDto(existing));
         }
 
         var backend = LocalModelBackend.Create(name, request.BackendType, request.LaunchCommand,
-            request.ContextSize, request.Ttl, projectId, request.ExtraFlags);
+            request.ContextSize, request.Ttl, projectId, request.ExtraFlags, request.Concurrent);
         db.LocalModelBackends.Add(backend);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ModelBackendMappers.ToDto(backend));

@@ -72,7 +72,7 @@ Self-host: copy `.env.example` to `.env`, set `POSTGRES_PASSWORD` and/or `Connec
 
 Local MCP: `dotnet run --project ProjectBeacon.Cli -- mcp --root .` (stdio). See `.net project docs/mcp-host.md`.
 
-Workstation client (outbound to the control plane): mint a device in Settings or `beacon client enroll --url <api> --login <user> --password <pass>`, then `dotnet run --project ProjectBeacon.Cli -- client --url <api> --token <bcd_…>`. The Web host does not read the user's disk and does not start llama-swap.
+Workstation client (outbound to the control plane): `dotnet run --project ProjectBeacon.Cli -- client` opens the TUI walkthrough and dashboard. Headless: `beacon client enroll --url <api> --login <user> --password <pass>` then `dotnet run --project ProjectBeacon.Cli -- client --url <api> --token <bcd_…> --headless`. The Web host does not read the user's disk and does not start llama-swap.
 
 Edit the living brief in Context. Export `AGENTS.md` when a host only reads the repo. Import is a one-time bootstrap from an existing file, not the ongoing source of truth.
 

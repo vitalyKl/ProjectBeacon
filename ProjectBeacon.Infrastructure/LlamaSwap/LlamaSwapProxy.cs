@@ -1,12 +1,29 @@
 namespace ProjectBeacon.Infrastructure.LlamaSwap;
 
+public record LoadedModelStatus(string Name, string State);
+
+public record GpuLoadDto(
+    string? Name,
+    double? UtilizationPercent,
+    long? MemoryUsedBytes,
+    long? MemoryTotalBytes);
+
+public record HostLoadDto(
+    double? CpuPercent,
+    long? RamUsedBytes,
+    long? RamTotalBytes,
+    GpuLoadDto? Gpu,
+    DateTimeOffset? SampledAt);
+
 public record LlamaSwapStatusDto(
     bool Available,
     bool Healthy,
     string? LoadedModel,
     string? Memory,
     DateTime? LastSwap,
-    string? Error);
+    string? Error,
+    IReadOnlyList<LoadedModelStatus>? LoadedModels = null,
+    HostLoadDto? Host = null);
 
 public interface ILlamaSwapProxy
 {

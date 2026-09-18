@@ -74,6 +74,35 @@ public sealed class LlamaSwapConfigGeneratorTests
     }
 
     [Fact]
+    public void Generate_ConcurrentModels_EmitsResidentGroup()
+    {
+        var config = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("embed", "llama-server -m e.gguf --port ${PORT}", 0, 0, [], Concurrent: true),
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf --port ${PORT}", 0, 300, [])]);
+
+        Assert.Contains("groups:", config);
+        Assert.Contains("  resident:", config);
+        Assert.Contains("    swap: false", config);
+        Assert.Contains("    exclusive: false", config);
+        Assert.Contains("    persistent: true", config);
+        Assert.Contains("      - embed", config);
+        Assert.Contains("  swap:", config);
+        Assert.Contains("    swap: true", config);
+        Assert.Contains("      - qwen", config);
+        var modelsIdx = config.IndexOf("models:", StringComparison.Ordinal);
+        var groupsIdx = config.IndexOf("groups:", StringComparison.Ordinal);
+        Assert.True(modelsIdx >= 0 && groupsIdx > modelsIdx);
+    }
+
+    [Fact]
+    public void Generate_NoConcurrent_OmitsGroups()
+    {
+        var config = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 0, 0, [])]);
+        Assert.DoesNotContain("groups:", config);
+    }
+
+    [Fact]
     public void Generate_SortsByNameForStableOutput()
     {
         var config = LlamaSwapConfigGenerator.Generate([

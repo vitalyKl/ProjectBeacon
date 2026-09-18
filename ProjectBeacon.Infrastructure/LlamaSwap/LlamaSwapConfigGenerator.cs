@@ -9,7 +9,8 @@ public sealed record LlamaSwapModelSpec(
     string LaunchCommand,
     int ContextSize,
     int Ttl,
-    IReadOnlyList<string> ExtraFlags);
+    IReadOnlyList<string> ExtraFlags,
+    bool Concurrent = false);
 
 public static class LlamaSwapConfigGenerator
 {
@@ -22,15 +23,42 @@ public static class LlamaSwapConfigGenerator
 
         // \n regardless of platform: the file is consumed by llama-swap on any OS.
         var used = new Dictionary<string, int>();
+        var emitted = new List<(string Key, bool Concurrent)>();
         var sb = new StringBuilder();
         sb.Append("models:\n");
         foreach (var model in models.OrderBy(m => m.Name, StringComparer.Ordinal))
         {
-            sb.Append("  ").Append(QuoteKey(ResolveKey(model.Name, used))).Append(":\n");
+            var key = ResolveKey(model.Name, used);
+            emitted.Add((key, model.Concurrent));
+            sb.Append("  ").Append(QuoteKey(key)).Append(":\n");
             sb.Append("    cmd: ").Append(QuoteScalar(BuildCommand(model))).Append('\n');
             if (model.Ttl > 0)
                 sb.Append("    ttl: ").Append(model.Ttl.ToString(CultureInfo.InvariantCulture)).Append('\n');
         }
+
+        var resident = emitted.Where(e => e.Concurrent).Select(e => e.Key).ToList();
+        if (resident.Count == 0)
+            return sb.ToString();
+
+        sb.Append("groups:\n");
+        sb.Append("  resident:\n");
+        sb.Append("    swap: false\n");
+        sb.Append("    exclusive: false\n");
+        sb.Append("    persistent: true\n");
+        sb.Append("    members:\n");
+        foreach (var key in resident)
+            sb.Append("      - ").Append(QuoteKey(key)).Append('\n');
+
+        var swap = emitted.Where(e => !e.Concurrent).Select(e => e.Key).ToList();
+        if (swap.Count == 0)
+            return sb.ToString();
+
+        sb.Append("  swap:\n");
+        sb.Append("    swap: true\n");
+        sb.Append("    exclusive: true\n");
+        sb.Append("    members:\n");
+        foreach (var key in swap)
+            sb.Append("      - ").Append(QuoteKey(key)).Append('\n');
         return sb.ToString();
     }
 

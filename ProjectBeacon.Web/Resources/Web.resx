@@ -667,6 +667,30 @@
   <data name="LoadedModel" xml:space="preserve">
     <value>Loaded model</value>
   </data>
+  <data name="LoadedModels" xml:space="preserve">
+    <value>Loaded models</value>
+  </data>
+  <data name="LoadWithOthers" xml:space="preserve">
+    <value>Load with others</value>
+  </data>
+  <data name="LoadWithOthersHint" xml:space="preserve">
+    <value>Keep this model loaded alongside others (llama-swap group, swap: false). Launch command must use ${PORT}.</value>
+  </data>
+  <data name="Cpu" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="Ram" xml:space="preserve">
+    <value>RAM</value>
+  </data>
+  <data name="Gpu" xml:space="preserve">
+    <value>GPU</value>
+  </data>
+  <data name="Vram" xml:space="preserve">
+    <value>VRAM</value>
+  </data>
+  <data name="ReportedAt" xml:space="preserve">
+    <value>As of {0}</value>
+  </data>
   <data name="Memory" xml:space="preserve">
     <value>Memory</value>
   </data>
@@ -1092,5 +1116,71 @@
   </data>
   <data name="InstallQueued" xml:space="preserve">
     <value>Install command sent to the device.</value>
+  </data>
+  <data name="ProjectBrief" xml:space="preserve">
+    <value>Project brief</value>
+  </data>
+  <data name="EditInContext" xml:space="preserve">
+    <value>Edit in Context</value>
+  </data>
+  <data name="NoBrief" xml:space="preserve">
+    <value>No Goals or Definition of Done yet. Open Context to write those sections.</value>
+  </data>
+  <data name="Queue" xml:space="preserve">
+    <value>Queue</value>
+  </data>
+  <data name="NoReadyTasks" xml:space="preserve">
+    <value>No ready tasks. Move a card to Todo and an agent can call start_work.</value>
+  </data>
+  <data name="OpenMilestones" xml:space="preserve">
+    <value>{0} open</value>
+  </data>
+  <data name="NoOpenMilestones" xml:space="preserve">
+    <value>No open milestones yet.</value>
+  </data>
+  <data name="AgentsActive" xml:space="preserve">
+    <value>{0} active</value>
+  </data>
+  <data name="NoAgentSessions" xml:space="preserve">
+    <value>No active agent sessions.</value>
+  </data>
+  <data name="None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="EditTask" xml:space="preserve">
+    <value>Edit task</value>
+  </data>
+  <data name="PathPrefix" xml:space="preserve">
+    <value>Path prefix</value>
+  </data>
+  <data name="DeleteLabelConfirm" xml:space="preserve">
+    <value>Delete this label? Tasks keep their other fields.</value>
+  </data>
+  <data name="ExportAgentsMd" xml:space="preserve">
+    <value>Export AGENTS.md</value>
+  </data>
+  <data name="Deprecate" xml:space="preserve">
+    <value>Deprecate</value>
+  </data>
+  <data name="Supersede" xml:space="preserve">
+    <value>Supersede</value>
+  </data>
+  <data name="Replacement" xml:space="preserve">
+    <value>Replacement</value>
+  </data>
+  <data name="ProbeGit" xml:space="preserve">
+    <value>git</value>
+  </data>
+  <data name="ProbeOpencode" xml:space="preserve">
+    <value>opencode</value>
+  </data>
+  <data name="ProbeNode" xml:space="preserve">
+    <value>node</value>
+  </data>
+  <data name="ProbeDocker" xml:space="preserve">
+    <value>docker</value>
+  </data>
+  <data name="ProbeLlamaSwap" xml:space="preserve">
+    <value>llama-swap</value>
   </data>
 </root>

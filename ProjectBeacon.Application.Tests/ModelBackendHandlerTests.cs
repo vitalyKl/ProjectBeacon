@@ -85,6 +85,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal(8192, dto.ContextSize);
         Assert.Equal(300, dto.Ttl);
         Assert.Equal(new[] { "--no-mmap" }, dto.ExtraFlags);
+        Assert.False(dto.Concurrent);
         Assert.Equal(projectId, dto.ProjectId);
         Assert.NotNull(dto.UpdatedAt);
         Assert.Equal(1, await CountBackendsAsync());
@@ -107,7 +108,24 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal("new", updated.Value.Name);
         Assert.Equal(ModelBackendType.OpenAiCompatible, updated.Value.BackendType);
         Assert.Equal(2048, updated.Value.ContextSize);
+        Assert.False(updated.Value.Concurrent);
         Assert.Equal(1, await CountBackendsAsync());
+    }
+
+    [Fact]
+    public async Task Upsert_PersistsConcurrentFlag()
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
+        var created = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
+            new UpsertLocalModelBackendRequest(null, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, null, true)));
+        Assert.True(created.Success, created.Error);
+        Assert.True(created.Value!.Concurrent);
+
+        var updated = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
+            new UpsertLocalModelBackendRequest(created.Value.Id, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, null, false)));
+        Assert.True(updated.Success, updated.Error);
+        Assert.False(updated.Value!.Concurrent);
     }
 
     [Fact]

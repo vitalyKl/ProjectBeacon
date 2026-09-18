@@ -13,7 +13,8 @@ public record LocalModelBackendDto(
     int Ttl,
     IReadOnlyList<string> ExtraFlags,
     Guid ProjectId,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    bool Concurrent = false);
 
 public record RoleBindingDto(
     Guid Id,
@@ -33,7 +34,8 @@ public record UpsertLocalModelBackendRequest(
     string LaunchCommand,
     int ContextSize,
     int Ttl,
-    IReadOnlyList<string>? ExtraFlags = null);
+    IReadOnlyList<string>? ExtraFlags = null,
+    bool Concurrent = false);
 
 public record UpsertLocalModelBackendCommand(UpsertLocalModelBackendRequest Request) : ICommand<Result<LocalModelBackendDto>>;
 

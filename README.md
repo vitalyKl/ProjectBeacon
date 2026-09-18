@@ -17,18 +17,21 @@ Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Reports,
 
 The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (init repo, OpenCode config, llama-swap, install).
 
-1. In Settings, **Add device** and copy the `bcd_` token (shown once), or enroll from the CLI:
+1. In a terminal, run the first-run walkthrough (URL, sign-in, paths, probe/install, Windows autostart):
+   ```
+   dotnet run --project ProjectBeacon.Cli -- client
+   ```
+   Keep that window open. Keys: **S** settings, **P** probe, **R**/**U** llama-swap reload/unload, **A** autostart, **L** log, **O** open Web, **Q** quit.
+2. Non-interactive enroll (CI / `--headless`):
    ```
    dotnet run --project ProjectBeacon.Cli -- client enroll --url http://localhost:5083 --login <user> --password <pass>
+   dotnet run --project ProjectBeacon.Cli -- client --url http://localhost:5083 --token <bcd_…> --headless
    ```
-2. Keep the client running:
-   ```
-   dotnet run --project ProjectBeacon.Cli -- client --url http://localhost:5083 --token <bcd_…>
-   ```
+   Or mint a device in Settings and paste the `bcd_` token (shown once) into the walkthrough or `--token`.
 3. Create a project (`/projects/new`), pick the online device, browse its disk, optionally initialize `.gitignore` + `opencode.json`.
-4. Agents: Solo/Pipeline models and MCP catalog apply on the selected device. Settings: models/history paths and winget install (git/node/docker) after Confirm.
+4. Agents: Solo/Pipeline models and MCP catalog apply on the selected device. Settings: models/history paths and winget install (git/node/docker) after Confirm. Mark a backend **Load with others** so llama-swap keeps it resident (`groups.resident`). Agents and Dashboard show CPU/RAM/GPU from the client heartbeat.
 
-llama-swap is started by the client (`GET /v1/devices/me/llamaswap-config`), not by the Web process.
+llama-swap is started by the client (`GET /v1/devices/me/llamaswap-config`), not by the Web process. Concurrent backends must use `${PORT}` in the launch command.
 
 ## Agent MCP
 

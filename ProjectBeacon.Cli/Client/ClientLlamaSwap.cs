@@ -1,7 +1,6 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
-using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,29 +12,43 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
     private Process? _process;
     private string _lastHash = "";
+    private string? _lastBin;
     private int _port = 8080;
     private DateTime? _lastSwap;
     private string? _lastLoaded;
+    private bool _runningFake;
 
     public LlamaSwapStatusDto Status { get; private set; } =
         new(false, false, null, null, null, "llama-swap is not started on this device.");
+
+    public int Port => _port;
+
+    internal int StartCount { get; private set; }
+    internal bool SkipRealProcess { get; set; }
+    internal string ConfigFile { get; set; } = ConfigPath;
 
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ProjectBeacon", "llama-swap", "config.yaml");
 
+    internal static bool ShouldRestart(
+        string hash, string lastHash, int port, int lastPort, string bin, string? lastBin, bool running) =>
+        !running
+        || !string.Equals(hash, lastHash, StringComparison.Ordinal)
+        || port != lastPort
+        || !string.Equals(bin, lastBin, StringComparison.OrdinalIgnoreCase);
+
     public async Task TickAsync(string yaml, int port, string? binPath, CancellationToken ct)
     {
-        _port = port <= 0 ? 8080 : port;
+        var nextPort = port <= 0 ? 8080 : port;
         var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(yaml)));
         if (hash != _lastHash)
         {
-            var dir = Path.GetDirectoryName(ConfigPath)!;
+            var dir = Path.GetDirectoryName(ConfigFile)!;
             Directory.CreateDirectory(dir);
-            var tmp = ConfigPath + ".tmp";
+            var tmp = ConfigFile + ".tmp";
             await File.WriteAllTextAsync(tmp, yaml, ct);
-            File.Move(tmp, ConfigPath, overwrite: true);
-            _lastHash = hash;
+            File.Move(tmp, ConfigFile, overwrite: true);
         }
 
         var bin = binPath;
@@ -43,11 +56,33 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             bin = WorkstationActions.Which("llama-swap") ?? WorkstationActions.Which("llama-swap.exe");
         if (string.IsNullOrWhiteSpace(bin))
         {
+            KillProcess();
+            _lastHash = hash;
+            _port = nextPort;
+            _lastBin = null;
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap binary not found on this device.");
             return;
         }
 
+        if (ShouldRestart(hash, _lastHash, nextPort, _port, bin, _lastBin, IsRunning))
+            KillProcess();
+
+        _lastHash = hash;
+        _port = nextPort;
+        _lastBin = bin;
         EnsureProcess(bin);
+        await PollAsync(ct);
+    }
+
+    public async Task ReloadAsync(CancellationToken ct)
+    {
+        KillProcess();
+        if (string.IsNullOrWhiteSpace(_lastBin))
+        {
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap binary not found on this device.");
+            return;
+        }
+        EnsureProcess(_lastBin);
         await PollAsync(ct);
     }
 
@@ -71,15 +106,25 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         available = Status.Available,
         healthy = Status.Healthy,
         loadedModel = Status.LoadedModel,
+        loadedModels = Status.LoadedModels?.Select(m => new { name = m.Name, state = m.State }).ToList(),
         memory = Status.Memory,
         lastSwap = Status.LastSwap,
         error = Status.Error
     };
 
+    private bool IsRunning => SkipRealProcess ? _runningFake : _process is { HasExited: false };
+
     private void EnsureProcess(string bin)
     {
-        if (_process is { HasExited: false })
+        if (IsRunning)
             return;
+        StartCount++;
+        if (SkipRealProcess)
+        {
+            _runningFake = true;
+            Status = new LlamaSwapStatusDto(true, true, null, null, null, null);
+            return;
+        }
         var psi = new ProcessStartInfo
         {
             FileName = bin,
@@ -89,7 +134,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             CreateNoWindow = true
         };
         psi.ArgumentList.Add("-config");
-        psi.ArgumentList.Add(ConfigPath);
+        psi.ArgumentList.Add(ConfigFile);
         psi.ArgumentList.Add("-listen");
         psi.ArgumentList.Add($"127.0.0.1:{_port}");
         var process = new Process { StartInfo = psi };
@@ -103,8 +148,29 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         _process = process;
     }
 
+    private void KillProcess()
+    {
+        if (SkipRealProcess)
+        {
+            _runningFake = false;
+            return;
+        }
+        if (_process is { HasExited: false })
+        {
+            try { _process.Kill(entireProcessTree: true); } catch { }
+            try { _process.WaitForExit(2000); } catch { }
+        }
+        _process?.Dispose();
+        _process = null;
+    }
+
     private async Task PollAsync(CancellationToken ct)
     {
+        if (SkipRealProcess)
+        {
+            Status = new LlamaSwapStatusDto(true, true, null, null, null, null);
+            return;
+        }
         try
         {
             using var health = await _http.GetAsync($"http://127.0.0.1:{_port}/health", ct);
@@ -114,10 +180,11 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
                 return;
             }
             var loaded = await FetchLoadedAsync(ct);
-            if (loaded is not null && loaded != _lastLoaded)
+            var joined = loaded.Count > 0 ? string.Join(", ", loaded.Select(m => m.Name)) : null;
+            if (joined is not null && joined != _lastLoaded)
                 _lastSwap = DateTime.UtcNow;
-            _lastLoaded = loaded;
-            Status = new LlamaSwapStatusDto(true, true, loaded, await FetchMemoryAsync(ct), _lastSwap, null);
+            _lastLoaded = joined;
+            Status = new LlamaSwapStatusDto(true, true, joined, await FetchMemoryAsync(ct), _lastSwap, null, loaded);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -125,15 +192,15 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         }
     }
 
-    private async Task<string?> FetchLoadedAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<LoadedModelStatus>> FetchLoadedAsync(CancellationToken ct)
     {
         try
         {
             var json = await _http.GetStringAsync($"http://127.0.0.1:{_port}/running", ct);
             using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("running", out var arr) || arr.ValueKind != JsonValueKind.Array)
-                return null;
-            var names = new List<string>();
+                return [];
+            var names = new List<LoadedModelStatus>();
             foreach (var element in arr.EnumerateArray())
             {
                 var state = element.TryGetProperty("state", out var s) ? s.GetString() : null;
@@ -141,13 +208,13 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
                     continue;
                 var model = element.TryGetProperty("model", out var m) ? m.GetString() : null;
                 if (!string.IsNullOrWhiteSpace(model))
-                    names.Add(model!);
+                    names.Add(new LoadedModelStatus(model!, state!));
             }
-            return names.Count > 0 ? string.Join(", ", names) : null;
+            return names;
         }
         catch
         {
-            return null;
+            return [];
         }
     }
 
@@ -172,7 +239,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
                 var name = (brace < 0 ? namePart : namePart[..brace]).Trim();
                 if (!Regex.IsMatch(name, "(?i)memory|vram|rss|resident"))
                     continue;
-                return trimmed[(idx + 1)..].Trim();
+                return HostLoadSampler.FormatMemory(trimmed[(idx + 1)..].Trim());
             }
         }
         catch
@@ -183,11 +250,8 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_process is { HasExited: false })
-        {
-            try { _process.Kill(entireProcessTree: true); } catch { }
-            try { await _process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)); } catch { }
-        }
+        KillProcess();
         _http.Dispose();
+        await Task.CompletedTask;
     }
 }

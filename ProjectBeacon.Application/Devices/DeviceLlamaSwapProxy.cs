@@ -96,11 +96,63 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
                 && DateTime.TryParse(swap.GetString(), out var parsed))
                 lastSwap = parsed.ToUniversalTime();
             var error = status.TryGetProperty("error", out var err) ? err.GetString() : null;
-            return new LlamaSwapStatusDto(available, healthy, loaded, memory, lastSwap, error);
+            var models = ParseLoadedModels(status, loaded);
+            var host = doc.RootElement.TryGetProperty("hostLoad", out var hostEl)
+                ? ParseHost(hostEl)
+                : null;
+            return new LlamaSwapStatusDto(available, healthy, loaded, memory, lastSwap, error, models, host);
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    private static IReadOnlyList<LoadedModelStatus> ParseLoadedModels(JsonElement status, string? loaded)
+    {
+        if (status.TryGetProperty("loadedModels", out var arr) && arr.ValueKind == JsonValueKind.Array)
+        {
+            var list = new List<LoadedModelStatus>();
+            foreach (var el in arr.EnumerateArray())
+            {
+                var name = el.TryGetProperty("name", out var n) ? n.GetString() : null;
+                var state = el.TryGetProperty("state", out var s) ? s.GetString() : "ready";
+                if (!string.IsNullOrWhiteSpace(name))
+                    list.Add(new LoadedModelStatus(name, state ?? "ready"));
+            }
+            if (list.Count > 0)
+                return list;
+        }
+        if (string.IsNullOrWhiteSpace(loaded))
+            return [];
+        return loaded.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(name => new LoadedModelStatus(name, "ready"))
+            .ToList();
+    }
+
+    private static HostLoadDto? ParseHost(JsonElement host)
+    {
+        if (host.ValueKind != JsonValueKind.Object)
+            return null;
+        double? cpu = host.TryGetProperty("cpuPercent", out var cpuEl) && cpuEl.TryGetDouble(out var cpuVal) ? cpuVal : null;
+        long? ramUsed = host.TryGetProperty("ramUsedBytes", out var usedEl) && usedEl.TryGetInt64(out var usedVal) ? usedVal : null;
+        long? ramTotal = host.TryGetProperty("ramTotalBytes", out var totalEl) && totalEl.TryGetInt64(out var totalVal) ? totalVal : null;
+        DateTimeOffset? sampled = null;
+        if (host.TryGetProperty("sampledAt", out var atEl) && atEl.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(atEl.GetString(), out var parsed))
+            sampled = parsed;
+        GpuLoadDto? gpu = null;
+        if (host.TryGetProperty("gpu", out var gpuEl) && gpuEl.ValueKind == JsonValueKind.Object)
+        {
+            var name = gpuEl.TryGetProperty("name", out var n) ? n.GetString() : null;
+            double? util = gpuEl.TryGetProperty("utilizationPercent", out var u) && u.TryGetDouble(out var uv) ? uv : null;
+            long? gUsed = gpuEl.TryGetProperty("memoryUsedBytes", out var gu) && gu.TryGetInt64(out var guv) ? guv : null;
+            long? gTotal = gpuEl.TryGetProperty("memoryTotalBytes", out var gt) && gt.TryGetInt64(out var gtv) ? gtv : null;
+            if (name is not null || util is not null || gUsed is not null)
+                gpu = new GpuLoadDto(name, util, gUsed, gTotal);
+        }
+        if (cpu is null && ramUsed is null && ramTotal is null && gpu is null)
+            return null;
+        return new HostLoadDto(cpu, ramUsed, ramTotal, gpu, sampled);
     }
 }

@@ -8,12 +8,13 @@ dotnet run --project ProjectBeacon.Cli -- mcp --root <project-root>
 
 Or after publish, `beacon mcp --root <project-root>`.
 
-llama-swap is started by `beacon client` on the device, not by the Web host. The client pulls `GET /v1/devices/me/llamaswap-config` and reports proxy status in heartbeat `probeJson.llamaSwapStatus`.
+llama-swap is started by `beacon client` on the device, not by the Web host. The client pulls `GET /v1/devices/me/llamaswap-config` and reports proxy status in heartbeat `probeJson.llamaSwapStatus` plus `probeJson.hostLoad` (CPU/RAM/GPU). Backends with `Concurrent` emit a llama-swap `groups.resident` block (`swap: false`, `persistent: true`) so they can stay loaded together; unmarked backends stay in the default swap group. Launch commands for concurrent models must use `${PORT}`.
 
-Local workstation client (outbound HTTPS to the control plane; no inbound port, no WSS file tunnel):
+Local workstation client (outbound HTTPS to the control plane; no inbound port, no WSS file tunnel). In a terminal, `beacon client` with no token opens a Spectre.Console first-run walkthrough and a live dashboard. `--headless` keeps the old stderr loop.
 
 ```
-dotnet run --project ProjectBeacon.Cli -- client --url <api> --token <bcd_…>
+dotnet run --project ProjectBeacon.Cli -- client
+dotnet run --project ProjectBeacon.Cli -- client --url <api> --token <bcd_…> --headless
 dotnet run --project ProjectBeacon.Cli -- client enroll --url <api> --login <user> --password <pass>
 ```
 

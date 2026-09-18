@@ -13,6 +13,7 @@ public class LocalModelBackend : Entity, IProjectScoped
     public string LaunchCommand { get; private set; } = string.Empty;
     public int ContextSize { get; private set; }
     public int Ttl { get; private set; }
+    public bool Concurrent { get; private set; }
     public Guid ProjectId { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
@@ -44,7 +45,8 @@ public class LocalModelBackend : Entity, IProjectScoped
         int contextSize,
         int ttl,
         Guid projectId,
-        IReadOnlyList<string>? extraFlags = null)
+        IReadOnlyList<string>? extraFlags = null,
+        bool concurrent = false)
     {
         var backend = Entity.New<LocalModelBackend>();
         backend.Name = name;
@@ -52,6 +54,7 @@ public class LocalModelBackend : Entity, IProjectScoped
         backend.LaunchCommand = launchCommand ?? string.Empty;
         backend.ContextSize = contextSize;
         backend.Ttl = ttl;
+        backend.Concurrent = concurrent;
         backend.ProjectId = projectId;
         backend.ExtraFlags = extraFlags ?? [];
         backend.UpdatedAt = DateTime.UtcNow;
@@ -64,13 +67,15 @@ public class LocalModelBackend : Entity, IProjectScoped
         string launchCommand,
         int contextSize,
         int ttl,
-        IReadOnlyList<string>? extraFlags = null)
+        IReadOnlyList<string>? extraFlags = null,
+        bool concurrent = false)
     {
         Name = name;
         BackendType = backendType;
         LaunchCommand = launchCommand ?? string.Empty;
         ContextSize = contextSize;
         Ttl = ttl;
+        Concurrent = concurrent;
         if (extraFlags is not null)
             ExtraFlags = extraFlags;
         UpdatedAt = DateTime.UtcNow;

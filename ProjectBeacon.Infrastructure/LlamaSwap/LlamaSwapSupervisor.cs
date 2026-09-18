@@ -172,7 +172,7 @@ public sealed class LlamaSwapSupervisor : BackgroundService, ILlamaSwapProxy
                 .OrderBy(b => b.Name)
                 .ToListAsync(ct);
             return backends
-                .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags))
+                .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags, b.Concurrent))
                 .ToList();
         }
     }
@@ -180,7 +180,7 @@ public sealed class LlamaSwapSupervisor : BackgroundService, ILlamaSwapProxy
     private static string HashRegistry(IReadOnlyList<LlamaSwapModelSpec> specs)
     {
         var payload = string.Join("\n", specs.Select(s =>
-            $"{s.Name}|{s.LaunchCommand}|{s.ContextSize}|{s.Ttl}|{string.Join(",", s.ExtraFlags)}"));
+            $"{s.Name}|{s.LaunchCommand}|{s.ContextSize}|{s.Ttl}|{s.Concurrent}|{string.Join(",", s.ExtraFlags)}"));
         using var sha = SHA256.Create();
         return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(payload)));
     }

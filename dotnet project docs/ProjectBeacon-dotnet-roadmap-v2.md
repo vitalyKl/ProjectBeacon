@@ -175,6 +175,8 @@ acceptance criterion was run.
 | C4 | Solo / Pipeline models | 🟡 | Agents UI Solo/Pipeline + Apply on device writes `opencode.json` provider/model/agent; GGUF pick from modelsRoot; `OpencodePayloadTests` + `ApplyAgentConfigHandlerTests` |
 | C5 | probe + install | 🟡 | Probe in heartbeat; Settings shows tools and Install git/node/docker via winget after Confirm |
 | C6 | llama-swap on client | 🟡 | Web no longer hosts llama-swap; client writes config from `/v1/devices/me/llamaswap-config` and reports status in heartbeat; Agents proxy uses device probe. `DeviceLlamaSwapProxyTests` |
+| C7 | Client TUI first-run + settings | 🟡 | `beacon client` in a TTY runs a Spectre.Console walkthrough (URL, enroll or token, paths, probe/install, Windows autostart) then a live dashboard; `--headless` is the stderr loop. Reload restarts llama-swap. `ClientDaemonTests` |
+| C8 | Parallel llama-swap models + host load | 🟡 | Per-backend `Concurrent` emits llama-swap `groups.resident` (`swap: false`, `persistent: true`). Heartbeat probe includes `loadedModels` + host CPU/RAM/GPU. Agents and Dashboard show load bars. `LlamaSwapConfigGeneratorTests` + `DeviceLlamaSwapProxyTests` + `ClientDaemonTests` |
 
 | O1 | K8s blue-green Web image | 🟡 | `Dockerfile` publishes Web; `deploy/k8s` blue/green + Service switch; migrate Job; `GET /v1/version`; release workflow on `v*` tags. Client auto-update is out of scope. |
 
