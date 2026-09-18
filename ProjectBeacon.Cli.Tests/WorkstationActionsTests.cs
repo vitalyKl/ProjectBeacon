@@ -96,6 +96,37 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public void ApplyOpencode_McpReplace_DropsPreviousServers()
+    {
+        var path = Path.Combine(_dir, "replace");
+        Directory.CreateDirectory(path);
+        File.WriteAllText(Path.Combine(path, "opencode.json"), """{"mcp":{"old":{"type":"remote","url":"https://old"}}}""");
+        var payload = new JsonObject
+        {
+            ["path"] = path,
+            ["mcpReplace"] = true,
+            ["mcp"] = new JsonObject
+            {
+                ["beacon"] = new JsonObject { ["type"] = "local", ["command"] = new JsonArray("beacon", "mcp") }
+            }
+        };
+        WorkstationActions.ApplyOpencode(payload.ToJsonString());
+        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
+        Assert.Contains("beacon", opc);
+        Assert.DoesNotContain("https://old", opc);
+    }
+
+    [Fact]
+    public void SaveWorkstation_WritesSettingsFile()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+        WorkstationActions.SaveWorkstation("""{"modelsRoot":"D:\\models","llamaSwapPort":9090}""", file);
+        var loaded = WorkstationSettings.Load(file);
+        Assert.Equal(@"D:\models", loaded.ModelsRoot);
+        Assert.Equal(9090, loaded.LlamaSwapPort);
+    }
+
+    [Fact]
     public void MergeGitignore_Idempotent()
     {
         var file = Path.Combine(_dir, ".gitignore");

@@ -127,8 +127,30 @@ public static class WorkstationActions
         var model = root.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
         var agent = root.TryGetProperty("agent", out var agentEl) ? agentEl : default;
         var provider = root.TryGetProperty("provider", out var providerEl) ? providerEl : default;
-        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider);
+        var replaceMcp = root.TryGetProperty("mcpReplace", out var replaceEl) && replaceEl.ValueKind == JsonValueKind.True;
+        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider, replaceMcp);
         return JsonSerializer.Serialize(new { path = opencodePath });
+    }
+
+    public static string SaveWorkstation(string payloadJson, string? settingsPath = null)
+    {
+        var settings = WorkstationSettings.Load(settingsPath);
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("modelsRoot", out var models) && models.ValueKind == JsonValueKind.String)
+            settings.ModelsRoot = models.GetString();
+        if (root.TryGetProperty("llamaCppBin", out var llama) && llama.ValueKind == JsonValueKind.String)
+            settings.LlamaCppBin = llama.GetString();
+        if (root.TryGetProperty("llamaSwapBin", out var swap) && swap.ValueKind == JsonValueKind.String)
+            settings.LlamaSwapBin = swap.GetString();
+        if (root.TryGetProperty("llamaSwapPort", out var port) && port.TryGetInt32(out var p) && p > 0)
+            settings.LlamaSwapPort = p;
+        if (root.TryGetProperty("opencodeDataDir", out var data) && data.ValueKind == JsonValueKind.String)
+            settings.OpencodeDataDir = data.GetString();
+        if (root.TryGetProperty("projectsRoot", out var projects) && projects.ValueKind == JsonValueKind.String)
+            settings.ProjectsRoot = projects.GetString();
+        settings.Save(settingsPath);
+        return JsonSerializer.Serialize(settings, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
     }
 
     public static string Install(string payloadJson)
@@ -254,7 +276,8 @@ public static class OpencodeConfig
         string? model,
         JsonElement agent,
         bool denyNativeFiles,
-        JsonElement provider = default)
+        JsonElement provider = default,
+        bool replaceMcp = false)
     {
         JsonObject root;
         if (File.Exists(path))
@@ -274,7 +297,7 @@ public static class OpencodeConfig
 
         if (mcp.ValueKind == JsonValueKind.Object)
         {
-            var mcpObj = root["mcp"] as JsonObject ?? new JsonObject();
+            var mcpObj = replaceMcp ? new JsonObject() : root["mcp"] as JsonObject ?? new JsonObject();
             foreach (var prop in mcp.EnumerateObject())
                 mcpObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
             root["mcp"] = mcpObj;

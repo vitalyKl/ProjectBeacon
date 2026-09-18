@@ -2,6 +2,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using System.Security.Claims
+@using System.Text.Json.Nodes
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
@@ -19,6 +20,7 @@
 @inject UnloadProxyHandler UnloadProxy
 @inject ListRuntimesHandler ListRuntimes
 @inject ApplyAgentConfigHandler ApplyAgentConfig
+@inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
@@ -130,6 +132,37 @@ else
     </MudPaper>
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["McpServers"]</MudText>
+        <MudCheckBox T="bool" Value="true" Disabled="true" Label="beacon" />
+        <MudCheckBox @bind-Value="_mcpContext7" Label="context7" />
+        <MudCheckBox @bind-Value="_mcpSerena" Label="serena" />
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-2">
+            <MudTextField @bind-Value="_customName" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="string" @bind-Value="_customType" Label="@L["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="@("local")">local</MudSelectItem>
+                <MudSelectItem Value="@("remote")">remote</MudSelectItem>
+            </MudSelect>
+            <MudTextField @bind-Value="_customCommand" Label="@(_customType == "remote" ? "URL" : "Command")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Outlined" OnClick="AddCustomMcp">@L["Create"]</MudButton>
+        </MudStack>
+        @if (_customMcps.Count > 0)
+        {
+            <MudList T="string" Dense="true" Class="mt-2">
+                @foreach (var server in _customMcps)
+                {
+                    <MudListItem T="string">
+                        @server.Name (@server.Type)
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveCustomMcp(server)">@L["Delete"]</MudButton>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyMcp" Disabled="_busy || _runtimeDeviceId is null">
+            @L["ApplyOnDevice"]
+        </MudButton>
+    </MudPaper>
+
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
             <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
             <MudStack Row="true" Spacing="2">
@@ -169,6 +202,12 @@ else
     private Guid? _solo;
     private Guid? _runtimeDeviceId;
     private List<ProjectRuntimeDto> _runtimes = [];
+    private bool _mcpContext7;
+    private bool _mcpSerena;
+    private string _customName = string.Empty;
+    private string _customType = "local";
+    private string _customCommand = string.Empty;
+    private List<CustomMcpServer> _customMcps = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -394,6 +433,54 @@ else
         }
         _status = result.Value;
         Snackbar.Add(L["ProxyUnloaded"].Value, Severity.Success);
+    }
+
+    private void AddCustomMcp()
+    {
+        if (string.IsNullOrWhiteSpace(_customName)) return;
+        _customMcps.Add(new CustomMcpServer(_customName.Trim(), _customType,
+            _customType == "local" ? _customCommand : null,
+            _customType == "remote" ? _customCommand : null));
+        _customName = string.Empty;
+        _customCommand = string.Empty;
+    }
+
+    private void RemoveCustomMcp(CustomMcpServer server) => _customMcps.Remove(server);
+
+    private async Task ApplyMcp()
+    {
+        if (_project is null || _runtimeDeviceId is not { } deviceId || _userId == Guid.Empty) return;
+        var runtime = _runtimes.FirstOrDefault(r => r.DeviceId == deviceId);
+        if (runtime is null) return;
+        _busy = true;
+        try
+        {
+            var mcp = McpCatalog.Build(runtime.LocalRoot, _mcpContext7, _mcpSerena, _customMcps);
+            var payload = new JsonObject
+            {
+                ["path"] = runtime.LocalRoot,
+                ["mcpReplace"] = true,
+                ["mcp"] = mcp
+            };
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.ApplyOpencode, payload.ToJsonString(), _project.Id)));
+            if (!queued.Success)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var finished = await WaitAsync(queued.Value!.Id);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ApplyOnDeviceDone"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task ApplyOnDevice()

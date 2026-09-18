@@ -9,5 +9,6 @@ public enum WorkstationCommandKind
     ApplyOpencode,
     ScanGguf,
     ReloadProxy,
-    UnloadProxy
+    UnloadProxy,
+    SaveWorkstation
 }

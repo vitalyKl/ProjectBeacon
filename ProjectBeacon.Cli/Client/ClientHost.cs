@@ -147,6 +147,7 @@ public static class ClientHost
                 WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(ReadPath(payload) ?? WorkstationSettings.Load().ModelsRoot),
                 WorkstationCommandKind.InitProject => WorkstationActions.InitProject(payload),
                 WorkstationCommandKind.ApplyOpencode => WorkstationActions.ApplyOpencode(payload),
+                WorkstationCommandKind.SaveWorkstation => WorkstationActions.SaveWorkstation(payload),
                 WorkstationCommandKind.Install => WorkstationActions.Install(payload),
                 _ => throw new InvalidOperationException($"Unknown command {kind}.")
             };

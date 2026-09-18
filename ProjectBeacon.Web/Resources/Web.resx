@@ -1060,4 +1060,37 @@
   <data name="SoloModel" xml:space="preserve">
     <value>Solo model</value>
   </data>
+  <data name="Workstation" xml:space="preserve">
+    <value>Workstation</value>
+  </data>
+  <data name="LlamaSwapBin" xml:space="preserve">
+    <value>llama-swap binary</value>
+  </data>
+  <data name="LlamaCppBin" xml:space="preserve">
+    <value>llama-server binary</value>
+  </data>
+  <data name="HistoryDir" xml:space="preserve">
+    <value>OpenCode history directory</value>
+  </data>
+  <data name="ProjectsRoot" xml:space="preserve">
+    <value>Projects root</value>
+  </data>
+  <data name="SaveWorkstation" xml:space="preserve">
+    <value>Save on device</value>
+  </data>
+  <data name="WorkstationSaved" xml:space="preserve">
+    <value>Workstation settings saved on the device.</value>
+  </data>
+  <data name="Probe" xml:space="preserve">
+    <value>Installed tools</value>
+  </data>
+  <data name="Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="InstallConfirm" xml:space="preserve">
+    <value>Install {0} on the selected device via winget?</value>
+  </data>
+  <data name="InstallQueued" xml:space="preserve">
+    <value>Install command sent to the device.</value>
+  </data>
 </root>
