@@ -61,14 +61,17 @@ Four pieces, each with one clear job:
   under `Features/{Name}`. They call Application handlers in-process and
   hold no independent store. The Web host also maps the `/v1` API so
   agents and the UI share one process on `:5083`.
-- **Local agent daemon** — a single implementation, run by the developer,
-  that gives an agent (a) MCP tools scoped to one project and (b) a code
-  index over the local working tree. This replaces what the TypeScript
-  build had split into three independently-written, independently-drifted
-  copies of the same "cache a code index per repo" logic — one of which
-  never got a staleness fix applied to it at all despite being the one
-  actual agents were most likely talking to. **One implementation, one
-  place to get freshness right, no drift possible between copies.**
+- **Local workstation client** (`beacon client`) — an evolution of the CLI,
+  run on the developer's machine. It holds an **outbound HTTPS** connection
+  to the API (device enroll, heartbeat, long-poll commands). It owns the
+  working tree, OpenCode config, and the llama-swap process. The Web host
+  does not read user disks and does not start llama-swap. This is not the
+  flagged-off WSS sidecar tunnel and not hosted clone: file bodies do not
+  transit the API except as command results (paths, probe, status). The
+  code index over the working tree is still the same single implementation
+  idea as before; stdio `beacon mcp` serves file tools locally. Pipeline
+  session spawn is still `ManualSessionSpawner` — the client is not yet an
+  OpenCode harness.
 - **Worker** — background jobs only (GitHub sync, scheduled cleanup). Not
   a second code-serving path; if a self-hosted deployment needs remote code
   access without a local daemon, that's an explicit, separate design
@@ -200,18 +203,14 @@ project lives on disk at all, and shouldn't have a choice to make.
 
 ## 7. Live sessions and remote control
 
-A locally-running daemon (an evolution of the CLI, not a new Electron/
-MAUI client) holds the outbound connection to the API, drives the agent
-process, and is the thing that would eventually let a task's chat stay
-open in the web UI across a session rather than requiring a terminal to
-stay attached. Scope for this phase: extend the existing local daemon
-concept, not build a new always-connected client from scratch — a session
-stays `active`/`paused` across turns and only closes when the task itself
-reaches a terminal state, matching how session locking already models
-"not done yet, but this leg of work is over" today. Full remote-driving
-(triggering a turn from a phone, say) is real future work, not something
-this rebuild needs to solve immediately — but the daemon should be shaped
-so that's an extension later, not a rewrite.
+`beacon client` (an evolution of the CLI, not a new Electron/MAUI client)
+holds the outbound HTTPS connection to the API, executes workstation
+commands, and runs llama-swap. It is not yet the thing that drives an
+OpenCode harness turn — pipeline sessions still use `ManualSessionSpawner`.
+A later extension can keep a task's chat open in the web UI across turns
+without a rewrite of the outbound command bus. Full remote-driving
+(triggering a turn from a phone, say) stays future work. Hosted clone and
+the outbound WSS sidecar tunnel stay flagged off.
 
 ## 8. Multi-agent coordination — the actual differentiator
 

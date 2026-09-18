@@ -1,7 +1,7 @@
 # План: Task-пайплайн (Planner → Actor → Cold Review) + оркестрация локальных моделей
 
 Исходники: `dotnet project docs/features.md` (Блок A — Model Orchestration, Блок B — Task-пайплайн).
-Документ — рабочий: к нему возвращаемся на каждом шаге имплементации.
+Документ — рабочий план M1–M6 (сданы). Статус после Phase 7 workstation client: **D7 superseded** — llama-swap крутит `beacon client`, не Web `IHostedService`. Daemon есть как outbound HTTPS-клиент (init, OpenCode, probe); спавн OpenCode-сессий пайплайна по-прежнему `ManualSessionSpawner`.
 
 ---
 
@@ -23,7 +23,7 @@
 - Миграции: только `dotnet ef migrations add` + регенерация ModelSnapshot. Никогда руками.
 
 ### 0.3 Non-goals, которые не трогаем
-- Beacon-hosted coding agent, local agent daemon (Phase 7) и worker (Phase 8) — не начаты.
+- Beacon-hosted coding agent и worker (Phase 8) — не начаты. Workstation client (`beacon client`) сдан как command bus; не OpenCode harness.
 - Hosted clone, outbound WSS, `write_handoff`, GitHub two-way sync — flagged off.
 - `TaskItemStatus {Todo, InProgress, Done}`, `TaskSubStage` и cold-diff гейт (`ReviewNotes` обязательны для `Done` — `TaskItem.MoveInProgressToDone`/`TransitionTo`) — **не ломаем**.
 - `design-doc-v2.md` не редактируем (AGENTS.md).
@@ -68,10 +68,10 @@
 - Точное имя tool'а из ТЗ (напр. `beacon.model.bind`) — логическое; реальное имя — snake_case без префикса, как у существующих.
 - Набор tool'ов: `model_bind(role, modelId)`, `model_status()`, `task_create_subtask(instructions, allowedMcpTools, allowedPaths)`, `subtask_report_result(subtaskId, diffRef, summary)`, `task_review_verdict(verdict, subtaskId?, note?)`, `task_pipeline_status()`.
 
-**D7. llama-swap супервизор — `IHostedService` в Web-хосте.**
-- `Infrastructure/LlamaSwap/`: `LLamaSwapOptions` (env: `BEACON_LLAMASWAP_BIN`, `BEACON_LLAMASWAP_PORT`, `BEACON_LLAMASWAP_CONFIG`), `LlamaSwapConfigGenerator` (config.yaml из реестра), `LlamaSwapSupervisor` (процесс-жизнь, `GET /health`, `GET /metrics`, graceful stop). Интерфейс для хэндлеров — `Application/Agents/ILlamaSwapProxy` (status/reload/unload).
-- Изменение реестра — поллинг `MAX(LocalModelBackend.UpdatedAt)` (внешние агенты не могут стучать в память Web; Web — единственный хост).
-- NFR-A1: не переопределяем свап-логику — только config + наблюдение. NFR-A2: только HTTP. NFR-A3: нет бинарника / процесс упал → статус «unavailable», остальной Beacon работает.
+**D7. llama-swap супервизор — изначально `IHostedService` в Web (A4). C6: процесс на `beacon client`.**
+- Генератор `LlamaSwapConfigGenerator` и юнит-тесты супервизора остаются. Web регистрирует `DeviceLlamaSwapProxy`: статус из heartbeat `probeJson.llamaSwapStatus`; reload/unload — команды device.
+- Клиент пишет config.yaml из `GET /v1/devices/me/llamaswap-config` и сам поднимает бинарь (`workstation.json` / PATH).
+- NFR-A1–A3 без изменений: нет процесса на device → unavailable, Web не падает.
 
 **D8. Ответы на открытые вопросы ТЗ §2.6:**
 - `DiffRef`: через MCP `subtask_report_result` (actor вызывает из промпта) + ручной ввод в UI (FR-B5). Git-хуки/поллинг ФС — не v1.
@@ -270,7 +270,7 @@
 
 ## 6. Out of scope (не делаем, не выдумываем)
 
-- Реальный harness/daemon (Phase 7), auto-timeout и worker (Phase 8) — `ManualSessionSpawner` + ручной Fail.
+- Реальный OpenCode harness и auto-timeout/worker (Phase 8) — `ManualSessionSpawner` + ручной Fail. Workstation client (Phase 7 C0–C6) — отдельно.
 - Параллельное выполнение subtasks (последовательно, §4 ТЗ).
 - UI для прямого редактирования `config.yaml` llama-swap (только через реестр).
 - Автоопределение MoE/dense (тип задаётся вручную).

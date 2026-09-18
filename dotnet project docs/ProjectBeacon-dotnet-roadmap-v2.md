@@ -171,9 +171,9 @@ acceptance criterion was run.
 | C0 | Device enroll + heartbeat + long-poll | 🟡 | `POST /v1/devices` returns `bcd_` once; heartbeat + `GET /v1/devices/me/commands`; `DeviceHandlerTests` + `DeviceHttpTests` |
 | C1 | `list_dir` + `ProjectRuntime` | 🟡 | Wizard picks an online device and attaches `LocalRoot` per (project, device) |
 | C2 | `init_project` | 🟡 | Client writes `.gitignore` + merge `opencode.json` + `.opencode/data`; token not in git |
-| C3 | MCP apply | 🟡 | Init payload installs beacon MCP; `ApplyOpencode` merges extra servers |
+| C3 | MCP apply | 🟡 | Init installs beacon MCP; Agents catalog (context7, serena, custom) applies with `mcpReplace`; `McpCatalogTests` |
 | C4 | Solo / Pipeline models | 🟡 | Agents UI Solo/Pipeline + Apply on device writes `opencode.json` provider/model/agent; GGUF pick from modelsRoot; `OpencodePayloadTests` + `ApplyAgentConfigHandlerTests` |
-| C5 | probe + install | 🟡 | Probe in heartbeat; install allowlist (git/node/docker) via winget after Confirm |
+| C5 | probe + install | 🟡 | Probe in heartbeat; Settings shows tools and Install git/node/docker via winget after Confirm |
 | C6 | llama-swap on client | 🟡 | Web no longer hosts llama-swap; client writes config from `/v1/devices/me/llamaswap-config` and reports status in heartbeat; Agents proxy uses device probe. `DeviceLlamaSwapProxyTests` |
 
 Code index, worker jobs, eval harness still ⬜. Hosted clone and `ff.sidecar_tunnel` stay off. Postgres-only `docker-compose.yml` exists (not full product Compose).

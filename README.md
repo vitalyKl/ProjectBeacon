@@ -1,6 +1,6 @@
 # ProjectBeacon
 
-.NET 9 project operating system for mixed human + agent development. Blazor Server + MudBlazor on `:5083`. Agents use stdio `beacon mcp`, not HTTP MCP.
+.NET 9 project operating system for mixed human + agent development. Blazor Server + MudBlazor on `:5083`. Agents use stdio `beacon mcp`, not HTTP MCP. The workstation client (`beacon client`) talks outbound HTTPS to the control plane; the Web host does not read the user's disk.
 
 Authoritative product docs: `.net project docs/ProjectBeacon-design-doc-v2.md` (wins on conflict) and `ProjectBeacon-dotnet-roadmap-v2.md`. Process contract: `AGENTS.md`.
 
@@ -12,6 +12,23 @@ Authoritative product docs: `.net project docs/ProjectBeacon-design-doc-v2.md` (
 4. Open `http://localhost:5083/bootstrap`, then `/login`.
 
 Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Reports, Settings. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers.
+
+## Workstation client
+
+The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (init repo, OpenCode config, llama-swap, install).
+
+1. In Settings, **Add device** and copy the `bcd_` token (shown once), or enroll from the CLI:
+   ```
+   dotnet run --project ProjectBeacon.Cli -- client enroll --url http://localhost:5083 --login <user> --password <pass>
+   ```
+2. Keep the client running:
+   ```
+   dotnet run --project ProjectBeacon.Cli -- client --url http://localhost:5083 --token <bcd_…>
+   ```
+3. Create a project (`/projects/new`), pick the online device, browse its disk, optionally initialize `.gitignore` + `opencode.json`.
+4. Agents: Solo/Pipeline models and MCP catalog apply on the selected device. Settings: models/history paths and winget install (git/node/docker) after Confirm.
+
+llama-swap is started by the client (`GET /v1/devices/me/llamaswap-config`), not by the Web process.
 
 ## Agent MCP
 

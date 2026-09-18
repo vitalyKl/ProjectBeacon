@@ -1,5 +1,7 @@
 # ТЗ: Task-пайплайн (Planner → Actor → Cold Review) и оркестрация локальных моделей в ProjectBeacon
 
+Implementation note (not a change to the FR text): FR-A3's llama-swap process runs on `beacon client` (device), not as a Web `IHostedService`. The control plane still owns the model registry and generates `config.yaml`. See roadmap C6 and `mcp-host.md`.
+
 ## 0. Контекст и цель
 
 ProjectBeacon — control plane для управления AI-кодинг-агентами (.NET 9 / Blazor Server / MudBlazor, API как MCP tool surface, Application-слой вызывается Blazor-слоем in-process).

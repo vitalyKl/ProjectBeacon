@@ -49,11 +49,28 @@ These tools talk to the database and require Beacon environment:
 | `BEACON_TASK_ID` | the four `task_*` / `subtask_*` tools | GUID of the session task |
 | `BEACON_ACTOR_ID` | none (reserved) | actor identity; not enforced yet |
 
-Without `BEACON_PROJECT_ID` (or without the connection configuration) the tools return an MCP `isError` result; the server keeps running, and the file tools stay available. The database provider is created lazily on the first database tool call. The llama-swap proxy is only available while a supervisor process runs it; otherwise `model_status` reports the proxy as unavailable.
+Without `BEACON_PROJECT_ID` (or without the connection configuration) the tools return an MCP `isError` result; the server keeps running, and the file tools stay available. The database provider is created lazily on the first database tool call. The llama-swap proxy is only available while a workstation client reports it in heartbeat (`probeJson.llamaSwapStatus`); otherwise `model_status` reports the proxy as unavailable.
 
 For `search_code` and `get_changed_scope`, `path` is a comma-separated list of path prefixes; an empty or omitted value means the whole tree.
 
 Paths are resolved inside the project root. `../` and other escapes are rejected. There is no shell tool.
+
+## Workstation client commands
+
+`beacon client` long-polls `GET /v1/devices/me/commands` (device token `bcd_`). Web never executes these on the server.
+
+| Kind | Role |
+|---|---|
+| `probe` | Detect git, opencode, node, docker, llama-swap, llama-server |
+| `list_dir` | One-level directory listing on the device |
+| `init_project` | `.gitignore`, merge `opencode.json`, `.opencode/data` |
+| `apply_opencode` | Merge or replace (`mcpReplace`) OpenCode config |
+| `scan_gguf` | List `*.gguf` under `modelsRoot` |
+| `install` | Allowlisted winget ids: git, node, docker |
+| `save_workstation` | Persist `workstation.json` (models root, bins, history dir) |
+| `reload_proxy` / `unload_proxy` | llama-swap config rewrite / HTTP unload |
+
+Do not add an inbound listen port on the device. Do not use the flagged-off WSS sidecar tunnel.
 
 ## Deny native file tools on the host
 
