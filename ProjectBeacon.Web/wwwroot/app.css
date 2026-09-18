@@ -242,6 +242,7 @@
 }
 
 .beacon-track {
+    height: 6px;
     border-radius: var(--radius-pill);
     background-color: var(--color-surface-1);
     overflow: hidden;
@@ -357,6 +358,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.beacon-pre {
+    white-space: pre-wrap;
+    font-family: monospace;
+}
+
+.beacon-form {
+    width: 100%;
+    max-width: 520px;
 }
 
 .blazor-error-boundary {

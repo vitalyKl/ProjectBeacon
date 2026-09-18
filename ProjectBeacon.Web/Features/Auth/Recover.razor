@@ -12,7 +12,7 @@
 
 <PageTitle>@L["RecoverPassword"]</PageTitle>
 
-<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card" Style="max-width: 500px;">
+<MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
     <MudText Typo="Typo.h4" Class="text-center mb-6">@L["RecoverPassword"]</MudText>
 
     <MudText Typo="Typo.body1" Class="mb-4">
@@ -21,11 +21,11 @@
 
     @if (_success)
     {
-        <MudAlert Severity="Severity.Success" Class="mb-4" variant="Variant.Text">
+        <MudAlert Severity="Severity.Success" Class="mb-4">
             <MudText Typo="Typo.body2">
                 @L["RecoverSuccess"]
             </MudText>
-            <MudTextField @bind-Value="_password" T="string" ReadOnly="true" Label="@L["NewPassword"]" Class="mt-2" />
+            <MudTextField @bind-Value="_password" T="string" ReadOnly="true" Label="@L["NewPassword"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         </MudAlert>
 
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -39,6 +39,7 @@
         <MudTextField @bind-Value="_token"
                       Label="@L["BootstrapToken"]"
                       Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
                       InputType="InputType.Password"
                       Class="mb-4" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary"
@@ -50,7 +51,7 @@
 
     @if (!string.IsNullOrEmpty(_error))
     {
-        <MudAlert Severity="Severity.Error" Class="mt-4" variant="Variant.Text">
+        <MudAlert Severity="Severity.Error" Class="mt-4">
             @_error
         </MudAlert>
     }

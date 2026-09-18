@@ -5,6 +5,7 @@
 @using ProjectBeacon.Application.Decisions
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
@@ -14,7 +15,7 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Decisions"]</PageTitle>
-<MudText Typo="Typo.h4">@L["Decisions"]</MudText>
+<PageHeader Title="@L["Decisions"]" />
 
 @if (_project is null)
 {
@@ -22,31 +23,44 @@
 }
 else
 {
-    <MudTextField @bind-Value="_title" Label="@L["Title"]" Class="mt-4" />
-    <MudTextField @bind-Value="_context" Label="@L["Context"]" Lines="2" Class="mt-2" />
-    <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="3" Class="mt-2" />
-    <MudTextField @bind-Value="_consequences" Label="@L["Consequences"]" Lines="2" Class="mt-2" />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+        <MudTextField @bind-Value="_title" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudTextField @bind-Value="_context" Label="@L["Context"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudTextField @bind-Value="_consequences" Label="@L["Consequences"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
+    </MudPaper>
 
-    <MudTable Items="_decisions" Hover="true" Class="mt-4" Dense="true">
-        <HeaderContent>
-            <MudTh>@L["Title"]</MudTh>
-            <MudTh>@L["Status"]</MudTh>
-            <MudTh>@L["Consequences"]</MudTh>
-            <MudTh></MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.Title</MudTd>
-            <MudTd>@context.Status</MudTd>
-            <MudTd>@context.Consequences</MudTd>
-            <MudTd>
-                @if (context.Status == DecisionStatus.Proposed)
-                {
-                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Accept(context)">@L["Accept"]</MudButton>
-                }
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    @if (_decisions.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoDecisionsYet"]</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_decisions" Hover="true" Dense="true" Class="mt-4">
+            <HeaderContent>
+                <MudTh>@L["Title"]</MudTh>
+                <MudTh>@L["Status"]</MudTh>
+                <MudTh>@L["Consequences"]</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Title</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(context.Status)">
+                        @ChromeLabels.Decision(L, context.Status)
+                    </MudChip>
+                </MudTd>
+                <MudTd>@context.Consequences</MudTd>
+                <MudTd>
+                    @if (context.Status == DecisionStatus.Proposed)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Accept(context)">@L["Accept"]</MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
 }
 
 @code {

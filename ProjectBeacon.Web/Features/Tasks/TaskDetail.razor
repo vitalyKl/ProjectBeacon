@@ -23,45 +23,42 @@
 
 <PageTitle>@L["TaskDetail"]</PageTitle>
 
-<MudGrid>
-    <MudItem>
-        <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo("/board"))">
-            @L["BackToBoard"]
-        </MudButton>
-    </MudItem>
-</MudGrid>
+<PageHeader Title="@(_task?.Title ?? L["TaskDetail"].Value)">
+    <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/board"))">
+        @L["BackToBoard"]
+    </MudButton>
+</PageHeader>
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
 else if (_task is null)
 {
-    <MudText Typo="Typo.h6">@L["TaskNotFound"]</MudText>
+    <MudAlert Severity="Severity.Info">@L["TaskNotFound"]</MudAlert>
 }
 else
 {
-    <MudCard Class="beacon-panel">
-        <MudText Typo="Typo.h4">@_task.Title</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
         @if (!string.IsNullOrEmpty(_task.Description))
         {
-            <MudText Typo="Typo.body1" Class="mt-2">@_task.Description</MudText>
+            <MudText Typo="Typo.body1">@_task.Description</MudText>
         }
         <MudStack Row="true" Spacing="2" Class="mt-4">
             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(_task.Status)">
-                @StatusLabel(_task.Status)
+                @ChromeLabels.Status(L, _task.Status)
             </MudChip>
             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(_task.Priority)">
-                @L["Priority"]: @_task.Priority
+                @L["Priority"]: @ChromeLabels.Priority(L, _task.Priority)
             </MudChip>
             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(_task.Type)">
-                @L["Type"]: @_task.Type
+                @L["Type"]: @ChromeLabels.Type(L, _task.Type)
             </MudChip>
         </MudStack>
         @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
         {
-            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4 beacon-track" Height="6" />
-            <MudText Typo="Typo.caption" Class="mt-1">@_task.SubStage</MudText>
+            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4 beacon-track" />
+            <MudText Typo="Typo.caption" Class="mt-1">@ChromeLabels.SubStage(L, _task.SubStage)</MudText>
         }
         @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
         {
@@ -71,13 +68,13 @@ else
         @if (!string.IsNullOrEmpty(_task.ReviewNotes))
         {
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ReviewNotes"]</MudText>
-            <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_task.ReviewNotes</MudText>
+            <MudText Typo="Typo.body2" Class="beacon-pre">@_task.ReviewNotes</MudText>
         }
-        <MudTextField @bind-Value="_reviewDraft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Class="mt-2" />
+        <MudTextField @bind-Value="_reviewDraft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveReview">@L["Save"]</MudButton>
-    </MudCard>
+    </MudPaper>
 
-    <MudCard Class="beacon-panel mt-4">
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
         @if (_pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
         {
@@ -144,13 +141,13 @@ else
                 }
                 @foreach (var subtask in pipeline.Subtasks)
                 {
-                    <MudCard Class="mb-2">
-                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@subtask.Instructions</MudText>
+                    <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 mb-2">
+                        <MudText Typo="Typo.body2" Class="beacon-pre">@subtask.Instructions</MudText>
                         <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@SubtaskStatusColor(subtask.Status)">@SubtaskStatusLabel(subtask.Status)</MudChip>
                             @if (subtask.ReopenCount > 0)
                             {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@L["Reopens"]: @subtask.ReopenCount</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning">@L["Reopens"]: @subtask.ReopenCount</MudChip>
                             }
                         </MudStack>
                         @if (subtask.DiffRef is not null)
@@ -172,7 +169,7 @@ else
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))" Disabled="_busy">@L["FailSubtask"]</MudButton>
                             }
                         </MudStack>
-                    </MudCard>
+                    </MudPaper>
                 }
             }
 
@@ -201,7 +198,7 @@ else
                 </MudStack>
                 @if (!string.IsNullOrEmpty(session.LaunchSpec))
                 {
-                    <MudText Typo="Typo.caption" Style="max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@session.LaunchSpec</MudText>
+                    <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
                 }
             }
 
@@ -216,7 +213,7 @@ else
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)">
                         @(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)
                     </MudChip>
-                    <MudText Typo="Typo.body2" Class="flex-grow-1" Style="white-space: pre-wrap;">@verdict.Note</MudText>
+                    <MudText Typo="Typo.body2" Class="grow beacon-pre">@verdict.Note</MudText>
                     <MudText Typo="Typo.caption">@verdict.CreatedAt.ToShortDateString()</MudText>
                 </MudStack>
             }
@@ -226,9 +223,9 @@ else
             <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineNotStarted"]</MudText>
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
         }
-    </MudCard>
+    </MudPaper>
 
-    <MudCard Class="beacon-panel mt-4">
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudText Typo="Typo.h6">@L["Comments"]</MudText>
         @if (_task.Comments.Count == 0)
         {
@@ -239,11 +236,11 @@ else
             <MudText Typo="Typo.body2" Class="mt-2">@comment.Content</MudText>
             <MudText Typo="Typo.caption">@comment.CreatedAt.ToShortDateString()</MudText>
         }
-        <MudTextField @bind-Value="_commentDraft" Label="@L["WriteAComment"]" Lines="2" Variant="Variant.Outlined" Class="mt-2" />
+        <MudTextField @bind-Value="_commentDraft" Label="@L["WriteAComment"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveComment">@L["AddComment"]</MudButton>
-    </MudCard>
+    </MudPaper>
 
-    <MudCard Class="beacon-panel mt-4">
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
             <MudText Typo="Typo.h6">@L["CompiledBrief"]</MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Compile" Disabled="_compiling">
@@ -251,16 +248,16 @@ else
             </MudButton>
         </MudStack>
         <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_briefTokens / @_briefBudget</MudText>
-        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="Color.Default" Class="mt-1 beacon-track" Height="6" />
+        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="Color.Default" Class="mt-1 beacon-track" />
         @if (!string.IsNullOrEmpty(_briefError))
         {
             <MudAlert Severity="Severity.Error" Class="mt-2">@_briefError</MudAlert>
         }
         @if (!string.IsNullOrEmpty(_briefMarkdown))
         {
-            <MudText Typo="Typo.body2" Class="mt-4" Style="white-space: pre-wrap; font-family: monospace;">@_briefMarkdown</MudText>
+            <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_briefMarkdown</MudText>
         }
-    </MudCard>
+    </MudPaper>
 }
 
 @code {
@@ -301,14 +298,6 @@ else
         _task = result.Success ? result.Value : null;
         _reviewDraft = _task?.ReviewNotes ?? string.Empty;
     }
-
-    private string StatusLabel(string status) => status switch
-    {
-        "Todo" => L["Todo"].Value,
-        "InProgress" => L["InProgress"].Value,
-        "Done" => L["Done"].Value,
-        _ => status
-    };
 
     private async Task ReloadPipeline()
     {
@@ -480,7 +469,7 @@ else
             {
                 { nameof(PipelineDialog.Params), new PipelineDialogParams(mode, TaskId, subtask, ReopenableSubtasks, _userId) }
             };
-            var reference = await Dialogs.ShowAsync<PipelineDialog>(parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+            var reference = await Dialogs.ShowAsync(typeof(PipelineDialog), DialogTitle(mode), parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
             var result = await reference.Result;
             if (result?.Data is true)
             {
@@ -493,6 +482,18 @@ else
             _busy = false;
         }
     }
+
+    private string DialogTitle(PipelineDialogMode mode) => mode switch
+    {
+        PipelineDialogMode.CreateSubtask => L["CreateSubtask"].Value,
+        PipelineDialogMode.ReportResult => L["ReportResult"].Value,
+        PipelineDialogMode.FailSubtask => L["FailSubtask"].Value,
+        PipelineDialogMode.ReviewApprove => L["Approve"].Value,
+        PipelineDialogMode.ReviewReopen => L["ReopenSubtask"].Value,
+        PipelineDialogMode.ConfirmClose => L["ConfirmClose"].Value,
+        PipelineDialogMode.ForceClose => L["ForceClose"].Value,
+        _ => L["Pipeline"].Value
+    };
 
     private string SubtaskStatusLabel(SubtaskStatus status) => L[status.ToString()].Value;
 

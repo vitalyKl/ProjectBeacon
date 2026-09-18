@@ -17,17 +17,17 @@
     }
     @if (Task.Status == "InProgress" && Task.SubStage.HasValue)
     {
-        <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Info" Class="mt-2 beacon-track" Height="6" />
+        <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Default" Class="mt-2 beacon-track" />
     }
     <MudStack Row="true" Spacing="2" Class="mt-2">
         <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(Task.Status)">
-            @StatusLabel(Task.Status)
+            @ChromeLabels.Status(L, Task.Status)
         </MudChip>
         <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(Task.Priority)">
-            @Task.Priority
+            @ChromeLabels.Priority(L, Task.Priority)
         </MudChip>
         <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(Task.Type)">
-            @Task.Type
+            @ChromeLabels.Type(L, Task.Type)
         </MudChip>
     </MudStack>
 </MudPaper>
@@ -42,14 +42,6 @@
         if (e.Key is "Enter" or " ")
             Open();
     }
-
-    private string StatusLabel(string status) => status switch
-    {
-        "Todo" => L["Todo"].Value,
-        "InProgress" => L["InProgress"].Value,
-        "Done" => L["Done"].Value,
-        _ => status
-    };
 
     private int SubStageToPercent(TaskSubStage stage) => stage switch
     {

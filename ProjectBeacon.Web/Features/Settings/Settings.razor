@@ -9,35 +9,45 @@
 @inject ListLabelsHandler ListLabels
 
 <PageTitle>@L["Settings"]</PageTitle>
-<MudText Typo="Typo.h4">@L["Settings"]</MudText>
+<PageHeader Title="@L["Settings"]">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/projects/new">
+        @L["CreateProject"]
+    </MudButton>
+</PageHeader>
 
-<MudText Typo="Typo.h6" Class="mt-4">@L["Labels"]</MudText>
-@if (_labels.Count == 0)
+<MudText Typo="Typo.h6" Class="mb-3">@L["Labels"]</MudText>
+@if (_projectMissing)
 {
-    <MudText Typo="Typo.body2" Class="mt-2">@L["NoData"]</MudText>
+    <MudAlert Severity="Severity.Info">@L["NoProjectAvailable"]</MudAlert>
+}
+else if (_labels.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">@L["NoLabelsYet"]</MudAlert>
 }
 else
 {
-    <MudList T="string" Dense="true">
-        @foreach (var label in _labels)
-        {
-            <MudListItem T="string">@label.Name (@label.PathPrefix)</MudListItem>
-        }
-    </MudList>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
+        <MudList T="string" Dense="true">
+            @foreach (var label in _labels)
+            {
+                <MudListItem T="string">@label.Name (@label.PathPrefix)</MudListItem>
+            }
+        </MudList>
+    </MudPaper>
 }
-
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">
-    @L["CreateProject"]
-</MudButton>
 
 @code {
     private List<LabelDto> _labels = [];
+    private bool _projectMissing;
 
     protected override async Task OnInitializedAsync()
     {
         var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         if (current.Value is null)
+        {
+            _projectMissing = true;
             return;
+        }
         var listed = await ListLabels.HandleAsync(new ListLabelsRequest(current.Value.Id));
         _labels = listed.Success ? listed.Value!.ToList() : [];
     }

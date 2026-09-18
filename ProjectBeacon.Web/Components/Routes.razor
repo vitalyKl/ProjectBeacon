@@ -29,7 +29,7 @@
                     }
                 </NotAuthorized>
                 <Authorizing>
-                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
                 </Authorizing>
             </AuthorizeRouteView>
                 </ChildContent>
@@ -39,12 +39,12 @@
             <AuthorizeView>
                 <Authorized>
                     <LayoutView Layout="typeof(MainLayout)">
-                        <MudText Typo="Typo.h5">@L["PageNotFound"]</MudText>
+                        <MudAlert Severity="Severity.Info">@L["PageNotFound"]</MudAlert>
                     </LayoutView>
                 </Authorized>
                 <NotAuthorized>
                     <LayoutView Layout="typeof(AuthLayout)">
-                        <MudText Typo="Typo.h5">@L["PageNotFound"]</MudText>
+                        <MudAlert Severity="Severity.Info">@L["PageNotFound"]</MudAlert>
                     </LayoutView>
                 </NotAuthorized>
             </AuthorizeView>

@@ -9,15 +9,15 @@
     @foreach (var culture in SupportedCultures)
     {
         <MudMenuItem OnClick="@(() => OnSelect(culture.Culture))">
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                 <span>@culture.Flag</span>
                 <span>@GetLanguageName(culture.Culture)</span>
                 @if (SelectedCulture == culture.Culture)
                 {
-                    <span style="flex-grow: 1;"></span>
+                    <MudSpacer />
                     <span>✓</span>
                 }
-            </div>
+            </MudStack>
         </MudMenuItem>
     }
 </MudMenu>

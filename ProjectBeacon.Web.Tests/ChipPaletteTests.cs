@@ -34,4 +34,21 @@ public sealed class ChipPaletteTests
         Assert.Equal(Color.Default, ChipPalette.ForType(TaskType.Feature));
         Assert.Equal(Color.Default, ChipPalette.ForType(TaskType.Improvement));
     }
+
+    [Fact]
+    public void ForDecisionStatus_MapsSemanticColor()
+    {
+        Assert.Equal(Color.Info, ChipPalette.ForDecisionStatus(DecisionStatus.Proposed));
+        Assert.Equal(Color.Success, ChipPalette.ForDecisionStatus(DecisionStatus.Accepted));
+        Assert.Equal(Color.Default, ChipPalette.ForDecisionStatus(DecisionStatus.Superseded));
+        Assert.Equal(Color.Warning, ChipPalette.ForDecisionStatus(DecisionStatus.Deprecated));
+    }
+
+    [Fact]
+    public void ForConstraintStatus_MapsSemanticColor()
+    {
+        Assert.Equal(Color.Info, ChipPalette.ForConstraintStatus(ConstraintStatus.Proposed));
+        Assert.Equal(Color.Success, ChipPalette.ForConstraintStatus(ConstraintStatus.Active));
+        Assert.Equal(Color.Error, ChipPalette.ForConstraintStatus(ConstraintStatus.Rejected));
+    }
 }

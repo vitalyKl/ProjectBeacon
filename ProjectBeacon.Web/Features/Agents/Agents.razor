@@ -19,7 +19,12 @@
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Agents"]</PageTitle>
-<MudText Typo="Typo.h4">@L["Agents"]</MudText>
+<PageHeader Title="@L["Agents"]">
+    @if (_project is not null)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
+    }
+</PageHeader>
 
 @if (_project is null)
 {
@@ -27,109 +32,96 @@
 }
 else
 {
-    <MudCard Class="mt-4">
-        <MudCardHeader>
-            <CardHeaderContent>@L["ModelRegistry"]</CardHeaderContent>
-            <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
-            </CardHeaderActions>
-        </MudCardHeader>
-        <MudCardContent>
-            @if (_backends.Count == 0)
-            {
-                <MudText Typo="Typo.body2">@L["NoModels"]</MudText>
-            }
-            else
-            {
-                <MudTable Items="_backends" Hover="true" Dense="true">
-                    <HeaderContent>
-                        <MudTh>@L["ModelName"]</MudTh>
-                        <MudTh>@L["Type"]</MudTh>
-                        <MudTh>@L["LaunchCommand"]</MudTh>
-                        <MudTh>@L["ContextSize"]</MudTh>
-                        <MudTh>@L["Ttl"]</MudTh>
-                        <MudTh></MudTh>
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd DataLabel="@L["ModelName"]">@context.Name</MudTd>
-                        <MudTd DataLabel="@L["Type"]">@L["Backend" + context.BackendType].Value</MudTd>
-                        <MudTd DataLabel="@L["LaunchCommand"]">@context.LaunchCommand</MudTd>
-                        <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
-                        <MudTd DataLabel="@L["Ttl"]">@context.Ttl</MudTd>
-                        <MudTd>
-                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditModel(context)">@L["Edit"]</MudButton>
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteModel(context)">@L["Delete"]</MudButton>
-                        </MudTd>
-                    </RowTemplate>
-                </MudTable>
-            }
-        </MudCardContent>
-    </MudCard>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ModelRegistry"]</MudText>
+        @if (_backends.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">@L["NoModels"]</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_backends" Hover="true" Dense="true">
+                <HeaderContent>
+                    <MudTh>@L["ModelName"]</MudTh>
+                    <MudTh>@L["Type"]</MudTh>
+                    <MudTh>@L["LaunchCommand"]</MudTh>
+                    <MudTh>@L["ContextSize"]</MudTh>
+                    <MudTh>@L["Ttl"]</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="@L["ModelName"]">@context.Name</MudTd>
+                    <MudTd DataLabel="@L["Type"]">@L["Backend" + context.BackendType].Value</MudTd>
+                    <MudTd DataLabel="@L["LaunchCommand"]">@context.LaunchCommand</MudTd>
+                    <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
+                    <MudTd DataLabel="@L["Ttl"]">@context.Ttl</MudTd>
+                    <MudTd>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditModel(context)">@L["Edit"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteModel(context)">@L["Delete"]</MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
 
-    <MudCard Class="mt-4">
-        <MudCardHeader>
-            <CardHeaderContent>@L["RoleBindings"]</CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudGrid>
-                <MudItem xs="12" sm="4">
-                    <MudSelect T="Guid?" Value="_planner" ValueChanged="OnPlannerBindingChanged" Label="@L["RoleBindingPlanner"]" Disabled="_busy">
-                        <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                        @foreach (var backend in _backends)
-                        {
-                            <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" sm="4">
-                    <MudSelect T="Guid?" Value="_actor" ValueChanged="OnActorBindingChanged" Label="@L["RoleBindingActor"]" Disabled="_busy">
-                        <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                        @foreach (var backend in _backends)
-                        {
-                            <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-                <MudItem xs="12" sm="4">
-                    <MudSelect T="Guid?" Value="_review" ValueChanged="OnReviewBindingChanged" Label="@L["Review"]" Disabled="_busy">
-                        <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                        @foreach (var backend in _backends)
-                        {
-                            <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-            </MudGrid>
-        </MudCardContent>
-    </MudCard>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["RoleBindings"]</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" Value="_planner" ValueChanged="OnPlannerBindingChanged" Label="@L["RoleBindingPlanner"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
+                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                    @foreach (var backend in _backends)
+                    {
+                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" Value="_actor" ValueChanged="OnActorBindingChanged" Label="@L["RoleBindingActor"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
+                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                    @foreach (var backend in _backends)
+                    {
+                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="Guid?" Value="_review" ValueChanged="OnReviewBindingChanged" Label="@L["Review"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
+                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                    @foreach (var backend in _backends)
+                    {
+                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
 
-    <MudCard Class="mt-4">
-        <MudCardHeader>
-            <CardHeaderContent>@L["ProxyStatus"]</CardHeaderContent>
-            <CardHeaderActions>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+            <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
+            <MudStack Row="true" Spacing="2">
                 <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="RefreshStatus">@L["Refresh"]</MudButton>
                 <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="Reload">@L["Reload"]</MudButton>
                 <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload">@L["Unload"]</MudButton>
-            </CardHeaderActions>
-        </MudCardHeader>
-        <MudCardContent>
-            @if (_status is null)
+            </MudStack>
+        </MudStack>
+        @if (_status is null)
+        {
+            <MudText Typo="Typo.body2">@L["Loading"]</MudText>
+        }
+        else
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@StatusColor">@StatusText</MudChip>
+            <MudText Typo="Typo.body2" Class="mt-2">@L["LoadedModel"]: @(_status.LoadedModel ?? "-")</MudText>
+            <MudText Typo="Typo.body2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
+            <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
+            @if (_status.Error is not null)
             {
-                <MudText Typo="Typo.body2">@L["Loading"]</MudText>
+                <MudAlert Severity="Severity.Warning" Class="mt-2">@_status.Error</MudAlert>
             }
-            else
-            {
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@StatusColor">@StatusText</MudChip>
-                <MudText Typo="Typo.body2" Class="mt-2">@L["LoadedModel"]: @(_status.LoadedModel ?? "-")</MudText>
-                <MudText Typo="Typo.body2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
-                <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
-                @if (_status.Error is not null)
-                {
-                    <MudAlert Severity="Severity.Warning" Class="mt-2">@_status.Error</MudAlert>
-                }
-            }
-        </MudCardContent>
-    </MudCard>
+        }
+    </MudPaper>
 }
 
 @code {

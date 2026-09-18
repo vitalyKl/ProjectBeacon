@@ -12,42 +12,42 @@
 @switch (Params.Mode)
 {
     case PipelineDialogMode.CreateSubtask:
-        <MudTextField @bind-Value="_instructions" Label="@L["Instructions"]" Lines="3" />
+        <MudTextField @bind-Value="_instructions" Label="@L["Instructions"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" />
         break;
     case PipelineDialogMode.ReportResult:
-        <MudTextField @bind-Value="_diffRef" Label="@L["DiffRef"]" />
-        <MudTextField @bind-Value="_summary" Label="@L["Summary"]" Lines="2" Class="mt-3" />
+        <MudTextField @bind-Value="_diffRef" Label="@L["DiffRef"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudTextField @bind-Value="_summary" Label="@L["Summary"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
         break;
     case PipelineDialogMode.FailSubtask:
-        <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" />
+        <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
         break;
     case PipelineDialogMode.ReviewApprove:
-        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" />
+        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" />
         break;
     case PipelineDialogMode.ReviewReopen:
-        <MudSelect T="SubtaskDto" @bind-Value="_reopenTarget" Label="@L["Subtask"]">
+        <MudSelect T="SubtaskDto" @bind-Value="_reopenTarget" Label="@L["Subtask"]" Variant="Variant.Outlined" Margin="Margin.Dense">
             @foreach (var subtask in Reopenable)
             {
                 <MudSelectItem Value="@subtask">@SubtaskLabel(subtask)</MudSelectItem>
             }
         </MudSelect>
-        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" Class="mt-3" />
+        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
         break;
     case PipelineDialogMode.ConfirmClose:
-        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" HelperText="@L["ConfirmCloseHint"]" />
+        <MudTextField @bind-Value="_note" Label="@L["Note"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@L["ConfirmCloseHint"]" />
         break;
     case PipelineDialogMode.ForceClose:
         <MudAlert Severity="Severity.Warning">@L["ForceCloseWarning"]</MudAlert>
-        <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" Class="mt-3" />
+        <MudTextField @bind-Value="_reason" Label="@L["Reason"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
         break;
 }
 
-<div Class="d-flex justify-end gap-2 mt-4">
+<MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
     <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
     <MudButton Variant="Variant.Filled" Color="@(Params.Mode == PipelineDialogMode.ForceClose ? Color.Error : Color.Primary)" OnClick="Save" Disabled="_saving">
         @ConfirmLabel
     </MudButton>
-</div>
+</MudStack>
 
 @code {
     [CascadingParameter] private IMudDialogInstance? Dialog { get; set; }

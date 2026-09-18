@@ -92,7 +92,7 @@
     <value>First</value>
   </data>
   <data name="Healthy" xml:space="preserve">
-    <value>healthy</value>
+    <value>Healthy</value>
   </data>
   <data name="Language" xml:space="preserve">
     <value>Language</value>
@@ -659,10 +659,10 @@
     <value>Proxy status</value>
   </data>
   <data name="Unavailable" xml:space="preserve">
-    <value>unavailable</value>
+    <value>Unavailable</value>
   </data>
   <data name="Unhealthy" xml:space="preserve">
-    <value>unhealthy</value>
+    <value>Unhealthy</value>
   </data>
   <data name="LoadedModel" xml:space="preserve">
     <value>Loaded model</value>
@@ -933,5 +933,47 @@
   </data>
   <data name="PipelineClosed" xml:space="preserve">
     <value>Pipeline closed.</value>
+  </data>
+  <data name="SectionGoals" xml:space="preserve">
+    <value>Goals</value>
+  </data>
+  <data name="SectionNonGoals" xml:space="preserve">
+    <value>Non-goals</value>
+  </data>
+  <data name="SectionSecurity" xml:space="preserve">
+    <value>Security</value>
+  </data>
+  <data name="SectionDefinitionOfDone" xml:space="preserve">
+    <value>Definition of done</value>
+  </data>
+  <data name="SectionArchitecture" xml:space="preserve">
+    <value>Architecture</value>
+  </data>
+  <data name="SectionConventions" xml:space="preserve">
+    <value>Conventions</value>
+  </data>
+  <data name="Proposed" xml:space="preserve">
+    <value>Proposed</value>
+  </data>
+  <data name="Accepted" xml:space="preserve">
+    <value>Accepted</value>
+  </data>
+  <data name="Superseded" xml:space="preserve">
+    <value>Superseded</value>
+  </data>
+  <data name="Deprecated" xml:space="preserve">
+    <value>Deprecated</value>
+  </data>
+  <data name="Rejected" xml:space="preserve">
+    <value>Rejected</value>
+  </data>
+  <data name="NoDecisionsYet" xml:space="preserve">
+    <value>No decisions yet.</value>
+  </data>
+  <data name="NoLabelsYet" xml:space="preserve">
+    <value>No labels yet.</value>
+  </data>
+  <data name="NoSectionsYet" xml:space="preserve">
+    <value>No sections yet.</value>
   </data>
 </root>

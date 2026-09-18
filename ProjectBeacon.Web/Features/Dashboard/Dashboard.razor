@@ -13,10 +13,19 @@
 
 <PageTitle>@L["Dashboard"]</PageTitle>
 
-<MudText Typo="Typo.h4">@L["Dashboard"]</MudText>
+<PageHeader Title="@L["Dashboard"]">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               OnClick="@(() => Navigation.NavigateTo("/board"))">
+        @L["GoToBoard"]
+    </MudButton>
+</PageHeader>
 
-<MudDivider Class="mt-4 mb-4" />
-
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+}
+else
+{
 <MudGrid>
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
@@ -94,7 +103,7 @@
         <MudText Typo="Typo.h6" Class="mb-3">@L["RecentActivity"]</MudText>
         @if (_data is null || _data.RecentTasks.Count == 0)
         {
-            <MudText Typo="Typo.body2">@L["NoRecentActivity"]</MudText>
+            <MudAlert Severity="Severity.Info">@L["NoRecentActivity"]</MudAlert>
         }
         else
         {
@@ -105,7 +114,7 @@
                         <MudListItem T="string">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
                                 <MudText Typo="Typo.body2" Class="grow beacon-ellipsis">@t.Title</MudText>
-                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus(t.Status.ToString())" Variant="Variant.Filled">@StatusText(t.Status)</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus(t.Status.ToString())" Variant="Variant.Filled">@ChromeLabels.Status(L, t.Status)</MudChip>
                             </MudStack>
                             <MudText Typo="Typo.caption">@t.ProjectName · @t.ActivityAt.ToString("dd.MM HH:mm")</MudText>
                         </MudListItem>
@@ -115,16 +124,12 @@
         }
     </MudItem>
 </MudGrid>
-
-<MudButton Variant="Variant.Filled" Color="Color.Primary"
-          OnClick="@(() => Navigation.NavigateTo("/board"))"
-          Class="mt-6">
-    @L["GoToBoard"]
-</MudButton>
+}
 
 @code {
     private ListMyProjectsDto? _data;
     private Guid? _activeProjectId;
+    private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,7 +137,10 @@
         var user = state.User;
         if (user.Identity?.IsAuthenticated != true
             || !Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
+        {
+            _loading = false;
             return;
+        }
 
         if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var active))
             _activeProjectId = active;
@@ -141,14 +149,8 @@
         var result = await MyProjects.HandleAsync(uid, isAdmin);
         if (result.Success)
             _data = result.Value;
+        _loading = false;
     }
-
-    private string StatusText(TaskItemStatus status) => status switch
-    {
-        TaskItemStatus.InProgress => L["InProgress"].Value,
-        TaskItemStatus.Done => L["Done"].Value,
-        _ => L["Todo"].Value
-    };
 
     private void SwitchProject(Guid projectId) =>
         Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl=/dashboard", forceLoad: true);

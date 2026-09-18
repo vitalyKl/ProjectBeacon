@@ -18,89 +18,90 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Roadmap"]</PageTitle>
-<MudGrid>
-    <MudItem>
-        <MudText Typo="Typo.h4">@L["Roadmap"]</MudText>
-    </MudItem>
-    <MudItem>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ShowCreateForm">@L["NewMilestone"]</MudButton>
-    </MudItem>
-</MudGrid>
+<PageHeader Title="@L["Roadmap"]">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ShowCreateForm">@L["NewMilestone"]</MudButton>
+</PageHeader>
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+}
+else if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
 }
 else if (_milestones.Count == 0 && !_showCreateForm)
 {
-    <MudText Typo="Typo.body1" Class="text-center mt-6">@L["NoMilestones"]</MudText>
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoMilestones"]</MudAlert>
 }
 else
 {
     @if (_showCreateForm)
     {
-        <MudCard Class="mt-4 pa-4">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
             <MudText Typo="Typo.h6">@L["CreateMilestone"]</MudText>
-            <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Class="mt-2 mb-2" />
-            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Class="mt-2 mb-2" />
-            <MudTextField @bind-Value="_newOrder" Label="@L["Order"]" InputType="InputType.Number" Class="mt-2 mb-2" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateMilestone" Class="mt-2">@L["Create"]</MudButton>
-            <MudButton Variant="Variant.Text" OnClick="@HideCreateForm" Class="mt-2">@L["Cancel"]</MudButton>
-        </MudCard>
+            <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_newOrder" Label="@L["Order"]" InputType="InputType.Number" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MudStack Row="true" Spacing="2" Class="mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateMilestone">@L["Create"]</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@HideCreateForm">@L["Cancel"]</MudButton>
+            </MudStack>
+        </MudPaper>
     }
 
     @if (_editingId is not null)
     {
-        <MudCard Class="mt-4 pa-4">
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
             <MudText Typo="Typo.h6">@L["UpdateMilestone"]</MudText>
-            <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Class="mt-2 mb-2" />
-            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Class="mt-2 mb-2" />
-            <MudTextField @bind-Value="_editOrder" Label="@L["Order"]" InputType="InputType.Number" Class="mt-2 mb-2" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveMilestone" Class="mt-2">@L["Save"]</MudButton>
-            <MudButton Variant="Variant.Text" OnClick="@CancelEdit" Class="mt-2">@L["Cancel"]</MudButton>
-        </MudCard>
+            <MudTextField @bind-Value="_editName" Label="@L["MilestoneName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_editDescription" Label="@L["Description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MudTextField @bind-Value="_editOrder" Label="@L["Order"]" InputType="InputType.Number" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2 mb-2" />
+            <MudStack Row="true" Spacing="2" Class="mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveMilestone">@L["Save"]</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@CancelEdit">@L["Cancel"]</MudButton>
+            </MudStack>
+        </MudPaper>
     }
 
     <MudGrid Class="mt-4">
         @foreach (var milestone in _milestones.OrderBy(m => m.Order))
         {
             <MudItem xs="12" sm="6" md="4">
-                <MudCard Class="pa-4">
-                    <MudCardContent>
-                        <MudText Typo="Typo.h6">@milestone.Name</MudText>
-                        @if (!string.IsNullOrEmpty(milestone.Description))
+                <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                    <MudText Typo="Typo.h6">@milestone.Name</MudText>
+                    @if (!string.IsNullOrEmpty(milestone.Description))
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">@milestone.Description</MudText>
+                    }
+                    <MudText Typo="Typo.caption" Class="mt-2">
+                        @L["TaskCount"]: @(_tasks.Count(t => t.MilestoneId == milestone.Id))
+                    </MudText>
+                    @if (milestone.ClosedAt is not null)
+                    {
+                        var orphans = MilestoneOrphanLint.OpenTaskCount(
+                            milestone.ClosedAt, milestone.Id,
+                            _tasks.Select(t => (t.MilestoneId, t.Status)));
+                        if (orphans > 0)
                         {
-                            <MudText Typo="Typo.body2" Class="mt-2">@milestone.Description</MudText>
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                @string.Format(L["OrphanWarning"].Value, orphans)
+                            </MudAlert>
                         }
-                        <MudText Typo="Typo.caption" Class="mt-2">
-                            @L["TaskCount"]: @(_tasks.Count(t => t.MilestoneId == milestone.Id))
-                        </MudText>
-                        @if (milestone.ClosedAt is not null)
-                        {
-                            var orphans = MilestoneOrphanLint.OpenTaskCount(
-                                milestone.ClosedAt, milestone.Id,
-                                _tasks.Select(t => (t.MilestoneId, t.Status)));
-                            if (orphans > 0)
-                            {
-                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
-                                    @string.Format(L["OrphanWarning"].Value, orphans)
-                                </MudAlert>
-                            }
-                        }
-                    </MudCardContent>
-                    <MudCardActions>
+                    }
+                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-3">
                         <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => StartEditMilestone(milestone)">@L["Edit"]</MudButton>
                         @if (milestone.ClosedAt is null)
                         {
-                            <MudButton Variant="Variant.Text" OnClick="() => CloseMilestone(milestone)">@L["CloseMilestone"]</MudButton>
+                            <MudButton Variant="Variant.Outlined" OnClick="() => CloseMilestone(milestone)">@L["CloseMilestone"]</MudButton>
                         }
                         else
                         {
-                            <MudButton Variant="Variant.Text" OnClick="() => ReopenMilestone(milestone)">@L["ReopenMilestone"]</MudButton>
+                            <MudButton Variant="Variant.Outlined" OnClick="() => ReopenMilestone(milestone)">@L["ReopenMilestone"]</MudButton>
                         }
                         <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteMilestone(milestone)">@L["Delete"]</MudButton>
-                    </MudCardActions>
-                </MudCard>
+                    </MudStack>
+                </MudPaper>
             </MudItem>
         }
     </MudGrid>

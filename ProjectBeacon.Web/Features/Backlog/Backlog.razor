@@ -16,63 +16,75 @@
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Backlog"]</PageTitle>
-<MudGrid>
-    <MudItem>
-        <MudText Typo="Typo.h4">@L["Backlog"]</MudText>
-    </MudItem>
-    <MudItem>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateTask">@L["NewTask"]</MudButton>
-    </MudItem>
-</MudGrid>
+<PageHeader Title="@L["Backlog"]">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateTask">@L["NewTask"]</MudButton>
+</PageHeader>
 
-<MudTable Items="_tasks" Hover="true" Class="mt-4" Striped="true" Bordered="true">
-    <HeaderContent>
-        <MudTh>@L["Title"]</MudTh>
-        <MudTh>@L["Status"]</MudTh>
-        <MudTh>@L["Priority"]</MudTh>
-        <MudTh>@L["Type"]</MudTh>
-        <MudTh>@L["SubStage"]</MudTh>
-        <MudTh>@L["CreatedAt"]</MudTh>
-        <MudTh></MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="@L["Title"]">
-            <MudButton Variant="Variant.Text" OnClick="() => NavigateToTask(context.Id)">@context.Title</MudButton>
-        </MudTd>
-        <MudTd DataLabel="@L["Status"]">
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(context.Status)">
-                @StatusLabel(context.Status)
-            </MudChip>
-        </MudTd>
-        <MudTd DataLabel="@L["Priority"]">
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(context.Priority)">
-                @context.Priority
-            </MudChip>
-        </MudTd>
-        <MudTd DataLabel="@L["Type"]">
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(context.Type)">
-                @context.Type
-            </MudChip>
-        </MudTd>
-        <MudTd DataLabel="@L["SubStage"]">
-            @(context.Status == "InProgress" && context.SubStage.HasValue ? context.SubStage.Value.ToString() : "-")
-        </MudTd>
-        <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToShortDateString()</MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteTask(context.Id)" />
-        </MudTd>
-    </RowTemplate>
-</MudTable>
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+}
+else if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else if (_tasks.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoTasks"]</MudAlert>
+}
+else
+{
+    <MudTable Items="_tasks" Hover="true" Dense="true" Class="mt-4">
+        <HeaderContent>
+            <MudTh>@L["Title"]</MudTh>
+            <MudTh>@L["Status"]</MudTh>
+            <MudTh>@L["Priority"]</MudTh>
+            <MudTh>@L["Type"]</MudTh>
+            <MudTh>@L["SubStage"]</MudTh>
+            <MudTh>@L["CreatedAt"]</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="@L["Title"]">
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => NavigateToTask(context.Id)">@context.Title</MudButton>
+            </MudTd>
+            <MudTd DataLabel="@L["Status"]">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(context.Status)">
+                    @ChromeLabels.Status(L, context.Status)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="@L["Priority"]">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(context.Priority)">
+                    @ChromeLabels.Priority(L, context.Priority)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="@L["Type"]">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(context.Type)">
+                    @ChromeLabels.Type(L, context.Type)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="@L["SubStage"]">
+                @(context.Status == "InProgress" ? ChromeLabels.SubStage(L, context.SubStage) : "-")
+            </MudTd>
+            <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToShortDateString()</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteTask(context.Id)" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
 
 @code {
     private List<TaskItemDto> _tasks = [];
     private ProjectDto? _project;
+    private bool _loading = true;
 
     protected override async Task OnInitializedAsync()
     {
         var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         _project = current.Value;
         await LoadTasks();
+        _loading = false;
     }
 
     private async Task LoadTasks()
@@ -86,14 +98,6 @@
         var listed = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
         _tasks = listed.Success ? listed.Value!.ToList() : [];
     }
-
-    private string StatusLabel(string status) => status switch
-    {
-        "Todo" => L["Todo"].Value,
-        "InProgress" => L["InProgress"].Value,
-        "Done" => L["Done"].Value,
-        _ => status
-    };
 
     private void NavigateToTask(Guid taskId) => Navigation.NavigateTo($"/task/{taskId}");
 

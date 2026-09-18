@@ -97,4 +97,16 @@ public sealed class LocalizationTests
         var value = _rm.GetString("BootstrapAlreadyCompleted", new System.Globalization.CultureInfo("ru"));
         Assert.Equal("Инициализация уже выполнена.", value);
     }
+
+    [Fact]
+    public void ResourceManager_SectionGoals_English()
+    {
+        Assert.Equal("Goals", _rm.GetString("SectionGoals", new System.Globalization.CultureInfo("en")));
+    }
+
+    [Fact]
+    public void ResourceManager_Proposed_English()
+    {
+        Assert.Equal("Proposed", _rm.GetString("Proposed", new System.Globalization.CultureInfo("en")));
+    }
 }

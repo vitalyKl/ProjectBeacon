@@ -5,6 +5,7 @@
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
@@ -18,7 +19,12 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Context"]</PageTitle>
-<MudText Typo="Typo.h4">@L["Context"]</MudText>
+<PageHeader Title="@L["Context"]">
+    @if (_project is not null)
+    {
+        <MudButton Variant="Variant.Outlined" OnClick="Compile">@L["CompileBrief"]</MudButton>
+    }
+</PageHeader>
 
 @if (_project is null)
 {
@@ -27,63 +33,81 @@
 }
 else
 {
-    <MudText Typo="Typo.caption" Class="mt-2">@_project.Name</MudText>
+    <MudText Typo="Typo.caption" Class="mb-4">@_project.Name</MudText>
 
-    <MudGrid Class="mt-4">
+    <MudGrid>
         <MudItem xs="12" md="6">
-            <MudTextField @bind-Value="_title" Label="@L["Title"]" />
-            <MudSelect T="string" @bind-Value="_sectionId" Label="@L["Section"]" Class="mt-2">
-                <MudSelectItem Value="@("goals")">goals</MudSelectItem>
-                <MudSelectItem Value="@("non_goals")">non_goals</MudSelectItem>
-                <MudSelectItem Value="@("security")">security</MudSelectItem>
-                <MudSelectItem Value="@("definition_of_done")">definition_of_done</MudSelectItem>
-                <MudSelectItem Value="@("architecture")">architecture</MudSelectItem>
-                <MudSelectItem Value="@("conventions")">conventions</MudSelectItem>
-            </MudSelect>
-            <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="8" Class="mt-2" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Save">@L["Save"]</MudButton>
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+                <MudTextField @bind-Value="_title" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudSelect T="string" @bind-Value="_sectionId" Label="@L["Section"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+                    <MudSelectItem Value="@("goals")">@L["SectionGoals"]</MudSelectItem>
+                    <MudSelectItem Value="@("non_goals")">@L["SectionNonGoals"]</MudSelectItem>
+                    <MudSelectItem Value="@("security")">@L["SectionSecurity"]</MudSelectItem>
+                    <MudSelectItem Value="@("definition_of_done")">@L["SectionDefinitionOfDone"]</MudSelectItem>
+                    <MudSelectItem Value="@("architecture")">@L["SectionArchitecture"]</MudSelectItem>
+                    <MudSelectItem Value="@("conventions")">@L["SectionConventions"]</MudSelectItem>
+                </MudSelect>
+                <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="8" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Save">@L["Save"]</MudButton>
+            </MudPaper>
         </MudItem>
         <MudItem xs="12" md="6">
-            <MudButton Variant="Variant.Outlined" OnClick="Compile">@L["CompileBrief"]</MudButton>
-            <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_tokens / 8000</MudText>
-            <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, 8000)" Class="mt-1 beacon-track" Height="6" />
-            @if (!string.IsNullOrEmpty(_preview))
-            {
-                <MudText Typo="Typo.body2" Class="mt-4" Style="white-space: pre-wrap; font-family: monospace;">@_preview</MudText>
-            }
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+                <MudText Typo="Typo.caption">@L["TokenBudget"]: @_tokens / 8000</MudText>
+                <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, 8000)" Color="Color.Default" Class="mt-1 beacon-track" />
+                @if (!string.IsNullOrEmpty(_preview))
+                {
+                    <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_preview</MudText>
+                }
+            </MudPaper>
         </MudItem>
     </MudGrid>
 
-    <MudText Typo="Typo.h6" Class="mt-6">@L["Sections"]</MudText>
-    <MudList T="string" Dense="true">
-        @foreach (var node in _nodes)
-        {
-            <MudListItem T="string">@node.SectionId — @node.Title</MudListItem>
-        }
-    </MudList>
-
-    <MudText Typo="Typo.h6" Class="mt-6">@L["Constraints"]</MudText>
-    <MudTextField @bind-Value="_constraintBody" Label="@L["ConstraintBody"]" Class="mt-2" />
-    <MudSelect T="ConstraintKind" @bind-Value="_constraintKind" Label="@L["Kind"]" Class="mt-2">
-        <MudSelectItem Value="ConstraintKind.Must">@L["KindMust"]</MudSelectItem>
-        <MudSelectItem Value="ConstraintKind.MustNot">@L["KindMustNot"]</MudSelectItem>
-        <MudSelectItem Value="ConstraintKind.Security">@L["KindSecurity"]</MudSelectItem>
-        <MudSelectItem Value="ConstraintKind.Compliance">@L["KindCompliance"]</MudSelectItem>
-    </MudSelect>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="AddConstraint">@L["Create"]</MudButton>
-    <MudList T="string" Dense="true" Class="mt-2">
-        @foreach (var c in _constraints)
-        {
-            <MudListItem T="string">
-                [@c.Kind] @c.Body — @c.Status
-                @if (c.Status == ConstraintStatus.Proposed)
+    <MudText Typo="Typo.h6" Class="mt-6 mb-3">@L["Sections"]</MudText>
+    @if (_nodes.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">@L["NoSectionsYet"]</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
+            <MudList T="string" Dense="true">
+                @foreach (var node in _nodes)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ActivateConstraint(c)">@L["Activate"]</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RejectConstraint(c)">@L["Reject"]</MudButton>
+                    <MudListItem T="string">@ChromeLabels.Section(L, node.SectionId) — @node.Title</MudListItem>
                 }
-            </MudListItem>
-        }
-    </MudList>
+            </MudList>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" Class="mt-6 mb-3">@L["Constraints"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+        <MudTextField @bind-Value="_constraintBody" Label="@L["ConstraintBody"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudSelect T="ConstraintKind" @bind-Value="_constraintKind" Label="@L["Kind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+            <MudSelectItem Value="ConstraintKind.Must">@L["KindMust"]</MudSelectItem>
+            <MudSelectItem Value="ConstraintKind.MustNot">@L["KindMustNot"]</MudSelectItem>
+            <MudSelectItem Value="ConstraintKind.Security">@L["KindSecurity"]</MudSelectItem>
+            <MudSelectItem Value="ConstraintKind.Compliance">@L["KindCompliance"]</MudSelectItem>
+        </MudSelect>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="AddConstraint">@L["Create"]</MudButton>
+        <MudList T="string" Dense="true" Class="mt-2">
+            @foreach (var c in _constraints)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled">@L["Kind" + c.Kind]</MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForConstraintStatus(c.Status)">@ChromeLabels.Constraint(L, c.Status)</MudChip>
+                        <MudText Typo="Typo.body2" Class="grow">@c.Body</MudText>
+                        @if (c.Status == ConstraintStatus.Proposed)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ActivateConstraint(c)">@L["Activate"]</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RejectConstraint(c)">@L["Reject"]</MudButton>
+                        }
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
+    </MudPaper>
 }
 
 @code {

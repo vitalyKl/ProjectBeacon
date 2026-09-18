@@ -15,18 +15,13 @@
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Board"]</PageTitle>
-<MudGrid>
-    <MudItem>
-        <MudText Typo="Typo.h4">@L["Board"]</MudText>
-    </MudItem>
-    <MudItem>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateTask">@L["NewTask"]</MudButton>
-    </MudItem>
-</MudGrid>
+<PageHeader Title="@L["Board"]">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateTask">@L["NewTask"]</MudButton>
+</PageHeader>
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
 else if (_project is null)
 {

@@ -12,12 +12,11 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Reports"]</PageTitle>
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-    <MudText Typo="Typo.h4">@L["Reports"]</MudText>
+<PageHeader Title="@L["Reports"]">
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Generate" Disabled="_project is null || _busy">
         @L["GenerateReport"]
     </MudButton>
-</MudStack>
+</PageHeader>
 
 @if (_project is null)
 {
@@ -39,7 +38,7 @@ else
             <MudTd>@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
             <MudTd>@context.Title</MudTd>
             <MudTd>
-                <MudText Typo="Typo.caption" Style="white-space: pre-wrap; font-family: monospace;">@context.BodyMarkdown</MudText>
+                <MudText Typo="Typo.caption" Class="beacon-pre">@context.BodyMarkdown</MudText>
             </MudTd>
         </RowTemplate>
     </MudTable>

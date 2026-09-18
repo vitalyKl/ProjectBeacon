@@ -12,12 +12,12 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<MudText Typo="Typo.h4">@L["CreateProject"]</MudText>
+<PageHeader Title="@L["CreateProject"]" />
 
-<MudPaper Class="pa-6 mt-4" Elevation="0" Outlined="true" Style="max-width: 520px;">
-    <MudTextField @bind-Value="_orgName" Label="@L["OrgName"]" Required="true" />
-    <MudTextField @bind-Value="_projectName" Label="@L["ProjectName"]" Required="true" Class="mt-2" />
-    <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Class="mt-2" />
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-form">
+    <MudTextField @bind-Value="_orgName" Label="@L["OrgName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudTextField @bind-Value="_projectName" Label="@L["ProjectName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+    <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="Create" Disabled="_saving">
         @L["Create"]
     </MudButton>

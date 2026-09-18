@@ -24,4 +24,19 @@ public static class ChipPalette
         TaskType.Bug => Color.Error,
         _ => Color.Default
     };
+
+    public static Color ForDecisionStatus(DecisionStatus status) => status switch
+    {
+        DecisionStatus.Accepted => Color.Success,
+        DecisionStatus.Deprecated => Color.Warning,
+        DecisionStatus.Superseded => Color.Default,
+        _ => Color.Info
+    };
+
+    public static Color ForConstraintStatus(ConstraintStatus status) => status switch
+    {
+        ConstraintStatus.Active => Color.Success,
+        ConstraintStatus.Rejected => Color.Error,
+        _ => Color.Info
+    };
 }
