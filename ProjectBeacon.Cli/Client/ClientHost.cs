@@ -52,6 +52,7 @@ public static class ClientHost
 
         using var http = new HttpClient { BaseAddress = new Uri(store.Url) };
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", store.Token);
+        await using var llama = new ClientLlamaSwap();
 
         Console.Error.WriteLine($"beacon client connected to {store.Url}");
         while (!ct.IsCancellationRequested)
@@ -59,9 +60,10 @@ public static class ClientHost
             try
             {
                 var settings = WorkstationSettings.Load();
+                await SyncLlamaAsync(http, llama, settings, ct);
                 var heartbeat = await http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
                 {
-                    probeJson = WorkstationActions.ProbeJson(),
+                    probeJson = WorkstationActions.ProbeJson(llama.StatusWire()),
                     workstationJson = JsonSerializer.Serialize(settings)
                 }, ct);
                 if (!heartbeat.IsSuccessStatusCode)
@@ -83,7 +85,7 @@ public static class ClientHost
                 var command = await claimed.Content.ReadFromJsonAsync<CommandWire>(Json, ct);
                 if (command is null)
                     continue;
-                var (ok, result, error) = Execute(command);
+                var (ok, result, error) = await ExecuteAsync(command, llama, ct);
                 await http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new
                 {
                     success = ok,
@@ -104,15 +106,43 @@ public static class ClientHost
         return 0;
     }
 
-    internal static (bool Ok, string? Result, string? Error) Execute(CommandWire command)
+    private static async Task SyncLlamaAsync(HttpClient http, ClientLlamaSwap llama, WorkstationSettings settings, CancellationToken ct)
+    {
+        try
+        {
+            var response = await http.GetAsync("/v1/devices/me/llamaswap-config", ct);
+            if (!response.IsSuccessStatusCode)
+                return;
+            var config = await response.Content.ReadFromJsonAsync<LlamaSwapConfigWire>(Json, ct);
+            if (config is null)
+                return;
+            var port = settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : config.Port;
+            await llama.TickAsync(config.Yaml ?? "models: {}\n", port, settings.LlamaSwapBin, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Console.Error.WriteLine($"llama-swap sync: {ex.Message}");
+        }
+    }
+
+    internal static async Task<(bool Ok, string? Result, string? Error)> ExecuteAsync(CommandWire command, ClientLlamaSwap llama, CancellationToken ct)
     {
         try
         {
             var kind = command.Kind;
             var payload = command.PayloadJson ?? "{}";
+            if (kind == WorkstationCommandKind.ReloadProxy)
+            {
+                return (true, JsonSerializer.Serialize(llama.StatusWire()), null);
+            }
+            if (kind == WorkstationCommandKind.UnloadProxy)
+            {
+                await llama.UnloadAsync(ct);
+                return (true, JsonSerializer.Serialize(llama.StatusWire()), null);
+            }
             string result = kind switch
             {
-                WorkstationCommandKind.Probe => WorkstationActions.ProbeJson(),
+                WorkstationCommandKind.Probe => WorkstationActions.ProbeJson(llama.StatusWire()),
                 WorkstationCommandKind.ListDir => WorkstationActions.ListDir(ReadPath(payload)),
                 WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(ReadPath(payload) ?? WorkstationSettings.Load().ModelsRoot),
                 WorkstationCommandKind.InitProject => WorkstationActions.InitProject(payload),
@@ -187,6 +217,12 @@ public static class ClientHost
         public Guid Id { get; set; }
         public WorkstationCommandKind Kind { get; set; }
         public string? PayloadJson { get; set; }
+    }
+
+    public sealed class LlamaSwapConfigWire
+    {
+        public string? Yaml { get; set; }
+        public int Port { get; set; }
     }
 
     private static readonly JsonSerializerOptions Json = new()

@@ -5,6 +5,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
+using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 
 public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<DaemonDeviceDto>>
@@ -339,5 +340,35 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
         db.ProjectRuntimes.Remove(runtime);
         await db.SaveChangesAsync(ct);
         return Result.Ok(true);
+    }
+}
+
+public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigCommand, Result<LlamaSwapConfigDto>>
+{
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+
+    public GetLlamaSwapConfigHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<LlamaSwapConfigDto>> HandleAsync(GetLlamaSwapConfigCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
+        if (device is null || device.IsRevoked)
+            return Result.Failure<LlamaSwapConfigDto>("Device not found.");
+
+        var projectIds = await db.ProjectRuntimes.IgnoreQueryFilters()
+            .Where(r => r.DeviceId == device.Id)
+            .Select(r => r.ProjectId)
+            .ToListAsync(ct);
+        var backends = projectIds.Count == 0
+            ? []
+            : await db.LocalModelBackends.IgnoreQueryFilters()
+                .Where(b => projectIds.Contains(b.ProjectId))
+                .OrderBy(b => b.Name)
+                .ToListAsync(ct);
+        var specs = backends
+            .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags))
+            .ToList();
+        return Result.Ok(new LlamaSwapConfigDto(LlamaSwapConfigGenerator.Generate(specs), 8080));
     }
 }

@@ -78,3 +78,8 @@ public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result
 
 public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId);
 public record DetachRuntimeCommand(DetachRuntimeRequest Request) : ICommand<Result<bool>>;
+
+public record LlamaSwapConfigDto(string Yaml, int Port);
+
+public record GetLlamaSwapConfigRequest(Guid DeviceId);
+public record GetLlamaSwapConfigCommand(GetLlamaSwapConfigRequest Request) : ICommand<Result<LlamaSwapConfigDto>>;

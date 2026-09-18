@@ -106,11 +106,7 @@ public static class ServiceCollectionExtensions
         services.AddInfrastructure(connectionString);
         services.AddApplicationHandlers();
 
-        // Overrides the UnavailableLlamaSwapProxy fallback from AddApplicationHandlers.
-        services.AddSingleton(_ => LlamaSwapOptions.FromEnvironment());
-        services.AddSingleton<LlamaSwapSupervisor>();
-        services.AddHostedService(sp => sp.GetRequiredService<LlamaSwapSupervisor>());
-        services.AddSingleton<ILlamaSwapProxy>(sp => sp.GetRequiredService<LlamaSwapSupervisor>());
+        services.AddTransient<ILlamaSwapProxy, ProjectBeacon.Application.Devices.DeviceLlamaSwapProxy>();
         services.AddHttpContextAccessor();
         services.AddScoped(sp =>
         {

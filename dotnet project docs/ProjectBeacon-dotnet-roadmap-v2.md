@@ -174,7 +174,7 @@ acceptance criterion was run.
 | C3 | MCP apply | 🟡 | Init payload installs beacon MCP; `ApplyOpencode` merges extra servers |
 | C4 | Solo / Pipeline models | 🟡 | Agents UI Solo/Pipeline + Apply on device writes `opencode.json` provider/model/agent; GGUF pick from modelsRoot; `OpencodePayloadTests` + `ApplyAgentConfigHandlerTests` |
 | C5 | probe + install | 🟡 | Probe in heartbeat; install allowlist (git/node/docker) via winget after Confirm |
-| C6 | llama-swap on client | ⬜ | Web supervisor stays until client-owned process is proven; probe reports llama-swap |
+| C6 | llama-swap on client | 🟡 | Web no longer hosts llama-swap; client writes config from `/v1/devices/me/llamaswap-config` and reports status in heartbeat; Agents proxy uses device probe. `DeviceLlamaSwapProxyTests` |
 
 Code index, worker jobs, eval harness still ⬜. Hosted clone and `ff.sidecar_tunnel` stay off. Postgres-only `docker-compose.yml` exists (not full product Compose).
 

@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 public static class WorkstationActions
 {
-    public static string ProbeJson()
+    public static string ProbeJson(object? llamaSwapStatus = null)
     {
         var probe = new Dictionary<string, object?>
         {
@@ -20,6 +20,8 @@ public static class WorkstationActions
             ["os"] = Environment.OSVersion.ToString(),
             ["machine"] = Environment.MachineName
         };
+        if (llamaSwapStatus is not null)
+            probe["llamaSwapStatus"] = llamaSwapStatus;
         return JsonSerializer.Serialize(probe);
     }
 

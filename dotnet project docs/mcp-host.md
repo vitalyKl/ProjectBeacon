@@ -8,6 +8,8 @@ dotnet run --project ProjectBeacon.Cli -- mcp --root <project-root>
 
 Or after publish, `beacon mcp --root <project-root>`.
 
+llama-swap is started by `beacon client` on the device, not by the Web host. The client pulls `GET /v1/devices/me/llamaswap-config` and reports proxy status in heartbeat `probeJson.llamaSwapStatus`.
+
 Local workstation client (outbound HTTPS to the control plane; no inbound port, no WSS file tunnel):
 
 ```

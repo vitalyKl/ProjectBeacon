@@ -21,6 +21,7 @@ public static class DeviceEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/runtimes", ListRuntimes).RequireAuthorization().DisableAntiforgery();
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery();
         return app;
     }
 
@@ -142,6 +143,15 @@ public static class DeviceEndpoints
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, userId)), ct);
         return result.Success ? Results.NoContent() : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> GetLlamaSwapConfig(
+        GetLlamaSwapConfigHandler handler, ClaimsPrincipal user, CancellationToken ct)
+    {
+        if (!TryDeviceId(user, out var deviceId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new GetLlamaSwapConfigCommand(new GetLlamaSwapConfigRequest(deviceId)), ct);
+        return result.Success ? Results.Ok(result.Value) : Results.Unauthorized();
     }
 
     private static bool TryUserId(ClaimsPrincipal user, out Guid userId)

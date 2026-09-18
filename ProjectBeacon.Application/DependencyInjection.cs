@@ -119,6 +119,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AttachRuntimeHandler>();
         services.AddTransient<ListRuntimesHandler>();
         services.AddTransient<DetachRuntimeHandler>();
+        services.AddTransient<GetLlamaSwapConfigHandler>();
 
         services.AddTransient<ILlamaSwapProxy, UnavailableLlamaSwapProxy>();
         services.AddTransient<UpsertLocalModelBackendHandler>();

@@ -39,6 +39,7 @@ public sealed class WorkstationSettings
     public string? ModelsRoot { get; set; }
     public string? LlamaCppBin { get; set; }
     public string? LlamaSwapBin { get; set; }
+    public int LlamaSwapPort { get; set; } = 8080;
     public string? OpencodeDataDir { get; set; }
     public string? ProjectsRoot { get; set; }
 

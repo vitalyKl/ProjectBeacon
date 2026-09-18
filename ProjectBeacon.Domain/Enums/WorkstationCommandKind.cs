@@ -7,5 +7,7 @@ public enum WorkstationCommandKind
     Install,
     InitProject,
     ApplyOpencode,
-    ScanGguf
+    ScanGguf,
+    ReloadProxy,
+    UnloadProxy
 }
