@@ -6,19 +6,19 @@
 @inject AuthenticationStateProvider Auth
 @inject ListMyProjectsHandler MyProjects
 
-<MudSelect T="Guid" Value="_selected" ValueChanged="OnSelected"
+<MudSelect T="Guid?" Value="_selected" ValueChanged="OnSelected"
            Label="@L["Project"]" Dense="true" Variant="Variant.Outlined"
            Class="@Class" Disabled="@(_projects.Count == 0)">
     @foreach (var p in _projects)
     {
-        <MudSelectItem Value="p.Id">@p.Name</MudSelectItem>
+        <MudSelectItem Value="@((Guid?)p.Id)">@p.Name</MudSelectItem>
     }
 </MudSelect>
 
 @code {
     [Parameter] public string? Class { get; set; }
 
-    private Guid _selected = Guid.Empty;
+    private Guid? _selected;
     private List<ProjectSummaryDto> _projects = [];
 
     protected override async Task OnInitializedAsync()
@@ -40,9 +40,9 @@
             _selected = activeId;
     }
 
-    private void OnSelected(Guid projectId)
+    private void OnSelected(Guid? projectId)
     {
-        if (projectId == Guid.Empty)
+        if (projectId is null)
             return;
 
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);

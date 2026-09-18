@@ -158,11 +158,11 @@ acceptance criterion was run.
 | # | Item | Status | Acceptance criterion |
 |---|---|---|---|
 | M1 | Fundamentals (A1, A2, B1, B2) | ✅ | `dotnet build` green; migrations `AddLocalModelRegistry` and `AddTaskPipeline` apply; Domain.Tests pipeline transitions pass |
-| M2 | Block A app+API+UI (A3, A5, A6) | 🟡 | UI CRUD backends + role bind; API `/v1/models*` responds. HTTP CRUD verified in A6; browser UI not run. |
+| M2 | Block A app+API+UI (A3, A5, A6) | ✅ | UI CRUD backends + role bind; API `/v1/models*` responds. Playwright on `http://127.0.0.1:5183` / `beacon_test`: add/edit/bind/unbind/delete + proxy unavailable (NFR-A3). |
 | M3 | llama-swap supervisor (A4, A8) | ✅ | Fake HTTP listener: `/health` `/running` `/metrics` `/unload`; empty/seeded registry writes config.yaml; no bin/project → unavailable. `LlamaSwapSupervisorTests` 9/9. Live fake-binary smoke was run in A4. |
 | M4 | Block B app+API (B3, B4) | ✅ | Handler + curl flow: start → subtasks → actor sessions → results → review → approve → task `Done` + ReviewNotes; reopen ≤ `BEACON_MAX_REOPEN_CYCLES`. `PipelineHandlerTests` covers happy path, D13, D14. |
 | M5 | MCP tools (A7, B5) | ✅ | `beacon mcp` `tools/list` = 6 file + 6 pipeline/model; live Postgres; no DB → `isError`; file tools intact. `mcp-host.md` matches `McpStdioServer`. |
-| M6 | UI + tests + docs (B6, B7, B8, A8) | 🟡 | `dotnet test` green for Domain/Application/Infrastructure/API/Web (+ Cli when the `beacon` host is not locking the DLL); pipeline UI verified via curl substitute (no browser); this table and `mcp-host.md` updated. |
+| M6 | UI + tests + docs (B6, B7, B8, A8) | ✅ | `dotnet test` green (Domain 117, Application 120, Infrastructure 26, API 32, Web 44). Playwright on `:5183`/`beacon_test`: TaskDetail happy path (start→subtask→actor→launch→result→review→approve→close) and reopen+admin force-close. `mcp-host.md` matches `McpStdioServer`. |
 
 ## 9. Phase 7–9
 

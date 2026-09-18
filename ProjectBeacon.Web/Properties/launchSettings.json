@@ -10,6 +10,16 @@
           "ASPNETCORE_ENVIRONMENT": "Development"
         }
       },
+      "http-test": {
+        "commandName": "Project",
+        "dotnetRunMessages": true,
+        "launchBrowser": false,
+        "applicationUrl": "http://localhost:5183",
+        "environmentVariables": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=beacon_test;Username=beacon;"
+        }
+      },
       "https": {
         "commandName": "Project",
         "dotnetRunMessages": true,
