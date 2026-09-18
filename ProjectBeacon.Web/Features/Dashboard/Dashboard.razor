@@ -3,133 +3,165 @@
 @attribute [Authorize]
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Projects
-@using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Infrastructure.LlamaSwap
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider Auth
-@inject ListMyProjectsHandler MyProjects
+@inject GetProjectPulseHandler Pulse
+@inject GetProxyStatusHandler Proxy
 
 <PageTitle>@L["Dashboard"]</PageTitle>
 
 <PageHeader Title="@L["Dashboard"]">
-    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-               OnClick="@(() => Navigation.NavigateTo("/board"))">
-        @L["GoToBoard"]
-    </MudButton>
+    @if (_pulse is not null)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/board">
+            @L["GoToBoard"]
+        </MudButton>
+    }
 </PageHeader>
 
 @if (_loading)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
+else if (_error)
+{
+    <MudAlert Severity="Severity.Error" Class="mt-4">@L["AnErrorOccurred"]</MudAlert>
+}
+else if (_pulse is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Href="/projects/new">@L["CreateProject"]</MudButton>
+}
 else
 {
-<MudGrid>
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
-            <MudText Typo="Typo.h5">@L["Projects"]</MudText>
-            <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@(_data?.TotalProjects ?? 0)</MudChip>
-            </MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
-            <MudText Typo="Typo.h5">@L["Tasks"]</MudText>
-            <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@(_data?.TotalTasks ?? 0)</MudChip>
-            </MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
-            <MudText Typo="Typo.h5">@L["InProgress"]</MudText>
-            <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@(_data?.InProgress ?? 0)</MudChip>
-            </MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 text-center">
-            <MudText Typo="Typo.h5">@L["Completed"]</MudText>
-            <MudText Typo="Typo.body1" Class="mt-2">
-                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@(_data?.Done ?? 0)</MudChip>
-            </MudText>
-        </MudPaper>
-    </MudItem>
-</MudGrid>
+    <MudStack Spacing="1" Class="mb-6">
+        <MudText Typo="Typo.h6">@_pulse.Name</MudText>
+        @if (!string.IsNullOrWhiteSpace(_pulse.Description))
+        {
+            <MudText Typo="Typo.body2">@_pulse.Description</MudText>
+        }
+    </MudStack>
 
-<MudGrid Spacing="3" Class="mt-2">
-    <MudItem xs="12" md="8">
-        <MudText Typo="Typo.h6" Class="mb-3">@L["MyProjects"]</MudText>
-        @if (_data is null || _data.Projects.Count == 0)
-        {
-            <MudAlert Severity="Severity.Info">@L["NoProjectsYet"]</MudAlert>
-        }
-        else
-        {
-            <MudGrid Spacing="3">
-                @foreach (var p in _data.Projects)
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+        <MudText Typo="Typo.subtitle1">@L["ProjectBrief"]</MudText>
+        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/context">@L["EditInContext"]</MudButton>
+    </MudStack>
+    @if (_pulse.BriefSections.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-6">@L["NoBrief"]</MudAlert>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 mb-6">
+            @foreach (var section in _pulse.BriefSections)
+            {
+                <MudText Typo="Typo.caption" Class="mb-1">@ChromeLabels.Section(L, section.SectionId)</MudText>
+                <MudText Typo="Typo.body2" Class="mb-3 beacon-pre">@section.BodyMarkdown</MudText>
+            }
+        </MudPaper>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+                    <MudText Typo="Typo.subtitle1">@L["Queue"]</MudText>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/board">@L["GoToBoard"]</MudButton>
+                </MudStack>
+                <MudStack Row="true" Wrap="Wrap.Wrap" Class="mb-3">
+                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Todo")" Variant="Variant.Filled">@L["Todo"]: @_pulse.Todo</MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@L["InProgress"]: @_pulse.InProgress</MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@L["Done"]: @_pulse.Done</MudChip>
+                </MudStack>
+                @if (_pulse.ReadyPeek.Count == 0)
                 {
-                    <MudItem xs="12" sm="6">
-                        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100 beacon-card-interactive"
-                                  @onclick="@(() => SwitchProject(p.Id))">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
-                                <MudText Typo="Typo.h6" Class="grow beacon-ellipsis">@p.Name</MudText>
-                                @if (p.Id == _activeProjectId)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">@L["Active"]</MudChip>
-                                }
-                            </MudStack>
-                            @if (!string.IsNullOrWhiteSpace(p.Description))
-                            {
-                                <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis">@p.Description</MudText>
-                            }
-                            <MudStack Row="true" Class="mt-3" Wrap="Wrap.Wrap">
-                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Todo")" Variant="Variant.Filled">@L["Todo"]: @p.Todo</MudChip>
-                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@L["InProgress"]: @p.InProgress</MudChip>
-                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@L["Done"]: @p.Done</MudChip>
-                            </MudStack>
-                            <MudText Typo="Typo.caption" Class="mt-2">@L["LastActivity"]: @p.LastActivity.ToString("dd.MM.yyyy")</MudText>
-                        </MudPaper>
-                    </MudItem>
+                    <MudText Typo="Typo.body2">@L["NoReadyTasks"]</MudText>
                 }
-            </MudGrid>
-        }
-    </MudItem>
-    <MudItem xs="12" md="4">
-        <MudText Typo="Typo.h6" Class="mb-3">@L["RecentActivity"]</MudText>
-        @if (_data is null || _data.RecentTasks.Count == 0)
-        {
-            <MudAlert Severity="Severity.Info">@L["NoRecentActivity"]</MudAlert>
-        }
-        else
-        {
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
-                <MudList T="string" Dense="true">
-                    @foreach (var t in _data.RecentTasks)
-                    {
-                        <MudListItem T="string">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
-                                <MudText Typo="Typo.body2" Class="grow beacon-ellipsis">@t.Title</MudText>
-                                <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus(t.Status.ToString())" Variant="Variant.Filled">@ChromeLabels.Status(L, t.Status)</MudChip>
-                            </MudStack>
-                            <MudText Typo="Typo.caption">@t.ProjectName · @t.ActivityAt.ToString("dd.MM HH:mm")</MudText>
-                        </MudListItem>
-                    }
-                </MudList>
+                else
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var t in _pulse.ReadyPeek)
+                        {
+                            <MudListItem T="string" OnClick="@(() => Navigation.NavigateTo($"/task/{t.Id}"))">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
+                                    <MudText Typo="Typo.body2" Class="grow beacon-ellipsis">@t.Title</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForPriority(t.Priority)" Variant="Variant.Filled">@ChromeLabels.Priority(L, t.Priority)</MudChip>
+                                </MudStack>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
             </MudPaper>
-        }
-    </MudItem>
-</MudGrid>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+                    <MudText Typo="Typo.subtitle1">@L["Milestone"]</MudText>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/roadmap">@L["Roadmap"]</MudButton>
+                </MudStack>
+                @if (_pulse.OpenMilestones == 0)
+                {
+                    <MudText Typo="Typo.body2">@L["NoOpenMilestones"]</MudText>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Href="/roadmap">@L["OpenMilestones", _pulse.OpenMilestones]</MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+                    <MudText Typo="Typo.subtitle1">@L["Agents"]</MudText>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/agents">@L["Agents"]</MudButton>
+                </MudStack>
+                <MudText Typo="Typo.body2">@L["AgentsActive", _pulse.ActiveSessions]</MudText>
+                @if (_pulse.ActiveSessions == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2">@L["NoAgentSessions"]</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+                    <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/agents">@L["Agents"]</MudButton>
+                </MudStack>
+                @if (_status is null)
+                {
+                    <MudText Typo="Typo.body2">@L["Unavailable"]</MudText>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ProxyColor">@ProxyText</MudChip>
+                    <HostLoadView Status="_status" />
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 }
 
 @code {
-    private ListMyProjectsDto? _data;
-    private Guid? _activeProjectId;
+    private ProjectPulseDto? _pulse;
+    private LlamaSwapStatusDto? _status;
     private bool _loading = true;
+    private bool _error;
+
+    private Color ProxyColor =>
+        _status is null || !_status.Available ? Color.Default
+        : _status.Healthy ? Color.Success
+        : Color.Warning;
+
+    private string ProxyText =>
+        _status is null || !_status.Available ? L["Unavailable"].Value
+        : !_status.Healthy ? L["Unhealthy"].Value
+        : L["Healthy"].Value;
 
     protected override async Task OnInitializedAsync()
     {
@@ -142,16 +174,20 @@ else
             return;
         }
 
-        if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var active))
-            _activeProjectId = active;
-
+        Guid? preferred = Guid.TryParse(user.FindFirst("project_id")?.Value, out var active) ? active : null;
         var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
-        var result = await MyProjects.HandleAsync(uid, isAdmin);
-        if (result.Success)
-            _data = result.Value;
+        var result = await Pulse.HandleAsync(uid, isAdmin, preferred);
+        if (!result.Success)
+        {
+            _error = true;
+            _loading = false;
+            return;
+        }
+
+        _pulse = result.Value;
+        var proxy = await Proxy.HandleAsync(new GetProxyStatusCommand());
+        if (proxy.Success)
+            _status = proxy.Value;
         _loading = false;
     }
-
-    private void SwitchProject(Guid projectId) =>
-        Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl=/dashboard", forceLoad: true);
 }

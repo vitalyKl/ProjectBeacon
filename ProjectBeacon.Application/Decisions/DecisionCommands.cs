@@ -81,3 +81,59 @@ public class AcceptDecisionHandler
             decision.Consequences, decision.Status, decision.ProjectId));
     }
 }
+
+public class DeprecateDecisionHandler
+{
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+
+    public DeprecateDecisionHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var decision = await db.Decisions.FindAsync([decisionId], ct);
+        if (decision is null)
+            return Result.Failure<DecisionDto>("Decision not found.");
+        decision.Deprecate();
+        await db.SaveChangesAsync(ct);
+        return Result.Ok(Map(decision));
+    }
+
+    private static DecisionDto Map(Decision d) =>
+        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId);
+}
+
+public class SupersedeDecisionHandler
+{
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+
+    public SupersedeDecisionHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<DecisionDto>> HandleAsync(Guid decisionId, Guid replacementId, CancellationToken ct = default)
+    {
+        if (decisionId == replacementId)
+            return Result.Failure<DecisionDto>("Replacement must be a different decision.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var decision = await db.Decisions.FindAsync([decisionId], ct);
+        if (decision is null)
+            return Result.Failure<DecisionDto>("Decision not found.");
+        var replacement = await db.Decisions.FindAsync([replacementId], ct);
+        if (replacement is null || replacement.ProjectId != decision.ProjectId)
+            return Result.Failure<DecisionDto>("Replacement not found.");
+
+        try
+        {
+            decision.Supersede(replacement);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<DecisionDto>(ex.Message);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Result.Ok(new DecisionDto(
+            decision.Id, decision.Title, decision.Context, decision.DecisionBody,
+            decision.Consequences, decision.Status, decision.ProjectId));
+    }
+}

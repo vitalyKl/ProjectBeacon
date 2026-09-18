@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Projects;
 using System.Security.Claims;
 using Application.Common;
 using Application.Identity;
+using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +61,7 @@ public class GetCurrentProjectHandler
         return Result.Ok<ProjectDto?>(MapToDto(project));
     }
 
-    private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
+    private static ProjectDto MapToDto(Project project) =>
         new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 }
 
@@ -257,6 +258,98 @@ public class GetProjectOverviewHandler
             tasks.Count(t => t.Status == TaskItemStatus.Done),
             lastActivity,
             recent));
+    }
+}
+
+public record PulseBriefSectionDto(string SectionId, string Title, string BodyMarkdown);
+
+public record PulsePeekTaskDto(Guid Id, string Title, TaskItemStatus Status, TaskPriority Priority);
+
+public record ProjectPulseDto(
+    Guid ProjectId,
+    string Name,
+    string? Description,
+    int Todo,
+    int InProgress,
+    int Done,
+    IReadOnlyList<PulsePeekTaskDto> ReadyPeek,
+    int OpenMilestones,
+    int ActiveSessions,
+    IReadOnlyList<PulseBriefSectionDto> BriefSections);
+
+public class GetProjectPulseHandler
+{
+    private const int PeekLimit = 3;
+    private static readonly string[] PulseSectionIds = ["goals", "definition_of_done"];
+
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+
+    public GetProjectPulseHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<ProjectPulseDto?>> HandleAsync(
+        Guid userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var (projectId, _) = await CurrentProjectLookup.ForUserAsync(db, userId, isAdmin, preferredProjectId, ct);
+        if (projectId is null)
+            return Result.Ok<ProjectPulseDto?>(null);
+
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == projectId.Value, ct);
+        if (project is null)
+            return Result.Ok<ProjectPulseDto?>(null);
+
+        var tasks = await db.Tasks.IgnoreQueryFilters()
+            .Where(t => t.ProjectId == project.Id)
+            .ToListAsync(ct);
+
+        var openMilestones = await db.Milestones.IgnoreQueryFilters()
+            .CountAsync(m => m.ProjectId == project.Id && m.ClosedAt == null, ct);
+
+        var activeSessions = await db.PipelineSessions.IgnoreQueryFilters()
+            .CountAsync(s => s.ProjectId == project.Id && s.Status == SessionStatus.Active, ct);
+
+        var sections = await db.ContextSections.IgnoreQueryFilters()
+            .Where(s => s.ProjectId == project.Id && PulseSectionIds.Contains(s.SectionId))
+            .ToListAsync(ct);
+
+        var peek = tasks
+            .Where(t => t.Status == TaskItemStatus.Todo)
+            .OrderByDescending(t => t.Priority)
+            .ThenBy(t => t.CreatedAt)
+            .Take(PeekLimit)
+            .Select(t => new PulsePeekTaskDto(t.Id, t.Title, t.Status, t.Priority))
+            .ToList();
+
+        return Result.Ok<ProjectPulseDto?>(new ProjectPulseDto(
+            project.Id,
+            project.Name,
+            project.Description,
+            tasks.Count(t => t.Status == TaskItemStatus.Todo),
+            tasks.Count(t => t.Status == TaskItemStatus.InProgress),
+            tasks.Count(t => t.Status == TaskItemStatus.Done),
+            peek,
+            openMilestones,
+            activeSessions,
+            PickBrief(sections)));
+    }
+
+    internal static IReadOnlyList<PulseBriefSectionDto> PickBrief(IReadOnlyList<ContextSection> sections)
+    {
+        var result = new List<PulseBriefSectionDto>();
+        foreach (var id in PulseSectionIds)
+        {
+            var picked = sections
+                .Where(s => s.SectionId == id && !string.IsNullOrWhiteSpace(s.BodyMarkdown))
+                .OrderBy(s => s.ScopeType)
+                .ThenByDescending(s => s.ReviewState)
+                .ThenByDescending(s => s.UpdatedAt)
+                .FirstOrDefault();
+            if (picked is not null)
+                result.Add(new PulseBriefSectionDto(picked.SectionId, picked.Title, picked.BodyMarkdown.Trim()));
+        }
+
+        return result;
     }
 }
 

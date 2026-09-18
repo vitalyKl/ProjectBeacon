@@ -78,7 +78,7 @@ public static class PipelineEndpoints
             : Results.BadRequest(new { error = result.Error });
     }
 
-private static async Task<IResult> ReportSubtaskResult(Guid taskId, Guid subtaskId, [FromBody] SubtaskResultBody body, ReportSubtaskResultHandler handler, CancellationToken ct)
+    private static async Task<IResult> ReportSubtaskResult(Guid taskId, Guid subtaskId, [FromBody] SubtaskResultBody body, ReportSubtaskResultHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId || subtaskId != body.SubtaskId)
             return Results.BadRequest("TaskId/SubtaskId mismatch.");

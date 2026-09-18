@@ -11,6 +11,9 @@
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
 @inject ListLabelsHandler ListLabels
+@inject CreateLabelHandler CreateLabel
+@inject UpdateLabelHandler UpdateLabel
+@inject DeleteLabelHandler DeleteLabel
 @inject ListDevicesHandler ListDevices
 @inject CreateDeviceHandler CreateDevice
 @inject RevokeDeviceHandler RevokeDevice
@@ -84,11 +87,11 @@
         <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
-        <MudText Typo="Typo.body2">git: @_probeGit</MudText>
-        <MudText Typo="Typo.body2">opencode: @_probeOpencode</MudText>
-        <MudText Typo="Typo.body2">node: @_probeNode</MudText>
-        <MudText Typo="Typo.body2">docker: @_probeDocker</MudText>
-        <MudText Typo="Typo.body2">llama-swap: @_probeLlamaSwap</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @_probeOpencode</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeNode"]: @_probeNode</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeDocker"]: @_probeDocker</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @_probeLlamaSwap</MudText>
         <MudStack Row="true" Spacing="2" Class="mt-2">
             @if (_probeGit == "-")
             {
@@ -111,26 +114,53 @@
 {
     <MudAlert Severity="Severity.Info">@L["NoProjectAvailable"]</MudAlert>
 }
-else if (_labels.Count == 0)
-{
-    <MudAlert Severity="Severity.Info">@L["NoLabelsYet"]</MudAlert>
-}
 else
 {
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
-        <MudList T="string" Dense="true">
-            @foreach (var label in _labels)
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+            <MudTextField @bind-Value="_labelName" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_labelPrefix" Label="@L["PathPrefix"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveLabel" Disabled="_busy">
+                @(_editingLabelId is null ? L["Create"] : L["Save"])
+            </MudButton>
+            @if (_editingLabelId is not null)
             {
-                <MudListItem T="string">@label.Name (@label.PathPrefix)</MudListItem>
+                <MudButton Variant="Variant.Text" OnClick="CancelLabelEdit">@L["Cancel"]</MudButton>
             }
-        </MudList>
+        </MudStack>
     </MudPaper>
+    @if (_labels.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">@L["NoLabelsYet"]</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_labels" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>@L["Title"]</MudTh>
+                <MudTh>@L["PathPrefix"]</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.PathPrefix</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartLabelEdit(context)">@L["Edit"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveLabel(context)">@L["Delete"]</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
 }
 
 @code {
     private List<LabelDto> _labels = [];
     private List<DaemonDeviceDto> _devices = [];
     private bool _projectMissing;
+    private Guid? _projectId;
+    private string _labelName = string.Empty;
+    private string _labelPrefix = string.Empty;
+    private Guid? _editingLabelId;
     private string _deviceName = string.Empty;
     private string? _deviceToken;
     private bool _busy;
@@ -157,8 +187,8 @@ else
             _projectMissing = true;
         else
         {
-            var listed = await ListLabels.HandleAsync(new ListLabelsRequest(current.Value.Id));
-            _labels = listed.Success ? listed.Value!.ToList() : [];
+            _projectId = current.Value.Id;
+            await ReloadLabels();
         }
         await ReloadDevices();
     }
@@ -311,6 +341,85 @@ else
             await Task.Delay(500);
         }
         return null;
+    }
+
+    private async Task ReloadLabels()
+    {
+        if (_projectId is not { } projectId)
+            return;
+        var listed = await ListLabels.HandleAsync(new ListLabelsRequest(projectId));
+        _labels = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private void StartLabelEdit(LabelDto label)
+    {
+        _editingLabelId = label.Id;
+        _labelName = label.Name;
+        _labelPrefix = label.PathPrefix;
+    }
+
+    private void CancelLabelEdit()
+    {
+        _editingLabelId = null;
+        _labelName = string.Empty;
+        _labelPrefix = string.Empty;
+    }
+
+    private async Task SaveLabel()
+    {
+        if (_projectId is not { } projectId || string.IsNullOrWhiteSpace(_labelName) || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            if (_editingLabelId is { } id)
+            {
+                var updated = await UpdateLabel.HandleAsync(new UpdateLabelRequest(
+                    projectId, id, _labelName.Trim(), null, _labelPrefix));
+                if (!updated.Success)
+                {
+                    Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+            }
+            else
+            {
+                var created = await CreateLabel.HandleAsync(new CreateLabelRequest(
+                    projectId, _labelName.Trim(), null, _labelPrefix));
+                if (!created.Success)
+                {
+                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+            }
+            CancelLabelEdit();
+            Snackbar.Add(L["Saved"].Value, Severity.Success);
+            await ReloadLabels();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveLabel(LabelDto label)
+    {
+        if (_projectId is not { } projectId)
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteLabelConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await DeleteLabel.HandleAsync(new DeleteLabelRequest(projectId, label.Id));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        if (_editingLabelId == label.Id)
+            CancelLabelEdit();
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await ReloadLabels();
     }
 
     private async Task AddDevice()

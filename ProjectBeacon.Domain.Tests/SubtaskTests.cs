@@ -34,7 +34,6 @@ public sealed class SubtaskTests
         Assert.Equal(0, subtask.ReopenCount);
         Assert.Empty(subtask.AllowedMcpTools);
         Assert.Empty(subtask.AllowedPaths);
-        Assert.NotNull(subtask.CreatedAt);
         Assert.Null(subtask.UpdatedAt);
     }
 

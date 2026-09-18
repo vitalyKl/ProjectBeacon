@@ -12,6 +12,8 @@
 @inject CreateDecisionHandler CreateDecision
 @inject ListDecisionsHandler ListDecisions
 @inject AcceptDecisionHandler AcceptDecision
+@inject DeprecateDecisionHandler DeprecateDecision
+@inject SupersedeDecisionHandler SupersedeDecision
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Decisions"]</PageTitle>
@@ -41,6 +43,7 @@ else
             <HeaderContent>
                 <MudTh>@L["Title"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
+                <MudTh>@L["Content"]</MudTh>
                 <MudTh>@L["Consequences"]</MudTh>
                 <MudTh></MudTh>
             </HeaderContent>
@@ -51,15 +54,46 @@ else
                         @ChromeLabels.Decision(L, context.Status)
                     </MudChip>
                 </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2">@context.DecisionBody</MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.Context))
+                    {
+                        <MudText Typo="Typo.caption">@context.Context</MudText>
+                    }
+                </MudTd>
                 <MudTd>@context.Consequences</MudTd>
                 <MudTd>
                     @if (context.Status == DecisionStatus.Proposed)
                     {
                         <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Accept(context)">@L["Accept"]</MudButton>
                     }
+                    @if (context.Status is DecisionStatus.Proposed or DecisionStatus.Accepted)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="() => Deprecate(context)">@L["Deprecate"]</MudButton>
+                    }
+                    @if (context.Status == DecisionStatus.Accepted)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartSupersede(context)">@L["Supersede"]</MudButton>
+                    }
                 </MudTd>
             </RowTemplate>
         </MudTable>
+        @if (_superseding is not null)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+                <MudText Typo="Typo.subtitle2">@L["Supersede"]: @_superseding.Title</MudText>
+                <MudSelect T="Guid?" @bind-Value="_replacementId" Label="@L["Replacement"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+                    @foreach (var other in _decisions.Where(d => d.Id != _superseding.Id))
+                    {
+                        <MudSelectItem Value="@((Guid?)other.Id)">@other.Title</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmSupersede">@L["Save"]</MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="CancelSupersede">@L["Cancel"]</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
     }
 }
 
@@ -70,6 +104,8 @@ else
     private string _context = string.Empty;
     private string _body = string.Empty;
     private string _consequences = string.Empty;
+    private DecisionDto? _superseding;
+    private Guid? _replacementId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,6 +148,45 @@ else
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private async Task Deprecate(DecisionDto decision)
+    {
+        var result = await DeprecateDecision.HandleAsync(decision.Id);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+
+    private void StartSupersede(DecisionDto decision)
+    {
+        _superseding = decision;
+        _replacementId = _decisions.FirstOrDefault(d => d.Id != decision.Id)?.Id;
+    }
+
+    private void CancelSupersede()
+    {
+        _superseding = null;
+        _replacementId = null;
+    }
+
+    private async Task ConfirmSupersede()
+    {
+        if (_superseding is null || _replacementId is null)
+            return;
+        var result = await SupersedeDecision.HandleAsync(_superseding.Id, _replacementId.Value);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        CancelSupersede();
         Snackbar.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }

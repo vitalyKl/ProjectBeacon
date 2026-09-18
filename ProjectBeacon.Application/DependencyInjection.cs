@@ -42,6 +42,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListApiTokensHandler>();
         services.AddTransient<MatchLabelHandler>();
         services.AddTransient<AddLabelPathHandler>();
+        services.AddTransient<CreateLabelHandler>();
+        services.AddTransient<UpdateLabelHandler>();
+        services.AddTransient<DeleteLabelHandler>();
         services.AddTransient<GenerateReportHandler>();
         services.AddTransient<ListReportsHandler>();
         services.AddTransient<GetReportHandler>();
@@ -80,6 +83,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetDashboardCountsHandler>();
         services.AddTransient<ListMyProjectsHandler>();
         services.AddTransient<GetProjectOverviewHandler>();
+        services.AddTransient<GetProjectPulseHandler>();
         services.AddTransient<ListLabelsHandler>();
         services.AddScoped<TenantContextBinder>();
 
@@ -99,6 +103,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
         services.AddTransient<AcceptDecisionHandler>();
+        services.AddTransient<DeprecateDecisionHandler>();
+        services.AddTransient<SupersedeDecisionHandler>();
 
         services.AddTransient<CreateMilestoneHandler>();
         services.AddTransient<UpdateMilestoneHandler>();

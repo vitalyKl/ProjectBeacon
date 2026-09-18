@@ -77,6 +77,10 @@ else
                     <MudText Typo="Typo.caption" Class="mt-2">
                         @L["TaskCount"]: @(_tasks.Count(t => t.MilestoneId == milestone.Id))
                     </MudText>
+                    @foreach (var task in _tasks.Where(t => t.MilestoneId == milestone.Id))
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" Href="@($"/task/{task.Id}")">@task.Title</MudButton>
+                    }
                     @if (milestone.ClosedAt is not null)
                     {
                         var orphans = MilestoneOrphanLint.OpenTaskCount(

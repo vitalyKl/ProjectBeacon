@@ -27,6 +27,12 @@ public class Label : Entity, IProjectScoped
         return label;
     }
 
+    public void Update(string? name = null, string? color = null)
+    {
+        if (name is not null) Name = name;
+        if (color is not null) Color = color;
+    }
+
     public void SetPathPrefix(string pathPrefix)
     {
         PathPrefix = pathPrefix ?? string.Empty;

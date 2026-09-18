@@ -2,17 +2,22 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Features.Tasks
+@using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
 @inject ListProjectTasksHandler ListTasks
-@inject CreateTaskHandler CreateTaskHandler
+@inject ListLabelsHandler ListLabels
+@inject ListProjectMilestonesHandler ListMilestones
 @inject ChangeTaskStatusHandler ChangeStatus
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Board"]</PageTitle>
 <PageHeader Title="@L["Board"]">
@@ -23,21 +28,25 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
-else if (_project is null)
-{
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
-}
-else
-{
-    <MudDropContainer @ref="_container"
-        T="TaskItemDto"
-        Items="_allTasks"
-        ItemsSelector="@((task, zoneId) => task.Status == GetStatusFromZone(zoneId))"
-        ItemDropped="OnItemDropped"
-        Class="kanban-board">
+else if (_error)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@L["AnErrorOccurred"]</MudAlert>
+    }
+    else if (_project is null)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    }
+    else
+    {
+        <MudDropContainer @ref="_container"
+            T="TaskItemDto"
+            Items="_allTasks"
+            ItemsSelector="@((task, zoneId) => task.Status == GetStatusFromZone(zoneId))"
+            ItemDropped="OnItemDropped"
+            Class="kanban-board">
         <ChildContent>
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
-                <MudDropZone Identifier="Todo" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
+                <MudDropZone Identifier="Todo" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["Todo"]</MudText>
                         <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_todoCount)</MudText>
@@ -46,7 +55,7 @@ else
             </MudPaper>
 
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
-                <MudDropZone Identifier="InProgress" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
+                <MudDropZone Identifier="InProgress" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["InProgress"]</MudText>
                         <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_inProgressCount)</MudText>
@@ -55,7 +64,7 @@ else
             </MudPaper>
 
             <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
-                <MudDropZone Identifier="Done" AllowReorder="true" T="TaskItemDto" Class="kanban-zone">
+                <MudDropZone Identifier="Done" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["Done"]</MudText>
                         <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_doneCount)</MudText>
@@ -71,9 +80,12 @@ else
 
 @code {
     private List<TaskItemDto> _allTasks = [];
+    private List<LabelDto> _labels = [];
+    private List<MilestoneDto> _milestones = [];
     private ProjectDto? _project;
     private MudDropContainer<TaskItemDto>? _container;
     private bool _loading = true;
+    private bool _error;
     private int _todoCount => _allTasks.Count(t => t.Status == "Todo");
     private int _inProgressCount => _allTasks.Count(t => t.Status == "InProgress");
     private int _doneCount => _allTasks.Count(t => t.Status == "Done");
@@ -120,7 +132,7 @@ else
         }
 
         await ReloadTasks();
-        Snackbar.Add(string.Format(L["TaskMoved"].Value, dropInfo.DropzoneIdentifier), Severity.Info);
+        Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, ParseStatus(dropInfo.DropzoneIdentifier))), Severity.Info);
     }
 
     private async Task ReloadTasks()
@@ -133,7 +145,20 @@ else
         }
 
         var listed = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
-        _allTasks = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _error = true;
+            _allTasks = [];
+            _container?.Refresh();
+            return;
+        }
+
+        _error = false;
+        _allTasks = listed.Value!.ToList();
+        var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_project.Id));
+        _labels = labels.Success ? labels.Value!.ToList() : [];
+        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id)));
+        _milestones = milestones.Success ? milestones.Value!.ToList() : [];
         _container?.Refresh();
     }
 
@@ -145,15 +170,19 @@ else
             return;
         }
 
-        var created = await CreateTaskHandler.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
-            L["NewTask"].Value, null, _project.Id, TaskPriority.Medium, TaskType.Task, null, null)));
-        if (!created.Success)
+        var parameters = new DialogParameters
         {
-            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
-            return;
+            { nameof(TaskDialog.ProjectId), _project.Id },
+            { nameof(TaskDialog.Labels), _labels },
+            { nameof(TaskDialog.Milestones), _milestones }
+        };
+        var reference = await Dialogs.ShowAsync(typeof(TaskDialog), L["NewTask"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await reference.Result;
+        if (result?.Data is TaskItemDto created)
+        {
+            Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
+            Navigation.NavigateTo($"/task/{created.Id}");
         }
-
-        Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
-        Navigation.NavigateTo($"/task/{created.Value!.Id}");
     }
 }

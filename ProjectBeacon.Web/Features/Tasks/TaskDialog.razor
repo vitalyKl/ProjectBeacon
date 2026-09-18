@@ -1,0 +1,99 @@
+@using ProjectBeacon.Application.Milestones
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Theme
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject CreateTaskHandler CreateTask
+@inject UpdateTaskHandler UpdateTask
+@inject ISnackbar Snackbar
+
+<MudTextField @bind-Value="_title" Label="@L["Title"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+<MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+<MudSelect T="TaskPriority" @bind-Value="_priority" Label="@L["Priority"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+    <MudSelectItem Value="TaskPriority.Low">@ChromeLabels.Priority(L, TaskPriority.Low)</MudSelectItem>
+    <MudSelectItem Value="TaskPriority.Medium">@ChromeLabels.Priority(L, TaskPriority.Medium)</MudSelectItem>
+    <MudSelectItem Value="TaskPriority.High">@ChromeLabels.Priority(L, TaskPriority.High)</MudSelectItem>
+    <MudSelectItem Value="TaskPriority.Critical">@ChromeLabels.Priority(L, TaskPriority.Critical)</MudSelectItem>
+</MudSelect>
+<MudSelect T="TaskType" @bind-Value="_type" Label="@L["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+    <MudSelectItem Value="TaskType.Task">@ChromeLabels.Type(L, TaskType.Task)</MudSelectItem>
+    <MudSelectItem Value="TaskType.Bug">@ChromeLabels.Type(L, TaskType.Bug)</MudSelectItem>
+    <MudSelectItem Value="TaskType.Feature">@ChromeLabels.Type(L, TaskType.Feature)</MudSelectItem>
+    <MudSelectItem Value="TaskType.Improvement">@ChromeLabels.Type(L, TaskType.Improvement)</MudSelectItem>
+</MudSelect>
+<MudSelect T="Guid?" @bind-Value="_labelId" Label="@L["Labels"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+    <MudSelectItem Value="@((Guid?)null)">@L["None"]</MudSelectItem>
+    @foreach (var label in Labels)
+    {
+        <MudSelectItem Value="@((Guid?)label.Id)">@label.Name</MudSelectItem>
+    }
+</MudSelect>
+<MudSelect T="Guid?" @bind-Value="_milestoneId" Label="@L["Milestone"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+    <MudSelectItem Value="@((Guid?)null)">@L["None"]</MudSelectItem>
+    @foreach (var milestone in Milestones)
+    {
+        <MudSelectItem Value="@((Guid?)milestone.Id)">@milestone.Name</MudSelectItem>
+    }
+</MudSelect>
+<MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+    <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">@L["Save"]</MudButton>
+</MudStack>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? Dialog { get; set; }
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public TaskItemDto? Task { get; set; }
+    [Parameter] public IReadOnlyList<LabelDto> Labels { get; set; } = [];
+    [Parameter] public IReadOnlyList<MilestoneDto> Milestones { get; set; } = [];
+
+    private string _title = string.Empty;
+    private string? _description;
+    private TaskPriority _priority = TaskPriority.Medium;
+    private TaskType _type = TaskType.Task;
+    private Guid? _labelId;
+    private Guid? _milestoneId;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Task is null)
+            return;
+        _title = Task.Title;
+        _description = Task.Description;
+        _priority = Task.Priority;
+        _type = Task.Type;
+        _labelId = Task.LabelId;
+        _milestoneId = Task.MilestoneId;
+    }
+
+    private void Cancel() => Dialog?.Cancel();
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_title) || _saving)
+            return;
+        _saving = true;
+        try
+        {
+            var result = Task is null
+                ? await CreateTask.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
+                    _title.Trim(), _description, ProjectId, _priority, _type, _labelId, _milestoneId)))
+                : await UpdateTask.HandleAsync(new UpdateTaskCommand(new UpdateTaskRequest(
+                    Task.Id, _title.Trim(), _description, _priority, _type, _labelId, _milestoneId)));
+
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            Dialog?.Close(DialogResult.Ok(result.Value));
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

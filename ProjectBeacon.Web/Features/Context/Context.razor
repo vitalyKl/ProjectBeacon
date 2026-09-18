@@ -12,6 +12,7 @@
 @inject UpsertContextNodeHandler Upsert
 @inject ListContextNodesHandler ListNodes
 @inject CompileBriefHandler CompileBrief
+@inject ExportAgentsMdHandler ExportAgents
 @inject CreateConstraintHandler CreateConstraint
 @inject ListConstraintsHandler ListConstraints
 @inject ActivateConstraintHandler ActivateConstraintHandler
@@ -23,6 +24,7 @@
     @if (_project is not null)
     {
         <MudButton Variant="Variant.Outlined" OnClick="Compile">@L["CompileBrief"]</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="Export">@L["ExportAgentsMd"]</MudButton>
     }
 </PageHeader>
 
@@ -74,7 +76,7 @@ else
             <MudList T="string" Dense="true">
                 @foreach (var node in _nodes)
                 {
-                    <MudListItem T="string">@ChromeLabels.Section(L, node.SectionId) — @node.Title</MudListItem>
+                    <MudListItem T="string" OnClick="() => LoadSection(node)">@ChromeLabels.Section(L, node.SectionId) — @node.Title</MudListItem>
                 }
             </MudList>
         </MudPaper>
@@ -154,6 +156,13 @@ else
         await Reload();
     }
 
+    private void LoadSection(ContextSectionDto node)
+    {
+        _title = node.Title;
+        _sectionId = node.SectionId;
+        _body = node.BodyMarkdown;
+    }
+
     private async Task Compile()
     {
         if (_project is null) return;
@@ -166,6 +175,19 @@ else
         }
         _preview = result.Value.BriefMarkdown;
         _tokens = result.Value.TokenEstimate;
+    }
+
+    private async Task Export()
+    {
+        if (_project is null) return;
+        var result = await ExportAgents.HandleAsync(new ExportAgentsMdCommand(new ExportAgentsMdRequest(_project.Id, null, null)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _preview = result.Value;
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
     }
 
     private async Task AddConstraint()

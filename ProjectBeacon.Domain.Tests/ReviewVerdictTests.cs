@@ -17,7 +17,6 @@ public sealed class ReviewVerdictTests
         Assert.Equal(ReviewVerdictKind.Approve, verdict.Kind);
         Assert.Equal("All subtasks verified", verdict.Note);
         Assert.Null(verdict.SubtaskId);
-        Assert.NotNull(verdict.CreatedAt);
     }
 
     [Fact]

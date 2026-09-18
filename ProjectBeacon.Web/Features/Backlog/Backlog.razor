@@ -2,18 +2,22 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Features.Tasks
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
 @inject ListProjectTasksHandler ListTasks
-@inject CreateTaskHandler CreateTaskHandler
+@inject ListLabelsHandler ListLabels
+@inject ListProjectMilestonesHandler ListMilestones
 @inject DeleteTaskHandler DeleteTaskHandler
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Backlog"]</PageTitle>
 <PageHeader Title="@L["Backlog"]">
@@ -24,11 +28,15 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
-else if (_project is null)
-{
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
-}
-else if (_tasks.Count == 0)
+else if (_error)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@L["AnErrorOccurred"]</MudAlert>
+    }
+    else if (_project is null)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    }
+    else if (_tasks.Count == 0)
 {
     <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoTasks"]</MudAlert>
 }
@@ -76,8 +84,11 @@ else
 
 @code {
     private List<TaskItemDto> _tasks = [];
+    private List<LabelDto> _labels = [];
+    private List<MilestoneDto> _milestones = [];
     private ProjectDto? _project;
     private bool _loading = true;
+    private bool _error;
 
     protected override async Task OnInitializedAsync()
     {
@@ -96,7 +107,19 @@ else
         }
 
         var listed = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
-        _tasks = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _error = true;
+            _tasks = [];
+            return;
+        }
+
+        _error = false;
+        _tasks = listed.Value!.ToList();
+        var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_project.Id));
+        _labels = labels.Success ? labels.Value!.ToList() : [];
+        var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id)));
+        _milestones = milestones.Success ? milestones.Value!.ToList() : [];
     }
 
     private void NavigateToTask(Guid taskId) => Navigation.NavigateTo($"/task/{taskId}");
@@ -109,16 +132,20 @@ else
             return;
         }
 
-        var created = await CreateTaskHandler.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
-            L["NewTask"].Value, null, _project.Id, TaskPriority.Medium, TaskType.Task, null, null)));
-        if (!created.Success)
+        var parameters = new DialogParameters
         {
-            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
-            return;
+            { nameof(TaskDialog.ProjectId), _project.Id },
+            { nameof(TaskDialog.Labels), _labels },
+            { nameof(TaskDialog.Milestones), _milestones }
+        };
+        var reference = await Dialogs.ShowAsync(typeof(TaskDialog), L["NewTask"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await reference.Result;
+        if (result?.Data is TaskItemDto)
+        {
+            Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
+            await LoadTasks();
         }
-
-        Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
-        await LoadTasks();
     }
 
     private async Task DeleteTask(Guid taskId)

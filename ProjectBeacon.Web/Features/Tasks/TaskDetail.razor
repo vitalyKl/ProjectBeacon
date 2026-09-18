@@ -2,12 +2,16 @@
 @layout MainLayout
 @attribute [Authorize]
 @using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Milestones
+@using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @using Microsoft.AspNetCore.Components.Authorization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetTaskHandler GetTask
+@inject ListLabelsHandler ListLabels
+@inject ListProjectMilestonesHandler ListMilestones
 @inject CompileBriefHandler CompileBrief
 @inject AddCommentHandler AddComment
 @inject AddReviewNotesHandler AddReviewNotes
@@ -24,6 +28,10 @@
 <PageTitle>@L["TaskDetail"]</PageTitle>
 
 <PageHeader Title="@(_task?.Title ?? L["TaskDetail"].Value)">
+    @if (_task is not null)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="EditTask">@L["Edit"]</MudButton>
+    }
     <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/board"))">
         @L["BackToBoard"]
     </MudButton>
@@ -277,6 +285,8 @@ else
     private bool _compiling;
     private string _commentDraft = string.Empty;
     private string _reviewDraft = string.Empty;
+    private List<LabelDto> _labels = [];
+    private List<MilestoneDto> _milestones = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -297,6 +307,33 @@ else
         var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
         _task = result.Success ? result.Value : null;
         _reviewDraft = _task?.ReviewNotes ?? string.Empty;
+        if (_task is not null)
+        {
+            var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
+            _labels = labels.Success ? labels.Value!.ToList() : [];
+            var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId)));
+            _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        }
+    }
+
+    private async Task EditTask()
+    {
+        if (_task is null) return;
+        var parameters = new DialogParameters
+        {
+            { nameof(TaskDialog.ProjectId), _task.ProjectId },
+            { nameof(TaskDialog.Task), _task },
+            { nameof(TaskDialog.Labels), _labels },
+            { nameof(TaskDialog.Milestones), _milestones }
+        };
+        var reference = await Dialogs.ShowAsync(typeof(TaskDialog), L["EditTask"].Value, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await reference.Result;
+        if (result?.Data is TaskItemDto)
+        {
+            Snackbar.Add(L["Saved"].Value, Severity.Success);
+            await Reload();
+        }
     }
 
     private async Task ReloadPipeline()
