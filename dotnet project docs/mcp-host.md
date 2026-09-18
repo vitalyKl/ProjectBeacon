@@ -28,7 +28,7 @@ These tools talk to the database and require Beacon environment:
 - `task_create_subtask` `{ instructions, allowedMcpTools?, allowedPaths? }` — create a subtask on the session task
 - `subtask_report_result` `{ subtaskId, diffRef, summary }` — report the result of an in-progress subtask
 - `task_review_verdict` `{ verdict, note, subtaskId? }` — record a review verdict (`approve`, `reopen_subtask`)
-- `task_pipeline_status` `{}` — show the pipeline state (subtasks, verdicts) of the session task
+- `task_pipeline_status` `{}` — show the pipeline state (subtasks, sessions, verdicts) of the session task
 
 `allowedMcpTools` and `allowedPaths` are comma-separated lists.
 

@@ -170,9 +170,9 @@
 - Проверка: `dotnet run --project ProjectBeacon.Cli -- mcp --root .` — `tools/list` содержит новые тулзы; `tools/call` по live Postgres.
 - Сделано: live-прогон stdio MCP: `model_status` — реальный реестр (пустые backends/bindings, proxy «unavailable» без супервизора); write-path `model_bind` с несуществующим backend → `isError` «Model backend not found.», без мутации; без `BEACON_PROJECT_ID`/DB → `isError` (процесс не падает). `dotnet build` 0/0, `dotnet test` 333/333.
 
-### A8. Тесты Блока A
-- `Application.Tests`: CRUD бэкендов, валидация биндингов, реестр (SQLite).
-- `Infrastructure.Tests`: генерация config.yaml (юнит), супервизор против fake HTTP listener (health/metrics/reload/деградация).
+### A8. Тесты Блока A — выполнено
+- `Application.Tests`: CRUD бэкендов, валидация биндингов, реестр (SQLite) — `ModelBackendHandlerTests.cs`.
+- `Infrastructure.Tests`: генерация config.yaml (юнит, `LlamaSwapConfigGeneratorTests.cs`); супервизор против fake HTTP listener (`LlamaSwapSupervisorTests.cs`: health/running/metrics/unload, reload empty+seeded registry, деградация без bin/project).
 - Acceptance: реестр CRUD-ится из UI, config.yaml регенерируется при изменении, процесс управляется, статус виден, при отсутствии бинарника — деградация без падения Web.
 
 ---
@@ -240,14 +240,15 @@
 - Проверка: браузерный прогон полного флоу end-to-end (AGENTS.md: один скриншот — не верификация).
 - Сделано: `dotnet build` 0/0; `dotnet test` зелёный (Web 44, Application 116, API 32, Infrastructure 17, CLI 7). Браузерного инструмента нет — по AGENTS.md применён ближайший суррогат: live-прогон полного флоу через curl на работающем хосте (admin cookie) против тех же Application-хэндлеров, которые инжектит UI: `GET /v1/tasks/{id}/pipeline` (stage пуст) → `pipeline/start` (Planning, авто Planner-session Ready) → `subtasks` (Pending) → `subtasks/{id}/session` (Actor Ready, prompt только о subtask) → `sessions/{id}/launch` (Active) → `subtasks/{id}/result` (subtask Done, task → InProgress/Executing, actor-сессия автозакрыта) → `pipeline/review/start` (Reviewing + Review-session, prompt только артефакты) → `pipeline/verdict` Approve (Approved, task → Done) → `pipeline/force-close` (Closed, ReviewNotes «force-closed without review», все сессии закрыты). UI: 7 режимов диалога (create subtask, report result, fail subtask, approve, reopen, confirm-close, force-close c confirm) + степпер + таблицы subtasks/sessions/verdicts; текст — только resx; Razor без DbContext. Не верифицировано браузером: визуальный рендер степпера и диалогов.
 
-### B7. Тесты Блока B
+### B7. Тесты Блока B — выполнено
 - `Application.Tests`: полный happy path (start → 2 subtasks → results → review → approve → task `Done` + ReviewNotes), reopen-цикл и лимит 3, force close, force close **отклонён для обычного `ProjectMember` (D13)**, **двойной переход (`EnterExecuting` дважды / `StartReview` vs `Approve`) → второй получает ошибку, а не перезапись (D14)**, изоляция контекста (Failed-subtasks помечены статусом в review-контексте), tenancy (null scope → пусто), валидация переходов (verdict без review-сессии и т.п.).
 - `Cli.Tests`: `tools/list` содержит 6 новых тулз; DB-тулзы без env → `isError`.
 - Проверка: `dotnet test` полностью зелёный.
+- Сделано: `PipelineHandlerTests` — 18 тестов, включая `EnterExecuting_Twice_IsIdempotent`, `StartReview_Twice_SecondFails`, `StartReview_AfterApproval_Fails`, `ReviewPrompt_MarksFailedSubtasks`.
 
-### B8. Документация и roadmap
+### B8. Документация и roadmap — выполнено
 - `dotnet project docs/ProjectBeacon-dotnet-roadmap-v2.md` — строки на M1–M6 с acceptance (AGENTS.md: изменение не «done», пока acceptance строки не выполнена).
-- `dotnet project docs/mcp-host.md` — новые tool'ы и env (см. B5).
+- `dotnet project docs/mcp-host.md` — новые tool'ы и env (см. B5). Cross-check с `McpStdioServer.Tools()`: 6 file + `model_bind`/`model_status`/`task_create_subtask`/`subtask_report_result`/`task_review_verdict`/`task_pipeline_status`; env `BEACON_PROJECT_ID` / `BEACON_TASK_ID` / `BEACON_ACTOR_ID`.
 - `design-doc-v2.md` — не трогаем.
 
 ---
