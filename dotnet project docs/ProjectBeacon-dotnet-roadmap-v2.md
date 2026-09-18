@@ -172,7 +172,7 @@ acceptance criterion was run.
 | C1 | `list_dir` + `ProjectRuntime` | 🟡 | Wizard picks an online device and attaches `LocalRoot` per (project, device) |
 | C2 | `init_project` | 🟡 | Client writes `.gitignore` + merge `opencode.json` + `.opencode/data`; token not in git |
 | C3 | MCP apply | 🟡 | Init payload installs beacon MCP; `ApplyOpencode` merges extra servers |
-| C4 | Solo / Pipeline models | ⬜ | OpenCode `model` / `agent.*` + RoleBinding from UI |
+| C4 | Solo / Pipeline models | 🟡 | Agents UI Solo/Pipeline + Apply on device writes `opencode.json` provider/model/agent; GGUF pick from modelsRoot; `OpencodePayloadTests` + `ApplyAgentConfigHandlerTests` |
 | C5 | probe + install | 🟡 | Probe in heartbeat; install allowlist (git/node/docker) via winget after Confirm |
 | C6 | llama-swap on client | ⬜ | Web supervisor stays until client-owned process is proven; probe reports llama-swap |
 

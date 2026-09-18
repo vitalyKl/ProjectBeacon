@@ -129,6 +129,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetProxyStatusHandler>();
         services.AddTransient<ReloadProxyHandler>();
         services.AddTransient<UnloadProxyHandler>();
+        services.AddTransient<ApplyAgentConfigHandler>();
 
         return services;
     }

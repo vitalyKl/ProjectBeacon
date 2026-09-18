@@ -1,7 +1,11 @@
+@using System.Text.Json
 @using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject UpsertLocalModelBackendHandler SaveBackend
+@inject EnqueueCommandHandler EnqueueCommand
+@inject GetCommandHandler GetCommand
 @inject ISnackbar Snackbar
 
 <MudTextField @bind-Value="_name" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
@@ -11,6 +15,19 @@
     <MudSelectItem Value="ModelBackendType.OpenAiCompatible">@L["BackendOpenAiCompatible"]</MudSelectItem>
 </MudSelect>
 <MudTextField @bind-Value="_launchCommand" Label="@L["LaunchCommand"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["LaunchCommandHint"]" />
+@if (DeviceId is { } && UserId != Guid.Empty && _type == ModelBackendType.LlamaCpp)
+{
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="mt-2" OnClick="ScanGguf" Disabled="_saving">@L["PickGguf"]</MudButton>
+    @if (_ggufs.Count > 0)
+    {
+        <MudSelect T="string" Value="_gguf" ValueChanged="OnGgufChanged" Label="@L["PickGguf"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+            @foreach (var file in _ggufs)
+            {
+                <MudSelectItem Value="@file.Path">@file.Name</MudSelectItem>
+            }
+        </MudSelect>
+    }
+}
 <MudNumericField T="int" @bind-Value="_contextSize" Label="@L["ContextSize"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
 <MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
 <MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
@@ -22,6 +39,8 @@
 @code {
     [CascadingParameter] private IMudDialogInstance? Dialog { get; set; }
     [Parameter] public LocalModelBackendDto? Backend { get; set; }
+    [Parameter] public Guid? DeviceId { get; set; }
+    [Parameter] public Guid UserId { get; set; }
 
     private string _name = string.Empty;
     private ModelBackendType _type = ModelBackendType.FreeToken;
@@ -30,6 +49,8 @@
     private int _ttl = 300;
     private string _extraFlags = string.Empty;
     private bool _saving;
+    private string? _gguf;
+    private List<GgufFile> _ggufs = [];
 
     protected override void OnInitialized()
     {
@@ -45,6 +66,65 @@
     }
 
     private void Cancel() => Dialog?.Cancel();
+
+    private void OnGgufChanged(string path)
+    {
+        _gguf = path;
+        _launchCommand = $"llama-server -m \"{path}\" --port ${{PORT}}";
+        if (string.IsNullOrWhiteSpace(_name))
+            _name = System.IO.Path.GetFileNameWithoutExtension(path);
+    }
+
+    private async Task ScanGguf()
+    {
+        if (DeviceId is not { } deviceId || UserId == Guid.Empty) return;
+        _saving = true;
+        try
+        {
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ScanGguf, "{}", null)));
+            if (!queued.Success)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            WorkstationCommandDto? finished = null;
+            for (var i = 0; i < 40; i++)
+            {
+                var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, UserId)));
+                if (!got.Success) break;
+                if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed)
+                {
+                    finished = got.Value;
+                    break;
+                }
+                await Task.Delay(500);
+            }
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
+            {
+                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            using var doc = JsonDocument.Parse(finished.ResultJson);
+            _ggufs = [];
+            if (doc.RootElement.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var file in files.EnumerateArray())
+                {
+                    var name = file.GetProperty("name").GetString() ?? "";
+                    var path = file.GetProperty("path").GetString() ?? "";
+                    if (path.Length > 0)
+                        _ggufs.Add(new GgufFile(name, path));
+                }
+            }
+            if (_ggufs.Count == 0)
+                Snackbar.Add(L["NoGgufFiles"].Value, Severity.Info);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
 
     private async Task Save()
     {
@@ -70,4 +150,6 @@
             _saving = false;
         }
     }
+
+    private sealed record GgufFile(string Name, string Path);
 }

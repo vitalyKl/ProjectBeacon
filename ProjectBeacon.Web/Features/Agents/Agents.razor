@@ -1,7 +1,9 @@
 @page "/agents"
 @layout MainLayout
 @attribute [Authorize]
+@using System.Security.Claims
 @using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Infrastructure.LlamaSwap
@@ -15,6 +17,9 @@
 @inject GetProxyStatusHandler GetStatus
 @inject ReloadProxyHandler ReloadProxy
 @inject UnloadProxyHandler UnloadProxy
+@inject ListRuntimesHandler ListRuntimes
+@inject ApplyAgentConfigHandler ApplyAgentConfig
+@inject GetCommandHandler GetCommand
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 
@@ -98,6 +103,33 @@ else
     </MudPaper>
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["AgentMode"]</MudText>
+        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+            <MudSelectItem Value="AgentRunMode.Solo">@L["AgentModeSolo"]</MudSelectItem>
+            <MudSelectItem Value="AgentRunMode.Pipeline">@L["AgentModePipeline"]</MudSelectItem>
+        </MudSelect>
+        @if (_mode == AgentRunMode.Solo)
+        {
+            <MudSelect T="Guid?" @bind-Value="_solo" Label="@L["SoloModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+                <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                @foreach (var backend in _backends)
+                {
+                    <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudSelect T="Guid?" @bind-Value="_runtimeDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+            @foreach (var runtime in _runtimes)
+            {
+                <MudSelectItem Value="@((Guid?)runtime.DeviceId)">@runtime.DeviceName (@runtime.LocalRoot)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyOnDevice" Disabled="_busy || _runtimeDeviceId is null">
+            @L["ApplyOnDevice"]
+        </MudButton>
+    </MudPaper>
+
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
             <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
             <MudStack Row="true" Spacing="2">
@@ -132,10 +164,18 @@ else
     private Guid? _review;
     private LlamaSwapStatusDto? _status;
     private bool _busy;
+    private Guid _userId;
+    private AgentRunMode _mode = AgentRunMode.Solo;
+    private Guid? _solo;
+    private Guid? _runtimeDeviceId;
+    private List<ProjectRuntimeDto> _runtimes = [];
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        var current = await CurrentProject.HandleAsync(user);
         _project = current.Value;
         await ReloadAsync();
     }
@@ -145,7 +185,17 @@ else
         _backends = [];
         _planner = _actor = _review = null;
         _status = null;
+        _runtimes = [];
         if (_project is null) return;
+        if (_userId != Guid.Empty)
+        {
+            var runtimes = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(_project.Id, _userId)));
+            if (runtimes.Success)
+            {
+                _runtimes = runtimes.Value!.ToList();
+                _runtimeDeviceId ??= _runtimes.FirstOrDefault(r => r.DeviceOnline)?.DeviceId ?? _runtimes.FirstOrDefault()?.DeviceId;
+            }
+        }
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand());
         if (registry.Success)
         {
@@ -166,6 +216,10 @@ else
                         break;
                 }
             }
+            _solo = _actor ?? _planner ?? _review;
+            if (_planner is { } && _actor is { } && _review is { } &&
+                (_planner != _actor || _actor != _review))
+                _mode = AgentRunMode.Pipeline;
         }
         else
         {
@@ -178,8 +232,13 @@ else
 
     private async Task AddModel()
     {
+        var parameters = new DialogParameters
+        {
+            { nameof(BackendDialog.DeviceId), _runtimeDeviceId },
+            { nameof(BackendDialog.UserId), _userId }
+        };
         var reference = await Dialogs.ShowAsync(
-            typeof(BackendDialog), L["ModelsAdd"].Value,
+            typeof(BackendDialog), L["ModelsAdd"].Value, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await reference.Result;
         if (result.Data is LocalModelBackendDto)
@@ -191,7 +250,12 @@ else
 
     private async Task EditModel(LocalModelBackendDto backend)
     {
-        var parameters = new DialogParameters { { nameof(BackendDialog.Backend), backend } };
+        var parameters = new DialogParameters
+        {
+            { nameof(BackendDialog.Backend), backend },
+            { nameof(BackendDialog.DeviceId), _runtimeDeviceId },
+            { nameof(BackendDialog.UserId), _userId }
+        };
         var reference = await Dialogs.ShowAsync(
             typeof(BackendDialog), L["ModelsEdit"].Value, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
@@ -330,5 +394,47 @@ else
         }
         _status = result.Value;
         Snackbar.Add(L["ProxyUnloaded"].Value, Severity.Success);
+    }
+
+    private async Task ApplyOnDevice()
+    {
+        if (_project is null || _runtimeDeviceId is not { } deviceId || _userId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            var applied = await ApplyAgentConfig.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
+                _project.Id, deviceId, _userId, _mode, _solo, _planner, _actor, _review)));
+            if (!applied.Success)
+            {
+                Snackbar.Add(applied.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var finished = await WaitAsync(applied.Value!.Id);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ApplyOnDeviceDone"].Value, Severity.Success);
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
+    {
+        for (var i = 0; i < 40; i++)
+        {
+            var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
+            if (!got.Success)
+                return null;
+            if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
+                return got.Value;
+            await Task.Delay(500);
+        }
+        return null;
     }
 }

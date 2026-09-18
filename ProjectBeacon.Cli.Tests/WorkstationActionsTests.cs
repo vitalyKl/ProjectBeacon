@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Tests;
 
 using ProjectBeacon.Cli.Client;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 public sealed class WorkstationActionsTests : IDisposable
 {
@@ -66,6 +67,32 @@ public sealed class WorkstationActionsTests : IDisposable
         Assert.Contains("autoupdate", opc);
         Assert.Contains("context7", opc);
         Assert.Contains("deny", opc);
+    }
+
+    [Fact]
+    public void ApplyOpencode_MergesProviderAndAgents()
+    {
+        var path = Path.Combine(_dir, "prov");
+        Directory.CreateDirectory(path);
+        var payload = new JsonObject
+        {
+            ["path"] = path,
+            ["model"] = "beacon-local/qwen",
+            ["provider"] = new JsonObject
+            {
+                ["beacon-local"] = new JsonObject
+                {
+                    ["npm"] = "@ai-sdk/openai-compatible",
+                    ["options"] = new JsonObject { ["baseURL"] = "http://127.0.0.1:8080/v1" }
+                }
+            },
+            ["agent"] = new JsonObject { ["build"] = new JsonObject { ["model"] = "beacon-local/qwen" } }
+        };
+        WorkstationActions.ApplyOpencode(payload.ToJsonString());
+        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
+        Assert.Contains("beacon-local", opc);
+        Assert.Contains("127.0.0.1:8080", opc);
+        Assert.Contains("\"build\"", opc);
     }
 
     [Fact]

@@ -102,7 +102,8 @@ public static class WorkstationActions
         var mcp = root.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
         var model = root.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
         var agent = root.TryGetProperty("agent", out var agentEl) ? agentEl : default;
-        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true);
+        var provider = root.TryGetProperty("provider", out var providerEl) ? providerEl : default;
+        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider);
 
         var local = Path.Combine(full, ".opencode", "local.json");
         Directory.CreateDirectory(Path.GetDirectoryName(local)!);
@@ -123,7 +124,8 @@ public static class WorkstationActions
         var mcp = root.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
         var model = root.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
         var agent = root.TryGetProperty("agent", out var agentEl) ? agentEl : default;
-        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true);
+        var provider = root.TryGetProperty("provider", out var providerEl) ? providerEl : default;
+        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider);
         return JsonSerializer.Serialize(new { path = opencodePath });
     }
 
@@ -249,7 +251,8 @@ public static class OpencodeConfig
         JsonElement mcp,
         string? model,
         JsonElement agent,
-        bool denyNativeFiles)
+        bool denyNativeFiles,
+        JsonElement provider = default)
     {
         JsonObject root;
         if (File.Exists(path))
@@ -284,6 +287,14 @@ public static class OpencodeConfig
             foreach (var prop in agent.EnumerateObject())
                 agentObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
             root["agent"] = agentObj;
+        }
+
+        if (provider.ValueKind == JsonValueKind.Object)
+        {
+            var providerObj = root["provider"] as JsonObject ?? new JsonObject();
+            foreach (var prop in provider.EnumerateObject())
+                providerObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
+            root["provider"] = providerObj;
         }
 
         if (denyNativeFiles)

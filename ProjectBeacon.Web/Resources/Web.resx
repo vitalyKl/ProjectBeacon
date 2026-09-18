@@ -1048,4 +1048,16 @@
   <data name="ModelsRoot" xml:space="preserve">
     <value>Local models directory</value>
   </data>
+  <data name="ApplyOnDeviceDone" xml:space="preserve">
+    <value>OpenCode config applied on the device.</value>
+  </data>
+  <data name="PickGguf" xml:space="preserve">
+    <value>Pick GGUF</value>
+  </data>
+  <data name="NoGgufFiles" xml:space="preserve">
+    <value>No .gguf files in the device models directory.</value>
+  </data>
+  <data name="SoloModel" xml:space="preserve">
+    <value>Solo model</value>
+  </data>
 </root>
