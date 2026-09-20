@@ -65,6 +65,10 @@ public static class ServiceCollectionExtensions
         services.AddTransient<DeleteTaskHandler>();
         services.AddTransient<ChangeSubStageHandler>();
         services.AddTransient<AddCommentHandler>();
+        services.AddTransient<ListTaskStepsHandler>();
+        services.AddTransient<AddTaskStepHandler>();
+        services.AddTransient<ToggleTaskStepHandler>();
+        services.AddTransient<DeleteTaskStepHandler>();
         services.AddTransient<SetDependenciesHandler>();
         services.AddTransient<AddReviewNotesHandler>();
         services.AddTransient<GetTaskHandler>();
@@ -137,6 +141,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListRuntimesHandler>();
         services.AddTransient<DetachRuntimeHandler>();
         services.AddTransient<GetLlamaSwapConfigHandler>();
+        services.AddTransient<ListHostSamplesHandler>();
 
         services.AddTransient<ILlamaSwapProxy, UnavailableLlamaSwapProxy>();
         services.AddTransient<UpsertLocalModelBackendHandler>();

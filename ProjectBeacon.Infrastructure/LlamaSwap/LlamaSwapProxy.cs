@@ -23,7 +23,8 @@ public record LlamaSwapStatusDto(
     DateTime? LastSwap,
     string? Error,
     IReadOnlyList<LoadedModelStatus>? LoadedModels = null,
-    HostLoadDto? Host = null);
+    HostLoadDto? Host = null,
+    string? DeviceName = null);
 
 public interface ILlamaSwapProxy
 {

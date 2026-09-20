@@ -20,6 +20,10 @@
 @inject StartActorSessionHandler StartActorSession
 @inject LaunchSessionHandler LaunchSession
 @inject StartReviewHandler StartReview
+@inject ListTaskStepsHandler ListSteps
+@inject AddTaskStepHandler AddStep
+@inject ToggleTaskStepHandler ToggleStep
+@inject DeleteTaskStepHandler DeleteStep
 @inject IDialogService Dialogs
 @inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
@@ -73,6 +77,7 @@ else
             <MudText Typo="Typo.caption" Class="mt-2">@L["Done"] @_task.CompletedAt.Value.ToShortDateString()</MudText>
         }
         <MudText Typo="Typo.caption" Class="mt-2">@L["CreatedAt"] @_task.CreatedAt.ToShortDateString()</MudText>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">@NextStepText</MudAlert>
         @if (!string.IsNullOrEmpty(_task.ReviewNotes))
         {
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ReviewNotes"]</MudText>
@@ -80,6 +85,26 @@ else
         }
         <MudTextField @bind-Value="_reviewDraft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveReview">@L["Save"]</MudButton>
+    </MudPaper>
+
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.h6">@L["TaskSteps"]</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2">
+            <MudTextField @bind-Value="_stepTitle" Label="@L["StepTitle"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnAddStep" Disabled="_busy || string.IsNullOrWhiteSpace(_stepTitle)">@L["AddStep"]</MudButton>
+        </MudStack>
+        @if (_steps.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mt-2">@L["NoStepsYet"]</MudText>
+        }
+        @foreach (var step in _steps)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                <MudCheckBox T="bool" Value="step.IsDone" ValueChanged="done => OnToggleStep(step, done)" Dense="true" />
+                <MudText Typo="Typo.body2" Class="grow" Style="@(step.IsDone ? "text-decoration:line-through" : null)">@step.Title</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => OnDeleteStep(step)">@L["Delete"]</MudButton>
+            </MudStack>
+        }
     </MudPaper>
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -199,10 +224,11 @@ else
                     {
                         <MudText Typo="Typo.caption">@L["Closed"]: @session.ClosedAt.Value.ToShortDateString()</MudText>
                     }
-                    @if (session.Status == SessionStatus.Ready)
-                    {
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunchSession(session))" Disabled="_busy">@L["LaunchSession"]</MudButton>
-                    }
+                      @if (session.Status == SessionStatus.Ready)
+                      {
+                          <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunchSession(session))" Disabled="_busy">@L["LaunchSession"]</MudButton>
+                          <MudText Typo="Typo.caption">@L["LaunchSessionHint"]</MudText>
+                      }
                 </MudStack>
                 @if (!string.IsNullOrEmpty(session.LaunchSpec))
                 {
@@ -287,6 +313,25 @@ else
     private string _reviewDraft = string.Empty;
     private List<LabelDto> _labels = [];
     private List<MilestoneDto> _milestones = [];
+    private List<TaskStepDto> _steps = [];
+    private string _stepTitle = string.Empty;
+
+    private string NextStepText
+    {
+        get
+        {
+            if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
+                return L["NextStepTodo"].Value;
+            return _pipeline.Stage switch
+            {
+                TaskPipelineStage.Planning => L["NextStepCreateSubtask"].Value,
+                TaskPipelineStage.Executing => L["NextStepCreateSubtask"].Value,
+                TaskPipelineStage.Reviewing => L["Approve"].Value,
+                TaskPipelineStage.Approved => L["ConfirmClose"].Value,
+                _ => L["NextStepTodo"].Value
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -298,6 +343,7 @@ else
         if (_task is not null)
         {
             await ReloadPipeline();
+            await ReloadSteps();
             await Compile();
         }
     }
@@ -340,6 +386,56 @@ else
     {
         var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)));
         _pipeline = result.Success ? result.Value : null;
+    }
+
+    private async Task ReloadSteps()
+    {
+        var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId)));
+        _steps = result.Success ? result.Value!.ToList() : [];
+    }
+
+    private async Task OnAddStep()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_stepTitle))
+            return;
+        _busy = true;
+        try
+        {
+            var result = await AddStep.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(TaskId, _stepTitle)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _stepTitle = string.Empty;
+            await ReloadSteps();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnToggleStep(TaskStepDto step, bool done)
+    {
+        var result = await ToggleStep.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(step.Id, done)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        await ReloadSteps();
+    }
+
+    private async Task OnDeleteStep(TaskStepDto step)
+    {
+        var result = await DeleteStep.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(step.Id)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        await ReloadSteps();
     }
 
     private static int StageIndex(TaskPipelineStage? stage) => stage switch

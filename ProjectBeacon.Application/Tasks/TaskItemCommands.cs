@@ -84,3 +84,17 @@ public record TaskCommentDto(
     Guid UserId,
     DateTime CreatedAt,
     DateTime? UpdatedAt);
+
+public record TaskStepDto(Guid Id, Guid TaskId, string Title, int SortOrder, DateTime? DoneAt, bool IsDone);
+
+public record ListTaskStepsRequest(Guid TaskId);
+public record ListTaskStepsCommand(ListTaskStepsRequest Request) : ICommand<Result<IList<TaskStepDto>>>;
+
+public record AddTaskStepRequest(Guid TaskId, string Title);
+public record AddTaskStepCommand(AddTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
+
+public record ToggleTaskStepRequest(Guid StepId, bool Done);
+public record ToggleTaskStepCommand(ToggleTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
+
+public record DeleteTaskStepRequest(Guid StepId);
+public record DeleteTaskStepCommand(DeleteTaskStepRequest Request) : ICommand<Result<bool>>;

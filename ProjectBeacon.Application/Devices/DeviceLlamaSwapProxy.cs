@@ -26,9 +26,10 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
     {
         var device = await FindOnlineDeviceAsync(ct);
         if (device is null)
-            return new LlamaSwapStatusDto(false, false, null, null, null, "No connected device is running llama-swap.");
-        return ParseProbe(device.ProbeJson) ?? new LlamaSwapStatusDto(false, false, null, null, null,
+            return new LlamaSwapStatusDto(false, false, null, null, null, "Start beacon client to see workstation load.");
+        var parsed = ParseProbe(device.ProbeJson) ?? new LlamaSwapStatusDto(false, false, null, null, null,
             "Connected device has not reported llama-swap status.");
+        return parsed with { DeviceName = device.Name };
     }
 
     public Task<bool> ReloadAsync(CancellationToken ct = default) =>
@@ -63,21 +64,41 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
     private async Task<Domain.Entities.Devices.DaemonDevice?> FindOnlineDeviceAsync(CancellationToken ct)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!db.FilterProjectId.HasValue || db.FilterProjectId == Guid.Empty)
-            return null;
-        var projectId = db.FilterProjectId.Value;
-        var deviceIds = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.ProjectId == projectId)
-            .Select(r => r.DeviceId)
-            .ToListAsync(ct);
-        if (deviceIds.Count == 0)
-            return null;
         var now = DateTime.UtcNow;
-        var devices = await db.DaemonDevices.Where(d => deviceIds.Contains(d.Id)).ToListAsync(ct);
-        return devices
-            .Where(d => d.IsOnline(now))
-            .OrderByDescending(d => d.LastHeartbeatAt)
-            .FirstOrDefault();
+        if (db.FilterProjectId is { } projectId && projectId != Guid.Empty)
+        {
+            var runtimeIds = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(r => r.ProjectId == projectId)
+                .Select(r => r.DeviceId)
+                .ToListAsync(ct);
+            if (runtimeIds.Count > 0)
+            {
+                var runtimeDevices = await db.DaemonDevices.Where(d => runtimeIds.Contains(d.Id)).ToListAsync(ct);
+                var onlineRuntime = runtimeDevices
+                    .Where(d => d.IsOnline(now))
+                    .OrderByDescending(d => d.LastHeartbeatAt)
+                    .FirstOrDefault();
+                if (onlineRuntime is not null)
+                    return onlineRuntime;
+            }
+
+            var memberIds = await db.ProjectMembers.IgnoreQueryFilters()
+                .Where(m => m.ProjectId == projectId)
+                .Select(m => m.UserId)
+                .ToListAsync(ct);
+            if (memberIds.Count > 0)
+            {
+                var memberDevices = await db.DaemonDevices.Where(d => memberIds.Contains(d.UserId)).ToListAsync(ct);
+                var onlineMember = memberDevices
+                    .Where(d => d.IsOnline(now))
+                    .OrderByDescending(d => d.LastHeartbeatAt)
+                    .FirstOrDefault();
+                if (onlineMember is not null)
+                    return onlineMember;
+            }
+        }
+
+        return null;
     }
 
     public static LlamaSwapStatusDto? ParseProbe(string probeJson)
@@ -85,8 +106,11 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
         try
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
+            var host = doc.RootElement.TryGetProperty("hostLoad", out var hostEl)
+                ? ParseHost(hostEl)
+                : null;
             if (!doc.RootElement.TryGetProperty("llamaSwapStatus", out var status))
-                return null;
+                return host is null ? null : new LlamaSwapStatusDto(false, false, null, null, null, null, null, host);
             var available = status.TryGetProperty("available", out var a) && a.GetBoolean();
             var healthy = status.TryGetProperty("healthy", out var h) && h.GetBoolean();
             var loaded = status.TryGetProperty("loadedModel", out var m) ? m.GetString() : null;
@@ -97,9 +121,6 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
                 lastSwap = parsed.ToUniversalTime();
             var error = status.TryGetProperty("error", out var err) ? err.GetString() : null;
             var models = ParseLoadedModels(status, loaded);
-            var host = doc.RootElement.TryGetProperty("hostLoad", out var hostEl)
-                ? ParseHost(hostEl)
-                : null;
             return new LlamaSwapStatusDto(available, healthy, loaded, memory, lastSwap, error, models, host);
         }
         catch (JsonException)

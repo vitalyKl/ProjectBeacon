@@ -1,9 +1,11 @@
 @page "/dashboard"
 @layout MainLayout
 @attribute [Authorize]
+@implements IDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Infrastructure.LlamaSwap
 @using ProjectBeacon.Web.Theme
@@ -12,6 +14,7 @@
 @inject AuthenticationStateProvider Auth
 @inject GetProjectPulseHandler Pulse
 @inject GetProxyStatusHandler Proxy
+@inject ListHostSamplesHandler HostSamples
 
 <PageTitle>@L["Dashboard"]</PageTitle>
 
@@ -120,30 +123,53 @@ else
                     <MudText Typo="Typo.subtitle1">@L["Agents"]</MudText>
                     <MudButton Variant="Variant.Text" Size="Size.Small" Href="/agents">@L["Agents"]</MudButton>
                 </MudStack>
-                <MudText Typo="Typo.body2">@L["AgentsActive", _pulse.ActiveSessions]</MudText>
-                @if (_pulse.ActiveSessions == 0)
-                {
-                    <MudText Typo="Typo.caption" Class="mt-2">@L["NoAgentSessions"]</MudText>
-                }
+                  <MudText Typo="Typo.body2">@L["AgentsActive", _pulse.ActiveSessions]</MudText>
+                  @if (_pulse.ActiveSessions == 0)
+                  {
+                      <MudText Typo="Typo.caption" Class="mt-2">@L["NoAgentSessionsHint"]</MudText>
+                  }
             </MudPaper>
         </MudItem>
         <MudItem xs="12" md="6">
             <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                    <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
+                    <MudText Typo="Typo.subtitle1">@L["WorkstationLoad"]</MudText>
                     <MudButton Variant="Variant.Text" Size="Size.Small" Href="/agents">@L["Agents"]</MudButton>
                 </MudStack>
-                @if (_status is null)
+                @if (_status is null || (!_status.Available && _status.Host is null))
                 {
-                    <MudText Typo="Typo.body2">@L["Unavailable"]</MudText>
+                    <MudAlert Severity="Severity.Info">@L["StartClientHint"]</MudAlert>
                 }
                 else
                 {
+                    @if (!string.IsNullOrWhiteSpace(_status.DeviceName))
+                    {
+                        <MudText Typo="Typo.caption" Class="mb-1">@_status.DeviceName</MudText>
+                    }
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ProxyColor">@ProxyText</MudChip>
                     <HostLoadView Status="_status" />
                 }
             </MudPaper>
         </MudItem>
+        @if (_cpuSeries.Count > 0)
+        {
+            <MudItem xs="12">
+                <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4">
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">@L["CpuHistory"]</MudText>
+                    <MudChart ChartType="ChartType.Line" ChartSeries="_cpuSeries" ChartLabels="_xLabels" Width="100%" Height="180px" />
+                    @if (_ramSeries.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-3">@L["RamHistory"]</MudText>
+                        <MudChart ChartType="ChartType.Line" ChartSeries="_ramSeries" ChartLabels="_xLabels" Width="100%" Height="180px" />
+                    }
+                    @if (_gpuSeries.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-3">@L["GpuHistory"]</MudText>
+                        <MudChart ChartType="ChartType.Line" ChartSeries="_gpuSeries" ChartLabels="_xLabels" Width="100%" Height="180px" />
+                    }
+                </MudPaper>
+            </MudItem>
+        }
     </MudGrid>
 }
 
@@ -152,16 +178,26 @@ else
     private LlamaSwapStatusDto? _status;
     private bool _loading = true;
     private bool _error;
+    private Guid _userId;
+    private CancellationTokenSource? _poll;
+    private List<ChartSeries<double>> _cpuSeries = [];
+    private List<ChartSeries<double>> _ramSeries = [];
+    private List<ChartSeries<double>> _gpuSeries = [];
+    private string[] _xLabels = [];
 
     private Color ProxyColor =>
-        _status is null || !_status.Available ? Color.Default
-        : _status.Healthy ? Color.Success
-        : Color.Warning;
+        _status is null ? Color.Default
+        : _status.Available && _status.Healthy ? Color.Success
+        : _status.Available ? Color.Warning
+        : _status.Host is not null ? Color.Info
+        : Color.Default;
 
     private string ProxyText =>
-        _status is null || !_status.Available ? L["Unavailable"].Value
-        : !_status.Healthy ? L["Unhealthy"].Value
-        : L["Healthy"].Value;
+        _status is null ? L["Unavailable"].Value
+        : _status.Available && _status.Healthy ? L["Healthy"].Value
+        : _status.Available ? L["Unhealthy"].Value
+        : _status.Host is not null ? L["DeviceOnline"].Value
+        : L["Unavailable"].Value;
 
     protected override async Task OnInitializedAsync()
     {
@@ -173,6 +209,7 @@ else
             _loading = false;
             return;
         }
+        _userId = uid;
 
         Guid? preferred = Guid.TryParse(user.FindFirst("project_id")?.Value, out var active) ? active : null;
         var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
@@ -185,9 +222,70 @@ else
         }
 
         _pulse = result.Value;
+        await RefreshHost();
+        _loading = false;
+        _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        _poll = new CancellationTokenSource();
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_poll.Token))
+            {
+                await RefreshHost();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task RefreshHost()
+    {
         var proxy = await Proxy.HandleAsync(new GetProxyStatusCommand());
         if (proxy.Success)
             _status = proxy.Value;
-        _loading = false;
+        if (_userId == Guid.Empty)
+            return;
+        var samples = await HostSamples.HandleAsync(new ListHostSamplesCommand(new ListHostSamplesRequest(_userId)));
+        if (!samples.Success || samples.Value is null || samples.Value.Count == 0)
+            return;
+        var rows = samples.Value.ToList();
+        _xLabels = rows.Select(s => s.SampledAt.ToLocalTime().ToString("HH:mm")).ToArray();
+        _cpuSeries = [new ChartSeries<double> { Name = L["Cpu"].Value, Data = new ChartData<double>(rows.Select(s => s.CpuPercent ?? 0).ToList()) }];
+        if (rows.Any(s => s.RamTotalBytes is > 0))
+        {
+            _ramSeries =
+            [
+                new ChartSeries<double>
+                {
+                    Name = L["Ram"].Value,
+                    Data = new ChartData<double>(rows.Select(s => s.RamTotalBytes is > 0 && s.RamUsedBytes is { } used
+                        ? 100d * used / s.RamTotalBytes.Value
+                        : 0d).ToList())
+                }
+            ];
+        }
+        if (rows.Any(s => s.GpuUtilizationPercent is not null))
+        {
+            _gpuSeries =
+            [
+                new ChartSeries<double>
+                {
+                    Name = L["Gpu"].Value,
+                    Data = new ChartData<double>(rows.Select(s => s.GpuUtilizationPercent ?? 0).ToList())
+                }
+            ];
+        }
+    }
+
+    public void Dispose()
+    {
+        _poll?.Cancel();
+        _poll?.Dispose();
     }
 }

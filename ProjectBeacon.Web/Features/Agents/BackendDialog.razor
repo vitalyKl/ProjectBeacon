@@ -8,16 +8,21 @@
 @inject GetCommandHandler GetCommand
 @inject ISnackbar Snackbar
 
-<MudTextField @bind-Value="_name" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-<MudSelect T="ModelBackendType" @bind-Value="_type" Label="@L["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3">
-    <MudSelectItem Value="ModelBackendType.FreeToken">@L["BackendFreeToken"]</MudSelectItem>
+<MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["HowToAddModel"]</MudText>
+<MudSelect T="ModelBackendType" Value="_type" ValueChanged="OnTypeChanged" Label="@L["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense">
     <MudSelectItem Value="ModelBackendType.LlamaCpp">@L["BackendLlamaCpp"]</MudSelectItem>
+    <MudSelectItem Value="ModelBackendType.FreeToken">@L["BackendFreeToken"]</MudSelectItem>
     <MudSelectItem Value="ModelBackendType.OpenAiCompatible">@L["BackendOpenAiCompatible"]</MudSelectItem>
 </MudSelect>
-<MudTextField @bind-Value="_launchCommand" Label="@L["LaunchCommand"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["LaunchCommandHint"]" />
-@if (DeviceId is { } && UserId != Guid.Empty && _type == ModelBackendType.LlamaCpp)
+<MudTextField @bind-Value="_name" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+<MudTextField @bind-Value="_launchCommand" Label="@L["LaunchCommand"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@LaunchHint" />
+@if (_type == ModelBackendType.LlamaCpp)
 {
-    <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="mt-2" OnClick="ScanGguf" Disabled="_saving">@L["PickGguf"]</MudButton>
+    @if (DeviceId is null)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@L["NeedProjectFolderForGguf"]</MudAlert>
+    }
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="mt-2" OnClick="ScanGguf" Disabled="_saving || DeviceId is null">@L["PickGguf"]</MudButton>
     @if (_ggufs.Count > 0)
     {
         <MudSelect T="string" Value="_gguf" ValueChanged="OnGgufChanged" Label="@L["PickGguf"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
@@ -45,7 +50,7 @@
     [Parameter] public Guid UserId { get; set; }
 
     private string _name = string.Empty;
-    private ModelBackendType _type = ModelBackendType.FreeToken;
+    private ModelBackendType _type = ModelBackendType.LlamaCpp;
     private string _launchCommand = string.Empty;
     private int _contextSize = 4096;
     private int _ttl = 300;
@@ -69,7 +74,11 @@
         }
     }
 
+    private string LaunchHint => _type == ModelBackendType.LlamaCpp ? L["PickGgufFirst"].Value : L["LaunchCommandHint"].Value;
+
     private void Cancel() => Dialog?.Cancel();
+
+    private void OnTypeChanged(ModelBackendType type) => _type = type;
 
     private void OnGgufChanged(string path)
     {
@@ -133,6 +142,14 @@
     private async Task Save()
     {
         if (_saving) return;
+        if (string.IsNullOrWhiteSpace(_launchCommand))
+        {
+            Snackbar.Add(_type == ModelBackendType.LlamaCpp ? L["PickGgufFirst"].Value : L["LaunchCommandRequired"].Value, Severity.Warning);
+            return;
+        }
+        if (_type == ModelBackendType.LlamaCpp && !_launchCommand.Contains("${PORT}", StringComparison.Ordinal)
+            && !_launchCommand.Contains("--port", StringComparison.OrdinalIgnoreCase))
+            _launchCommand = _launchCommand.TrimEnd() + " --port ${PORT}";
         _saving = true;
         try
         {

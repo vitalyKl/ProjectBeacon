@@ -35,6 +35,10 @@ public static class TaskEndpoints
         app.MapPut("/v1/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery();
         app.MapPatch("/v1/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/tasks/{taskId:guid}/steps", ListSteps).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/tasks/{taskId:guid}/steps", AddStep).RequireAuthorization().DisableAntiforgery();
+        app.MapPatch("/v1/steps/{stepId:guid}", ToggleStep).RequireAuthorization().DisableAntiforgery();
+        app.MapDelete("/v1/steps/{stepId:guid}", DeleteStep).RequireAuthorization().DisableAntiforgery();
 
         return app;
     }
@@ -182,4 +186,34 @@ public static class TaskEndpoints
 
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
+
+    private static async Task<IResult> ListSteps(Guid taskId, ListTaskStepsHandler handler)
+    {
+        var result = await handler.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)));
+        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+    }
+
+    public record AddStepBody(string Title);
+
+    private static async Task<IResult> AddStep(Guid taskId, [FromBody] AddStepBody body, AddTaskStepHandler handler)
+    {
+        var result = await handler.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(taskId, body.Title)));
+        return result.Success
+            ? Results.Created($"/v1/steps/{result.Value!.Id}", result.Value)
+            : Results.BadRequest(new { error = result.Error });
+    }
+
+    public record ToggleStepBody(bool Done);
+
+    private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, ToggleTaskStepHandler handler)
+    {
+        var result = await handler.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(stepId, body.Done)));
+        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> DeleteStep(Guid stepId, DeleteTaskStepHandler handler)
+    {
+        var result = await handler.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(stepId)));
+        return result.Success ? Results.NoContent() : Results.NotFound(new { error = result.Error });
+    }
 }

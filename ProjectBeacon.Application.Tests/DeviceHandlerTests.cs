@@ -160,6 +160,23 @@ public sealed class DeviceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Heartbeat_RecordsHostSample()
+    {
+        var user = await SeedUserAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
+        var beat = await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(created.Value!.Id,
+                """{"hostLoad":{"cpuPercent":40,"ramUsedBytes":1,"ramTotalBytes":2,"sampledAt":"2026-09-20T12:00:00Z"}}""", "{}")));
+        Assert.True(beat.Success, beat.Error);
+        var samples = await new ListHostSamplesHandler(Factory()).HandleAsync(
+            new ListHostSamplesCommand(new ListHostSamplesRequest(user.Id, created.Value.Id)));
+        Assert.True(samples.Success, samples.Error);
+        Assert.Single(samples.Value!);
+        Assert.Equal(40, samples.Value![0].CpuPercent);
+    }
+
+    [Fact]
     public async Task Revoke_HidesFromHeartbeat()
     {
         var user = await SeedUserAsync();

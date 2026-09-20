@@ -86,6 +86,38 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
     }
 
     [Fact]
+    public async Task GetStatus_FallsBackToMemberDeviceWithoutRuntime()
+    {
+        Guid projectId;
+        using (TenantScope.EnterUnscoped())
+        {
+            var user = User.Create("dev", "dev@beacon.local", "hash");
+            var org = Org.Create("Org");
+            _db.Users.Add(user);
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync();
+            var project = Project.Create("P", null, org.Id);
+            _db.Projects.Add(project);
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
+            await _db.SaveChangesAsync();
+            projectId = project.Id;
+            var created = await new CreateDeviceHandler(HandlerSqlite.Factory(_connection))
+                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
+            await new HeartbeatDeviceHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
+                new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(created.Value!.Id,
+                    """{"hostLoad":{"cpuPercent":22,"ramUsedBytes":100,"ramTotalBytes":200,"sampledAt":"2026-09-20T12:00:00Z"}}""", "{}")));
+        }
+
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var proxy = new DeviceLlamaSwapProxy(factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory));
+        var status = await proxy.GetStatusAsync();
+        Assert.Equal("laptop", status.DeviceName);
+        Assert.Equal(22, status.Host!.CpuPercent);
+    }
+
+    [Fact]
     public async Task LlamaSwapConfig_FromAttachedBackends()
     {
         Guid deviceId;

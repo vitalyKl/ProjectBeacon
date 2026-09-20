@@ -26,6 +26,8 @@
 @inject RevokeDeviceHandler RevokeDevice
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
+@inject ListRuntimesHandler ListRuntimes
+@inject AttachRuntimeHandler AttachRuntime
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
@@ -113,6 +115,32 @@
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallDocker">@L["Install"] docker</MudButton>
             }
         </MudStack>
+    </MudPaper>
+}
+
+@if (!_projectMissing && _projectId is { })
+{
+    <MudText Typo="Typo.h6" Class="mb-3">@L["ProjectFolder"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["BrowseOnDeviceHint"]</MudText>
+        @if (_runtimes.Count > 0)
+        {
+            <MudText Typo="Typo.body2" Class="mb-2">@_runtimes[0].DeviceName: @_runtimes[0].LocalRoot</MudText>
+        }
+        <MudSelect T="Guid?" @bind-Value="_folderDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+            @foreach (var device in _devices)
+            {
+                <MudSelectItem Value="@((Guid?)device.Id)">@device.Name (@(device.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value))</MudSelectItem>
+            }
+        </MudSelect>
+        <div class="mt-2">
+            <FolderPicker DeviceId="_folderDeviceId" UserId="_userId" Path="_folderPath" PathChanged="OnFolderPathChanged"
+                          Disabled="_busy || FolderDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveProjectFolder"
+                   Disabled="_busy || _folderDeviceId is null || string.IsNullOrWhiteSpace(_folderPath)">
+            @L["AttachFolder"]
+        </MudButton>
     </MudPaper>
 }
 
@@ -264,6 +292,11 @@ else
     private string _probeNode = "-";
     private string _probeDocker = "-";
     private string _probeLlamaSwap = "-";
+    private List<ProjectRuntimeDto> _runtimes = [];
+    private Guid? _folderDeviceId;
+    private string _folderPath = string.Empty;
+
+    private DaemonDeviceDto? FolderDevice => _devices.FirstOrDefault(d => d.Id == _folderDeviceId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -281,6 +314,7 @@ else
             await ReloadMembers();
         }
         await ReloadDevices();
+        await ReloadRuntimes();
     }
 
     private async Task ReloadDevices()
@@ -323,6 +357,54 @@ else
 
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
+
+    private Task OnFolderPathChanged(string path)
+    {
+        _folderPath = path;
+        return Task.CompletedTask;
+    }
+
+    private async Task ReloadRuntimes()
+    {
+        _runtimes = [];
+        if (_projectId is not { } projectId || _userId == Guid.Empty)
+            return;
+        var listed = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, _userId)));
+        if (!listed.Success)
+            return;
+        _runtimes = listed.Value!.ToList();
+        var current = _runtimes.FirstOrDefault();
+        if (current is not null)
+        {
+            _folderDeviceId ??= current.DeviceId;
+            if (string.IsNullOrWhiteSpace(_folderPath))
+                _folderPath = current.LocalRoot;
+        }
+        _folderDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
+    }
+
+    private async Task SaveProjectFolder()
+    {
+        if (_projectId is not { } projectId || _folderDeviceId is not { } deviceId || string.IsNullOrWhiteSpace(_folderPath) || _userId == Guid.Empty)
+            return;
+        _busy = true;
+        try
+        {
+            var attached = await AttachRuntime.HandleAsync(new AttachRuntimeCommand(
+                new AttachRuntimeRequest(projectId, deviceId, _userId, _folderPath)));
+            if (!attached.Success)
+            {
+                Snackbar.Add(attached.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ProjectFolderSaved"].Value, Severity.Success);
+            await ReloadRuntimes();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
 
     private void FillProbe(string probeJson)
     {

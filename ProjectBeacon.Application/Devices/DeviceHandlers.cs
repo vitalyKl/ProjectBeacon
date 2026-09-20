@@ -113,8 +113,36 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
         {
             return Result.Failure<DaemonDeviceDto>(ex.Message);
         }
+        RecordHostSample(db, device.Id, command.Request.ProbeJson);
         await db.SaveChangesAsync(ct);
+        var stale = await db.DeviceHostSamples
+            .Where(s => s.DeviceId == device.Id)
+            .OrderByDescending(s => s.SampledAt)
+            .Skip(60)
+            .ToListAsync(ct);
+        if (stale.Count > 0)
+        {
+            db.DeviceHostSamples.RemoveRange(stale);
+            await db.SaveChangesAsync(ct);
+        }
         return Result.Ok(CreateDeviceHandler.MapDevice(device, null, DateTime.UtcNow));
+    }
+
+    private static void RecordHostSample(BeaconDbContext db, Guid deviceId, string? probeJson)
+    {
+        var host = DeviceLlamaSwapProxy.ParseProbe(probeJson ?? "{}")?.Host;
+        if (host is null)
+            return;
+        db.DeviceHostSamples.Add(DeviceHostSample.Create(
+            deviceId,
+            (host.SampledAt ?? DateTimeOffset.UtcNow).UtcDateTime,
+            host.CpuPercent,
+            host.RamUsedBytes,
+            host.RamTotalBytes,
+            host.Gpu?.Name,
+            host.Gpu?.UtilizationPercent,
+            host.Gpu?.MemoryUsedBytes,
+            host.Gpu?.MemoryTotalBytes));
     }
 }
 
@@ -370,5 +398,31 @@ public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigComma
             .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags, b.Concurrent))
             .ToList();
         return Result.Ok(new LlamaSwapConfigDto(LlamaSwapConfigGenerator.Generate(specs), 8080));
+    }
+}
+
+public class ListHostSamplesHandler : ICommandHandler<ListHostSamplesCommand, Result<IList<DeviceHostSampleDto>>>
+{
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+
+    public ListHostSamplesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<IList<DeviceHostSampleDto>>> HandleAsync(ListHostSamplesCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var devices = db.DaemonDevices.Where(d => d.UserId == command.Request.UserId && d.RevokedAt == null);
+        if (command.Request.DeviceId is { } deviceId)
+            devices = devices.Where(d => d.Id == deviceId);
+        var deviceIds = await devices.Select(d => d.Id).ToListAsync(ct);
+        if (deviceIds.Count == 0)
+            return Result.Ok((IList<DeviceHostSampleDto>)[]);
+
+        var samples = await db.DeviceHostSamples
+            .Where(s => deviceIds.Contains(s.DeviceId))
+            .OrderBy(s => s.SampledAt)
+            .ToListAsync(ct);
+        return Result.Ok((IList<DeviceHostSampleDto>)samples.Select(s => new DeviceHostSampleDto(
+            s.Id, s.DeviceId, s.SampledAt, s.CpuPercent, s.RamUsedBytes, s.RamTotalBytes,
+            s.GpuName, s.GpuUtilizationPercent, s.GpuMemoryUsedBytes, s.GpuMemoryTotalBytes)).ToList());
     }
 }

@@ -1,0 +1,122 @@
+@using System.Text.Json
+@using ProjectBeacon.Application.Devices
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject EnqueueCommandHandler EnqueueCommand
+@inject GetCommandHandler GetCommand
+
+<MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
+    <MudTextField T="string" Value="Path" ValueChanged="OnPathChanged" Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="Disabled" />
+    <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="Disabled || _busy || DeviceId is not { }">@L["Browse"]</MudButton>
+</MudStack>
+@if (_listing is not null)
+{
+    <MudPaper Outlined="true" Class="mt-3 pa-3">
+        <MudText Typo="Typo.caption">@_listing.Path</MudText>
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            <MudButton Size="Size.Small" OnClick="BrowseParent" Disabled="_busy || string.IsNullOrEmpty(_listing.Parent)">@L["ParentDirectory"]</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SelectFolder" Disabled="_busy">@L["SelectFolder"]</MudButton>
+        </MudStack>
+        @if (_busy)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-2" Color="Color.Primary" />
+        }
+        <MudList T="string" Dense="true" Class="mt-2">
+            @foreach (var entry in _listing.Entries.Where(e => e.IsDirectory))
+            {
+                <MudListItem T="string" OnClick="() => BrowseTo(entry.Path)" Disabled="_busy">@entry.Name</MudListItem>
+            }
+        </MudList>
+    </MudPaper>
+}
+@if (!string.IsNullOrEmpty(_error))
+{
+    <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+}
+
+@code {
+    [Parameter] public Guid? DeviceId { get; set; }
+    [Parameter] public Guid UserId { get; set; }
+    [Parameter] public string Path { get; set; } = "";
+    [Parameter] public EventCallback<string> PathChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Label { get; set; }
+
+    private bool _busy;
+    private string? _error;
+    private DirListing? _listing;
+
+    private Task OnPathChanged(string value) => PathChanged.InvokeAsync(value ?? "");
+
+    private Task Browse() => BrowseTo(Path);
+
+    private Task BrowseParent() => BrowseTo(_listing?.Parent);
+
+    private async Task SelectFolder()
+    {
+        if (_listing is null)
+            return;
+        await PathChanged.InvokeAsync(_listing.Path);
+    }
+
+    private async Task BrowseTo(string? path)
+    {
+        _error = null;
+        if (DeviceId is not { } deviceId || UserId == Guid.Empty)
+        {
+            _error = L["DeviceRequiredForBrowse"].Value;
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { path = path ?? "" });
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ListDir, payload, null)));
+            if (!queued.Success)
+            {
+                _error = queued.Error;
+                return;
+            }
+            var finished = await WaitAsync(queued.Value!.Id);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
+            {
+                _error = finished?.Error ?? L["Error"].Value;
+                return;
+            }
+            _listing = JsonSerializer.Deserialize<DirListing>(finished.ResultJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
+    {
+        for (var i = 0; i < 40; i++)
+        {
+            var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, UserId)));
+            if (!got.Success)
+                return null;
+            if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
+                return got.Value;
+            await Task.Delay(500);
+        }
+        return null;
+    }
+
+    private sealed class DirListing
+    {
+        public string Path { get; set; } = "";
+        public string? Parent { get; set; }
+        public List<DirEntry> Entries { get; set; } = [];
+    }
+
+    private sealed class DirEntry
+    {
+        public string Name { get; set; } = "";
+        public string Path { get; set; } = "";
+        public bool IsDirectory { get; set; }
+    }
+}

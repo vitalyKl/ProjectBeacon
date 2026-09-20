@@ -83,3 +83,18 @@ public record LlamaSwapConfigDto(string Yaml, int Port);
 
 public record GetLlamaSwapConfigRequest(Guid DeviceId);
 public record GetLlamaSwapConfigCommand(GetLlamaSwapConfigRequest Request) : ICommand<Result<LlamaSwapConfigDto>>;
+
+public record DeviceHostSampleDto(
+    Guid Id,
+    Guid DeviceId,
+    DateTime SampledAt,
+    double? CpuPercent,
+    long? RamUsedBytes,
+    long? RamTotalBytes,
+    string? GpuName,
+    double? GpuUtilizationPercent,
+    long? GpuMemoryUsedBytes,
+    long? GpuMemoryTotalBytes);
+
+public record ListHostSamplesRequest(Guid UserId, Guid? DeviceId = null);
+public record ListHostSamplesCommand(ListHostSamplesRequest Request) : ICommand<Result<IList<DeviceHostSampleDto>>>;

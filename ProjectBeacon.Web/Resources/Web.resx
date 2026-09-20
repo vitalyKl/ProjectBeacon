@@ -1391,4 +1391,100 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingCtaTitle" xml:space="preserve">
     <value>Start on your own host</value>
   </data>
+  <data name="Project" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="CreateProjectStepNames" xml:space="preserve">
+    <value>Name the project</value>
+  </data>
+  <data name="CreateProjectStepDevice" xml:space="preserve">
+    <value>Pick the workstation running beacon client</value>
+  </data>
+  <data name="CreateProjectStepFolder" xml:space="preserve">
+    <value>Choose the folder on that machine</value>
+  </data>
+  <data name="OrgNameHint" xml:space="preserve">
+    <value>Leave blank to reuse the project name.</value>
+  </data>
+  <data name="RuntimeDeviceHint" xml:space="preserve">
+    <value>This is the PC where beacon.exe is running, not the browser.</value>
+  </data>
+  <data name="NoDeviceForProject" xml:space="preserve">
+    <value>No workstation yet. Add a device in Settings and start beacon.exe.</value>
+  </data>
+  <data name="DeviceOfflineHint" xml:space="preserve">
+    <value>This device is offline. Start artifacts/daemon/beacon.exe (or beacon client) and wait until it shows Connected.</value>
+  </data>
+  <data name="BrowseOnDeviceHint" xml:space="preserve">
+    <value>Browse lists folders on the selected workstation, not in this browser.</value>
+  </data>
+  <data name="FolderOptionalHint" xml:space="preserve">
+    <value>You can skip the folder now and attach it later in Settings.</value>
+  </data>
+  <data name="InitializeOnDeviceHint" xml:space="preserve">
+    <value>Writes .gitignore and opencode.json into that folder on the workstation.</value>
+  </data>
+  <data name="ProjectFolder" xml:space="preserve">
+    <value>Project folder</value>
+  </data>
+  <data name="AttachFolder" xml:space="preserve">
+    <value>Save folder</value>
+  </data>
+  <data name="ProjectFolderSaved" xml:space="preserve">
+    <value>Project folder saved on this device.</value>
+  </data>
+  <data name="HowToAddModel" xml:space="preserve">
+    <value>Llama.cpp: put GGUF files in Settings → Local models directory, then Pick GGUF. Other types need a launch command. Save registers the model; Apply on device writes OpenCode config.</value>
+  </data>
+  <data name="ModelSaveHint" xml:space="preserve">
+    <value>llama-swap picks up the registry on the next client heartbeat. Apply on device is required for OpenCode to see the model. Neither starts a task.</value>
+  </data>
+  <data name="LaunchCommandRequired" xml:space="preserve">
+    <value>Launch command is required for this backend type.</value>
+  </data>
+  <data name="PickGgufFirst" xml:space="preserve">
+    <value>Pick a GGUF file (or paste a llama-server command with --port ${PORT}).</value>
+  </data>
+  <data name="NeedProjectFolderForGguf" xml:space="preserve">
+    <value>Attach a project folder in Settings so this page can scan GGUF files on the device.</value>
+  </data>
+  <data name="NextStepTodo" xml:space="preserve">
+    <value>Nothing runs by itself. Attach a folder in Settings, add a model on Agents, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
+  </data>
+  <data name="NextStepCreateSubtask" xml:space="preserve">
+    <value>Create a subtask, then Start Actor Session. Launch Session only marks the session Active in Beacon — it does not start OpenCode.</value>
+  </data>
+  <data name="LaunchSessionHint" xml:space="preserve">
+    <value>Launch Session updates status in the database. It does not spawn OpenCode.</value>
+  </data>
+  <data name="NoAgentSessionsHint" xml:space="preserve">
+    <value>No active pipeline sessions. Models do not start tasks; open a task and Start Pipeline, or use MCP.</value>
+  </data>
+  <data name="WorkstationLoad" xml:space="preserve">
+    <value>Workstation</value>
+  </data>
+  <data name="StartClientHint" xml:space="preserve">
+    <value>Start beacon.exe on this PC to see CPU, RAM, and GPU.</value>
+  </data>
+  <data name="CpuHistory" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="RamHistory" xml:space="preserve">
+    <value>RAM</value>
+  </data>
+  <data name="GpuHistory" xml:space="preserve">
+    <value>GPU</value>
+  </data>
+  <data name="TaskSteps" xml:space="preserve">
+    <value>Steps</value>
+  </data>
+  <data name="AddStep" xml:space="preserve">
+    <value>Add step</value>
+  </data>
+  <data name="StepTitle" xml:space="preserve">
+    <value>Step</value>
+  </data>
+  <data name="NoStepsYet" xml:space="preserve">
+    <value>No custom steps yet.</value>
+  </data>
 </root>

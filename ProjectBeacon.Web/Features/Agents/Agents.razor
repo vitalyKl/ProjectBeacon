@@ -41,6 +41,14 @@ else
 {
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ModelRegistry"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["HowToAddModel"]</MudText>
+        @if (_runtimes.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-3">
+                @L["NeedProjectFolderForGguf"]
+                <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings">@L["Settings"]</MudButton>
+            </MudAlert>
+        }
         @if (_backends.Count == 0)
         {
             <MudAlert Severity="Severity.Info">@L["NoModels"]</MudAlert>
@@ -131,6 +139,7 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyOnDevice" Disabled="_busy || _runtimeDeviceId is null">
             @L["ApplyOnDevice"]
         </MudButton>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["ModelSaveHint"]</MudText>
     </MudPaper>
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">

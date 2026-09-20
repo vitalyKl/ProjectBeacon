@@ -22,36 +22,44 @@
 <PageHeader Title="@L["CreateProject"]" />
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-form">
-    <MudTextField @bind-Value="_orgName" Label="@L["OrgName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudText Typo="Typo.subtitle2">1. @L["CreateProjectStepNames"]</MudText>
     <MudTextField @bind-Value="_projectName" Label="@L["ProjectName"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+    <MudTextField @bind-Value="_orgName" Label="@L["OrgName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OrgNameHint"]" />
     <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-    <MudSelect T="Guid?" @bind-Value="_deviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
-        @foreach (var device in _devices)
-        {
-            <MudSelectItem Value="@((Guid?)device.Id)">@device.Name (@(device.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value))</MudSelectItem>
-        }
-    </MudSelect>
-    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2">
-        <MudTextField @bind-Value="_localRoot" Label="@L["ProjectDirectory"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
-        <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="_saving || SelectedDevice is not { Online: true }">@L["Browse"]</MudButton>
-    </MudStack>
-    <MudCheckBox @bind-Value="_initOnDevice" Label="@L["InitializeOnDevice"]" Class="mt-2" />
-    @if (_browse is not null)
+
+    <MudText Typo="Typo.subtitle2" Class="mt-6">2. @L["CreateProjectStepDevice"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["RuntimeDeviceHint"]</MudText>
+    @if (_devices.Count == 0)
     {
-        <MudPaper Outlined="true" Class="mt-3 pa-3">
-            <MudText Typo="Typo.caption">@_browse.Path</MudText>
-            <MudStack Row="true" Spacing="2" Class="mt-2">
-                <MudButton Size="Size.Small" OnClick="BrowseParent" Disabled="string.IsNullOrEmpty(_browse.Parent)">@L["ParentDirectory"]</MudButton>
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SelectBrowseFolder">@L["SelectFolder"]</MudButton>
-            </MudStack>
-            <MudList T="string" Dense="true" Class="mt-2">
-                @foreach (var entry in _browse.Entries.Where(e => e.IsDirectory))
-                {
-                    <MudListItem T="string" OnClick="() => BrowseTo(entry.Path)">@entry.Name</MudListItem>
-                }
-            </MudList>
-        </MudPaper>
+        <MudAlert Severity="Severity.Info" Class="mt-2">
+            @L["NoDeviceForProject"]
+            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings">@L["Settings"]</MudButton>
+        </MudAlert>
     }
+    else
+    {
+        <MudSelect T="Guid?" Value="_deviceId" ValueChanged="OnDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+            @foreach (var device in _devices)
+            {
+                <MudSelectItem Value="@((Guid?)device.Id)">@device.Name (@(device.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value))</MudSelectItem>
+            }
+        </MudSelect>
+        @if (SelectedDevice is { Online: false })
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-2">@L["DeviceOfflineHint"]</MudAlert>
+        }
+    }
+
+    <MudText Typo="Typo.subtitle2" Class="mt-6">3. @L["CreateProjectStepFolder"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["BrowseOnDeviceHint"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["FolderOptionalHint"]</MudText>
+    <div class="mt-2">
+        <FolderPicker DeviceId="_deviceId" UserId="_userId" Path="_localRoot" PathChanged="OnPathChanged"
+                      Disabled="_saving || SelectedDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+    </div>
+    <MudCheckBox @bind-Value="_initOnDevice" Label="@L["InitializeOnDevice"]" Class="mt-2" />
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["InitializeOnDeviceHint"]</MudText>
+
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="Create" Disabled="_saving">
         @L["Create"]
     </MudButton>
@@ -72,7 +80,6 @@
     private string _localRoot = string.Empty;
     private bool _initOnDevice = true;
     private List<DaemonDeviceDto> _devices = [];
-    private DirListing? _browse;
 
     private DaemonDeviceDto? SelectedDevice => _devices.FirstOrDefault(d => d.Id == _deviceId);
 
@@ -86,7 +93,42 @@
         _devices = listed.Success ? listed.Value!.ToList() : [];
         var online = _devices.FirstOrDefault(d => d.Online);
         if (online is not null)
-            _deviceId = online.Id;
+            await OnDeviceChanged(online.Id);
+    }
+
+    private Task OnPathChanged(string path)
+    {
+        _localRoot = path;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDeviceChanged(Guid? id)
+    {
+        _deviceId = id;
+        if (string.IsNullOrWhiteSpace(_localRoot) && id is { } deviceId)
+        {
+            var root = ProjectsRootOf(_devices.FirstOrDefault(d => d.Id == deviceId));
+            if (!string.IsNullOrWhiteSpace(root))
+                _localRoot = root;
+        }
+        return Task.CompletedTask;
+    }
+
+    private static string ProjectsRootOf(DaemonDeviceDto? device)
+    {
+        if (device is null || string.IsNullOrWhiteSpace(device.WorkstationJson))
+            return "";
+        try
+        {
+            using var doc = JsonDocument.Parse(device.WorkstationJson);
+            return doc.RootElement.TryGetProperty("projectsRoot", out var p) && p.ValueKind == JsonValueKind.String
+                ? p.GetString() ?? ""
+                : "";
+        }
+        catch (JsonException)
+        {
+            return "";
+        }
     }
 
     private async Task Create()
@@ -95,7 +137,8 @@
         _saving = true;
         try
         {
-            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(_orgName, null, _userId)));
+            var orgName = string.IsNullOrWhiteSpace(_orgName) ? _projectName : _orgName;
+            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null, _userId)));
             if (!org.Success)
             {
                 _error = org.Error;
@@ -153,51 +196,12 @@
             }
 
             Snackbar.Add(L["ProjectCreated"].Value, Severity.Success);
-            Navigation.NavigateTo("/board", forceLoad: true);
+            Navigation.NavigateTo($"/project/switch?projectId={project.Value.Id}&returnUrl={Uri.EscapeDataString("/board")}", forceLoad: true);
         }
         finally
         {
             _saving = false;
         }
-    }
-
-    private async Task Browse()
-    {
-        await BrowseTo(_localRoot);
-    }
-
-    private Task BrowseParent() => BrowseTo(_browse?.Parent);
-
-    private Task SelectBrowseFolder()
-    {
-        if (_browse is not null)
-            _localRoot = _browse.Path;
-        return Task.CompletedTask;
-    }
-
-    private async Task BrowseTo(string? path)
-    {
-        _error = null;
-        if (_deviceId is not { } deviceId)
-        {
-            _error = L["DeviceRequiredForBrowse"].Value;
-            return;
-        }
-        var payload = JsonSerializer.Serialize(new { path = path ?? "" });
-        var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
-            new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.ListDir, payload, null)));
-        if (!queued.Success)
-        {
-            _error = queued.Error;
-            return;
-        }
-        var finished = await WaitAsync(queued.Value!.Id);
-        if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
-        {
-            _error = finished?.Error ?? L["Error"].Value;
-            return;
-        }
-        _browse = JsonSerializer.Deserialize<DirListing>(finished.ResultJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
 
     private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
@@ -212,19 +216,5 @@
             await Task.Delay(500);
         }
         return null;
-    }
-
-    private sealed class DirListing
-    {
-        public string Path { get; set; } = "";
-        public string? Parent { get; set; }
-        public List<DirEntry> Entries { get; set; } = [];
-    }
-
-    private sealed class DirEntry
-    {
-        public string Name { get; set; } = "";
-        public string Path { get; set; } = "";
-        public bool IsDirectory { get; set; }
     }
 }

@@ -36,6 +36,8 @@ public class BeaconDbContext : DbContext
     public DbSet<DaemonDevice> DaemonDevices => Set<DaemonDevice>();
     public DbSet<WorkstationCommand> WorkstationCommands => Set<WorkstationCommand>();
     public DbSet<ProjectRuntime> ProjectRuntimes => Set<ProjectRuntime>();
+    public DbSet<DeviceHostSample> DeviceHostSamples => Set<DeviceHostSample>();
+    public DbSet<TaskStep> TaskSteps => Set<TaskStep>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -290,6 +292,11 @@ public class BeaconDbContext : DbContext
                 .HasForeignKey(e => e.TaskId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity.HasMany<TaskStep>()
+                .WithOne()
+                .HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             entity.HasIndex(e => new { e.ProjectId, e.Status });
         });
 
@@ -539,6 +546,26 @@ public class BeaconDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DeviceHostSample>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.GpuName).HasMaxLength(200);
+            entity.Property(e => e.SampledAt).IsRequired();
+            entity.HasIndex(e => new { e.DeviceId, e.SampledAt });
+            entity.HasOne<DaemonDevice>()
+                .WithMany()
+                .HasForeignKey(e => e.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TaskStep>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.TaskId, e.SortOrder });
         });
 
         TenantScopedQueryFilterConvention.Apply(modelBuilder, this);
