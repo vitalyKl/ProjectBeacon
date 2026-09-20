@@ -122,6 +122,14 @@ public sealed class WorkstationDaemon : IDisposable
     public Task SyncLlamaNowAsync(CancellationToken ct) =>
         WithLlamaAsync(() => SyncLlamaAsync(_loadSettings(), ct), ct);
 
+    public void SetControlPlane(string url)
+    {
+        var trimmed = url.Trim().TrimEnd('/');
+        _http.BaseAddress = new Uri(trimmed + "/");
+        Publish(s => s with { Url = trimmed, Connected = false, Error = null });
+        Log($"control plane {trimmed}");
+    }
+
     private async Task SyncLlamaAsync(WorkstationSettings settings, CancellationToken ct)
     {
         try

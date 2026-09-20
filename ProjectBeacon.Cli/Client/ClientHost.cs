@@ -78,7 +78,7 @@ public static class ClientHost
                 interactive ? null : msg => Console.Error.WriteLine(msg));
 
             if (interactive)
-                return await ClientTui.RunDashboardAsync(daemon, store, linked.Token);
+                return await ClientTui.RunDashboardAsync(daemon, store, linked.Token, opts.StorePath);
 
             Console.Error.WriteLine($"beacon client connected to {store.Url}");
             await daemon.RunAsync(linked.Token);

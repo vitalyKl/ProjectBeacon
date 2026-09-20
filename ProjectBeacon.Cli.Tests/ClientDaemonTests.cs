@@ -65,6 +65,18 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
+    public async Task SetControlPlane_UpdatesHttpBaseAndSnapshot()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri("http://old.example/") };
+        await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
+        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
+        Assert.Equal("http://old.example", daemon.Snapshot.Url);
+        daemon.SetControlPlane("http://localhost:5083");
+        Assert.Equal("http://localhost:5083/", http.BaseAddress!.ToString());
+        Assert.Equal("http://localhost:5083", daemon.Snapshot.Url);
+    }
+
+    [Fact]
     public void HostLoad_ParsesNvidiaSmiAndFormatsMemory()
     {
         var gpu = HostLoadSampler.ParseNvidiaSmi("NVIDIA GeForce RTX 4090, 12, 1024, 24564\n");

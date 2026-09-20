@@ -71,7 +71,7 @@ public static class ClientTui
     }
 
     public static async Task<int> RunDashboardAsync(
-        WorkstationDaemon daemon, ClientStore store, CancellationToken ct)
+        WorkstationDaemon daemon, ClientStore store, CancellationToken ct, string? storePath = null)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var run = daemon.RunAsync(linked.Token);
@@ -90,7 +90,7 @@ public static class ClientTui
                 }
                 if (key is null or ConsoleKey.Q or ConsoleKey.Escape)
                     break;
-                await HandleKeyAsync(key.Value, daemon, store, linked.Token);
+                    await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token);
             }
         }
         finally
@@ -121,6 +121,29 @@ public static class ClientTui
             fallback = url;
         }
         return null;
+    }
+
+    private static async Task EditConnectionAsync(ClientStore store, WorkstationDaemon daemon, string? storePath, CancellationToken ct)
+    {
+        var current = string.IsNullOrWhiteSpace(store.Url) ? "http://localhost:5083" : store.Url.TrimEnd('/');
+        var url = AnsiConsole.Ask("Control plane URL:", current).Trim().TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(url) || string.Equals(url, current, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var (ok, message) = await ClientEnrollment.ProbeUrlAsync(url, ct);
+        if (ok)
+            AnsiConsole.MarkupLine($"[green]{Markup.Escape(message)}[/]");
+        else
+        {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(message)}[/]");
+            if (!AnsiConsole.Confirm("Save this URL anyway?", false))
+                return;
+        }
+
+        store.Url = url;
+        store.Save(storePath);
+        daemon.SetControlPlane(url);
+        AnsiConsole.MarkupLine("[green]Control plane URL saved.[/]");
     }
 
     private static void EditSettings()
@@ -188,11 +211,12 @@ public static class ClientTui
         }
     }
 
-    private static async Task HandleKeyAsync(ConsoleKey key, WorkstationDaemon daemon, ClientStore store, CancellationToken ct)
+    private static async Task HandleKeyAsync(ConsoleKey key, WorkstationDaemon daemon, ClientStore store, string? storePath, CancellationToken ct)
     {
         switch (key)
         {
             case ConsoleKey.S:
+                await EditConnectionAsync(store, daemon, storePath, ct);
                 EditSettings();
                 await daemon.SyncLlamaNowAsync(ct);
                 break;
