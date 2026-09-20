@@ -7,7 +7,7 @@ using System.Text.Json.Nodes;
 
 public static class WorkstationActions
 {
-    public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null)
+    public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? opencodeServe = null)
     {
         var probe = new Dictionary<string, object?>
         {
@@ -28,6 +28,8 @@ public static class WorkstationActions
             probe["llamaSwapStatus"] = llamaSwapStatus;
         if (hostLoad is not null)
             probe["hostLoad"] = hostLoad;
+        if (opencodeServe is not null)
+            probe["opencodeServe"] = opencodeServe;
         return JsonSerializer.Serialize(probe);
     }
 

@@ -1,0 +1,233 @@
+@page "/chat"
+@layout MainLayout
+@attribute [Authorize]
+@implements IDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Chat
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject GetCurrentProjectHandler CurrentProject
+@inject AuthenticationStateProvider Auth
+@inject CreateChatSessionHandler CreateSession
+@inject ListChatSessionsHandler ListSessions
+@inject ListChatPartsHandler ListParts
+@inject GetChatSessionHandler GetSession
+@inject SendChatPromptHandler SendPrompt
+@inject AbortChatHandler AbortChat
+@inject GetModelRegistryHandler GetRegistry
+@inject ISnackbar Snackbar
+
+<PageTitle>@L["Chat"]</PageTitle>
+<PageHeader Title="@L["Chat"]">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="NewChat" Disabled="_busy">@L["NewChat"]</MudButton>
+</PageHeader>
+
+@if (_project is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+}
+else
+{
+    <MudGrid Spacing="3" Class="mt-2">
+        <MudItem xs="12" md="3">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel pa-2">
+                @if (_sessions.Count == 0)
+                {
+                    <MudText Typo="Typo.caption">@L["NoChatsYet"]</MudText>
+                }
+                else
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var session in _sessions)
+                        {
+                            <MudListItem T="string" OnClick="() => Select(session)">
+                                <MudText Typo="Typo.body2" Class="beacon-ellipsis">@session.Title</MudText>
+                                <MudText Typo="Typo.caption">@session.CreatedAt.ToLocalTime().ToString("g")</MudText>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="9">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-chat-pane">
+                @if (_selected is null)
+                {
+                    <MudAlert Severity="Severity.Info">@L["ChatEmptyHint"]</MudAlert>
+                }
+                else
+                {
+                    <div class="beacon-chat-log">
+                        @foreach (var part in _parts)
+                        {
+                            <MudPaper Elevation="0" Class="@PartClass(part)" Outlined="true">
+                                <MudText Typo="Typo.caption">@part.Role</MudText>
+                                <MudText Typo="Typo.body2" Class="beacon-pre">@part.Body</MudText>
+                            </MudPaper>
+                        }
+                    </div>
+                    @if (_selected.Status == ChatSessionStatus.Streaming)
+                    {
+                        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-2" />
+                    }
+                    <MudSelect T="string?" @bind-Value="_model" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+                        <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
+                        @foreach (var backend in _models)
+                        {
+                            <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2">
+                        <MudTextField @bind-Value="_draft" Label="@L["Message"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
+                                      OnKeyDown="OnKey" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="Abort" Disabled="_busy || _selected.Status != ChatSessionStatus.Streaming">@L["Abort"]</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private Guid _userId;
+    private ProjectDto? _project;
+    private List<ChatSessionDto> _sessions = [];
+    private ChatSessionDto? _selected;
+    private List<ChatPartDto> _parts = [];
+    private List<string> _models = [];
+    private string? _model;
+    private string _draft = string.Empty;
+    private bool _busy;
+    private CancellationTokenSource? _poll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        var current = await CurrentProject.HandleAsync(user);
+        _project = current.Value;
+        if (_project is null)
+            return;
+        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand());
+        if (registry.Success)
+            _models = registry.Value!.Backends.Select(b => b.Name).ToList();
+        await ReloadSessions();
+        if (_sessions.Count > 0)
+            await Select(_sessions[0]);
+        _ = PollAsync();
+    }
+
+    private async Task ReloadSessions()
+    {
+        var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
+        _sessions = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private async Task Select(ChatSessionDto session)
+    {
+        _selected = session;
+        var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(session.Id, _userId)));
+        _parts = parts.Success ? parts.Value!.ToList() : [];
+    }
+
+    private async Task NewChat()
+    {
+        _busy = true;
+        try
+        {
+            var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, L["Chat"].Value)));
+            if (!created.Success)
+            {
+                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            await ReloadSessions();
+            await Select(created.Value!);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Send()
+    {
+        if (_selected is null || string.IsNullOrWhiteSpace(_draft))
+            return;
+        _busy = true;
+        try
+        {
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_selected.Id, _userId, _draft, _model)));
+            if (!sent.Success)
+            {
+                Snackbar.Add(sent.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _draft = string.Empty;
+            if (sent.Value is { } selected)
+            {
+                _selected = selected;
+                await Select(selected);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Abort()
+    {
+        if (_selected is null)
+            return;
+        var result = await AbortChat.HandleAsync(new AbortChatCommand(new AbortChatRequest(_selected.Id, _userId)));
+        if (result.Success)
+            _selected = result.Value;
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+            await Send();
+    }
+
+    private async Task PollAsync()
+    {
+        _poll = new CancellationTokenSource();
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(400));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_poll.Token))
+            {
+                if (_selected is null)
+                    continue;
+                var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(_selected.Id, _userId)));
+                if (session.Success)
+                    _selected = session.Value;
+                var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(_selected.Id, _userId)));
+                if (parts.Success)
+                    _parts = parts.Value!.ToList();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private static string PartClass(ChatPartDto part) =>
+        string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase)
+            ? "pa-3 mb-2 beacon-chat-user"
+            : "pa-3 mb-2";
+
+    public void Dispose()
+    {
+        _poll?.Cancel();
+        _poll?.Dispose();
+    }
+}

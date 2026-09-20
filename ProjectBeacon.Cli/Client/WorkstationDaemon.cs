@@ -10,6 +10,8 @@ public sealed class WorkstationDaemon : IDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
+    private readonly ClientOpenCodeServe _openCode;
+    private readonly bool _ownsOpenCode;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly Action<string>? _log;
     private readonly SemaphoreSlim _llamaLock = new(1, 1);
@@ -21,10 +23,13 @@ public sealed class WorkstationDaemon : IDisposable
         HttpClient http,
         ClientLlamaSwap llama,
         Func<WorkstationSettings>? loadSettings = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        ClientOpenCodeServe? openCode = null)
     {
         _http = http;
         _llama = llama;
+        _ownsOpenCode = openCode is null;
+        _openCode = openCode ?? new ClientOpenCodeServe();
         _loadSettings = loadSettings ?? (() => WorkstationSettings.Load());
         _log = log;
         _status = new DaemonStatus { Url = http.BaseAddress?.ToString().TrimEnd('/') ?? "" };
@@ -42,16 +47,23 @@ public sealed class WorkstationDaemon : IDisposable
     public async Task RunAsync(CancellationToken ct)
     {
         Log($"connected to {_status.Url}");
+        await Task.WhenAll(RunHeartbeatAsync(ct), RunCommandsAsync(ct));
+    }
+
+    private async Task RunHeartbeatAsync(CancellationToken ct)
+    {
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 var settings = _loadSettings();
                 await WithLlamaAsync(() => SyncLlamaAsync(settings, ct), ct);
+                await _openCode.TickAsync(settings.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
                 {
-                    probeJson = WorkstationActions.ProbeJson(_llama.StatusWire(), HostLoadSampler.ToWire(host)),
+                    probeJson = WorkstationActions.ProbeJson(
+                        _llama.StatusWire(), HostLoadSampler.ToWire(host), _openCode.StatusWire()),
                     workstationJson = JsonSerializer.Serialize(settings, Camel)
                 }, ct);
                 var code = (int)heartbeat.StatusCode;
@@ -65,12 +77,29 @@ public sealed class WorkstationDaemon : IDisposable
                     Error = heartbeat.IsSuccessStatusCode ? null : $"heartbeat {code}"
                 });
                 if (!heartbeat.IsSuccessStatusCode)
-                {
                     Log($"heartbeat {code}");
-                    await DelayAsync(ErrorDelay, ct);
-                    continue;
-                }
+                await DelayAsync(ErrorDelay, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Log(ex.Message);
+                Publish(s => s with { Connected = false, Error = ex.Message });
+                try { await DelayAsync(TimeSpan.FromSeconds(3), ct); }
+                catch (OperationCanceledException) { break; }
+            }
+        }
+    }
 
+    private async Task RunCommandsAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
                 var claimed = await _http.GetAsync("/v1/devices/me/commands?wait=25", ct);
                 if (claimed.StatusCode == System.Net.HttpStatusCode.NoContent)
                     continue;
@@ -106,7 +135,6 @@ public sealed class WorkstationDaemon : IDisposable
             catch (Exception ex)
             {
                 Log(ex.Message);
-                Publish(s => s with { Connected = false, Error = ex.Message });
                 try { await DelayAsync(TimeSpan.FromSeconds(3), ct); }
                 catch (OperationCanceledException) { break; }
             }
@@ -156,6 +184,12 @@ public sealed class WorkstationDaemon : IDisposable
         {
             var kind = command.Kind;
             var payload = command.PayloadJson ?? "{}";
+            if (kind == WorkstationCommandKind.ChatEnsureSession)
+                return await ChatEnsureAsync(payload, ct);
+            if (kind == WorkstationCommandKind.ChatPrompt)
+                return await ChatPromptAsync(payload, ct);
+            if (kind == WorkstationCommandKind.ChatAbort)
+                return await ChatAbortAsync(payload, ct);
             if (kind == WorkstationCommandKind.ReloadProxy)
             {
                 await WithLlamaAsync(() => _llama.ReloadAsync(ct), ct);
@@ -183,6 +217,71 @@ public sealed class WorkstationDaemon : IDisposable
         {
             return (false, null, ex.Message);
         }
+    }
+
+    private async Task<(bool Ok, string? Result, string? Error)> ChatEnsureAsync(string payload, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(payload);
+        var path = doc.RootElement.TryGetProperty("path", out var p) ? p.GetString() : _loadSettings().ProjectsRoot;
+        var title = doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() ?? "Chat" : "Chat";
+        await _openCode.TickAsync(path, ct);
+        if (!_openCode.Status.Healthy)
+            return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
+        var id = await _openCode.CreateSessionAsync(title, ct);
+        return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = _openCode.Cwd }), null);
+    }
+
+    private async Task<(bool Ok, string? Result, string? Error)> ChatPromptAsync(string payload, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(payload);
+        var path = doc.RootElement.TryGetProperty("path", out var p) ? p.GetString() : _openCode.Cwd;
+        var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
+        var chatId = doc.RootElement.TryGetProperty("chatSessionId", out var c) ? c.GetGuid() : Guid.Empty;
+        var text = doc.RootElement.TryGetProperty("text", out var tx) ? tx.GetString() : null;
+        var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+        if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
+            return (false, null, "chatSessionId, externalSessionId, and text are required.");
+        await _openCode.TickAsync(path, ct);
+        if (!_openCode.Status.Healthy)
+            return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
+        await _openCode.PromptAsync(externalId, text, model, ct);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var quiet = 0;
+        for (var i = 0; i < 240 && !ct.IsCancellationRequested; i++)
+        {
+            var parts = await _openCode.ListPartsAsync(externalId, ct);
+            var added = 0;
+            foreach (var part in parts)
+            {
+                var key = part.ExternalId ?? $"{part.Role}:{part.Kind}:{part.Body}";
+                if (!seen.Add(key) || string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                added++;
+                await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
+                {
+                    role = part.Role,
+                    kind = part.Kind,
+                    body = part.Body,
+                    externalId = part.ExternalId
+                }, ct);
+            }
+            quiet = added > 0 ? 0 : quiet + 1;
+            if (quiet >= 6 && seen.Count > 0)
+                break;
+            await DelayAsync(TimeSpan.FromMilliseconds(250), ct);
+        }
+        await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/idle", new { }, ct);
+        return (true, JsonSerializer.Serialize(new { sessionId = externalId }), null);
+    }
+
+    private async Task<(bool Ok, string? Result, string? Error)> ChatAbortAsync(string payload, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(payload);
+        var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
+        if (string.IsNullOrWhiteSpace(externalId))
+            return (false, null, "externalSessionId is required.");
+        await _openCode.AbortAsync(externalId, ct);
+        return (true, "{}", null);
     }
 
     private async Task WithLlamaAsync(Func<Task> action, CancellationToken ct)
@@ -225,7 +324,12 @@ public sealed class WorkstationDaemon : IDisposable
         }
     }
 
-    public void Dispose() => _llamaLock.Dispose();
+    public void Dispose()
+    {
+        _llamaLock.Dispose();
+        if (_ownsOpenCode)
+            _openCode.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
 
     public sealed class CommandWire
     {

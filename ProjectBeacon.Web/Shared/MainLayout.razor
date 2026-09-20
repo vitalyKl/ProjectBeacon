@@ -6,6 +6,7 @@
 @using ProjectBeacon.Web.Theme
 @using ProjectBeacon.Web.Resources
 @using ProjectBeacon.Web.Shared
+@using ProjectBeacon.Web.Features.Chat
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.API.Endpoints
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
@@ -63,6 +64,9 @@
                 <MudNavLink Href="/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">
                     @L["Agents"]
                 </MudNavLink>
+                <MudNavLink Href="/chat" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Chat">
+                    @L["Chat"]
+                </MudNavLink>
                 <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assessment">
                     @L["Reports"]
                 </MudNavLink>
@@ -85,6 +89,7 @@
         </div>
     </MudMainContent>
 </MudLayout>
+<ChatDock />
 
 @code {
     [CascadingParameter]
@@ -145,6 +150,7 @@
             "context" => [home, Current(L["Context"])],
             "decisions" => [home, Current(L["Decisions"])],
             "agents" => [home, Current(L["Agents"])],
+            "chat" => [home, Current(L["Chat"])],
             "reports" => [home, Current(L["Reports"])],
             "settings" => [home, Current(L["Settings"])],
             "task" => [new BreadcrumbItem(L["Board"], "/board"), Current(L["TaskDetail"])],

@@ -38,6 +38,8 @@ public class BeaconDbContext : DbContext
     public DbSet<ProjectRuntime> ProjectRuntimes => Set<ProjectRuntime>();
     public DbSet<DeviceHostSample> DeviceHostSamples => Set<DeviceHostSample>();
     public DbSet<TaskStep> TaskSteps => Set<TaskStep>();
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<ChatPart> ChatParts => Set<ChatPart>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -566,6 +568,33 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => new { e.TaskId, e.SortOrder });
+        });
+
+        modelBuilder.Entity<ChatSession>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ExternalSessionId).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.LocalRoot).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.ProjectId, e.CreatedAt });
+            entity.HasMany(e => e.Parts)
+                .WithOne(e => e.Session)
+                .HasForeignKey(e => e.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChatPart>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Role).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.Kind).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.Body).IsRequired();
+            entity.Property(e => e.ExternalId).HasMaxLength(200);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.SessionId, e.SortOrder });
+            entity.HasIndex(e => new { e.SessionId, e.ExternalId });
         });
 
         TenantScopedQueryFilterConvention.Apply(modelBuilder, this);

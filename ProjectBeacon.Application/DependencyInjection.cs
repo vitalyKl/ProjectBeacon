@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application;
 
 using Application.Agents;
 using Application.Auth;
+using Application.Chat;
 using Application.Devices;
 using Application.Identity;
 using Application.Projects;
@@ -153,6 +154,14 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ReloadProxyHandler>();
         services.AddTransient<UnloadProxyHandler>();
         services.AddTransient<ApplyAgentConfigHandler>();
+        services.AddTransient<CreateChatSessionHandler>();
+        services.AddTransient<ListChatSessionsHandler>();
+        services.AddTransient<GetChatSessionHandler>();
+        services.AddTransient<ListChatPartsHandler>();
+        services.AddTransient<SendChatPromptHandler>();
+        services.AddTransient<AbortChatHandler>();
+        services.AddTransient<AppendChatPartHandler>();
+        services.AddTransient<MarkChatIdleHandler>();
 
         return services;
     }

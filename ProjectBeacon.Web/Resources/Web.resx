@@ -1487,4 +1487,25 @@ No Beacon-hosted coding agent.</value>
   <data name="NoStepsYet" xml:space="preserve">
     <value>No custom steps yet.</value>
   </data>
+  <data name="Chat" xml:space="preserve">
+    <value>Chat</value>
+  </data>
+  <data name="NewChat" xml:space="preserve">
+    <value>New chat</value>
+  </data>
+  <data name="NoChatsYet" xml:space="preserve">
+    <value>No chats yet.</value>
+  </data>
+  <data name="ChatEmptyHint" xml:space="preserve">
+    <value>Start a chat. OpenCode runs on the workstation via beacon client.</value>
+  </data>
+  <data name="Message" xml:space="preserve">
+    <value>Message</value>
+  </data>
+  <data name="Send" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Abort" xml:space="preserve">
+    <value>Stop</value>
+  </data>
 </root>

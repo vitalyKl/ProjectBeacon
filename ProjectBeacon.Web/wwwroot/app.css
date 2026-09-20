@@ -432,6 +432,42 @@
     font-family: monospace;
 }
 
+.beacon-chat-fab {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1200;
+}
+
+.beacon-chat-dock {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 360px;
+    max-height: 70vh;
+    z-index: 1200;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.beacon-chat-dock-log,
+.beacon-chat-log {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    max-height: 48vh;
+}
+
+.beacon-chat-pane {
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.beacon-chat-user {
+    background-color: var(--color-bg-accent);
+}
+
 .beacon-form {
     width: 100%;
     max-width: 520px;

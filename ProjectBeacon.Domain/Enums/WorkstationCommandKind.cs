@@ -10,5 +10,8 @@ public enum WorkstationCommandKind
     ScanGguf,
     ReloadProxy,
     UnloadProxy,
-    SaveWorkstation
+    SaveWorkstation,
+    ChatEnsureSession,
+    ChatPrompt,
+    ChatAbort
 }

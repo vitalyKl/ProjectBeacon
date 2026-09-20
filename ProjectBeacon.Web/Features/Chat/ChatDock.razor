@@ -1,0 +1,168 @@
+@implements IDisposable
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Chat
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Auth
+@inject GetCurrentProjectHandler CurrentProject
+@inject ListChatSessionsHandler ListSessions
+@inject ListChatPartsHandler ListParts
+@inject GetChatSessionHandler GetSession
+@inject SendChatPromptHandler SendPrompt
+@inject CreateChatSessionHandler CreateSession
+@inject ISnackbar Snackbar
+
+@if (_visible)
+{
+    @if (_open)
+    {
+        <MudPaper Elevation="8" Class="beacon-chat-dock">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                <MudText Typo="Typo.subtitle2">@L["Chat"]</MudText>
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="/chat">@L["Chat"]</MudButton>
+                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close" OnClick="() => _open = false" />
+                </MudStack>
+            </MudStack>
+            <div class="beacon-chat-dock-log">
+                @foreach (var part in _parts)
+                {
+                    <MudText Typo="Typo.caption">@part.Role</MudText>
+                    <MudText Typo="Typo.body2" Class="beacon-pre mb-2">@part.Body</MudText>
+                }
+            </div>
+            <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1">
+                <MudTextField @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="_busy" />
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudFab Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Chat" Class="beacon-chat-fab" OnClick="Open" title="@L["Chat"]" />
+    }
+}
+
+@code {
+    private bool _visible;
+    private bool _open;
+    private Guid _userId;
+    private ChatSessionDto? _session;
+    private List<ChatPartDto> _parts = [];
+    private string _draft = string.Empty;
+    private bool _busy;
+    private CancellationTokenSource? _poll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocation;
+        UpdateVisible();
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        var current = await CurrentProject.HandleAsync(user);
+        if (current.Value is null || _userId == Guid.Empty)
+            return;
+        var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
+        if (listed.Success && listed.Value!.Count > 0)
+        {
+            _session = listed.Value[0];
+            await ReloadParts();
+        }
+        _ = PollAsync();
+    }
+
+    private void OnLocation(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateVisible();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateVisible()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        _visible = path is not ("chat" or "login" or "register" or "forgot" or "reset" or "bootstrap" or "");
+        if (path.StartsWith("chat", StringComparison.OrdinalIgnoreCase))
+            _visible = false;
+    }
+
+    private async Task Open()
+    {
+        _open = true;
+        if (_session is null)
+        {
+            var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, L["Chat"].Value)));
+            if (!created.Success)
+            {
+                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                _open = false;
+                return;
+            }
+            _session = created.Value;
+        }
+        await ReloadParts();
+    }
+
+    private async Task Send()
+    {
+        if (_session is null || string.IsNullOrWhiteSpace(_draft))
+            return;
+        _busy = true;
+        try
+        {
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, null)));
+            if (!sent.Success)
+            {
+                Snackbar.Add(sent.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _draft = string.Empty;
+            _session = sent.Value;
+            await ReloadParts();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReloadParts()
+    {
+        if (_session is null)
+            return;
+        var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(_session.Id, _userId)));
+        _parts = parts.Success ? parts.Value!.ToList() : [];
+    }
+
+    private async Task PollAsync()
+    {
+        _poll = new CancellationTokenSource();
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_poll.Token))
+            {
+                if (!_open || _session is null)
+                    continue;
+                var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(_session.Id, _userId)));
+                if (session.Success)
+                    _session = session.Value;
+                await ReloadParts();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocation;
+        _poll?.Cancel();
+        _poll?.Dispose();
+    }
+}

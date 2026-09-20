@@ -71,11 +71,13 @@ public static class ClientHost
             using var http = new HttpClient { BaseAddress = new Uri(store.Url.TrimEnd('/') + "/") };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", store.Token);
             await using var llama = new ClientLlamaSwap();
+            await using var openCode = new ClientOpenCodeServe();
             using var daemon = new WorkstationDaemon(
                 http,
                 llama,
                 () => WorkstationSettings.Load(),
-                interactive ? null : msg => Console.Error.WriteLine(msg));
+                interactive ? null : msg => Console.Error.WriteLine(msg),
+                openCode);
 
             if (interactive)
                 return await ClientTui.RunDashboardAsync(daemon, store, linked.Token, opts.StorePath);
