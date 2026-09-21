@@ -159,4 +159,43 @@ public sealed class WorkstationActionsTests : IDisposable
         var ex = Assert.Throws<InvalidOperationException>(() => WorkstationActions.Install("""{"id":"not-a-package"}"""));
         Assert.Contains("allowlist", ex.Message);
     }
+
+    [Fact]
+    public void Which_PrefersCmdTwinOverPosixShim()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var bin = Path.Combine(_dir, "binrank");
+        Directory.CreateDirectory(bin);
+        File.WriteAllText(Path.Combine(bin, "fakebin"), "#!/bin/sh\nexec true\n");
+        File.WriteAllText(Path.Combine(bin, "fakebin.cmd"), "@echo off\r\n");
+        var found = WorkstationActions.Which("fakebin", bin);
+        Assert.Equal(Path.Combine(bin, "fakebin.cmd"), found);
+    }
+
+    [Fact]
+    public void Which_PrefersExeOverCmdAndShim()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var bin = Path.Combine(_dir, "binrank-exe");
+        Directory.CreateDirectory(bin);
+        File.WriteAllText(Path.Combine(bin, "fakebin"), "#!/bin/sh\nexec true\n");
+        File.WriteAllText(Path.Combine(bin, "fakebin.cmd"), "@echo off\r\n");
+        File.WriteAllText(Path.Combine(bin, "fakebin.exe"), "MZ");
+        var found = WorkstationActions.Which("fakebin", bin);
+        Assert.Equal(Path.Combine(bin, "fakebin.exe"), found);
+    }
+
+    [Fact]
+    public void Which_FallsBackToShimWhenNoLaunchableTwin()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var bin = Path.Combine(_dir, "binrank-shim");
+        Directory.CreateDirectory(bin);
+        File.WriteAllText(Path.Combine(bin, "fakebin"), "#!/bin/sh\nexec true\n");
+        var found = WorkstationActions.Which("fakebin", bin);
+        Assert.Equal(Path.Combine(bin, "fakebin"), found);
+    }
 }

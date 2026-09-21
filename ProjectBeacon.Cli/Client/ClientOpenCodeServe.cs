@@ -139,9 +139,19 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         psi.ArgumentList.Add("--port");
         psi.ArgumentList.Add(_port.ToString());
         var process = new Process { StartInfo = psi };
-        if (!process.Start())
+        try
         {
-            Status = OpenCodeServeStatus.Missing("opencode serve failed to start.");
+            if (!process.Start())
+            {
+                process.Dispose();
+                Status = OpenCodeServeStatus.Missing("opencode serve failed to start.");
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            process.Dispose();
+            Status = OpenCodeServeStatus.Missing($"opencode serve failed to start: {ex.Message}");
             return;
         }
         process.BeginOutputReadLine();

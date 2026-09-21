@@ -209,7 +209,7 @@ public static class WorkstationActions
         File.WriteAllLines(path, existing);
     }
 
-    public static string? Which(string name)
+    public static string? Which(string name, string? path = null)
     {
         try
         {
@@ -222,6 +222,8 @@ public static class WorkstationActions
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            if (path is not null)
+                psi.Environment["PATH"] = path;
             using var proc = Process.Start(psi);
             if (proc is null)
                 return null;
@@ -229,13 +231,38 @@ public static class WorkstationActions
             proc.WaitForExit();
             if (proc.ExitCode != 0)
                 return null;
-            var first = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-            return string.IsNullOrWhiteSpace(first) ? null : first.Trim();
+            var lines = output
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim())
+                .Where(l => l.Length > 0)
+                .ToList();
+            if (lines.Count == 0)
+                return null;
+            if (!OperatingSystem.IsWindows())
+                return lines[0];
+            // `where` lists an extensionless POSIX shim before its .cmd twin in the same
+            // directory (npm packages); Process.Start can only launch .exe/.cmd/.bat.
+            return lines
+                .Select((line, index) => (line, index, rank: LaunchRank(line)))
+                .OrderBy(x => x.rank)
+                .ThenBy(x => x.index)
+                .First()
+                .line;
         }
         catch
         {
             return null;
         }
+    }
+
+    private static int LaunchRank(string file)
+    {
+        var ext = Path.GetExtension(file).ToLowerInvariant();
+        if (ext is ".exe")
+            return 0;
+        if (ext is ".cmd" or ".bat")
+            return 1;
+        return 2;
     }
 
     private static void Run(string file, string args, string cwd)

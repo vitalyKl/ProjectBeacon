@@ -138,9 +138,19 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         psi.ArgumentList.Add("-listen");
         psi.ArgumentList.Add($"127.0.0.1:{_port}");
         var process = new Process { StartInfo = psi };
-        if (!process.Start())
+        try
         {
-            Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to start.");
+            if (!process.Start())
+            {
+                process.Dispose();
+                Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to start.");
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            process.Dispose();
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, $"llama-swap failed to start: {ex.Message}");
             return;
         }
         process.BeginOutputReadLine();
