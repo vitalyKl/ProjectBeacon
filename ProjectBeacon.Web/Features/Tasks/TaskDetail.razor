@@ -24,6 +24,7 @@
 @inject AddTaskStepHandler AddStep
 @inject ToggleTaskStepHandler ToggleStep
 @inject DeleteTaskStepHandler DeleteStep
+@inject ChangeTaskStatusHandler ChangeStatus
 @inject IDialogService Dialogs
 @inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
@@ -57,9 +58,20 @@ else
             <MudText Typo="Typo.body1">@_task.Description</MudText>
         }
         <MudStack Row="true" Spacing="2" Class="mt-4">
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(_task.Status)">
-                @ChromeLabels.Status(L, _task.Status)
-            </MudChip>
+            <MudSelect T="TaskItemStatus"
+                Value="_status"
+                ValueChanged="OnStatusChanged"
+                Label="@L["Status"]"
+                Variant="Variant.Outlined"
+                Margin="Margin.Dense"
+                Dense="true"
+                Disabled="_busy"
+                Style="min-width:180px">
+                @foreach (var status in StatusOptions)
+                {
+                    <MudSelectItem Value="status">@ChromeLabels.Status(L, status)</MudSelectItem>
+                }
+            </MudSelect>
             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(_task.Priority)">
                 @L["Priority"]: @ChromeLabels.Priority(L, _task.Priority)
             </MudChip>
@@ -296,9 +308,11 @@ else
 
 @code {
     private static readonly string[] StageChips = { "StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed" };
+    private static readonly TaskItemStatus[] StatusOptions = Enum.GetValues<TaskItemStatus>();
 
     [Parameter] public Guid TaskId { get; set; }
     private TaskItemDto? _task;
+    private TaskItemStatus _status = TaskItemStatus.Todo;
     private bool _loading = true;
     private PipelineStateDto? _pipeline;
     private bool _busy;
@@ -352,6 +366,7 @@ else
     {
         var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
         _task = result.Success ? result.Value : null;
+        _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus) ? parsedStatus : TaskItemStatus.Todo;
         _reviewDraft = _task?.ReviewNotes ?? string.Empty;
         if (_task is not null)
         {
@@ -359,6 +374,31 @@ else
             _labels = labels.Success ? labels.Value!.ToList() : [];
             var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId)));
             _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        }
+    }
+
+    private async Task OnStatusChanged(TaskItemStatus status)
+    {
+        if (_task is null || _busy) return;
+        var previous = _status;
+        _status = status;
+        _busy = true;
+        try
+        {
+            var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
+                new ChangeTaskStatusRequest(_task.Id, status, _task.ProjectId)));
+            if (!result.Success)
+            {
+                _status = previous;
+                Snackbar.Add(result.Error ?? L["StatusChangeFailed"].Value, Severity.Error);
+                return;
+            }
+            await Reload();
+            Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 

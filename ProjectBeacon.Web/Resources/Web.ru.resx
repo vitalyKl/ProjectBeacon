@@ -159,6 +159,9 @@
   <data name="Done" xml:space="preserve">
     <value>Готово</value>
   </data>
+  <data name="StatusChangeFailed" xml:space="preserve">
+    <value>Не удалось изменить статус.</value>
+  </data>
   <data name="CompileBrief" xml:space="preserve">
     <value>Собрать бриф</value>
   </data>

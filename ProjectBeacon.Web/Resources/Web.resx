@@ -388,6 +388,9 @@
   <data name="TaskMoved" xml:space="preserve">
     <value>Task moved to {0}</value>
   </data>
+  <data name="StatusChangeFailed" xml:space="preserve">
+    <value>Could not change status.</value>
+  </data>
   <data name="RequirementGathering" xml:space="preserve">
     <value>Requirements</value>
   </data>
