@@ -2,7 +2,7 @@
 
 .NET 9 project operating system for mixed human + agent development. Blazor Server + MudBlazor on `:5083`. Agents use stdio `beacon mcp`, not HTTP MCP. The workstation client (`beacon client`) talks outbound HTTPS to the control plane; the Web host does not read the user's disk.
 
-Authoritative product docs: `.net project docs/ProjectBeacon-design-doc-v2.md` (wins on conflict) and `ProjectBeacon-dotnet-roadmap-v2.md`. Process contract: `AGENTS.md`.
+Authoritative product docs: `dotnet project docs/ProjectBeacon-design-doc-v2.md` (wins on conflict) and `ProjectBeacon-dotnet-roadmap-v2.md`. Process contract: `AGENTS.md`.
 
 ## Self-host
 
@@ -13,7 +13,7 @@ Authoritative product docs: `.net project docs/ProjectBeacon-design-doc-v2.md` (
 5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from Settings (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.
 6. Product version lives in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows the assembly version.
 
-Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Reports, Settings. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers.
+Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Chat, Reports, Settings. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers.
 
 ## Workstation client
 
@@ -41,7 +41,7 @@ llama-swap is started by the client (`GET /v1/devices/me/llamaswap-config`), not
 dotnet run --project ProjectBeacon.Cli -- mcp --root .
 ```
 
-See `.net project docs/mcp-host.md`. Hosted clone, outbound WSS, HTTP MCP, and `write_handoff` are not shipped.
+See `dotnet project docs/mcp-host.md`. Hosted clone, outbound WSS, HTTP MCP, and `write_handoff` are not shipped.
 
 ## Kubernetes
 
