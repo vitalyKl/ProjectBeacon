@@ -15,6 +15,10 @@ public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskIte
 
     public async Task<Result<TaskItemDto>> HandleAsync(ClaimTaskCommand command, CancellationToken ct = default)
     {
+        var projectId = command.Request.ProjectId;
+        if (projectId == Guid.Empty)
+            return Result.Failure<TaskItemDto>("Task not found or already claimed.");
+
         await using var db = _dbFactory.CreateDbContext();
         var taskId = command.Request.TaskId;
         var strategy = db.Database.CreateExecutionStrategy();
@@ -22,10 +26,11 @@ public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskIte
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
 
+            // Explicit project predicate: isolation must not rest on the global tenant filter alone.
             var task = await db.Tasks
                 .FromSqlRaw(
-                    "SELECT * FROM \"Tasks\" WHERE \"Id\" = {0} AND \"Status\" = 'Todo' LIMIT 1 FOR UPDATE SKIP LOCKED",
-                    taskId)
+                    "SELECT * FROM \"Tasks\" WHERE \"Id\" = {0} AND \"ProjectId\" = {1} AND \"Status\" = 'Todo' LIMIT 1 FOR UPDATE SKIP LOCKED",
+                    taskId, projectId)
                 .FirstOrDefaultAsync(ct);
 
             if (task is null)

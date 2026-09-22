@@ -137,9 +137,10 @@ public static class TaskEndpoints
             : Results.BadRequest(new { error = result.Error });
     }
 
-    private static async Task<IResult> ClaimTask(Guid taskId, ClaimTaskHandler handler)
+    private static async Task<IResult> ClaimTask(Guid projectId, Guid taskId, ITenantContext tenant, ClaimTaskHandler handler)
     {
-        var result = await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty)));
+        var targetProject = projectId != Guid.Empty ? projectId : tenant.ProjectId ?? Guid.Empty;
+        var result = await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty, targetProject)));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
