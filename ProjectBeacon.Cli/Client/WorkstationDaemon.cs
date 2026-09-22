@@ -200,13 +200,25 @@ public sealed class WorkstationDaemon : IDisposable
                 await WithLlamaAsync(() => _llama.UnloadAsync(ct), ct);
                 return (true, JsonSerializer.Serialize(_llama.StatusWire()), null);
             }
+            var root = ReadRoot(payload);
+            var sandboxed = kind switch
+            {
+                WorkstationCommandKind.ListDir => WorkstationActions.ListDir(root, ReadPath(payload)),
+                WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(root, ReadPath(payload)),
+                WorkstationCommandKind.InitProject => WorkstationActions.InitProject(root, payload),
+                WorkstationCommandKind.ApplyOpencode => WorkstationActions.ApplyOpencode(root, payload),
+                _ => null
+            };
+            if (sandboxed is not null)
+            {
+                if (!sandboxed.Success)
+                    return (false, null, sandboxed.Error);
+                return (true, sandboxed.Value, null);
+            }
+
             string result = kind switch
             {
                 WorkstationCommandKind.Probe => WorkstationActions.ProbeJson(_llama.StatusWire()),
-                WorkstationCommandKind.ListDir => WorkstationActions.ListDir(ReadPath(payload)),
-                WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(ReadPath(payload) ?? _loadSettings().ModelsRoot),
-                WorkstationCommandKind.InitProject => WorkstationActions.InitProject(payload),
-                WorkstationCommandKind.ApplyOpencode => WorkstationActions.ApplyOpencode(payload),
                 WorkstationCommandKind.SaveWorkstation => WorkstationActions.SaveWorkstation(payload),
                 WorkstationCommandKind.Install => WorkstationActions.Install(payload),
                 _ => throw new InvalidOperationException($"Unknown command {kind}.")
@@ -297,6 +309,19 @@ public sealed class WorkstationDaemon : IDisposable
         {
             using var doc = JsonDocument.Parse(payload);
             return doc.RootElement.TryGetProperty("path", out var p) ? p.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadRoot(string payload)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            return doc.RootElement.TryGetProperty("root", out var r) ? r.GetString() : null;
         }
         catch (JsonException)
         {

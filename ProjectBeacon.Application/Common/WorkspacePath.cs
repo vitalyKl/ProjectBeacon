@@ -28,6 +28,32 @@ public static class WorkspacePath
         return Result.Ok(combined);
     }
 
+    public static Result<string> ValidateAbsoluteInsideRoot(string root, string absolutePath)
+    {
+        if (string.IsNullOrWhiteSpace(absolutePath))
+            return Result.Failure<string>("missing path");
+
+        if (absolutePath.Contains('\0', StringComparison.Ordinal))
+            return Result.Failure<string>("malformed path");
+
+        var rootFull = Path.GetFullPath(root);
+        var pathFull = Path.GetFullPath(absolutePath);
+
+        if (HasReparsePointBelowRoot(pathFull, rootFull))
+            return Result.Failure<string>("path escapes project root");
+
+        var rootPrefix = rootFull.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                         + Path.DirectorySeparatorChar;
+
+        if (!pathFull.Equals(rootFull, StringComparison.OrdinalIgnoreCase) &&
+            !pathFull.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<string>("path escapes project root");
+        }
+
+        return Result.Ok(pathFull);
+    }
+
     private static bool HasReparsePointBelowRoot(string path, string rootFull)
     {
         var rootPrefix = rootFull.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)

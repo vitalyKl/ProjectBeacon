@@ -7,6 +7,8 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<DaemonDeviceDto>>
 {
@@ -169,15 +171,67 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 return Result.Failure<WorkstationCommandDto>("Project not found.");
         }
 
+        var payloadJson = await InjectRootAsync(db, command.Request, device, ct);
+
         var queued = WorkstationCommand.Create(
             device.Id,
             command.Request.Kind,
-            command.Request.PayloadJson,
+            payloadJson,
             command.Request.ProjectId,
             command.Request.UserId);
         db.WorkstationCommands.Add(queued);
         await db.SaveChangesAsync(ct);
         return Result.Ok(MapCommand(queued));
+    }
+
+    private static readonly HashSet<WorkstationCommandKind> RootedKinds =
+        [WorkstationCommandKind.ListDir, WorkstationCommandKind.ScanGguf, WorkstationCommandKind.InitProject, WorkstationCommandKind.ApplyOpencode];
+
+    private static async Task<string?> InjectRootAsync(BeaconDbContext db, EnqueueCommandRequest request, DaemonDevice device, CancellationToken ct)
+    {
+        if (!RootedKinds.Contains(request.Kind))
+            return request.PayloadJson;
+
+        string? root = null;
+
+        if (request.ProjectId is { } projectId)
+        {
+            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.DeviceId == device.Id, ct);
+            if (runtime is not null)
+                root = runtime.LocalRoot;
+        }
+
+        if (root is null && !string.IsNullOrWhiteSpace(device.WorkstationJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(device.WorkstationJson);
+                var propName = request.Kind == WorkstationCommandKind.ScanGguf ? "modelsRoot" : "projectsRoot";
+                if (doc.RootElement.TryGetProperty(propName, out var prop) && prop.ValueKind == JsonValueKind.String)
+                    root = prop.GetString();
+            }
+            catch (JsonException) { }
+        }
+
+        if (root is null)
+            return request.PayloadJson;
+
+        if (string.IsNullOrWhiteSpace(request.PayloadJson))
+            return JsonSerializer.Serialize(new { root });
+
+        try
+        {
+            var node = JsonNode.Parse(request.PayloadJson);
+            if (node is JsonObject obj)
+            {
+                obj["root"] = root;
+                return obj.ToJsonString();
+            }
+        }
+        catch (JsonException) { }
+
+        return request.PayloadJson;
     }
 
     internal static WorkstationCommandDto MapCommand(WorkstationCommand command) =>

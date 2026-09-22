@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ProjectBeacon.Application.Common;
 
 public static class WorkstationActions
 {
@@ -33,24 +34,21 @@ public static class WorkstationActions
         return JsonSerializer.Serialize(probe);
     }
 
-    public static string ListDir(string? path)
+    public static Result<string> ListDir(string root, string? path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                var drives = DriveInfo.GetDrives()
-                    .Where(d => d.IsReady)
-                    .Select(d => new { name = d.Name, path = d.RootDirectory.FullName, isDirectory = true })
-                    .ToList();
-                return JsonSerializer.Serialize(new { path = "", parent = (string?)null, entries = drives });
-            }
-            path = "/";
-        }
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("missing root");
 
-        var full = Path.GetFullPath(path);
+        if (string.IsNullOrWhiteSpace(path))
+            path = root;
+
+        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        if (!resolved.Success)
+            return resolved;
+
+        var full = resolved.Value!;
         if (!Directory.Exists(full))
-            throw new DirectoryNotFoundException(full);
+            return Result.Failure<string>($"directory not found: {full}");
 
         var parent = Directory.GetParent(full)?.FullName;
         var entries = new List<object>();
@@ -66,35 +64,51 @@ public static class WorkstationActions
         {
             entries.Add(new { name = Path.GetFileName(file), path = file, isDirectory = false });
         }
-        return JsonSerializer.Serialize(new { path = full, parent, entries });
+        return Result.Ok(JsonSerializer.Serialize(new { path = full, parent, entries }));
     }
 
-    public static string ScanGguf(string? modelsRoot)
+    public static Result<string> ScanGguf(string root, string? path)
     {
-        var root = string.IsNullOrWhiteSpace(modelsRoot)
-            ? WorkstationSettings.Load().ModelsRoot ?? WorkstationSettings.DefaultModelsRoot
-            : modelsRoot;
-        if (!Directory.Exists(root))
-            return JsonSerializer.Serialize(new { root, files = Array.Empty<object>() });
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("missing root");
 
-        var files = Directory.EnumerateFiles(root, "*.gguf", SearchOption.AllDirectories)
+        if (string.IsNullOrWhiteSpace(path))
+            path = root;
+
+        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        if (!resolved.Success)
+            return resolved;
+
+        var full = resolved.Value!;
+        if (!Directory.Exists(full))
+            return Result.Ok(JsonSerializer.Serialize(new { root = full, files = Array.Empty<object>() }));
+
+        var files = Directory.EnumerateFiles(full, "*.gguf", SearchOption.AllDirectories)
             .Take(200)
             .Select(f => new { name = Path.GetFileName(f), path = f, bytes = new FileInfo(f).Length })
             .ToList();
-        return JsonSerializer.Serialize(new { root, files });
+        return Result.Ok(JsonSerializer.Serialize(new { root = full, files }));
     }
 
-    public static string InitProject(string payloadJson)
+    public static Result<string> InitProject(string root, string payloadJson)
     {
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("missing root");
+
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
-        var root = doc.RootElement;
-        var path = root.TryGetProperty("path", out var p) ? p.GetString() : null;
+        var payloadRoot = doc.RootElement;
+        var path = payloadRoot.TryGetProperty("path", out var p) ? p.GetString() : null;
         if (string.IsNullOrWhiteSpace(path))
-            throw new InvalidOperationException("path is required.");
-        var full = Path.GetFullPath(path);
+            return Result.Failure<string>("path is required.");
+
+        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        if (!resolved.Success)
+            return resolved;
+
+        var full = resolved.Value!;
         Directory.CreateDirectory(full);
 
-        if (root.TryGetProperty("createGit", out var gitEl) && gitEl.ValueKind == JsonValueKind.True
+        if (payloadRoot.TryGetProperty("createGit", out var gitEl) && gitEl.ValueKind == JsonValueKind.True
             && !Directory.Exists(Path.Combine(full, ".git")))
         {
             Run("git", "init", full);
@@ -103,41 +117,50 @@ public static class WorkstationActions
         var gitignore = Path.Combine(full, ".gitignore");
         MergeGitignore(gitignore);
 
-        var historyInProject = !root.TryGetProperty("historyInProject", out var hist) || hist.ValueKind != JsonValueKind.False;
+        var historyInProject = !payloadRoot.TryGetProperty("historyInProject", out var hist) || hist.ValueKind != JsonValueKind.False;
         var dataDir = Path.Combine(full, ".opencode", "data");
         if (historyInProject)
             Directory.CreateDirectory(dataDir);
 
         var opencodePath = Path.Combine(full, "opencode.json");
-        var mcp = root.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
-        var model = root.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
-        var agent = root.TryGetProperty("agent", out var agentEl) ? agentEl : default;
-        var provider = root.TryGetProperty("provider", out var providerEl) ? providerEl : default;
+        var mcp = payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
+        var model = payloadRoot.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
+        var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
+        var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
         OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider);
 
         var local = Path.Combine(full, ".opencode", "local.json");
         Directory.CreateDirectory(Path.GetDirectoryName(local)!);
-        if (root.TryGetProperty("localEnv", out var envEl) && envEl.ValueKind == JsonValueKind.Object)
+        if (payloadRoot.TryGetProperty("localEnv", out var envEl) && envEl.ValueKind == JsonValueKind.Object)
             File.WriteAllText(local, envEl.GetRawText());
 
-        return JsonSerializer.Serialize(new { path = full, gitignore, opencode = opencodePath, historyDir = historyInProject ? dataDir : null });
+        return Result.Ok(JsonSerializer.Serialize(new { path = full, gitignore, opencode = opencodePath, historyDir = historyInProject ? dataDir : null }));
     }
 
-    public static string ApplyOpencode(string payloadJson)
+    public static Result<string> ApplyOpencode(string root, string payloadJson)
     {
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("missing root");
+
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
-        var root = doc.RootElement;
-        var path = root.TryGetProperty("path", out var p) ? p.GetString() : null;
+        var payloadRoot = doc.RootElement;
+        var path = payloadRoot.TryGetProperty("path", out var p) ? p.GetString() : null;
         if (string.IsNullOrWhiteSpace(path))
-            throw new InvalidOperationException("path is required.");
-        var opencodePath = Path.Combine(Path.GetFullPath(path), "opencode.json");
-        var mcp = root.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
-        var model = root.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
-        var agent = root.TryGetProperty("agent", out var agentEl) ? agentEl : default;
-        var provider = root.TryGetProperty("provider", out var providerEl) ? providerEl : default;
-        var replaceMcp = root.TryGetProperty("mcpReplace", out var replaceEl) && replaceEl.ValueKind == JsonValueKind.True;
+            return Result.Failure<string>("path is required.");
+
+        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        if (!resolved.Success)
+            return resolved;
+
+        var full = resolved.Value!;
+        var opencodePath = Path.Combine(full, "opencode.json");
+        var mcp = payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
+        var model = payloadRoot.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
+        var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
+        var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
+        var replaceMcp = payloadRoot.TryGetProperty("mcpReplace", out var replaceEl) && replaceEl.ValueKind == JsonValueKind.True;
         OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider, replaceMcp);
-        return JsonSerializer.Serialize(new { path = opencodePath });
+        return Result.Ok(JsonSerializer.Serialize(new { path = opencodePath }));
     }
 
     public static string SaveWorkstation(string payloadJson, string? settingsPath = null)
