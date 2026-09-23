@@ -37,6 +37,29 @@ Order: migrate Job → scale idle color to 1 → wait Available → patch Servic
 
 Breaking schema changes need expand/contract across two releases. Additive EF migrations can run in the Job before traffic moves.
 
+## TLS termination and forwarded headers
+
+Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app
+runs `UseForwardedHeaders` (`X-Forwarded-For`, `X-Forwarded-Proto`) before authentication to restore
+`IsHttps` from the forwarded proto; the `BeaconAuth` cookie (`SecurePolicy = SameAsRequest`) is then
+issued with `Secure` for HTTPS clients.
+
+The middleware only honors forwarded headers from trusted sources (default: loopback only). The web
+pod sees the ingress controller's pod IP as the client, so add the cluster pod CIDR:
+
+```
+FORWARDEDHEADERS__KNOWNNETWORKS__0=<pod CIDR, e.g. 10.244.0.0/16>
+```
+
+or pin exact ingress pod IPs with `FORWARDEDHEADERS__KNOWNPROXIES__0=<ingress pod IP>`. For multiple
+entries append `__1`, `__2`, ... Check the source address the web pods actually see with
+`kubectl get pods -n ingress-nginx -o wide`. Set the variables in the `env:` list of
+`deploy/k8s/web.yaml` or in the `beacon-web` secret (`envFrom`).
+
+Do not set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` — it bypasses the trust lists and would honor
+forwarded headers from any client. Without the variables, forwarded headers are ignored and the app
+behaves as before (plain HTTP, no `Secure` flag).
+
 ## CI
 
 Tag `v*` runs `.github/workflows/release.yml`: build/push GHCR with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. Deploy job runs only if `KUBECONFIG` is set on the `production` environment.
