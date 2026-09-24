@@ -95,6 +95,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddAuthorization();
+        services.AddProblemDetails();
         services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());

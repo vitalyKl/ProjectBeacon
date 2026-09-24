@@ -44,6 +44,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -62,6 +63,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+app.UseBeaconExceptionHandler();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -71,6 +73,11 @@ app.UseAuthorization();
 
 app.MapBeaconApi();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+if (app.Environment.IsEnvironment("Testing"))
+{
+    app.MapGet("/v1/__test/unhandled", _ => throw new InvalidOperationException("test unhandled exception"));
+}
 
 app.Run();
 

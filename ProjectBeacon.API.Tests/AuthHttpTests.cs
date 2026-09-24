@@ -210,7 +210,7 @@ public sealed class AuthHttpTests
     }
 }
 
-public sealed class AuthApiFactory : WebApplicationFactory<Program>
+public class AuthApiFactory : WebApplicationFactory<Program>
 {
     public const string BootstrapToken = "test-bootstrap-token";
 

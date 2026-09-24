@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Configuration;
+using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Web.Components;
 using ProjectBeacon.Web.Extensions;
 
@@ -15,6 +16,8 @@ public static class MiddlewareExtensions
 {
     public static WebApplication ConfigureMiddleware(this WebApplication app)
     {
+        app.UseBeaconExceptionHandler("/v1");
+
         // The configuration binder cannot convert config strings to IPAddress/IPNetwork, so the
         // trusted lists are parsed manually. Bind covers the rest (flags, header names, limit).
         var forwardedHeaders = new ForwardedHeadersOptions
