@@ -90,7 +90,7 @@ public static class ClientTui
                 }
                 if (key is null or ConsoleKey.Q or ConsoleKey.Escape)
                     break;
-                    await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token);
+                await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token);
             }
         }
         finally

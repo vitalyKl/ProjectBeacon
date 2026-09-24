@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Client;
 
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -73,12 +74,14 @@ public sealed class ClientStore
         }
     }
 
+    [SupportedOSPlatform("windows")]
     private static string EncryptToken(string token)
     {
         var data = ProtectedData.Protect(Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser);
         return Convert.ToBase64String(data);
     }
 
+    [SupportedOSPlatform("windows")]
     private static string TryDecryptToken(string encoded)
     {
         try

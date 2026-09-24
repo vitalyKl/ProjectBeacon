@@ -36,26 +36,27 @@ public sealed class AuthIntegrationTests : IDisposable
         _connection.Dispose();
     }
 
-    private string SeedBootstrap()
+    private async Task<string> SeedBootstrapAsync()
     {
         var handler = new BootstrapHandler(_dbFactory, null!);
-        var result = handler.HandleAsync(string.Empty).Result;
+        var result = await handler.HandleAsync(string.Empty);
 
-        return result.Value.Password;
+        return result.Value!.Password;
     }
 
     [Fact]
-    public void Bootstrap_CreatesAdminUser()
+    public async Task Bootstrap_CreatesAdminUser()
     {
         var handler = new BootstrapHandler(_dbFactory, null!);
-        var result = handler.HandleAsync(string.Empty).Result;
+        var result = await handler.HandleAsync(string.Empty);
 
         Assert.True(result.Success);
-        Assert.NotEqual(Guid.Empty, result.Value.UserId);
-        Assert.Equal("admin", result.Value.Login);
-        Assert.Equal("admin@beacon.local", result.Value.Email);
-        Assert.True(result.Value.IsAdmin);
-        Assert.NotEmpty(result.Value.Password);
+        var admin = result.Value!;
+        Assert.NotEqual(Guid.Empty, admin.UserId);
+        Assert.Equal("admin", admin.Login);
+        Assert.Equal("admin@beacon.local", admin.Email);
+        Assert.True(admin.IsAdmin);
+        Assert.NotEmpty(admin.Password);
 
         var user = _db.Users.FirstOrDefault();
         Assert.NotNull(user);
@@ -64,25 +65,25 @@ public sealed class AuthIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void Bootstrap_AlreadyCompleted_ReturnsFailure()
+    public async Task Bootstrap_AlreadyCompleted_ReturnsFailure()
     {
         var handler = new BootstrapHandler(_dbFactory, null!);
-        handler.HandleAsync(string.Empty).Wait();
+        await handler.HandleAsync(string.Empty);
 
-        var result = handler.HandleAsync(string.Empty).Result;
+        var result = await handler.HandleAsync(string.Empty);
 
         Assert.False(result.Success);
         Assert.Equal("Bootstrap already completed.", result.Error);
     }
 
     [Fact]
-    public void Login_WithWrongPassword_ReturnsFailure()
+    public async Task Login_WithWrongPassword_ReturnsFailure()
     {
-        var password = SeedBootstrap();
+        await SeedBootstrapAsync();
 
         var handler = new LoginHandler(_dbFactory);
-        var result = handler.HandleAsync(
-            new LoginCommand(new LoginRequest("admin", "wrong-password"))).Result;
+        var result = await handler.HandleAsync(
+            new LoginCommand(new LoginRequest("admin", "wrong-password")));
 
         Assert.False(result.Success);
         Assert.Equal("Invalid credentials.", result.Error);
@@ -93,17 +94,18 @@ public sealed class AuthIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void Login_WithCorrectPassword_Succeeds()
+    public async Task Login_WithCorrectPassword_Succeeds()
     {
-        var password = SeedBootstrap();
+        var password = await SeedBootstrapAsync();
 
         var handler = new LoginHandler(_dbFactory);
-        var result = handler.HandleAsync(
-            new LoginCommand(new LoginRequest("admin", password))).Result;
+        var result = await handler.HandleAsync(
+            new LoginCommand(new LoginRequest("admin", password)));
 
         Assert.True(result.Success);
-        Assert.Equal("admin", result.Value.Login);
-        Assert.True(result.Value.IsAdmin);
+        var login = result.Value!;
+        Assert.Equal("admin", login.Login);
+        Assert.True(login.IsAdmin);
 
         var user = _db.Users.FirstOrDefault();
         Assert.NotNull(user);
@@ -112,16 +114,16 @@ public sealed class AuthIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void Login_FiveFailedAttempts_LocksAccount()
+    public async Task Login_FiveFailedAttempts_LocksAccount()
     {
-        var correctPassword = SeedBootstrap();
+        var correctPassword = await SeedBootstrapAsync();
 
         var handler = new LoginHandler(_dbFactory);
 
         for (var i = 0; i < 5; i++)
         {
-            handler.HandleAsync(
-                new LoginCommand(new LoginRequest("admin", "wrong"))).Wait();
+            await handler.HandleAsync(
+                new LoginCommand(new LoginRequest("admin", "wrong")));
         }
 
         var user = _db.Users.FirstOrDefault();
@@ -129,51 +131,52 @@ public sealed class AuthIntegrationTests : IDisposable
         Assert.True(user.IsLockedOut);
         Assert.NotNull(user.LockedUntil);
 
-        var lockedResult = handler.HandleAsync(
-            new LoginCommand(new LoginRequest("admin", correctPassword))).Result;
+        var lockedResult = await handler.HandleAsync(
+            new LoginCommand(new LoginRequest("admin", correctPassword)));
 
         Assert.False(lockedResult.Success);
         Assert.Equal("Account is temporarily locked. Try again later.", lockedResult.Error);
     }
 
     [Fact]
-    public void Register_CreatesUser()
+    public async Task Register_CreatesUser()
     {
         var handler = new RegisterHandler(_dbFactory);
-        var result = handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password"))).Result;
+        var result = await handler.HandleAsync(
+            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")));
 
         Assert.True(result.Success);
-        Assert.Equal("newuser", result.Value.Login);
-        Assert.Equal("new@test.com", result.Value.Email);
+        var registered = result.Value!;
+        Assert.Equal("newuser", registered.Login);
+        Assert.Equal("new@test.com", registered.Email);
 
         var user = _db.Users.FirstOrDefault(u => u.Login == "newuser");
         Assert.NotNull(user);
     }
 
     [Fact]
-    public void Register_DuplicateLogin_ReturnsFailure()
+    public async Task Register_DuplicateLogin_ReturnsFailure()
     {
         var handler = new RegisterHandler(_dbFactory);
-        handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password"))).Wait();
+        await handler.HandleAsync(
+            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")));
 
-        var result = handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("newuser", "other@test.com", "password"))).Result;
+        var result = await handler.HandleAsync(
+            new RegisterCommand(new RegisterRequest("newuser", "other@test.com", "password")));
 
         Assert.False(result.Success);
         Assert.Equal("Login already taken.", result.Error);
     }
 
     [Fact]
-    public void Register_DuplicateEmail_ReturnsFailure()
+    public async Task Register_DuplicateEmail_ReturnsFailure()
     {
         var handler = new RegisterHandler(_dbFactory);
-        handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password"))).Wait();
+        await handler.HandleAsync(
+            new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password")));
 
-        var result = handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("user2", "test@test.com", "password"))).Result;
+        var result = await handler.HandleAsync(
+            new RegisterCommand(new RegisterRequest("user2", "test@test.com", "password")));
 
         Assert.False(result.Success);
         Assert.Equal("Email already registered.", result.Error);
