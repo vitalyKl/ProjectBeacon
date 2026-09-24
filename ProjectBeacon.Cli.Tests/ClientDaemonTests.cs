@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Tests;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Domain.Enums;
 using ProjectBeacon.Cli.Client;
 
@@ -259,6 +260,68 @@ public sealed class ClientDaemonTests : IDisposable
             CancellationToken.None);
         Assert.True(ok, error);
         Assert.Equal(2, llama.StartCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_CompletesOnIdle()
+    {
+        var chatId = Guid.NewGuid();
+        var logs = new List<string>();
+        using var http = new HttpClient(new RouteHandler()) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask,
+            ChatIdleTimeout = TimeSpan.FromSeconds(1),
+            ChatMaxDuration = TimeSpan.FromSeconds(180)
+        };
+        var (ok, result, error) = await daemon.ExecuteAsync(
+            new WorkstationDaemon.CommandWire
+            {
+                Id = Guid.NewGuid(),
+                Kind = WorkstationCommandKind.ChatPrompt,
+                PayloadJson = JsonSerializer.Serialize(new { path = _dir, chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+            },
+            CancellationToken.None);
+        Assert.True(ok, error);
+        Assert.Contains("idle", string.Join("\n", logs));
+        Assert.Contains("\"interrupted\":false", result);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_InterruptsOnMaxDuration()
+    {
+        var chatId = Guid.NewGuid();
+        var logs = new List<string>();
+        using var http = new HttpClient(new RouteHandler()) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask,
+            ChatIdleTimeout = TimeSpan.FromSeconds(10),
+            ChatMaxDuration = TimeSpan.FromSeconds(1)
+        };
+        var (ok, result, error) = await daemon.ExecuteAsync(
+            new WorkstationDaemon.CommandWire
+            {
+                Id = Guid.NewGuid(),
+                Kind = WorkstationCommandKind.ChatPrompt,
+                PayloadJson = JsonSerializer.Serialize(new { path = _dir, chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+            },
+            CancellationToken.None);
+        Assert.True(ok, error);
+        Assert.Contains("interrupted", string.Join("\n", logs));
+        Assert.Contains("\"interrupted\":true", result);
     }
 
     private static HttpResponseMessage Json(object body) =>

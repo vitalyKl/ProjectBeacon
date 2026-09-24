@@ -38,6 +38,12 @@ public sealed class WorkstationDaemon : IDisposable
     internal TimeSpan ErrorDelay { get; set; } = TimeSpan.FromSeconds(5);
     internal TimeSpan CommandErrorDelay { get; set; } = TimeSpan.FromSeconds(2);
     internal Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; } = Task.Delay;
+    // 250ms: streams parts as they arrive without hammering the local OpenCode serve.
+    internal TimeSpan ChatPollInterval { get; set; } = TimeSpan.FromMilliseconds(250);
+    // CPU inference routinely pauses between tokens; 10s of quiet counts the turn as done.
+    internal TimeSpan ChatIdleTimeout { get; set; } = TimeSpan.FromSeconds(10);
+    // Hard cap so a stuck generation cannot hold the command queue indefinitely.
+    internal TimeSpan ChatMaxDuration { get; set; } = TimeSpan.FromSeconds(180);
 
     public DaemonStatus Snapshot
     {
@@ -258,8 +264,11 @@ public sealed class WorkstationDaemon : IDisposable
             return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
         await _openCode.PromptAsync(externalId, text, model, ct);
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var maxQuiet = Math.Max(1, (int)Math.Ceiling(ChatIdleTimeout / ChatPollInterval));
+        var maxIterations = Math.Max(1, (int)Math.Ceiling(ChatMaxDuration / ChatPollInterval));
         var quiet = 0;
-        for (var i = 0; i < 240 && !ct.IsCancellationRequested; i++)
+        var idle = false;
+        for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
         {
             var parts = await _openCode.ListPartsAsync(externalId, ct);
             var added = 0;
@@ -278,12 +287,19 @@ public sealed class WorkstationDaemon : IDisposable
                 }, ct);
             }
             quiet = added > 0 ? 0 : quiet + 1;
-            if (quiet >= 6 && seen.Count > 0)
+            if (quiet >= maxQuiet && seen.Count > 0)
+            {
+                idle = true;
                 break;
-            await DelayAsync(TimeSpan.FromMilliseconds(250), ct);
+            }
+            await DelayAsync(ChatPollInterval, ct);
         }
+        if (idle)
+            Log($"chat prompt done: {seen.Count} parts, idle");
+        else if (!ct.IsCancellationRequested)
+            Log($"chat prompt interrupted: max duration {ChatMaxDuration.TotalSeconds:0}s reached, {seen.Count} parts");
         await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/idle", new { }, ct);
-        return (true, JsonSerializer.Serialize(new { sessionId = externalId }), null);
+        return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> ChatAbortAsync(string payload, CancellationToken ct)
