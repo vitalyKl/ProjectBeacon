@@ -70,7 +70,7 @@ public sealed class ClientDaemonTests : IDisposable
     {
         using var http = new HttpClient { BaseAddress = new Uri("http://old.example/") };
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
-        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
         Assert.Equal("http://old.example", daemon.Snapshot.Url);
         daemon.SetControlPlane("http://localhost:5083");
         Assert.Equal("http://localhost:5083/", http.BaseAddress!.ToString());
@@ -185,7 +185,7 @@ public sealed class ClientDaemonTests : IDisposable
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
-        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
         {
             DelayAsync = (_, ct) => Task.Delay(1, ct),
             HeartbeatInterval = TimeSpan.Zero,
@@ -228,7 +228,7 @@ public sealed class ClientDaemonTests : IDisposable
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
-        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
         {
             DelayAsync = (_, ct) => Task.Delay(1, ct)
         };
@@ -254,7 +254,7 @@ public sealed class ClientDaemonTests : IDisposable
             ConfigFile = Path.Combine(_dir, "config.yaml")
         };
         await llama.TickAsync("models: {}\n", 8080, "fake-bin", CancellationToken.None);
-        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
         var (ok, _, error) = await daemon.ExecuteAsync(
             new WorkstationDaemon.CommandWire { Id = Guid.NewGuid(), Kind = WorkstationCommandKind.ReloadProxy, PayloadJson = "{}" },
             CancellationToken.None);
@@ -274,7 +274,7 @@ public sealed class ClientDaemonTests : IDisposable
             ConfigFile = Path.Combine(_dir, "config.yaml")
         };
         await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
         {
             DelayAsync = (_, _) => Task.CompletedTask,
             ChatIdleTimeout = TimeSpan.FromSeconds(1),
@@ -305,7 +305,7 @@ public sealed class ClientDaemonTests : IDisposable
             ConfigFile = Path.Combine(_dir, "config.yaml")
         };
         await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
         {
             DelayAsync = (_, _) => Task.CompletedTask,
             ChatIdleTimeout = TimeSpan.FromSeconds(10),

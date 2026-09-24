@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using Domain.Enums;
 using Infrastructure.LlamaSwap;
 
-public sealed class WorkstationDaemon : IDisposable
+public sealed class WorkstationDaemon : IAsyncDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
@@ -366,11 +366,11 @@ public sealed class WorkstationDaemon : IDisposable
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         _llamaLock.Dispose();
         if (_ownsOpenCode)
-            _openCode.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await _openCode.DisposeAsync();
     }
 
     public sealed class CommandWire

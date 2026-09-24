@@ -72,7 +72,7 @@ public static class ClientHost
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", store.Token);
             await using var llama = new ClientLlamaSwap();
             await using var openCode = new ClientOpenCodeServe();
-            using var daemon = new WorkstationDaemon(
+            await using var daemon = new WorkstationDaemon(
                 http,
                 llama,
                 () => WorkstationSettings.Load(),
