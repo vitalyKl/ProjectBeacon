@@ -26,4 +26,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ProjectBeacon.Web.Tests" />
+  </ItemGroup>
+
 </Project>

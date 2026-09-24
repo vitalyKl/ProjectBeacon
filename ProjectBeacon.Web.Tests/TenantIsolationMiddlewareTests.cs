@@ -234,4 +234,187 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         await mw.InvokeAsync(http, _db);
         Assert.Equal(Guid.Empty, scoped);
     }
+
+    [Theory]
+    [InlineData("11111111-2222-3333-4444-555555555555")]
+    public void FromRoute_ReturnsParsedId_ForValidRouteValue(string value)
+    {
+        var http = new DefaultHttpContext();
+        http.Request.RouteValues["projectId"] = value;
+
+        Assert.Equal(Guid.Parse(value), TenantIsolationMiddleware.FromRoute(http, "projectId"));
+    }
+
+    [Theory]
+    [InlineData("not-a-guid")]
+    [InlineData("")]
+    public void FromRoute_ReturnsNull_ForInvalidRouteValue(string value)
+    {
+        var http = new DefaultHttpContext();
+        http.Request.RouteValues["projectId"] = value;
+
+        Assert.Null(TenantIsolationMiddleware.FromRoute(http, "projectId"));
+    }
+
+    [Fact]
+    public void FromRoute_ReturnsNull_WhenRouteValueAbsent()
+    {
+        var http = new DefaultHttpContext();
+
+        Assert.Null(TenantIsolationMiddleware.FromRoute(http, "projectId"));
+    }
+
+    [Theory]
+    [InlineData("11111111-2222-3333-4444-555555555555")]
+    public void FromHeader_ReturnsParsedId_ForValidHeaderValue(string value)
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-Project-Id"] = value;
+
+        Assert.Equal(Guid.Parse(value), TenantIsolationMiddleware.FromHeader(http, "X-Project-Id"));
+    }
+
+    [Theory]
+    [InlineData("not-a-guid")]
+    [InlineData("")]
+    public void FromHeader_ReturnsNull_ForInvalidHeaderValue(string value)
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Headers["X-Project-Id"] = value;
+
+        Assert.Null(TenantIsolationMiddleware.FromHeader(http, "X-Project-Id"));
+    }
+
+    [Fact]
+    public void FromHeader_ReturnsNull_WhenHeaderAbsent()
+    {
+        var http = new DefaultHttpContext();
+
+        Assert.Null(TenantIsolationMiddleware.FromHeader(http, "X-Project-Id"));
+    }
+
+    [Theory]
+    [InlineData("11111111-2222-3333-4444-555555555555")]
+    public void FromClaim_ReturnsParsedId_ForValidClaim(string value)
+    {
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim("project_id", value)], "Cookies"))
+        };
+
+        Assert.Equal(Guid.Parse(value), TenantIsolationMiddleware.FromClaim(http, "project_id"));
+    }
+
+    [Theory]
+    [InlineData("not-a-guid")]
+    [InlineData("")]
+    public void FromClaim_ReturnsNull_ForInvalidClaim(string value)
+    {
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim("project_id", value)], "Cookies"))
+        };
+
+        Assert.Null(TenantIsolationMiddleware.FromClaim(http, "project_id"));
+    }
+
+    [Fact]
+    public void FromClaim_ReturnsNull_WhenClaimAbsent()
+    {
+        var http = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity("Cookies"))
+        };
+
+        Assert.Null(TenantIsolationMiddleware.FromClaim(http, "project_id"));
+    }
+
+    [Fact]
+    public void IsMemberOf_True_WhenMembershipExists()
+    {
+        var member = ProjectMember.Create(Guid.NewGuid(), Guid.NewGuid(), MemberRole.Member);
+        var members = new List<ProjectMember> { member };
+
+        Assert.True(TenantIsolationMiddleware.IsMemberOf(members, member.ProjectId));
+    }
+
+    [Fact]
+    public void IsMemberOf_False_WhenNoMembership()
+    {
+        var member = ProjectMember.Create(Guid.NewGuid(), Guid.NewGuid(), MemberRole.Member);
+        var members = new List<ProjectMember> { member };
+
+        Assert.False(TenantIsolationMiddleware.IsMemberOf(members, Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void FindMembership_ReturnsMember_WhenPresent()
+    {
+        var project = Guid.NewGuid();
+        var member = ProjectMember.Create(project, Guid.NewGuid(), MemberRole.Owner);
+        var members = new List<ProjectMember> { member };
+
+        var found = TenantIsolationMiddleware.FindMembership(members, project);
+
+        Assert.NotNull(found);
+        Assert.Equal(project, found!.ProjectId);
+    }
+
+    [Fact]
+    public void FindMembership_ReturnsNull_WhenAbsent()
+    {
+        var member = ProjectMember.Create(Guid.NewGuid(), Guid.NewGuid(), MemberRole.Member);
+        var members = new List<ProjectMember> { member };
+
+        Assert.Null(TenantIsolationMiddleware.FindMembership(members, Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void FindMembership_ReturnsNull_ForNullProjectId()
+    {
+        var member = ProjectMember.Create(Guid.NewGuid(), Guid.NewGuid(), MemberRole.Member);
+        var members = new List<ProjectMember> { member };
+
+        Assert.Null(TenantIsolationMiddleware.FindMembership(members, null));
+    }
+
+    [Fact]
+    public async Task ResolveAdminFallbackOrgAsync_ReturnsOrg_ForExistingProjectWhenAdmin()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+        var project = Project.Create("A", null, org.Id);
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+
+        var result = await TenantIsolationMiddleware.ResolveAdminFallbackOrgAsync(_db, isAdmin: true, project.Id);
+
+        Assert.Equal(org.Id, result);
+    }
+
+    [Fact]
+    public async Task ResolveAdminFallbackOrgAsync_ReturnsNull_ForMissingProject()
+    {
+        var result = await TenantIsolationMiddleware.ResolveAdminFallbackOrgAsync(_db, isAdmin: true, Guid.NewGuid());
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ResolveAdminFallbackOrgAsync_ReturnsNull_ForNonAdmin()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync();
+        var project = Project.Create("A", null, org.Id);
+        _db.Projects.Add(project);
+        await _db.SaveChangesAsync();
+
+        var result = await TenantIsolationMiddleware.ResolveAdminFallbackOrgAsync(_db, isAdmin: false, project.Id);
+
+        Assert.Null(result);
+    }
 }
