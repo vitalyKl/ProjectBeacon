@@ -130,23 +130,23 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
             []);
 }
 
-public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result<bool>>
+public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public DeleteTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
         if (task is null)
-            return Result.Failure<bool>("Task not found.");
+            return Result.Failure("Task not found.");
 
         db.Tasks.Remove(task);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

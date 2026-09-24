@@ -9,7 +9,7 @@ public record CreateApiTokenCommand(CreateApiTokenRequest Request) : ICommand<Re
 
 public record RevokeApiTokenRequest(Guid TokenId);
 
-public record RevokeApiTokenCommand(RevokeApiTokenRequest Request) : ICommand<Result<bool>>;
+public record RevokeApiTokenCommand(RevokeApiTokenRequest Request) : ICommand<Result>;
 
 public record GetApiTokenRequest(Guid TokenId);
 

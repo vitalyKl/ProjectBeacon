@@ -248,7 +248,7 @@ public class ForgotPasswordHandler
         _configuration = configuration;
     }
 
-    public async Task<Result<bool>> HandleAsync(ForgotPasswordRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(ForgotPasswordRequest request, CancellationToken ct = default)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? string.Empty;
         await using var db = _dbFactory.CreateDbContext();
@@ -256,7 +256,7 @@ public class ForgotPasswordHandler
             ? null
             : await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
         if (user is null)
-            return Result.Ok(true);
+            return Result.Ok();
 
         var raw = OpaqueToken.Generate(OpaqueToken.ResetPrefix);
         db.PasswordResetTokens.Add(PasswordResetToken.Create(user.Id, OpaqueToken.Hash(raw)));
@@ -273,7 +273,7 @@ public class ForgotPasswordHandler
         {
         }
 
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 
@@ -283,31 +283,31 @@ public class ResetPasswordHandler
 
     public ResetPasswordHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(ResetPasswordRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(ResetPasswordRequest request, CancellationToken ct = default)
     {
         var password = request.Password ?? string.Empty;
         if (password.Length < 8)
-            return Result.Failure<bool>("Password must be at least 8 characters.");
+            return Result.Failure("Password must be at least 8 characters.");
         var token = request.Token?.Trim() ?? string.Empty;
         if (token.Length == 0)
-            return Result.Failure<bool>("Invalid or expired token.");
+            return Result.Failure("Invalid or expired token.");
 
         await using var db = _dbFactory.CreateDbContext();
         var hash = OpaqueToken.Hash(token);
         var reset = await db.PasswordResetTokens.FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
         if (reset is null || !reset.TryConsume())
-            return Result.Failure<bool>("Invalid or expired token.");
+            return Result.Failure("Invalid or expired token.");
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == reset.UserId, ct);
         if (user is null)
-            return Result.Failure<bool>("Invalid or expired token.");
+            return Result.Failure("Invalid or expired token.");
 
         user.ResetPassword(PasswordHasher.Hash(password));
         var sessions = await db.Sessions.Where(s => s.UserId == user.Id && s.IsActive).ToListAsync(ct);
         foreach (var session in sessions)
             session.Deactivate();
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 
@@ -317,18 +317,18 @@ public class ChangePasswordHandler
 
     public ChangePasswordHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(ChangePasswordRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(ChangePasswordRequest request, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(request.NewPassword) || request.NewPassword.Length < 8)
-            return Result.Failure<bool>("Password must be at least 8 characters.");
+            return Result.Failure("Password must be at least 8 characters.");
 
         await using var db = _dbFactory.CreateDbContext();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
         if (user is null || !PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash))
-            return Result.Failure<bool>("Current password is incorrect.");
+            return Result.Failure("Current password is incorrect.");
 
         user.ResetPassword(PasswordHasher.Hash(request.NewPassword));
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }

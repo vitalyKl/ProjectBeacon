@@ -28,7 +28,7 @@ public record UpdateTaskCommand(UpdateTaskRequest Request) : ICommand<Result<Tas
 
 public record DeleteTaskRequest(Guid TaskId);
 
-public record DeleteTaskCommand(DeleteTaskRequest Request) : ICommand<Result<bool>>;
+public record DeleteTaskCommand(DeleteTaskRequest Request) : ICommand<Result>;
 
 public record ChangeSubStageRequest(Guid TaskId, TaskSubStage SubStage);
 
@@ -59,7 +59,7 @@ public record FinishWorkRequest(
     string ActorId,
     FinishWorkReview? Review = null);
 
-public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result<bool>>;
+public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result>;
 
 public record TaskItemDto(
     Guid Id,
@@ -97,4 +97,4 @@ public record ToggleTaskStepRequest(Guid StepId, bool Done);
 public record ToggleTaskStepCommand(ToggleTaskStepRequest Request) : ICommand<Result<TaskStepDto>>;
 
 public record DeleteTaskStepRequest(Guid StepId);
-public record DeleteTaskStepCommand(DeleteTaskStepRequest Request) : ICommand<Result<bool>>;
+public record DeleteTaskStepCommand(DeleteTaskStepRequest Request) : ICommand<Result>;

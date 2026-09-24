@@ -9,7 +9,7 @@ public record AddProjectMemberCommand(AddProjectMemberRequest Request) : IComman
 
 public record RemoveProjectMemberRequest(Guid ProjectId, Guid UserId);
 
-public record RemoveProjectMemberCommand(RemoveProjectMemberRequest Request) : ICommand<Result<bool>>;
+public record RemoveProjectMemberCommand(RemoveProjectMemberRequest Request) : ICommand<Result>;
 
 public record GetProjectMembersRequest(Guid ProjectId);
 

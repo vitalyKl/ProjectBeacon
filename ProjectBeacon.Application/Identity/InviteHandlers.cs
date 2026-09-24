@@ -136,12 +136,12 @@ public class AcceptInviteHandler
 
     public AcceptInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.ActorUserId, ct);
         if (user is null)
-            return Result.Failure<bool>("User not found.");
+            return Result.Failure("User not found.");
 
         var hash = OpaqueToken.Hash(request.Token.Trim());
         var orgInvite = await db.OrgInvites.IgnoreQueryFilters()
@@ -149,29 +149,29 @@ public class AcceptInviteHandler
         if (orgInvite is not null)
         {
             if (!string.Equals(orgInvite.Email, user.Email, StringComparison.Ordinal))
-                return Result.Failure<bool>("Email does not match invite.");
+                return Result.Failure("Email does not match invite.");
             if (!orgInvite.TryAccept())
-                return Result.Failure<bool>("Invite is no longer valid.");
+                return Result.Failure("Invite is no longer valid.");
             if (!await db.OrgMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.OrgId == orgInvite.OrgId && m.UserId == user.Id, ct))
                 db.OrgMembers.Add(OrgMember.Create(orgInvite.OrgId, user.Id, orgInvite.Role));
             await db.SaveChangesAsync(ct);
-            return Result.Ok(true);
+            return Result.Ok();
         }
 
         var projectInvite = await db.ProjectInvites.IgnoreQueryFilters()
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
         if (projectInvite is null)
-            return Result.Failure<bool>("Invite not found.");
+            return Result.Failure("Invite not found.");
         if (!string.Equals(projectInvite.Email, user.Email, StringComparison.Ordinal))
-            return Result.Failure<bool>("Email does not match invite.");
+            return Result.Failure("Email does not match invite.");
         if (!projectInvite.TryAccept())
-            return Result.Failure<bool>("Invite is no longer valid.");
+            return Result.Failure("Invite is no longer valid.");
 
         var project = await db.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);
         if (project is null)
-            return Result.Failure<bool>("Project not found.");
+            return Result.Failure("Project not found.");
         if (!await db.OrgMembers.IgnoreQueryFilters()
                 .AnyAsync(m => m.OrgId == project.OrgId && m.UserId == user.Id, ct))
             db.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, MemberRole.Member));
@@ -179,7 +179,7 @@ public class AcceptInviteHandler
                 .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
             db.ProjectMembers.Add(ProjectMember.Create(projectInvite.ProjectId, user.Id, projectInvite.Role));
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 
@@ -231,17 +231,17 @@ public class RevokeOrgInviteHandler
 
     public RevokeOrgInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var invite = await db.OrgInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
-            return Result.Failure<bool>("Invite not found.");
+            return Result.Failure("Invite not found.");
         if (!await MembershipAuth.CanManageOrgAsync(db, invite.OrgId, request.ActorUserId, request.ActorIsAdmin, ct))
-            return Result.Failure<bool>("Forbidden.");
+            return Result.Failure("Forbidden.");
         invite.Revoke();
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 
@@ -251,17 +251,17 @@ public class RevokeProjectInviteHandler
 
     public RevokeProjectInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var invite = await db.ProjectInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
-            return Result.Failure<bool>("Invite not found.");
+            return Result.Failure("Invite not found.");
         if (!await MembershipAuth.CanManageProjectAsync(db, invite.ProjectId, request.ActorUserId, request.ActorIsAdmin, ct))
-            return Result.Failure<bool>("Forbidden.");
+            return Result.Failure("Forbidden.");
         invite.Revoke();
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

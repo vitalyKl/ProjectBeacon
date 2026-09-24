@@ -120,13 +120,13 @@ public class DeleteLabelHandler
 
     public DeleteLabelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DeleteLabelRequest request, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DeleteLabelRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var label = await db.Labels
             .FirstOrDefaultAsync(l => l.Id == request.LabelId && l.ProjectId == request.ProjectId, ct);
         if (label is null)
-            return Result.Failure<bool>("Label not found.");
+            return Result.Failure("Label not found.");
 
         var tasks = await db.Tasks.Where(t => t.LabelId == label.Id).ToListAsync(ct);
         foreach (var task in tasks)
@@ -134,6 +134,6 @@ public class DeleteLabelHandler
 
         db.Labels.Remove(label);
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }

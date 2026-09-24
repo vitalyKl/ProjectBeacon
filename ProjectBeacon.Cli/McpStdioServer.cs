@@ -449,7 +449,7 @@ public static class McpStdioServer
             ? Result(id, Content(result.Value!))
             : ToolError(id, result.Error ?? "error");
 
-    private static JsonObject BoolResult(JsonNode id, Application.Common.Result<bool> result)
+    private static JsonObject BoolResult(JsonNode id, Application.Common.Result result)
         => result.Success
             ? Result(id, Content("ok"))
             : ToolError(id, result.Error ?? "error");

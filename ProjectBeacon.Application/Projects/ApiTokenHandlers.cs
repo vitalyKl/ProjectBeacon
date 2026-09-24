@@ -67,23 +67,23 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
     }
 }
 
-public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Result<bool>>
+public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public RevokeApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var token = await db.ApiTokens.FindAsync([command.Request.TokenId], ct);
         if (token is null)
-            return Result.Failure<bool>("API token not found.");
+            return Result.Failure("API token not found.");
 
         db.ApiTokens.Remove(token);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

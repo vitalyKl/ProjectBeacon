@@ -48,7 +48,7 @@ public record ListDevicesRequest(Guid UserId);
 public record ListDevicesCommand(ListDevicesRequest Request) : ICommand<Result<IList<DaemonDeviceDto>>>;
 
 public record RevokeDeviceRequest(Guid DeviceId, Guid UserId);
-public record RevokeDeviceCommand(RevokeDeviceRequest Request) : ICommand<Result<bool>>;
+public record RevokeDeviceCommand(RevokeDeviceRequest Request) : ICommand<Result>;
 
 public record HeartbeatDeviceRequest(Guid DeviceId, string? ProbeJson, string? WorkstationJson);
 public record HeartbeatDeviceCommand(HeartbeatDeviceRequest Request) : ICommand<Result<DaemonDeviceDto>>;
@@ -77,7 +77,7 @@ public record ListRuntimesRequest(Guid ProjectId, Guid UserId);
 public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result<IList<ProjectRuntimeDto>>>;
 
 public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId);
-public record DetachRuntimeCommand(DetachRuntimeRequest Request) : ICommand<Result<bool>>;
+public record DetachRuntimeCommand(DetachRuntimeRequest Request) : ICommand<Result>;
 
 public record LlamaSwapConfigDto(string Yaml, int Port);
 

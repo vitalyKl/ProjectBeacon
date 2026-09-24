@@ -57,23 +57,23 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
         new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
 }
 
-public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Result<bool>>
+public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public DeleteMilestoneHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var milestone = await db.Milestones.FindAsync([command.Request.MilestoneId], ct);
         if (milestone is null)
-            return Result.Failure<bool>("Milestone not found.");
+            return Result.Failure("Milestone not found.");
 
         db.Milestones.Remove(milestone);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

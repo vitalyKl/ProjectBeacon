@@ -48,18 +48,18 @@ public class DeleteContextNodeHandler
 
     public DeleteContextNodeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DeleteContextNodeCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var section = await db.ContextSections
             .FirstOrDefaultAsync(s => s.Id == command.Request.NodeId && s.ProjectId == command.Request.ProjectId, ct);
 
         if (section is null)
-            return Result.Failure<bool>("Context node not found.");
+            return Result.Failure("Context node not found.");
 
         db.ContextSections.Remove(section);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }

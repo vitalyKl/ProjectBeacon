@@ -49,4 +49,4 @@ public record GetContextNodeCommand(GetContextNodeRequest Request) : IQuery<Resu
 
 public record DeleteContextNodeRequest(Guid ProjectId, Guid NodeId);
 
-public record DeleteContextNodeCommand(DeleteContextNodeRequest Request) : ICommand<Result<bool>>;
+public record DeleteContextNodeCommand(DeleteContextNodeRequest Request) : ICommand<Result>;

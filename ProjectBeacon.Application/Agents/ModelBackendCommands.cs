@@ -41,7 +41,7 @@ public record UpsertLocalModelBackendCommand(UpsertLocalModelBackendRequest Requ
 
 public record DeleteLocalModelBackendRequest(Guid Id);
 
-public record DeleteLocalModelBackendCommand(DeleteLocalModelBackendRequest Request) : ICommand<Result<bool>>;
+public record DeleteLocalModelBackendCommand(DeleteLocalModelBackendRequest Request) : ICommand<Result>;
 
 public record SetRoleBindingRequest(PipelineRole Role, Guid ModelBackendId);
 
@@ -49,7 +49,7 @@ public record SetRoleBindingCommand(SetRoleBindingRequest Request) : ICommand<Re
 
 public record RemoveRoleBindingRequest(PipelineRole Role);
 
-public record RemoveRoleBindingCommand(RemoveRoleBindingRequest Request) : ICommand<Result<bool>>;
+public record RemoveRoleBindingCommand(RemoveRoleBindingRequest Request) : ICommand<Result>;
 
 public record GetModelRegistryCommand : ICommand<Result<ModelRegistryDto>>;
 

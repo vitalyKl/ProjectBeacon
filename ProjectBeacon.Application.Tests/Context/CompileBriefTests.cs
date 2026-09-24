@@ -252,7 +252,6 @@ public sealed class CompileBriefTests : IDisposable
         var result = await deleteHandler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.True(result.Value);
 
         var deleted = await _db.ContextSections.FirstOrDefaultAsync(s => s.Id == createResult.Value.Id);
         Assert.Null(deleted);

@@ -14,30 +14,30 @@ public class FinishWorkHandler
 
     public FinishWorkHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(FinishWorkCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(FinishWorkCommand command, CancellationToken ct = default)
     {
         if (!Guid.TryParse(command.Request.TaskId, out var taskId))
-            return Result.Failure<bool>("Invalid task ID format.");
+            return Result.Failure("Invalid task ID format.");
 
         await using var db = _dbFactory.CreateDbContext();
         var task = await db.Tasks
             .FirstOrDefaultAsync(t => t.Id == taskId, ct);
 
         if (task is null)
-            return Result.Failure<bool>("Task not found.");
+            return Result.Failure("Task not found.");
 
         if (!await ActorHasAccess(db, command.Request.ActorId, task.ProjectId, ct))
-            return Result.Failure<bool>("Actor does not have access to this project.");
+            return Result.Failure("Actor does not have access to this project.");
 
         var resultType = command.Request.Result.ToLowerInvariant();
         switch (resultType)
         {
             case "done":
                 if (command.Request.Review is null || !command.Request.Review.ReviewerRun)
-                    return Result.Failure<bool>("done requires a structured review (reviewer_run, regressions_found, regressions_fixed).");
+                    return Result.Failure("done requires a structured review (reviewer_run, regressions_found, regressions_fixed).");
 
                 if (command.Request.Review.RegressionsFound > command.Request.Review.RegressionsFixed)
-                    return Result.Failure<bool>("Unfixed regressions remain; cannot mark done.");
+                    return Result.Failure("Unfixed regressions remain; cannot mark done.");
 
                 var notes = FormatReview(command.Request.Review, command.Request.Output);
                 try
@@ -48,11 +48,11 @@ public class FinishWorkHandler
                     if (task.Status == TaskItemStatus.InProgress)
                         task.MoveToNextStatus();
                     if (task.Status != TaskItemStatus.Done)
-                        return Result.Failure<bool>("Cannot complete task: status is not Done.");
+                        return Result.Failure("Cannot complete task: status is not Done.");
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Result.Failure<bool>($"Cannot complete task: {ex.Message}");
+                    return Result.Failure($"Cannot complete task: {ex.Message}");
                 }
                 break;
 
@@ -68,7 +68,7 @@ public class FinishWorkHandler
                 break;
 
             default:
-                return Result.Failure<bool>("Invalid result type. Use 'done', 'failed', 'skipped', or 'partial'.");
+                return Result.Failure("Invalid result type. Use 'done', 'failed', 'skipped', or 'partial'.");
         }
 
         if (Guid.TryParse(command.Request.ActorId, out var userId))
@@ -81,7 +81,7 @@ public class FinishWorkHandler
         }
 
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 
     private static async Task<bool> ActorHasAccess(BeaconDbContext db, string actorId, Guid projectId, CancellationToken ct)

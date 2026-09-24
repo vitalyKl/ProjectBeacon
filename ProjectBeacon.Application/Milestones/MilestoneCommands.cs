@@ -12,7 +12,7 @@ public record UpdateMilestoneCommand(UpdateMilestoneRequest Request) : ICommand<
 
 public record DeleteMilestoneRequest(Guid MilestoneId);
 
-public record DeleteMilestoneCommand(DeleteMilestoneRequest Request) : ICommand<Result<bool>>;
+public record DeleteMilestoneCommand(DeleteMilestoneRequest Request) : ICommand<Result>;
 
 public record CloseMilestoneRequest(Guid MilestoneId);
 

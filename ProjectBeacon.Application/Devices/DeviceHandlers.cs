@@ -77,21 +77,21 @@ public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<ILi
     }
 }
 
-public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result<bool>>
+public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public RevokeDeviceHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(RevokeDeviceCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(RevokeDeviceCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
         if (device is null || device.UserId != command.Request.UserId)
-            return Result.Failure<bool>("Device not found.");
+            return Result.Failure("Device not found.");
         device.Revoke();
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 
@@ -402,26 +402,26 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
     }
 }
 
-public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result<bool>>
+public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public DetachRuntimeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.Id == command.Request.RuntimeId, ct);
         if (runtime is null)
-            return Result.Failure<bool>("Runtime not found.");
+            return Result.Failure("Runtime not found.");
         var member = await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == runtime.ProjectId && m.UserId == command.Request.UserId, ct);
         if (!member)
-            return Result.Failure<bool>("Runtime not found.");
+            return Result.Failure("Runtime not found.");
         db.ProjectRuntimes.Remove(runtime);
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

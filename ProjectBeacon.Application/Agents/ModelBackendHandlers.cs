@@ -69,32 +69,32 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
     }
 }
 
-public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocalModelBackendCommand, Result<bool>>
+public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocalModelBackendCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public DeleteLocalModelBackendHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DeleteLocalModelBackendCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DeleteLocalModelBackendCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out _))
-            return Result.Failure<bool>("Project scope is not resolved.");
+            return Result.Failure("Project scope is not resolved.");
 
         var backend = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == command.Request.Id, ct);
         if (backend is null)
-            return Result.Failure<bool>("Model backend not found.");
+            return Result.Failure("Model backend not found.");
 
         var boundRoles = await db.RoleBindings
             .Where(r => r.ModelBackendId == backend.Id)
             .Select(r => r.Role)
             .ToListAsync(ct);
         if (boundRoles.Count > 0)
-            return Result.Failure<bool>($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.");
+            return Result.Failure($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.");
 
         db.LocalModelBackends.Remove(backend);
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 
@@ -130,25 +130,25 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
     }
 }
 
-public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBindingCommand, Result<bool>>
+public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBindingCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public RemoveRoleBindingHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(RemoveRoleBindingCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(RemoveRoleBindingCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out _))
-            return Result.Failure<bool>("Project scope is not resolved.");
+            return Result.Failure("Project scope is not resolved.");
 
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);
         if (binding is null)
-            return Result.Failure<bool>("Role binding not found.");
+            return Result.Failure("Role binding not found.");
 
         db.RoleBindings.Remove(binding);
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

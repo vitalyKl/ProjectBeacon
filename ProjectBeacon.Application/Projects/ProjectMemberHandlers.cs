@@ -31,24 +31,24 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
         new(member.Id, member.UserId, member.Role, member.JoinedAt);
 }
 
-public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCommand, Result<bool>>
+public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public RemoveProjectMemberHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var member = await db.ProjectMembers
             .FirstOrDefaultAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
         if (member is null)
-            return Result.Failure<bool>("Project member not found.");
+            return Result.Failure("Project member not found.");
 
         db.ProjectMembers.Remove(member);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
 

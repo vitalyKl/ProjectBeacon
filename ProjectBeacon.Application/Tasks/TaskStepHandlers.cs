@@ -72,20 +72,20 @@ public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Resu
     }
 }
 
-public class DeleteTaskStepHandler : ICommandHandler<DeleteTaskStepCommand, Result<bool>>
+public class DeleteTaskStepHandler : ICommandHandler<DeleteTaskStepCommand, Result>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
 
     public DeleteTaskStepHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
 
-    public async Task<Result<bool>> HandleAsync(DeleteTaskStepCommand command, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(DeleteTaskStepCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         var step = await db.TaskSteps.FirstOrDefaultAsync(s => s.Id == command.Request.StepId, ct);
         if (step is null)
-            return Result.Failure<bool>("Step not found.");
+            return Result.Failure("Step not found.");
         db.TaskSteps.Remove(step);
         await db.SaveChangesAsync(ct);
-        return Result.Ok(true);
+        return Result.Ok();
     }
 }
