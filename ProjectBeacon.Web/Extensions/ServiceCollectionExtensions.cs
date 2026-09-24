@@ -15,6 +15,7 @@ using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.LlamaSwap;
+using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;
 
 namespace ProjectBeacon.Web.Extensions;
@@ -23,12 +24,11 @@ public static class ServiceCollectionExtensions
 {
     private static readonly string[] SupportedCultures = ["en", "ru", "de", "ja", "zh"];
 
-    public static IServiceCollection ConfigureServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection ConfigureServices(this IServiceCollection services, IConfiguration configuration, string environmentName)
     {
         var connectionString = ProjectBeacon.Infrastructure.Data.PostgresConnection.Resolve(configuration);
 
-        var jwtSecret = configuration["JWT:Secret"]
-            ?? throw new InvalidOperationException("JWT secret key not configured.");
+        var jwtSecret = JwtSecretPolicy.EnsureConfigured(configuration["JWT:Secret"], environmentName);
 
         services.Configure<DockerPostgresConfig>(config =>
         {

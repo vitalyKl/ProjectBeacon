@@ -5,7 +5,7 @@ using ProjectBeacon.Web.Startup;
 EnvFile.Load();
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.ConfigureServices(builder.Configuration);
+builder.Services.ConfigureServices(builder.Configuration, builder.Environment.EnvironmentName);
 
 var app = builder.Build();
 

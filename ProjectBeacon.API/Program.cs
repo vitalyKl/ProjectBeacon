@@ -2,6 +2,7 @@ using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.Http;
+using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.API.Endpoints;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -17,8 +18,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = PostgresConnection.Resolve(builder.Configuration);
 
-var jwtSecret = builder.Configuration["JWT:Secret"]
-    ?? throw new InvalidOperationException("JWT secret key not configured.");
+var jwtSecret = JwtSecretPolicy.EnsureConfigured(
+    builder.Configuration["JWT:Secret"],
+    builder.Environment.EnvironmentName);
 
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddApplicationHandlers();
