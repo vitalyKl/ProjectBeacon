@@ -35,8 +35,9 @@ public sealed class WorkstationDaemon : IDisposable
         _status = new DaemonStatus { Url = http.BaseAddress?.ToString().TrimEnd('/') ?? "" };
     }
 
-    internal TimeSpan ErrorDelay { get; set; } = TimeSpan.FromSeconds(5);
+    internal TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(5);
     internal TimeSpan CommandErrorDelay { get; set; } = TimeSpan.FromSeconds(2);
+    internal TimeSpan ErrorBackoffInterval { get; set; } = TimeSpan.FromSeconds(3);
     internal Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; } = Task.Delay;
     // 250ms: streams parts as they arrive without hammering the local OpenCode serve.
     internal TimeSpan ChatPollInterval { get; set; } = TimeSpan.FromMilliseconds(250);
@@ -84,7 +85,7 @@ public sealed class WorkstationDaemon : IDisposable
                 });
                 if (!heartbeat.IsSuccessStatusCode)
                     Log($"heartbeat {code}");
-                await DelayAsync(ErrorDelay, ct);
+                await DelayAsync(HeartbeatInterval, ct);
             }
             catch (OperationCanceledException)
             {
@@ -94,7 +95,7 @@ public sealed class WorkstationDaemon : IDisposable
             {
                 Log(ex.Message);
                 Publish(s => s with { Connected = false, Error = ex.Message });
-                try { await DelayAsync(TimeSpan.FromSeconds(3), ct); }
+                try { await DelayAsync(ErrorBackoffInterval, ct); }
                 catch (OperationCanceledException) { break; }
             }
         }
@@ -141,7 +142,7 @@ public sealed class WorkstationDaemon : IDisposable
             catch (Exception ex)
             {
                 Log(ex.Message);
-                try { await DelayAsync(TimeSpan.FromSeconds(3), ct); }
+                try { await DelayAsync(ErrorBackoffInterval, ct); }
                 catch (OperationCanceledException) { break; }
             }
         }

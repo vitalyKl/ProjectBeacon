@@ -188,7 +188,7 @@ public sealed class ClientDaemonTests : IDisposable
         using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
         {
             DelayAsync = (_, ct) => Task.Delay(1, ct),
-            ErrorDelay = TimeSpan.Zero,
+            HeartbeatInterval = TimeSpan.Zero,
             CommandErrorDelay = TimeSpan.Zero
         };
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
