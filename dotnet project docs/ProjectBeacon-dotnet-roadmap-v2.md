@@ -178,7 +178,7 @@ acceptance criterion was run.
 | M3 | llama-swap supervisor (A4, A8) | ✅ | Fake HTTP listener: `/health` `/running` `/metrics` `/unload`; empty/seeded registry writes config.yaml; no bin/project → unavailable. `LlamaSwapSupervisorTests` 9/9. Live fake-binary smoke was run in A4. |
 | M4 | Block B app+API (B3, B4) | ✅ | Handler + curl flow: start → subtasks → actor sessions → results → review → approve → task `Done` + ReviewNotes; reopen ≤ `BEACON_MAX_REOPEN_CYCLES`. `PipelineHandlerTests` covers happy path, D13, D14. |
 | M5 | MCP tools (A7, B5) | ✅ | `beacon mcp` `tools/list` = 6 file + 6 pipeline/model; live Postgres; no DB → `isError`; file tools intact. `mcp-host.md` matches `McpStdioServer`. |
-| M6 | UI + tests + docs (B6, B7, B8, A8) | ✅ | `dotnet test` green (Domain 117, Application 120, Infrastructure 26, API 32, Web 44). Playwright on `:5183`/`beacon_test`: TaskDetail happy path (start→subtask→actor→launch→result→review→approve→close) and reopen+admin force-close. `mcp-host.md` matches `McpStdioServer`. |
+| M6 | UI + tests + docs (B6, B7, B8, A8) | ✅ | `dotnet test` green. `[Fact]`/`[Theory]`: Domain 128, Application 153, Infrastructure 39, API 40, Web 68 (runner cases 128/160/39/40/81; Application has 2 theories / 9 `[InlineData]`, Web has 8 / 21). Web 44→40 was a counting mismatch: 44 was expanded cases at `e33f9bf` (32 `[Fact]` + 12 `[InlineData]`); 40 was a later attribute total (38 + 2). `git log` on `ProjectBeacon.Web.Tests` keeps every test method from this note (38 then, 68 now). Playwright on `:5183`/`beacon_test`: TaskDetail happy path (start→subtask→actor→launch→result→review→approve→close) and reopen+admin force-close. `mcp-host.md` matches `McpStdioServer`. |
 
 ## 9. Phase 7–9
 
