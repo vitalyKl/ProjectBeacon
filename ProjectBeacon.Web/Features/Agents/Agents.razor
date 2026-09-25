@@ -9,6 +9,8 @@
 @inject AuthenticationStateProvider Auth
 @inject GetCurrentProjectHandler CurrentProject
 @inject GetModelRegistryHandler GetRegistry
+@inject SaveAgentTemplateHandler SaveTemplate
+@inject DeleteAgentTemplateHandler DeleteTemplate
 @inject DeleteLocalModelBackendHandler DeleteBackend
 @inject SetRoleBindingHandler SetBinding
 @inject RemoveRoleBindingHandler RemoveBinding
@@ -23,7 +25,7 @@
 @inject IDialogService Dialogs
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["Agents"]</MudText>
-@if (_project is null)
+@if (_userId == Guid.Empty)
 {
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">@L["NoProjectAvailable"]</MudText>
 }
@@ -35,7 +37,7 @@ else
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
         </MudStack>
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["HowToAddModel"]</MudText>
-        @if (_runtimes.Count == 0)
+        @if (_project is not null && _runtimes.Count == 0)
         {
             <MudAlert Severity="Severity.Info" Class="mb-3">
                 @L["NeedProjectFolderForGguf"]
@@ -61,11 +63,11 @@ else
                 <RowTemplate>
                     <MudTd DataLabel="@L["ModelName"]">@context.Name</MudTd>
                     <MudTd DataLabel="@L["Type"]">@L["Backend" + context.BackendType].Value</MudTd>
-                    <MudTd DataLabel="@L["LaunchCommand"]">@context.LaunchCommand</MudTd>
+                    <MudTd DataLabel="@L["LaunchCommand"]" Class="beacon-ellipsis" Style="max-width: 16rem">@context.LaunchCommand</MudTd>
                     <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
                     <MudTd DataLabel="@L["Ttl"]">@context.Ttl</MudTd>
                     <MudTd DataLabel="@L["LoadWithOthers"]">@(context.Concurrent ? L["Yes"].Value : L["No"].Value)</MudTd>
-                    <MudTd>
+                    <MudTd Style="white-space: nowrap">
                         <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => EditModel(context)">@L["Edit"]</MudButton>
                         <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteModel(context)">@L["Delete"]</MudButton>
                     </MudTd>
@@ -74,8 +76,26 @@ else
         }
     </MudPaper>
 
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["RoleBindings"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.subtitle1" Class="mb-1">@L["AgentTemplates"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["AgentTemplatesLead"]</MudText>
+        <div class="beacon-form">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
+                <MudSelect T="Guid?" Value="_templateId" ValueChanged="SelectTemplate" Label="@L["AgentTemplates"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@((Guid?)null)">@L["AgentTemplateNew"]</MudSelectItem>
+                    @foreach (var template in _templates)
+                    {
+                        <MudSelectItem Value="@((Guid?)template.Id)">@template.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_templateName" Label="@L["AgentTemplateName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCurrentTemplate" Disabled="_busy">@L["Save"]</MudButton>
+                @if (_templateId is not null)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrentTemplate" Disabled="_busy">@L["Delete"]</MudButton>
+                }
+            </MudStack>
+        </div>
         <MudGrid>
             <MudItem xs="12" sm="4">
                 <MudSelect T="Guid?" Value="_planner" ValueChanged="OnPlannerBindingChanged" Label="@L["RoleBindingPlanner"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
@@ -105,11 +125,7 @@ else
                 </MudSelect>
             </MudItem>
         </MudGrid>
-    </MudPaper>
-
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["AgentMode"]</MudText>
-        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3">
             <MudSelectItem Value="AgentRunMode.Solo">@L["AgentModeSolo"]</MudSelectItem>
             <MudSelectItem Value="AgentRunMode.Pipeline">@L["AgentModePipeline"]</MudSelectItem>
         </MudSelect>
@@ -196,6 +212,9 @@ else
 @code {
     private ProjectDto? _project;
     private List<LocalModelBackendDto> _backends = [];
+    private List<AgentTemplateDto> _templates = [];
+    private Guid? _templateId;
+    private string _templateName = string.Empty;
     private Guid? _planner;
     private Guid? _actor;
     private Guid? _review;
@@ -226,11 +245,11 @@ else
     private async Task ReloadAsync()
     {
         _backends = [];
-        _planner = _actor = _review = null;
+        _templates = [];
         _status = null;
         _runtimes = [];
-        if (_project is null) return;
-        if (_userId != Guid.Empty)
+        if (_userId == Guid.Empty) return;
+        if (_project is not null)
         {
             var runtimes = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(_project.Id, _userId)));
             if (runtimes.Success)
@@ -239,30 +258,15 @@ else
                 _runtimeDeviceId ??= _runtimes.FirstOrDefault(r => r.DeviceOnline)?.DeviceId ?? _runtimes.FirstOrDefault()?.DeviceId;
             }
         }
-        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand());
+        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
         {
             var value = registry.Value!;
             _backends = value.Backends.ToList();
-            foreach (var binding in value.Bindings)
-            {
-                switch (binding.Role)
-                {
-                    case PipelineRole.Planner:
-                        _planner = binding.ModelBackendId;
-                        break;
-                    case PipelineRole.Actor:
-                        _actor = binding.ModelBackendId;
-                        break;
-                    case PipelineRole.Review:
-                        _review = binding.ModelBackendId;
-                        break;
-                }
-            }
-            _solo = _actor ?? _planner ?? _review;
-            if (_planner is { } && _actor is { } && _review is { } &&
-                (_planner != _actor || _actor != _review))
-                _mode = AgentRunMode.Pipeline;
+            _templates = value.Templates.ToList();
+            var selected = _templates.FirstOrDefault(t => t.Id == _templateId) ?? _templates.FirstOrDefault();
+            if (selected is not null)
+                CopyTemplate(selected);
         }
         else
         {
@@ -316,7 +320,7 @@ else
             L["Confirm"].Value, L["DeleteModelConfirm"].Value,
             yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true) return;
-        var deleted = await DeleteBackend.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id)));
+        var deleted = await DeleteBackend.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id, _userId)));
         if (!deleted.Success)
         {
             Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
@@ -388,9 +392,91 @@ else
         }
     }
 
-    private Task OnPlannerBindingChanged(Guid? value) => BindingChanged(PipelineRole.Planner, value);
-    private Task OnActorBindingChanged(Guid? value) => BindingChanged(PipelineRole.Actor, value);
-    private Task OnReviewBindingChanged(Guid? value) => BindingChanged(PipelineRole.Review, value);
+    private Task OnPlannerBindingChanged(Guid? value)
+    {
+        _planner = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnActorBindingChanged(Guid? value)
+    {
+        _actor = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnReviewBindingChanged(Guid? value)
+    {
+        _review = value;
+        return Task.CompletedTask;
+    }
+
+    private Task SelectTemplate(Guid? id)
+    {
+        _templateId = id;
+        var selected = _templates.FirstOrDefault(t => t.Id == id);
+        if (selected is null)
+        {
+            _templateName = string.Empty;
+            _mode = AgentRunMode.Solo;
+            _solo = _planner = _actor = _review = null;
+            return Task.CompletedTask;
+        }
+        CopyTemplate(selected);
+        return Task.CompletedTask;
+    }
+
+    private void CopyTemplate(AgentTemplateDto template)
+    {
+        _templateId = template.Id;
+        _templateName = template.Name;
+        _mode = template.Mode;
+        _solo = template.SoloBackendId;
+        _planner = template.PlannerBackendId;
+        _actor = template.ActorBackendId;
+        _review = template.ReviewBackendId;
+    }
+
+    private async Task SaveCurrentTemplate()
+    {
+        if (_userId == Guid.Empty || _busy) return;
+        _busy = true;
+        try
+        {
+            var saved = await SaveTemplate.HandleAsync(new SaveAgentTemplateCommand(new SaveAgentTemplateRequest(
+                _templateId, _userId, _templateName, _mode, _solo, _planner, _actor, _review)));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _templateId = saved.Value!.Id;
+            Snackbar.Add(L["TemplateSaved"].Value, Severity.Success);
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteCurrentTemplate()
+    {
+        if (_templateId is not { } id || _userId == Guid.Empty) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteTemplateConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var deleted = await DeleteTemplate.HandleAsync(new DeleteAgentTemplateCommand(new DeleteAgentTemplateRequest(id, _userId)));
+        if (!deleted.Success)
+        {
+            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _templateId = null;
+        _templateName = string.Empty;
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await ReloadAsync();
+    }
 
     private Color StatusColor => _status is null
         ? Color.Default

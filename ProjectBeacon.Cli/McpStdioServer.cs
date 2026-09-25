@@ -14,6 +14,7 @@ using Domain.Enums;
 using Infrastructure;
 using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Cli.Mcp;
@@ -218,6 +219,18 @@ public static class McpStdioServer
         }
     }
 
+    private static async Task<Guid> OwnerUserIdAsync(McpScope scope)
+    {
+        var db = scope.Services.GetRequiredService<IDbContextFactory<BeaconDbContext>>().CreateDbContext();
+        await using (db)
+        {
+            return await db.ProjectMembers.IgnoreQueryFilters()
+                .Where(m => m.ProjectId == scope.ProjectId && m.Role == MemberRole.Owner)
+                .Select(m => m.UserId)
+                .FirstOrDefaultAsync();
+        }
+    }
+
     private static bool TryParseScope(out Guid projectId, out Guid? taskId, out string? error)
     {
         projectId = Guid.Empty;
@@ -320,9 +333,12 @@ public static class McpStdioServer
 
         return await WithDbAsync(id, requiresTask: false, async scope =>
         {
+            var ownerId = await OwnerUserIdAsync(scope);
+            if (ownerId == Guid.Empty)
+                return ToolError(id, "Project has no owner.");
             var registry = await scope.Services
                 .GetRequiredService<GetModelRegistryHandler>()
-                .HandleAsync(new GetModelRegistryCommand());
+                .HandleAsync(new GetModelRegistryCommand(ownerId));
             if (!registry.Success)
                 return ToolError(id, registry.Error ?? "error");
 
@@ -332,9 +348,10 @@ public static class McpStdioServer
 
             var status = new JsonObject
             {
-                ["projectId"] = registry.Value!.ProjectId,
+                ["userId"] = registry.Value!.UserId,
                 ["backends"] = JsonSerializer.SerializeToNode(registry.Value.Backends, JsonDb) ?? new JsonArray(),
                 ["bindings"] = JsonSerializer.SerializeToNode(registry.Value.Bindings, JsonDb) ?? new JsonArray(),
+                ["templates"] = JsonSerializer.SerializeToNode(registry.Value.Templates, JsonDb) ?? new JsonArray(),
                 ["proxy"] = proxy.Success
                     ? JsonSerializer.SerializeToNode(proxy.Value, JsonDb)
                     : new JsonObject { ["available"] = false, ["error"] = proxy.Error ?? "unknown proxy error" }

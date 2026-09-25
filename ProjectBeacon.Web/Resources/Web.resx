@@ -142,6 +142,24 @@
   <data name="ThisProjectLead" xml:space="preserve">
     <value>Folder, members, and labels for the open project.</value>
   </data>
+  <data name="AgentTemplates" xml:space="preserve">
+    <value>Templates</value>
+  </data>
+  <data name="AgentTemplatesLead" xml:space="preserve">
+    <value>Saved ways to use your models. The model list stays with this account.</value>
+  </data>
+  <data name="AgentTemplateNew" xml:space="preserve">
+    <value>New template</value>
+  </data>
+  <data name="AgentTemplateName" xml:space="preserve">
+    <value>Template name</value>
+  </data>
+  <data name="TemplateSaved" xml:space="preserve">
+    <value>Template saved.</value>
+  </data>
+  <data name="DeleteTemplateConfirm" xml:space="preserve">
+    <value>Delete this template?</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>Submit</value>
   </data>

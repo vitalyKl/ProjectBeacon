@@ -157,7 +157,7 @@
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
             var result = await SaveBackend.HandleAsync(new UpsertLocalModelBackendCommand(new UpsertLocalModelBackendRequest(
-                Backend?.Id, _name, _type, _launchCommand, _contextSize, _ttl,
+                Backend?.Id, _name, _type, _launchCommand, _contextSize, _ttl, UserId,
                 flags.Count > 0 ? flags : null, _concurrent)));
             if (!result.Success)
             {

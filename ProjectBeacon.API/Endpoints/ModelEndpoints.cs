@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using System.Security.Claims;
 using Application.Agents;
 using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
@@ -20,17 +21,21 @@ public static class ModelEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetModelRegistry(GetModelRegistryHandler handler, CancellationToken ct)
+    private static async Task<IResult> GetModelRegistry(HttpContext ctx, GetModelRegistryHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetModelRegistryCommand(), ct);
+        if (!TryUser(ctx, out var userId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(userId), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error });
     }
 
-    private static async Task<IResult> UpsertModelBackend([FromBody] UpsertLocalModelBackendRequest request, UpsertLocalModelBackendHandler handler, CancellationToken ct)
+    private static async Task<IResult> UpsertModelBackend(HttpContext ctx, [FromBody] UpsertLocalModelBackendRequest request, UpsertLocalModelBackendHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request), ct);
+        if (!TryUser(ctx, out var userId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = userId }), ct);
         if (!result.Success)
             return Results.BadRequest(new { error = result.Error });
 
@@ -39,9 +44,11 @@ public static class ModelEndpoints
             : Results.Ok(result.Value);
     }
 
-    private static async Task<IResult> DeleteModelBackend(Guid id, DeleteLocalModelBackendHandler handler, CancellationToken ct)
+    private static async Task<IResult> DeleteModelBackend(HttpContext ctx, Guid id, DeleteLocalModelBackendHandler handler, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id)), ct);
+        if (!TryUser(ctx, out var userId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, userId)), ct);
         if (!result.Success)
             return result.Error!.StartsWith("Model backend not found")
                 ? Results.NotFound(new { error = result.Error })
@@ -92,4 +99,7 @@ public static class ModelEndpoints
             ? Results.Ok(result.Value)
             : Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
+
+    private static bool TryUser(HttpContext ctx, out Guid userId) =>
+        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId != Guid.Empty;
 }

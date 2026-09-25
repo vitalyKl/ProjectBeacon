@@ -81,7 +81,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            var backend = LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 300, project.Id);
+            var backend = LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 300, user.Id);
             _db.LocalModelBackends.Add(backend);
             await _db.SaveChangesAsync();
 

@@ -438,16 +438,10 @@ public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigComma
         if (device is null || device.IsRevoked)
             return Result.Failure<LlamaSwapConfigDto>("Device not found.");
 
-        var projectIds = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.DeviceId == device.Id)
-            .Select(r => r.ProjectId)
+        var backends = await db.LocalModelBackends
+            .Where(b => b.UserId == device.UserId)
+            .OrderBy(b => b.Name)
             .ToListAsync(ct);
-        var backends = projectIds.Count == 0
-            ? []
-            : await db.LocalModelBackends.IgnoreQueryFilters()
-                .Where(b => projectIds.Contains(b.ProjectId))
-                .OrderBy(b => b.Name)
-                .ToListAsync(ct);
         var specs = backends
             .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags, b.Concurrent))
             .ToList();

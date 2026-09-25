@@ -159,13 +159,11 @@ public sealed class LlamaSwapSupervisor : BackgroundService, ILlamaSwapProxy
 
     private async Task<IReadOnlyList<LlamaSwapModelSpec>> LoadRegistryAsync(CancellationToken ct)
     {
-        var projectId = _options.ProjectId!.Value;
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider
             .GetRequiredService<IDbContextFactory<BeaconDbContext>>()
             .CreateDbContext();
         await using (db)
-        using (TenantScope.EnterProjectScope(projectId))
         {
             var backends = await db.LocalModelBackends
                 .AsNoTracking()

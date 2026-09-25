@@ -12,7 +12,7 @@ public record LocalModelBackendDto(
     int ContextSize,
     int Ttl,
     IReadOnlyList<string> ExtraFlags,
-    Guid ProjectId,
+    Guid UserId,
     DateTime? UpdatedAt,
     bool Concurrent = false);
 
@@ -22,10 +22,20 @@ public record RoleBindingDto(
     Guid ModelBackendId,
     Guid ProjectId);
 
+public record AgentTemplateDto(
+    Guid Id,
+    string Name,
+    AgentRunMode Mode,
+    Guid? SoloBackendId,
+    Guid? PlannerBackendId,
+    Guid? ActorBackendId,
+    Guid? ReviewBackendId);
+
 public record ModelRegistryDto(
-    Guid ProjectId,
+    Guid UserId,
     IReadOnlyList<LocalModelBackendDto> Backends,
-    IReadOnlyList<RoleBindingDto> Bindings);
+    IReadOnlyList<RoleBindingDto> Bindings,
+    IReadOnlyList<AgentTemplateDto> Templates);
 
 public record UpsertLocalModelBackendRequest(
     Guid? Id,
@@ -34,12 +44,13 @@ public record UpsertLocalModelBackendRequest(
     string LaunchCommand,
     int ContextSize,
     int Ttl,
+    Guid UserId,
     IReadOnlyList<string>? ExtraFlags = null,
     bool Concurrent = false);
 
 public record UpsertLocalModelBackendCommand(UpsertLocalModelBackendRequest Request) : ICommand<Result<LocalModelBackendDto>>;
 
-public record DeleteLocalModelBackendRequest(Guid Id);
+public record DeleteLocalModelBackendRequest(Guid Id, Guid UserId);
 
 public record DeleteLocalModelBackendCommand(DeleteLocalModelBackendRequest Request) : ICommand<Result>;
 
@@ -51,7 +62,23 @@ public record RemoveRoleBindingRequest(PipelineRole Role);
 
 public record RemoveRoleBindingCommand(RemoveRoleBindingRequest Request) : ICommand<Result>;
 
-public record GetModelRegistryCommand : ICommand<Result<ModelRegistryDto>>;
+public record GetModelRegistryCommand(Guid UserId) : ICommand<Result<ModelRegistryDto>>;
+
+public record SaveAgentTemplateRequest(
+    Guid? Id,
+    Guid UserId,
+    string Name,
+    AgentRunMode Mode,
+    Guid? SoloBackendId,
+    Guid? PlannerBackendId,
+    Guid? ActorBackendId,
+    Guid? ReviewBackendId);
+
+public record SaveAgentTemplateCommand(SaveAgentTemplateRequest Request) : ICommand<Result<AgentTemplateDto>>;
+
+public record DeleteAgentTemplateRequest(Guid Id, Guid UserId);
+
+public record DeleteAgentTemplateCommand(DeleteAgentTemplateRequest Request) : ICommand<Result>;
 
 public record GetProxyStatusCommand : ICommand<Result<LlamaSwapStatusDto>>;
 

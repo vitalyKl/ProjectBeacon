@@ -123,7 +123,7 @@ else
         _project = current.Value;
         if (_project is null)
             return;
-        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand());
+        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
             _models = registry.Value!.Backends.Select(b => b.Name).ToList();
         await ReloadSessions();

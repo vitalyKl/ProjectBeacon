@@ -4,7 +4,7 @@ using System.Text.Json;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
-public class LocalModelBackend : Entity, IProjectScoped
+public class LocalModelBackend : Entity
 {
     public LocalModelBackend() { }
 
@@ -14,7 +14,7 @@ public class LocalModelBackend : Entity, IProjectScoped
     public int ContextSize { get; private set; }
     public int Ttl { get; private set; }
     public bool Concurrent { get; private set; }
-    public Guid ProjectId { get; private set; }
+    public Guid UserId { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
     // EF maps the JSON text backing; the ExtraFlags list view is ignored in the model.
@@ -44,7 +44,7 @@ public class LocalModelBackend : Entity, IProjectScoped
         string launchCommand,
         int contextSize,
         int ttl,
-        Guid projectId,
+        Guid userId,
         IReadOnlyList<string>? extraFlags = null,
         bool concurrent = false)
     {
@@ -55,7 +55,7 @@ public class LocalModelBackend : Entity, IProjectScoped
         backend.ContextSize = contextSize;
         backend.Ttl = ttl;
         backend.Concurrent = concurrent;
-        backend.ProjectId = projectId;
+        backend.UserId = userId;
         backend.ExtraFlags = extraFlags ?? [];
         backend.UpdatedAt = DateTime.UtcNow;
         return backend;

@@ -120,6 +120,24 @@
   <data name="ThisProjectLead" xml:space="preserve">
     <value>Папка, участники и метки открытого проекта.</value>
   </data>
+  <data name="AgentTemplates" xml:space="preserve">
+    <value>Шаблоны</value>
+  </data>
+  <data name="AgentTemplatesLead" xml:space="preserve">
+    <value>Заготовки того, как использовать модели. Список моделей остаётся у этой учётной записи.</value>
+  </data>
+  <data name="AgentTemplateNew" xml:space="preserve">
+    <value>Новый шаблон</value>
+  </data>
+  <data name="AgentTemplateName" xml:space="preserve">
+    <value>Название шаблона</value>
+  </data>
+  <data name="TemplateSaved" xml:space="preserve">
+    <value>Шаблон сохранён.</value>
+  </data>
+  <data name="DeleteTemplateConfirm" xml:space="preserve">
+    <value>Удалить этот шаблон?</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>Отправить</value>
   </data>

@@ -150,6 +150,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetRoleBindingHandler>();
         services.AddTransient<RemoveRoleBindingHandler>();
         services.AddTransient<GetModelRegistryHandler>();
+        services.AddTransient<SaveAgentTemplateHandler>();
+        services.AddTransient<DeleteAgentTemplateHandler>();
         services.AddTransient<GetProxyStatusHandler>();
         services.AddTransient<ReloadProxyHandler>();
         services.AddTransient<UnloadProxyHandler>();

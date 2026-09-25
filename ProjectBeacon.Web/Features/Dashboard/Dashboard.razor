@@ -132,46 +132,34 @@ else
                   }
             </MudPaper>
         </MudItem>
-        <MudItem xs="12" md="6">
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
+        <MudItem xs="12">
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
                     <MudText Typo="Typo.subtitle1">@L["WorkstationLoad"]</MudText>
                     <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings">@L["Agents"]</MudButton>
                 </MudStack>
-                @if (_status is null || (!_status.Available && _status.Host is null))
+                @if (_loadSeries.Count == 0 && (_status is null || (!_status.Available && _status.Host is null)))
                 {
                     <MudAlert Severity="Severity.Info">@L["StartClientHint"]</MudAlert>
                 }
                 else
                 {
-                    @if (!string.IsNullOrWhiteSpace(_status.DeviceName))
+                    @if (!string.IsNullOrWhiteSpace(_status?.DeviceName))
                     {
                         <MudText Typo="Typo.caption" Class="mb-1">@_status.DeviceName</MudText>
                     }
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ProxyColor">@ProxyText</MudChip>
-                    <HostLoadView Status="_status" />
+                    @if (_status is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ProxyColor">@ProxyText</MudChip>
+                        <HostLoadView Status="_status" />
+                    }
+                    @if (_loadSeries.Count > 0)
+                    {
+                        <MudChart ChartType="ChartType.Line" ChartSeries="_loadSeries" ChartLabels="_xLabels" ChartOptions="_loadChartOptions" Width="100%" Height="180px" Class="mt-3" />
+                    }
                 }
             </MudPaper>
         </MudItem>
-        @if (_cpuSeries.Count > 0)
-        {
-            <MudItem xs="12">
-                <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4">
-                    <MudText Typo="Typo.subtitle1" Class="mb-3">@L["CpuHistory"]</MudText>
-                    <MudChart ChartType="ChartType.Line" ChartSeries="_cpuSeries" ChartLabels="_xLabels" Width="100%" Height="180px" />
-                    @if (_ramSeries.Count > 0)
-                    {
-                        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-3">@L["RamHistory"]</MudText>
-                        <MudChart ChartType="ChartType.Line" ChartSeries="_ramSeries" ChartLabels="_xLabels" Width="100%" Height="180px" />
-                    }
-                    @if (_gpuSeries.Count > 0)
-                    {
-                        <MudText Typo="Typo.subtitle1" Class="mt-4 mb-3">@L["GpuHistory"]</MudText>
-                        <MudChart ChartType="ChartType.Line" ChartSeries="_gpuSeries" ChartLabels="_xLabels" Width="100%" Height="180px" />
-                    }
-                </MudPaper>
-            </MudItem>
-        }
     </MudGrid>
 }
 
@@ -182,10 +170,15 @@ else
     private bool _error;
     private Guid _userId;
     private CancellationTokenSource? _poll;
-    private List<ChartSeries<double>> _cpuSeries = [];
-    private List<ChartSeries<double>> _ramSeries = [];
-    private List<ChartSeries<double>> _gpuSeries = [];
+    private List<ChartSeries<double>> _loadSeries = [];
     private string[] _xLabels = [];
+    private readonly LineChartOptions _loadChartOptions = new()
+    {
+        YAxisTicks = 50,
+        YAxisSuggestedMax = 100,
+        YAxisRequireZeroPoint = true,
+        MaxNumYAxisTicks = 3
+    };
 
     private Color ProxyColor =>
         _status is null ? Color.Default
@@ -257,32 +250,44 @@ else
         if (!samples.Success || samples.Value is null || samples.Value.Count == 0)
             return;
         var rows = samples.Value.ToList();
-        _xLabels = rows.Select(s => s.SampledAt.ToLocalTime().ToString("HH:mm")).ToArray();
-        _cpuSeries = [new ChartSeries<double> { Name = L["Cpu"].Value, Data = new ChartData<double>(rows.Select(s => s.CpuPercent ?? 0).ToList()) }];
+        _xLabels = SparseTimes(rows);
+        var series = new List<ChartSeries<double>>
+        {
+            new() { Name = L["Cpu"].Value, Data = new ChartData<double>(rows.Select(s => s.CpuPercent ?? 0).ToList()) }
+        };
         if (rows.Any(s => s.RamTotalBytes is > 0))
         {
-            _ramSeries =
-            [
-                new ChartSeries<double>
-                {
-                    Name = L["Ram"].Value,
-                    Data = new ChartData<double>(rows.Select(s => s.RamTotalBytes is > 0 && s.RamUsedBytes is { } used
-                        ? 100d * used / s.RamTotalBytes.Value
-                        : 0d).ToList())
-                }
-            ];
+            series.Add(new ChartSeries<double>
+            {
+                Name = L["Ram"].Value,
+                Data = new ChartData<double>(rows.Select(s => s.RamTotalBytes is > 0 && s.RamUsedBytes is { } used
+                    ? 100d * used / s.RamTotalBytes.Value
+                    : 0d).ToList())
+            });
         }
         if (rows.Any(s => s.GpuUtilizationPercent is not null))
         {
-            _gpuSeries =
-            [
-                new ChartSeries<double>
-                {
-                    Name = L["Gpu"].Value,
-                    Data = new ChartData<double>(rows.Select(s => s.GpuUtilizationPercent ?? 0).ToList())
-                }
-            ];
+            series.Add(new ChartSeries<double>
+            {
+                Name = L["Gpu"].Value,
+                Data = new ChartData<double>(rows.Select(s => s.GpuUtilizationPercent ?? 0).ToList())
+            });
         }
+        _loadSeries = series;
+    }
+
+    private static string[] SparseTimes(IReadOnlyList<DeviceHostSampleDto> rows)
+    {
+        var labels = new string[rows.Count];
+        Array.Fill(labels, string.Empty);
+        if (rows.Count == 0)
+            return labels;
+        labels[0] = rows[0].SampledAt.ToLocalTime().ToString("HH:mm");
+        if (rows.Count > 2)
+            labels[rows.Count / 2] = rows[rows.Count / 2].SampledAt.ToLocalTime().ToString("HH:mm");
+        if (rows.Count > 1)
+            labels[^1] = rows[^1].SampledAt.ToLocalTime().ToString("HH:mm");
+        return labels;
     }
 
     public void Dispose()

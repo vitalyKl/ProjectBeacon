@@ -28,6 +28,9 @@ public sealed class ModelBackendHandlerTests : IDisposable
         _connection.Dispose();
     }
 
+    private static readonly Guid AccountA = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
+    private static readonly Guid AccountB = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2");
+
     private static async Task<(Guid OrgId, Guid ProjectId)> SeedProjectAsync(BeaconDbContext db, string orgName, string projectName)
     {
         using (TenantScope.EnterUnscoped())
@@ -39,6 +42,19 @@ public sealed class ModelBackendHandlerTests : IDisposable
             db.Projects.Add(project);
             await db.SaveChangesAsync();
             return (org.Id, project.Id);
+        }
+    }
+
+    private async Task<Guid> SeedOwnerAsync(Guid projectId)
+    {
+        using (TenantScope.EnterUnscoped())
+        {
+            var user = User.Create("owner-" + projectId.ToString("N"), projectId.ToString("N") + "@beacon.local", "hash");
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+            _db.ProjectMembers.Add(ProjectMember.Create(projectId, user.Id, MemberRole.Owner));
+            await _db.SaveChangesAsync();
+            return user.Id;
         }
     }
 
@@ -75,7 +91,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "llama-small", ModelBackendType.LlamaCpp, "llama-server -m small.gguf", 8192, 300, new[] { "--no-mmap" })));
+            new UpsertLocalModelBackendRequest(null, "llama-small", ModelBackendType.LlamaCpp, "llama-server -m small.gguf", 8192, 300, AccountA, new[] { "--no-mmap" })));
 
         Assert.True(result.Success, result.Error);
         var dto = result.Value!;
@@ -86,7 +102,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.Equal(300, dto.Ttl);
         Assert.Equal(new[] { "--no-mmap" }, dto.ExtraFlags);
         Assert.False(dto.Concurrent);
-        Assert.Equal(projectId, dto.ProjectId);
+        Assert.Equal(AccountA, dto.UserId);
         Assert.NotNull(dto.UpdatedAt);
         Assert.Equal(1, await CountBackendsAsync());
     }
@@ -97,11 +113,11 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "old", ModelBackendType.LlamaCpp, "old-cmd", 1024, 0)));
+            new UpsertLocalModelBackendRequest(null, "old", ModelBackendType.LlamaCpp, "old-cmd", 1024, 0, AccountA)));
         Assert.True(created.Success, created.Error);
 
         var updated = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(created.Value!.Id, "new", ModelBackendType.OpenAiCompatible, "new-cmd", 2048, 60)));
+            new UpsertLocalModelBackendRequest(created.Value!.Id, "new", ModelBackendType.OpenAiCompatible, "new-cmd", 2048, 60, AccountA)));
 
         Assert.True(updated.Success, updated.Error);
         Assert.Equal(created.Value.Id, updated.Value!.Id);
@@ -118,12 +134,12 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, null, true)));
+            new UpsertLocalModelBackendRequest(null, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, AccountA, null, true)));
         Assert.True(created.Success, created.Error);
         Assert.True(created.Value!.Concurrent);
 
         var updated = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(created.Value.Id, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, null, false)));
+            new UpsertLocalModelBackendRequest(created.Value.Id, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, AccountA, null, false)));
         Assert.True(updated.Success, updated.Error);
         Assert.False(updated.Value!.Concurrent);
     }
@@ -134,7 +150,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectA) = await SeedProjectAsync(_db, "OrgA", "A");
         var (_, projectB) = await SeedProjectAsync(_db, "OrgB", "B");
 
-        var foreign = LocalModelBackend.Create("foreign", ModelBackendType.LlamaCpp, "cmd", 1024, 0, projectB);
+        var foreign = LocalModelBackend.Create("foreign", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountB);
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.Add(foreign);
@@ -143,7 +159,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
 
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectA)));
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(foreign.Id, "foreign", ModelBackendType.LlamaCpp, "cmd", 1024, 0)));
+            new UpsertLocalModelBackendRequest(foreign.Id, "foreign", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountA)));
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -154,7 +170,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
     [InlineData(false)]
     public async Task Upsert_NoScope_FailClosed(bool emptyGuidScope)
     {
-        var request = new UpsertLocalModelBackendRequest(null, "x", ModelBackendType.LlamaCpp, "cmd", 1024, 0);
+        var request = new UpsertLocalModelBackendRequest(null, "x", ModelBackendType.LlamaCpp, "cmd", 1024, 0, Guid.Empty);
         var handler = emptyGuidScope
             ? new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, EmptyGuidScope()))
             : new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection));
@@ -162,7 +178,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request));
 
         Assert.False(result.Success);
-        Assert.Equal("Project scope is not resolved.", result.Error);
+        Assert.Equal("Account is not resolved.", result.Error);
     }
 
     [Fact]
@@ -172,17 +188,17 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
         var noName = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "  ", ModelBackendType.LlamaCpp, "cmd", 1024, 0)));
+            new UpsertLocalModelBackendRequest(null, "  ", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountA)));
         Assert.False(noName.Success);
         Assert.Equal("Name is required (max 200 characters).", noName.Error);
 
         var noLaunch = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "  ", 1024, 0)));
+            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "  ", 1024, 0, AccountA)));
         Assert.False(noLaunch.Success);
         Assert.Equal("LaunchCommand is required (max 1000 characters).", noLaunch.Error);
 
         var negative = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "cmd", 1024, -1)));
+            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "cmd", 1024, -1, AccountA)));
         Assert.False(negative.Success);
         Assert.Equal("ContextSize and Ttl must be non-negative.", negative.Error);
     }
@@ -191,7 +207,8 @@ public sealed class ModelBackendHandlerTests : IDisposable
     public async Task Delete_BoundBackend_FailsWithRoles()
     {
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
-        var backend = LocalModelBackend.Create("bound", ModelBackendType.LlamaCpp, "cmd", 1024, 0, projectId);
+        var ownerId = await SeedOwnerAsync(projectId);
+        var backend = LocalModelBackend.Create("bound", ModelBackendType.LlamaCpp, "cmd", 1024, 0, ownerId);
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.Add(backend);
@@ -201,7 +218,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         }
 
         var handler = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id)));
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id, ownerId)));
 
         Assert.False(result.Success);
         Assert.Contains("planner", result.Error);
@@ -216,11 +233,11 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var upsert = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await upsert.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "solo", ModelBackendType.FreeToken, "cmd", 1024, 0)));
+            new UpsertLocalModelBackendRequest(null, "solo", ModelBackendType.FreeToken, "cmd", 1024, 0, AccountA)));
         Assert.True(created.Success, created.Error);
 
         var del = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var result = await del.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(created.Value!.Id)));
+        var result = await del.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(created.Value!.Id, AccountA)));
         Assert.True(result.Success, result.Error);
         Assert.Equal(0, await CountBackendsAsync());
     }
@@ -231,7 +248,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(Guid.NewGuid())));
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(Guid.NewGuid(), AccountA)));
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -241,8 +258,9 @@ public sealed class ModelBackendHandlerTests : IDisposable
     public async Task SetRoleBinding_CreatesThenRepoints()
     {
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
-        var first = LocalModelBackend.Create("first", ModelBackendType.LlamaCpp, "c1", 1024, 0, projectId);
-        var second = LocalModelBackend.Create("second", ModelBackendType.LlamaCpp, "c2", 2048, 0, projectId);
+        var ownerId = await SeedOwnerAsync(projectId);
+        var first = LocalModelBackend.Create("first", ModelBackendType.LlamaCpp, "c1", 1024, 0, ownerId);
+        var second = LocalModelBackend.Create("second", ModelBackendType.LlamaCpp, "c2", 2048, 0, ownerId);
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.AddRange(first, second);
@@ -299,10 +317,12 @@ public sealed class ModelBackendHandlerTests : IDisposable
     {
         var (_, projectA) = await SeedProjectAsync(_db, "OrgA", "A");
         var (_, projectB) = await SeedProjectAsync(_db, "OrgB", "B");
+        var ownerA = await SeedOwnerAsync(projectA);
+        var ownerB = await SeedOwnerAsync(projectB);
 
-        var beta = LocalModelBackend.Create("beta", ModelBackendType.LlamaCpp, "b", 1024, 0, projectA);
-        var alpha = LocalModelBackend.Create("alpha", ModelBackendType.LlamaCpp, "a", 2048, 0, projectA);
-        var other = LocalModelBackend.Create("other", ModelBackendType.FreeToken, "o", 512, 0, projectB);
+        var beta = LocalModelBackend.Create("beta", ModelBackendType.LlamaCpp, "b", 1024, 0, ownerA);
+        var alpha = LocalModelBackend.Create("alpha", ModelBackendType.LlamaCpp, "a", 2048, 0, ownerA);
+        var other = LocalModelBackend.Create("other", ModelBackendType.FreeToken, "o", 512, 0, ownerB);
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.AddRange(beta, alpha, other);
@@ -315,10 +335,10 @@ public sealed class ModelBackendHandlerTests : IDisposable
         }
 
         var handler = new GetModelRegistryHandler(HandlerSqlite.Factory(_connection, Scope(projectA)));
-        var result = await handler.HandleAsync(new GetModelRegistryCommand());
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(ownerA));
 
         Assert.True(result.Success, result.Error);
-        Assert.Equal(projectA, result.Value!.ProjectId);
+        Assert.Equal(ownerA, result.Value!.UserId);
         Assert.Equal(new[] { alpha.Id, beta.Id }, result.Value.Backends.Select(b => b.Id).ToList());
         Assert.Equal(new[] { "alpha", "beta" }, result.Value.Backends.Select(b => b.Name).ToList());
         Assert.Equal(new[] { PipelineRole.Actor, PipelineRole.Review }, result.Value.Bindings.Select(r => r.Role).ToList());
@@ -329,10 +349,10 @@ public sealed class ModelBackendHandlerTests : IDisposable
     {
         var handler = new GetModelRegistryHandler(HandlerSqlite.Factory(_connection));
 
-        var result = await handler.HandleAsync(new GetModelRegistryCommand());
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(Guid.Empty));
 
         Assert.False(result.Success);
-        Assert.Equal("Project scope is not resolved.", result.Error);
+        Assert.Equal("Account is not resolved.", result.Error);
     }
 
     [Fact]

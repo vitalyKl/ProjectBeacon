@@ -48,8 +48,8 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
         if (runtime is null)
             return Result.Failure<WorkstationCommandDto>("Project runtime is not attached to this device.");
 
-        var backends = await db.LocalModelBackends.IgnoreQueryFilters()
-            .Where(b => b.ProjectId == request.ProjectId)
+        var backends = await db.LocalModelBackends
+            .Where(b => b.UserId == request.UserId)
             .OrderBy(b => b.Name)
             .Select(b => ModelBackendMappers.ToDto(b))
             .ToListAsync(ct);

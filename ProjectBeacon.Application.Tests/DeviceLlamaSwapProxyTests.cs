@@ -131,7 +131,7 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            _db.LocalModelBackends.Add(LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, project.Id, concurrent: true));
+            _db.LocalModelBackends.Add(LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, user.Id, concurrent: true));
             await _db.SaveChangesAsync();
             var created = await new CreateDeviceHandler(HandlerSqlite.Factory(_connection))
                 .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));

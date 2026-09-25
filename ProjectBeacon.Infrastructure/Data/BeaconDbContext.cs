@@ -29,6 +29,7 @@ public class BeaconDbContext : DbContext
     public DbSet<Decision> Decisions => Set<Decision>();
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();
     public DbSet<LocalModelBackend> LocalModelBackends => Set<LocalModelBackend>();
+    public DbSet<AgentTemplate> AgentTemplates => Set<AgentTemplate>();
     public DbSet<RoleBinding> RoleBindings => Set<RoleBinding>();
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<PipelineSession> PipelineSessions => Set<PipelineSession>();
@@ -441,7 +442,19 @@ public class BeaconDbContext : DbContext
             entity.Ignore(e => e.ExtraFlags);
             entity.Property(e => e.ExtraFlagsJson).IsRequired();
             entity.Property(e => e.UpdatedAt);
-            entity.HasIndex(e => e.ProjectId);
+            entity.HasIndex(e => e.UserId);
+        });
+
+        modelBuilder.Entity<AgentTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Mode).HasConversion<string>().IsRequired();
+            entity.HasIndex(e => e.UserId);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.SoloBackendId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.PlannerBackendId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.ActorBackendId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.ReviewBackendId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<RoleBinding>(entity =>
