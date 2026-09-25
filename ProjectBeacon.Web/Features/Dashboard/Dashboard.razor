@@ -123,7 +123,7 @@ else
             <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
                     <MudText Typo="Typo.subtitle1">@L["Agents"]</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/agents">@L["Agents"]</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings">@L["Agents"]</MudButton>
                 </MudStack>
                   <MudText Typo="Typo.body2">@L["AgentsActive", _pulse.ActiveSessions]</MudText>
                   @if (_pulse.ActiveSessions == 0)
@@ -136,7 +136,7 @@ else
             <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
                     <MudText Typo="Typo.subtitle1">@L["WorkstationLoad"]</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/agents">@L["Agents"]</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings">@L["Agents"]</MudButton>
                 </MudStack>
                 @if (_status is null || (!_status.Available && _status.Host is null))
                 {

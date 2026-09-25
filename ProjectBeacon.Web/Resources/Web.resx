@@ -134,7 +134,7 @@
     <value>Settings</value>
   </data>
   <data name="SettingsLead" xml:space="preserve">
-    <value>Account and this machine. The project folder, members, and labels stay with the project.</value>
+    <value>Account, this machine, and agent models. The project folder, members, and labels stay with the project.</value>
   </data>
   <data name="ThisProject" xml:space="preserve">
     <value>This project</value>
@@ -1464,7 +1464,7 @@ No Beacon-hosted coding agent.</value>
     <value>Attach a project folder on the dashboard so this page can scan GGUF files on the device.</value>
   </data>
   <data name="NextStepTodo" xml:space="preserve">
-    <value>Nothing runs by itself. Attach a folder on the dashboard, add a model on Agents, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
+    <value>Nothing runs by itself. Attach a folder on the dashboard, add a model in Settings, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
   </data>
   <data name="NextStepCreateSubtask" xml:space="preserve">
     <value>Create a subtask, then Start Actor Session. Launch Session only marks the session Active in Beacon — it does not start OpenCode.</value>

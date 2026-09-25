@@ -1,6 +1,3 @@
-@page "/agents"
-@layout MainLayout
-@attribute [Authorize]
 @using System.Security.Claims
 @using System.Text.Json.Nodes
 @using ProjectBeacon.Application.Agents
@@ -25,22 +22,18 @@
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 
-<PageTitle>@L["Agents"]</PageTitle>
-<PageHeader Title="@L["Agents"]">
-    @if (_project is not null)
-    {
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
-    }
-</PageHeader>
-
+<MudText Typo="Typo.h6" Class="mb-3">@L["Agents"]</MudText>
 @if (_project is null)
 {
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">@L["NoProjectAvailable"]</MudText>
 }
 else
 {
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ModelRegistry"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+            <MudText Typo="Typo.subtitle1">@L["ModelRegistry"]</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
+        </MudStack>
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["HowToAddModel"]</MudText>
         @if (_runtimes.Count == 0)
         {

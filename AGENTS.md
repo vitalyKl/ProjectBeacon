@@ -95,7 +95,7 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - Do not inject `BeaconDbContext` into Razor. Call Application handlers.
 - EF migration: always regenerate with dotnet-ef to get ModelSnapshot. Never apply migrations without a snapshot.
 - Importing a file attaches as repo scope. A project-only compile still includes that lone repo brief. Export without a repo still writes `scope: project`.
-- Web drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Chat, Reports, Settings. Learn and Files are not shipped in this rebuild.
+- Web drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Reports, Chat, Settings. Agent models, MCP, and the llama-swap proxy live in Settings. Learn and Files are not shipped in this rebuild.
 - Anonymous `/` is the product landing (`Landing.razor`, `LandingLayout`). Do not restore a 301 to `/dashboard`. Logged-in `/` navigates to the dashboard in the page.
 - Labels are project-scoped areas with optional path prefixes, not free-form chips. New projects start with an editable starter catalog (API, Web, CLI, Visual, UX). Agents may propose; only active labels expand compile and `get_changed_scope`.
 - Continue Beacon work from the living board and the compiled Context brief. Do not invent hosted clone, outbound WSS, `write_handoff`, or live HTTP MCP as available. `beacon client` is outbound HTTPS only.
