@@ -193,7 +193,16 @@
     <value>Аутентификатор включён. Добавление агента спрашивает код.</value>
   </data>
   <data name="AuthenticatorOff" xml:space="preserve">
-    <value>Аутентификатор выключен. Добавьте ключ в приложение вроде Aegis или Authy и подтвердите код.</value>
+    <value>Аутентификатор выключен. Нажмите «Включить», отсканируйте QR в Aegis, Authy или похожем приложении и введите шестизначный код.</value>
+  </data>
+  <data name="AuthenticatorScan" xml:space="preserve">
+    <value>Отсканируйте код приложением-аутентификатором. Затем введите шестизначный код, который оно покажет.</value>
+  </data>
+  <data name="AuthenticatorQr" xml:space="preserve">
+    <value>QR-код для приложения-аутентификатора</value>
+  </data>
+  <data name="AuthenticatorManual" xml:space="preserve">
+    <value>Если камера не считывает код, введите этот ключ в приложение вручную.</value>
   </data>
   <data name="AuthenticatorCode" xml:space="preserve">
     <value>Код аутентификатора</value>

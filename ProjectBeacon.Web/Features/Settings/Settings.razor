@@ -62,9 +62,12 @@
         <MudTextField @bind-Value="_totpCode" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
         <MudButton Variant="Variant.Text" Color="Color.Error" Class="mt-2" OnClick="TurnOffTotp" Disabled="_busy">@L["TurnOffAuthenticator"]</MudButton>
     }
-    else if (!string.IsNullOrEmpty(_totpSetup))
+    else if (!string.IsNullOrEmpty(_totpUri))
     {
-        <MudAlert Severity="Severity.Warning" Class="mb-2">@_totpSetup</MudAlert>
+        <MudText Typo="Typo.body2" Class="mb-3">@L["AuthenticatorScan"]</MudText>
+        <img src="@_totpQr" width="180" height="180" alt="@L["AuthenticatorQr"]" class="mb-3" style="background:#fff;padding:8px" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AuthenticatorManual"]</MudText>
+        <MudText Typo="Typo.body2" Class="beacon-pre mb-3">@_totpSecret</MudText>
         <MudTextField @bind-Value="_totpCode" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ConfirmAuthenticator" Disabled="_busy">@L["Confirm"]</MudButton>
     }
@@ -175,7 +178,9 @@
     private List<LocalModelBackendDto> _chatModels = [];
     private Guid? _chatModelId;
     private bool _totpEnabled;
-    private string _totpSetup = string.Empty;
+    private string _totpUri = string.Empty;
+    private string _totpQr = string.Empty;
+    private string _totpSecret = string.Empty;
     private string _totpCode = string.Empty;
     private string _deviceTotp = string.Empty;
     private Guid? _wsDeviceId;
@@ -206,6 +211,24 @@
             return;
         var status = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
         _totpEnabled = status.Success && status.Value!.Enabled;
+        if (status.Success && status.Value!.Pending && !string.IsNullOrEmpty(status.Value.OtpAuthUri))
+            ShowSetup(status.Value.OtpAuthUri, status.Value.Secret ?? string.Empty);
+        else if (_totpEnabled)
+            ClearSetup();
+    }
+
+    private void ShowSetup(string uri, string secret)
+    {
+        _totpUri = uri;
+        _totpSecret = secret;
+        _totpQr = TotpQr.DataUrl(uri);
+    }
+
+    private void ClearSetup()
+    {
+        _totpUri = string.Empty;
+        _totpSecret = string.Empty;
+        _totpQr = string.Empty;
     }
 
     private async Task StartAuthenticator()
@@ -218,7 +241,7 @@
             Snackbar.Add(begun.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
-        _totpSetup = begun.Value ?? string.Empty;
+        await ReloadTotp();
     }
 
     private async Task ConfirmAuthenticator()
@@ -229,8 +252,8 @@
             Snackbar.Add(confirmed.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
-        _totpSetup = string.Empty;
         _totpCode = string.Empty;
+        ClearSetup();
         await ReloadTotp();
     }
 

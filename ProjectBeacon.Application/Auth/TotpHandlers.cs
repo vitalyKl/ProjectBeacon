@@ -5,7 +5,7 @@ using Infrastructure.Data;
 using Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
-public record TotpStatusDto(bool Enabled, bool Pending);
+public record TotpStatusDto(bool Enabled, bool Pending, string? OtpAuthUri, string? Secret);
 
 public record GetTotpStatusCommand(Guid UserId) : ICommand<Result<TotpStatusDto>>;
 
@@ -31,7 +31,22 @@ public sealed class GetTotpStatusHandler : ICommandHandler<GetTotpStatusCommand,
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == command.UserId, ct);
         if (user is null)
             return Result.Failure<TotpStatusDto>("Account is not resolved.");
-        return Result.Ok(new TotpStatusDto(user.TotpEnabled, !user.TotpEnabled && !string.IsNullOrEmpty(user.TotpSecretCipher)));
+        var pending = !user.TotpEnabled && !string.IsNullOrEmpty(user.TotpSecretCipher);
+        string? uri = null;
+        string? secret = null;
+        if (pending)
+        {
+            try
+            {
+                secret = SecretBox.Open(user.TotpSecretCipher, SecretBox.KeyMaterial());
+                uri = Totp.OtpAuthUri(secret, user.Email);
+            }
+            catch (System.Security.Cryptography.CryptographicException)
+            {
+                pending = false;
+            }
+        }
+        return Result.Ok(new TotpStatusDto(user.TotpEnabled, pending, uri, secret));
     }
 }
 

@@ -215,7 +215,16 @@
     <value>Authenticator is on. Adding an agent asks for a code.</value>
   </data>
   <data name="AuthenticatorOff" xml:space="preserve">
-    <value>Authenticator is off. Add the key to an app such as Aegis or Authy, then confirm a code.</value>
+    <value>Authenticator is off. Turn it on, scan the QR in Aegis, Authy or a similar app, then enter the 6-digit code.</value>
+  </data>
+  <data name="AuthenticatorScan" xml:space="preserve">
+    <value>Scan this code with the authenticator app. Then enter the 6-digit code it shows.</value>
+  </data>
+  <data name="AuthenticatorQr" xml:space="preserve">
+    <value>QR code for the authenticator app</value>
+  </data>
+  <data name="AuthenticatorManual" xml:space="preserve">
+    <value>If the camera cannot scan it, type this key into the app.</value>
   </data>
   <data name="AuthenticatorCode" xml:space="preserve">
     <value>Authenticator code</value>
