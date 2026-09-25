@@ -41,11 +41,13 @@
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["Devices"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
-        <MudTextField @bind-Value="_deviceName" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy">@L["AddDevice"]</MudButton>
-        <MudButton Variant="Variant.Outlined" OnClick="ReloadDevices" Disabled="_busy">@L["Refresh"]</MudButton>
-    </MudStack>
+    <div class="beacon-form">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
+            <MudTextField @bind-Value="_deviceName" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy">@L["AddDevice"]</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="ReloadDevices" Disabled="_busy">@L["Refresh"]</MudButton>
+        </MudStack>
+    </div>
     @if (!string.IsNullOrEmpty(_deviceToken))
     {
         <MudAlert Severity="Severity.Warning" Class="mb-3">@string.Format(L["DeviceTokenOnce"].Value, Navigation.BaseUri.TrimEnd('/'), _deviceToken)</MudAlert>
@@ -83,18 +85,20 @@
 {
     <MudText Typo="Typo.h6" Class="mb-3">@L["Workstation"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudSelect T="Guid?" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
-            @foreach (var device in _devices)
-            {
-                <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
-            }
-        </MudSelect>
-        <MudTextField @bind-Value="_modelsRoot" Label="@L["ModelsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_historyDir" Label="@L["HistoryDir"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_projectsRoot" Label="@L["ProjectsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_llamaSwapBin" Label="@L["LlamaSwapBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
+        <div class="beacon-form">
+            <MudSelect T="Guid?" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var device in _devices)
+                {
+                    <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_modelsRoot" Label="@L["ModelsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_historyDir" Label="@L["HistoryDir"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_projectsRoot" Label="@L["ProjectsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_llamaSwapBin" Label="@L["LlamaSwapBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
+        </div>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
         <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
         <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @_probeOpencode</MudText>
@@ -127,20 +131,22 @@
         {
             <MudText Typo="Typo.body2" Class="mb-2">@_runtimes[0].DeviceName: @_runtimes[0].LocalRoot</MudText>
         }
-        <MudSelect T="Guid?" @bind-Value="_folderDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
-            @foreach (var device in _devices)
-            {
-                <MudSelectItem Value="@((Guid?)device.Id)">@device.Name (@(device.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value))</MudSelectItem>
-            }
-        </MudSelect>
-        <div class="mt-2">
-            <FolderPicker DeviceId="_folderDeviceId" UserId="_userId" Path="_folderPath" PathChanged="OnFolderPathChanged"
-                          Disabled="_busy || FolderDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+        <div class="beacon-form">
+            <MudSelect T="Guid?" @bind-Value="_folderDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var device in _devices)
+                {
+                    <MudSelectItem Value="@((Guid?)device.Id)">@device.Name (@(device.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value))</MudSelectItem>
+                }
+            </MudSelect>
+            <div class="mt-2">
+                <FolderPicker DeviceId="_folderDeviceId" UserId="_userId" Path="_folderPath" PathChanged="OnFolderPathChanged"
+                              Disabled="_busy || FolderDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveProjectFolder"
+                       Disabled="_busy || _folderDeviceId is null || string.IsNullOrWhiteSpace(_folderPath)">
+                @L["AttachFolder"]
+            </MudButton>
         </div>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveProjectFolder"
-                   Disabled="_busy || _folderDeviceId is null || string.IsNullOrWhiteSpace(_folderPath)">
-            @L["AttachFolder"]
-        </MudButton>
     </MudPaper>
 }
 
@@ -152,15 +158,17 @@
 else
 {
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
-            <MudTextField @bind-Value="_inviteEmail" Label="@L["Email"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudSelect T="MemberRole" @bind-Value="_inviteRole" Label="@L["Role"]" Variant="Variant.Outlined" Margin="Margin.Dense">
-                <MudSelectItem Value="@MemberRole.Member">@L["RoleMember"]</MudSelectItem>
-                <MudSelectItem Value="@MemberRole.Admin">@L["RoleAdmin"]</MudSelectItem>
-                <MudSelectItem Value="@MemberRole.Owner">@L["RoleOwner"]</MudSelectItem>
-            </MudSelect>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendInvite" Disabled="_busy">@L["InviteMember"]</MudButton>
-        </MudStack>
+        <div class="beacon-form">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
+                <MudTextField @bind-Value="_inviteEmail" Label="@L["Email"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudSelect T="MemberRole" @bind-Value="_inviteRole" Label="@L["Role"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@MemberRole.Member">@L["RoleMember"]</MudSelectItem>
+                    <MudSelectItem Value="@MemberRole.Admin">@L["RoleAdmin"]</MudSelectItem>
+                    <MudSelectItem Value="@MemberRole.Owner">@L["RoleOwner"]</MudSelectItem>
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendInvite" Disabled="_busy">@L["InviteMember"]</MudButton>
+            </MudStack>
+        </div>
         @if (!string.IsNullOrEmpty(_inviteUrl))
         {
             <MudAlert Severity="Severity.Warning" Class="mb-3">@L["InviteSent"] @_inviteUrl</MudAlert>
@@ -212,9 +220,11 @@ else
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["ChangePassword"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-    <MudTextField @bind-Value="_currentPassword" Label="@L["CurrentPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" />
-    <MudTextField @bind-Value="_newPassword" Label="@L["NewPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SavePassword" Disabled="_busy">@L["ChangePassword"]</MudButton>
+    <div class="beacon-form">
+        <MudTextField @bind-Value="_currentPassword" Label="@L["CurrentPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudTextField @bind-Value="_newPassword" Label="@L["NewPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SavePassword" Disabled="_busy">@L["ChangePassword"]</MudButton>
+    </div>
 </MudPaper>
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["Labels"]</MudText>
@@ -225,17 +235,19 @@ else
 else
 {
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
-            <MudTextField @bind-Value="_labelName" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudTextField @bind-Value="_labelPrefix" Label="@L["PathPrefix"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveLabel" Disabled="_busy">
-                @(_editingLabelId is null ? L["Create"] : L["Save"])
-            </MudButton>
-            @if (_editingLabelId is not null)
-            {
-                <MudButton Variant="Variant.Text" OnClick="CancelLabelEdit">@L["Cancel"]</MudButton>
-            }
-        </MudStack>
+        <div class="beacon-form">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                <MudTextField @bind-Value="_labelName" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_labelPrefix" Label="@L["PathPrefix"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveLabel" Disabled="_busy">
+                    @(_editingLabelId is null ? L["Create"] : L["Save"])
+                </MudButton>
+                @if (_editingLabelId is not null)
+                {
+                    <MudButton Variant="Variant.Text" OnClick="CancelLabelEdit">@L["Cancel"]</MudButton>
+                }
+            </MudStack>
+        </div>
     </MudPaper>
     @if (_labels.Count == 0)
     {

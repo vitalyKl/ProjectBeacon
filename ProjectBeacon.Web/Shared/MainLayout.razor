@@ -48,7 +48,6 @@
         @bind-Open="_drawerOpen"
         ClipMode="DrawerClipMode.Never"
         Elevation="0"
-        Width="168px"
         Variant="DrawerVariant.Responsive"
         Breakpoint="Breakpoint.Md"
         Class="beacon-drawer">
@@ -97,10 +96,12 @@
     </MudDrawer>
     <MudMainContent>
         <div class="pa-8">
-            @if (_bodyReady)
-            {
-                @Body
-            }
+            <div class="beacon-content-max">
+                @if (_bodyReady)
+                {
+                    @Body
+                }
+            </div>
         </div>
     </MudMainContent>
 </MudLayout>

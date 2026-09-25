@@ -44,8 +44,8 @@
 
 .d-flex { display: flex; }
 .justify-end { justify-content: flex-end; }
-.mb-4 { margin-bottom: 16px; }
-.ml-2 { margin-left: 8px; }
+.mb-4 { margin-bottom: var(--space-4); }
+.ml-2 { margin-left: var(--space-2); }
 .text-center { text-align: center; }
 .text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-100 { height: 100%; }
@@ -62,7 +62,7 @@
 .auth-toolbar {
     display: flex;
     justify-content: flex-end;
-    padding: 8px 16px;
+    padding: var(--space-2) var(--space-4);
 }
 
 .auth-body {
@@ -70,7 +70,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px 16px;
+    padding: var(--space-6) var(--space-4);
 }
 
 .auth-card {
@@ -89,7 +89,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 14px 20px;
+    padding: var(--space-4) var(--space-5);
     border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
@@ -98,15 +98,15 @@
     width: 100%;
     max-width: 960px;
     margin: 0 auto;
-    padding: 48px 20px 64px;
+    padding: var(--space-12) var(--space-5) var(--space-16);
 }
 
 .landing-section {
-    margin-bottom: 64px;
+    margin-bottom: var(--space-16);
 }
 
 .landing-hero {
-    padding-top: 24px;
+    padding-top: var(--space-6);
 }
 
 .landing-title {
@@ -116,7 +116,7 @@
 .landing-lead {
     color: var(--color-text-secondary);
     max-width: 42ch;
-    margin-top: 16px;
+    margin-top: var(--space-4);
 }
 
 .landing-footer {
@@ -124,7 +124,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 20px;
+    padding: var(--space-3) var(--space-5);
     border-top: var(--border-hairline) solid var(--color-border);
 }
 
@@ -155,6 +155,11 @@
     padding-top: var(--mud-appbar-height, 64px);
 }
 
+.beacon-content-max {
+    max-width: 1440px;
+    margin-inline: auto;
+}
+
 .beacon-appbar.mud-appbar {
     background-color: var(--color-bg-header) !important;
     border-bottom: var(--border-hairline) solid var(--color-border);
@@ -162,7 +167,7 @@
 }
 
 .beacon-appbar.mud-appbar .mud-toolbar-appbar {
-    padding: 0.85rem 1.25rem;
+    padding: var(--space-3) var(--space-5);
 }
 
 .beacon-breadcrumbs.mud-breadcrumbs {
@@ -170,7 +175,7 @@
 }
 
 .beacon-breadcrumbs .mud-breadcrumb-separator {
-    padding: 0 8px;
+    padding: 0 var(--space-2);
 }
 
 .beacon-breadcrumbs .mud-breadcrumb-separator > span {
@@ -205,7 +210,7 @@
 }
 
 .beacon-drawer-header {
-    padding: 16px 12px 12px;
+    padding: var(--space-4) var(--space-3) var(--space-3);
 }
 
 .beacon-brand {
@@ -214,12 +219,12 @@
 }
 
 .beacon-nav {
-    padding: 4px 12px 12px;
+    padding: var(--space-1) var(--space-3) var(--space-3);
 }
 
 .beacon-drawer-footer {
     margin-top: auto;
-    padding: 8px 12px 16px;
+    padding: var(--space-2) var(--space-3) var(--space-4);
     border-top: var(--border-hairline) solid var(--color-border-subtle);
 }
 
@@ -227,15 +232,15 @@
     color: var(--color-text-secondary);
     background-color: transparent;
     border-radius: var(--radius-small);
-    padding: 7px 8px;
-    margin: 2px 0;
+    padding: var(--space-2);
+    margin: var(--space-1) 0;
     font-size: 13px;
     transition: color 160ms ease, background-color 160ms ease;
 }
 
 .beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-text {
-    margin-left: 8px;
-    margin-inline-start: 8px;
+    margin-left: var(--space-2);
+    margin-inline-start: var(--space-2);
 }
 
 .beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-icon,
@@ -302,7 +307,7 @@
 }
 
 .beacon-board-card {
-    padding: 10px;
+    padding: var(--space-3);
 }
 
 .beacon-board-card .beacon-card-title {
@@ -316,7 +321,7 @@
 .beacon-panel {
     background-color: var(--color-surface-2);
     border-radius: var(--radius-panel);
-    padding: 1rem 1.25rem;
+    padding: var(--space-4) var(--space-5);
 }
 
 .beacon-track {
@@ -358,7 +363,7 @@
 
 .mud-chip.mud-chip-size-small {
     height: auto;
-    padding: 2px 8px;
+    padding: var(--space-1) var(--space-2);
     font-size: 11px;
     border-radius: var(--radius-small);
 }
@@ -381,7 +386,7 @@
 .kanban-zone {
     min-height: 60vh;
     height: 100%;
-    padding: 1rem 1.25rem;
+    padding: var(--space-4) var(--space-5);
 }
 
 .kanban-header {
@@ -457,7 +462,7 @@
     width: 360px;
     max-height: 70vh;
     z-index: 1200;
-    padding: 12px;
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
 }
@@ -512,7 +517,7 @@
 
 .blazor-error-boundary {
     background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
-    padding: 1rem 1rem 1rem 3.7rem;
+    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-16);
     color: white;
 }
 
