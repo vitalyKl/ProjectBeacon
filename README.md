@@ -10,7 +10,7 @@ Authoritative product docs: `dotnet project docs/ProjectBeacon-design-doc-v2.md`
 2. Start Postgres: `docker compose up -d` (or let `DockerPostgresHelper` start `beacon-postgres` on first Web run).
 3. `dotnet run --project ProjectBeacon.Web --launch-profile http` — Web loads `.env` from the repo root.
 4. Open `http://localhost:5083/` (landing). Bootstrap at `/bootstrap`, then `/login`. Logged-in `/` goes to the dashboard.
-5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from Settings (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.
+5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from the open project on the dashboard (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.
 6. Product version lives in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows the assembly version.
 
 Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Agents, Chat, Reports, Settings. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers.

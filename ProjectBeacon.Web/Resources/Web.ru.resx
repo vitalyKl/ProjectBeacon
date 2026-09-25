@@ -111,6 +111,15 @@
   <data name="Settings" xml:space="preserve">
     <value>Настройки</value>
   </data>
+  <data name="SettingsLead" xml:space="preserve">
+    <value>Учётная запись и эта машина. Папка проекта, участники и метки остаются у проекта.</value>
+  </data>
+  <data name="ThisProject" xml:space="preserve">
+    <value>Этот проект</value>
+  </data>
+  <data name="ThisProjectLead" xml:space="preserve">
+    <value>Папка, участники и метки открытого проекта.</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>Отправить</value>
   </data>
@@ -1343,7 +1352,7 @@
     <value>Как добавить людей?</value>
   </data>
   <data name="LandingFaq4A" xml:space="preserve">
-    <value>Открытая регистрация или только по приглашению, если включён AUTH_LOCAL_INVITE_ONLY. Приглашение создаётся в настройках, ссылка показывается один раз.</value>
+    <value>Открытая регистрация или только по приглашению, если включён AUTH_LOCAL_INVITE_ONLY. Приглашение создаётся у открытого проекта на панели управления, ссылка показывается один раз.</value>
   </data>
   <data name="LandingFaq5Q" xml:space="preserve">
     <value>Как сбросить пароль?</value>
@@ -1382,7 +1391,7 @@
     <value>Список папок берётся с выбранной рабочей станции, не из этого браузера.</value>
   </data>
   <data name="FolderOptionalHint" xml:space="preserve">
-    <value>Папку можно не указывать сейчас и прикрепить позже в настройках.</value>
+    <value>Папку можно не указывать сейчас и прикрепить позже на панели управления.</value>
   </data>
   <data name="InitializeOnDeviceHint" xml:space="preserve">
     <value>Записывает .gitignore и opencode.json в эту папку на рабочей станции.</value>
@@ -1409,10 +1418,10 @@
     <value>Выберите файл GGUF или вставьте команду llama-server с --port ${PORT}.</value>
   </data>
   <data name="NeedProjectFolderForGguf" xml:space="preserve">
-    <value>Укажите папку проекта в настройках, чтобы эта страница видела GGUF на устройстве.</value>
+    <value>Укажите папку проекта на панели управления, чтобы эта страница видела GGUF на устройстве.</value>
   </data>
   <data name="NextStepTodo" xml:space="preserve">
-    <value>Само ничего не запускается. Укажите папку в настройках, добавьте модель в «Агентах», затем запустите пайплайн или завершите задачу через MCP finish_work.</value>
+    <value>Само ничего не запускается. Укажите папку на панели управления, добавьте модель в «Агентах», затем запустите пайплайн или завершите задачу через MCP finish_work.</value>
   </data>
   <data name="NextStepCreateSubtask" xml:space="preserve">
     <value>Создайте подзадачу и запустите сессию актора. «Запустить» только помечает сессию активной в Beacon и не стартует OpenCode.</value>
@@ -1484,7 +1493,7 @@
     <value>C:\work\northstar</value>
   </data>
   <data name="ChatNeedsFolder" xml:space="preserve">
-    <value>Сначала укажите папку проекта в настройках.</value>
+    <value>Сначала укажите папку проекта на панели управления.</value>
   </data>
   <data name="ChatNeedsClient" xml:space="preserve">
     <value>Запустите beacon client на этой машине и откройте чат снова.</value>

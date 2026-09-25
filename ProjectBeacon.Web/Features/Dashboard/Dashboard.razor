@@ -8,6 +8,7 @@
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Infrastructure.LlamaSwap
+@using ProjectBeacon.Web.Features.Projects
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -48,6 +49,8 @@ else
             <MudText Typo="Typo.body2">@_pulse.Description</MudText>
         }
     </MudStack>
+
+    <ProjectManage />
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
         <MudText Typo="Typo.subtitle1">@L["ProjectBrief"]</MudText>

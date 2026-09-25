@@ -28,10 +28,15 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     }
 
     [Fact]
-    public void Settings_RendersMembersSection()
+    public void Settings_RendersAccountNotProject()
     {
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
 
-        Assert.Contains("Member", cut.Markup);
+        Assert.Contains("Account", cut.Markup);
+        Assert.Contains("Current password", cut.Markup);
+        Assert.Contains("Change password", cut.Markup);
+        Assert.DoesNotContain("ProjectFolder", cut.Markup);
+        Assert.DoesNotContain("Members", cut.Markup);
+        Assert.DoesNotContain("InviteMember", cut.Markup);
     }
 }

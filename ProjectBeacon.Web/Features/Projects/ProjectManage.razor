@@ -1,0 +1,377 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Devices
+@using ProjectBeacon.Application.Identity
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject GetCurrentProjectHandler CurrentProject
+@inject GetProjectMembersHandler ListMembers
+@inject CreateProjectInviteHandler CreateInvite
+@inject ListProjectInvitesHandler ListInvites
+@inject RevokeProjectInviteHandler RevokeInvite
+@inject ListLabelsHandler ListLabels
+@inject CreateLabelHandler CreateLabel
+@inject UpdateLabelHandler UpdateLabel
+@inject DeleteLabelHandler DeleteLabel
+@inject ListDevicesHandler ListDevices
+@inject ListRuntimesHandler ListRuntimes
+@inject AttachRuntimeHandler AttachRuntime
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<MudText Typo="Typo.h6" Class="mb-1">@L["ThisProject"]</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["ThisProjectLead"]</MudText>
+
+@if (_projectId is null)
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/projects/new">@L["CreateProject"]</MudButton>
+}
+else
+{
+    <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ProjectFolder"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["BrowseOnDeviceHint"]</MudText>
+        @if (_runtimes.Count > 0)
+        {
+            <MudText Typo="Typo.body2" Class="mb-2">@_runtimes[0].DeviceName: @_runtimes[0].LocalRoot</MudText>
+        }
+        <div class="beacon-form">
+            <MudSelect T="Guid?" @bind-Value="_folderDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var device in _devices)
+                {
+                    <MudSelectItem Value="@((Guid?)device.Id)">@device.Name (@(device.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value))</MudSelectItem>
+                }
+            </MudSelect>
+            <div class="mt-2">
+                <FolderPicker DeviceId="_folderDeviceId" UserId="_userId" Path="@_folderPath" PathChanged="OnFolderPathChanged"
+                              Disabled="_busy || FolderDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveProjectFolder"
+                       Disabled="_busy || _folderDeviceId is null || string.IsNullOrWhiteSpace(_folderPath)">
+                @L["AttachFolder"]
+            </MudButton>
+        </div>
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mb-3">@L["Members"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <div class="beacon-form">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
+                <MudTextField @bind-Value="_inviteEmail" Label="@L["Email"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudSelect T="MemberRole" @bind-Value="_inviteRole" Label="@L["Role"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@MemberRole.Member">@L["RoleMember"]</MudSelectItem>
+                    <MudSelectItem Value="@MemberRole.Admin">@L["RoleAdmin"]</MudSelectItem>
+                    <MudSelectItem Value="@MemberRole.Owner">@L["RoleOwner"]</MudSelectItem>
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendInvite" Disabled="_busy">@L["InviteMember"]</MudButton>
+            </MudStack>
+        </div>
+        @if (!string.IsNullOrEmpty(_inviteUrl))
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-3">@L["InviteSent"] @_inviteUrl</MudAlert>
+        }
+        @if (_members.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">@L["NoMembersYet"]</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_members" Dense="true" Hover="true" Class="mb-3">
+                <HeaderContent>
+                    <MudTh>@L["Username"]</MudTh>
+                    <MudTh>@L["Email"]</MudTh>
+                    <MudTh>@L["Role"]</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Login</MudTd>
+                    <MudTd>@context.Email</MudTd>
+                    <MudTd>@context.Role</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+        @if (_invites.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@L["PendingInvites"]</MudText>
+            <MudTable Items="_invites" Dense="true" Hover="true">
+                <HeaderContent>
+                    <MudTh>@L["Email"]</MudTh>
+                    <MudTh>@L["Role"]</MudTh>
+                    <MudTh>@L["Status"]</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.Email</MudTd>
+                    <MudTd>@context.Role</MudTd>
+                    <MudTd>@context.Status</MudTd>
+                    <MudTd>
+                        @if (context.Status == "Pending")
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["RevokeInvite"]</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mb-3">@L["Labels"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <div class="beacon-form">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                <MudTextField @bind-Value="_labelName" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_labelPrefix" Label="@L["PathPrefix"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveLabel" Disabled="_busy">
+                    @(_editingLabelId is null ? L["Create"] : L["Save"])
+                </MudButton>
+                @if (_editingLabelId is not null)
+                {
+                    <MudButton Variant="Variant.Text" OnClick="CancelLabelEdit">@L["Cancel"]</MudButton>
+                }
+            </MudStack>
+        </div>
+    </MudPaper>
+    @if (_labels.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">@L["NoLabelsYet"]</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_labels" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>@L["Title"]</MudTh>
+                <MudTh>@L["PathPrefix"]</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.PathPrefix</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartLabelEdit(context)">@L["Edit"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveLabel(context)">@L["Delete"]</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    private List<LabelDto> _labels = [];
+    private List<ProjectMemberDto> _members = [];
+    private List<InviteListDto> _invites = [];
+    private List<DaemonDeviceDto> _devices = [];
+    private List<ProjectRuntimeDto> _runtimes = [];
+    private Guid? _projectId;
+    private Guid _userId;
+    private bool _isAdmin;
+    private bool _busy;
+    private string _labelName = string.Empty;
+    private string _labelPrefix = string.Empty;
+    private Guid? _editingLabelId;
+    private string _inviteEmail = string.Empty;
+    private MemberRole _inviteRole = MemberRole.Member;
+    private string? _inviteUrl;
+    private Guid? _folderDeviceId;
+    private string _folderPath = string.Empty;
+
+    private DaemonDeviceDto? FolderDevice => _devices.FirstOrDefault(d => d.Id == _folderDeviceId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        _isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var adminFlag) && adminFlag;
+        if (_userId != Guid.Empty)
+        {
+            var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+            _devices = listed.Success ? listed.Value!.ToList() : [];
+        }
+        var current = await CurrentProject.HandleAsync(user);
+        if (current.Value is null)
+            return;
+        _projectId = current.Value.Id;
+        await ReloadLabels();
+        await ReloadMembers();
+        await ReloadRuntimes();
+    }
+
+    private Task OnFolderPathChanged(string path)
+    {
+        _folderPath = path;
+        return Task.CompletedTask;
+    }
+
+    private async Task ReloadRuntimes()
+    {
+        _runtimes = [];
+        if (_projectId is not { } projectId || _userId == Guid.Empty)
+            return;
+        var listed = await ListRuntimes.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, _userId)));
+        if (!listed.Success)
+            return;
+        _runtimes = listed.Value!.ToList();
+        var current = _runtimes.FirstOrDefault();
+        if (current is not null)
+        {
+            _folderDeviceId ??= current.DeviceId;
+            if (string.IsNullOrWhiteSpace(_folderPath))
+                _folderPath = current.LocalRoot;
+        }
+        _folderDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
+    }
+
+    private async Task SaveProjectFolder()
+    {
+        if (_projectId is not { } projectId || _folderDeviceId is not { } deviceId || string.IsNullOrWhiteSpace(_folderPath) || _userId == Guid.Empty)
+            return;
+        _busy = true;
+        try
+        {
+            var attached = await AttachRuntime.HandleAsync(new AttachRuntimeCommand(
+                new AttachRuntimeRequest(projectId, deviceId, _userId, _folderPath)));
+            if (!attached.Success)
+            {
+                Snackbar.Add(attached.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ProjectFolderSaved"].Value, Severity.Success);
+            await ReloadRuntimes();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReloadMembers()
+    {
+        if (_projectId is not { } projectId || _userId == Guid.Empty)
+            return;
+        var listed = await ListMembers.HandleAsync(new GetProjectMembersCommand(new GetProjectMembersRequest(projectId)));
+        _members = listed.Success ? listed.Value!.ToList() : [];
+        var invites = await ListInvites.HandleAsync(new ListInvitesRequest(projectId, _userId, _isAdmin));
+        _invites = invites.Success ? invites.Value!.ToList() : [];
+    }
+
+    private async Task SendInvite()
+    {
+        if (_projectId is not { } projectId || string.IsNullOrWhiteSpace(_inviteEmail) || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            var created = await CreateInvite.HandleAsync(new CreateProjectInviteRequest(
+                projectId, _inviteEmail.Trim(), _inviteRole, _userId, _isAdmin));
+            if (!created.Success)
+            {
+                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _inviteUrl = created.Value!.Url;
+            _inviteEmail = string.Empty;
+            Snackbar.Add(L["InviteSent"].Value, Severity.Success);
+            await ReloadMembers();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Revoke(InviteListDto invite)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["RevokeInvite"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await RevokeInvite.HandleAsync(new RevokeInviteRequest(invite.Id, _userId, _isAdmin));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await ReloadMembers();
+    }
+
+    private async Task ReloadLabels()
+    {
+        if (_projectId is not { } projectId)
+            return;
+        var listed = await ListLabels.HandleAsync(new ListLabelsRequest(projectId));
+        _labels = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private void StartLabelEdit(LabelDto label)
+    {
+        _editingLabelId = label.Id;
+        _labelName = label.Name;
+        _labelPrefix = label.PathPrefix;
+    }
+
+    private void CancelLabelEdit()
+    {
+        _editingLabelId = null;
+        _labelName = string.Empty;
+        _labelPrefix = string.Empty;
+    }
+
+    private async Task SaveLabel()
+    {
+        if (_projectId is not { } projectId || string.IsNullOrWhiteSpace(_labelName) || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            if (_editingLabelId is { } id)
+            {
+                var updated = await UpdateLabel.HandleAsync(new UpdateLabelRequest(
+                    projectId, id, _labelName.Trim(), null, _labelPrefix));
+                if (!updated.Success)
+                {
+                    Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+            }
+            else
+            {
+                var created = await CreateLabel.HandleAsync(new CreateLabelRequest(
+                    projectId, _labelName.Trim(), null, _labelPrefix));
+                if (!created.Success)
+                {
+                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+            }
+            CancelLabelEdit();
+            Snackbar.Add(L["Saved"].Value, Severity.Success);
+            await ReloadLabels();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveLabel(LabelDto label)
+    {
+        if (_projectId is not { } projectId)
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteLabelConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await DeleteLabel.HandleAsync(new DeleteLabelRequest(projectId, label.Id));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        if (_editingLabelId == label.Id)
+            CancelLabelEdit();
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await ReloadLabels();
+    }
+}

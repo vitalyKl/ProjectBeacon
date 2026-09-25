@@ -133,6 +133,15 @@
   <data name="Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
+  <data name="SettingsLead" xml:space="preserve">
+    <value>Account and this machine. The project folder, members, and labels stay with the project.</value>
+  </data>
+  <data name="ThisProject" xml:space="preserve">
+    <value>This project</value>
+  </data>
+  <data name="ThisProjectLead" xml:space="preserve">
+    <value>Folder, members, and labels for the open project.</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>Submit</value>
   </data>
@@ -1386,7 +1395,7 @@ No Beacon-hosted coding agent.</value>
     <value>How do I add people?</value>
   </data>
   <data name="LandingFaq4A" xml:space="preserve">
-    <value>Open registration, or invite-only via AUTH_LOCAL_INVITE_ONLY. Invite from Settings; the link is shown once.</value>
+    <value>Open registration, or invite-only via AUTH_LOCAL_INVITE_ONLY. Invite from the open project on the dashboard; the link is shown once.</value>
   </data>
   <data name="LandingFaq5Q" xml:space="preserve">
     <value>How do I reset a password?</value>
@@ -1425,7 +1434,7 @@ No Beacon-hosted coding agent.</value>
     <value>Browse lists folders on the selected workstation, not in this browser.</value>
   </data>
   <data name="FolderOptionalHint" xml:space="preserve">
-    <value>You can skip the folder now and attach it later in Settings.</value>
+    <value>You can skip the folder now and attach it later on the dashboard.</value>
   </data>
   <data name="InitializeOnDeviceHint" xml:space="preserve">
     <value>Writes .gitignore and opencode.json into that folder on the workstation.</value>
@@ -1452,10 +1461,10 @@ No Beacon-hosted coding agent.</value>
     <value>Pick a GGUF file (or paste a llama-server command with --port ${PORT}).</value>
   </data>
   <data name="NeedProjectFolderForGguf" xml:space="preserve">
-    <value>Attach a project folder in Settings so this page can scan GGUF files on the device.</value>
+    <value>Attach a project folder on the dashboard so this page can scan GGUF files on the device.</value>
   </data>
   <data name="NextStepTodo" xml:space="preserve">
-    <value>Nothing runs by itself. Attach a folder in Settings, add a model on Agents, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
+    <value>Nothing runs by itself. Attach a folder on the dashboard, add a model on Agents, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
   </data>
   <data name="NextStepCreateSubtask" xml:space="preserve">
     <value>Create a subtask, then Start Actor Session. Launch Session only marks the session Active in Beacon — it does not start OpenCode.</value>
@@ -1527,7 +1536,7 @@ No Beacon-hosted coding agent.</value>
     <value>C:\work\northstar</value>
   </data>
   <data name="ChatNeedsFolder" xml:space="preserve">
-    <value>Attach a project folder in Settings before chatting.</value>
+    <value>Attach a project folder on the dashboard before chatting.</value>
   </data>
   <data name="ChatNeedsClient" xml:space="preserve">
     <value>Start beacon client on this workstation, then open chat again.</value>

@@ -10,7 +10,7 @@ using System.Text.Json;
 
 public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand, Result<ChatSessionDto>>
 {
-    public const string ProjectFolderRequired = "Attach a project folder in Settings first.";
+    public const string ProjectFolderRequired = "Attach a project folder on the dashboard first.";
     public const string ClientRequired = "Start beacon client to chat.";
 
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
