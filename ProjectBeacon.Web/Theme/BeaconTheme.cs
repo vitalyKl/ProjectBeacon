@@ -90,7 +90,7 @@ public static class BeaconTheme
         {
             DefaultBorderRadius = "12px",
             AppbarHeight = "64px",
-            DrawerWidthLeft = "168px",
+            DrawerWidthLeft = "240px",
         },
         ZIndex = new ZIndex()
         {

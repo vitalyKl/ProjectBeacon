@@ -6,7 +6,7 @@
 @inject GetCommandHandler GetCommand
 
 <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
-    <MudTextField T="string" Value="Path" ValueChanged="OnPathChanged" Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="Disabled" />
+    <MudTextField T="string" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="Disabled" />
     <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="Disabled || _busy || DeviceId is not { }">@L["Browse"]</MudButton>
 </MudStack>
 @if (_listing is not null)

@@ -19,7 +19,7 @@
     {
         <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Default" Class="mt-2 beacon-track" />
     }
-    <MudStack Row="true" Spacing="2" Class="mt-2">
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
         <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(Task.Status)">
             @ChromeLabels.Status(L, Task.Status)
         </MudChip>

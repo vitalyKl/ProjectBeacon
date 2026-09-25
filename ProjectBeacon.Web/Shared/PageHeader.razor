@@ -1,7 +1,9 @@
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+<div class="beacon-page-header mb-4">
     <MudText Typo="Typo.h4">@Title</MudText>
-    @ChildContent
-</MudStack>
+    <div class="beacon-page-actions">
+        @ChildContent
+    </div>
+</div>
 
 @code {
     [Parameter] public string Title { get; set; } = string.Empty;

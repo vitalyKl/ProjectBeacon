@@ -1,38 +1,37 @@
+using System.Globalization;
 using Bunit;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
 public sealed class SettingsRenderTests : BUnitRenderBase
 {
+    public SettingsRenderTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
+    }
+
     [Fact]
     public void Settings_RendersPage()
     {
-        // Act
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
 
-        // Assert
         Assert.Contains("<div", cut.Markup);
     }
 
     [Fact]
     public void Settings_RendersDeviceSection()
     {
-        // Act
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
 
-        // Assert
-        var html = cut.Markup;
-        Assert.Contains("Device", html);
+        Assert.Contains("Device", cut.Markup);
     }
 
     [Fact]
     public void Settings_RendersMembersSection()
     {
-        // Act
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
 
-        // Assert
-        var html = cut.Markup;
-        Assert.Contains("Member", html);
+        Assert.Contains("Member", cut.Markup);
     }
 }

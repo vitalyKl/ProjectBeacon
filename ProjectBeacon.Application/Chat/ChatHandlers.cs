@@ -10,6 +10,9 @@ using System.Text.Json;
 
 public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand, Result<ChatSessionDto>>
 {
+    public const string ProjectFolderRequired = "Attach a project folder in Settings first.";
+    public const string ClientRequired = "Start beacon client to chat.";
+
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
     private readonly GetCommandHandler _getCommand;
@@ -40,11 +43,11 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
             .OrderBy(r => r.CreatedAt)
             .FirstOrDefaultAsync(ct);
         if (runtime is null)
-            return Result.Failure<ChatSessionDto>("Attach a project folder in Settings first.");
+            return Result.Failure<ChatSessionDto>(ProjectFolderRequired);
 
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == runtime.DeviceId, ct);
         if (device is null || !device.IsOnline(DateTime.UtcNow))
-            return Result.Failure<ChatSessionDto>("Start beacon client to chat.");
+            return Result.Failure<ChatSessionDto>(ClientRequired);
 
         var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", runtime.LocalRoot);
         db.ChatSessions.Add(session);

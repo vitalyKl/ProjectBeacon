@@ -20,13 +20,9 @@
 
 @if (_project is null)
 {
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
-else if (_reports.Count == 0)
-{
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["ReportsEmpty"]</MudAlert>
-}
-else
+else if (_reports.Count > 0)
 {
     <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true">
         <HeaderContent>

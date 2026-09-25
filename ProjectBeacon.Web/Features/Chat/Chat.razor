@@ -27,7 +27,7 @@
 
 @if (_project is null)
 {
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
 {
@@ -54,7 +54,16 @@ else
         </MudItem>
         <MudItem xs="12" md="9">
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-chat-pane">
-                @if (_selected is null)
+                @if (_block == "folder")
+                {
+                    <MudAlert Severity="Severity.Info">@L["ChatNeedsFolder"]</MudAlert>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Href="/settings">@L["Settings"]</MudButton>
+                }
+                else if (_block == "client")
+                {
+                    <MudAlert Severity="Severity.Info">@L["ChatNeedsClient"]</MudAlert>
+                }
+                else if (_selected is null)
                 {
                     <MudAlert Severity="Severity.Info">@L["ChatEmptyHint"]</MudAlert>
                 }
@@ -94,6 +103,7 @@ else
 
 @code {
     private Guid _userId;
+    private string? _block;
     private ProjectDto? _project;
     private List<ChatSessionDto> _sessions = [];
     private ChatSessionDto? _selected;
@@ -143,9 +153,17 @@ else
             var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, L["Chat"].Value)));
             if (!created.Success)
             {
-                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                _block = created.Error switch
+                {
+                    CreateChatSessionHandler.ProjectFolderRequired => "folder",
+                    CreateChatSessionHandler.ClientRequired => "client",
+                    _ => null
+                };
+                if (_block is null)
+                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
+            _block = null;
             await ReloadSessions();
             await Select(created.Value!);
         }

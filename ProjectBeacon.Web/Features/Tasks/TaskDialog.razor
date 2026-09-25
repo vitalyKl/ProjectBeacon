@@ -9,6 +9,8 @@
 @inject ISnackbar Snackbar
 
 <MudTextField @bind-Value="_title" Label="@L["Title"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+@if (Task is not null)
+{
 <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
 <MudSelect T="TaskPriority" @bind-Value="_priority" Label="@L["Priority"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
     <MudSelectItem Value="TaskPriority.Low">@ChromeLabels.Priority(L, TaskPriority.Low)</MudSelectItem>
@@ -36,6 +38,7 @@
         <MudSelectItem Value="@((Guid?)milestone.Id)">@milestone.Name</MudSelectItem>
     }
 </MudSelect>
+}
 <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
     <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">@L["Save"]</MudButton>

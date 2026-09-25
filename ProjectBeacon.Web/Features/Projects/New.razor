@@ -54,7 +54,7 @@
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["BrowseOnDeviceHint"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["FolderOptionalHint"]</MudText>
     <div class="mt-2">
-        <FolderPicker DeviceId="_deviceId" UserId="_userId" Path="_localRoot" PathChanged="OnPathChanged"
+        <FolderPicker DeviceId="_deviceId" UserId="_userId" Path="@_localRoot" PathChanged="OnPathChanged"
                       Disabled="_saving || SelectedDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
     </div>
     <MudCheckBox @bind-Value="_initOnDevice" Label="@L["InitializeOnDevice"]" Class="mt-2" />
@@ -78,7 +78,7 @@
     private Guid _userId;
     private Guid? _deviceId;
     private string _localRoot = string.Empty;
-    private bool _initOnDevice = true;
+    private bool _initOnDevice;
     private List<DaemonDeviceDto> _devices = [];
 
     private DaemonDeviceDto? SelectedDevice => _devices.FirstOrDefault(d => d.Id == _deviceId);
@@ -92,6 +92,7 @@
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
         _devices = listed.Success ? listed.Value!.ToList() : [];
         var online = _devices.FirstOrDefault(d => d.Online);
+        _initOnDevice = online is not null;
         if (online is not null)
             await OnDeviceChanged(online.Id);
     }

@@ -204,4 +204,1289 @@
   <data name="TaskDetail" xml:space="preserve">
     <value>Задача</value>
   </data>
+  <data name="Lang_en" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="Lang_ru" xml:space="preserve">
+    <value>Русский</value>
+  </data>
+  <data name="Lang_de" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="Lang_fr" xml:space="preserve">
+    <value>Français</value>
+  </data>
+  <data name="Lang_es" xml:space="preserve">
+    <value>Español</value>
+  </data>
+  <data name="Lang_it" xml:space="preserve">
+    <value>Italiano</value>
+  </data>
+  <data name="Lang_pt" xml:space="preserve">
+    <value>Português</value>
+  </data>
+  <data name="Lang_nl" xml:space="preserve">
+    <value>Nederlands</value>
+  </data>
+  <data name="Lang_pl" xml:space="preserve">
+    <value>Polski</value>
+  </data>
+  <data name="Lang_cs" xml:space="preserve">
+    <value>Čeština</value>
+  </data>
+  <data name="Lang_hu" xml:space="preserve">
+    <value>Magyar</value>
+  </data>
+  <data name="Lang_ro" xml:space="preserve">
+    <value>Română</value>
+  </data>
+  <data name="Lang_bg" xml:space="preserve">
+    <value>Български</value>
+  </data>
+  <data name="Lang_hr" xml:space="preserve">
+    <value>Hrvatski</value>
+  </data>
+  <data name="Lang_sk" xml:space="preserve">
+    <value>Slovenčina</value>
+  </data>
+  <data name="Lang_sl" xml:space="preserve">
+    <value>Slovenščina</value>
+  </data>
+  <data name="Lang_lt" xml:space="preserve">
+    <value>Lietuvių</value>
+  </data>
+  <data name="Lang_lv" xml:space="preserve">
+    <value>Latviešu</value>
+  </data>
+  <data name="Lang_et" xml:space="preserve">
+    <value>Eesti</value>
+  </data>
+  <data name="Lang_fi" xml:space="preserve">
+    <value>Suomi</value>
+  </data>
+  <data name="Lang_sv" xml:space="preserve">
+    <value>Svenska</value>
+  </data>
+  <data name="Lang_no" xml:space="preserve">
+    <value>Norsk</value>
+  </data>
+  <data name="Lang_da" xml:space="preserve">
+    <value>Dansk</value>
+  </data>
+  <data name="Lang_el" xml:space="preserve">
+    <value>Ελληνικά</value>
+  </data>
+  <data name="Lang_tr" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="Lang_zh" xml:space="preserve">
+    <value>中文</value>
+  </data>
+  <data name="Lang_ja" xml:space="preserve">
+    <value>日本語</value>
+  </data>
+  <data name="Lang_ko" xml:space="preserve">
+    <value>한국어</value>
+  </data>
+  <data name="Lang_ar" xml:space="preserve">
+    <value>العربية</value>
+  </data>
+  <data name="Lang_hi" xml:space="preserve">
+    <value>हिन्दी</value>
+  </data>
+  <data name="Lang_th" xml:space="preserve">
+    <value>ไทย</value>
+  </data>
+  <data name="Lang_vi" xml:space="preserve">
+    <value>Tiếng Việt</value>
+  </data>
+  <data name="Lang_id" xml:space="preserve">
+    <value>Bahasa Indonesia</value>
+  </data>
+  <data name="Lang_ms" xml:space="preserve">
+    <value>Bahasa Melayu</value>
+  </data>
+  <data name="Lang_tl" xml:space="preserve">
+    <value>Filipino</value>
+  </data>
+  <data name="Lang_uk" xml:space="preserve">
+    <value>Українська</value>
+  </data>
+  <data name="Lang_be" xml:space="preserve">
+    <value>Беларуская</value>
+  </data>
+  <data name="Lang_mk" xml:space="preserve">
+    <value>Македонски</value>
+  </data>
+  <data name="Lang_sr" xml:space="preserve">
+    <value>Српски</value>
+  </data>
+  <data name="Lang_bs" xml:space="preserve">
+    <value>Bosanski</value>
+  </data>
+  <data name="Lang_ca" xml:space="preserve">
+    <value>Català</value>
+  </data>
+  <data name="Lang_gl" xml:space="preserve">
+    <value>Galego</value>
+  </data>
+  <data name="Lang_eu" xml:space="preserve">
+    <value>Euskara</value>
+  </data>
+  <data name="Lang_is" xml:space="preserve">
+    <value>Íslenska</value>
+  </data>
+  <data name="Lang_ga" xml:space="preserve">
+    <value>Gaeilge</value>
+  </data>
+  <data name="Lang_cy" xml:space="preserve">
+    <value>Cymraeg</value>
+  </data>
+  <data name="Account" xml:space="preserve">
+    <value>Аккаунт</value>
+  </data>
+  <data name="Bootstrap" xml:space="preserve">
+    <value>Инициализация</value>
+  </data>
+  <data name="BootstrapDescription" xml:space="preserve">
+    <value>Создаётся первая учётная запись администратора. Это можно сделать только один раз.</value>
+  </data>
+  <data name="BootstrapSuccess" xml:space="preserve">
+    <value>Учётная запись администратора создана. Сохраните пароль: он больше не будет показан.</value>
+  </data>
+  <data name="ClickToCopy" xml:space="preserve">
+    <value>Нажмите, чтобы скопировать</value>
+  </data>
+  <data name="GoToLogin" xml:space="preserve">
+    <value>Ко входу</value>
+  </data>
+  <data name="ProjectBeaconWelcome" xml:space="preserve">
+    <value>Добро пожаловать в ProjectBeacon.</value>
+  </data>
+  <data name="Status" xml:space="preserve">
+    <value>Статус</value>
+  </data>
+  <data name="Priority" xml:space="preserve">
+    <value>Приоритет</value>
+  </data>
+  <data name="Type" xml:space="preserve">
+    <value>Тип</value>
+  </data>
+  <data name="SubStage" xml:space="preserve">
+    <value>Подэтап</value>
+  </data>
+  <data name="Milestone" xml:space="preserve">
+    <value>Веха</value>
+  </data>
+  <data name="Low" xml:space="preserve">
+    <value>Низкий</value>
+  </data>
+  <data name="Medium" xml:space="preserve">
+    <value>Средний</value>
+  </data>
+  <data name="High" xml:space="preserve">
+    <value>Высокий</value>
+  </data>
+  <data name="Critical" xml:space="preserve">
+    <value>Критический</value>
+  </data>
+  <data name="Feature" xml:space="preserve">
+    <value>Функция</value>
+  </data>
+  <data name="Bug" xml:space="preserve">
+    <value>Ошибка</value>
+  </data>
+  <data name="Improvement" xml:space="preserve">
+    <value>Улучшение</value>
+  </data>
+  <data name="Task" xml:space="preserve">
+    <value>Задача</value>
+  </data>
+  <data name="TaskMoved" xml:space="preserve">
+    <value>Задача перенесена: {0}</value>
+  </data>
+  <data name="RequirementGathering" xml:space="preserve">
+    <value>Требования</value>
+  </data>
+  <data name="Estimation" xml:space="preserve">
+    <value>Оценка</value>
+  </data>
+  <data name="IntermediateResult" xml:space="preserve">
+    <value>Прогресс</value>
+  </data>
+  <data name="Review" xml:space="preserve">
+    <value>Ревью</value>
+  </data>
+  <data name="Corrections" xml:space="preserve">
+    <value>Правки</value>
+  </data>
+  <data name="ReviewCorrections" xml:space="preserve">
+    <value>Проверка правок</value>
+  </data>
+  <data name="Complete" xml:space="preserve">
+    <value>Завершить</value>
+  </data>
+  <data name="CreateTask" xml:space="preserve">
+    <value>Создать задачу</value>
+  </data>
+  <data name="UpdateTask" xml:space="preserve">
+    <value>Изменить задачу</value>
+  </data>
+  <data name="CreateMilestone" xml:space="preserve">
+    <value>Новая веха</value>
+  </data>
+  <data name="UpdateMilestone" xml:space="preserve">
+    <value>Изменить веху</value>
+  </data>
+  <data name="DeleteMilestone" xml:space="preserve">
+    <value>Удалить веху</value>
+  </data>
+  <data name="Dependencies" xml:space="preserve">
+    <value>Зависимости</value>
+  </data>
+  <data name="AddTask" xml:space="preserve">
+    <value>Добавить задачу</value>
+  </data>
+  <data name="AddComment" xml:space="preserve">
+    <value>Добавить комментарий</value>
+  </data>
+  <data name="AddDependency" xml:space="preserve">
+    <value>Добавить зависимость</value>
+  </data>
+  <data name="TaskCreated" xml:space="preserve">
+    <value>Задача создана.</value>
+  </data>
+  <data name="TaskUpdated" xml:space="preserve">
+    <value>Задача обновлена.</value>
+  </data>
+  <data name="TaskDeleted" xml:space="preserve">
+    <value>Задача удалена.</value>
+  </data>
+  <data name="TaskClaimed" xml:space="preserve">
+    <value>Задача взята.</value>
+  </data>
+  <data name="MilestoneCreated" xml:space="preserve">
+    <value>Веха создана.</value>
+  </data>
+  <data name="MilestoneUpdated" xml:space="preserve">
+    <value>Веха обновлена.</value>
+  </data>
+  <data name="MilestoneDeleted" xml:space="preserve">
+    <value>Веха удалена.</value>
+  </data>
+  <data name="TaskTitle" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="Description" xml:space="preserve">
+    <value>Описание</value>
+  </data>
+  <data name="SaveChanges" xml:space="preserve">
+    <value>Сохранить изменения</value>
+  </data>
+  <data name="NoTasks" xml:space="preserve">
+    <value>Задач нет.</value>
+  </data>
+  <data name="NoMilestones" xml:space="preserve">
+    <value>Вех пока нет.</value>
+  </data>
+  <data name="NewMilestone" xml:space="preserve">
+    <value>Новая веха</value>
+  </data>
+  <data name="BackToBoard" xml:space="preserve">
+    <value>К доске</value>
+  </data>
+  <data name="BackToBacklog" xml:space="preserve">
+    <value>К бэклогу</value>
+  </data>
+  <data name="TaskNotFound" xml:space="preserve">
+    <value>Задача не найдена.</value>
+  </data>
+  <data name="MilestoneName" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="TaskCount" xml:space="preserve">
+    <value>Задачи</value>
+  </data>
+  <data name="Order" xml:space="preserve">
+    <value>Порядок</value>
+  </data>
+  <data name="CreatedBy" xml:space="preserve">
+    <value>Автор</value>
+  </data>
+  <data name="CreatedAt" xml:space="preserve">
+    <value>Создано</value>
+  </data>
+  <data name="Updated" xml:space="preserve">
+    <value>Обновлено</value>
+  </data>
+  <data name="FilterByStatus" xml:space="preserve">
+    <value>Фильтр по статусу</value>
+  </data>
+  <data name="FilterByPriority" xml:space="preserve">
+    <value>Фильтр по приоритету</value>
+  </data>
+  <data name="SortBy" xml:space="preserve">
+    <value>Сортировка</value>
+  </data>
+  <data name="SortByCreated" xml:space="preserve">
+    <value>Дата создания</value>
+  </data>
+  <data name="SortByPriority" xml:space="preserve">
+    <value>Приоритет</value>
+  </data>
+  <data name="SortByTitle" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="Content" xml:space="preserve">
+    <value>Содержание</value>
+  </data>
+  <data name="WriteAComment" xml:space="preserve">
+    <value>Напишите комментарий...</value>
+  </data>
+  <data name="NoCommentsYet" xml:space="preserve">
+    <value>Комментариев пока нет.</value>
+  </data>
+  <data name="NoProjectAvailable" xml:space="preserve">
+    <value>Проекта ещё нет. Сначала создайте проект.</value>
+  </data>
+  <data name="CompiledBrief" xml:space="preserve">
+    <value>Собранный бриф</value>
+  </data>
+  <data name="CreateProject" xml:space="preserve">
+    <value>Создать проект</value>
+  </data>
+  <data name="OrgName" xml:space="preserve">
+    <value>Название организации</value>
+  </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>Название проекта</value>
+  </data>
+  <data name="ProjectCreated" xml:space="preserve">
+    <value>Проект создан.</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>Сохранено.</value>
+  </data>
+  <data name="Section" xml:space="preserve">
+    <value>Раздел</value>
+  </data>
+  <data name="Sections" xml:space="preserve">
+    <value>Разделы</value>
+  </data>
+  <data name="Title" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="Labels" xml:space="preserve">
+    <value>Метки</value>
+  </data>
+  <data name="ModelRegistry" xml:space="preserve">
+    <value>Реестр моделей</value>
+  </data>
+  <data name="ModelsAdd" xml:space="preserve">
+    <value>Добавить модель</value>
+  </data>
+  <data name="ModelsEdit" xml:space="preserve">
+    <value>Изменить модель</value>
+  </data>
+  <data name="ModelName" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="LaunchCommand" xml:space="preserve">
+    <value>Команда запуска</value>
+  </data>
+  <data name="LaunchCommandHint" xml:space="preserve">
+    <value>Командная строка, которой запускается бэкенд модели.</value>
+  </data>
+  <data name="ContextSize" xml:space="preserve">
+    <value>Размер контекста</value>
+  </data>
+  <data name="Ttl" xml:space="preserve">
+    <value>TTL (секунды)</value>
+  </data>
+  <data name="ExtraFlags" xml:space="preserve">
+    <value>Дополнительные флаги</value>
+  </data>
+  <data name="NoModels" xml:space="preserve">
+    <value>Бэкенды моделей ещё не зарегистрированы.</value>
+  </data>
+  <data name="BackendFreeToken" xml:space="preserve">
+    <value>free-token</value>
+  </data>
+  <data name="BackendLlamaCpp" xml:space="preserve">
+    <value>llama.cpp</value>
+  </data>
+  <data name="BackendOpenAiCompatible" xml:space="preserve">
+    <value>Совместимый с OpenAI</value>
+  </data>
+  <data name="RoleBindings" xml:space="preserve">
+    <value>Привязки ролей</value>
+  </data>
+  <data name="RoleBindingPlanner" xml:space="preserve">
+    <value>Планировщик</value>
+  </data>
+  <data name="RoleBindingActor" xml:space="preserve">
+    <value>Актор</value>
+  </data>
+  <data name="Unbound" xml:space="preserve">
+    <value>Не выбрано</value>
+  </data>
+  <data name="BindingSaved" xml:space="preserve">
+    <value>Привязка роли сохранена.</value>
+  </data>
+  <data name="BindingRemoved" xml:space="preserve">
+    <value>Привязка роли снята.</value>
+  </data>
+  <data name="ModelSaved" xml:space="preserve">
+    <value>Модель сохранена.</value>
+  </data>
+  <data name="ModelDeleted" xml:space="preserve">
+    <value>Модель удалена.</value>
+  </data>
+  <data name="DeleteModelConfirm" xml:space="preserve">
+    <value>Удалить этот бэкенд модели?</value>
+  </data>
+  <data name="ProxyStatus" xml:space="preserve">
+    <value>Статус прокси</value>
+  </data>
+  <data name="Unavailable" xml:space="preserve">
+    <value>Недоступно</value>
+  </data>
+  <data name="Unhealthy" xml:space="preserve">
+    <value>Неисправно</value>
+  </data>
+  <data name="LoadedModel" xml:space="preserve">
+    <value>Загруженная модель</value>
+  </data>
+  <data name="LoadedModels" xml:space="preserve">
+    <value>Загруженные модели</value>
+  </data>
+  <data name="LoadWithOthers" xml:space="preserve">
+    <value>Держать вместе с другими</value>
+  </data>
+  <data name="LoadWithOthersHint" xml:space="preserve">
+    <value>Оставить модель загруженной рядом с другими (группа llama-swap, swap: false). В команде запуска должен быть ${PORT}.</value>
+  </data>
+  <data name="Cpu" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="Ram" xml:space="preserve">
+    <value>RAM</value>
+  </data>
+  <data name="Gpu" xml:space="preserve">
+    <value>GPU</value>
+  </data>
+  <data name="Vram" xml:space="preserve">
+    <value>VRAM</value>
+  </data>
+  <data name="ReportedAt" xml:space="preserve">
+    <value>На момент {0}</value>
+  </data>
+  <data name="Memory" xml:space="preserve">
+    <value>Память</value>
+  </data>
+  <data name="LastSwap" xml:space="preserve">
+    <value>Последняя смена</value>
+  </data>
+  <data name="Reload" xml:space="preserve">
+    <value>Перезагрузить</value>
+  </data>
+  <data name="Unload" xml:space="preserve">
+    <value>Выгрузить</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>Обновить</value>
+  </data>
+  <data name="ProxyReloaded" xml:space="preserve">
+    <value>Прокси перезагружен.</value>
+  </data>
+  <data name="ProxyUnloaded" xml:space="preserve">
+    <value>Прокси выгружен.</value>
+  </data>
+  <data name="ReportsEmpty" xml:space="preserve">
+    <value>Отчётов пока нет. Соберите снимок доски.</value>
+  </data>
+  <data name="GenerateReport" xml:space="preserve">
+    <value>Собрать отчёт</value>
+  </data>
+  <data name="Constraints" xml:space="preserve">
+    <value>Ограничения</value>
+  </data>
+  <data name="Activate" xml:space="preserve">
+    <value>Активировать</value>
+  </data>
+  <data name="Reject" xml:space="preserve">
+    <value>Отклонить</value>
+  </data>
+  <data name="Accept" xml:space="preserve">
+    <value>Принять</value>
+  </data>
+  <data name="Kind" xml:space="preserve">
+    <value>Вид</value>
+  </data>
+  <data name="Consequences" xml:space="preserve">
+    <value>Последствия</value>
+  </data>
+  <data name="CloseMilestone" xml:space="preserve">
+    <value>Закрыть</value>
+  </data>
+  <data name="ReopenMilestone" xml:space="preserve">
+    <value>Открыть снова</value>
+  </data>
+  <data name="OrphanWarning" xml:space="preserve">
+    <value>У закрытой вехи ещё {0} открытых задач.</value>
+  </data>
+  <data name="ConstraintBody" xml:space="preserve">
+    <value>Ограничение</value>
+  </data>
+  <data name="RecoverPassword" xml:space="preserve">
+    <value>Восстановить пароль</value>
+  </data>
+  <data name="RecoverDescription" xml:space="preserve">
+    <value>Введите токен инициализации, чтобы сбросить пароль администратора. Новый пароль показывается один раз.</value>
+  </data>
+  <data name="RecoverSuccess" xml:space="preserve">
+    <value>Пароль администратора сброшен. Сохраните его: он больше не будет показан.</value>
+  </data>
+  <data name="NewPassword" xml:space="preserve">
+    <value>Новый пароль</value>
+  </data>
+  <data name="MyProjects" xml:space="preserve">
+    <value>Мои проекты</value>
+  </data>
+  <data name="NoProjectsYet" xml:space="preserve">
+    <value>Проектов пока нет. Создайте первый.</value>
+  </data>
+  <data name="NoProjects" xml:space="preserve">
+    <value>Нет проектов</value>
+  </data>
+  <data name="RecentActivity" xml:space="preserve">
+    <value>Недавняя активность</value>
+  </data>
+  <data name="NoRecentActivity" xml:space="preserve">
+    <value>Недавней активности нет.</value>
+  </data>
+  <data name="LastActivity" xml:space="preserve">
+    <value>Последняя активность</value>
+  </data>
+  <data name="Active" xml:space="preserve">
+    <value>Активно</value>
+  </data>
+  <data name="SwitchProject" xml:space="preserve">
+    <value>Сменить проект</value>
+  </data>
+  <data name="Pipeline" xml:space="preserve">
+    <value>Пайплайн</value>
+  </data>
+  <data name="PipelineNotStarted" xml:space="preserve">
+    <value>Пайплайн не запущен.</value>
+  </data>
+  <data name="StagePlanning" xml:space="preserve">
+    <value>Планирование</value>
+  </data>
+  <data name="StageExecuting" xml:space="preserve">
+    <value>Выполняется</value>
+  </data>
+  <data name="StageReviewing" xml:space="preserve">
+    <value>На ревью</value>
+  </data>
+  <data name="StageApproved" xml:space="preserve">
+    <value>Одобрено</value>
+  </data>
+  <data name="StageReopenedForRevision" xml:space="preserve">
+    <value>Возвращено на доработку</value>
+  </data>
+  <data name="Subtasks" xml:space="preserve">
+    <value>Подзадачи</value>
+  </data>
+  <data name="NoSubtasksYet" xml:space="preserve">
+    <value>Подзадач пока нет.</value>
+  </data>
+  <data name="Instructions" xml:space="preserve">
+    <value>Инструкции</value>
+  </data>
+  <data name="DiffRef" xml:space="preserve">
+    <value>Ссылка на diff</value>
+  </data>
+  <data name="Summary" xml:space="preserve">
+    <value>Сводка</value>
+  </data>
+  <data name="Reopens" xml:space="preserve">
+    <value>Открывает снова</value>
+  </data>
+  <data name="Pending" xml:space="preserve">
+    <value>Ожидает</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>Сбой</value>
+  </data>
+  <data name="Sessions" xml:space="preserve">
+    <value>Сессии</value>
+  </data>
+  <data name="NoSessionsYet" xml:space="preserve">
+    <value>Сессий пока нет.</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Готово</value>
+  </data>
+  <data name="Closed" xml:space="preserve">
+    <value>Закрыто</value>
+  </data>
+  <data name="Launched" xml:space="preserve">
+    <value>Запущено</value>
+  </data>
+  <data name="Verdicts" xml:space="preserve">
+    <value>Вердикты</value>
+  </data>
+  <data name="NoVerdictsYet" xml:space="preserve">
+    <value>Вердиктов пока нет.</value>
+  </data>
+  <data name="VerdictApprove" xml:space="preserve">
+    <value>Одобрить</value>
+  </data>
+  <data name="VerdictReopenSubtask" xml:space="preserve">
+    <value>Вернуть подзадачу</value>
+  </data>
+  <data name="StartPipeline" xml:space="preserve">
+    <value>Запустить пайплайн</value>
+  </data>
+  <data name="CreateSubtask" xml:space="preserve">
+    <value>Создать подзадачу</value>
+  </data>
+  <data name="StartActorSession" xml:space="preserve">
+    <value>Запустить сессию актора</value>
+  </data>
+  <data name="LaunchSession" xml:space="preserve">
+    <value>Запустить</value>
+  </data>
+  <data name="ReportResult" xml:space="preserve">
+    <value>Сообщить результат</value>
+  </data>
+  <data name="FailSubtask" xml:space="preserve">
+    <value>Провал</value>
+  </data>
+  <data name="StartReview" xml:space="preserve">
+    <value>Начать ревью</value>
+  </data>
+  <data name="Approve" xml:space="preserve">
+    <value>Одобрить</value>
+  </data>
+  <data name="ReopenSubtask" xml:space="preserve">
+    <value>Вернуть подзадачу</value>
+  </data>
+  <data name="ConfirmClose" xml:space="preserve">
+    <value>Подтвердить закрытие</value>
+  </data>
+  <data name="ConfirmCloseHint" xml:space="preserve">
+    <value>Необязательно. Если пусто, берётся последняя заметка об одобрении.</value>
+  </data>
+  <data name="ForceClose" xml:space="preserve">
+    <value>Закрыть принудительно</value>
+  </data>
+  <data name="ForceCloseWarning" xml:space="preserve">
+    <value>Пайплайн закроется без вердикта ревью. Это нельзя отменить.</value>
+  </data>
+  <data name="Reason" xml:space="preserve">
+    <value>Причина</value>
+  </data>
+  <data name="Note" xml:space="preserve">
+    <value>Заметка</value>
+  </data>
+  <data name="Subtask" xml:space="preserve">
+    <value>Подзадача</value>
+  </data>
+  <data name="PipelineStarted" xml:space="preserve">
+    <value>Пайплайн запущен.</value>
+  </data>
+  <data name="SubtaskCreated" xml:space="preserve">
+    <value>Подзадача создана.</value>
+  </data>
+  <data name="SessionStarted" xml:space="preserve">
+    <value>Сессия начата.</value>
+  </data>
+  <data name="SessionLaunched" xml:space="preserve">
+    <value>Сессия запущена.</value>
+  </data>
+  <data name="ResultReported" xml:space="preserve">
+    <value>Результат записан.</value>
+  </data>
+  <data name="SubtaskFailedMsg" xml:space="preserve">
+    <value>Подзадача провалена.</value>
+  </data>
+  <data name="ReviewStarted" xml:space="preserve">
+    <value>Ревью начато.</value>
+  </data>
+  <data name="VerdictRecorded" xml:space="preserve">
+    <value>Вердикт записан.</value>
+  </data>
+  <data name="SubtaskReopened" xml:space="preserve">
+    <value>Подзадача возвращена на доработку.</value>
+  </data>
+  <data name="PipelineClosed" xml:space="preserve">
+    <value>Пайплайн закрыт.</value>
+  </data>
+  <data name="SectionGoals" xml:space="preserve">
+    <value>Цели</value>
+  </data>
+  <data name="SectionNonGoals" xml:space="preserve">
+    <value>Вне целей</value>
+  </data>
+  <data name="SectionSecurity" xml:space="preserve">
+    <value>Безопасность</value>
+  </data>
+  <data name="SectionDefinitionOfDone" xml:space="preserve">
+    <value>Критерий готовности</value>
+  </data>
+  <data name="SectionArchitecture" xml:space="preserve">
+    <value>Архитектура</value>
+  </data>
+  <data name="SectionConventions" xml:space="preserve">
+    <value>Договорённости</value>
+  </data>
+  <data name="Proposed" xml:space="preserve">
+    <value>Предложено</value>
+  </data>
+  <data name="Accepted" xml:space="preserve">
+    <value>Принято</value>
+  </data>
+  <data name="Superseded" xml:space="preserve">
+    <value>Заменено</value>
+  </data>
+  <data name="Deprecated" xml:space="preserve">
+    <value>Устарело</value>
+  </data>
+  <data name="Rejected" xml:space="preserve">
+    <value>Отклонено</value>
+  </data>
+  <data name="NoDecisionsYet" xml:space="preserve">
+    <value>Решений пока нет.</value>
+  </data>
+  <data name="NoLabelsYet" xml:space="preserve">
+    <value>Меток пока нет.</value>
+  </data>
+  <data name="NoSectionsYet" xml:space="preserve">
+    <value>Разделов пока нет.</value>
+  </data>
+  <data name="Devices" xml:space="preserve">
+    <value>Устройства</value>
+  </data>
+  <data name="AddDevice" xml:space="preserve">
+    <value>Добавить устройство</value>
+  </data>
+  <data name="DeviceName" xml:space="preserve">
+    <value>Имя устройства</value>
+  </data>
+  <data name="NoDevicesYet" xml:space="preserve">
+    <value>Устройств пока нет. Добавьте одно и запустите beacon client с токеном.</value>
+  </data>
+  <data name="DeviceOffline" xml:space="preserve">
+    <value>Не в сети</value>
+  </data>
+  <data name="DeviceOnline" xml:space="preserve">
+    <value>Подключено</value>
+  </data>
+  <data name="DeviceTokenOnce" xml:space="preserve">
+    <value>Сохраните токен. Он показывается один раз. Команда: beacon client --url {0} --token {1}</value>
+  </data>
+  <data name="DeviceCreated" xml:space="preserve">
+    <value>Устройство создано.</value>
+  </data>
+  <data name="DeviceRevoked" xml:space="preserve">
+    <value>Устройство отозвано.</value>
+  </data>
+  <data name="RevokeDeviceConfirm" xml:space="preserve">
+    <value>Отозвать это устройство? Клиент перестанет получать команды.</value>
+  </data>
+  <data name="LastSeen" xml:space="preserve">
+    <value>Был в сети</value>
+  </data>
+  <data name="RuntimeDevice" xml:space="preserve">
+    <value>Рабочая станция</value>
+  </data>
+  <data name="ProjectDirectory" xml:space="preserve">
+    <value>Каталог проекта</value>
+  </data>
+  <data name="Browse" xml:space="preserve">
+    <value>Обзор</value>
+  </data>
+  <data name="InitializeOnDevice" xml:space="preserve">
+    <value>Инициализировать на устройстве (.gitignore, opencode.json)</value>
+  </data>
+  <data name="ParentDirectory" xml:space="preserve">
+    <value>Вверх</value>
+  </data>
+  <data name="SelectFolder" xml:space="preserve">
+    <value>Выбрать эту папку</value>
+  </data>
+  <data name="DeviceRequiredForBrowse" xml:space="preserve">
+    <value>Подключите устройство, чтобы смотреть папки.</value>
+  </data>
+  <data name="McpServers" xml:space="preserve">
+    <value>Серверы MCP</value>
+  </data>
+  <data name="AgentMode" xml:space="preserve">
+    <value>Режим агента</value>
+  </data>
+  <data name="AgentModeSolo" xml:space="preserve">
+    <value>Один</value>
+  </data>
+  <data name="AgentModePipeline" xml:space="preserve">
+    <value>Пайплайн</value>
+  </data>
+  <data name="ApplyOnDevice" xml:space="preserve">
+    <value>Применить на устройстве</value>
+  </data>
+  <data name="ModelsRoot" xml:space="preserve">
+    <value>Каталог локальных моделей</value>
+  </data>
+  <data name="ApplyOnDeviceDone" xml:space="preserve">
+    <value>Конфигурация OpenCode записана на устройство.</value>
+  </data>
+  <data name="PickGguf" xml:space="preserve">
+    <value>Выбрать GGUF</value>
+  </data>
+  <data name="NoGgufFiles" xml:space="preserve">
+    <value>В каталоге моделей на устройстве нет файлов .gguf.</value>
+  </data>
+  <data name="SoloModel" xml:space="preserve">
+    <value>Одна модель</value>
+  </data>
+  <data name="Workstation" xml:space="preserve">
+    <value>Станция</value>
+  </data>
+  <data name="LlamaSwapBin" xml:space="preserve">
+    <value>Бинарник llama-swap</value>
+  </data>
+  <data name="LlamaCppBin" xml:space="preserve">
+    <value>Бинарник llama-server</value>
+  </data>
+  <data name="HistoryDir" xml:space="preserve">
+    <value>Каталог истории OpenCode</value>
+  </data>
+  <data name="ProjectsRoot" xml:space="preserve">
+    <value>Корень проектов</value>
+  </data>
+  <data name="SaveWorkstation" xml:space="preserve">
+    <value>Сохранить на устройстве</value>
+  </data>
+  <data name="WorkstationSaved" xml:space="preserve">
+    <value>Настройки станции сохранены на устройстве.</value>
+  </data>
+  <data name="Probe" xml:space="preserve">
+    <value>Установленные инструменты</value>
+  </data>
+  <data name="Install" xml:space="preserve">
+    <value>Установить</value>
+  </data>
+  <data name="InstallConfirm" xml:space="preserve">
+    <value>Установить {0} на выбранное устройство через winget?</value>
+  </data>
+  <data name="InstallQueued" xml:space="preserve">
+    <value>Команда установки отправлена на устройство.</value>
+  </data>
+  <data name="ProjectBrief" xml:space="preserve">
+    <value>Бриф проекта</value>
+  </data>
+  <data name="EditInContext" xml:space="preserve">
+    <value>Править в контексте</value>
+  </data>
+  <data name="NoBrief" xml:space="preserve">
+    <value>Пока нет целей и критерия готовности. Напишите эти разделы в контексте.</value>
+  </data>
+  <data name="Queue" xml:space="preserve">
+    <value>Очередь</value>
+  </data>
+  <data name="NoReadyTasks" xml:space="preserve">
+    <value>Нет готовых задач. Перенесите карточку в «К выполнению», и агент сможет вызвать start_work.</value>
+  </data>
+  <data name="OpenMilestones" xml:space="preserve">
+    <value>Открытых: {0}</value>
+  </data>
+  <data name="NoOpenMilestones" xml:space="preserve">
+    <value>Открытых вех нет.</value>
+  </data>
+  <data name="AgentsActive" xml:space="preserve">
+    <value>Активных: {0}</value>
+  </data>
+  <data name="NoAgentSessions" xml:space="preserve">
+    <value>Нет активных сессий агентов.</value>
+  </data>
+  <data name="None" xml:space="preserve">
+    <value>Нет</value>
+  </data>
+  <data name="EditTask" xml:space="preserve">
+    <value>Изменить задачу</value>
+  </data>
+  <data name="PathPrefix" xml:space="preserve">
+    <value>Префикс пути</value>
+  </data>
+  <data name="DeleteLabelConfirm" xml:space="preserve">
+    <value>Удалить эту метку? Остальные поля задач сохранятся.</value>
+  </data>
+  <data name="ExportAgentsMd" xml:space="preserve">
+    <value>Экспорт AGENTS.md</value>
+  </data>
+  <data name="Deprecate" xml:space="preserve">
+    <value>Устарело</value>
+  </data>
+  <data name="Supersede" xml:space="preserve">
+    <value>Заменить</value>
+  </data>
+  <data name="Replacement" xml:space="preserve">
+    <value>Замена</value>
+  </data>
+  <data name="ProbeGit" xml:space="preserve">
+    <value>git</value>
+  </data>
+  <data name="ProbeOpencode" xml:space="preserve">
+    <value>opencode</value>
+  </data>
+  <data name="ProbeNode" xml:space="preserve">
+    <value>node</value>
+  </data>
+  <data name="ProbeDocker" xml:space="preserve">
+    <value>docker</value>
+  </data>
+  <data name="ProbeLlamaSwap" xml:space="preserve">
+    <value>llama-swap</value>
+  </data>
+  <data name="Register" xml:space="preserve">
+    <value>Создать аккаунт</value>
+  </data>
+  <data name="Email" xml:space="preserve">
+    <value>Почта</value>
+  </data>
+  <data name="ForgotPassword" xml:space="preserve">
+    <value>Забыли пароль</value>
+  </data>
+  <data name="ForgotDescription" xml:space="preserve">
+    <value>Введите почту. Если аккаунт есть, на неё уйдёт ссылка для сброса.</value>
+  </data>
+  <data name="ForgotSuccess" xml:space="preserve">
+    <value>Если эта почта зарегистрирована, ссылка для сброса уже отправлена.</value>
+  </data>
+  <data name="ResetPasswordTitle" xml:space="preserve">
+    <value>Новый пароль</value>
+  </data>
+  <data name="ResetSuccess" xml:space="preserve">
+    <value>Пароль обновлён. Можно входить.</value>
+  </data>
+  <data name="InviteTitle" xml:space="preserve">
+    <value>Приглашение</value>
+  </data>
+  <data name="InviteDescription" xml:space="preserve">
+    <value>Вас пригласили в {0} с ролью {1}.</value>
+  </data>
+  <data name="InviteAccept" xml:space="preserve">
+    <value>Принять приглашение</value>
+  </data>
+  <data name="InviteAccepted" xml:space="preserve">
+    <value>Приглашение принято.</value>
+  </data>
+  <data name="AlreadyHaveAccount" xml:space="preserve">
+    <value>Уже есть аккаунт? Войдите и откройте ссылку снова.</value>
+  </data>
+  <data name="Members" xml:space="preserve">
+    <value>Участники</value>
+  </data>
+  <data name="InviteMember" xml:space="preserve">
+    <value>Пригласить</value>
+  </data>
+  <data name="PendingInvites" xml:space="preserve">
+    <value>Ожидающие приглашения</value>
+  </data>
+  <data name="InviteSent" xml:space="preserve">
+    <value>Приглашение создано. Сохраните ссылку: она показывается один раз.</value>
+  </data>
+  <data name="RevokeInvite" xml:space="preserve">
+    <value>Отозвать</value>
+  </data>
+  <data name="ChangePassword" xml:space="preserve">
+    <value>Сменить пароль</value>
+  </data>
+  <data name="CurrentPassword" xml:space="preserve">
+    <value>Текущий пароль</value>
+  </data>
+  <data name="PasswordChanged" xml:space="preserve">
+    <value>Пароль изменён.</value>
+  </data>
+  <data name="Role" xml:space="preserve">
+    <value>Роль</value>
+  </data>
+  <data name="NoMembersYet" xml:space="preserve">
+    <value>Участников пока нет.</value>
+  </data>
+  <data name="RoleMember" xml:space="preserve">
+    <value>Участник</value>
+  </data>
+  <data name="RoleAdmin" xml:space="preserve">
+    <value>Администратор</value>
+  </data>
+  <data name="RoleOwner" xml:space="preserve">
+    <value>Владелец</value>
+  </data>
+  <data name="LandingHeroTitle" xml:space="preserve">
+    <value>Контекст, который доживает до следующей сессии.</value>
+  </data>
+  <data name="LandingHeroLead" xml:space="preserve">
+    <value>Пульт для совместной работы людей и локальных агентов. Beacon один раз собирает бриф, и агенты не ищут заново то, что уже решено.</value>
+  </data>
+  <data name="LandingProblemTitle" xml:space="preserve">
+    <value>Агенты начинают с нуля</value>
+  </data>
+  <data name="LandingProblemBody" xml:space="preserve">
+    <value>В каждой новой сессии агент заново ищет решения, ограничения и нужные файлы. Beacon хранит запись и отдаёт бриф с бюджетом.</value>
+  </data>
+  <data name="LandingHowTitle" xml:space="preserve">
+    <value>Как это работает</value>
+  </data>
+  <data name="LandingHow1" xml:space="preserve">
+    <value>Соберите бриф с бюджетом из контекста, решений и ограничений.</value>
+  </data>
+  <data name="LandingHow2" xml:space="preserve">
+    <value>Возьмите работу с доски. Статус, заметки ревью и пайплайн остаются в одном месте.</value>
+  </data>
+  <data name="LandingHow3" xml:space="preserve">
+    <value>Запускайте агента на своей машине через beacon mcp и beacon client. Сам Beacon ход не выполняет.</value>
+  </data>
+  <data name="LandingFeaturesTitle" xml:space="preserve">
+    <value>Что входит</value>
+  </data>
+  <data name="LandingFeatureContext" xml:space="preserve">
+    <value>Брифы с бюджетом токенов. Безопасность и критерий готовности не выбрасываются.</value>
+  </data>
+  <data name="LandingFeatureBoard" xml:space="preserve">
+    <value>Доска, бэклог и дорожная карта для людей и агентов.</value>
+  </data>
+  <data name="LandingFeatureDecisions" xml:space="preserve">
+    <value>У решений есть последствия, поэтому агентам есть на что опираться.</value>
+  </data>
+  <data name="LandingFeatureAgents" xml:space="preserve">
+    <value>Одиночные и пайплайн-модели на вашем железе. llama-swap остаётся на рабочей станции.</value>
+  </data>
+  <data name="LandingFeatureDevices" xml:space="preserve">
+    <value>Исходящий HTTPS от beacon client. Веб-хост не читает ваш диск.</value>
+  </data>
+  <data name="LandingFeatureMcpTitle" xml:space="preserve">
+    <value>stdio MCP</value>
+  </data>
+  <data name="LandingFeatureMcp" xml:space="preserve">
+    <value>Локальные файловые и пайплайн-инструменты по stdio. HTTP MCP не входит в поставку.</value>
+  </data>
+  <data name="LandingCompareTitle" xml:space="preserve">
+    <value>В сравнении</value>
+  </data>
+  <data name="LandingCompareChat" xml:space="preserve">
+    <value>Только чат</value>
+  </data>
+  <data name="LandingCompareCloud" xml:space="preserve">
+    <value>Облачный кодинг</value>
+  </data>
+  <data name="LandingCompareBrief" xml:space="preserve">
+    <value>Живой бриф</value>
+  </data>
+  <data name="LandingCompareHardware" xml:space="preserve">
+    <value>Ваше железо</value>
+  </data>
+  <data name="LandingCompareRecord" xml:space="preserve">
+    <value>Система записи</value>
+  </data>
+  <data name="LandingCompareExecutes" xml:space="preserve">
+    <value>Сам выполняет ход агента</value>
+  </data>
+  <data name="LandingYes" xml:space="preserve">
+    <value>Да</value>
+  </data>
+  <data name="LandingNo" xml:space="preserve">
+    <value>Нет</value>
+  </data>
+  <data name="LandingMaybe" xml:space="preserve">
+    <value>Иногда</value>
+  </data>
+  <data name="LandingVisualTitle" xml:space="preserve">
+    <value>Доска и бриф рядом</value>
+  </data>
+  <data name="LandingMockTodo" xml:space="preserve">
+    <value>Собрать бриф задачи</value>
+  </data>
+  <data name="LandingMockDoing" xml:space="preserve">
+    <value>Взять и сделать</value>
+  </data>
+  <data name="LandingMockBrief" xml:space="preserve">
+    <value>## Цели
+Держать контекст актуальным для людей и агентов.
+
+## Вне целей
+Нет агента, которого хостит Beacon.</value>
+  </data>
+  <data name="LandingFaqTitle" xml:space="preserve">
+    <value>Вопросы</value>
+  </data>
+  <data name="LandingFaq1Q" xml:space="preserve">
+    <value>Beacon сам запускает агента?</value>
+  </data>
+  <data name="LandingFaq1A" xml:space="preserve">
+    <value>Нет. Beacon передаёт и оркестрирует. Процесс агента всегда идёт на железе, которым вы управляете.</value>
+  </data>
+  <data name="LandingFaq2Q" xml:space="preserve">
+    <value>Где лежит код?</value>
+  </data>
+  <data name="LandingFaq2A" xml:space="preserve">
+    <value>На вашей машине. beacon client ходит наружу по HTTPS. Веб-хост не читает рабочее дерево.</value>
+  </data>
+  <data name="LandingFaq3Q" xml:space="preserve">
+    <value>Это облачный сервис?</value>
+  </data>
+  <data name="LandingFaq3A" xml:space="preserve">
+    <value>В первой версии путь — свой хост. Общий хостинг остаётся отдельной закрытой фазой.</value>
+  </data>
+  <data name="LandingFaq4Q" xml:space="preserve">
+    <value>Как добавить людей?</value>
+  </data>
+  <data name="LandingFaq4A" xml:space="preserve">
+    <value>Открытая регистрация или только по приглашению, если включён AUTH_LOCAL_INVITE_ONLY. Приглашение создаётся в настройках, ссылка показывается один раз.</value>
+  </data>
+  <data name="LandingFaq5Q" xml:space="preserve">
+    <value>Как сбросить пароль?</value>
+  </data>
+  <data name="LandingFaq5A" xml:space="preserve">
+    <value>Используйте «Забыли пароль». Страница /recover сбрасывает пароль администратора по токену инициализации, это не обычный сброс.</value>
+  </data>
+  <data name="LandingCtaTitle" xml:space="preserve">
+    <value>Запуск на своём хосте</value>
+  </data>
+  <data name="Project" xml:space="preserve">
+    <value>Проект</value>
+  </data>
+  <data name="CreateProjectStepNames" xml:space="preserve">
+    <value>Назовите проект</value>
+  </data>
+  <data name="CreateProjectStepDevice" xml:space="preserve">
+    <value>Выберите станцию с beacon client</value>
+  </data>
+  <data name="CreateProjectStepFolder" xml:space="preserve">
+    <value>Выберите папку на этой машине</value>
+  </data>
+  <data name="OrgNameHint" xml:space="preserve">
+    <value>Оставьте пустым, чтобы взять название проекта.</value>
+  </data>
+  <data name="RuntimeDeviceHint" xml:space="preserve">
+    <value>Это компьютер, где запущен beacon.exe, а не браузер.</value>
+  </data>
+  <data name="NoDeviceForProject" xml:space="preserve">
+    <value>Рабочей станции ещё нет. Добавьте устройство в настройках и запустите beacon.exe.</value>
+  </data>
+  <data name="DeviceOfflineHint" xml:space="preserve">
+    <value>Устройство не в сети. Запустите beacon client и дождитесь статуса «Подключено».</value>
+  </data>
+  <data name="BrowseOnDeviceHint" xml:space="preserve">
+    <value>Список папок берётся с выбранной рабочей станции, не из этого браузера.</value>
+  </data>
+  <data name="FolderOptionalHint" xml:space="preserve">
+    <value>Папку можно не указывать сейчас и прикрепить позже в настройках.</value>
+  </data>
+  <data name="InitializeOnDeviceHint" xml:space="preserve">
+    <value>Записывает .gitignore и opencode.json в эту папку на рабочей станции.</value>
+  </data>
+  <data name="ProjectFolder" xml:space="preserve">
+    <value>Папка проекта</value>
+  </data>
+  <data name="AttachFolder" xml:space="preserve">
+    <value>Сохранить папку</value>
+  </data>
+  <data name="ProjectFolderSaved" xml:space="preserve">
+    <value>Папка проекта сохранена на этом устройстве.</value>
+  </data>
+  <data name="HowToAddModel" xml:space="preserve">
+    <value>Llama.cpp: положите GGUF в каталог локальных моделей в настройках и нажмите «Выбрать GGUF». Остальным типам нужна команда запуска. Сохранение регистрирует модель, «Применить на устройстве» пишет конфиг OpenCode.</value>
+  </data>
+  <data name="ModelSaveHint" xml:space="preserve">
+    <value>llama-swap подхватит реестр на следующем heartbeat клиента. Чтобы OpenCode увидел модель, нажмите «Применить на устройстве». Само по себе это задачу не запускает.</value>
+  </data>
+  <data name="LaunchCommandRequired" xml:space="preserve">
+    <value>Для этого типа бэкенда нужна команда запуска.</value>
+  </data>
+  <data name="PickGgufFirst" xml:space="preserve">
+    <value>Выберите файл GGUF или вставьте команду llama-server с --port ${PORT}.</value>
+  </data>
+  <data name="NeedProjectFolderForGguf" xml:space="preserve">
+    <value>Укажите папку проекта в настройках, чтобы эта страница видела GGUF на устройстве.</value>
+  </data>
+  <data name="NextStepTodo" xml:space="preserve">
+    <value>Само ничего не запускается. Укажите папку в настройках, добавьте модель в «Агентах», затем запустите пайплайн или завершите задачу через MCP finish_work.</value>
+  </data>
+  <data name="NextStepCreateSubtask" xml:space="preserve">
+    <value>Создайте подзадачу и запустите сессию актора. «Запустить» только помечает сессию активной в Beacon и не стартует OpenCode.</value>
+  </data>
+  <data name="LaunchSessionHint" xml:space="preserve">
+    <value>Запуск сессии меняет статус в базе. OpenCode при этом не стартует.</value>
+  </data>
+  <data name="NoAgentSessionsHint" xml:space="preserve">
+    <value>Нет активных сессий пайплайна. Модели сами задачи не начинают: откройте задачу и запустите пайплайн или используйте MCP.</value>
+  </data>
+  <data name="WorkstationLoad" xml:space="preserve">
+    <value>Станция</value>
+  </data>
+  <data name="StartClientHint" xml:space="preserve">
+    <value>Запустите beacon.exe на этом компьютере, чтобы видеть CPU, RAM и GPU.</value>
+  </data>
+  <data name="CpuHistory" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="RamHistory" xml:space="preserve">
+    <value>RAM</value>
+  </data>
+  <data name="GpuHistory" xml:space="preserve">
+    <value>GPU</value>
+  </data>
+  <data name="TaskSteps" xml:space="preserve">
+    <value>Шаги</value>
+  </data>
+  <data name="AddStep" xml:space="preserve">
+    <value>Добавить шаг</value>
+  </data>
+  <data name="StepTitle" xml:space="preserve">
+    <value>Шаг</value>
+  </data>
+  <data name="NoStepsYet" xml:space="preserve">
+    <value>Своих шагов пока нет.</value>
+  </data>
+  <data name="Chat" xml:space="preserve">
+    <value>Чат</value>
+  </data>
+  <data name="NewChat" xml:space="preserve">
+    <value>Новый чат</value>
+  </data>
+  <data name="NoChatsYet" xml:space="preserve">
+    <value>Чатов пока нет.</value>
+  </data>
+  <data name="ChatEmptyHint" xml:space="preserve">
+    <value>Начните чат. OpenCode работает на станции через beacon client.</value>
+  </data>
+  <data name="Message" xml:space="preserve">
+    <value>Сообщение</value>
+  </data>
+  <data name="Send" xml:space="preserve">
+    <value>Отправить</value>
+  </data>
+  <data name="Abort" xml:space="preserve">
+    <value>Стоп</value>
+  </data>
+  <data name="NavQueue" xml:space="preserve">
+    <value>Очередь</value>
+  </data>
+  <data name="NavMemory" xml:space="preserve">
+    <value>Память проекта</value>
+  </data>
+  <data name="NavRuntime" xml:space="preserve">
+    <value>Среда</value>
+  </data>
+  <data name="FolderExample" xml:space="preserve">
+    <value>C:\work\northstar</value>
+  </data>
+  <data name="ChatNeedsFolder" xml:space="preserve">
+    <value>Сначала укажите папку проекта в настройках.</value>
+  </data>
+  <data name="ChatNeedsClient" xml:space="preserve">
+    <value>Запустите beacon client на этой машине и откройте чат снова.</value>
+  </data>
 </root>

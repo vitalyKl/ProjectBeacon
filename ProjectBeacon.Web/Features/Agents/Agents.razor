@@ -35,7 +35,7 @@
 
 @if (_project is null)
 {
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
 {
@@ -402,7 +402,7 @@ else
     private Color StatusColor => _status is null
         ? Color.Default
         : !_status.Available
-            ? Color.Error
+            ? Color.Default
             : !_status.Healthy
                 ? Color.Warning
                 : Color.Success;

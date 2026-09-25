@@ -193,8 +193,11 @@
 
 .beacon-profile {
     color: var(--color-text-primary) !important;
-    text-transform: none;
     min-width: auto;
+}
+
+.mud-button-root {
+    text-transform: none;
 }
 
 .beacon-drawer.mud-drawer {
@@ -387,6 +390,60 @@
     min-height: 60vh;
     height: 100%;
     padding: var(--space-4) var(--space-5);
+}
+
+.beacon-nav-label {
+    padding: var(--space-3) var(--space-2) var(--space-1);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+}
+
+.beacon-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.beacon-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+@media (max-width: 959px) {
+    .kanban-board.mud-drop-container,
+    .kanban-board {
+        flex-direction: column;
+        overflow-x: visible;
+    }
+
+    .kanban-column {
+        flex: none;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .kanban-zone {
+        min-height: 0;
+        height: auto;
+    }
+}
+
+@media (max-width: 599px) {
+    .beacon-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .beacon-page-actions {
+        justify-content: flex-start;
+    }
 }
 
 .kanban-header {

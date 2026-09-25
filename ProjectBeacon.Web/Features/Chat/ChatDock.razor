@@ -32,17 +32,29 @@
                         aria-label="@L["Close"].Value" />
                 </MudStack>
             </MudStack>
-            <div class="beacon-chat-dock-log">
-                @foreach (var part in _parts)
-                {
-                    <MudText Typo="Typo.caption">@part.Role</MudText>
-                    <MudText Typo="Typo.body2" Class="beacon-pre mb-2">@part.Body</MudText>
-                }
-            </div>
-            <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1">
-                <MudTextField @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="_busy" />
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
-            </MudStack>
+            @if (_block == "folder")
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">@L["ChatNeedsFolder"]</MudAlert>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2" Href="/settings">@L["Settings"]</MudButton>
+            }
+            else if (_block == "client")
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">@L["ChatNeedsClient"]</MudAlert>
+            }
+            else
+            {
+                <div class="beacon-chat-dock-log">
+                    @foreach (var part in _parts)
+                    {
+                        <MudText Typo="Typo.caption">@part.Role</MudText>
+                        <MudText Typo="Typo.body2" Class="beacon-pre mb-2">@part.Body</MudText>
+                    }
+                </div>
+                <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1">
+                    <MudTextField @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="_busy" />
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
+                </MudStack>
+            }
         </MudPaper>
     }
     else
@@ -54,6 +66,7 @@
 @code {
     private bool _visible;
     private bool _open;
+    private string? _block;
     private Guid _userId;
     private ChatSessionDto? _session;
     private List<ChatPartDto> _parts = [];
@@ -102,10 +115,20 @@
             var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, L["Chat"].Value)));
             if (!created.Success)
             {
-                Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
-                _open = false;
+                _block = created.Error switch
+                {
+                    CreateChatSessionHandler.ProjectFolderRequired => "folder",
+                    CreateChatSessionHandler.ClientRequired => "client",
+                    _ => null
+                };
+                if (_block is null)
+                {
+                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                    _open = false;
+                }
                 return;
             }
+            _block = null;
             _session = created.Value;
         }
         await ReloadParts();

@@ -34,7 +34,7 @@ else if (_error)
     }
     else if (_project is null)
     {
-        <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
     }
     else
     {
@@ -177,12 +177,9 @@ else if (_error)
             { nameof(TaskDialog.Milestones), _milestones }
         };
         var reference = await Dialogs.ShowAsync(typeof(TaskDialog), L["NewTask"].Value, parameters,
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await reference.Result;
         if (result?.Data is TaskItemDto created)
-        {
-            Snackbar.Add(L["TaskCreated"].Value, Severity.Success);
             Navigation.NavigateTo($"/task/{created.Id}");
-        }
     }
 }

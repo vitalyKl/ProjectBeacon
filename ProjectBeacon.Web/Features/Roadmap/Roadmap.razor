@@ -28,7 +28,7 @@
 }
 else if (_project is null)
 {
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else if (_milestones.Count == 0 && !_showCreateForm)
 {

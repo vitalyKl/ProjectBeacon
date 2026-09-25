@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json.Serialization;
+using MudBlazor;
 using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
@@ -101,7 +102,10 @@ public static class ServiceCollectionExtensions
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
         services.AddCascadingAuthenticationState();
-        services.AddMudServices();
+        services.AddMudServices(options =>
+        {
+            options.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;
+        });
         services.AddRazorComponents().AddInteractiveServerComponents();
         services.AddLocalization();
         services.AddInfrastructure(connectionString);

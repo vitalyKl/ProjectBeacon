@@ -21,7 +21,7 @@
 
 @if (_project is null)
 {
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoProjectAvailable"]</MudAlert>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
 {
@@ -33,11 +33,7 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
     </MudPaper>
 
-    @if (_decisions.Count == 0)
-    {
-        <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoDecisionsYet"]</MudAlert>
-    }
-    else
+    @if (_decisions.Count > 0)
     {
         <MudTable Items="_decisions" Hover="true" Dense="true" Class="mt-4">
             <HeaderContent>
