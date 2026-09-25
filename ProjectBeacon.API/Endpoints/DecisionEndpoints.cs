@@ -10,6 +10,8 @@ public static class DecisionEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/decisions", List).RequireAuthorization().DisableAntiforgery();
         app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/accept", Accept).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/deprecate", Deprecate).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede", Supersede).RequireAuthorization().DisableAntiforgery();
         return app;
     }
 
@@ -36,5 +38,27 @@ public static class DecisionEndpoints
             : Results.NotFound(new { error = result.Error });
     }
 
+    private static async Task<IResult> Deprecate(Guid projectId, Guid decisionId, DeprecateDecisionHandler handler)
+    {
+        var result = await handler.HandleAsync(decisionId);
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> Supersede(
+        Guid projectId,
+        Guid decisionId,
+        [FromBody] SupersedeBody body,
+        SupersedeDecisionHandler handler)
+    {
+        var result = await handler.HandleAsync(decisionId, body.ReplacementId);
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error });
+    }
+
     public record CreateDecisionBody(string Title, string? Context, string Body, string? Consequences);
+
+    public record SupersedeBody(Guid ReplacementId);
 }

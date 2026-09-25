@@ -42,12 +42,64 @@ These tools talk to the database and require Beacon environment:
 
 `allowedMcpTools` and `allowedPaths` are comma-separated lists.
 
+When `BEACON_API_URL` and `BEACON_API_TOKEN` are set, these six tools call `/v1` instead of opening the database: `model_bind`, `model_status`, `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status`. Without that pair they keep the database path below.
+
+## Control-plane tools
+
+These tools call the same `/v1` routes the Web host serves. They need `BEACON_API_URL` (for example `http://127.0.0.1:5083`) and `BEACON_API_TOKEN` (project token `bcn_…` or a user JWT). `BEACON_PROJECT_ID` is the default project. `BEACON_TASK_ID` is the default task for `claim_task`, `context_compile`, `finish_work`, and the `pipeline_*` tools. A missing URL or token returns MCP `isError`; file tools keep working. There is no HTTP MCP server.
+
+Board, backlog, and task detail:
+
+- `list_tasks` `{ projectId?, status? }` — status `Todo`, `InProgress`, `Done`
+- `get_task` `{ taskId?, projectId? }`
+- `create_task` `{ title, description?, priority?, type?, labelId?, milestoneId?, path?, projectId? }`
+- `update_task` `{ taskId, title?, description?, priority?, type?, labelId?, milestoneId?, projectId? }`
+- `set_task_status` `{ taskId, status, projectId? }`
+- `set_task_substage` `{ taskId, subStage }`
+- `claim_task` `{ taskId?, projectId? }`
+- `add_task_comment` `{ taskId, content, userId? }`
+- `set_task_dependencies` `{ taskId, dependentTaskIds }`
+- `add_review_notes` `{ taskId, reviewNotes }`
+- `list_task_steps` `{ taskId }` / `add_task_step` `{ taskId, title }` / `toggle_task_step` `{ stepId, done }` / `delete_task_step` `{ stepId }`
+- `finish_work` `{ taskId?, result, output?, actorId, review? }` — `result` is `done`, `failed`, `skipped`, or `partial`. `done` sends `review.reviewerRun`, `review.regressionsFound`, `review.regressionsFixed`
+
+Context, decisions, roadmap, labels, reports:
+
+- `context_compile` `{ taskId?, path?, repoId?, budgetTokens?, includeChangedScope?, includeTreeCapsule?, includeHandoff?, projectId? }`
+- `list_context_nodes` / `get_context_node` `{ nodeId }` / `upsert_context_node` / `delete_context_node` `{ nodeId }` / `export_agents_md`
+- `list_constraints` / `create_constraint` `{ body, kind }` / `activate_constraint` / `reject_constraint`
+- `list_decisions` / `record_decision` `{ title, body, context?, consequences? }` / `accept_decision` / `deprecate_decision` / `supersede_decision` `{ decisionId, replacementId }`
+- `list_milestones` / `get_milestone` / `create_milestone` / `update_milestone` / `delete_milestone` / `close_milestone` / `reopen_milestone`
+- `list_labels` / `match_label` `{ path }` / `add_label_path` `{ labelId, path }`
+- `list_reports` / `get_report` `{ reportId }` / `generate_report`
+
+Pipeline actions that the task page has and the six database tools do not:
+
+- `pipeline_start` `{ taskId? }`
+- `pipeline_start_actor` `{ subtaskId, taskId? }`
+- `pipeline_launch_session` `{ sessionId }`
+- `pipeline_fail_subtask` `{ subtaskId, reason, taskId? }`
+- `pipeline_start_review` `{ taskId? }`
+- `pipeline_approve` `{ note?, taskId? }`
+- `pipeline_force_close` `{ actorId, reason?, taskId? }` — API token needs Admin
+
+Agents page writes that are not `model_bind` / `model_status`:
+
+- `model_upsert` `{ name, backendType, launchCommand, contextSize, ttl, id?, extraFlags?, concurrent? }`
+- `model_delete` `{ modelBackendId }`
+- `model_unbind` `{ role }`
+- `proxy_reload` / `proxy_unload`
+
+Enum values on the wire match the API (`Todo`, `Planner`, `Must`, `Native`). Do not send `write_handoff`. Chat, settings, auth, and device commands stay off this tool list: chat needs a user session, and device commands stay on `beacon client`.
+
 ### Environment
 
 | Variable | Required for | Meaning |
 | --- | --- | --- |
-| `BEACON_PROJECT_ID` | all pipeline and model tools | GUID of the project this MCP session belongs to |
-| `BEACON_TASK_ID` | the four `task_*` / `subtask_*` tools | GUID of the session task |
+| `BEACON_API_URL` | control-plane tools, and the API path of the six pipeline/model tools | Base URL of the Web or API host, such as `http://127.0.0.1:5083` |
+| `BEACON_API_TOKEN` | same as `BEACON_API_URL` | Bearer token: project `bcn_…` or a user JWT. Not printed |
+| `BEACON_PROJECT_ID` | pipeline, model, and project-scoped control-plane tools | GUID of the project this MCP session belongs to |
+| `BEACON_TASK_ID` | the four `task_*` / `subtask_*` tools, and the default task for `claim_task`, `context_compile`, `finish_work`, `pipeline_*` | GUID of the session task |
 | `BEACON_ACTOR_ID` | none (reserved) | actor identity; not enforced yet |
 
 Without `BEACON_PROJECT_ID` (or without the connection configuration) the tools return an MCP `isError` result; the server keeps running, and the file tools stay available. The database provider is created lazily on the first database tool call. The llama-swap proxy is only available while a workstation client reports it in heartbeat (`probeJson.llamaSwapStatus`); otherwise `model_status` reports the proxy as unavailable.

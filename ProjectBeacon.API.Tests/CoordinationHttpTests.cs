@@ -38,6 +38,31 @@ public sealed class CoordinationHttpTests
         var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/decisions");
         Assert.Equal("Accepted", listed[0].GetProperty("status").GetString());
 
+        var replacement = await PostJson(client, $"/v1/projects/{projectId}/decisions", new
+        {
+            title = "Use Postgres 17",
+            context = "upgrade",
+            body = "Postgres 17",
+            consequences = "migrate once"
+        });
+        var replacementId = replacement.GetProperty("id").GetGuid();
+        var acceptedReplacement = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{replacementId}/accept", new { });
+        Assert.True(acceptedReplacement.IsSuccessStatusCode, await acceptedReplacement.Content.ReadAsStringAsync());
+
+        var superseded = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/decisions/{decisionId}/supersede",
+            new { replacementId });
+        var supersededBody = await superseded.Content.ReadAsStringAsync();
+        Assert.True(superseded.IsSuccessStatusCode, supersededBody);
+        var supersededJson = JsonSerializer.Deserialize<JsonElement>(supersededBody, Json);
+        Assert.Equal("Superseded", supersededJson.GetProperty("status").GetString());
+
+        var deprecated = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{replacementId}/deprecate", new { });
+        var deprecatedBody = await deprecated.Content.ReadAsStringAsync();
+        Assert.True(deprecated.IsSuccessStatusCode, deprecatedBody);
+        var deprecatedJson = JsonSerializer.Deserialize<JsonElement>(deprecatedBody, Json);
+        Assert.Equal("Deprecated", deprecatedJson.GetProperty("status").GetString());
+
         var constraint = await PostJson(client, $"/v1/projects/{projectId}/constraints", new
         {
             body = "tests must pass",
