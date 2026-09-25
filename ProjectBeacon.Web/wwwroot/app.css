@@ -285,6 +285,17 @@
     border-color: var(--color-accent) !important;
 }
 
+.beacon-card-interactive:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgb(59 130 246 / 24%);
+}
+
+.beacon-card-interactive:focus-within {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
 .beacon-card {
     background-color: var(--color-surface-1);
     border-radius: var(--radius-small);
@@ -471,6 +482,32 @@
 .beacon-form {
     width: 100%;
     max-width: 520px;
+}
+
+@media (max-width: 479px) {
+    .beacon-chat-dock {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: auto;
+        max-height: 80vh;
+    }
+
+    .beacon-chat-dock-log,
+    .beacon-chat-log {
+        max-height: 50vh;
+    }
+
+    .beacon-chat-fab {
+        right: 12px;
+        bottom: 12px;
+    }
+}
+
+@media (min-width: 960px) {
+    .beacon-menu-toggle {
+        display: none;
+    }
 }
 
 .blazor-error-boundary {

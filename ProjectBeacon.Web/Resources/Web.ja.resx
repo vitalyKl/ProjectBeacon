@@ -42,6 +42,12 @@
   <data name="Delete" xml:space="preserve">
     <value>削除</value>
   </data>
+  <data name="DeleteTask" xml:space="preserve">
+    <value>タスクを削除</value>
+  </data>
+  <data name="Menu" xml:space="preserve">
+    <value>メニュー</value>
+  </data>
   <data name="Edit" xml:space="preserve">
     <value>編集</value>
   </data>

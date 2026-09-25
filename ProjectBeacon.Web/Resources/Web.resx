@@ -421,6 +421,9 @@
   <data name="DeleteTask" xml:space="preserve">
     <value>Delete Task</value>
   </data>
+  <data name="Menu" xml:space="preserve">
+    <value>Menu</value>
+  </data>
   <data name="CreateMilestone" xml:space="preserve">
     <value>Create Milestone</value>
   </data>

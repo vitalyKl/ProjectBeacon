@@ -24,7 +24,12 @@
                 <MudText Typo="Typo.subtitle2">@L["Chat"]</MudText>
                 <MudStack Row="true" Spacing="1">
                     <MudButton Size="Size.Small" Variant="Variant.Text" Href="/chat">@L["Chat"]</MudButton>
-                    <MudIconButton Size="Size.Small" Icon="@Icons.Material.Filled.Close" OnClick="() => _open = false" />
+                    <MudIconButton
+                        Size="Size.Small"
+                        Icon="@Icons.Material.Filled.Close"
+                        OnClick="() => _open = false"
+                        title="@L["Close"].Value"
+                        aria-label="@L["Close"].Value" />
                 </MudStack>
             </MudStack>
             <div class="beacon-chat-dock-log">

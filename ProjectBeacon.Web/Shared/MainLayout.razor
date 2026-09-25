@@ -20,6 +20,14 @@
 
 <MudLayout>
     <MudAppBar Elevation="0" Class="beacon-appbar">
+        <MudIconButton
+            Icon="@Icons.Material.Filled.Menu"
+            Color="Color.Inherit"
+            Edge="Edge.Start"
+            Class="beacon-menu-toggle"
+            title="@L["Menu"].Value"
+            aria-label="@L["Menu"].Value"
+            OnClick="@(() => _drawerOpen = !_drawerOpen)" />
         <MudBreadcrumbs Items="_crumbs" Separator="›" Class="beacon-breadcrumbs" />
         <MudSpacer />
         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
@@ -36,7 +44,14 @@
             </ChildContent>
         </MudMenu>
     </MudAppBar>
-    <MudDrawer Open="true" ClipMode="DrawerClipMode.Never" Elevation="0" Width="168px" Variant="DrawerVariant.Persistent" Class="beacon-drawer">
+    <MudDrawer
+        @bind-Open="_drawerOpen"
+        ClipMode="DrawerClipMode.Never"
+        Elevation="0"
+        Width="168px"
+        Variant="DrawerVariant.Responsive"
+        Breakpoint="Breakpoint.Md"
+        Class="beacon-drawer">
         <div class="beacon-drawer-inner">
             <MudDrawerHeader Class="beacon-drawer-header">
                 <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
@@ -97,6 +112,7 @@
 
     private List<BreadcrumbItem> _crumbs = [];
     private string _displayName = string.Empty;
+    private bool _drawerOpen = true;
     private bool _bodyReady;
 
     protected override async Task OnInitializedAsync()

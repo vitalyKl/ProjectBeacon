@@ -76,7 +76,13 @@ else
             </MudTd>
             <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToShortDateString()</MudTd>
             <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteTask(context.Id)" />
+                <MudIconButton
+                    Icon="@Icons.Material.Filled.Delete"
+                    Size="Size.Small"
+                    Color="Color.Error"
+                    OnClick="() => DeleteTask(context.Id)"
+                    title="@L["DeleteTask"].Value"
+                    aria-label="@L["DeleteTask"].Value" />
             </MudTd>
         </RowTemplate>
     </MudTable>
