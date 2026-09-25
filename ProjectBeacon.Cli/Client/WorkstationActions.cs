@@ -137,6 +137,65 @@ public static class WorkstationActions
         return Result.Ok(JsonSerializer.Serialize(new { path = full, gitignore, opencode = opencodePath, historyDir = historyInProject ? dataDir : null }));
     }
 
+    public static OpenCodeApplyResult ApplyOpenCodeConnections(string json, string? configPath = null)
+    {
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "[]" : json);
+        var rows = doc.RootElement.ValueKind == JsonValueKind.Array
+            ? doc.RootElement
+            : doc.RootElement.TryGetProperty("value", out var wrapped) ? wrapped : doc.RootElement;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var path = configPath ?? Path.Combine(home, ".config", "opencode", "opencode.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        JsonObject root;
+        if (File.Exists(path))
+        {
+            var text = File.ReadAllText(path);
+            root = string.IsNullOrWhiteSpace(text) ? new JsonObject() : JsonNode.Parse(text) as JsonObject ?? new JsonObject();
+        }
+        else
+        {
+            root = new JsonObject();
+        }
+        root["$schema"] = "https://opencode.ai/config.json";
+        var providers = root["provider"] as JsonObject ?? new JsonObject();
+        var env = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (rows.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var row in rows.EnumerateArray())
+            {
+                var provider = row.TryGetProperty("providerId", out var p) ? p.GetString() : null;
+                var model = row.TryGetProperty("modelId", out var m) ? m.GetString() : null;
+                if (string.IsNullOrWhiteSpace(provider) || string.IsNullOrWhiteSpace(model))
+                    continue;
+                var block = providers[provider] as JsonObject ?? new JsonObject();
+                var baseUrl = row.TryGetProperty("baseUrl", out var b) ? b.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    block["npm"] = "@ai-sdk/openai-compatible";
+                    var options = block["options"] as JsonObject ?? new JsonObject();
+                    options["baseURL"] = baseUrl;
+                    block["options"] = options;
+                }
+                var apiKey = row.TryGetProperty("apiKey", out var k) ? k.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                {
+                    var envName = "BEACON_OC_" + new string(provider.ToUpperInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+                    env[envName] = apiKey;
+                    var options = block["options"] as JsonObject ?? new JsonObject();
+                    options["apiKey"] = "{env:" + envName + "}";
+                    block["options"] = options;
+                }
+                var models = block["models"] as JsonObject ?? new JsonObject();
+                models[model] = new JsonObject { ["name"] = model };
+                block["models"] = models;
+                providers[provider] = block;
+            }
+        }
+        root["provider"] = providers;
+        File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        return new OpenCodeApplyResult(path, env);
+    }
+
     public static Result<string> ApplyOpencode(string root, string payloadJson)
     {
         if (string.IsNullOrWhiteSpace(root))
@@ -325,6 +384,8 @@ public static class WorkstationActions
         return (proc.ExitCode, output);
     }
 }
+
+public sealed record OpenCodeApplyResult(string ConfigPath, Dictionary<string, string> Environment);
 
 public static class OpencodeConfig
 {

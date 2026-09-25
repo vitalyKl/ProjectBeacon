@@ -15,6 +15,10 @@
 @inject GetChatModelHandler GetChatModel
 @inject SetChatModelHandler SetChatModel
 @inject NudgeModelsHandler NudgeModels
+@inject GetTotpStatusHandler GetTotp
+@inject BeginTotpHandler BeginTotp
+@inject ConfirmTotpHandler ConfirmTotp
+@inject DisableTotpHandler DisableTotp
 @inject ListDevicesHandler ListDevices
 @inject CreateDeviceHandler CreateDevice
 @inject RevokeDeviceHandler RevokeDevice
@@ -46,12 +50,41 @@
     </div>
 </MudPaper>
 
+<OpenCodeConnections UserId="_userId" />
+
+<MudText Typo="Typo.h6" Class="mb-1">@L["DangerZone"]</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@L["DangerZoneLead"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@L["Authenticator"]</MudText>
+    @if (_totpEnabled)
+    {
+        <MudText Typo="Typo.body2" Class="mb-2">@L["AuthenticatorOn"]</MudText>
+        <MudTextField @bind-Value="_totpCode" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudButton Variant="Variant.Text" Color="Color.Error" Class="mt-2" OnClick="TurnOffTotp" Disabled="_busy">@L["TurnOffAuthenticator"]</MudButton>
+    }
+    else if (!string.IsNullOrEmpty(_totpSetup))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-2">@_totpSetup</MudAlert>
+        <MudTextField @bind-Value="_totpCode" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="ConfirmAuthenticator" Disabled="_busy">@L["Confirm"]</MudButton>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mb-2">@L["AuthenticatorOff"]</MudText>
+        <MudButton Variant="Variant.Outlined" OnClick="StartAuthenticator" Disabled="_busy">@L["TurnOnAuthenticator"]</MudButton>
+    }
+</MudPaper>
+
 <MudText Typo="Typo.h6" Class="mb-3">@L["Devices"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
     <div class="beacon-form">
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
             <MudTextField @bind-Value="_deviceName" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy">@L["AddDevice"]</MudButton>
+            @if (_totpEnabled)
+            {
+                <MudTextField @bind-Value="_deviceTotp" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy || !_totpEnabled">@L["AddDevice"]</MudButton>
             <MudButton Variant="Variant.Outlined" OnClick="ReloadDevices" Disabled="_busy">@L["Refresh"]</MudButton>
         </MudStack>
     </div>
@@ -141,6 +174,10 @@
     private string _newPassword = string.Empty;
     private List<LocalModelBackendDto> _chatModels = [];
     private Guid? _chatModelId;
+    private bool _totpEnabled;
+    private string _totpSetup = string.Empty;
+    private string _totpCode = string.Empty;
+    private string _deviceTotp = string.Empty;
     private Guid? _wsDeviceId;
     private string _modelsRoot = string.Empty;
     private string _historyDir = string.Empty;
@@ -160,6 +197,53 @@
             _userId = id;
         await ReloadDevices();
         await ReloadChatModel();
+        await ReloadTotp();
+    }
+
+    private async Task ReloadTotp()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var status = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
+        _totpEnabled = status.Success && status.Value!.Enabled;
+    }
+
+    private async Task StartAuthenticator()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var begun = await BeginTotp.HandleAsync(new BeginTotpCommand(_userId));
+        if (!begun.Success)
+        {
+            Snackbar.Add(begun.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _totpSetup = begun.Value ?? string.Empty;
+    }
+
+    private async Task ConfirmAuthenticator()
+    {
+        var confirmed = await ConfirmTotp.HandleAsync(new ConfirmTotpCommand(new ConfirmTotpRequest(_userId, _totpCode)));
+        if (!confirmed.Success)
+        {
+            Snackbar.Add(confirmed.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _totpSetup = string.Empty;
+        _totpCode = string.Empty;
+        await ReloadTotp();
+    }
+
+    private async Task TurnOffTotp()
+    {
+        var disabled = await DisableTotp.HandleAsync(new DisableTotpCommand(new DisableTotpRequest(_userId, _totpCode)));
+        if (!disabled.Success)
+        {
+            Snackbar.Add(disabled.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _totpCode = string.Empty;
+        await ReloadTotp();
     }
 
     private async Task ReloadChatModel()
@@ -374,7 +458,7 @@
         {
             var name = string.IsNullOrWhiteSpace(_deviceName) ? Environment.MachineName : _deviceName.Trim();
             var result = await CreateDevice.HandleAsync(new CreateDeviceCommand(
-                new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId)));
+                new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId, _deviceTotp)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

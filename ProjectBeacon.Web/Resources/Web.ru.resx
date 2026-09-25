@@ -154,7 +154,55 @@
     <value>Модель OpenCode</value>
   </data>
   <data name="OpenCodeModelHint" xml:space="preserve">
-    <value>Провайдер и модель, которые OpenCode уже знает, например xai/grok-3. Вход на машине: opencode auth login. Beacon этот вход не хранит.</value>
+    <value>Провайдер и модель, которые OpenCode уже знает, например xai/grok-3. Ключ можно сохранить в подключении, иначе вход на машине: opencode auth login.</value>
+  </data>
+  <data name="OpenCodeConnections" xml:space="preserve">
+    <value>Подключения OpenCode</value>
+  </data>
+  <data name="OpenCodeConnectionsLead" xml:space="preserve">
+    <value>Это провайдеры OpenCode. Сохранение ставит команду клиенту: он дописывает ~/.config/opencode/opencode.json и перезапускает opencode serve. Ключ хранится в зашифрованном виде и передаётся процессу через переменную окружения.</value>
+  </data>
+  <data name="OpenCodeProvider" xml:space="preserve">
+    <value>Провайдер</value>
+  </data>
+  <data name="OpenCodeBaseUrl" xml:space="preserve">
+    <value>Базовый адрес</value>
+  </data>
+  <data name="OpenCodeApiKey" xml:space="preserve">
+    <value>Ключ API</value>
+  </data>
+  <data name="OpenCodeApiKeyHint" xml:space="preserve">
+    <value>Пустое поле оставляет сохранённый ключ. Встроенным провайдерам вроде xai базовый адрес не нужен.</value>
+  </data>
+  <data name="OpenCodeConnectionSaved" xml:space="preserve">
+    <value>Подключение сохранено. Включённый клиент его применит.</value>
+  </data>
+  <data name="NoOpenCodeConnections" xml:space="preserve">
+    <value>Подключений пока нет.</value>
+  </data>
+  <data name="DangerZone" xml:space="preserve">
+    <value>Опасная зона</value>
+  </data>
+  <data name="DangerZoneLead" xml:space="preserve">
+    <value>Новый агент — это доступ к машине, где запущен beacon client. Сначала включите аутентификатор.</value>
+  </data>
+  <data name="Authenticator" xml:space="preserve">
+    <value>Аутентификатор</value>
+  </data>
+  <data name="AuthenticatorOn" xml:space="preserve">
+    <value>Аутентификатор включён. Добавление агента спрашивает код.</value>
+  </data>
+  <data name="AuthenticatorOff" xml:space="preserve">
+    <value>Аутентификатор выключен. Добавьте ключ в приложение вроде Aegis или Authy и подтвердите код.</value>
+  </data>
+  <data name="AuthenticatorCode" xml:space="preserve">
+    <value>Код аутентификатора</value>
+  </data>
+  <data name="TurnOnAuthenticator" xml:space="preserve">
+    <value>Включить аутентификатор</value>
+  </data>
+  <data name="TurnOffAuthenticator" xml:space="preserve">
+    <value>Выключить аутентификатор</value>
   </data>
   <data name="ChatModelSaved" xml:space="preserve">
     <value>Модель чата сохранена.</value>

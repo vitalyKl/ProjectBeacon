@@ -14,6 +14,8 @@ public class User : Entity
     public int FailedLoginAttempts { get; private set; }
     public DateTime? LockedUntil { get; private set; }
     public Guid? ChatModelBackendId { get; private set; }
+    public string TotpSecretCipher { get; private set; } = string.Empty;
+    public bool TotpEnabled { get; private set; }
 
     public ICollection<UserSession> Sessions { get; private set; } = [];
 
@@ -53,4 +55,18 @@ public class User : Entity
     public bool IsLockedOut => LockedUntil.HasValue && LockedUntil.Value > DateTime.UtcNow;
 
     public void SetChatModel(Guid? backendId) => ChatModelBackendId = backendId;
+
+    public void BeginTotp(string cipher)
+    {
+        TotpSecretCipher = cipher;
+        TotpEnabled = false;
+    }
+
+    public void ConfirmTotp() => TotpEnabled = true;
+
+    public void ClearTotp()
+    {
+        TotpSecretCipher = string.Empty;
+        TotpEnabled = false;
+    }
 }

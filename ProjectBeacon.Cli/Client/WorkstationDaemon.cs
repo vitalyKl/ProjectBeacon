@@ -207,6 +207,8 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                 await WithLlamaAsync(() => _llama.UnloadAsync(ct), ct);
                 return (true, JsonSerializer.Serialize(_llama.StatusWire()), null);
             }
+            if (kind == WorkstationCommandKind.ConfigureOpenCode)
+                return await ConfigureOpenCodeAsync(ct);
             var root = ReadRoot(payload);
             var sandboxed = kind switch
             {
@@ -236,6 +238,18 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         {
             return (false, null, ex.Message);
         }
+    }
+
+    private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
+    {
+        var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
+        if (!response.IsSuccessStatusCode)
+            return (false, null, $"opencode connections {(int)response.StatusCode}");
+        var body = await response.Content.ReadAsStringAsync(ct);
+        var applied = WorkstationActions.ApplyOpenCodeConnections(body);
+        _openCode.SetEnvironment(applied.Environment);
+        await _openCode.RestartAsync(_loadSettings().ProjectsRoot, ct);
+        return (true, JsonSerializer.Serialize(new { config = applied.ConfigPath, restarted = true, providers = applied.Environment.Count }), null);
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> ChatEnsureAsync(string payload, CancellationToken ct)

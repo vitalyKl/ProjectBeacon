@@ -8,6 +8,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private Process? _process;
+    private Dictionary<string, string> _env = new(StringComparer.Ordinal);
     private string? _cwd;
     private int _port = 4096;
     private bool _runningFake;
@@ -28,6 +29,15 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         version = Status.Version,
         error = Status.Error
     };
+
+    public void SetEnvironment(IReadOnlyDictionary<string, string> env) =>
+        _env = new Dictionary<string, string>(env, StringComparer.Ordinal);
+
+    public async Task RestartAsync(string? cwd, CancellationToken ct)
+    {
+        KillProcess();
+        await TickAsync(cwd, ct);
+    }
 
     public async Task TickAsync(string? cwd, CancellationToken ct)
     {
@@ -138,6 +148,8 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         psi.ArgumentList.Add("127.0.0.1");
         psi.ArgumentList.Add("--port");
         psi.ArgumentList.Add(_port.ToString());
+        foreach (var pair in _env)
+            psi.Environment[pair.Key] = pair.Value;
         var process = new Process { StartInfo = psi };
         try
         {

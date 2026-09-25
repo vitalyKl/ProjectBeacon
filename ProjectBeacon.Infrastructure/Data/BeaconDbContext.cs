@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
+using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -9,6 +10,7 @@ using Domain.Enums;
 public class BeaconDbContext : DbContext
 {
     public DbSet<User> Users => Set<User>();
+    public DbSet<OpenCodeConnection> OpenCodeConnections => Set<OpenCodeConnection>();
     public DbSet<UserSession> Sessions => Set<UserSession>();
     public DbSet<Org> Orgs => Set<Org>();
     public DbSet<OrgMember> OrgMembers => Set<OrgMember>();
@@ -69,6 +71,7 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.Login).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
             entity.Property(e => e.PasswordHash).IsRequired();
+            entity.Property(e => e.TotpSecretCipher).HasMaxLength(500);
             entity.HasIndex(e => e.Login).IsUnique();
             entity.HasIndex(e => e.Email).IsUnique();
 
@@ -431,6 +434,16 @@ public class BeaconDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.TaskId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OpenCodeConnection>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProviderId).IsRequired().HasMaxLength(80);
+            entity.Property(e => e.ModelId).IsRequired().HasMaxLength(120);
+            entity.Property(e => e.BaseUrl).HasMaxLength(300);
+            entity.Property(e => e.ApiKeyCipher).HasMaxLength(2000);
+            entity.HasIndex(e => new { e.UserId, e.ProviderId }).IsUnique();
         });
 
         modelBuilder.Entity<LocalModelBackend>(entity =>

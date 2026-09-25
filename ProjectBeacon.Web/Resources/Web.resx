@@ -176,7 +176,55 @@
     <value>OpenCode model</value>
   </data>
   <data name="OpenCodeModelHint" xml:space="preserve">
-    <value>Provider and model OpenCode already knows, like xai/grok-3. Sign in on the machine with opencode auth login. Beacon does not store that login.</value>
+    <value>Provider and model OpenCode already knows, like xai/grok-3. A saved connection can supply the key; otherwise sign in on the machine with opencode auth login.</value>
+  </data>
+  <data name="OpenCodeConnections" xml:space="preserve">
+    <value>OpenCode connections</value>
+  </data>
+  <data name="OpenCodeConnectionsLead" xml:space="preserve">
+    <value>These are OpenCode providers, not a Beacon provider. Saving queues a command: the client writes ~/.config/opencode/opencode.json and restarts opencode serve. The key is stored encrypted and is passed to the process as an environment variable.</value>
+  </data>
+  <data name="OpenCodeProvider" xml:space="preserve">
+    <value>Provider</value>
+  </data>
+  <data name="OpenCodeBaseUrl" xml:space="preserve">
+    <value>Base URL</value>
+  </data>
+  <data name="OpenCodeApiKey" xml:space="preserve">
+    <value>API key</value>
+  </data>
+  <data name="OpenCodeApiKeyHint" xml:space="preserve">
+    <value>Leave blank to keep the saved key. Built-in providers such as xai do not need a base URL.</value>
+  </data>
+  <data name="OpenCodeConnectionSaved" xml:space="preserve">
+    <value>Connection saved. The online client will apply it.</value>
+  </data>
+  <data name="NoOpenCodeConnections" xml:space="preserve">
+    <value>No connections yet.</value>
+  </data>
+  <data name="DangerZone" xml:space="preserve">
+    <value>Danger zone</value>
+  </data>
+  <data name="DangerZoneLead" xml:space="preserve">
+    <value>A new agent is a token for the machine where beacon client runs. Turn on an authenticator before adding one.</value>
+  </data>
+  <data name="Authenticator" xml:space="preserve">
+    <value>Authenticator</value>
+  </data>
+  <data name="AuthenticatorOn" xml:space="preserve">
+    <value>Authenticator is on. Adding an agent asks for a code.</value>
+  </data>
+  <data name="AuthenticatorOff" xml:space="preserve">
+    <value>Authenticator is off. Add the key to an app such as Aegis or Authy, then confirm a code.</value>
+  </data>
+  <data name="AuthenticatorCode" xml:space="preserve">
+    <value>Authenticator code</value>
+  </data>
+  <data name="TurnOnAuthenticator" xml:space="preserve">
+    <value>Turn on authenticator</value>
+  </data>
+  <data name="TurnOffAuthenticator" xml:space="preserve">
+    <value>Turn off authenticator</value>
   </data>
   <data name="ChatModelSaved" xml:space="preserve">
     <value>Chat model saved.</value>

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using System.Security.Claims;
+using Application.Agents;
 using Application.Devices;
 using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +23,7 @@ public static class DeviceEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/devices/me/opencode-connections", GetOpenCodeConnections).RequireAuthorization().DisableAntiforgery();
         return app;
     }
 
@@ -143,6 +145,15 @@ public static class DeviceEndpoints
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, userId)), ct);
         return result.Success ? Results.NoContent() : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> GetOpenCodeConnections(
+        DeviceOpenCodeConnectionsHandler handler, ClaimsPrincipal user, CancellationToken ct)
+    {
+        if (!TryDeviceId(user, out var deviceId))
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new DeviceOpenCodeConnectionsCommand(deviceId), ct);
+        return result.Success ? Results.Ok(result.Value) : Results.Unauthorized();
     }
 
     private static async Task<IResult> GetLlamaSwapConfig(

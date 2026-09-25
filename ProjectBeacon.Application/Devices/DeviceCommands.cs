@@ -41,7 +41,7 @@ public record ProjectRuntimeDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt);
 
-public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId);
+public record CreateDeviceRequest(string Name, string Fingerprint, Guid UserId, string? TotpCode = null);
 public record CreateDeviceCommand(CreateDeviceRequest Request) : ICommand<Result<DaemonDeviceDto>>;
 
 public record ListDevicesRequest(Guid UserId);

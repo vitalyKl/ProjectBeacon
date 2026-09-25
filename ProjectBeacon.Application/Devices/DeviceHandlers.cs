@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Devices;
 
+using Application.Auth;
 using Application.Common;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
@@ -30,6 +31,9 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
         var userExists = await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == request.UserId, ct);
         if (!userExists)
             return Result.Failure<DaemonDeviceDto>("User not found.");
+        var gate = await TotpGate.RequireAsync(db, request.UserId, request.TotpCode, ct);
+        if (!gate.Success)
+            return Result.Failure<DaemonDeviceDto>(gate.Error ?? "Authenticator code is required.");
 
         var token = DeviceToken.Generate();
         var hash = DeviceToken.Hash(token);

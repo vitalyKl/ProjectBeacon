@@ -13,5 +13,6 @@ public enum WorkstationCommandKind
     SaveWorkstation,
     ChatEnsureSession,
     ChatPrompt,
-    ChatAbort
+    ChatAbort,
+    ConfigureOpenCode
 }

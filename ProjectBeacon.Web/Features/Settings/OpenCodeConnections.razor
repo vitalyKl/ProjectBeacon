@@ -1,0 +1,98 @@
+@using ProjectBeacon.Application.Agents
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject ListOpenCodeConnectionsHandler ListConnections
+@inject SaveOpenCodeConnectionHandler SaveConnection
+@inject DeleteOpenCodeConnectionHandler DeleteConnection
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h6" Class="mb-3">@L["OpenCodeConnections"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@L["OpenCodeConnectionsLead"]</MudText>
+    <div class="beacon-form">
+        <MudTextField @bind-Value="_provider" Label="@L["OpenCodeProvider"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudTextField @bind-Value="_model" Label="@L["OpenCodeModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudTextField @bind-Value="_baseUrl" Label="@L["OpenCodeBaseUrl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudTextField @bind-Value="_apiKey" Label="@L["OpenCodeApiKey"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeApiKeyHint"]" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save" Disabled="_busy || UserId == Guid.Empty">@L["Save"]</MudButton>
+    </div>
+    @if (_rows.Count == 0)
+    {
+        <MudText Typo="Typo.caption" Class="mt-3">@L["NoOpenCodeConnections"]</MudText>
+    }
+    else
+    {
+        <MudTable Items="_rows" Dense="true" Hover="true" Class="mt-3">
+            <HeaderContent>
+                <MudTh>@L["OpenCodeProvider"]</MudTh>
+                <MudTh>@L["OpenCodeModel"]</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.ProviderId</MudTd>
+                <MudTd>@context.ModelId</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Remove(context)">@L["Delete"]</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public Guid UserId { get; set; }
+
+    private List<OpenCodeConnectionDto> _rows = [];
+    private string _provider = string.Empty;
+    private string _model = string.Empty;
+    private string _baseUrl = string.Empty;
+    private string _apiKey = string.Empty;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserId == Guid.Empty)
+            return;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        var listed = await ListConnections.HandleAsync(new ListOpenCodeConnectionsCommand(UserId));
+        _rows = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private async Task Save()
+    {
+        if (_busy || UserId == Guid.Empty)
+            return;
+        _busy = true;
+        try
+        {
+            var saved = await SaveConnection.HandleAsync(new SaveOpenCodeConnectionCommand(
+                new SaveOpenCodeConnectionRequest(UserId, _provider, _model, _baseUrl, _apiKey)));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _apiKey = string.Empty;
+            Snackbar.Add(L["OpenCodeConnectionSaved"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Remove(OpenCodeConnectionDto row)
+    {
+        var deleted = await DeleteConnection.HandleAsync(new DeleteOpenCodeConnectionCommand(new DeleteOpenCodeConnectionRequest(UserId, row.Id)));
+        if (!deleted.Success)
+        {
+            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        await Reload();
+    }
+}
