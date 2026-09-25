@@ -4,12 +4,16 @@
 @using System.Security.Claims
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Auth
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject ChangePasswordHandler ChangePassword
+@inject GetModelRegistryHandler GetRegistry
+@inject GetChatModelHandler GetChatModel
+@inject SetChatModelHandler SetChatModel
 @inject ListDevicesHandler ListDevices
 @inject CreateDeviceHandler CreateDevice
 @inject RevokeDeviceHandler RevokeDevice
@@ -29,6 +33,15 @@
         <MudTextField @bind-Value="_currentPassword" Label="@L["CurrentPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" />
         <MudTextField @bind-Value="_newPassword" Label="@L["NewPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SavePassword" Disabled="_busy">@L["ChangePassword"]</MudButton>
+        <MudSelect T="Guid?" @bind-Value="_chatModelId" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-4" Clearable="true">
+            <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+            @foreach (var backend in _chatModels)
+            {
+                <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ChatModelHint"]</MudText>
+        <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveChatModel" Disabled="_busy">@L["Save"]</MudButton>
     </div>
 </MudPaper>
 
@@ -125,6 +138,8 @@
     private Guid _userId;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
+    private List<LocalModelBackendDto> _chatModels = [];
+    private Guid? _chatModelId;
     private Guid? _wsDeviceId;
     private string _modelsRoot = string.Empty;
     private string _historyDir = string.Empty;
@@ -143,6 +158,38 @@
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
         await ReloadDevices();
+        await ReloadChatModel();
+    }
+
+    private async Task ReloadChatModel()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
+        _chatModels = registry.Success ? registry.Value!.Backends.ToList() : [];
+        var current = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
+        _chatModelId = current.Success ? current.Value : null;
+    }
+
+    private async Task SaveChatModel()
+    {
+        if (_userId == Guid.Empty || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            var saved = await SetChatModel.HandleAsync(new SetChatModelCommand(new SetChatModelRequest(_userId, _chatModelId)));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["ChatModelSaved"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task ReloadDevices()

@@ -5,6 +5,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Auth
 @using ProjectBeacon.Application.Chat
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
@@ -18,6 +19,7 @@
 @inject SendChatPromptHandler SendPrompt
 @inject AbortChatHandler AbortChat
 @inject GetModelRegistryHandler GetRegistry
+@inject GetChatModelHandler GetChatModel
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Chat"]</PageTitle>
@@ -125,7 +127,16 @@ else
             return;
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
+        {
             _models = registry.Value!.Backends.Select(b => b.Name).ToList();
+            var preferred = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
+            if (preferred.Success && preferred.Value is Guid backendId)
+            {
+                var name = registry.Value.Backends.FirstOrDefault(b => b.Id == backendId)?.Name;
+                if (!string.IsNullOrWhiteSpace(name))
+                    _model = $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(name)}";
+            }
+        }
         await ReloadSessions();
         if (_sessions.Count > 0)
             await Select(_sessions[0]);

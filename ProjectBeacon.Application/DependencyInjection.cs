@@ -150,6 +150,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetRoleBindingHandler>();
         services.AddTransient<RemoveRoleBindingHandler>();
         services.AddTransient<GetModelRegistryHandler>();
+        services.AddTransient<GetChatModelHandler>();
+        services.AddTransient<SetChatModelHandler>();
         services.AddTransient<ListTaskKindsHandler>();
         services.AddTransient<SaveTaskKindHandler>();
         services.AddTransient<DeleteTaskKindHandler>();

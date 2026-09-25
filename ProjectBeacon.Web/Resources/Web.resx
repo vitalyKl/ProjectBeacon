@@ -166,6 +166,15 @@
   <data name="ModelNoteHint" xml:space="preserve">
     <value>For you. The launch command is unchanged.</value>
   </data>
+  <data name="ChatModel" xml:space="preserve">
+    <value>Chat model</value>
+  </data>
+  <data name="ChatModelHint" xml:space="preserve">
+    <value>Used by the app chat when a message does not name another model. OpenCode still receives it as beacon-local/name.</value>
+  </data>
+  <data name="ChatModelSaved" xml:space="preserve">
+    <value>Chat model saved.</value>
+  </data>
   <data name="TaskKinds" xml:space="preserve">
     <value>Task kinds</value>
   </data>

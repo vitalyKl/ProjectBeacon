@@ -13,6 +13,7 @@ public class User : Entity
     public DateTime? LastLoginAt { get; private set; }
     public int FailedLoginAttempts { get; private set; }
     public DateTime? LockedUntil { get; private set; }
+    public Guid? ChatModelBackendId { get; private set; }
 
     public ICollection<UserSession> Sessions { get; private set; } = [];
 
@@ -50,4 +51,6 @@ public class User : Entity
     }
 
     public bool IsLockedOut => LockedUntil.HasValue && LockedUntil.Value > DateTime.UtcNow;
+
+    public void SetChatModel(Guid? backendId) => ChatModelBackendId = backendId;
 }

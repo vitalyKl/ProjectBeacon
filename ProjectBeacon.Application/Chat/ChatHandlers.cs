@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Chat;
 
+using Application.Auth;
 using Application.Common;
 using Application.Devices;
 using Domain.Entities.Projects;
@@ -191,7 +192,7 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
             chatSessionId = session.Id,
             externalSessionId = session.ExternalSessionId,
             text,
-            model = command.Request.Model
+            model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct)
         });
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatPrompt, payload, session.ProjectId)), ct);

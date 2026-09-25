@@ -144,6 +144,15 @@
   <data name="ModelNoteHint" xml:space="preserve">
     <value>Для себя. Команда запуска не меняется.</value>
   </data>
+  <data name="ChatModel" xml:space="preserve">
+    <value>Модель чата</value>
+  </data>
+  <data name="ChatModelHint" xml:space="preserve">
+    <value>Эту модель берёт чат приложения, если в сообщении не указана другая. OpenCode получает её как beacon-local/имя.</value>
+  </data>
+  <data name="ChatModelSaved" xml:space="preserve">
+    <value>Модель чата сохранена.</value>
+  </data>
   <data name="TaskKinds" xml:space="preserve">
     <value>Виды задач</value>
   </data>
