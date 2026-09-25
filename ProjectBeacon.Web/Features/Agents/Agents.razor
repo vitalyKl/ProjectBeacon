@@ -61,7 +61,13 @@ else
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="@L["ModelName"]">@context.Name</MudTd>
+                    <MudTd DataLabel="@L["ModelName"]">
+                        @context.Name
+                        @if (!string.IsNullOrWhiteSpace(context.Note))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Note</MudText>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="@L["Type"]">@L["Backend" + context.BackendType].Value</MudTd>
                     <MudTd DataLabel="@L["LaunchCommand"]" Class="beacon-ellipsis" Style="max-width: 16rem">@context.LaunchCommand</MudTd>
                     <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
@@ -76,69 +82,10 @@ else
         }
     </MudPaper>
 
+    <TaskKindEditor UserId="_userId" Backends="_backends" />
+
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudText Typo="Typo.subtitle1" Class="mb-1">@L["AgentTemplates"]</MudText>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["AgentTemplatesLead"]</MudText>
-        <div class="beacon-form">
-            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
-                <MudSelect T="Guid?" Value="_templateId" ValueChanged="SelectTemplate" Label="@L["AgentTemplates"]" Variant="Variant.Outlined" Margin="Margin.Dense">
-                    <MudSelectItem Value="@((Guid?)null)">@L["AgentTemplateNew"]</MudSelectItem>
-                    @foreach (var template in _templates)
-                    {
-                        <MudSelectItem Value="@((Guid?)template.Id)">@template.Name</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudTextField @bind-Value="_templateName" Label="@L["AgentTemplateName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCurrentTemplate" Disabled="_busy">@L["Save"]</MudButton>
-                @if (_templateId is not null)
-                {
-                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteCurrentTemplate" Disabled="_busy">@L["Delete"]</MudButton>
-                }
-            </MudStack>
-        </div>
-        <MudGrid>
-            <MudItem xs="12" sm="4">
-                <MudSelect T="Guid?" Value="_planner" ValueChanged="OnPlannerBindingChanged" Label="@L["RoleBindingPlanner"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
-                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                    @foreach (var backend in _backends)
-                    {
-                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" sm="4">
-                <MudSelect T="Guid?" Value="_actor" ValueChanged="OnActorBindingChanged" Label="@L["RoleBindingActor"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
-                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                    @foreach (var backend in _backends)
-                    {
-                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" sm="4">
-                <MudSelect T="Guid?" Value="_review" ValueChanged="OnReviewBindingChanged" Label="@L["Review"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy">
-                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                    @foreach (var backend in _backends)
-                    {
-                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-        </MudGrid>
-        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3">
-            <MudSelectItem Value="AgentRunMode.Solo">@L["AgentModeSolo"]</MudSelectItem>
-            <MudSelectItem Value="AgentRunMode.Pipeline">@L["AgentModePipeline"]</MudSelectItem>
-        </MudSelect>
-        @if (_mode == AgentRunMode.Solo)
-        {
-            <MudSelect T="Guid?" @bind-Value="_solo" Label="@L["SoloModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
-                <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
-                @foreach (var backend in _backends)
-                {
-                    <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
-                }
-            </MudSelect>
-        }
+        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ApplyOnDevice"]</MudText>
         <MudSelect T="Guid?" @bind-Value="_runtimeDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
             @foreach (var runtime in _runtimes)
             {

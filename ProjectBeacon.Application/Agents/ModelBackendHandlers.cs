@@ -31,7 +31,7 @@ internal static class ModelBackendMappers
 {
     public static LocalModelBackendDto ToDto(LocalModelBackend backend) =>
         new(backend.Id, backend.Name, backend.BackendType, backend.LaunchCommand,
-            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.UserId, backend.UpdatedAt, backend.Concurrent);
+            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.UserId, backend.UpdatedAt, backend.Concurrent, backend.Note);
 
     public static AgentTemplateDto ToDto(AgentTemplate template) =>
         new(template.Id, template.Name, template.Mode, template.SoloBackendId,
@@ -55,6 +55,8 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             return Result.Failure<LocalModelBackendDto>("Name is required (max 200 characters).");
         if (string.IsNullOrWhiteSpace(request.LaunchCommand) || request.LaunchCommand.Length > 1000)
             return Result.Failure<LocalModelBackendDto>("LaunchCommand is required (max 1000 characters).");
+        if ((request.Note?.Length ?? 0) > 2000)
+            return Result.Failure<LocalModelBackendDto>("Note is too long (max 2000 characters).");
         if (request.ContextSize < 0 || request.Ttl < 0)
             return Result.Failure<LocalModelBackendDto>("ContextSize and Ttl must be non-negative.");
 
@@ -67,13 +69,13 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             var existing = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == id && b.UserId == request.UserId, ct);
             if (existing is null)
                 return Result.Failure<LocalModelBackendDto>("Model backend not found.");
-            existing.Update(name, request.BackendType, request.LaunchCommand, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent);
+            existing.Update(name, request.BackendType, request.LaunchCommand, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note);
             await db.SaveChangesAsync(ct);
             return Result.Ok(ModelBackendMappers.ToDto(existing));
         }
 
         var backend = LocalModelBackend.Create(name, request.BackendType, request.LaunchCommand,
-            request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent);
+            request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent, request.Note);
         db.LocalModelBackends.Add(backend);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ModelBackendMappers.ToDto(backend));

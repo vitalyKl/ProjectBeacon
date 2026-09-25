@@ -30,6 +30,9 @@ public class BeaconDbContext : DbContext
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();
     public DbSet<LocalModelBackend> LocalModelBackends => Set<LocalModelBackend>();
     public DbSet<AgentTemplate> AgentTemplates => Set<AgentTemplate>();
+    public DbSet<TaskKind> TaskKinds => Set<TaskKind>();
+    public DbSet<TaskKindPhase> TaskKindPhases => Set<TaskKindPhase>();
+    public DbSet<TaskPhase> TaskPhases => Set<TaskPhase>();
     public DbSet<RoleBinding> RoleBindings => Set<RoleBinding>();
     public DbSet<Subtask> Subtasks => Set<Subtask>();
     public DbSet<PipelineSession> PipelineSessions => Set<PipelineSession>();
@@ -441,8 +444,41 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.Concurrent).IsRequired();
             entity.Ignore(e => e.ExtraFlags);
             entity.Property(e => e.ExtraFlagsJson).IsRequired();
+            entity.Property(e => e.Note).HasMaxLength(2000);
             entity.Property(e => e.UpdatedAt);
             entity.HasIndex(e => e.UserId);
+        });
+
+        modelBuilder.Entity<TaskKind>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.IsBuiltIn).IsRequired();
+            entity.HasIndex(e => e.UserId);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.DecisionBackendId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.WorkerBackendId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TaskKindPhase>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).HasMaxLength(40);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Instruction).HasMaxLength(2000);
+            entity.HasIndex(e => new { e.TaskKindId, e.SortOrder });
+            entity.HasOne<TaskKind>().WithMany().HasForeignKey(e => e.TaskKindId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.ModelBackendId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TaskPhase>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Key).HasMaxLength(40);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Instruction).HasMaxLength(2000);
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entity.HasIndex(e => new { e.TaskId, e.SortOrder });
+            entity.HasOne<LocalModelBackend>().WithMany().HasForeignKey(e => e.ModelBackendId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AgentTemplate>(entity =>

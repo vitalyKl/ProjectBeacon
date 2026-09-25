@@ -138,6 +138,75 @@
   <data name="DeleteTemplateConfirm" xml:space="preserve">
     <value>Удалить этот шаблон?</value>
   </data>
+  <data name="ModelNote" xml:space="preserve">
+    <value>Пометка</value>
+  </data>
+  <data name="ModelNoteHint" xml:space="preserve">
+    <value>Для себя. Команда запуска не меняется.</value>
+  </data>
+  <data name="TaskKinds" xml:space="preserve">
+    <value>Виды задач</value>
+  </data>
+  <data name="TaskKindsLead" xml:space="preserve">
+    <value>Вид задаёт, как делать работу. Модель решений планирует и читает ревью. Модель работников берёт короткие срезы, например один скриншот.</value>
+  </data>
+  <data name="TaskKindNew" xml:space="preserve">
+    <value>Новый вид</value>
+  </data>
+  <data name="TaskKindName" xml:space="preserve">
+    <value>Название</value>
+  </data>
+  <data name="TaskKindHint" xml:space="preserve">
+    <value>Вид копирует свои фазы на эту задачу.</value>
+  </data>
+  <data name="BuiltInKind" xml:space="preserve">
+    <value>Стандарт</value>
+  </data>
+  <data name="DecisionModel" xml:space="preserve">
+    <value>Модель решений</value>
+  </data>
+  <data name="DecisionModelHint" xml:space="preserve">
+    <value>Планирует работу и читает ревью срезов.</value>
+  </data>
+  <data name="WorkerModel" xml:space="preserve">
+    <value>Модель работников</value>
+  </data>
+  <data name="WorkerModelHint" xml:space="preserve">
+    <value>Для фазы, которую режем на подзадачи. Пусто — берётся модель решений.</value>
+  </data>
+  <data name="PhaseTitle" xml:space="preserve">
+    <value>Фаза</value>
+  </data>
+  <data name="PhaseInstruction" xml:space="preserve">
+    <value>Инструкция</value>
+  </data>
+  <data name="PhaseModel" xml:space="preserve">
+    <value>Модель</value>
+  </data>
+  <data name="FanOut" xml:space="preserve">
+    <value>Резать эту фазу на подзадачи</value>
+  </data>
+  <data name="AddPhase" xml:space="preserve">
+    <value>Добавить фазу</value>
+  </data>
+  <data name="ResetKind" xml:space="preserve">
+    <value>Сбросить стандарт</value>
+  </data>
+  <data name="KindSaved" xml:space="preserve">
+    <value>Вид задачи сохранён.</value>
+  </data>
+  <data name="DeleteKindConfirm" xml:space="preserve">
+    <value>Удалить этот вид задачи?</value>
+  </data>
+  <data name="Phase_understand" xml:space="preserve">
+    <value>Разобрать задачу</value>
+  </data>
+  <data name="Phase_do" xml:space="preserve">
+    <value>Сделать</value>
+  </data>
+  <data name="Phase_check" xml:space="preserve">
+    <value>Проверить</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>Отправить</value>
   </data>

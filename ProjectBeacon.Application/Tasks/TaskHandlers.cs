@@ -48,6 +48,8 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
         task.SetMilestone(command.Request.MilestoneId);
 
         db.Tasks.Add(task);
+        if (command.Request.ActorUserId is { } actorId && actorId != Guid.Empty)
+            await TaskKindCopy.CopyOntoTaskAsync(db, task, actorId, command.Request.KindId, ct);
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(task));

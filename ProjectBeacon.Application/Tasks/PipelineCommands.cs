@@ -13,7 +13,8 @@ public record SubtaskDto(
     IReadOnlyList<string> AllowedMcpTools,
     IReadOnlyList<string> AllowedPaths,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    Guid? TaskPhaseId = null);
 
 public record PipelineSessionDto(
     Guid Id,

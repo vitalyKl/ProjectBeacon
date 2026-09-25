@@ -10,6 +10,7 @@ public class Subtask : Entity, IProjectScoped
 
     public Guid TaskId { get; private set; }
     public Guid ProjectId { get; private set; }
+    public Guid? TaskPhaseId { get; private set; }
     public string Instructions { get; private set; } = string.Empty;
     public SubtaskStatus Status { get; private set; }
     public string? DiffRef { get; private set; }
@@ -77,6 +78,8 @@ public class Subtask : Entity, IProjectScoped
         subtask.CreatedAt = DateTime.UtcNow;
         return subtask;
     }
+
+    public void AssignPhase(Guid phaseId) => TaskPhaseId = phaseId;
 
     public void Start()
     {

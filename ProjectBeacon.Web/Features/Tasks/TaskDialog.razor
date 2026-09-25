@@ -4,11 +4,25 @@
 @using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject CreateTaskHandler CreateTask
 @inject UpdateTaskHandler UpdateTask
+@inject ListTaskKindsHandler ListKinds
+@inject AuthenticationStateProvider Auth
 @inject ISnackbar Snackbar
 
 <MudTextField @bind-Value="_title" Label="@L["Title"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+@if (Task is null)
+{
+    <MudSelect T="Guid?" @bind-Value="_kindId" Label="@L["TaskKinds"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+        @foreach (var kind in _kinds)
+        {
+            <MudSelectItem Value="@((Guid?)kind.Id)">@(kind.IsBuiltIn ? L["BuiltInKind"].Value : kind.Name)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["TaskKindHint"]</MudText>
+}
 @if (Task is not null)
 {
 <MudTextField @bind-Value="_description" Label="@L["Description"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
@@ -57,12 +71,26 @@
     private TaskType _type = TaskType.Task;
     private Guid? _labelId;
     private Guid? _milestoneId;
+    private Guid? _kindId;
+    private Guid _userId;
+    private List<TaskKindDto> _kinds = [];
     private bool _saving;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (Task is null)
+        {
+            var user = (await Auth.GetAuthenticationStateAsync()).User;
+            if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+                _userId = id;
+            if (_userId != Guid.Empty)
+            {
+                var listed = await ListKinds.HandleAsync(new ListTaskKindsCommand(_userId));
+                _kinds = listed.Success ? listed.Value!.ToList() : [];
+                _kindId = _kinds.FirstOrDefault(k => k.IsBuiltIn)?.Id ?? _kinds.FirstOrDefault()?.Id;
+            }
             return;
+        }
         _title = Task.Title;
         _description = Task.Description;
         _priority = Task.Priority;
@@ -82,7 +110,7 @@
         {
             var result = Task is null
                 ? await CreateTask.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
-                    _title.Trim(), _description, ProjectId, _priority, _type, _labelId, _milestoneId)))
+                    _title.Trim(), _description, ProjectId, _priority, _type, _labelId, _milestoneId, null, _kindId, _userId)))
                 : await UpdateTask.HandleAsync(new UpdateTaskCommand(new UpdateTaskRequest(
                     Task.Id, _title.Trim(), _description, _priority, _type, _labelId, _milestoneId)));
 

@@ -327,6 +327,47 @@
     padding: var(--space-4) var(--space-5);
 }
 
+.beacon-phase-strip {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+}
+
+.beacon-phase-tick {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 7rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.beacon-phase-tick.is-open {
+    color: var(--mud-palette-primary);
+}
+
+.beacon-phase-mark {
+    display: block;
+    width: 100%;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-1);
+}
+
+.beacon-phase-mark.active,
+.beacon-phase-mark.done {
+    background: var(--mud-palette-primary);
+}
+
+.beacon-phase-mark.failed {
+    background: var(--mud-palette-error);
+}
+
 .beacon-track {
     height: 6px;
     border-radius: var(--radius-pill);

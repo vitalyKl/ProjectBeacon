@@ -160,6 +160,75 @@
   <data name="DeleteTemplateConfirm" xml:space="preserve">
     <value>Delete this template?</value>
   </data>
+  <data name="ModelNote" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="ModelNoteHint" xml:space="preserve">
+    <value>For you. The launch command is unchanged.</value>
+  </data>
+  <data name="TaskKinds" xml:space="preserve">
+    <value>Task kinds</value>
+  </data>
+  <data name="TaskKindsLead" xml:space="preserve">
+    <value>A kind is how the work is done. The decision model plans and reviews. The worker model handles short slices, such as one screenshot.</value>
+  </data>
+  <data name="TaskKindNew" xml:space="preserve">
+    <value>New kind</value>
+  </data>
+  <data name="TaskKindName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="TaskKindHint" xml:space="preserve">
+    <value>The kind copies its phases onto this task.</value>
+  </data>
+  <data name="BuiltInKind" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="DecisionModel" xml:space="preserve">
+    <value>Decision model</value>
+  </data>
+  <data name="DecisionModelHint" xml:space="preserve">
+    <value>Plans the work and reads the slice reviews.</value>
+  </data>
+  <data name="WorkerModel" xml:space="preserve">
+    <value>Worker model</value>
+  </data>
+  <data name="WorkerModelHint" xml:space="preserve">
+    <value>Used when a phase is split into subtasks. Empty means the decision model.</value>
+  </data>
+  <data name="PhaseTitle" xml:space="preserve">
+    <value>Phase</value>
+  </data>
+  <data name="PhaseInstruction" xml:space="preserve">
+    <value>Instruction</value>
+  </data>
+  <data name="PhaseModel" xml:space="preserve">
+    <value>Model</value>
+  </data>
+  <data name="FanOut" xml:space="preserve">
+    <value>Split this phase into subtasks</value>
+  </data>
+  <data name="AddPhase" xml:space="preserve">
+    <value>Add phase</value>
+  </data>
+  <data name="ResetKind" xml:space="preserve">
+    <value>Reset default</value>
+  </data>
+  <data name="KindSaved" xml:space="preserve">
+    <value>Task kind saved.</value>
+  </data>
+  <data name="DeleteKindConfirm" xml:space="preserve">
+    <value>Delete this task kind?</value>
+  </data>
+  <data name="Phase_understand" xml:space="preserve">
+    <value>Understand the task</value>
+  </data>
+  <data name="Phase_do" xml:space="preserve">
+    <value>Do the work</value>
+  </data>
+  <data name="Phase_check" xml:space="preserve">
+    <value>Check the result</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>Submit</value>
   </data>

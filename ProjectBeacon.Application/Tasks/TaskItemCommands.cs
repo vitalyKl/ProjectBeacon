@@ -11,7 +11,9 @@ public record CreateTaskRequest(
     TaskType Type,
     Guid? LabelId,
     Guid? MilestoneId,
-    string? Path = null);
+    string? Path = null,
+    Guid? KindId = null,
+    Guid? ActorUserId = null);
 
 public record CreateTaskCommand(CreateTaskRequest Request) : ICommand<Result<TaskItemDto>>;
 

@@ -38,6 +38,7 @@
 <MudSwitch @bind-Value="_concurrent" Label="@L["LoadWithOthers"]" Color="Color.Primary" Class="mt-3" />
 <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LoadWithOthersHint"]</MudText>
 <MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+<MudTextField @bind-Value="_note" Label="@L["ModelNote"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["ModelNoteHint"]" />
 <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
     <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">@L["Save"]</MudButton>
@@ -56,6 +57,7 @@
     private int _ttl = 300;
     private bool _concurrent;
     private string _extraFlags = string.Empty;
+    private string _note = string.Empty;
     private bool _saving;
     private string? _gguf;
     private List<GgufFile> _ggufs = [];
@@ -67,6 +69,7 @@
             _name = backend.Name;
             _type = backend.BackendType;
             _launchCommand = backend.LaunchCommand;
+            _note = backend.Note;
             _contextSize = backend.ContextSize;
             _ttl = backend.Ttl;
             _concurrent = backend.Concurrent;
@@ -158,7 +161,7 @@
                 .ToList();
             var result = await SaveBackend.HandleAsync(new UpsertLocalModelBackendCommand(new UpsertLocalModelBackendRequest(
                 Backend?.Id, _name, _type, _launchCommand, _contextSize, _ttl, UserId,
-                flags.Count > 0 ? flags : null, _concurrent)));
+                flags.Count > 0 ? flags : null, _concurrent, _note)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

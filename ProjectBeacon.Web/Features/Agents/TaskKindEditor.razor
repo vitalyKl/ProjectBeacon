@@ -1,0 +1,199 @@
+@using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Tasks
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject ListTaskKindsHandler ListKinds
+@inject SaveTaskKindHandler SaveKind
+@inject DeleteTaskKindHandler DeleteKind
+@inject ResetBuiltInTaskKindHandler ResetKind
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["TaskKinds"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["TaskKindsLead"]</MudText>
+    <div class="beacon-form">
+        <MudSelect T="Guid?" Value="_kindId" ValueChanged="SelectKind" Label="@L["TaskKinds"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+            <MudSelectItem Value="@((Guid?)null)">@L["TaskKindNew"]</MudSelectItem>
+            @foreach (var kind in _kinds)
+            {
+                <MudSelectItem Value="@((Guid?)kind.Id)">@(kind.IsBuiltIn ? L["BuiltInKind"].Value : kind.Name)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="_name" Label="@L["TaskKindName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Disabled="_builtIn" />
+        <MudSelect T="Guid?" @bind-Value="_decision" Label="@L["DecisionModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+            <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+            @foreach (var backend in Backends)
+            {
+                <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["DecisionModelHint"]</MudText>
+        <MudSelect T="Guid?" @bind-Value="_worker" Label="@L["WorkerModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+            <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+            @foreach (var backend in Backends)
+            {
+                <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["WorkerModelHint"]</MudText>
+        @foreach (var phase in _phases)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="pa-3 mb-2">
+                <MudTextField @bind-Value="phase.Title" Label="@L["PhaseTitle"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="phase.Instruction" Label="@L["PhaseInstruction"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudSelect T="Guid?" @bind-Value="phase.ModelId" Label="@L["PhaseModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+                    <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
+                    @foreach (var backend in Backends)
+                    {
+                        <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudCheckBox @bind-Value="phase.FanOut" Label="@L["FanOut"]" Dense="true" Class="mt-1" />
+            </MudPaper>
+        }
+        <MudButton Variant="Variant.Text" OnClick="AddPhase">@L["AddPhase"]</MudButton>
+        <MudStack Row="true" Spacing="2" Class="mt-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy">@L["Save"]</MudButton>
+            @if (_builtIn)
+            {
+                <MudButton Variant="Variant.Text" OnClick="Reset" Disabled="_busy">@L["ResetKind"]</MudButton>
+            }
+            else if (_kindId is not null)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="Remove" Disabled="_busy">@L["Delete"]</MudButton>
+            }
+        </MudStack>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public Guid UserId { get; set; }
+    [Parameter] public IReadOnlyList<LocalModelBackendDto> Backends { get; set; } = [];
+
+    private List<TaskKindDto> _kinds = [];
+    private Guid? _kindId;
+    private string _name = string.Empty;
+    private bool _builtIn;
+    private Guid? _decision;
+    private Guid? _worker;
+    private List<PhaseEdit> _phases = [new()];
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserId == Guid.Empty)
+            return;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        var listed = await ListKinds.HandleAsync(new ListTaskKindsCommand(UserId));
+        _kinds = listed.Success ? listed.Value!.ToList() : [];
+        var selected = _kinds.FirstOrDefault(k => k.Id == _kindId) ?? _kinds.FirstOrDefault(k => k.IsBuiltIn);
+        if (selected is not null)
+            Copy(selected);
+    }
+
+    private Task SelectKind(Guid? id)
+    {
+        _kindId = id;
+        var kind = _kinds.FirstOrDefault(k => k.Id == id);
+        if (kind is null)
+        {
+            _name = string.Empty;
+            _builtIn = false;
+            _decision = _worker = null;
+            _phases = [new()];
+            return Task.CompletedTask;
+        }
+        Copy(kind);
+        return Task.CompletedTask;
+    }
+
+    private void Copy(TaskKindDto kind)
+    {
+        _kindId = kind.Id;
+        _name = kind.Name;
+        _builtIn = kind.IsBuiltIn;
+        _decision = kind.DecisionBackendId;
+        _worker = kind.WorkerBackendId;
+        _phases = kind.Phases.Select(p => new PhaseEdit
+        {
+            Key = p.Key,
+            Title = p.Title,
+            Instruction = p.Instruction,
+            FanOut = p.FanOut,
+            ModelId = p.ModelBackendId
+        }).ToList();
+        if (_phases.Count == 0)
+            _phases.Add(new PhaseEdit());
+    }
+
+    private void AddPhase() => _phases.Add(new PhaseEdit());
+
+    private async Task Save()
+    {
+        if (UserId == Guid.Empty || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            var saved = await SaveKind.HandleAsync(new SaveTaskKindCommand(new SaveTaskKindRequest(
+                _kindId, UserId, _name, _decision, _worker,
+                _phases.Select(p => new TaskKindPhaseInput(p.Key, p.Title, p.Instruction, p.FanOut, p.ModelId)).ToList())));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _kindId = saved.Value!.Id;
+            Snackbar.Add(L["KindSaved"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Remove()
+    {
+        if (_kindId is not { } id)
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(L["Confirm"].Value, L["DeleteKindConfirm"].Value, yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
+        var deleted = await DeleteKind.HandleAsync(new DeleteTaskKindCommand(new DeleteTaskKindRequest(id, UserId)));
+        if (!deleted.Success)
+        {
+            Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _kindId = null;
+        await Reload();
+    }
+
+    private async Task Reset()
+    {
+        if (UserId == Guid.Empty)
+            return;
+        var reset = await ResetKind.HandleAsync(new ResetBuiltInTaskKindCommand(UserId));
+        if (!reset.Success)
+        {
+            Snackbar.Add(reset.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _kindId = reset.Value!.Id;
+        await Reload();
+    }
+
+    private sealed class PhaseEdit
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Instruction { get; set; } = string.Empty;
+        public bool FanOut { get; set; }
+        public Guid? ModelId { get; set; }
+    }
+}

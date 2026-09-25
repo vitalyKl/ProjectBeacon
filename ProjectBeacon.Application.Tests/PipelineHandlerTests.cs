@@ -56,7 +56,7 @@ public sealed class PipelineHandlerTests : IDisposable
     {
         public List<(Guid ProjectId, PipelineRole Role)> Calls { get; } = [];
 
-        public Task<SpawnedSession> SpawnAsync(BeaconDbContext db, Guid projectId, PipelineRole role, CancellationToken ct)
+        public Task<SpawnedSession> SpawnAsync(BeaconDbContext db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             Calls.Add((projectId, role));
             return Task.FromResult(new SpawnedSession(null, null));

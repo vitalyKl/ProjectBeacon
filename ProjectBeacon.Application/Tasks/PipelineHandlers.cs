@@ -12,7 +12,7 @@ public static class PipelineMappers
 {
     public static SubtaskDto ToDto(Subtask s) =>
         new(s.Id, s.Instructions, s.Status, s.DiffRef, s.Summary, s.ReopenCount,
-            s.AllowedMcpTools, s.AllowedPaths, s.CreatedAt, s.UpdatedAt);
+            s.AllowedMcpTools, s.AllowedPaths, s.CreatedAt, s.UpdatedAt, s.TaskPhaseId);
 
     public static PipelineSessionDto ToDto(PipelineSession s) =>
         new(s.Id, s.TaskId, s.SubtaskId, s.Role, s.Status, s.ModelBackendId,
@@ -117,7 +117,7 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Planner, ct);
+        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Planner, task.Id, ct);
         var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
 
         try
@@ -164,6 +164,12 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         var subtask = Subtask.Create(
             instructions, task.Id, task.ProjectId,
             command.Request.AllowedMcpTools, command.Request.AllowedPaths);
+        var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).OrderBy(p => p.SortOrder).ToListAsync(ct);
+        var phase = phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)
+            ?? phases.FirstOrDefault(p => p.Key == "do")
+            ?? phases.FirstOrDefault();
+        if (phase is not null)
+            subtask.AssignPhase(phase.Id);
         db.Subtasks.Add(subtask);
 
         try
@@ -222,7 +228,7 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
         if (subtask.Status == SubtaskStatus.Pending)
             subtask.Start();
 
-        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Actor, ct);
+        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Actor, task.Id, ct);
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Actor,
             SessionPrompts.Actor(subtask), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
@@ -418,7 +424,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
             return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
-        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Review, ct);
+        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Review, task.Id, ct);
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Review,
             SessionPrompts.Review(task, subtasks), null, spawned.ModelBackendId, spawned.LaunchSpec);

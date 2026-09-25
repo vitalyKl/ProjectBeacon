@@ -150,6 +150,12 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetRoleBindingHandler>();
         services.AddTransient<RemoveRoleBindingHandler>();
         services.AddTransient<GetModelRegistryHandler>();
+        services.AddTransient<ListTaskKindsHandler>();
+        services.AddTransient<SaveTaskKindHandler>();
+        services.AddTransient<DeleteTaskKindHandler>();
+        services.AddTransient<ResetBuiltInTaskKindHandler>();
+        services.AddTransient<ListTaskPhasesHandler>();
+        services.AddTransient<SetTaskPhaseModelHandler>();
         services.AddTransient<SaveAgentTemplateHandler>();
         services.AddTransient<DeleteAgentTemplateHandler>();
         services.AddTransient<GetProxyStatusHandler>();
