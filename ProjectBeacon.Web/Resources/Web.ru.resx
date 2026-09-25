@@ -160,7 +160,31 @@
     <value>Подключения OpenCode</value>
   </data>
   <data name="OpenCodeConnectionsLead" xml:space="preserve">
-    <value>Это провайдеры OpenCode. Сохранение ставит команду клиенту: он дописывает ~/.config/opencode/opencode.json и перезапускает opencode serve. Ключ хранится в зашифрованном виде и передаётся процессу через переменную окружения.</value>
+    <value>Здесь выбирается облачная модель для OpenCode. Локальная модель llama.cpp добавляется отдельно, в блоке «Агенты».</value>
+  </data>
+  <data name="OpenCodeStepPick" xml:space="preserve">
+    <value>Выберите сервис или впишите сами: провайдер/модель.</value>
+  </data>
+  <data name="OpenCodeStepKey" xml:space="preserve">
+    <value>Ключ нужен, только если на этом компьютере ещё не выполнен вход.</value>
+  </data>
+  <data name="OpenCodeStepSave" xml:space="preserve">
+    <value>Нажмите «Сохранить». Запущенный beacon client обновит OpenCode и перезапустит его.</value>
+  </data>
+  <data name="OpenCodeOwnServer" xml:space="preserve">
+    <value>Свой сервер</value>
+  </data>
+  <data name="OpenCodeOnePerService" xml:space="preserve">
+    <value>У каждого сервиса одна модель. Повторное сохранение её заменяет.</value>
+  </data>
+  <data name="OpenCodeModelExample" xml:space="preserve">
+    <value>Пишите как провайдер/модель, например xai/grok-3.</value>
+  </data>
+  <data name="OpenCodeBaseUrlHint" xml:space="preserve">
+    <value>Адрес своего сервера, совместимого с OpenAI.</value>
+  </data>
+  <data name="OpenCodeKeySaved" xml:space="preserve">
+    <value>Ключ сохранён</value>
   </data>
   <data name="OpenCodeProvider" xml:space="preserve">
     <value>Провайдер</value>
@@ -172,10 +196,10 @@
     <value>Ключ API</value>
   </data>
   <data name="OpenCodeApiKeyHint" xml:space="preserve">
-    <value>Пустое поле оставляет сохранённый ключ. Встроенным провайдерам вроде xai базовый адрес не нужен.</value>
+    <value>Необязательно. Оставьте пустым, если на компьютере уже выполнен вход, или чтобы не менять сохранённый ключ.</value>
   </data>
   <data name="OpenCodeConnectionSaved" xml:space="preserve">
-    <value>Подключение сохранено. Включённый клиент его применит.</value>
+    <value>Сохранено. Если beacon client запущен, он обновит OpenCode сейчас.</value>
   </data>
   <data name="NoOpenCodeConnections" xml:space="preserve">
     <value>Подключений пока нет.</value>

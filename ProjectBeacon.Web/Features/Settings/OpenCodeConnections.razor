@@ -7,34 +7,58 @@
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["OpenCodeConnections"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@L["OpenCodeConnectionsLead"]</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">@L["OpenCodeConnectionsLead"]</MudText>
+    <ol class="mud-text-secondary ps-4 mt-2 mb-4">
+        <li>@L["OpenCodeStepPick"]</li>
+        <li>@L["OpenCodeStepKey"]</li>
+        <li>@L["OpenCodeStepSave"]</li>
+    </ol>
     <div class="beacon-form">
-        <MudTextField @bind-Value="_provider" Label="@L["OpenCodeProvider"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudTextField @bind-Value="_model" Label="@L["OpenCodeModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudTextField @bind-Value="_baseUrl" Label="@L["OpenCodeBaseUrl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mb-1">
+            <MudButton Variant="@PresetVariant("xai/grok-3")" Size="Size.Small" OnClick='() => Pick("xai/grok-3")'>Grok</MudButton>
+            <MudButton Variant="@PresetVariant("openai/gpt-4.1")" Size="Size.Small" OnClick='() => Pick("openai/gpt-4.1")'>OpenAI</MudButton>
+            <MudButton Variant="@PresetVariant("anthropic/claude-sonnet-4-5")" Size="Size.Small" OnClick='() => Pick("anthropic/claude-sonnet-4-5")'>Claude</MudButton>
+            <MudButton Variant="@(_custom ? Variant.Filled : Variant.Outlined)" Size="Size.Small" OnClick="PickCustom">@L["OpenCodeOwnServer"]</MudButton>
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["OpenCodeOnePerService"]</MudText>
+        <MudTextField @bind-Value="_model" Label="@L["OpenCodeModel"]" Placeholder="xai/grok-3" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@L["OpenCodeModelExample"]" />
+        @if (_custom)
+        {
+            <MudTextField @bind-Value="_baseUrl" Label="@L["OpenCodeBaseUrl"]" Placeholder="http://127.0.0.1:11434/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeBaseUrlHint"]" />
+        }
         <MudTextField @bind-Value="_apiKey" Label="@L["OpenCodeApiKey"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeApiKeyHint"]" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save" Disabled="_busy || UserId == Guid.Empty">@L["Save"]</MudButton>
     </div>
     @if (_rows.Count == 0)
     {
-        <MudText Typo="Typo.caption" Class="mt-3">@L["NoOpenCodeConnections"]</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoOpenCodeConnections"]</MudText>
     }
     else
     {
-        <MudTable Items="_rows" Dense="true" Hover="true" Class="mt-3">
-            <HeaderContent>
-                <MudTh>@L["OpenCodeProvider"]</MudTh>
-                <MudTh>@L["OpenCodeModel"]</MudTh>
-                <MudTh></MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.ProviderId</MudTd>
-                <MudTd>@context.ModelId</MudTd>
-                <MudTd>
-                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Remove(context)">@L["Delete"]</MudButton>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
+        <MudList T="string" Dense="true" Class="mt-3">
+            @foreach (var row in _rows)
+            {
+                <MudListItem T="string">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body2">@row.ProviderId/@row.ModelId</MudText>
+                            @if (!string.IsNullOrWhiteSpace(row.BaseUrl))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@row.BaseUrl</MudText>
+                            }
+                        </MudStack>
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                            @if (row.HasApiKey)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["OpenCodeKeySaved"]</MudText>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(row)">@L["Edit"]</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Remove(row)">@L["Delete"]</MudButton>
+                        </MudStack>
+                    </MudStack>
+                </MudListItem>
+            }
+        </MudList>
     }
 </MudPaper>
 
@@ -42,10 +66,10 @@
     [Parameter] public Guid UserId { get; set; }
 
     private List<OpenCodeConnectionDto> _rows = [];
-    private string _provider = string.Empty;
-    private string _model = string.Empty;
+    private string _model = "xai/grok-3";
     private string _baseUrl = string.Empty;
     private string _apiKey = string.Empty;
+    private bool _custom;
     private bool _busy;
 
     protected override async Task OnParametersSetAsync()
@@ -53,6 +77,46 @@
         if (UserId == Guid.Empty)
             return;
         await Reload();
+    }
+
+    private static readonly string[] Presets = ["xai/grok-3", "openai/gpt-4.1", "anthropic/claude-sonnet-4-5"];
+
+    private Variant PresetVariant(string value)
+    {
+        if (_custom)
+            return Variant.Outlined;
+        return string.Equals(ProviderOf(_model), ProviderOf(value), StringComparison.OrdinalIgnoreCase)
+            ? Variant.Filled
+            : Variant.Outlined;
+    }
+
+    private void Pick(string value)
+    {
+        _custom = false;
+        _baseUrl = string.Empty;
+        var saved = _rows.FirstOrDefault(row => string.Equals(row.ProviderId, ProviderOf(value), StringComparison.OrdinalIgnoreCase));
+        _model = saved is null ? value : $"{saved.ProviderId}/{saved.ModelId}";
+    }
+
+    private void PickCustom()
+    {
+        _custom = true;
+        if (Presets.Contains(_model, StringComparer.OrdinalIgnoreCase))
+            _model = string.Empty;
+    }
+
+    private void Edit(OpenCodeConnectionDto row)
+    {
+        _model = $"{row.ProviderId}/{row.ModelId}";
+        _baseUrl = row.BaseUrl;
+        _custom = !string.IsNullOrWhiteSpace(row.BaseUrl);
+        _apiKey = string.Empty;
+    }
+
+    private static string ProviderOf(string value)
+    {
+        var slash = value.IndexOf('/');
+        return (slash > 0 ? value[..slash] : value).Trim();
     }
 
     private async Task Reload()
@@ -65,11 +129,18 @@
     {
         if (_busy || UserId == Guid.Empty)
             return;
+        _model = _model.Trim();
+        var slash = _model.IndexOf('/');
+        if (slash <= 0 || slash == _model.Length - 1)
+        {
+            Snackbar.Add(L["OpenCodeModelExample"].Value, Severity.Warning);
+            return;
+        }
         _busy = true;
         try
         {
             var saved = await SaveConnection.HandleAsync(new SaveOpenCodeConnectionCommand(
-                new SaveOpenCodeConnectionRequest(UserId, _provider, _model, _baseUrl, _apiKey)));
+                new SaveOpenCodeConnectionRequest(UserId, _model[..slash], _model[(slash + 1)..], _custom ? _baseUrl : null, _apiKey)));
             if (!saved.Success)
             {
                 Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);

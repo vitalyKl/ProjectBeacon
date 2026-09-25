@@ -182,7 +182,31 @@
     <value>OpenCode connections</value>
   </data>
   <data name="OpenCodeConnectionsLead" xml:space="preserve">
-    <value>These are OpenCode providers, not a Beacon provider. Saving queues a command: the client writes ~/.config/opencode/opencode.json and restarts opencode serve. The key is stored encrypted and is passed to the process as an environment variable.</value>
+    <value>Tell OpenCode which online model to use. A local llama.cpp model is added separately, under Agents.</value>
+  </data>
+  <data name="OpenCodeStepPick" xml:space="preserve">
+    <value>Pick a service, or type provider/model yourself.</value>
+  </data>
+  <data name="OpenCodeStepKey" xml:space="preserve">
+    <value>Paste an API key only if you have not already signed in on that computer.</value>
+  </data>
+  <data name="OpenCodeStepSave" xml:space="preserve">
+    <value>Save. The running beacon client updates OpenCode and restarts it.</value>
+  </data>
+  <data name="OpenCodeOwnServer" xml:space="preserve">
+    <value>Own server</value>
+  </data>
+  <data name="OpenCodeOnePerService" xml:space="preserve">
+    <value>Each service keeps one model. Saving it again replaces that model.</value>
+  </data>
+  <data name="OpenCodeModelExample" xml:space="preserve">
+    <value>Write it as provider/model, for example xai/grok-3.</value>
+  </data>
+  <data name="OpenCodeBaseUrlHint" xml:space="preserve">
+    <value>Address of your own OpenAI-compatible server.</value>
+  </data>
+  <data name="OpenCodeKeySaved" xml:space="preserve">
+    <value>Key saved</value>
   </data>
   <data name="OpenCodeProvider" xml:space="preserve">
     <value>Provider</value>
@@ -194,10 +218,10 @@
     <value>API key</value>
   </data>
   <data name="OpenCodeApiKeyHint" xml:space="preserve">
-    <value>Leave blank to keep the saved key. Built-in providers such as xai do not need a base URL.</value>
+    <value>Optional. Leave blank if this computer is already signed in, or to keep a key you saved earlier.</value>
   </data>
   <data name="OpenCodeConnectionSaved" xml:space="preserve">
-    <value>Connection saved. The online client will apply it.</value>
+    <value>Saved. If beacon client is running, it will update OpenCode now.</value>
   </data>
   <data name="NoOpenCodeConnections" xml:space="preserve">
     <value>No connections yet.</value>
