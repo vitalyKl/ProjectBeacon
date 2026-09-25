@@ -21,7 +21,7 @@ public static class OpencodePayload
         ArgumentException.ThrowIfNullOrWhiteSpace(localRoot);
         var byId = backends.ToDictionary(b => b.Id);
         var models = new JsonObject();
-        foreach (var backend in backends.OrderBy(b => b.Name, StringComparer.Ordinal))
+        foreach (var backend in backends.Where(b => b.BackendType == ModelBackendType.LlamaCpp).OrderBy(b => b.Name, StringComparer.Ordinal))
             models[ModelKey(backend.Name)] = new JsonObject { ["name"] = backend.Name };
 
         var provider = new JsonObject
@@ -45,7 +45,7 @@ public static class OpencodePayload
         {
             var backend = Resolve(byId, soloBackendId) ?? backends.FirstOrDefault();
             if (backend is not null)
-                model = $"{ProviderId}/{ModelKey(backend.Name)}";
+                model = OpenCodeId(backend);
         }
         else
         {
@@ -53,19 +53,19 @@ public static class OpencodePayload
             var actor = Resolve(byId, actorId);
             var review = Resolve(byId, reviewId);
             if (actor is not null)
-                model = $"{ProviderId}/{ModelKey(actor.Name)}";
+                model = OpenCodeId(actor);
             agent = new JsonObject();
             if (actor is not null)
-                agent["build"] = new JsonObject { ["model"] = $"{ProviderId}/{ModelKey(actor.Name)}" };
+                agent["build"] = new JsonObject { ["model"] = OpenCodeId(actor) };
             if (planner is not null)
-                agent["plan"] = new JsonObject { ["model"] = $"{ProviderId}/{ModelKey(planner.Name)}" };
+                agent["plan"] = new JsonObject { ["model"] = OpenCodeId(planner) };
             if (review is not null)
             {
                 agent["review"] = new JsonObject
                 {
                     ["mode"] = "subagent",
                     ["description"] = "Cold review of the diff without the originating session.",
-                    ["model"] = $"{ProviderId}/{ModelKey(review.Name)}"
+                    ["model"] = OpenCodeId(review)
                 };
             }
         }
@@ -81,6 +81,11 @@ public static class OpencodePayload
             root["agent"] = agent;
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
+
+    public static string OpenCodeId(LocalModelBackendDto backend) =>
+        backend.BackendType == ModelBackendType.LlamaCpp || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
+            ? $"{ProviderId}/{ModelKey(backend.Name)}"
+            : backend.OpenCodeModel.Trim();
 
     public static string ModelKey(string name)
     {

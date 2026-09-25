@@ -31,7 +31,7 @@ internal static class ModelBackendMappers
 {
     public static LocalModelBackendDto ToDto(LocalModelBackend backend) =>
         new(backend.Id, backend.Name, backend.BackendType, backend.LaunchCommand,
-            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.UserId, backend.UpdatedAt, backend.Concurrent, backend.Note);
+            backend.ContextSize, backend.Ttl, backend.ExtraFlags, backend.UserId, backend.UpdatedAt, backend.Concurrent, backend.Note, backend.OpenCodeModel);
 
     public static AgentTemplateDto ToDto(AgentTemplate template) =>
         new(template.Id, template.Name, template.Mode, template.SoloBackendId,
@@ -53,8 +53,17 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         var name = request.Name?.Trim() ?? string.Empty;
         if (name.Length == 0 || name.Length > 200)
             return Result.Failure<LocalModelBackendDto>("Name is required (max 200 characters).");
-        if (string.IsNullOrWhiteSpace(request.LaunchCommand) || request.LaunchCommand.Length > 1000)
-            return Result.Failure<LocalModelBackendDto>("LaunchCommand is required (max 1000 characters).");
+        var openCodeModel = request.OpenCodeModel?.Trim() ?? string.Empty;
+        var launch = request.LaunchCommand ?? string.Empty;
+        if (request.BackendType == ModelBackendType.LlamaCpp)
+        {
+            if (string.IsNullOrWhiteSpace(launch) || launch.Length > 1000)
+                return Result.Failure<LocalModelBackendDto>("LaunchCommand is required (max 1000 characters).");
+        }
+        else if (openCodeModel.Length == 0 || openCodeModel.Length > 200 || !openCodeModel.Contains('/'))
+        {
+            return Result.Failure<LocalModelBackendDto>("OpenCode model id is required, like xai/grok-3.");
+        }
         if ((request.Note?.Length ?? 0) > 2000)
             return Result.Failure<LocalModelBackendDto>("Note is too long (max 2000 characters).");
         if (request.ContextSize < 0 || request.Ttl < 0)
@@ -69,13 +78,13 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             var existing = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == id && b.UserId == request.UserId, ct);
             if (existing is null)
                 return Result.Failure<LocalModelBackendDto>("Model backend not found.");
-            existing.Update(name, request.BackendType, request.LaunchCommand, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note);
+            existing.Update(name, request.BackendType, launch, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
             await db.SaveChangesAsync(ct);
             return Result.Ok(ModelBackendMappers.ToDto(existing));
         }
 
-        var backend = LocalModelBackend.Create(name, request.BackendType, request.LaunchCommand,
-            request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent, request.Note);
+        var backend = LocalModelBackend.Create(name, request.BackendType, launch,
+            request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
         db.LocalModelBackends.Add(backend);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ModelBackendMappers.ToDto(backend));

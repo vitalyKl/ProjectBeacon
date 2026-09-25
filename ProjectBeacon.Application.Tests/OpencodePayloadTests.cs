@@ -23,6 +23,18 @@ public sealed class OpencodePayloadTests
     }
 
     [Fact]
+    public void RemoteModel_UsesOpenCodeId_AndStaysOutOfLlamaProvider()
+    {
+        var grok = new LocalModelBackendDto(
+            Guid.NewGuid(), "Grok", ModelBackendType.OpenAiCompatible, "", 0, 0, [], Guid.NewGuid(), null,
+            false, "", "xai/grok-3");
+        var json = OpencodePayload.BuildApply(@"A:\work\app", AgentRunMode.Solo, [grok], grok.Id, null, null, null);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal("xai/grok-3", doc.RootElement.GetProperty("model").GetString());
+        Assert.False(doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("models").EnumerateObject().Any());
+    }
+
+    [Fact]
     public void Pipeline_SetsPlanBuildReview()
     {
         var planner = Backend("plan-model");

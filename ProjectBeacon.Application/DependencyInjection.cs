@@ -152,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GetModelRegistryHandler>();
         services.AddTransient<GetChatModelHandler>();
         services.AddTransient<SetChatModelHandler>();
+        services.AddTransient<NudgeModelsHandler>();
         services.AddTransient<ListTaskKindsHandler>();
         services.AddTransient<SaveTaskKindHandler>();
         services.AddTransient<DeleteTaskKindHandler>();

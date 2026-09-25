@@ -170,7 +170,13 @@
     <value>Chat model</value>
   </data>
   <data name="ChatModelHint" xml:space="preserve">
-    <value>Used by the app chat when a message does not name another model. OpenCode still receives it as beacon-local/name.</value>
+    <value>Used by the app chat when a message does not name another model. Saving tells the running client to refresh OpenCode.</value>
+  </data>
+  <data name="OpenCodeModel" xml:space="preserve">
+    <value>OpenCode model</value>
+  </data>
+  <data name="OpenCodeModelHint" xml:space="preserve">
+    <value>Provider and model OpenCode already knows, like xai/grok-3. Sign in on the machine with opencode auth login. Beacon does not store that login.</value>
   </data>
   <data name="ChatModelSaved" xml:space="preserve">
     <value>Chat model saved.</value>

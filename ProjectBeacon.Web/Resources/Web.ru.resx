@@ -148,7 +148,13 @@
     <value>Модель чата</value>
   </data>
   <data name="ChatModelHint" xml:space="preserve">
-    <value>Эту модель берёт чат приложения, если в сообщении не указана другая. OpenCode получает её как beacon-local/имя.</value>
+    <value>Эту модель берёт чат приложения, если в сообщении не указана другая. Сохранение ставит команду работающему клиенту обновить OpenCode.</value>
+  </data>
+  <data name="OpenCodeModel" xml:space="preserve">
+    <value>Модель OpenCode</value>
+  </data>
+  <data name="OpenCodeModelHint" xml:space="preserve">
+    <value>Провайдер и модель, которые OpenCode уже знает, например xai/grok-3. Вход на машине: opencode auth login. Beacon этот вход не хранит.</value>
   </data>
   <data name="ChatModelSaved" xml:space="preserve">
     <value>Модель чата сохранена.</value>

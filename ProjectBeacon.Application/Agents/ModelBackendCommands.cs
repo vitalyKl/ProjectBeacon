@@ -15,7 +15,8 @@ public record LocalModelBackendDto(
     Guid UserId,
     DateTime? UpdatedAt,
     bool Concurrent = false,
-    string Note = "");
+    string Note = "",
+    string OpenCodeModel = "");
 
 public record RoleBindingDto(
     Guid Id,
@@ -48,7 +49,8 @@ public record UpsertLocalModelBackendRequest(
     Guid UserId,
     IReadOnlyList<string>? ExtraFlags = null,
     bool Concurrent = false,
-    string? Note = null);
+    string? Note = null,
+    string? OpenCodeModel = null);
 
 public record UpsertLocalModelBackendCommand(UpsertLocalModelBackendRequest Request) : ICommand<Result<LocalModelBackendDto>>;
 

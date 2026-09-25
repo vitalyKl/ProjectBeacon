@@ -14,6 +14,7 @@
 @inject GetModelRegistryHandler GetRegistry
 @inject GetChatModelHandler GetChatModel
 @inject SetChatModelHandler SetChatModel
+@inject NudgeModelsHandler NudgeModels
 @inject ListDevicesHandler ListDevices
 @inject CreateDeviceHandler CreateDevice
 @inject RevokeDeviceHandler RevokeDevice
@@ -185,6 +186,7 @@
                 return;
             }
             Snackbar.Add(L["ChatModelSaved"].Value, Severity.Success);
+            await NudgeModels.HandleAsync(new NudgeModelsCommand(_userId));
         }
         finally
         {

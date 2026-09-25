@@ -439,7 +439,7 @@ public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigComma
             return Result.Failure<LlamaSwapConfigDto>("Device not found.");
 
         var backends = await db.LocalModelBackends
-            .Where(b => b.UserId == device.UserId)
+            .Where(b => b.UserId == device.UserId && b.BackendType == ModelBackendType.LlamaCpp)
             .OrderBy(b => b.Name)
             .ToListAsync(ct);
         var specs = backends

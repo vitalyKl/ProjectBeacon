@@ -16,6 +16,7 @@ public class LocalModelBackend : Entity
     public bool Concurrent { get; private set; }
     public Guid UserId { get; private set; }
     public string Note { get; private set; } = string.Empty;
+    public string OpenCodeModel { get; private set; } = string.Empty;
     public DateTime? UpdatedAt { get; private set; }
 
     // EF maps the JSON text backing; the ExtraFlags list view is ignored in the model.
@@ -48,7 +49,8 @@ public class LocalModelBackend : Entity
         Guid userId,
         IReadOnlyList<string>? extraFlags = null,
         bool concurrent = false,
-        string? note = null)
+        string? note = null,
+        string? openCodeModel = null)
     {
         var backend = Entity.New<LocalModelBackend>();
         backend.Name = name;
@@ -59,6 +61,7 @@ public class LocalModelBackend : Entity
         backend.Concurrent = concurrent;
         backend.UserId = userId;
         backend.Note = note?.Trim() ?? string.Empty;
+        backend.OpenCodeModel = openCodeModel?.Trim() ?? string.Empty;
         backend.ExtraFlags = extraFlags ?? [];
         backend.UpdatedAt = DateTime.UtcNow;
         return backend;
@@ -72,7 +75,8 @@ public class LocalModelBackend : Entity
         int ttl,
         IReadOnlyList<string>? extraFlags = null,
         bool concurrent = false,
-        string? note = null)
+        string? note = null,
+        string? openCodeModel = null)
     {
         Name = name;
         BackendType = backendType;
@@ -84,6 +88,8 @@ public class LocalModelBackend : Entity
             ExtraFlags = extraFlags;
         if (note is not null)
             Note = note.Trim();
+        if (openCodeModel is not null)
+            OpenCodeModel = openCodeModel.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
 }

@@ -60,7 +60,13 @@ public static class ChatModelSelection
         var preferred = await db.Users.Where(u => u.Id == userId).Select(u => u.ChatModelBackendId).FirstOrDefaultAsync(ct);
         if (preferred is not Guid backendId)
             return null;
-        var name = await db.LocalModelBackends.Where(b => b.Id == backendId && b.UserId == userId).Select(b => b.Name).FirstOrDefaultAsync(ct);
-        return string.IsNullOrWhiteSpace(name) ? null : $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(name)}";
+        var kind = await db.LocalModelBackends
+            .Where(b => b.Id == backendId && b.UserId == userId)
+            .Select(b => new { b.BackendType, b.Name, b.OpenCodeModel })
+            .FirstOrDefaultAsync(ct);
+        if (kind is null || string.IsNullOrWhiteSpace(kind.Name))
+            return null;
+        return OpencodePayload.OpenCodeId(new LocalModelBackendDto(
+            backendId, kind.Name, kind.BackendType, "", 0, 0, [], userId, null, false, "", kind.OpenCodeModel));
     }
 }

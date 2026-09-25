@@ -133,8 +133,9 @@ else
             if (preferred.Success && preferred.Value is Guid backendId)
             {
                 var name = registry.Value.Backends.FirstOrDefault(b => b.Id == backendId)?.Name;
-                if (!string.IsNullOrWhiteSpace(name))
-                    _model = $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(name)}";
+                var chosen = registry.Value.Backends.FirstOrDefault(b => b.Id == backendId);
+                if (chosen is not null)
+                    _model = OpencodePayload.OpenCodeId(chosen);
             }
         }
         await ReloadSessions();
