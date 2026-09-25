@@ -148,7 +148,9 @@ public static class ClientTui
 
     private static void EditSettings()
     {
-        var settings = WorkstationSettings.Load();
+        var (settings, readError) = WorkstationSettings.TryRead();
+        if (readError is not null)
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(readError)}[/]");
         settings.ProjectsRoot = PromptPath("Projects root", settings.ProjectsRoot
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "projects"));
         settings.ModelsRoot = PromptPath("Models root", settings.ModelsRoot ?? WorkstationSettings.DefaultModelsRoot);

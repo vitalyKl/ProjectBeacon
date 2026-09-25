@@ -98,4 +98,47 @@ public sealed class ClientStoreTests : IDisposable
         Assert.Equal("http://localhost:5083", loaded.Url);
         Assert.False(loaded.HasCredentials);
     }
+
+    [Fact]
+    public void WorkstationSettings_TryRead_Missing_ReturnsDefaults()
+    {
+        var (settings, error) = WorkstationSettings.TryRead(Path.Combine(_dir, "missing.json"));
+        Assert.Null(error);
+        Assert.Equal(WorkstationSettings.DefaultModelsRoot, settings.ModelsRoot);
+    }
+
+    [Fact]
+    public void WorkstationSettings_TryRead_InvalidHtml_ReturnsDefaultsAndError()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+        File.WriteAllText(file, "<html></html>");
+
+        var (settings, error) = WorkstationSettings.TryRead(file);
+
+        Assert.NotNull(error);
+        Assert.Contains(file, error);
+        Assert.Equal(8080, settings.LlamaSwapPort);
+    }
+
+    [Fact]
+    public void WorkstationSettings_Load_InvalidFile_ThrowsActionableError()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+        File.WriteAllText(file, "<html></html>");
+
+        var ex = Assert.Throws<InvalidDataException>(() => WorkstationSettings.Load(file));
+
+        Assert.Contains(file, ex.Message);
+        Assert.Contains("Delete the file", ex.Message);
+    }
+
+    [Fact]
+    public void WorkstationSettings_Save_Atomic_LeavesNoTempFiles()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+        new WorkstationSettings { LlamaSwapPort = 9090 }.Save(file);
+
+        Assert.True(File.Exists(file));
+        Assert.Empty(Directory.EnumerateFiles(_dir, Path.GetFileName(file) + ".tmp-*"));
+    }
 }

@@ -121,26 +121,53 @@ public sealed class WorkstationSettings
     public static string DefaultModelsRoot =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon", "models");
 
-    public static WorkstationSettings Load(string? path = null)
+    private static WorkstationSettings Defaults() => new()
+    {
+        ModelsRoot = DefaultModelsRoot,
+        ProjectsRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "projects")
+    };
+
+    public static (WorkstationSettings Settings, string? Error) TryRead(string? path = null)
     {
         path ??= DefaultPath;
         if (!File.Exists(path))
+            return (Defaults(), null);
+        try
         {
-            return new WorkstationSettings
-            {
-                ModelsRoot = DefaultModelsRoot,
-                ProjectsRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "projects")
-            };
+            var json = File.ReadAllText(path);
+            return (JsonSerializer.Deserialize<WorkstationSettings>(json, JsonOptions) ?? new WorkstationSettings(), null);
         }
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<WorkstationSettings>(json, JsonOptions) ?? new WorkstationSettings();
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return (Defaults(), $"{path}: {ex.Message}");
+        }
+    }
+
+    public static WorkstationSettings Load(string? path = null)
+    {
+        var (settings, error) = TryRead(path);
+        if (error is null)
+            return settings;
+        throw new InvalidDataException($"{error}. Delete the file or re-save it from the client TUI (s).");
     }
 
     public void Save(string? path = null)
     {
         path ??= DefaultPath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+        var dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+        var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            File.WriteAllText(temp, JsonSerializer.Serialize(this, JsonOptions));
+            File.Move(temp, path, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(temp); } catch { }
+            throw;
+        }
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()

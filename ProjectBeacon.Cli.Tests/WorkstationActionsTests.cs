@@ -131,6 +131,21 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public void SaveWorkstation_OverInvalidExistingFile_UsesDefaultsAndSaves()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+        File.WriteAllText(file, "<html></html>");
+
+        var json = WorkstationActions.SaveWorkstation("""{"llamaSwapPort":9091}""", file);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(9091, doc.RootElement.GetProperty("llamaSwapPort").GetInt32());
+        var (loaded, error) = WorkstationSettings.TryRead(file);
+        Assert.Null(error);
+        Assert.Equal(9091, loaded.LlamaSwapPort);
+    }
+
+    [Fact]
     public void MergeGitignore_Idempotent()
     {
         var file = Path.Combine(_dir, ".gitignore");

@@ -199,6 +199,40 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
+    public async Task Daemon_Heartbeat_InvalidSettingsFile_ReportsActionableError()
+    {
+        var badSettings = Path.Combine(_dir, "bad-workstation.json");
+        File.WriteAllText(badSettings, "<html></html>");
+        var handler = new RouteHandler
+        {
+            Impl = req =>
+            {
+                var path = req.RequestUri!.AbsolutePath;
+                if (path.Contains("llamaswap-config", StringComparison.Ordinal))
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+                if (path.Contains("heartbeat", StringComparison.Ordinal))
+                    return Json(new { id = Guid.Empty });
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+        };
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
+        await using var daemon = new WorkstationDaemon(http, llama, () => WorkstationSettings.Load(badSettings))
+        {
+            DelayAsync = (_, ct) => Task.Delay(1, ct),
+            HeartbeatInterval = TimeSpan.Zero,
+            CommandErrorDelay = TimeSpan.Zero
+        };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try { await daemon.RunAsync(cts.Token); }
+        catch (OperationCanceledException) { }
+        Assert.False(daemon.Snapshot.Connected);
+        Assert.NotNull(daemon.Snapshot.Error);
+        Assert.Contains(badSettings, daemon.Snapshot.Error!);
+        Assert.Contains("Delete the file", daemon.Snapshot.Error!);
+    }
+
+    [Fact]
     public async Task Daemon_ExecutesProbeAndCompletes()
     {
         var commandId = Guid.NewGuid();

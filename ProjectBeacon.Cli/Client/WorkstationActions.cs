@@ -165,7 +165,7 @@ public static class WorkstationActions
 
     public static string SaveWorkstation(string payloadJson, string? settingsPath = null)
     {
-        var settings = WorkstationSettings.Load(settingsPath);
+        var (settings, _) = WorkstationSettings.TryRead(settingsPath);
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
         var root = doc.RootElement;
         if (root.TryGetProperty("modelsRoot", out var models) && models.ValueKind == JsonValueKind.String)
