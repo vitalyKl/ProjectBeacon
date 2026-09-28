@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
+
 public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
@@ -109,6 +111,17 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         return ParseParts(doc.RootElement);
+    }
+
+    public async Task<OpenCodeSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
+    {
+        if (SkipRealProcess)
+            return new OpenCodeSessionUsage(12, 34, 1, 0.0001);
+
+        using var response = await Send(HttpMethod.Get, $"/session/{Uri.EscapeDataString(sessionId)}/message", null, ct);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        return ParseUsage(doc.RootElement);
     }
 
     private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body, CancellationToken ct)
@@ -257,6 +270,66 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             }
         }
         return list;
+    }
+
+    private static OpenCodeSessionUsage ParseUsage(JsonElement root)
+    {
+        var promptTokens = 0;
+        var completionTokens = 0;
+        var assistantMessages = 0;
+        var totalCost = 0.0;
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var message in root.EnumerateArray())
+                (assistantMessages, promptTokens, completionTokens, totalCost) = AddMessageUsage(message, assistantMessages, promptTokens, completionTokens, totalCost);
+        }
+        else if (root.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var message in messages.EnumerateArray())
+                (assistantMessages, promptTokens, completionTokens, totalCost) = AddMessageUsage(message, assistantMessages, promptTokens, completionTokens, totalCost);
+        }
+        return new OpenCodeSessionUsage(promptTokens, completionTokens, assistantMessages, totalCost);
+    }
+
+    private static (int AssistantMessages, int PromptTokens, int CompletionTokens, double TotalCost) AddMessageUsage(JsonElement message, int assistantMessages, int promptTokens, int completionTokens, double totalCost)
+    {
+        string? role = null;
+        JsonElement info = default;
+        if (message.TryGetProperty("info", out var infoElement) && infoElement.ValueKind == JsonValueKind.Object)
+            info = infoElement;
+        if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("role", out var infoRole) && infoRole.ValueKind == JsonValueKind.String)
+            role = infoRole.GetString();
+        else if (message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
+            role = topRole.GetString();
+        if (role != "assistant")
+            return (assistantMessages, promptTokens, completionTokens, totalCost);
+        assistantMessages++;
+        var usageSource = info.ValueKind == JsonValueKind.Object ? info : message;
+        if (usageSource.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
+        {
+            promptTokens += ReadInt(tokens, "input");
+            completionTokens += ReadInt(tokens, "output");
+            completionTokens += ReadInt(tokens, "reasoning");
+            if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
+            {
+                promptTokens += ReadInt(cache, "read");
+                promptTokens += ReadInt(cache, "write");
+            }
+        }
+        if (usageSource.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number && cost.TryGetDouble(out var parsedCost))
+            totalCost += parsedCost;
+        return (assistantMessages, promptTokens, completionTokens, totalCost);
+    }
+
+    private static int ReadInt(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+            return 0;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed))
+            return parsed;
+        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var number))
+            return number;
+        return 0;
     }
 
     public async ValueTask DisposeAsync()

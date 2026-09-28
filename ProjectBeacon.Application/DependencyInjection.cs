@@ -4,6 +4,7 @@ using Application.Agents;
 using Application.Auth;
 using Application.Chat;
 using Application.Devices;
+using Application.Evals;
 using Application.Identity;
 using Application.Projects;
 using Application.Tasks;
@@ -60,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GenerateReportHandler>();
         services.AddTransient<ListReportsHandler>();
         services.AddTransient<GetReportHandler>();
+        services.AddTransient<ContextCostReportHandler>();
 
         services.AddTransient<CreateTaskHandler>();
         services.AddTransient<UpdateTaskHandler>();
@@ -182,6 +184,11 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AbortChatHandler>();
         services.AddTransient<AppendChatPartHandler>();
         services.AddTransient<MarkChatIdleHandler>();
+
+        services.AddTransient<RecordEvalRunHandler>();
+        services.AddTransient<CompleteEvalRunHandler>();
+        services.AddTransient<ListEvalRunsHandler>();
+        services.AddTransient<EvalPairHandler>();
 
         return services;
     }

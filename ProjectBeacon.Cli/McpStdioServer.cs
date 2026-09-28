@@ -160,6 +160,7 @@ public static class McpStdioServer
                 "subtask_report_result" => await SubtaskReportResultAsync(id, arguments, api),
                 "task_review_verdict" => await TaskReviewVerdictAsync(id, arguments, api),
                 "task_pipeline_status" => await TaskPipelineStatusAsync(id, api),
+                "context_compile" => api is not null ? await ContextCompileAsync(id, workspace, index, api) : await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api)),
                 _ when McpApiTools.IsApiTool(name) => await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api)),
                 _ => ToolError(id, $"Unknown tool: {name}")
             };
@@ -297,6 +298,17 @@ public static class McpStdioServer
 
     private static async Task<JsonObject> ApiTextAsync(JsonNode id, McpToolText text)
         => text.IsError ? ToolError(id, text.Text) : Result(id, Content(text.Text));
+
+    private static async Task<JsonObject> ContextCompileAsync(JsonNode id, FileWorkspace workspace, CodeIndex index, BeaconApiClient api)
+    {
+        var projectId = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
+        if (string.IsNullOrWhiteSpace(projectId) || !Guid.TryParse(projectId, out var parsed))
+            return ToolError(id, "BEACON_PROJECT_ID is not set.");
+
+        var taskId = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+        var result = await BriefPatcher.PatchCompileAsync(parsed.ToString("D"), taskId, index, api, CancellationToken.None);
+        return result.IsError ? ToolError(id, result.Text) : Result(id, Content(result.Text));
+    }
 
     private static async Task<JsonObject> ModelBindAsync(JsonNode id, JsonObject? args, BeaconApiClient? api)
     {

@@ -10,6 +10,7 @@ public static class ReportEndpoints
         app.MapPost("/v1/projects/{projectId:guid}/reports", Generate).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/reports", List).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/reports/{reportId:guid}", Get).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/reports/context-cost/{taskId:guid}", ContextCost).RequireAuthorization().DisableAntiforgery();
         return app;
     }
 
@@ -36,6 +37,14 @@ public static class ReportEndpoints
     private static async Task<IResult> Get(Guid projectId, Guid reportId, GetReportHandler handler)
     {
         var result = await handler.HandleAsync(new GetReportRequest(projectId, reportId));
+        return result.Success
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error });
+    }
+
+    private static async Task<IResult> ContextCost(Guid taskId, ContextCostReportHandler handler)
+    {
+        var result = await handler.HandleAsync(new GetContextCostReportRequest(taskId));
         return result.Success
             ? Results.Ok(result.Value)
             : Results.NotFound(new { error = result.Error });

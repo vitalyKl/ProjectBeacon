@@ -5,6 +5,7 @@ using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Evals;
 using Domain.Enums;
 
 public class BeaconDbContext : DbContext
@@ -46,6 +47,8 @@ public class BeaconDbContext : DbContext
     public DbSet<TaskStep> TaskSteps => Set<TaskStep>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatPart> ChatParts => Set<ChatPart>();
+
+    public DbSet<EvalRun> EvalRuns => Set<EvalRun>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -658,6 +661,21 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => new { e.SessionId, e.SortOrder });
             entity.HasIndex(e => new { e.SessionId, e.ExternalId });
+        });
+
+        modelBuilder.Entity<EvalRun>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.PairId).HasMaxLength(100);
+            entity.Property(e => e.Condition).HasConversion<string>().IsRequired();
+            entity.Property(e => e.PromptTokens).IsRequired();
+            entity.Property(e => e.CompletionTokens).IsRequired();
+            entity.Property(e => e.TurnCount).IsRequired();
+            entity.Property(e => e.StartedAt).IsRequired();
+            entity.Property(e => e.CompletedAt);
+            entity.Property(e => e.TranscriptRef).HasMaxLength(500);
+            entity.HasIndex(e => new { e.ProjectId, e.TaskId });
+            entity.HasIndex(e => e.PairId);
         });
 
         TenantScopedQueryFilterConvention.Apply(modelBuilder, this);

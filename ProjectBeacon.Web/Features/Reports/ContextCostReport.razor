@@ -1,0 +1,101 @@
+@using ProjectBeacon.Application.Evals
+@using ProjectBeacon.Application.Reports
+@using ProjectBeacon.Application.Tasks
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject ListProjectTasksHandler ListTasks
+@inject ContextCostReportHandler ContextCostHandler
+
+<MudText Typo="Typo.h6" Class="mt-4">@L["ContextCostReport"]</MudText>
+
+@if (_tasks.Count == 0)
+{
+    <MudText Typo="Typo.body2">@L["ContextCostNoTasks"]</MudText>
+}
+else
+{
+    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask" Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" MaxWidth="420">
+        @foreach (var task in _tasks)
+        {
+            <MudSelectItem Value="@((Guid?)task.Id)">@task.Title</MudSelectItem>
+        }
+    </MudSelect>
+
+    @if (_report is null || _report.PairCount == 0)
+    {
+        <MudText Typo="Typo.body2">@L["ContextCostNoPairs"]</MudText>
+    }
+    else
+    {
+        <MudTable Items="_report.Pairs" Hover="true" Dense="true">
+            <HeaderContent>
+                <MudTh>@L["Pair"]</MudTh>
+                <MudTh>@L["ContextCostWithBrief"]</MudTh>
+                <MudTh>@L["ContextCostWithoutBrief"]</MudTh>
+                <MudTh>@L["ContextCostPromptDelta"]</MudTh>
+                <MudTh>@L["ContextCostCompletionDelta"]</MudTh>
+                <MudTh>@L["ContextCostTotalDelta"]</MudTh>
+                <MudTh>@L["ContextCostTurnDelta"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.PairId</MudTd>
+                <MudTd>@FormatRun(context.WithBrief)</MudTd>
+                <MudTd>@FormatRun(context.WithoutBrief)</MudTd>
+                <MudTd>@FormatDelta(context.PromptTokensDelta)</MudTd>
+                <MudTd>@FormatDelta(context.CompletionTokensDelta)</MudTd>
+                <MudTd>@FormatDelta(context.TotalTokensDelta)</MudTd>
+                <MudTd>@FormatDelta(context.TurnCountDelta)</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IList<TaskItemDto> _tasks = [];
+    private Guid? _selectedTaskId;
+    private ContextCostReportDto? _report;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var listed = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(ProjectId)));
+        if (listed.Success)
+        {
+            _tasks = listed.Value!.ToList();
+            _selectedTaskId = _tasks.FirstOrDefault()?.Id;
+        }
+        await LoadReportAsync();
+    }
+
+    private async Task OnSelectedTask(Guid? taskId)
+    {
+        if (taskId is null)
+            return;
+
+        _selectedTaskId = taskId;
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        if (_selectedTaskId is null)
+        {
+            _report = null;
+            return;
+        }
+
+        var result = await ContextCostHandler.HandleAsync(new GetContextCostReportRequest(_selectedTaskId.Value, ProjectId));
+        _report = result.Success ? result.Value : null;
+    }
+
+    private string FormatRun(EvalRunDto? run)
+    {
+        if (run is null || run.CompletedAt is null)
+            return L["Pending"].Value;
+
+        var status = run.Passed is true ? L["Passed"].Value : L["Failed"].Value;
+        return $"{run.PromptTokens} / {run.CompletionTokens} / {run.TurnCount} / {status}";
+    }
+
+    private string FormatDelta(int? delta) => delta is null ? "—" : delta.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}

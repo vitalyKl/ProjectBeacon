@@ -14,5 +14,6 @@ public enum WorkstationCommandKind
     ChatEnsureSession,
     ChatPrompt,
     ChatAbort,
-    ConfigureOpenCode
+    ConfigureOpenCode,
+    RunEvalTurn
 }

@@ -20,7 +20,7 @@ internal static class McpApiTools
         "claim_task", "add_task_comment", "set_task_dependencies", "add_review_notes",
         "list_task_steps", "add_task_step", "toggle_task_step", "delete_task_step",
         "finish_work",
-        "context_compile", "list_context_nodes", "get_context_node", "upsert_context_node", "delete_context_node",
+        "list_context_nodes", "get_context_node", "upsert_context_node", "delete_context_node",
         "export_agents_md", "list_constraints", "create_constraint", "activate_constraint", "reject_constraint",
         "list_decisions", "record_decision", "accept_decision", "deprecate_decision", "supersede_decision",
         "list_milestones", "get_milestone", "create_milestone", "update_milestone", "delete_milestone",

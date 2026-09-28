@@ -900,6 +900,42 @@
   <data name="GenerateReport" xml:space="preserve">
     <value>Собрать отчёт</value>
   </data>
+  <data name="ContextCostReport" xml:space="preserve">
+    <value>Стоимость контекста</value>
+  </data>
+  <data name="ContextCostNoTasks" xml:space="preserve">
+    <value>В этом проекте пока нет задач.</value>
+  </data>
+  <data name="ContextCostNoPairs" xml:space="preserve">
+    <value>Пока нет парных eval-запусков.</value>
+  </data>
+  <data name="ContextCostWithBrief" xml:space="preserve">
+    <value>С брифом</value>
+  </data>
+  <data name="ContextCostWithoutBrief" xml:space="preserve">
+    <value>Без брифа</value>
+  </data>
+  <data name="ContextCostPromptDelta" xml:space="preserve">
+    <value>Δ токенов запроса</value>
+  </data>
+  <data name="ContextCostCompletionDelta" xml:space="preserve">
+    <value>Δ токенов ответа</value>
+  </data>
+  <data name="ContextCostTotalDelta" xml:space="preserve">
+    <value>Δ всех токенов</value>
+  </data>
+  <data name="ContextCostTurnDelta" xml:space="preserve">
+    <value>Δ ходов</value>
+  </data>
+  <data name="Pair" xml:space="preserve">
+    <value>Пара</value>
+  </data>
+  <data name="Passed" xml:space="preserve">
+    <value>пройдено</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>не пройдено</value>
+  </data>
   <data name="Constraints" xml:space="preserve">
     <value>Ограничения</value>
   </data>

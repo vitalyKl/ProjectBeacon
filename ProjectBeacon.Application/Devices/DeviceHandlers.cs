@@ -189,7 +189,7 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
     }
 
     private static readonly HashSet<WorkstationCommandKind> RootedKinds =
-        [WorkstationCommandKind.ListDir, WorkstationCommandKind.ScanGguf, WorkstationCommandKind.InitProject, WorkstationCommandKind.ApplyOpencode];
+        [WorkstationCommandKind.ListDir, WorkstationCommandKind.ScanGguf, WorkstationCommandKind.InitProject, WorkstationCommandKind.ApplyOpencode, WorkstationCommandKind.RunEvalTurn];
 
     private static async Task<string?> InjectRootAsync(BeaconDbContext db, EnqueueCommandRequest request, DaemonDevice device, CancellationToken ct)
     {
@@ -299,9 +299,14 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
         try
         {
             if (command.Request.Success)
+            {
+                await CompleteEvalRunAsync(db, row, command.Request.ResultJson, ct);
                 row.Succeed(command.Request.ResultJson);
+            }
             else
+            {
                 row.Fail(string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error);
+            }
         }
         catch (InvalidOperationException ex)
         {
@@ -309,6 +314,60 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
         }
         await db.SaveChangesAsync(ct);
         return Result.Ok(EnqueueCommandHandler.MapCommand(row));
+    }
+
+    private static async Task CompleteEvalRunAsync(BeaconDbContext db, WorkstationCommand row, string? resultJson, CancellationToken ct)
+    {
+        var runId = ReadEvalRunId(row.PayloadJson) ?? ReadEvalRunId(resultJson);
+        if (runId is null || string.IsNullOrWhiteSpace(resultJson))
+            return;
+        try
+        {
+            using var doc = JsonDocument.Parse(resultJson);
+            var r = doc.RootElement;
+            var promptTokens = ReadInt(r, "promptTokens");
+            var completionTokens = ReadInt(r, "completionTokens");
+            var turnCount = ReadInt(r, "turnCount");
+            var passed = r.TryGetProperty("passed", out var passedElement) && passedElement.ValueKind == JsonValueKind.True;
+            string? transcriptRef = r.TryGetProperty("transcriptRef", out var transcriptElement) && transcriptElement.ValueKind == JsonValueKind.String
+                ? transcriptElement.GetString()
+                : null;
+            var run = await db.EvalRuns.FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
+            if (run is null)
+                return;
+            run.Complete(promptTokens, completionTokens, turnCount, passed, transcriptRef);
+        }
+        catch (JsonException)
+        {
+        }
+    }
+
+    private static Guid? ReadEvalRunId(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("evalRunId", out var value) && value.ValueKind == JsonValueKind.String
+                && Guid.TryParse(value.GetString(), out var id))
+                return id;
+        }
+        catch (JsonException)
+        {
+        }
+        return null;
+    }
+
+    private static int ReadInt(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out var value))
+            return 0;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed))
+            return parsed;
+        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var number))
+            return number;
+        return 0;
     }
 }
 

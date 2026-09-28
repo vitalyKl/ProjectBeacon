@@ -919,6 +919,42 @@
   <data name="GenerateReport" xml:space="preserve">
     <value>Generate report</value>
   </data>
+  <data name="ContextCostReport" xml:space="preserve">
+    <value>Context cost</value>
+  </data>
+  <data name="ContextCostNoTasks" xml:space="preserve">
+    <value>No tasks are available for this project.</value>
+  </data>
+  <data name="ContextCostNoPairs" xml:space="preserve">
+    <value>No paired evaluation runs are available yet.</value>
+  </data>
+  <data name="ContextCostWithBrief" xml:space="preserve">
+    <value>With brief</value>
+  </data>
+  <data name="ContextCostWithoutBrief" xml:space="preserve">
+    <value>Without brief</value>
+  </data>
+  <data name="ContextCostPromptDelta" xml:space="preserve">
+    <value>Δ prompt tokens</value>
+  </data>
+  <data name="ContextCostCompletionDelta" xml:space="preserve">
+    <value>Δ completion tokens</value>
+  </data>
+  <data name="ContextCostTotalDelta" xml:space="preserve">
+    <value>Δ total tokens</value>
+  </data>
+  <data name="ContextCostTurnDelta" xml:space="preserve">
+    <value>Δ turns</value>
+  </data>
+  <data name="Pair" xml:space="preserve">
+    <value>Pair</value>
+  </data>
+  <data name="Passed" xml:space="preserve">
+    <value>passed</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>failed</value>
+  </data>
   <data name="Decisions" xml:space="preserve">
     <value>Decisions</value>
   </data>

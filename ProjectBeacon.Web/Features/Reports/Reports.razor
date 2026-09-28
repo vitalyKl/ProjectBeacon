@@ -22,22 +22,27 @@
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
-else if (_reports.Count > 0)
+else
 {
-    <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true">
-        <HeaderContent>
-            <MudTh>@L["CreatedAt"]</MudTh>
-            <MudTh>@L["Title"]</MudTh>
-            <MudTh>@L["Content"]</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
-            <MudTd>@context.Title</MudTd>
-            <MudTd>
-                <MudText Typo="Typo.caption" Class="beacon-pre">@context.BodyMarkdown</MudText>
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    @if (_reports.Count > 0)
+    {
+        <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true">
+            <HeaderContent>
+                <MudTh>@L["CreatedAt"]</MudTh>
+                <MudTh>@L["Title"]</MudTh>
+                <MudTh>@L["Content"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
+                <MudTd>@context.Title</MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.caption" Class="beacon-pre">@context.BodyMarkdown</MudText>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+    <ContextCostReport ProjectId="_project.Id" />
 }
 
 @code {

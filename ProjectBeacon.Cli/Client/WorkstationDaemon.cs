@@ -197,6 +197,16 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                 return await ChatPromptAsync(payload, ct);
             if (kind == WorkstationCommandKind.ChatAbort)
                 return await ChatAbortAsync(payload, ct);
+            if (kind == WorkstationCommandKind.RunEvalTurn)
+            {
+                var evalRoot = ReadRoot(payload);
+                if (string.IsNullOrWhiteSpace(evalRoot))
+                    return (false, null, "root is required.");
+                var evalAction = await WorkstationActions.RunEvalTurnAsync(evalRoot, payload, _openCode, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
+                if (!evalAction.Success)
+                    return (false, null, evalAction.Error);
+                return (true, evalAction.Value, null);
+            }
             if (kind == WorkstationCommandKind.ReloadProxy)
             {
                 await WithLlamaAsync(() => _llama.ReloadAsync(ct), ct);

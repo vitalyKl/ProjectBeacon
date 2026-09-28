@@ -152,11 +152,14 @@ public sealed class McpApiToolsTests
             var project = request.Headers.TryGetValues("X-Project-Id", out var values) ? values.Single() : null;
             var path = request.RequestUri!.PathAndQuery;
             Calls.Add((request.Method.Method, path, body, project));
-            var payload = path == "/v1/models"
-                ? """{"projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","backends":[],"bindings":[]}"""
-                : path == "/v1/models/proxy/status"
-                    ? """{"available":false}"""
-                    : """{"ok":true}""";
+
+            var payload = path switch
+            {
+                "/v1/models" => """{"projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","backends":[],"bindings":[]}""",
+                "/v1/models/proxy/status" => """{"available":false}""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/context/compile" => """{"success":true,"value":{"briefMarkdown":"# Project\n\n## Goals\n\nDone."}}""",
+                _ => """{"ok":true}"""
+            };
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(payload, Encoding.UTF8, "application/json")

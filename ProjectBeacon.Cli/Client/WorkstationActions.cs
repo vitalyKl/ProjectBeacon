@@ -67,6 +67,100 @@ public static class WorkstationActions
         return Result.Ok(JsonSerializer.Serialize(new { path = full, parent, entries }));
     }
 
+    public static async Task<Result<string>> RunEvalTurnAsync(
+        string root,
+        string payloadJson,
+        ClientOpenCodeServe openCode,
+        TimeSpan pollInterval,
+        TimeSpan idleTimeout,
+        TimeSpan maxDuration,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("root is required.");
+        if (string.IsNullOrWhiteSpace(payloadJson))
+            return Result.Failure<string>("payload is required.");
+
+        JsonElement payload;
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            payload = doc.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<string>("payload must be valid JSON.");
+        }
+
+        var evalRunId = payload.TryGetProperty("evalRunId", out var runIdElement) && runIdElement.ValueKind == JsonValueKind.String
+            && Guid.TryParse(runIdElement.GetString(), out var runId)
+                ? runId
+                : Guid.Empty;
+        if (evalRunId == Guid.Empty)
+            return Result.Failure<string>("evalRunId is required.");
+
+        var prompt = payload.TryGetProperty("prompt", out var promptElement) ? promptElement.GetString() : null;
+        if (string.IsNullOrWhiteSpace(prompt))
+            return Result.Failure<string>("prompt is required.");
+
+        var relativePath = payload.TryGetProperty("path", out var pathElement) ? pathElement.GetString() : null;
+        var path = string.IsNullOrWhiteSpace(relativePath) ? root : relativePath;
+        var validatedPath = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        if (!validatedPath.Success)
+            return Result.Failure<string>(validatedPath.Error ?? "path is not inside root.");
+
+        var model = payload.TryGetProperty("model", out var modelElement) ? modelElement.GetString() : null;
+        var title = payload.TryGetProperty("title", out var titleElement) ? titleElement.GetString() : "Beacon eval";
+
+        await openCode.TickAsync(validatedPath.Value, ct);
+        if (!openCode.Status.Healthy)
+            return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
+
+        var sessionId = await openCode.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
+        await openCode.PromptAsync(sessionId, prompt, model, ct);
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var maxQuiet = Math.Max(1, (int)Math.Ceiling(idleTimeout / pollInterval));
+        var maxIterations = Math.Max(1, (int)Math.Ceiling(maxDuration / pollInterval));
+        var quiet = 0;
+        var idle = false;
+        for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
+        {
+            var parts = await openCode.ListPartsAsync(sessionId, ct);
+            var added = 0;
+            foreach (var part in parts)
+            {
+                if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var key = part.ExternalId ?? $"{part.Role}|{part.Kind}|{part.Body}";
+                if (seen.Add(key))
+                    added++;
+            }
+            quiet = added > 0 ? 0 : quiet + 1;
+            if (quiet >= maxQuiet && seen.Count > 0)
+            {
+                idle = true;
+                break;
+            }
+            await Task.Delay(pollInterval, ct);
+        }
+
+        var usage = await openCode.ReadUsageAsync(sessionId, ct);
+        var passed = idle && seen.Count > 0;
+        var result = new
+        {
+            evalRunId,
+            sessionId,
+            promptTokens = usage.PromptTokens,
+            completionTokens = usage.CompletionTokens,
+            turnCount = Math.Max(usage.AssistantMessages, seen.Count),
+            passed,
+            interrupted = !idle,
+            transcriptRef = $"opencode:session/{sessionId}"
+        };
+        return Result.Ok(JsonSerializer.Serialize(result));
+    }
+
     public static Result<string> ScanGguf(string root, string? path)
     {
         if (string.IsNullOrWhiteSpace(root))
