@@ -110,7 +110,7 @@ public class CompileBriefHandler
         }
 
         briefParts.Add(("tools",
-            "## Tools for this task\n\n- `context_compile` — compile this brief\n- `claim_task` / `finish_work` — task lifecycle\n- Beacon file tools (when the local daemon is connected)",
+            "## Tools for this task\n\n- `context_compile` — compile this brief\n- `claim_task` / `finish_work` — task lifecycle\n- `get_tree` / `search_code` / `get_changed_scope` — code index (when the local daemon is connected)\n- `read_file` / `write_file` / `apply_patch` — Beacon file tools (when the local daemon is connected)",
             true));
 
         var includeTree = command.Request.IncludeTreeCapsule || command.Request.RepoId != null;

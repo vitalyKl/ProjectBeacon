@@ -419,4 +419,24 @@ public sealed class CompileBriefTests : IDisposable
         _db.ContextSections.Add(section);
         _db.SaveChanges();
     }
+
+    [Fact]
+    public async Task CompileBrief_ToolsSection_NamesIndexTools()
+    {
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
+        var command = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.True(result.Success);
+        var toolsSection = result.Value.BriefMarkdown
+            .Split("## Tools for this task", 2)[1]
+            .Split("\n## ", 2)[0];
+        Assert.Contains("`get_tree`", toolsSection);
+        Assert.Contains("`search_code`", toolsSection);
+        Assert.Contains("`get_changed_scope`", toolsSection);
+        Assert.Contains("`read_file`", toolsSection);
+        Assert.Contains("`write_file`", toolsSection);
+        Assert.Contains("`apply_patch`", toolsSection);
+    }
 }

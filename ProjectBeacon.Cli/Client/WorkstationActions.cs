@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Common;
+using ProjectBeacon.Application.Context;
 
 public static class WorkstationActions
 {
@@ -312,7 +313,9 @@ public static class WorkstationActions
         var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
         var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
         var replaceMcp = payloadRoot.TryGetProperty("mcpReplace", out var replaceEl) && replaceEl.ValueKind == JsonValueKind.True;
-        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider, replaceMcp);
+        WriteToolDisciplineInstructions(full);
+        OpencodeConfig.Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider, replaceMcp,
+            instructions: new[] { BeaconToolDiscipline.RelativePath });
         return Result.Ok(JsonSerializer.Serialize(new { path = opencodePath }));
     }
 
@@ -477,6 +480,14 @@ public static class WorkstationActions
         proc.WaitForExit();
         return (proc.ExitCode, output);
     }
+
+    private static void WriteToolDisciplineInstructions(string projectRoot)
+    {
+        var dir = Path.Combine(projectRoot, ".opencode", "instructions");
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "beacon-tool-discipline.md");
+        File.WriteAllText(file, BeaconToolDiscipline.Rules);
+    }
 }
 
 public sealed record OpenCodeApplyResult(string ConfigPath, Dictionary<string, string> Environment);
@@ -490,7 +501,8 @@ public static class OpencodeConfig
         JsonElement agent,
         bool denyNativeFiles,
         JsonElement provider = default,
-        bool replaceMcp = false)
+        bool replaceMcp = false,
+        string[]? instructions = null)
     {
         JsonObject root;
         if (File.Exists(path))
@@ -533,6 +545,16 @@ public static class OpencodeConfig
             foreach (var prop in provider.EnumerateObject())
                 providerObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
             root["provider"] = providerObj;
+        }
+
+        if (instructions is { Length: > 0 })
+        {
+            var existing = root["instructions"] as JsonArray ?? new JsonArray();
+            var existingSet = existing.Select(j => j.GetValue<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var instr in instructions)
+                if (existingSet.Add(instr))
+                    existing.Add(instr);
+            root["instructions"] = existing;
         }
 
         if (denyNativeFiles)

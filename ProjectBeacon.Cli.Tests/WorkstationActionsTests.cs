@@ -358,6 +358,34 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public void ApplyOpencode_WritesToolDisciplineInstructions()
+    {
+        var path = Path.Combine(_dir, "discipline");
+        Directory.CreateDirectory(path);
+        var payload = new JsonObject { ["path"] = path };
+        var result = WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        Assert.True(result.Success);
+        var instrFile = Path.Combine(path, ".opencode", "instructions", "beacon-tool-discipline.md");
+        Assert.True(File.Exists(instrFile));
+        var content = File.ReadAllText(instrFile);
+        Assert.Contains("Beacon Tool Discipline", content);
+        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
+        Assert.Contains("beacon-tool-discipline", opc);
+    }
+
+    [Fact]
+    public void ApplyOpencode_InstructionsIdempotent()
+    {
+        var path = Path.Combine(_dir, "discipline2");
+        Directory.CreateDirectory(path);
+        var payload = new JsonObject { ["path"] = path };
+        WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
+        Assert.Equal(1, opc.Split("beacon-tool-discipline").Length - 1);
+    }
+
+    [Fact]
     public void Which_FallsBackToShimWhenNoLaunchableTwin()
     {
         if (!OperatingSystem.IsWindows())
