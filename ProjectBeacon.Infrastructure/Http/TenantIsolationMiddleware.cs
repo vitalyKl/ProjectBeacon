@@ -16,10 +16,19 @@ public sealed class TenantIsolationMiddleware
 
     public async Task InvokeAsync(HttpContext ctx, BeaconDbContext db)
     {
-        var (projectId, orgId) = await ResolveTenantScopeAsync(ctx, db);
+        Guid? projectId;
+        Guid? orgId;
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
+            (projectId, orgId) = await ResolveTenantScopeAsync(ctx, db);
+        }
 
         ctx.RequestServices?.GetService<ITenantContext>()
             ?.Assign(projectId, orgId, unscoped: false);
+
+        await TenantRlsSession.ApplyAsync(db, projectId, orgId, unscoped: false);
 
         IDisposable? projectScope = projectId is { } projectPid ? TenantScope.EnterProjectScope(projectPid) : null;
         IDisposable? orgScope = orgId is { } oid ? TenantScope.EnterOrgScope(oid) : null;
