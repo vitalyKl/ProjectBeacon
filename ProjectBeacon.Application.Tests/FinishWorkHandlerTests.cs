@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Tasks;
+using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -59,5 +60,52 @@ public sealed class FinishWorkHandlerTests : IDisposable
         Assert.True(result.Success, result.Error);
         await _db.Entry(task).ReloadAsync();
         Assert.Equal(TaskItemStatus.Done, task.Status);
+    }
+
+    [Fact]
+    public async Task Done_WithValidReviewTranscriptRef_Succeeds()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        _db.ReviewRuns.Add(ReviewRun.Create(_projectId, task.Id, "transcript-abc"));
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(),
+            "done",
+            "ok",
+            _userId.ToString(),
+            new FinishWorkReview(true, 0, 0),
+            ReviewTranscriptRef: "transcript-abc")));
+
+        Assert.True(result.Success, result.Error);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Done, task.Status);
+    }
+
+    [Fact]
+    public async Task Done_WithInvalidReviewTranscriptRef_Fails()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        _db.ReviewRuns.Add(ReviewRun.Create(_projectId, task.Id, "transcript-abc"));
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(),
+            "done",
+            "ok",
+            _userId.ToString(),
+            new FinishWorkReview(true, 0, 0),
+            ReviewTranscriptRef: "transcript-WRONG")));
+
+        Assert.False(result.Success);
+        Assert.Contains("Review run not found", result.Error);
     }
 }

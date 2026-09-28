@@ -39,6 +39,14 @@ public class FinishWorkHandler
                 if (command.Request.Review.RegressionsFound > command.Request.Review.RegressionsFixed)
                     return Result.Failure("Unfixed regressions remain; cannot mark done.");
 
+                if (!string.IsNullOrEmpty(command.Request.ReviewTranscriptRef))
+                {
+                    var reviewExists = await db.ReviewRuns.AnyAsync(
+                        r => r.TaskId == taskId && r.TranscriptRef == command.Request.ReviewTranscriptRef, ct);
+                    if (!reviewExists)
+                        return Result.Failure($"Review run not found for transcript ref '{command.Request.ReviewTranscriptRef}'.");
+                }
+
                 var notes = FormatReview(command.Request.Review, command.Request.Output);
                 try
                 {

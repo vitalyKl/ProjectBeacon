@@ -49,6 +49,7 @@ public class BeaconDbContext : DbContext
     public DbSet<ChatPart> ChatParts => Set<ChatPart>();
 
     public DbSet<EvalRun> EvalRuns => Set<EvalRun>();
+    public DbSet<ReviewRun> ReviewRuns => Set<ReviewRun>();
 
     public DbSet<ContextSection> ContextSections => Set<ContextSection>();
     public DbSet<ContextRevision> ContextRevisions => Set<ContextRevision>();
@@ -676,6 +677,15 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.TranscriptRef).HasMaxLength(500);
             entity.HasIndex(e => new { e.ProjectId, e.TaskId });
             entity.HasIndex(e => e.PairId);
+        });
+
+        modelBuilder.Entity<ReviewRun>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TranscriptRef).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ReviewerActorId).HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => new { e.ProjectId, e.TaskId });
         });
 
         TenantScopedQueryFilterConvention.Apply(modelBuilder, this);
