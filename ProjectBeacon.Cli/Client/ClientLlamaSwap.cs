@@ -35,6 +35,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
     internal IVramChecker VramChecker { get; set; } = new NoopVramChecker();
     internal Action<string>? Log { get; set; }
     private string? _ownLastYaml;
+    private string? _desiredSwapModel;
 
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -320,6 +321,17 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         _coordinator.UnregisterAll();
     }
 
+    /// <summary>Remembers which swap-group model to keep resident; survives heartbeat ticks.</summary>
+    internal void PreferSwapModel(string? name) => _desiredSwapModel = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+
+    internal Task EnsureSwapModelAsync(string? name, CancellationToken ct)
+    {
+        PreferSwapModel(name);
+        if (UseOwnSwapper && _ownLastYaml is not null)
+            return TickOwnAsync(_ownLastYaml, _port, ct);
+        return Task.CompletedTask;
+    }
+
     private async Task TickOwnAsync(string yaml, int port, CancellationToken ct)
     {
         if (port > 0)
@@ -336,18 +348,17 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             return;
         }
 
+        var swapSpec = specs.FirstOrDefault(s => !s.Concurrent && string.Equals(s.Name, _desiredSwapModel, StringComparison.OrdinalIgnoreCase))
+            ?? specs.FirstOrDefault(s => !s.Concurrent);
+
         var desired = new Dictionary<string, (LlamaSwapModelSpec Spec, int Port)>(StringComparer.Ordinal);
         var residentIndex = 0;
-        var swapAssigned = false;
         foreach (var spec in specs)
         {
             if (spec.Concurrent)
                 desired[spec.Name] = (spec, ConcurrentPortBase + residentIndex++);
-            else if (!swapAssigned)
-            {
+            else if (spec.Name == swapSpec?.Name)
                 desired[spec.Name] = (spec, _port);
-                swapAssigned = true;
-            }
         }
 
         foreach (var name in _own.Keys.Where(k => !desired.ContainsKey(k)).ToList())

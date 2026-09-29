@@ -7,7 +7,7 @@ using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 
-public sealed record SpawnedSession(Guid? ModelBackendId, string? LaunchSpec);
+public sealed record SpawnedSession(Guid? ModelBackendId, string? ModelName, string? LaunchSpec);
 
 public interface ISessionSpawner
 {
@@ -33,19 +33,19 @@ public sealed class ManualSessionSpawner : ISessionSpawner
                 _ => phases.FirstOrDefault(p => p.Key == "do") ?? (phases.Count > 1 ? phases[1] : phases[0])
             };
             if (phase.ModelBackendId is not Guid modelId)
-                return new SpawnedSession(null, null);
+                return new SpawnedSession(null, null, null);
             var chosen = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == modelId, ct);
-            return chosen is null ? new SpawnedSession(null, null) : SessionFrom(chosen);
+            return chosen is null ? new SpawnedSession(null, null, null) : SessionFrom(chosen);
         }
 
         var binding = await db.RoleBindings
             .FirstOrDefaultAsync(b => b.Role == role && b.ProjectId == projectId, ct);
         if (binding is null)
-            return new SpawnedSession(null, null);
+            return new SpawnedSession(null, null, null);
 
         var backend = await db.LocalModelBackends.FirstOrDefaultAsync(b => b.Id == binding.ModelBackendId, ct);
         if (backend is null)
-            return new SpawnedSession(null, null);
+            return new SpawnedSession(null, null, null);
 
         return SessionFrom(backend);
     }
@@ -59,6 +59,6 @@ public sealed class ManualSessionSpawner : ISessionSpawner
         if (backend.BackendType == ModelBackendType.LlamaCpp
             && !spec.Contains("--no-reasoning-preserve", StringComparison.Ordinal))
             spec += " --no-reasoning-preserve";
-        return new SpawnedSession(backend.Id, spec);
+        return new SpawnedSession(backend.Id, backend.Name, spec);
     }
 }

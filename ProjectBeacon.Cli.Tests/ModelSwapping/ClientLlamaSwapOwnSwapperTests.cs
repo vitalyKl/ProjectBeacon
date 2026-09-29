@@ -127,4 +127,58 @@ public sealed class ClientLlamaSwapOwnSwapperTests
         // depending on SkipRealProcess, but the key is it did NOT use TickOwnAsync.
         Assert.NotNull(ll.Status);
     }
+
+    private static string TwoModelYaml() => LlamaSwapConfigGenerator.Generate([
+        new LlamaSwapModelSpec("alpha", "llama-server -m a.gguf", 0, 300, []),
+        new LlamaSwapModelSpec("beta", "llama-server -m b.gguf", 0, 300, [])]);
+
+    [Fact]
+    public async Task TickOwn_NoDesired_FallsBackToFirstAlphabetical()
+    {
+        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
+        Assert.Equal("alpha", ll.Status.LoadedModel);
+    }
+
+    [Fact]
+    public async Task TickOwn_PrefersDesiredSwapModel_NotFirstAlphabetical()
+    {
+        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        ll.PreferSwapModel("beta");
+        await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
+        Assert.Equal("beta", ll.Status.LoadedModel);
+    }
+
+    [Fact]
+    public async Task TickOwn_SwapsToDesiredOnDemand()
+    {
+        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        ll.PreferSwapModel("alpha");
+        await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
+        Assert.Equal("alpha", ll.Status.LoadedModel);
+
+        ll.PreferSwapModel("beta");
+        await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
+        Assert.Equal("beta", ll.Status.LoadedModel);
+    }
+
+    [Fact]
+    public async Task TickOwn_UnknownDesired_FallsBackToFirst()
+    {
+        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        ll.PreferSwapModel("zzz");
+        await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
+        Assert.Equal("alpha", ll.Status.LoadedModel);
+    }
+
+    [Fact]
+    public async Task EnsureSwapModelAsync_SetsPreferenceAndTicks()
+    {
+        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
+        Assert.Equal("alpha", ll.Status.LoadedModel);
+
+        await ll.EnsureSwapModelAsync("beta", CancellationToken.None);
+        Assert.Equal("beta", ll.Status.LoadedModel);
+    }
 }

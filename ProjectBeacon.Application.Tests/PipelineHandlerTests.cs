@@ -59,7 +59,7 @@ public sealed class PipelineHandlerTests : IDisposable
         public Task<SpawnedSession> SpawnAsync(BeaconDbContext db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             Calls.Add((projectId, role));
-            return Task.FromResult(new SpawnedSession(null, null));
+            return Task.FromResult(new SpawnedSession(null, null, null));
         }
     }
     [Fact]

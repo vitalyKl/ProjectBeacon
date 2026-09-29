@@ -220,6 +220,12 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                 await WithLlamaAsync(() => _llama.UnloadAsync(ct), ct);
                 return (true, JsonSerializer.Serialize(_llama.StatusWire()), null);
             }
+            if (kind == WorkstationCommandKind.SwapModel)
+            {
+                var name = ExtractSwapName(ReadModelName(payload));
+                await WithLlamaAsync(() => _llama.EnsureSwapModelAsync(name, ct), ct);
+                return (true, JsonSerializer.Serialize(_llama.StatusWire()), null);
+            }
             if (kind == WorkstationCommandKind.ConfigureOpenCode)
                 return await ConfigureOpenCodeAsync(ct);
             var root = ReadRoot(payload);
@@ -290,6 +296,8 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         await _openCode.TickAsync(path, ct);
         if (!_openCode.Status.Healthy)
             return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
+        if (_llama.UseOwnSwapper && model is not null)
+            await WithLlamaAsync(() => _llama.EnsureSwapModelAsync(ExtractSwapName(model), ct), ct);
         await _openCode.PromptAsync(externalId, text, model, ct);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(ChatIdleTimeout / ChatPollInterval));
@@ -345,6 +353,28 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         await _llamaLock.WaitAsync(ct);
         try { await action(); }
         finally { _llamaLock.Release(); }
+    }
+
+    private static string? ExtractSwapName(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return null;
+        var i = model.IndexOf('/');
+        var name = i < 0 ? model : model[(i + 1)..];
+        return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+    }
+
+    private static string? ReadModelName(string payload)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            return doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string? ReadPath(string payload)
