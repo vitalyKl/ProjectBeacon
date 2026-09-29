@@ -10,12 +10,10 @@ public static class TenantRlsSession
             return;
 
         await db.Database.OpenConnectionAsync();
-        await db.Database.ExecuteSqlRawAsync(
-            "SELECT set_config('app.tenant_project_id', @pid, false)," +
-            "       set_config('app.tenant_org_id', @oid, false)," +
-            "       set_config('app.tenant_unscoped', @uns, false)",
-            projectId?.ToString() ?? "",
-            orgId?.ToString() ?? "",
-            unscoped ? "true" : "false");
+        var pid = projectId?.ToString() ?? "";
+        var oid = orgId?.ToString() ?? "";
+        var uns = unscoped ? "true" : "false";
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT set_config('app.tenant_project_id', {pid}, false), set_config('app.tenant_org_id', {oid}, false), set_config('app.tenant_unscoped', {uns}, false)");
     }
 }
