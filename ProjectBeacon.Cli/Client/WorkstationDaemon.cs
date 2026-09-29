@@ -28,6 +28,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     {
         _http = http;
         _llama = llama;
+        _llama.Log = msg => Log(msg);
         _ownsOpenCode = openCode is null;
         _openCode = openCode ?? new ClientOpenCodeServe();
         _loadSettings = loadSettings ?? (() => WorkstationSettings.Load());
@@ -176,6 +177,8 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             if (config is null)
                 return;
             var port = settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : config.Port;
+            _llama.UseOwnSwapper = settings.UseOwnSwapper;
+            _llama.ConcurrentPortBase = settings.ConcurrentPortBase > 0 ? settings.ConcurrentPortBase : 9000;
             await _llama.TickAsync(config.Yaml ?? "models: {}\n", port, settings.LlamaSwapBin, ct);
             Publish(s => s with { Llama = _llama.Status });
         }
@@ -392,6 +395,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await _llama.DisposeAsync();
         _llamaLock.Dispose();
         if (_ownsOpenCode)
             await _openCode.DisposeAsync();

@@ -1,11 +1,13 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Infrastructure.LlamaSwap;
+using ModelSwapping;
 
 public sealed class ClientLlamaSwap : IAsyncDisposable
 {
@@ -26,6 +28,13 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
     internal int StartCount { get; private set; }
     internal bool SkipRealProcess { get; set; }
     internal string ConfigFile { get; set; } = ConfigPath;
+    internal bool UseOwnSwapper { get; set; }
+    internal int ConcurrentPortBase { get; set; } = 9000;
+    private readonly Dictionary<string, LlamaServerBackend> _own = new();
+    private readonly SwapGroupCoordinator _coordinator = new();
+    internal IVramChecker VramChecker { get; set; } = new NoopVramChecker();
+    internal Action<string>? Log { get; set; }
+    private string? _ownLastYaml;
 
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -40,6 +49,13 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
 
     public async Task TickAsync(string yaml, int port, string? binPath, CancellationToken ct)
     {
+        if (UseOwnSwapper)
+        {
+            _ownLastYaml = yaml;
+            await TickOwnAsync(yaml, port, ct);
+            return;
+        }
+
         var nextPort = port <= 0 ? 8080 : port;
         var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(yaml)));
         if (hash != _lastHash)
@@ -76,6 +92,19 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
 
     public async Task ReloadAsync(CancellationToken ct)
     {
+        if (UseOwnSwapper)
+        {
+            await StopOwnBackendsAsync(ct);
+            _own.Clear();
+            if (_ownLastYaml is null)
+            {
+                Status = new LlamaSwapStatusDto(false, false, null, null, null, null);
+                return;
+            }
+            await TickOwnAsync(_ownLastYaml, _port, ct);
+            return;
+        }
+
         KillProcess();
         if (string.IsNullOrWhiteSpace(_lastBin))
         {
@@ -88,6 +117,15 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
 
     public async Task UnloadAsync(CancellationToken ct)
     {
+        if (UseOwnSwapper)
+        {
+            await StopOwnBackendsAsync(ct);
+            _own.Clear();
+            _lastLoaded = null;
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, null);
+            return;
+        }
+
         try
         {
             using var response = await _http.PostAsync($"http://127.0.0.1:{_port}/api/models/unload", null, ct);
@@ -258,10 +296,153 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         return null;
     }
 
+    private async Task<bool> TryCheckVramAsync(CancellationToken ct)
+    {
+        try
+        {
+            var free = await VramChecker.GetFreeVramMbAsync(ct);
+            return free < 0 || free > 0;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private async Task StopOwnBackendsAsync(CancellationToken ct)
+    {
+        foreach (var backend in _own.Values)
+        {
+            await backend.StopAsync(ct);
+            backend.Dispose();
+            _coordinator.Deactivate(backend.Name);
+        }
+        _coordinator.UnregisterAll();
+    }
+
+    private async Task TickOwnAsync(string yaml, int port, CancellationToken ct)
+    {
+        if (port > 0)
+            _port = port;
+
+        IReadOnlyList<LlamaSwapModelSpec> specs;
+        try
+        {
+            specs = LlamaSwapConfigParser.Parse(yaml);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, $"config parse failed: {ex.Message}");
+            return;
+        }
+
+        var desired = new Dictionary<string, (LlamaSwapModelSpec Spec, int Port)>(StringComparer.Ordinal);
+        var residentIndex = 0;
+        var swapAssigned = false;
+        foreach (var spec in specs)
+        {
+            if (spec.Concurrent)
+                desired[spec.Name] = (spec, ConcurrentPortBase + residentIndex++);
+            else if (!swapAssigned)
+            {
+                desired[spec.Name] = (spec, _port);
+                swapAssigned = true;
+            }
+        }
+
+        foreach (var name in _own.Keys.Where(k => !desired.ContainsKey(k)).ToList())
+        {
+            await _own[name].StopAsync(ct);
+            _own[name].Dispose();
+            _own.Remove(name);
+            _coordinator.Unregister(name);
+        }
+
+        foreach (var (name, (spec, p)) in desired)
+        {
+            _coordinator.Register(name, spec.Concurrent);
+
+            if (!spec.Concurrent && !await TryCheckVramAsync(ct))
+                continue;
+
+            if (!spec.Concurrent && _coordinator.IsGroupBusy("swap"))
+                continue;
+
+            if (!_own.TryGetValue(name, out var backend) || backend.Port != p)
+            {
+                if (backend is not null)
+                {
+                    await backend.StopAsync(ct);
+                    backend.Dispose();
+                    _coordinator.Deactivate(name);
+                }
+                backend = new LlamaServerBackend
+                {
+                    Name = name,
+                    Port = p,
+                    SkipRealProcess = SkipRealProcess,
+                    Log = Log
+                };
+                _own[name] = backend;
+            }
+            try
+            {
+                await backend.StartAsync(spec, ct);
+                if (backend.State == BackendState.Ready)
+                    _coordinator.TryActivate(name);
+            }
+            catch (Exception)
+            {
+                // StartAsync already recorded the fault; the next tick retries.
+            }
+        }
+
+        Status = BuildOwnStatus();
+    }
+
+    private LlamaSwapStatusDto BuildOwnStatus()
+    {
+        if (_own.Count == 0)
+            return new LlamaSwapStatusDto(false, false, null, null, null, null);
+
+        var backends = _own.Values.ToArray();
+        var faulted = backends.Where(b => b.State == BackendState.Faulted).ToArray();
+        var ready = backends.Where(b => b.State == BackendState.Ready).ToArray();
+        var available = ready.Length > 0 || backends.Any(b => b.State == BackendState.Starting);
+        var healthy = ready.Length > 0 && faulted.Length == 0;
+
+        var active = ready.FirstOrDefault(b => b.Port == _port) ?? ready.FirstOrDefault();
+        var loadedModel = active?.Name;
+        if (loadedModel != null && loadedModel != _lastLoaded)
+        {
+            _lastLoaded = loadedModel;
+            _lastSwap = DateTime.UtcNow;
+        }
+
+        var memory = backends.Where(b => b.VramFootprintMb > 0)
+            .Sum(b => b.VramFootprintMb).ToString(CultureInfo.InvariantCulture) + " MiB";
+        var error = faulted.Length > 0 ? faulted[0].Error : null;
+
+        var loadedModels = backends
+            .OrderBy(b => b.Port)
+            .Select(b => new LoadedModelStatus(b.Name, b.State.ToString().ToLowerInvariant()))
+            .ToList();
+
+        return new LlamaSwapStatusDto(available, healthy, loadedModel, memory, _lastSwap, error, loadedModels);
+    }
+
     public async ValueTask DisposeAsync()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        foreach (var backend in _own.Values)
+        {
+            try { await backend.StopAsync(cts.Token); } catch { }
+            backend.Dispose();
+            _coordinator.Deactivate(backend.Name);
+        }
+        _coordinator.UnregisterAll();
+        _own.Clear();
         KillProcess();
         _http.Dispose();
-        await Task.CompletedTask;
     }
 }

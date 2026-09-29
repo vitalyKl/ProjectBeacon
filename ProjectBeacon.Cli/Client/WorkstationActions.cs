@@ -332,6 +332,11 @@ public static class WorkstationActions
             settings.LlamaSwapBin = swap.GetString();
         if (root.TryGetProperty("llamaSwapPort", out var port) && port.TryGetInt32(out var p) && p > 0)
             settings.LlamaSwapPort = p;
+        if (root.TryGetProperty("useOwnSwapper", out var own) &&
+            (own.ValueKind == JsonValueKind.True || own.ValueKind == JsonValueKind.False))
+            settings.UseOwnSwapper = own.GetBoolean();
+        if (root.TryGetProperty("concurrentPortBase", out var cport) && cport.TryGetInt32(out var cp) && cp > 0)
+            settings.ConcurrentPortBase = cp;
         if (root.TryGetProperty("opencodeDataDir", out var data) && data.ValueKind == JsonValueKind.String)
             settings.OpencodeDataDir = data.GetString();
         if (root.TryGetProperty("projectsRoot", out var projects) && projects.ValueKind == JsonValueKind.String)
