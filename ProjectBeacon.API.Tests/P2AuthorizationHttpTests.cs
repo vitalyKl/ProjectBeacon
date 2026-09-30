@@ -365,6 +365,87 @@ public sealed class P2AuthorizationHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task GetToken_NonMember_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "secret-token",
+            capabilities = 1
+        });
+        var tokenId = token.GetProperty("id").GetGuid();
+
+        var outsiderJwt = await RegisterAndLogin(client, "outsider8", "o8@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+
+        var response = await client.GetAsync($"/v1/projects/{projectId}/tokens/{tokenId}");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ApiToken_CannotListTokens_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var tokenResponse = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "api-token-l",
+            capabilities = 1
+        });
+        var apiTokenValue = tokenResponse.GetProperty("tokenPrefix").GetString()!;
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
+        var response = await client.GetAsync($"/v1/projects/{projectId}/tokens");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetToken_CrossProject_Returns404()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var projectA = await PostJson(client, "/v1/projects", new { name = "A", orgId });
+        var projectIdA = projectA.GetProperty("id").GetGuid();
+        var projectB = await PostJson(client, "/v1/projects", new { name = "B", orgId });
+        var projectIdB = projectB.GetProperty("id").GetGuid();
+
+        var token = await PostJson(client, $"/v1/projects/{projectIdA}/tokens", new
+        {
+            projectIdA,
+            name = "in-a",
+            capabilities = 1
+        });
+        var tokenId = token.GetProperty("id").GetGuid();
+
+        var response = await client.GetAsync($"/v1/projects/{projectIdB}/tokens/{tokenId}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");

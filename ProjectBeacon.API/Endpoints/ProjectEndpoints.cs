@@ -35,7 +35,7 @@ public static class ProjectEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/tokens/{tokenId:guid}", async (Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx) => await RevokeToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/tokens/{tokenId:guid}", async (Guid tokenId, GetApiTokenHandler handler, HttpContext ctx) => await GetToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery();
 
         return app;
     }
@@ -159,18 +159,31 @@ public static class ProjectEndpoints
             : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
     }
 
-    private static async Task<IResult> GetToken(Guid tokenId, GetApiTokenHandler handler)
+    private static async Task<IResult> GetToken(Guid projectId, Guid tokenId, GetApiTokenHandler handler, HttpContext ctx)
     {
-        var result = await handler.HandleAsync(new GetApiTokenCommand(new GetApiTokenRequest(tokenId)));
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+
+        var result = await handler.HandleAsync(new GetApiTokenCommand(
+            new GetApiTokenRequest(projectId, tokenId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
     }
 
-    private static async Task<IResult> ListTokens(Guid projectId, ListApiTokensHandler handler)
+    private static async Task<IResult> ListTokens(Guid projectId, ListApiTokensHandler handler, HttpContext ctx)
     {
-        var result = await handler.HandleAsync(new ListApiTokensCommand(new ListApiTokensRequest(projectId)));
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+
+        var result = await handler.HandleAsync(new ListApiTokensCommand(
+            new ListApiTokensRequest(projectId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+        if (!result.Success)
+            return Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
+
         return Results.Ok(result.Value?.Select(MapTokenResponse));
     }
 

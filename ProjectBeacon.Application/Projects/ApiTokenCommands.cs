@@ -11,13 +11,13 @@ public record RevokeApiTokenRequest(Guid ProjectId, Guid TokenId);
 
 public record RevokeApiTokenCommand(RevokeApiTokenRequest Request, Guid ActorUserId, bool ActorIsAdmin, bool ActorIsApiToken) : ICommand<Result>;
 
-public record GetApiTokenRequest(Guid TokenId);
+public record GetApiTokenRequest(Guid ProjectId, Guid TokenId);
 
-public record GetApiTokenCommand(GetApiTokenRequest Request) : ICommand<Result<ApiTokenDto>>;
+public record GetApiTokenCommand(GetApiTokenRequest Request, Guid ActorUserId, bool ActorIsAdmin, bool ActorIsApiToken) : ICommand<Result<ApiTokenDto>>;
 
 public record ListApiTokensRequest(Guid ProjectId);
 
-public record ListApiTokensCommand(ListApiTokensRequest Request) : ICommand<Result<IList<ApiTokenDto>>>;
+public record ListApiTokensCommand(ListApiTokensRequest Request, Guid ActorUserId, bool ActorIsAdmin, bool ActorIsApiToken) : ICommand<Result<IList<ApiTokenDto>>>;
 
 public record ApiTokenDto(
     Guid Id,

@@ -125,7 +125,26 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
     public async Task<Result<ApiTokenDto>> HandleAsync(GetApiTokenCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var token = await db.ApiTokens.FindAsync([command.Request.TokenId], ct);
+
+        var tokenId = command.Request.TokenId;
+        var projectId = command.Request.ProjectId;
+        if (projectId == Guid.Empty)
+        {
+            var owner = await db.ApiTokens.IgnoreQueryFilters()
+                .Where(t => t.Id == tokenId)
+                .Select(t => t.ProjectId)
+                .FirstOrDefaultAsync(ct);
+            if (owner == Guid.Empty)
+                return Result.Failure<ApiTokenDto>("API token not found.");
+            projectId = owner;
+        }
+
+        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, projectId, actor, ct))
+            return Result.Failure<ApiTokenDto>("Forbidden.");
+
+        var token = await db.ApiTokens
+            .FirstOrDefaultAsync(t => t.Id == tokenId && t.ProjectId == projectId, ct);
         if (token is null)
             return Result.Failure<ApiTokenDto>("API token not found.");
 
@@ -150,6 +169,11 @@ public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result
     public async Task<Result<IList<ApiTokenDto>>> HandleAsync(ListApiTokensCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+
+        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, actor, ct))
+            return Result.Failure<IList<ApiTokenDto>>("Forbidden.");
+
         var tokens = await db.ApiTokens
             .Where(t => t.ProjectId == command.Request.ProjectId)
             .OrderByDescending(t => t.CreatedAt)
