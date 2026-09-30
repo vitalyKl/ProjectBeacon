@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Authorization;
 using Application.Common;
-using Application.Projects;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -22,6 +22,13 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
     public async Task<Result<ApiTokenDto>> HandleAsync(CreateApiTokenCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+
+        var auth = await ProjectAuthorization.CreateToken(
+            db, command.Request.ProjectId, command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken,
+            command.Request.Capabilities, ct);
+        if (!auth.Success)
+            return Result.Failure<ApiTokenDto>(auth.Error!);
+
         var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
             return Result.Failure<ApiTokenDto>("Project not found.");
@@ -76,7 +83,27 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
     public async Task<Result> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var token = await db.ApiTokens.FindAsync([command.Request.TokenId], ct);
+
+        var projectId = command.Request.ProjectId;
+        if (projectId == Guid.Empty)
+        {
+            var existing = await db.ApiTokens.IgnoreQueryFilters()
+                .Where(t => t.Id == command.Request.TokenId)
+                .Select(t => t.ProjectId)
+                .FirstOrDefaultAsync(ct);
+            if (existing == Guid.Empty)
+                return Result.Failure("API token not found.");
+            projectId = existing;
+        }
+
+        var auth = await ProjectAuthorization.RevokeToken(
+            db, projectId, command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken,
+            command.Request.TokenId, ct);
+        if (!auth.Success)
+            return Result.Failure(auth.Error!);
+
+        var token = await db.ApiTokens
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TokenId && t.ProjectId == projectId, ct);
         if (token is null)
             return Result.Failure("API token not found.");
 

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
@@ -14,6 +15,12 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
     public async Task<Result<ProjectMemberDto>> HandleAsync(AddProjectMemberCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var auth = await ProjectAuthorization.AddMember(
+            db, command.Request.ProjectId, command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken,
+            command.Request.UserId, command.Request.Role, ct);
+        if (!auth.Success)
+            return Result.Failure<ProjectMemberDto>(auth.Error!);
+
         var alreadyMember = await db.ProjectMembers
             .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
         if (alreadyMember)
@@ -40,6 +47,12 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
     public async Task<Result> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var auth = await ProjectAuthorization.RemoveMember(
+            db, command.Request.ProjectId, command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken,
+            command.Request.UserId, ct);
+        if (!auth.Success)
+            return Result.Failure(auth.Error!);
+
         var member = await db.ProjectMembers
             .FirstOrDefaultAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
         if (member is null)

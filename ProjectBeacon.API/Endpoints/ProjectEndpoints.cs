@@ -33,7 +33,7 @@ public static class ProjectEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
         app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery();
+        app.MapDelete("/v1/tokens/{tokenId:guid}", async (Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx) => await RevokeToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery();
         app.MapGet("/v1/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
 
         return app;
@@ -87,25 +87,32 @@ public static class ProjectEndpoints
     private static ProjectDto MapProjectResponse(ProjectDto dto) =>
         new(dto.Id, dto.Name, dto.Description, dto.OrgId, dto.CreatedAt, dto.UpdatedAt);
 
-    private static async Task<IResult> AddMember(Guid projectId, [FromBody] AddProjectMemberRequest request, AddProjectMemberHandler handler)
+    private static async Task<IResult> AddMember(Guid projectId, [FromBody] AddProjectMemberRequest request, AddProjectMemberHandler handler, HttpContext ctx)
     {
         if (projectId != request.ProjectId)
             return Results.BadRequest("ProjectId mismatch.");
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
 
-        var result = await handler.HandleAsync(new AddProjectMemberCommand(request));
+        var result = await handler.HandleAsync(new AddProjectMemberCommand(request, actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.Ok(MapMemberResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 400);
     }
 
-    private static async Task<IResult> RemoveMember(Guid projectId, Guid userId, RemoveProjectMemberHandler handler)
+    private static async Task<IResult> RemoveMember(Guid projectId, Guid userId, RemoveProjectMemberHandler handler, HttpContext ctx)
     {
-        var result = await handler.HandleAsync(new RemoveProjectMemberCommand(new RemoveProjectMemberRequest(projectId, userId)));
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+
+        var result = await handler.HandleAsync(new RemoveProjectMemberCommand(new RemoveProjectMemberRequest(projectId, userId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.NoContent()
-            : Results.NotFound(new { error = result.Error });
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
     }
 
     private static async Task<IResult> ListMembers(Guid projectId, GetProjectMembersHandler handler)
@@ -123,20 +130,27 @@ public static class ProjectEndpoints
         var actor = ActorUserId(ctx);
         if (actor is null)
             return Results.Unauthorized();
-        var result = await handler.HandleAsync(new CreateApiTokenCommand(new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.Value)));
+        var result = await handler.HandleAsync(new CreateApiTokenCommand(
+            new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.Value),
+            actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 400);
     }
 
-    private static async Task<IResult> RevokeToken(Guid tokenId, RevokeApiTokenHandler handler)
+    private static async Task<IResult> RevokeToken(Guid projectId, Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx)
     {
-        var result = await handler.HandleAsync(new RevokeApiTokenCommand(new RevokeApiTokenRequest(tokenId)));
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+        var resolvedProject = projectId == Guid.Empty ? Guid.Empty : projectId;
+        var result = await handler.HandleAsync(new RevokeApiTokenCommand(
+            new RevokeApiTokenRequest(resolvedProject, tokenId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.NoContent()
-            : Results.NotFound(new { error = result.Error });
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
     }
 
     private static async Task<IResult> GetToken(Guid tokenId, GetApiTokenHandler handler)
@@ -201,4 +215,7 @@ public static class ProjectEndpoints
 
     private static bool ActorIsAdmin(HttpContext ctx) =>
         bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var flag) && flag;
+
+    private static bool ActorIsApiToken(HttpContext ctx) =>
+        ctx.User.Identity?.AuthenticationType == "ApiToken";
 }
