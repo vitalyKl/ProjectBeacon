@@ -23,10 +23,9 @@
 - Миграции: только `dotnet ef migrations add` + регенерация ModelSnapshot. Никогда руками.
 
 ### 0.3 Non-goals, которые не трогаем
-- Beacon-hosted coding agent и worker (Phase 8) — не начаты. Workstation client (`beacon client`) сдан как command bus; не OpenCode harness.
+- Beacon-hosted coding agent. Worker (`ProjectBeacon.Worker`) существует, Phase 8+. Workstation client (`beacon client`) сдан как command bus; не OpenCode harness.
 - Hosted clone, outbound WSS, `write_handoff`, GitHub two-way sync — flagged off.
 - `TaskItemStatus {Todo, InProgress, Done}`, `TaskSubStage` и cold-diff гейт (`ReviewNotes` обязательны для `Done` — `TaskItem.MoveInProgressToDone`/`TransitionTo`) — **не ломаем**.
-- `design-doc-v2.md` не редактируем (AGENTS.md).
 
 ### 0.4 Факты по коду, на которые опирается план
 - `TaskItem` (`Domain/Entities/Projects/TaskItem.cs`): поля Status/SubStage/ReviewNotes, `TransitionTo(TaskItemStatus)` бросает без ReviewNotes — cold-diff гейт.
@@ -247,9 +246,8 @@
 - Сделано: `PipelineHandlerTests` — 18 тестов, включая `EnterExecuting_Twice_IsIdempotent`, `StartReview_Twice_SecondFails`, `StartReview_AfterApproval_Fails`, `ReviewPrompt_MarksFailedSubtasks`.
 
 ### B8. Документация и roadmap — выполнено
-- `dotnet project docs/ProjectBeacon-dotnet-roadmap-v2.md` — строки на M1–M6 с acceptance (AGENTS.md: изменение не «done», пока acceptance строки не выполнена).
 - `dotnet project docs/mcp-host.md` — новые tool'ы и env (см. B5). Cross-check с `McpStdioServer.Tools()`: 6 file + `model_bind`/`model_status`/`task_create_subtask`/`subtask_report_result`/`task_review_verdict`/`task_pipeline_status`; env `BEACON_PROJECT_ID` / `BEACON_TASK_ID` / `BEACON_ACTOR_ID`.
-- `design-doc-v2.md` — не трогаем.
+- B1–B7, A1–A8 зафиксированы в `ProjectBeacon-master-roadmap-v1.md` как выполненные.
 
 ---
 

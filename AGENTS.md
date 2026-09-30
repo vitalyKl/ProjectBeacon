@@ -39,11 +39,11 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 
 **Dependency graph:** Domain → Infrastructure → Application → API → Web. Cli references Application, Domain, and Infrastructure.
 
-Four pieces (per design-doc-v2 §3):
+Four pieces (per architecture):
 - **API** — thin `/v1` endpoints; handlers live in Application. Mapped on the Web host (`:5083`) and on the API project for tests.
 - **Web** — human-facing UI. Invokes Application handlers in-process; Razor must not inject `BeaconDbContext`.
 - **Local workstation client** — `beacon client` on the developer's machine. Outbound HTTPS to the API (enroll, heartbeat, long-poll commands). Owns the working tree, OpenCode config, and llama-swap process. Not a WSS tunnel and not a hosted clone. Pipeline session spawn is still `ManualSessionSpawner` (no OpenCode harness yet).
-- **Worker** — not started yet (Phase 8)
+- **Worker** — background jobs (`ProjectBeacon.Worker`, Generic Host); `BEACON_WORKER_TOKEN` is the root credential for all projects.
 
 ## Conventions
 
@@ -55,10 +55,10 @@ Four pieces (per design-doc-v2 §3):
 - Status enums live in `ProjectBeacon.Domain.Enums` to avoid BCL name collisions.
 - Password hashing uses `PasswordHasher` in Infrastructure (BCrypt).
 - Comments explain a non-obvious constraint. Do not narrate implementation history.
-- Do not edit `dotnet project docs/ProjectBeacon-design-doc-v2.md` unless the task says to.
+- Do not edit historical docs in `archive/docs/` unless the task says to.
 - User-facing web chrome goes through `IStringLocalizer<Web>` (resx). Add the English key first; other locales fall back to English.
 - Do not hardcode English chrome in Razor components. Leave user-authored content (project names, task titles, descriptions, comments) in the language they were written. Filenames and CLI commands stay English.
-- A change is not done until the acceptance criterion in `dotnet project docs/ProjectBeacon-dotnet-roadmap-v2.md` for that row is met.
+- A change is not done until the acceptance criterion in the relevant section of `dotnet project docs/ProjectBeacon-master-roadmap-v1.md` or its specialized roadmaps is met.
 
 ## Style
 

@@ -1,19 +1,23 @@
 # Промпт для агента (шаблон)
 
-Подставь `{STEP_NUMBER}` (1–19) и отправь агенту. Всё остальное агент берёт из документов репозитория.
+## Инструкция
 
----
+Агент получает инструкцию от master roadmap и specialized roadmaps. Не использовать этот файл как standalone prompt.
 
-Ты работаешь в .NET 9 монорепо ProjectBeacon (C# 12, Blazor Server + MudBlazor, EF Core/Postgres, решение `ProjectBeacon.sln`).
+## Routing
 
-1. Прочитай `AGENTS.md` — цели, non-goals, конвенции, security-правила, pitfalls. Следи за ними.
-2. Прочитай `dotnet project docs/ProjectBeacon-fix-plan.md` и найди **Шаг {STEP_NUMBER}**.
-3. Прочитай все файлы из секции «Контекст» этого шага.
-4. Выполни подшаги шага. Меняй только то, что требуется шагом; не рефактори соседний код.
-5. Правила:
+Перед началом задачи:
+1. Прочитай `AGENTS.md` — цели, non-goals, конвенции, security-правила, pitfalls.
+2. Определи текущую фазу в `dotnet project docs/ProjectBeacon-master-roadmap-v1.md`.
+3. Прочитай указанные секции:
+   - Backend roadmap: `dotnet project docs/ProjectBeacon-code-review-roadmap-v3.md`
+   - UI/UX roadmap: `dotnet project docs/ProjectBeacon-ui-ux-review-roadmap-v1.1.md`
+4. Прочитай все файлы из секции «Контекст» задачи.
+5. Выполни подшаги задачи. Меняй только то, что требуется задачей; не рефактори соседний код.
+6. Правила:
    - английский UI-текст — только через `IStringLocalizer<Web>` (resx);
-   - не трогай `AGENTS.md`, `ProjectBeacon-design-doc-v2.md` и roadmap, если шаг прямо об этом;
+   - не трогай `AGENTS.md` и `archive/docs/` если задача прямо об этом;
    - не коммить, если не просят.
-6. Валидация: `dotnet build` и `dotnet test` — без ошибок и без сломанных существующих тестов.
-   Если шаг требует новых тестов (в списке подшагов) — они обязательны.
-7. В ответе кратко: какие файлы изменены, какие тесты добавлены, результат build/test.
+7. Валидация: `dotnet build` и `dotnet test` — без ошибок и без сломанных существующих тестов.
+   Если задача требует новых тестов — они обязательны.
+8. В ответе кратко: какие файлы изменены, какие тесты добавлены, результат build/test.

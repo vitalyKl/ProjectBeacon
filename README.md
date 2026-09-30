@@ -2,7 +2,7 @@
 
 .NET 9 project operating system for mixed human + agent development. Blazor Server + MudBlazor on `:5083`. Agents use stdio `beacon mcp`, not HTTP MCP. The workstation client (`beacon client`) talks outbound HTTPS to the control plane; the Web host does not read the user's disk.
 
-Authoritative product docs: `dotnet project docs/ProjectBeacon-design-doc-v2.md` (wins on conflict) and `ProjectBeacon-dotnet-roadmap-v2.md`. Process contract: `AGENTS.md`.
+Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1.md` (execution entrypoint), `dotnet project docs/ProjectBeacon-code-review-roadmap-v3.md` (backend/security/architecture), and `dotnet project docs/ProjectBeacon-ui-ux-review-roadmap-v1.1.md` (UI/UX). Process contract: `AGENTS.md`. Historical plans are archived in `archive/docs/`.
 
 ## Self-host
 

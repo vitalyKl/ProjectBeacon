@@ -1,0 +1,9 @@
+{
+  "testDir": "./screenshots",
+  "use": {
+    "baseURL": "http://localhost:5083"
+  },
+  "projects": [
+    { "name": "chromium", "use": { "browserName": "chromium" } }
+  ]
+}
