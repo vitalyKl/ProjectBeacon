@@ -1699,14 +1699,29 @@
   <data name="Abort" xml:space="preserve">
     <value>Стоп</value>
   </data>
-  <data name="NavQueue" xml:space="preserve">
-    <value>Очередь</value>
+  <data name="NavWork" xml:space="preserve">
+    <value>Работа</value>
   </data>
-  <data name="NavMemory" xml:space="preserve">
-    <value>Память проекта</value>
+  <data name="NavKnowledge" xml:space="preserve">
+    <value>Знания</value>
   </data>
-  <data name="NavRuntime" xml:space="preserve">
-    <value>Среда</value>
+  <data name="NavAgents" xml:space="preserve">
+    <value>Агенты</value>
+  </data>
+  <data name="NavProject" xml:space="preserve">
+    <value>Проект</value>
+  </data>
+  <data name="NavAccount" xml:space="preserve">
+    <value>Аккаунт</value>
+  </data>
+  <data name="ProjectSettings" xml:space="preserve">
+    <value>Настройки проекта</value>
+  </data>
+  <data name="Connections" xml:space="preserve">
+    <value>Соединения</value>
+  </data>
+  <data name="Workstations" xml:space="preserve">
+    <value>Рабочие станции</value>
   </data>
   <data name="FolderExample" xml:space="preserve">
     <value>C:\work\northstar</value>

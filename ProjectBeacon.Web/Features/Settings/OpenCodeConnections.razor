@@ -1,11 +1,18 @@
+@page "/settings/connections"
+@layout MainLayout
+@attribute [Authorize]
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Agents
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
 @inject ListOpenCodeConnectionsHandler ListConnections
 @inject SaveOpenCodeConnectionHandler SaveConnection
 @inject DeleteOpenCodeConnectionHandler DeleteConnection
 @inject ISnackbar Snackbar
 
-<MudText Typo="Typo.h6" Class="mb-3">@L["OpenCodeConnections"]</MudText>
+<PageTitle>@L["OpenCodeConnections"]</PageTitle>
+<PageHeader Title="@L["OpenCodeConnections"]" />
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
     <MudText Typo="Typo.body2" Class="mud-text-secondary">@L["OpenCodeConnectionsLead"]</MudText>
     <ol class="mud-text-secondary ps-4 mt-2 mb-4">
@@ -27,7 +34,7 @@
             <MudTextField @bind-Value="_baseUrl" Label="@L["OpenCodeBaseUrl"]" Placeholder="http://127.0.0.1:11434/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeBaseUrlHint"]" />
         }
         <MudTextField @bind-Value="_apiKey" Label="@L["OpenCodeApiKey"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeApiKeyHint"]" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save" Disabled="_busy || UserId == Guid.Empty">@L["Save"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save" Disabled="_busy || _userId == Guid.Empty">@L["Save"]</MudButton>
     </div>
     @if (_rows.Count == 0)
     {
@@ -63,7 +70,7 @@
 </MudPaper>
 
 @code {
-    [Parameter] public Guid UserId { get; set; }
+    private Guid _userId;
 
     private List<OpenCodeConnectionDto> _rows = [];
     private string _model = "xai/grok-3";
@@ -72,11 +79,13 @@
     private bool _custom;
     private bool _busy;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        if (UserId == Guid.Empty)
-            return;
-        await Reload();
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        if (_userId != Guid.Empty)
+            await Reload();
     }
 
     private static readonly string[] Presets = ["xai/grok-3", "openai/gpt-4.1", "anthropic/claude-sonnet-4-5"];
@@ -121,13 +130,13 @@
 
     private async Task Reload()
     {
-        var listed = await ListConnections.HandleAsync(new ListOpenCodeConnectionsCommand(UserId));
+        var listed = await ListConnections.HandleAsync(new ListOpenCodeConnectionsCommand(_userId));
         _rows = listed.Success ? listed.Value!.ToList() : [];
     }
 
     private async Task Save()
     {
-        if (_busy || UserId == Guid.Empty)
+        if (_busy || _userId == Guid.Empty)
             return;
         _model = _model.Trim();
         var slash = _model.IndexOf('/');
@@ -140,7 +149,7 @@
         try
         {
             var saved = await SaveConnection.HandleAsync(new SaveOpenCodeConnectionCommand(
-                new SaveOpenCodeConnectionRequest(UserId, _model[..slash], _model[(slash + 1)..], _custom ? _baseUrl : null, _apiKey)));
+                new SaveOpenCodeConnectionRequest(_userId, _model[..slash], _model[(slash + 1)..], _custom ? _baseUrl : null, _apiKey)));
             if (!saved.Success)
             {
                 Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
@@ -158,7 +167,7 @@
 
     private async Task Remove(OpenCodeConnectionDto row)
     {
-        var deleted = await DeleteConnection.HandleAsync(new DeleteOpenCodeConnectionCommand(new DeleteOpenCodeConnectionRequest(UserId, row.Id)));
+        var deleted = await DeleteConnection.HandleAsync(new DeleteOpenCodeConnectionCommand(new DeleteOpenCodeConnectionRequest(_userId, row.Id)));
         if (!deleted.Success)
         {
             Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);

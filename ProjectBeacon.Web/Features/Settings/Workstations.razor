@@ -1,0 +1,335 @@
+@page "/settings/workstations"
+@layout MainLayout
+@attribute [Authorize]
+@using System.Security.Claims
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Devices
+@using ProjectBeacon.Application.Auth
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject ListDevicesHandler ListDevices
+@inject CreateDeviceHandler CreateDevice
+@inject RevokeDeviceHandler RevokeDevice
+@inject EnqueueCommandHandler EnqueueCommand
+@inject GetCommandHandler GetCommand
+@inject GetTotpStatusHandler GetTotp
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Workstations"]</PageTitle>
+<PageHeader Title="@L["Workstations"]" />
+
+<MudText Typo="Typo.h6" Class="mb-3">@L["Devices"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <div class="beacon-form">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
+            <MudTextField @bind-Value="_deviceName" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            @if (_totpEnabled)
+            {
+                <MudTextField @bind-Value="_deviceTotp" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy || !_totpEnabled">@L["AddDevice"]</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="ReloadDevices" Disabled="_busy">@L["Refresh"]</MudButton>
+        </MudStack>
+    </div>
+    @if (!string.IsNullOrEmpty(_deviceToken))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3">@string.Format(L["DeviceTokenOnce"].Value, Navigation.BaseUri.TrimEnd('/'), _deviceToken)</MudAlert>
+    }
+    @if (_devices.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">@L["NoDevicesYet"]</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_devices" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>@L["DeviceName"]</MudTh>
+                <MudTh>@L["Status"]</MudTh>
+                <MudTh>@L["LastSeen"]</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Online ? Color.Success : Color.Default)">
+                        @(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)
+                    </MudChip>
+                </MudTd>
+                <MudTd>@(context.LastHeartbeatAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["Delete"]</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+@if (_devices.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-3">@L["Workstation"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <div class="beacon-form">
+            <MudSelect T="Guid?" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var device in _devices)
+                {
+                    <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_modelsRoot" Label="@L["ModelsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_historyDir" Label="@L["HistoryDir"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_projectsRoot" Label="@L["ProjectsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_llamaSwapBin" Label="@L["LlamaSwapBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
+        </div>
+        <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeOpencode"]: @_probeOpencode</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeNode"]: @_probeNode</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeDocker"]: @_probeDocker</MudText>
+        <MudText Typo="Typo.body2">@L["ProbeLlamaSwap"]: @_probeLlamaSwap</MudText>
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            @if (_probeGit == "-")
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallGit">@L["Install"] git</MudButton>
+            }
+            @if (_probeNode == "-")
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallNode">@L["Install"] node</MudButton>
+            }
+            @if (_probeDocker == "-")
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="InstallDocker">@L["Install"] docker</MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private List<DaemonDeviceDto> _devices = [];
+    private string _deviceName = string.Empty;
+    private string? _deviceToken;
+    private bool _busy;
+    private Guid _userId;
+    private bool _totpEnabled;
+    private string _deviceTotp = string.Empty;
+    private Guid? _wsDeviceId;
+    private string _modelsRoot = string.Empty;
+    private string _historyDir = string.Empty;
+    private string _projectsRoot = string.Empty;
+    private string _llamaSwapBin = string.Empty;
+    private string _llamaCppBin = string.Empty;
+    private string _probeGit = "-";
+    private string _probeOpencode = "-";
+    private string _probeNode = "-";
+    private string _probeDocker = "-";
+    private string _probeLlamaSwap = "-";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
+            _userId = id;
+        if (_userId != Guid.Empty)
+        {
+            var totp = await GetTotp.HandleAsync(new GetTotpStatusCommand(_userId));
+            _totpEnabled = totp.Success && totp.Value!.Enabled;
+        }
+        await ReloadDevices();
+    }
+
+    private async Task ReloadDevices()
+    {
+        if (_userId == Guid.Empty) return;
+        var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+        _devices = listed.Success ? listed.Value!.ToList() : [];
+        _wsDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
+        if (_wsDeviceId is { } id)
+            LoadWorkstation(id);
+    }
+
+    private Task OnWorkstationDeviceChanged(Guid? id)
+    {
+        _wsDeviceId = id;
+        if (id is { } deviceId)
+            LoadWorkstation(deviceId);
+        return Task.CompletedTask;
+    }
+
+    private void LoadWorkstation(Guid deviceId)
+    {
+        var device = _devices.FirstOrDefault(d => d.Id == deviceId);
+        if (device is null) return;
+        FillProbe(device.ProbeJson);
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(device.WorkstationJson) ? "{}" : device.WorkstationJson);
+            var root = doc.RootElement;
+            _modelsRoot = Str(root, "modelsRoot");
+            _historyDir = Str(root, "opencodeDataDir");
+            _projectsRoot = Str(root, "projectsRoot");
+            _llamaSwapBin = Str(root, "llamaSwapBin");
+            _llamaCppBin = Str(root, "llamaCppBin");
+        }
+        catch (JsonException)
+        {
+        }
+    }
+
+    private static string Str(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
+
+    private void FillProbe(string probeJson)
+    {
+        _probeGit = _probeOpencode = _probeNode = _probeDocker = _probeLlamaSwap = "-";
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
+            _probeGit = Tool(doc.RootElement, "git");
+            _probeOpencode = Tool(doc.RootElement, "opencode");
+            _probeNode = Tool(doc.RootElement, "node");
+            _probeDocker = Tool(doc.RootElement, "docker");
+            _probeLlamaSwap = Tool(doc.RootElement, "llamaSwap");
+        }
+        catch (JsonException)
+        {
+        }
+    }
+
+    private static string Tool(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.String)
+            return "-";
+        var value = p.GetString();
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private async Task AddDevice()
+    {
+        if (_userId == Guid.Empty || _busy) return;
+        _busy = true;
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(_deviceName) ? Environment.MachineName : _deviceName.Trim();
+            var result = await CreateDevice.HandleAsync(new CreateDeviceCommand(
+                new CreateDeviceRequest(name, "web-" + Guid.NewGuid().ToString("N"), _userId, _deviceTotp)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _deviceToken = result.Value!.Token;
+            _deviceName = string.Empty;
+            Snackbar.Add(L["DeviceCreated"].Value, Severity.Success);
+            await ReloadDevices();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Revoke(DaemonDeviceDto device)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["RevokeDeviceConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await RevokeDevice.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(device.Id, _userId)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        Snackbar.Add(L["DeviceRevoked"].Value, Severity.Success);
+        await ReloadDevices();
+    }
+
+    private async Task SaveWorkstation()
+    {
+        if (_wsDeviceId is not { } deviceId || _userId == Guid.Empty) return;
+        _busy = true;
+        try
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                modelsRoot = _modelsRoot,
+                opencodeDataDir = _historyDir,
+                projectsRoot = _projectsRoot,
+                llamaSwapBin = _llamaSwapBin,
+                llamaCppBin = _llamaCppBin
+            });
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.SaveWorkstation, payload, null)));
+            if (!queued.Success)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var finished = await WaitAsync(queued.Value!.Id);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["WorkstationSaved"].Value, Severity.Success);
+            await ReloadDevices();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task InstallGit() => Install("git");
+    private Task InstallNode() => Install("node");
+    private Task InstallDocker() => Install("docker");
+
+    private async Task Install(string id)
+    {
+        if (_wsDeviceId is not { } deviceId || _userId == Guid.Empty) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, string.Format(L["InstallConfirm"].Value, id),
+            yesText: L["Install"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        _busy = true;
+        try
+        {
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.Install, JsonSerializer.Serialize(new { id }), null)));
+            if (!queued.Success)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var finished = await WaitAsync(queued.Value!.Id);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["InstallQueued"].Value, Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
+    {
+        for (var i = 0; i < 80; i++)
+        {
+            var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
+            if (!got.Success) return null;
+            if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
+                return got.Value;
+            await Task.Delay(500);
+        }
+        return null;
+    }
+}

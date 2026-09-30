@@ -1,3 +1,6 @@
+@page "/settings/agents"
+@layout MainLayout
+@attribute [Authorize]
 @using System.Security.Claims
 @using System.Text.Json.Nodes
 @using ProjectBeacon.Application.Agents
@@ -24,7 +27,8 @@
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 
-<MudText Typo="Typo.h6" Class="mb-3">@L["Agents"]</MudText>
+<PageTitle>@L["Agents"]</PageTitle>
+<PageHeader Title="@L["Agents"]" />
 @if (_userId == Guid.Empty)
 {
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">@L["NoProjectAvailable"]</MudText>

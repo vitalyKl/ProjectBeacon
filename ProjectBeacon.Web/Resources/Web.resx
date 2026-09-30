@@ -1742,14 +1742,29 @@ No Beacon-hosted coding agent.</value>
   <data name="Abort" xml:space="preserve">
     <value>Stop</value>
   </data>
-  <data name="NavQueue" xml:space="preserve">
-    <value>Queue</value>
+  <data name="NavWork" xml:space="preserve">
+    <value>Work</value>
   </data>
-  <data name="NavMemory" xml:space="preserve">
-    <value>Project memory</value>
+  <data name="NavKnowledge" xml:space="preserve">
+    <value>Knowledge</value>
   </data>
-  <data name="NavRuntime" xml:space="preserve">
-    <value>Runtime</value>
+  <data name="NavAgents" xml:space="preserve">
+    <value>Agents</value>
+  </data>
+  <data name="NavProject" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="NavAccount" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="ProjectSettings" xml:space="preserve">
+    <value>Project Settings</value>
+  </data>
+  <data name="Connections" xml:space="preserve">
+    <value>Connections</value>
+  </data>
+  <data name="Workstations" xml:space="preserve">
+    <value>Workstations</value>
   </data>
   <data name="FolderExample" xml:space="preserve">
     <value>C:\work\northstar</value>

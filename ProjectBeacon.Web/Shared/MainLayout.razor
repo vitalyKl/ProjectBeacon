@@ -57,10 +57,10 @@
             </MudDrawerHeader>
             <ProjectSwitcher Class="mb-2 px-3" />
             <MudNavMenu Dense="true" Class="beacon-nav">
+                <div class="beacon-nav-label">@L["NavWork"]</div>
                 <MudNavLink Href="/dashboard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard">
                     @L["Dashboard"]
                 </MudNavLink>
-                <div class="beacon-nav-label">@L["NavQueue"]</div>
                 <MudNavLink Href="/board" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Apps">
                     @L["Board"]
                 </MudNavLink>
@@ -70,7 +70,7 @@
                 <MudNavLink Href="/roadmap" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.EventNote">
                     @L["Roadmap"]
                 </MudNavLink>
-                <div class="beacon-nav-label">@L["NavMemory"]</div>
+                <div class="beacon-nav-label">@L["NavKnowledge"]</div>
                 <MudNavLink Href="/context" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Description">
                     @L["Context"]
                 </MudNavLink>
@@ -80,12 +80,26 @@
                 <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assessment">
                     @L["Reports"]
                 </MudNavLink>
-                <div class="beacon-nav-label">@L["NavRuntime"]</div>
+                <div class="beacon-nav-label">@L["NavAgents"]</div>
                 <MudNavLink Href="/chat" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Chat">
                     @L["Chat"]
                 </MudNavLink>
+                <MudNavLink Href="/settings/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">
+                    @L["Agents"]
+                </MudNavLink>
+                <MudNavLink Href="/settings/workstations" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Computer">
+                    @L["Workstations"]
+                </MudNavLink>
+                <div class="beacon-nav-label">@L["NavProject"]</div>
+                <MudNavLink Href="/project/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
+                    @L["ProjectSettings"]
+                </MudNavLink>
+                <div class="beacon-nav-label">@L["NavAccount"]</div>
                 <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
+                </MudNavLink>
+                <MudNavLink Href="/settings/connections" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Link">
+                    @L["Connections"]
                 </MudNavLink>
             </MudNavMenu>
             <div class="beacon-drawer-footer">
@@ -174,6 +188,22 @@
             "projects" => [home, Current(L["CreateProject"])],
             _ => [home]
         };
+
+        if (path.StartsWith("settings/"))
+        {
+            var sub = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[1];
+            _crumbs = sub switch
+            {
+                "agents" => [home, new BreadcrumbItem(L["Settings"], "/settings"), Current(L["Agents"])],
+                "workstations" => [home, new BreadcrumbItem(L["Settings"], "/settings"), Current(L["Workstations"])],
+                "connections" => [home, new BreadcrumbItem(L["Settings"], "/settings"), Current(L["Connections"])],
+                _ => [home, Current(L["Settings"])]
+            };
+        }
+        else if (path.StartsWith("project/"))
+        {
+            _crumbs = [home, new BreadcrumbItem(L["ProjectSettings"], "/project/settings"), Current(L["ProjectSettings"])];
+        }
     }
 
     private static BreadcrumbItem Current(string text) => new(text, href: string.Empty, disabled: true);
