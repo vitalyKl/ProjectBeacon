@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Identity;
 
 using Application.Auth;
+using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -33,7 +34,7 @@ public class CreateOrgInviteHandler
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        if (!await MembershipAuth.CanManageOrgAsync(db, request.OrgId, request.ActorUserId, request.ActorIsAdmin, ct))
+        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.OrgId, request.ActorUserId, request.ActorIsAdmin, ct))
             return Result.Failure<InviteCreatedDto>("Forbidden.");
 
         var org = await db.Orgs.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
@@ -85,7 +86,7 @@ public class CreateProjectInviteHandler
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        if (!await MembershipAuth.CanManageProjectAsync(db, request.ProjectId, request.ActorUserId, request.ActorIsAdmin, ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.ProjectId, request.ActorUserId, request.ActorIsAdmin, false, ct))
             return Result.Failure<InviteCreatedDto>("Forbidden.");
 
         var project = await db.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
@@ -192,7 +193,7 @@ public class ListOrgInvitesHandler
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await MembershipAuth.CanManageOrgAsync(db, request.TargetId, request.ActorUserId, request.ActorIsAdmin, ct))
+        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.TargetId, request.ActorUserId, request.ActorIsAdmin, ct))
             return Result.Failure<IList<InviteListDto>>("Forbidden.");
 
         var items = await db.OrgInvites.IgnoreQueryFilters()
@@ -213,7 +214,7 @@ public class ListProjectInvitesHandler
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await MembershipAuth.CanManageProjectAsync(db, request.TargetId, request.ActorUserId, request.ActorIsAdmin, ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.TargetId, request.ActorUserId, request.ActorIsAdmin, false, ct))
             return Result.Failure<IList<InviteListDto>>("Forbidden.");
 
         var items = await db.ProjectInvites.IgnoreQueryFilters()
@@ -237,7 +238,7 @@ public class RevokeOrgInviteHandler
         var invite = await db.OrgInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        if (!await MembershipAuth.CanManageOrgAsync(db, invite.OrgId, request.ActorUserId, request.ActorIsAdmin, ct))
+        if (!await ProjectAuthorization.CanManageOrgAsync(db, invite.OrgId, request.ActorUserId, request.ActorIsAdmin, ct))
             return Result.Failure("Forbidden.");
         invite.Revoke();
         await db.SaveChangesAsync(ct);
@@ -257,7 +258,7 @@ public class RevokeProjectInviteHandler
         var invite = await db.ProjectInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        if (!await MembershipAuth.CanManageProjectAsync(db, invite.ProjectId, request.ActorUserId, request.ActorIsAdmin, ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, invite.ProjectId, request.ActorUserId, request.ActorIsAdmin, false, ct))
             return Result.Failure("Forbidden.");
         invite.Revoke();
         await db.SaveChangesAsync(ct);

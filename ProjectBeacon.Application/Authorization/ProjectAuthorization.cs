@@ -18,7 +18,7 @@ public static class ProjectAuthorization
             .Where(p => p.Id == projectId)
             .Select(p => (Guid?)p.OrgId)
             .FirstOrDefaultAsync(ct);
-        if (orgId is not null && await CanManageOrgAsync(db, orgId.Value, actorUserId, ct))
+        if (orgId is not null && await CanManageOrgAsync(db, orgId.Value, actorUserId, false, ct))
             return true;
         return await db.ProjectMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.ProjectId == projectId && m.UserId == actorUserId
@@ -26,8 +26,10 @@ public static class ProjectAuthorization
     }
 
     public static async Task<bool> CanManageOrgAsync(
-        BeaconDbContext db, Guid orgId, Guid actorUserId, CancellationToken ct)
+        BeaconDbContext db, Guid orgId, Guid actorUserId, bool isAdmin, CancellationToken ct)
     {
+        if (isAdmin)
+            return true;
         return await db.OrgMembers.IgnoreQueryFilters()
             .AnyAsync(m => m.OrgId == orgId && m.UserId == actorUserId
                 && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct);
