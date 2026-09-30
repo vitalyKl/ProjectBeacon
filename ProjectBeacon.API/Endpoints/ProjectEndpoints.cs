@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using System.Security.Claims;
+using Application.Authorization;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
@@ -49,16 +50,21 @@ public static class ProjectEndpoints
             : Results.BadRequest(new { error = result.Error });
     }
 
-    private static async Task<IResult> UpdateProject(Guid projectId, [FromBody] UpdateProjectRequest request, UpdateProjectHandler handler)
+    private static async Task<IResult> UpdateProject(Guid projectId, [FromBody] UpdateProjectRequest request, UpdateProjectHandler handler, HttpContext ctx)
     {
         if (projectId != request.ProjectId)
             return Results.BadRequest("ProjectId mismatch.");
 
-        var result = await handler.HandleAsync(new UpdateProjectCommand(request));
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+
+        var ac = new ActorContext(actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx));
+        var result = await handler.HandleAsync(new UpdateProjectCommand(request, ac));
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
     }
 
     private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler)

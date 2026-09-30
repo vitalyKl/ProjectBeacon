@@ -290,6 +290,81 @@ public sealed class P2AuthorizationHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task UpdateProject_NonMember_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var outsiderJwt = await RegisterAndLogin(client, "outsider7", "o7@beacon.local");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
+
+        var response = await client.PutAsJsonAsync($"/v1/projects/{projectId}", new
+        {
+            projectId,
+            name = "Hacked"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateProject_SystemAdmin_Succeeds()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var response = await client.PutAsJsonAsync($"/v1/projects/{projectId}", new
+        {
+            projectId,
+            name = "Renamed"
+        });
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task ApiToken_CannotUpdateProject_Returns403()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        var tokenResponse = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "api-token-upd",
+            capabilities = 1
+        });
+        var apiTokenValue = tokenResponse.GetProperty("tokenPrefix").GetString()!;
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
+        var response = await client.PutAsJsonAsync($"/v1/projects/{projectId}", new
+        {
+            projectId,
+            name = "TokenHacked"
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");

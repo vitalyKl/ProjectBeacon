@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Authorization;
 using Application.Common;
 
 public record CreateProjectRequest(string Name, string? Description, Guid OrgId, Guid? CreatedByUserId = null);
@@ -8,7 +9,7 @@ public record CreateProjectCommand(CreateProjectRequest Request) : ICommand<Resu
 
 public record UpdateProjectRequest(Guid ProjectId, string? Name, string? Description);
 
-public record UpdateProjectCommand(UpdateProjectRequest Request) : ICommand<Result<ProjectDto>>;
+public record UpdateProjectCommand(UpdateProjectRequest Request, ActorContext Actor) : ICommand<Result<ProjectDto>>;
 
 public record GetProjectRequest(Guid ProjectId);
 

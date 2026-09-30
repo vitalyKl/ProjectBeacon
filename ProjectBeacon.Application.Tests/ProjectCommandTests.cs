@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
 using Projects;
 using Tasks;
 
@@ -21,7 +22,7 @@ public sealed class ProjectCommandTests
     {
         var projectId = Guid.NewGuid();
         var request = new UpdateProjectRequest(projectId, "New Name", "New Desc");
-        var command = new UpdateProjectCommand(request);
+        var command = new UpdateProjectCommand(request, ActorContext.Anonymous);
 
         Assert.Equal(projectId, command.Request.ProjectId);
         Assert.Equal("New Name", command.Request.Name);

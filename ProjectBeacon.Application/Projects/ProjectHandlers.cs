@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -62,7 +63,11 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, command.Actor, ct))
+            return Result.Failure<ProjectDto>("Forbidden.");
+
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
         if (project is null)
             return Result.Failure<ProjectDto>("Project not found.");
 
