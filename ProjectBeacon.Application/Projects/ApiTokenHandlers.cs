@@ -23,8 +23,9 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
     {
         await using var db = _dbFactory.CreateDbContext();
 
+        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
         var auth = await ProjectAuthorization.CreateToken(
-            db, command.Request.ProjectId, command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken,
+            db, command.Request.ProjectId, actor,
             command.Request.Capabilities, ct);
         if (!auth.Success)
             return Result.Failure<ApiTokenDto>(auth.Error!);
@@ -96,8 +97,9 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
             projectId = existing;
         }
 
+        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
         var auth = await ProjectAuthorization.RevokeToken(
-            db, projectId, command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken,
+            db, projectId, actor,
             command.Request.TokenId, ct);
         if (!auth.Success)
             return Result.Failure(auth.Error!);
