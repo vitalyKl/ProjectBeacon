@@ -118,9 +118,12 @@ public static class ProjectEndpoints
     private static ProjectMemberDto MapMemberResponse(ProjectMemberDto dto) =>
         new(dto.Id, dto.UserId, dto.Role, dto.JoinedAt, dto.Login, dto.Email);
 
-    private static async Task<IResult> CreateToken(Guid projectId, [FromBody] CreateApiTokenRequest request, [FromServices] IConfiguration config, CreateApiTokenHandler handler)
+    private static async Task<IResult> CreateToken(Guid projectId, [FromBody] CreateApiTokenRequest request, HttpContext ctx, CreateApiTokenHandler handler)
     {
-        var result = await handler.HandleAsync(new CreateApiTokenCommand(new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, request.CreatedByUserId)));
+        var actor = ActorUserId(ctx);
+        if (actor is null)
+            return Results.Unauthorized();
+        var result = await handler.HandleAsync(new CreateApiTokenCommand(new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.Value)));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))

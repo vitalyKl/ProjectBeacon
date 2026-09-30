@@ -54,6 +54,21 @@ public sealed class TenantIsolationMiddleware
 
         var isAdmin = IsAdmin(ctx);
 
+        // API tokens are bound to a single project: the token's project claim
+        // is the scope. Ignore any route/header project override and fail
+        // closed if it disagrees with the binding.
+        if (ctx.User.Identity?.AuthenticationType == "ApiToken")
+        {
+            var bound = FromClaim(ctx, "project_id") ?? Guid.Empty;
+            var overridden = fromRoute ?? fromHeader;
+            if (overridden is { } ov && ov != bound)
+            {
+                return (Guid.Empty, Guid.Empty);
+            }
+            var org = await GetProjectOrgIdAsync(db, bound);
+            return (bound, fromOrgRoute ?? fromOrgHeader ?? org);
+        }
+
         if (ctx.User.Identity?.IsAuthenticated == true && TryGetUserId(ctx, out var userId))
         {
             var members = await LoadMembershipsAsync(db, userId);

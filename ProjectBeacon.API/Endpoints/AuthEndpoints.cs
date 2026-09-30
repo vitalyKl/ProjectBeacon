@@ -21,7 +21,7 @@ public static class AuthEndpoints
         app.MapPost("/v1/auth/forgot-password", ForgotPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/reset-password", ResetPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth");
-        app.MapPost("/v1/auth/logout", Logout).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
+        app.MapPost("/v1/auth/logout", Logout).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapGet("/v1/auth/me", GetMe).RequireAuthorization();
         app.MapGet("/v1/auth/options", AuthOptions).AllowAnonymous();
         app.MapGet("/v1/invites/{token}", GetInvite).AllowAnonymous().RequireRateLimiting("auth");
@@ -160,10 +160,14 @@ public static class AuthEndpoints
 
     public record ChangePasswordBody(string CurrentPassword, string NewPassword);
 
-    private static async Task<IResult> Logout([FromBody] LogoutRequest request, BeaconDbContext db)
+    private static async Task<IResult> Logout(BeaconDbContext db, HttpContext ctx)
     {
+        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        if (!Guid.TryParse(userIdStr, out var userId))
+            return Results.Unauthorized();
+
         await db.Sessions
-            .Where(s => s.UserId == request.UserId && s.IsActive)
+            .Where(s => s.UserId == userId && s.IsActive)
             .ExecuteDeleteAsync();
 
         return Results.Ok();

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
 using Domain.Enums;
@@ -136,12 +137,16 @@ public static class PipelineEndpoints
             : Results.BadRequest(new { error = result.Error });
     }
 
-    private static async Task<IResult> ForceClosePipeline(Guid taskId, [FromBody] ForceCloseBody body, ForceClosePipelineHandler handler, CancellationToken ct)
+    private static async Task<IResult> ForceClosePipeline(Guid taskId, [FromBody] ForceCloseBody body, HttpContext ctx, ForceClosePipelineHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return Results.BadRequest("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, body.ActorId, body.Reason)), ct);
+        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(actorId))
+            return Results.Unauthorized();
+
+        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actorId, body.Reason)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error });
@@ -167,5 +172,5 @@ public static class PipelineEndpoints
 
     public record ApproveBody(Guid TaskId, string? Note = null);
 
-    public record ForceCloseBody(Guid TaskId, string ActorId, string? Reason = null);
+    public record ForceCloseBody(Guid TaskId, string? Reason = null);
 }

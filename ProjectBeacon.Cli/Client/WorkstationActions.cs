@@ -218,7 +218,7 @@ public static class WorkstationActions
             Directory.CreateDirectory(dataDir);
 
         var opencodePath = Path.Combine(full, "opencode.json");
-        var mcp = payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
+        var mcp = ReplaceBeaconCommand(payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default);
         var model = payloadRoot.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
         var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
         var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
@@ -308,7 +308,7 @@ public static class WorkstationActions
 
         var full = resolved.Value!;
         var opencodePath = Path.Combine(full, "opencode.json");
-        var mcp = payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default;
+        var mcp = ReplaceBeaconCommand(payloadRoot.TryGetProperty("mcp", out var mcpEl) ? mcpEl : default);
         var model = payloadRoot.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
         var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
         var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
@@ -391,6 +391,44 @@ public static class WorkstationActions
                 existing.Add(line);
         }
         File.WriteAllLines(path, existing);
+    }
+
+    public static string? ResolveBeaconPath(string? settingsPath = null)
+    {
+        var (settings, _) = WorkstationSettings.TryRead(settingsPath);
+        return !string.IsNullOrWhiteSpace(settings.BeaconPath) ? settings.BeaconPath : Environment.ProcessPath;
+    }
+
+    public static JsonElement ReplaceBeaconCommand(JsonElement mcp, string? beaconPath = null, string? settingsPath = null)
+    {
+        if (mcp.ValueKind != JsonValueKind.Object)
+            return mcp;
+        var resolved = !string.IsNullOrWhiteSpace(beaconPath) ? beaconPath : ResolveBeaconPath(settingsPath);
+        if (string.IsNullOrWhiteSpace(resolved))
+            return mcp;
+
+        var node = JsonNode.Parse(mcp.GetRawText()) as JsonObject;
+        if (node is null)
+            return mcp;
+
+        var changed = false;
+        foreach (var server in node)
+        {
+            if (server.Value is not JsonObject serverObj || serverObj["command"] is not JsonArray command || command.Count == 0)
+                continue;
+            if (command[0] is not JsonValue value || value.GetValueKind() != JsonValueKind.String)
+                continue;
+            var first = value.GetValue<string>();
+            if (first is not null
+                && !first.Contains('/')
+                && !first.Contains('\\')
+                && string.Equals(first, "beacon", StringComparison.OrdinalIgnoreCase))
+            {
+                command[0] = resolved;
+                changed = true;
+            }
+        }
+        return changed ? JsonSerializer.SerializeToElement(node) : mcp;
     }
 
     public static string? Which(string name, string? path = null)

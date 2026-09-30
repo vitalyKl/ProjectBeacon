@@ -32,6 +32,8 @@ public sealed class ApiTokenAuthMiddleware
                 identity.AddClaim(new Claim("token_id", token.Id.ToString()));
                 identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
                 identity.AddClaim(new Claim("capabilities", ((long)token.Capabilities).ToString()));
+                if (token.CreatedByUserId.HasValue)
+                    identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, token.CreatedByUserId.Value.ToString()));
                 ctx.User = new ClaimsPrincipal(identity);
             }
         }

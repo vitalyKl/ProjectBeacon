@@ -24,6 +24,26 @@ public static class ClientEnrollment
         }
     }
 
+    public static async Task<(bool Ok, string Message)> ValidateTokenAsync(string url, string token, CancellationToken ct, HttpMessageHandler? handler = null)
+    {
+        try
+        {
+            using var http = CreateClient(url, handler);
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await http.GetAsync("/v1/devices/me/llamaswap-config", ct);
+            var code = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode)
+                return (true, "Token accepted.");
+            if (code is 401 or 403)
+                return (false, $"Token rejected (HTTP {code}).");
+            return (false, $"Unexpected response (HTTP {code}).");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return (false, ex.Message);
+        }
+    }
+
     public static async Task<EnrollResult> EnrollAsync(
         string url, string login, string password, string name, CancellationToken ct, HttpMessageHandler? handler = null)
     {

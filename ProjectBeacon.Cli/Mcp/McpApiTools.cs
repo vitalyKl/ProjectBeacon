@@ -57,7 +57,7 @@ internal static class McpApiTools
         yield return Tool("claim_task", "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
             Props(("taskId", "string", false), ("projectId", "string", false)));
         yield return Tool("add_task_comment", "Add a comment on a task.",
-            Props(("taskId", "string", true), ("content", "string", true), ("userId", "string", false)));
+            Props(("taskId", "string", true), ("content", "string", true)));
         yield return Tool("set_task_dependencies", "Replace the tasks this task depends on.",
             Props(("taskId", "string", true), ("dependentTaskIds", "array", true)));
         yield return Tool("add_review_notes", "Save review notes required before a task can move to Done.",
@@ -150,7 +150,7 @@ internal static class McpApiTools
         yield return Tool("pipeline_approve", "Approve the pipeline and close the task.",
             Props(("note", "string", false), ("taskId", "string", false)));
         yield return Tool("pipeline_force_close", "Force-close a pipeline. The API token needs the Admin capability.",
-            Props(("actorId", "string", true), ("reason", "string", false), ("taskId", "string", false)));
+            Props(("reason", "string", false), ("taskId", "string", false)));
         yield return Tool("model_upsert", "Create or update a local model backend. backendType: FreeToken, LlamaCpp, OpenAiCompatible.",
             Props(("name", "string", true), ("backendType", "string", true), ("launchCommand", "string", true),
                 ("contextSize", "integer", true), ("ttl", "integer", true), ("id", "string", false),
@@ -439,8 +439,7 @@ internal static class McpApiTools
         var body = new JsonObject
         {
             ["taskId"] = taskId.ToString("D"),
-            ["content"] = content,
-            ["userId"] = Text(args, "userId") ?? Guid.Empty.ToString("D")
+            ["content"] = content
         };
         if (!TryProject(args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/comments", body, ct);
@@ -519,14 +518,10 @@ internal static class McpApiTools
         var result = Text(args, "result");
         if (string.IsNullOrWhiteSpace(result))
             return new McpToolText(true, "missing 'result'");
-        var actorId = Text(args, "actorId");
-        if (string.IsNullOrWhiteSpace(actorId))
-            return new McpToolText(true, "missing 'actorId'");
         var body = new JsonObject
         {
             ["taskId"] = taskId,
-            ["result"] = result,
-            ["actorId"] = actorId
+            ["result"] = result
         };
         Put(body, "output", Text(args, "output"));
         if (args?["review"] is JsonObject review)
@@ -871,10 +866,7 @@ internal static class McpApiTools
     {
         if (!TryTask(args, out var taskId, out var error))
             return new McpToolText(true, error);
-        var actorId = Text(args, "actorId");
-        if (string.IsNullOrWhiteSpace(actorId))
-            return new McpToolText(true, "missing 'actorId'");
-        var body = new JsonObject { ["taskId"] = taskId.ToString("D"), ["actorId"] = actorId };
+        var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "reason", Text(args, "reason"));
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/force-close", body, ct);
     }
@@ -1157,8 +1149,7 @@ internal static class McpApiTools
         var schema = Props(
             ("taskId", "string", false),
             ("result", "string", true),
-            ("output", "string", false),
-            ("actorId", "string", true));
+            ("output", "string", false));
         var properties = schema["properties"]!.AsObject();
         properties["review"] = new JsonObject
         {

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
 using Application.Projects; // ClaimTaskHandler
@@ -43,12 +44,13 @@ public static class TaskEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateTask(Guid projectId, [FromBody] CreateTaskRequest request, CreateTaskHandler handler)
+    private static async Task<IResult> CreateTask(Guid projectId, [FromBody] CreateTaskRequest request, HttpContext ctx, CreateTaskHandler handler)
     {
         if (projectId != request.ProjectId)
             return Results.BadRequest("ProjectId mismatch.");
 
-        var result = await handler.HandleAsync(new CreateTaskCommand(request));
+        var actor = ActorUserId(ctx);
+        var result = await handler.HandleAsync(new CreateTaskCommand(request with { ActorUserId = actor }));
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value.Id}", MapTaskResponse(result.Value))
@@ -147,12 +149,13 @@ public static class TaskEndpoints
             : Results.NotFound(new { error = result.Error });
     }
 
-    private static async Task<IResult> AddComment(Guid taskId, [FromBody] AddCommentRequest request, AddCommentHandler handler)
+    private static async Task<IResult> AddComment(Guid taskId, [FromBody] AddCommentRequest request, HttpContext ctx, AddCommentHandler handler)
     {
         if (taskId != request.TaskId)
             return Results.BadRequest("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new AddCommentCommand(request));
+        var actor = ActorUserId(ctx);
+        var result = await handler.HandleAsync(new AddCommentCommand(request with { UserId = actor ?? Guid.Empty }));
 
         return result.Success
             ? Results.Created($"/v1/tasks/{taskId}/comments/{result.Value.Id}", MapCommentResponse(result.Value))
@@ -187,6 +190,9 @@ public static class TaskEndpoints
 
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
+
+    private static Guid? ActorUserId(HttpContext ctx) =>
+        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
     private static async Task<IResult> ListSteps(Guid taskId, ListTaskStepsHandler handler)
     {

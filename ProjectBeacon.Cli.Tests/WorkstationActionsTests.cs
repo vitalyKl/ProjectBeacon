@@ -396,4 +396,53 @@ public sealed class WorkstationActionsTests : IDisposable
         var found = WorkstationActions.Which("fakebin", bin);
         Assert.Equal(Path.Combine(bin, "fakebin"), found);
     }
+
+    [Fact]
+    public void ReplaceBeaconCommand_ReplacesBareBeaconWithAbsolutePath()
+    {
+        using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp","--root","."],"enabled":true}}""");
+        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
+        using var outDoc = JsonDocument.Parse(result.GetRawText());
+        var command = outDoc.RootElement.GetProperty("beacon").GetProperty("command");
+        Assert.Equal("/opt/beacon/beacon", command[0].GetString());
+        Assert.Equal("mcp", command[1].GetString());
+        Assert.Equal(".", command[3].GetString());
+    }
+
+    [Fact]
+    public void ReplaceBeaconCommand_LeavesNonBeaconServersAlone()
+    {
+        using var doc = JsonDocument.Parse("""{"ctx7":{"type":"remote","url":"https://x"},"other":{"type":"local","command":["node","server.js"]}}""");
+        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
+        Assert.Equal(doc.RootElement.GetRawText(), result.GetRawText());
+    }
+
+    [Fact]
+    public void ReplaceBeaconCommand_LeavesExistingAbsolutePathAlone()
+    {
+        using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["/opt/beacon/beacon","mcp"]}}""");
+        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/other");
+        Assert.Equal("/opt/beacon/beacon", doc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
+        Assert.Equal(doc.RootElement.GetRawText(), result.GetRawText());
+    }
+
+    [Fact]
+    public void ReplaceBeaconCommand_UsesBeaconPathFromSettingsFile()
+    {
+        var settingsFile = Path.Combine(_dir, "workstation.json");
+        new WorkstationSettings { BeaconPath = "/opt/beacon/beacon" }.Save(settingsFile);
+        using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp"]}}""");
+        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, settingsPath: settingsFile);
+        using var outDoc = JsonDocument.Parse(result.GetRawText());
+        Assert.Equal("/opt/beacon/beacon", outDoc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
+    }
+
+    [Fact]
+    public void ResolveBeaconPath_FallsBackToProcessPath()
+    {
+        var settingsFile = Path.Combine(_dir, "workstation-empty.json");
+        new WorkstationSettings().Save(settingsFile);
+        var resolved = WorkstationActions.ResolveBeaconPath(settingsFile);
+        Assert.Equal(Environment.ProcessPath, resolved);
+    }
 }

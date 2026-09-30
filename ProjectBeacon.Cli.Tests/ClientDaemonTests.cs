@@ -78,6 +78,22 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
+    public async Task SetToken_UpdatesBearerHeaderAndResetsConnection()
+    {
+        using var http = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:5083/"),
+            DefaultRequestHeaders = { Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "bcd_old") }
+        };
+        await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
+        daemon.SetToken("bcd_new");
+        Assert.Equal("Bearer", http.DefaultRequestHeaders.Authorization!.Scheme);
+        Assert.Equal("bcd_new", http.DefaultRequestHeaders.Authorization.Parameter);
+        Assert.False(daemon.Snapshot.Connected);
+    }
+
+    [Fact]
     public void HostLoad_ParsesNvidiaSmiAndFormatsMemory()
     {
         var gpu = HostLoadSampler.ParseNvidiaSmi("NVIDIA GeForce RTX 4090, 12, 1024, 24564\n");

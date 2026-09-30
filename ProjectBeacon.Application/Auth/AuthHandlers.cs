@@ -23,13 +23,16 @@ public class BootstrapHandler
 
     public async Task<Result<BootstrapResponse>> HandleAsync(string bootstrapToken, CancellationToken ct = default)
     {
+        if (_bootstrapToken.Length == 0)
+            return Result.Failure<BootstrapResponse>("Bootstrap token is not configured.");
+
+        if (!FixedTimeEquals(bootstrapToken, _bootstrapToken))
+            return Result.Failure<BootstrapResponse>("Invalid bootstrap token.");
+
         await using var db = _dbFactory.CreateDbContext();
         var exists = await db.Users.AnyAsync(u => u.IsAdmin, ct);
         if (exists)
             return Result.Failure<BootstrapResponse>("Bootstrap already completed.");
-
-        if (_bootstrapToken.Length > 0 && !FixedTimeEquals(bootstrapToken, _bootstrapToken))
-            return Result.Failure<BootstrapResponse>("Invalid bootstrap token.");
 
         var password = PasswordHasher.GenerateRandomPassword(32);
         var user = User.Create("admin", "admin@beacon.local",

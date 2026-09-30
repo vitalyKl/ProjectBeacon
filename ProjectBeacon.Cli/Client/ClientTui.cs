@@ -127,23 +127,52 @@ public static class ClientTui
     {
         var current = string.IsNullOrWhiteSpace(store.Url) ? "http://localhost:5083" : store.Url.TrimEnd('/');
         var url = AnsiConsole.Ask("Control plane URL:", current).Trim().TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(url) || string.Equals(url, current, StringComparison.OrdinalIgnoreCase))
-            return;
+        if (string.IsNullOrWhiteSpace(url))
+            url = current;
+        var urlChanged = !string.Equals(url, current, StringComparison.OrdinalIgnoreCase);
 
-        var (ok, message) = await ClientEnrollment.ProbeUrlAsync(url, ct);
-        if (ok)
-            AnsiConsole.MarkupLine($"[green]{Markup.Escape(message)}[/]");
-        else
+        if (urlChanged)
         {
-            AnsiConsole.MarkupLine($"[red]{Markup.Escape(message)}[/]");
-            if (!AnsiConsole.Confirm("Save this URL anyway?", false))
-                return;
+            var (ok, message) = await ClientEnrollment.ProbeUrlAsync(url, ct);
+            if (ok)
+                AnsiConsole.MarkupLine($"[green]{Markup.Escape(message)}[/]");
+            else if (!AnsiConsole.Confirm($"[red]{Markup.Escape(message)}[/] — save this URL anyway?", false))
+            {
+                url = current;
+                urlChanged = false;
+            }
         }
 
-        store.Url = url;
-        store.Save(storePath);
-        daemon.SetControlPlane(url);
-        AnsiConsole.MarkupLine("[green]Control plane URL saved.[/]");
+        var token = AnsiConsole.Prompt(
+            new TextPrompt<string>("Device token [grey]bcd_… (empty to keep current)[/]:")
+                .PromptStyle("green")
+                .Secret()
+                .AllowEmpty());
+        var tokenChanged = !string.IsNullOrWhiteSpace(token);
+
+        if (urlChanged || tokenChanged)
+        {
+            if (urlChanged)
+                store.Url = url;
+            if (tokenChanged)
+                store.Token = token.Trim();
+            store.Save(storePath);
+            if (urlChanged)
+                daemon.SetControlPlane(store.Url);
+            if (tokenChanged)
+                daemon.SetToken(store.Token);
+            AnsiConsole.MarkupLine("[green]Connection saved.[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[grey]No changes.[/]");
+        }
+
+        if (tokenChanged)
+        {
+            var (ok, message) = await ClientEnrollment.ValidateTokenAsync(store.Url, store.Token, ct);
+            AnsiConsole.MarkupLine(ok ? $"[green]{Markup.Escape(message)}[/]" : $"[yellow]{Markup.Escape(message)}[/]");
+        }
     }
 
     private static void EditSettings()
@@ -157,6 +186,7 @@ public static class ClientTui
         settings.LlamaSwapBin = PromptOptional("llama-swap binary", settings.LlamaSwapBin);
         settings.LlamaCppBin = PromptOptional("llama-server binary", settings.LlamaCppBin);
         settings.OpencodeDataDir = PromptOptional("OpenCode history dir", settings.OpencodeDataDir);
+        settings.BeaconPath = PromptOptional("beacon executable", settings.BeaconPath ?? Environment.ProcessPath);
         settings.LlamaSwapPort = AnsiConsole.Ask("llama-swap port:", settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080);
         settings.Save();
         AnsiConsole.MarkupLine("[green]Saved workstation.json[/]");

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -17,13 +18,18 @@ public static class WorkEndpoints
     private static async Task<IResult> FinishWork(
         [FromBody] FinishWorkRequest request,
         FinishWorkHandler handler,
+        HttpContext ctx,
         CancellationToken ct)
     {
+        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(actorId))
+            return Results.Unauthorized();
+
         var command = new FinishWorkCommand(new Application.Tasks.FinishWorkRequest(
             request.TaskId,
             request.Result,
             request.Output,
-            request.ActorId,
+            actorId,
             request.Review is null
                 ? null
                 : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed)));
@@ -41,6 +47,5 @@ public static class WorkEndpoints
         string TaskId,
         string Result,
         string? Output,
-        string ActorId,
         FinishWorkReviewDto? Review = null);
 }

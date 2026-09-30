@@ -4,6 +4,7 @@ using Application.Auth;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using ProjectBeacon.Domain.Entities.Identity;
 
 public sealed class AuthIntegrationTests : IDisposable
@@ -36,10 +37,16 @@ public sealed class AuthIntegrationTests : IDisposable
         _connection.Dispose();
     }
 
+    private static IConfiguration BootstrapConfig(string token = "test-bootstrap-token") =>
+        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["BOOTSTRAP_ADMIN_TOKEN"] = token
+        }).Build();
+
     private async Task<string> SeedBootstrapAsync()
     {
-        var handler = new BootstrapHandler(_dbFactory, null!);
-        var result = await handler.HandleAsync(string.Empty);
+        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var result = await handler.HandleAsync("test-bootstrap-token");
 
         return result.Value!.Password;
     }
@@ -47,8 +54,8 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Bootstrap_CreatesAdminUser()
     {
-        var handler = new BootstrapHandler(_dbFactory, null!);
-        var result = await handler.HandleAsync(string.Empty);
+        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var result = await handler.HandleAsync("test-bootstrap-token");
 
         Assert.True(result.Success);
         var admin = result.Value!;
@@ -67,13 +74,33 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Bootstrap_AlreadyCompleted_ReturnsFailure()
     {
-        var handler = new BootstrapHandler(_dbFactory, null!);
-        await handler.HandleAsync(string.Empty);
+        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        await handler.HandleAsync("test-bootstrap-token");
 
-        var result = await handler.HandleAsync(string.Empty);
+        var result = await handler.HandleAsync("test-bootstrap-token");
 
         Assert.False(result.Success);
         Assert.Equal("Bootstrap already completed.", result.Error);
+    }
+
+    [Fact]
+    public async Task Bootstrap_WithoutConfiguredToken_ReturnsFailure()
+    {
+        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig(token: ""));
+        var result = await handler.HandleAsync("anything");
+
+        Assert.False(result.Success);
+        Assert.Equal("Bootstrap token is not configured.", result.Error);
+    }
+
+    [Fact]
+    public async Task Bootstrap_WithWrongToken_ReturnsFailure()
+    {
+        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var result = await handler.HandleAsync("wrong-token");
+
+        Assert.False(result.Success);
+        Assert.Equal("Invalid bootstrap token.", result.Error);
     }
 
     [Fact]

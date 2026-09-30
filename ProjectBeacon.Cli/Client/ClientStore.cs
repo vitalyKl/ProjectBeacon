@@ -116,6 +116,7 @@ public sealed class WorkstationSettings
     public int ConcurrentPortBase { get; set; } = 9000;
     public string? OpencodeDataDir { get; set; }
     public string? ProjectsRoot { get; set; }
+    public string? BeaconPath { get; set; }
 
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon", "workstation.json");

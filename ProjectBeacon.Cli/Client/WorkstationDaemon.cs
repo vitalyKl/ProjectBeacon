@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Client;
 
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -164,6 +165,13 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _http.BaseAddress = new Uri(trimmed + "/");
         Publish(s => s with { Url = trimmed, Connected = false, Error = null });
         Log($"control plane {trimmed}");
+    }
+
+    public void SetToken(string token)
+    {
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        Publish(s => s with { Connected = false, Error = null });
+        Log("device token updated");
     }
 
     private async Task SyncLlamaAsync(WorkstationSettings settings, CancellationToken ct)
