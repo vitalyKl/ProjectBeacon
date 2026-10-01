@@ -59,6 +59,10 @@ Four pieces (per architecture):
 - User-facing web chrome goes through `IStringLocalizer<Web>` (resx). Add the English key first; other locales fall back to English.
 - Do not hardcode English chrome in Razor components. Leave user-authored content (project names, task titles, descriptions, comments) in the language they were written. Filenames and CLI commands stay English.
 - A change is not done until the acceptance criterion in the relevant section of `dotnet project docs/ProjectBeacon-master-roadmap-v1.md` or its specialized roadmaps is met.
+- Package versions are centrally managed in `Directory.Packages.props` (CPM). Do not add `Version` attributes to `<PackageReference>` items in csproj files.
+- API error responses use RFC 7807 ProblemDetails (`application/problem+json`). Helpers in `ProjectBeacon.API/ProblemResults.cs`.
+- Web theme: `DesignTokens.cs` (Theme/) is the single source for CSS custom properties (colors, radii, spacing, geometry). `BeaconTheme.cs` reads from it. Do not hardcode theme values in Razor.
+- Status chips: use `StatusChip` (Shared/) with `ChipPalette` (Theme/) for consistent status coloring. Do not inline `<MudChip>` for status display.
 
 ## Style
 
