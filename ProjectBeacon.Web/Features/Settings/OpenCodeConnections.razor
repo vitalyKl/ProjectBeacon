@@ -9,6 +9,7 @@
 @inject ListOpenCodeConnectionsHandler ListConnections
 @inject SaveOpenCodeConnectionHandler SaveConnection
 @inject DeleteOpenCodeConnectionHandler DeleteConnection
+@inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["OpenCodeConnections"]</PageTitle>
@@ -167,6 +168,11 @@
 
     private async Task Remove(OpenCodeConnectionDto row)
     {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteConnectionConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
         var deleted = await DeleteConnection.HandleAsync(new DeleteOpenCodeConnectionCommand(new DeleteOpenCodeConnectionRequest(_userId, row.Id)));
         if (!deleted.Success)
         {

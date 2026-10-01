@@ -5,7 +5,8 @@
 
 <MudMenu Icon="@Icons.Material.Filled.Language"
          Variant="Variant.Text"
-         Dense="true">
+         Dense="true"
+         AriaLabel="@L["Language"]">
     @foreach (var culture in SupportedCultures)
     {
         <MudMenuItem OnClick="@(() => OnSelect(culture.Culture))">

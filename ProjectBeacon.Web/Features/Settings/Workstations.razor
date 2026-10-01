@@ -56,11 +56,11 @@
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.Name</MudTd>
-                <MudTd>
+                <MudTd DataLabel="@L["DeviceName"]">@context.Name</MudTd>
+                <MudTd DataLabel="@L["Status"]">
                     <StatusChip Color="@ChipPalette.ForRuntime(context.Online ? "Online" : "Offline")" Label="@(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)" />
                 </MudTd>
-                <MudTd>@(context.LastHeartbeatAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd DataLabel="@L["LastSeen"]">@(context.LastHeartbeatAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
                 <MudTd>
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["Delete"]</MudButton>
                 </MudTd>
@@ -145,12 +145,12 @@
                 <MudTh>@L["Completed"]</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.Kind</MudTd>
-                <MudTd>
+                <MudTd DataLabel="@L["Kind"]">@ChromeLabels.CommandKind(L, context.Kind)</MudTd>
+                <MudTd DataLabel="@L["Status"]">
                     <StatusChip Color="@ChipPalette.ForCommandStatus(context.Status)" Label="@StatusLabel(context.Status)" />
                 </MudTd>
-                <MudTd>@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
-                <MudTd>@(context.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd DataLabel="@L["Created"]">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
+                <MudTd DataLabel="@L["Completed"]">@(context.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
         </MudTable>

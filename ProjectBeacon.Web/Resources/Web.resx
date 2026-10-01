@@ -1955,4 +1955,58 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatYou" xml:space="preserve">
     <value>You</value>
   </data>
+  <data name="Revision" xml:space="preserve">
+    <value>Revision</value>
+  </data>
+  <data name="CompiledHash" xml:space="preserve">
+    <value>Hash</value>
+  </data>
+  <data name="BudgetOverflow" xml:space="preserve">
+    <value>Over budget</value>
+  </data>
+  <data name="DroppedSections" xml:space="preserve">
+    <value>Dropped</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="NoDecisions" xml:space="preserve">
+    <value>No decisions yet.</value>
+  </data>
+  <data name="NoReports" xml:space="preserve">
+    <value>No reports yet.</value>
+  </data>
+  <data name="Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Scope" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+  <data name="Generated" xml:space="preserve">
+    <value>Generated</value>
+  </data>
+  <data name="DeleteTaskConfirm" xml:space="preserve">
+    <value>Delete this task? This cannot be undone.</value>
+  </data>
+  <data name="DeleteMilestoneConfirm" xml:space="preserve">
+    <value>Delete this milestone? Tasks stay on the board.</value>
+  </data>
+  <data name="DeleteConnectionConfirm" xml:space="preserve">
+    <value>Remove this connection?</value>
+  </data>
+  <data name="Owner" xml:space="preserve">
+    <value>Owner</value>
+  </data>
+  <data name="Admin" xml:space="preserve">
+    <value>Admin</value>
+  </data>
+  <data name="Member" xml:space="preserve">
+    <value>Member</value>
+  </data>
+  <data name="Viewer" xml:space="preserve">
+    <value>Viewer</value>
+  </data>
+  <data name="Revoked" xml:space="preserve">
+    <value>Revoked</value>
+  </data>
 </root>

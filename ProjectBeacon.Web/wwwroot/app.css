@@ -429,7 +429,17 @@
     display: none;
 }
 
-@media (max-width: 959px) {
+@media (max-width: 1024px) and (min-width: 768px) {
+    .beacon-chat-dock {
+        width: 320px;
+    }
+
+    .kanban-column {
+        min-width: 220px;
+    }
+}
+
+@media (max-width: 767px) {
     .beacon-board-filter {
         display: inline-flex;
     }
@@ -455,6 +465,21 @@
     .kanban-board.kanban-show-inprogress .kanban-column:not(.kanban-column-inprogress),
     .kanban-board.kanban-show-done .kanban-column:not(.kanban-column-done) {
         display: none;
+    }
+}
+
+@media (max-width: 599px) {
+    .mud-dialog-container {
+        align-items: stretch;
+    }
+
+    .mud-dialog {
+        margin: 0;
+        width: 100vw;
+        max-width: 100vw !important;
+        max-height: 100vh;
+        height: 100%;
+        border-radius: 0;
     }
 }
 
@@ -613,4 +638,12 @@
 
 .blazor-error-boundary::after {
     content: attr(data-error);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .beacon-nav.mud-navmenu .mud-nav-link,
+    .beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-icon,
+    .beacon-card-interactive {
+        transition: none;
+    }
 }

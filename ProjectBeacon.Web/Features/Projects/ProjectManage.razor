@@ -7,6 +7,7 @@
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject GetCurrentProjectHandler CurrentProject
@@ -92,9 +93,9 @@ else
                     <MudTh>@L["Role"]</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.Login</MudTd>
-                    <MudTd>@context.Email</MudTd>
-                    <MudTd>@context.Role</MudTd>
+                    <MudTd DataLabel="@L["Username"]">@context.Login</MudTd>
+                    <MudTd DataLabel="@L["Email"]">@context.Email</MudTd>
+                    <MudTd DataLabel="@L["Role"]">@ChromeLabels.Role(L, context.Role)</MudTd>
                 </RowTemplate>
             </MudTable>
         }
@@ -109,9 +110,9 @@ else
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.Email</MudTd>
-                    <MudTd>@context.Role</MudTd>
-                    <MudTd>@context.Status</MudTd>
+                    <MudTd DataLabel="@L["Email"]">@context.Email</MudTd>
+                    <MudTd DataLabel="@L["Role"]">@ChromeLabels.Role(L, context.Role)</MudTd>
+                    <MudTd DataLabel="@L["Status"]">@ChromeLabels.Invite(L, context.Status)</MudTd>
                     <MudTd>
                         @if (context.Status == "Pending")
                         {
@@ -152,8 +153,8 @@ else
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.Name</MudTd>
-                <MudTd>@context.PathPrefix</MudTd>
+                <MudTd DataLabel="@L["Title"]">@context.Name</MudTd>
+                <MudTd DataLabel="@L["PathPrefix"]">@context.PathPrefix</MudTd>
                 <MudTd>
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartLabelEdit(context)">@L["Edit"]</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveLabel(context)">@L["Delete"]</MudButton>

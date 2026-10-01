@@ -13,7 +13,8 @@ public record DecisionDto(
     string DecisionBody,
     string? Consequences,
     DecisionStatus Status,
-    Guid ProjectId);
+    Guid ProjectId,
+    Guid? SupersededById = null);
 
 public record CreateDecisionRequest(Guid ProjectId, string Title, string Context, string Body, string? Consequences);
 
@@ -41,7 +42,7 @@ public class CreateDecisionHandler
     }
 
     private static DecisionDto Map(Decision d) =>
-        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId);
+        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
 }
 
 public class ListDecisionsHandler
@@ -56,7 +57,7 @@ public class ListDecisionsHandler
         var items = await db.Decisions
             .Where(d => d.ProjectId == projectId)
             .OrderByDescending(d => d.CreatedAt)
-            .Select(d => new DecisionDto(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId))
+            .Select(d => new DecisionDto(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById))
             .ToListAsync(ct);
         return Result.Ok((IList<DecisionDto>)items);
     }
@@ -78,7 +79,7 @@ public class AcceptDecisionHandler
         await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
             decision.Id, decision.Title, decision.Context, decision.DecisionBody,
-            decision.Consequences, decision.Status, decision.ProjectId));
+            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById));
     }
 }
 
@@ -100,7 +101,7 @@ public class DeprecateDecisionHandler
     }
 
     private static DecisionDto Map(Decision d) =>
-        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId);
+        new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
 }
 
 public class SupersedeDecisionHandler
@@ -134,6 +135,6 @@ public class SupersedeDecisionHandler
         await db.SaveChangesAsync(ct);
         return Result.Ok(new DecisionDto(
             decision.Id, decision.Title, decision.Context, decision.DecisionBody,
-            decision.Consequences, decision.Status, decision.ProjectId));
+            decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById));
     }
 }

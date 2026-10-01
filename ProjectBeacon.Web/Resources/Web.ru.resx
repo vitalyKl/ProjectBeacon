@@ -1825,4 +1825,145 @@
   <data name="Retry" xml:space="preserve">
     <value>Повторить</value>
   </data>
+  <data name="Revision" xml:space="preserve">
+    <value>Ревизия</value>
+  </data>
+  <data name="CompiledHash" xml:space="preserve">
+    <value>Хеш</value>
+  </data>
+  <data name="BudgetOverflow" xml:space="preserve">
+    <value>Сверх бюджета</value>
+  </data>
+  <data name="DroppedSections" xml:space="preserve">
+    <value>Отброшено</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Открыть</value>
+  </data>
+  <data name="NoDecisions" xml:space="preserve">
+    <value>Решений пока нет.</value>
+  </data>
+  <data name="NoReports" xml:space="preserve">
+    <value>Отчётов пока нет.</value>
+  </data>
+  <data name="Actions" xml:space="preserve">
+    <value>Действия</value>
+  </data>
+  <data name="Scope" xml:space="preserve">
+    <value>Область</value>
+  </data>
+  <data name="Generated" xml:space="preserve">
+    <value>Сформирован</value>
+  </data>
+  <data name="DeleteTaskConfirm" xml:space="preserve">
+    <value>Удалить задачу? Это нельзя отменить.</value>
+  </data>
+  <data name="DeleteMilestoneConfirm" xml:space="preserve">
+    <value>Удалить веху? Задачи останутся на доске.</value>
+  </data>
+  <data name="DeleteConnectionConfirm" xml:space="preserve">
+    <value>Удалить это подключение?</value>
+  </data>
+  <data name="Owner" xml:space="preserve">
+    <value>Владелец</value>
+  </data>
+  <data name="Admin" xml:space="preserve">
+    <value>Администратор</value>
+  </data>
+  <data name="Member" xml:space="preserve">
+    <value>Участник</value>
+  </data>
+  <data name="Viewer" xml:space="preserve">
+    <value>Наблюдатель</value>
+  </data>
+  <data name="Revoked" xml:space="preserve">
+    <value>Отозван</value>
+  </data>
+  <data name="Created" xml:space="preserve">
+    <value>Создано</value>
+  </data>
+  <data name="Commands" xml:space="preserve">
+    <value>Команды</value>
+  </data>
+  <data name="NoCommands" xml:space="preserve">
+    <value>Команд пока нет.</value>
+  </data>
+  <data name="Overview" xml:space="preserve">
+    <value>Обзор</value>
+  </data>
+  <data name="Work" xml:space="preserve">
+    <value>Работа</value>
+  </data>
+  <data name="Discussion" xml:space="preserve">
+    <value>Обсуждение</value>
+  </data>
+  <data name="RuntimeDiagnostics" xml:space="preserve">
+    <value>Среда</value>
+  </data>
+  <data name="Advanced" xml:space="preserve">
+    <value>Дополнительно</value>
+  </data>
+  <data name="ScopeUserLevel" xml:space="preserve">
+    <value>Уровень пользователя</value>
+  </data>
+  <data name="ScopeContextual" xml:space="preserve">
+    <value>Контекстное</value>
+  </data>
+  <data name="Connect" xml:space="preserve">
+    <value>Подключить</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>Диагностика</value>
+  </data>
+  <data name="MoveTo" xml:space="preserve">
+    <value>Переместить</value>
+  </data>
+  <data name="RoleBindingReview" xml:space="preserve">
+    <value>Проверка</value>
+  </data>
+  <data name="McpLocal" xml:space="preserve">
+    <value>Локальный</value>
+  </data>
+  <data name="McpRemote" xml:space="preserve">
+    <value>Удалённый</value>
+  </data>
+  <data name="McpUrl" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="McpCommand" xml:space="preserve">
+    <value>Команда</value>
+  </data>
+  <data name="NoTemplateSelected" xml:space="preserve">
+    <value>Шаблон не выбран.</value>
+  </data>
+  <data name="ModelsCount" xml:space="preserve">
+    <value>Моделей: {0}</value>
+  </data>
+  <data name="ChatGenerating" xml:space="preserve">
+    <value>Генерация</value>
+  </data>
+  <data name="ChatUsingTool" xml:space="preserve">
+    <value>Вызов инструмента</value>
+  </data>
+  <data name="ChatWaitingRuntime" xml:space="preserve">
+    <value>Ожидание среды</value>
+  </data>
+  <data name="ChatCompleted" xml:space="preserve">
+    <value>Завершено</value>
+  </data>
+  <data name="ChatAborted" xml:space="preserve">
+    <value>Прервано</value>
+  </data>
+  <data name="ChatThinking" xml:space="preserve">
+    <value>Размышление</value>
+  </data>
+  <data name="ChatTool" xml:space="preserve">
+    <value>Инструмент</value>
+  </data>
+  <data name="ChatOpenFull" xml:space="preserve">
+    <value>Открыть полный чат</value>
+  </data>
+  <data name="ChatYou" xml:space="preserve">
+    <value>Вы</value>
+  </data>
 </root>

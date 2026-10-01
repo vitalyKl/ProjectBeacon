@@ -15,6 +15,7 @@
 @inject DeleteMilestoneHandler DeleteMilestoneHandler
 @inject CloseMilestoneHandler CloseMilestoneHandler
 @inject ReopenMilestoneHandler ReopenMilestoneHandler
+@inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Roadmap"]</PageTitle>
@@ -74,13 +75,23 @@ else
                     {
                         <MudText Typo="Typo.body2" Class="mt-2">@milestone.Description</MudText>
                     }
-                    <MudText Typo="Typo.caption" Class="mt-2">
-                        @L["TaskCount"]: @(_tasks.Count(t => t.MilestoneId == milestone.Id))
-                    </MudText>
-                    @foreach (var task in _tasks.Where(t => t.MilestoneId == milestone.Id))
-                    {
-                        <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" Href="@($"/task/{task.Id}")">@task.Title</MudButton>
+                    @{
+                        var milestoneTasks = _tasks.Where(t => t.MilestoneId == milestone.Id).ToList();
+                        var done = milestoneTasks.Count(t => t.Status == "Done");
                     }
+                    <MudText Typo="Typo.caption" Class="mt-2">
+                        @L["TaskCount"]: @milestoneTasks.Count · @done/@milestoneTasks.Count @L["Done"]
+                    </MudText>
+                    <MudProgressLinear Value="@(milestoneTasks.Count == 0 ? 0 : done * 100d / milestoneTasks.Count)" Color="Color.Default" Class="mt-1 beacon-track" />
+                    @foreach (var task in milestoneTasks.Take(3))
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis">@task.Title</MudText>
+                    }
+                    @if (milestoneTasks.Count > 3)
+                    {
+                        <MudText Typo="Typo.caption">+@(milestoneTasks.Count - 3)</MudText>
+                    }
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" OnClick="() => OpenMilestone(milestone)">@L["Open"]</MudButton>
                     @if (milestone.ClosedAt is not null)
                     {
                         var orphans = MilestoneOrphanLint.OpenTaskCount(
@@ -109,6 +120,28 @@ else
             </MudItem>
         }
     </MudGrid>
+    @if (_open is not null)
+    {
+        var openTasks = _tasks.Where(t => t.MilestoneId == _open.Id).ToList();
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+            <MudText Typo="Typo.h6">@_open.Name</MudText>
+            @if (!string.IsNullOrEmpty(_open.Description))
+            {
+                <MudText Typo="Typo.body2" Class="mt-2">@_open.Description</MudText>
+            }
+            @if (openTasks.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">@L["NoTasks"]</MudText>
+            }
+            else
+            {
+                @foreach (var task in openTasks)
+                {
+                    <MudButton Variant="Variant.Text" Class="mt-1" Href="@($"/task/{task.Id}")">@task.Title</MudButton>
+                }
+            }
+        </MudPaper>
+    }
 }
 
 @code {
@@ -118,6 +151,7 @@ else
     private bool _loading = true;
     private bool _showCreateForm;
     private Guid? _editingId;
+    private MilestoneDto? _open;
     private string? _editName;
     private string? _editDescription;
     private int _editOrder;
@@ -206,6 +240,8 @@ else
 
     private void CancelEdit() => _editingId = null;
 
+    private void OpenMilestone(MilestoneDto milestone) => _open = milestone;
+
     private async Task CloseMilestone(MilestoneDto milestone)
     {
         var result = await CloseMilestoneHandler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestone.Id)));
@@ -232,6 +268,11 @@ else
 
     private async Task DeleteMilestone(MilestoneDto milestone)
     {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteMilestoneConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
         var result = await DeleteMilestoneHandler.HandleAsync(new DeleteMilestoneCommand(new DeleteMilestoneRequest(milestone.Id)));
         if (!result.Success)
         {

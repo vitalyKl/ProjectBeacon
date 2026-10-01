@@ -55,7 +55,20 @@ else
         <MudItem xs="12" md="6">
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
                 <MudText Typo="Typo.caption">@L["TokenBudget"]: @_tokens / 8000</MudText>
-                <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, 8000)" Color="Color.Default" Class="mt-1 beacon-track" />
+                <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, 8000)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
+                @if (!string.IsNullOrEmpty(_revisionId))
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2">@L["Revision"]: @_revisionId</MudText>
+                    <MudText Typo="Typo.caption">@L["CompiledHash"]: @_compiledHash</MudText>
+                    @if (_overflow)
+                    {
+                        <MudText Typo="Typo.caption">@L["BudgetOverflow"]</MudText>
+                    }
+                    @if (!string.IsNullOrEmpty(_dropped))
+                    {
+                        <MudText Typo="Typo.caption">@L["DroppedSections"]: @_dropped</MudText>
+                    }
+                }
                 @if (!string.IsNullOrEmpty(_preview))
                 {
                     <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_preview</MudText>
@@ -119,6 +132,10 @@ else
     private string _body = string.Empty;
     private string? _preview;
     private int _tokens;
+    private string? _revisionId;
+    private string? _compiledHash;
+    private bool _overflow;
+    private string? _dropped;
     private List<ConstraintDto> _constraints = [];
     private string _constraintBody = string.Empty;
     private ConstraintKind _constraintKind = ConstraintKind.Must;
@@ -174,6 +191,14 @@ else
         }
         _preview = result.Value.BriefMarkdown;
         _tokens = result.Value.TokenEstimate;
+        _revisionId = result.Value.RevisionId;
+        _compiledHash = result.Value.CompiledHash.Length > 12
+            ? result.Value.CompiledHash[..12]
+            : result.Value.CompiledHash;
+        _overflow = result.Value.BudgetOverflow;
+        _dropped = result.Value.DroppedSections.Count == 0
+            ? null
+            : string.Join(", ", result.Value.DroppedSections);
     }
 
     private async Task Export()

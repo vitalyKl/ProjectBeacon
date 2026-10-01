@@ -156,6 +156,11 @@ else
 
     private async Task DeleteTask(Guid taskId)
     {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteTaskConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
         var deleted = await DeleteTaskHandler.HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(taskId)));
         if (!deleted.Success)
         {

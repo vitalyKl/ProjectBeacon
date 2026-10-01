@@ -44,6 +44,21 @@ public static class ChromeLabels
     public static string Constraint(IStringLocalizer L, ConstraintStatus status) =>
         L[status.ToString()].Value;
 
+    public static string Role(IStringLocalizer L, MemberRole role) => L[role.ToString()].Value;
+
+    public static string Invite(IStringLocalizer L, string? status) => status switch
+    {
+        "Pending" => L["Pending"].Value,
+        "Accepted" => L["Accepted"].Value,
+        "Revoked" => L["Revoked"].Value,
+        _ => status ?? "-"
+    };
+
+    public static string CommandKind(IStringLocalizer L, WorkstationCommandKind kind) => L[kind.ToString()].Value;
+
+    public static string HostState(IStringLocalizer L, string? state) =>
+        string.IsNullOrWhiteSpace(state) ? "-" : L[state].Value;
+
     public static string Section(IStringLocalizer L, string sectionId) => sectionId switch
     {
         "goals" => L["SectionGoals"].Value,

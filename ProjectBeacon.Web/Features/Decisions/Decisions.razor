@@ -33,47 +33,76 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
     </MudPaper>
 
-    @if (_decisions.Count > 0)
+    @if (_decisions.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoDecisions"]</MudText>
+    }
+    else
     {
         <MudTable Items="_decisions" Hover="true" Dense="true" Class="mt-4">
             <HeaderContent>
                 <MudTh>@L["Title"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
-                <MudTh>@L["Content"]</MudTh>
-                <MudTh>@L["Consequences"]</MudTh>
+                <MudTh>@L["Context"]</MudTh>
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.Title</MudTd>
-                <MudTd>
+                <MudTd DataLabel="@L["Title"]">@context.Title</MudTd>
+                <MudTd DataLabel="@L["Status"]">
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(context.Status)">
                         @ChromeLabels.Decision(L, context.Status)
                     </MudChip>
                 </MudTd>
-                <MudTd>
-                    <MudText Typo="Typo.body2">@context.DecisionBody</MudText>
-                    @if (!string.IsNullOrWhiteSpace(context.Context))
-                    {
-                        <MudText Typo="Typo.caption">@context.Context</MudText>
-                    }
+                <MudTd DataLabel="@L["Context"]">
+                    <MudText Typo="Typo.caption">@context.Context</MudText>
                 </MudTd>
-                <MudTd>@context.Consequences</MudTd>
-                <MudTd>
-                    @if (context.Status == DecisionStatus.Proposed)
-                    {
-                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Accept(context)">@L["Accept"]</MudButton>
-                    }
-                    @if (context.Status is DecisionStatus.Proposed or DecisionStatus.Accepted)
-                    {
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="() => Deprecate(context)">@L["Deprecate"]</MudButton>
-                    }
-                    @if (context.Status == DecisionStatus.Accepted)
-                    {
-                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartSupersede(context)">@L["Supersede"]</MudButton>
-                    }
+                <MudTd DataLabel="@L["Actions"]">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Select(context)">@L["Open"]</MudButton>
                 </MudTd>
             </RowTemplate>
         </MudTable>
+        @if (_selected is not null)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.h6">@_selected.Title</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(_selected.Status)">
+                        @ChromeLabels.Decision(L, _selected.Status)
+                    </MudChip>
+                </MudStack>
+                @if (!string.IsNullOrWhiteSpace(_selected.Context))
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2">@_selected.Context</MudText>
+                }
+                <MudText Typo="Typo.body2" Class="mt-3 beacon-pre">@_selected.DecisionBody</MudText>
+                @if (!string.IsNullOrWhiteSpace(_selected.Consequences))
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mt-3">@L["Consequences"]</MudText>
+                    <MudText Typo="Typo.body2">@_selected.Consequences</MudText>
+                }
+                @if (_selected.SupersededById is Guid replacementId)
+                {
+                    var replacement = _decisions.FirstOrDefault(d => d.Id == replacementId);
+                    <MudButton Variant="Variant.Text" Class="mt-2" OnClick="() => Select(replacement)">
+                        @L["Replacement"]: @(replacement?.Title ?? replacementId.ToString())
+                    </MudButton>
+                }
+                <MudStack Row="true" Spacing="1" Class="mt-3">
+                    @if (_selected.Status == DecisionStatus.Proposed)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Accept(_selected)">@L["Accept"]</MudButton>
+                    }
+                    @if (_selected.Status is DecisionStatus.Proposed or DecisionStatus.Accepted)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" OnClick="() => Deprecate(_selected)">@L["Deprecate"]</MudButton>
+                    }
+                    @if (_selected.Status == DecisionStatus.Accepted)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartSupersede(_selected)">@L["Supersede"]</MudButton>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
         @if (_superseding is not null)
         {
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -100,6 +129,7 @@ else
     private string _context = string.Empty;
     private string _body = string.Empty;
     private string _consequences = string.Empty;
+    private DecisionDto? _selected;
     private DecisionDto? _superseding;
     private Guid? _replacementId;
 
@@ -119,6 +149,8 @@ else
         }
         var listed = await ListDecisions.HandleAsync(_project.Id);
         _decisions = listed.Success ? listed.Value!.ToList() : [];
+        if (_selected is not null)
+            _selected = _decisions.FirstOrDefault(d => d.Id == _selected.Id);
     }
 
     private async Task Add()
@@ -159,6 +191,8 @@ else
         Snackbar.Add(L["Saved"].Value, Severity.Success);
         await Reload();
     }
+
+    private void Select(DecisionDto? decision) => _selected = decision;
 
     private void StartSupersede(DecisionDto decision)
     {

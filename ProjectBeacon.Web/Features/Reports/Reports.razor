@@ -8,6 +8,7 @@
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
 @inject ListReportsHandler ListReports
+@inject GetReportHandler GetReport
 @inject GenerateReportHandler GenerateReport
 @inject ISnackbar Snackbar
 
@@ -24,22 +25,38 @@
 }
 else
 {
-    @if (_reports.Count > 0)
+    @if (_reports.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoReports"]</MudText>
+    }
+    else
     {
         <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true">
             <HeaderContent>
                 <MudTh>@L["CreatedAt"]</MudTh>
                 <MudTh>@L["Title"]</MudTh>
-                <MudTh>@L["Content"]</MudTh>
+                <MudTh>@L["Scope"]</MudTh>
+                <MudTh>@L["Status"]</MudTh>
+                <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
-                <MudTd>@context.Title</MudTd>
-                <MudTd>
-                    <MudText Typo="Typo.caption" Class="beacon-pre">@context.BodyMarkdown</MudText>
+                <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
+                <MudTd DataLabel="@L["Title"]">@context.Title</MudTd>
+                <MudTd DataLabel="@L["Scope"]">@L["Project"]</MudTd>
+                <MudTd DataLabel="@L["Status"]">@L["Generated"]</MudTd>
+                <MudTd DataLabel="@L["Open"]">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Open(context)">@L["Open"]</MudButton>
                 </MudTd>
             </RowTemplate>
         </MudTable>
+        @if (_open is not null)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+                <MudText Typo="Typo.h6">@_open.Title</MudText>
+                <MudText Typo="Typo.caption">@_open.CreatedAt.ToUniversalTime().ToString("u") · @L["Project"] · @L["Generated"]</MudText>
+                <MudText Typo="Typo.body2" Class="mt-3 beacon-pre">@_open.BodyMarkdown</MudText>
+            </MudPaper>
+        }
     }
 
     <ContextCostReport ProjectId="_project.Id" />
@@ -48,6 +65,7 @@ else
 @code {
     private ProjectDto? _project;
     private List<ReportDto> _reports = [];
+    private ReportDto? _open;
     private bool _busy;
 
     protected override async Task OnInitializedAsync()
@@ -79,5 +97,18 @@ else
             return;
         }
         await Reload();
+    }
+
+    private async Task Open(ReportDto report)
+    {
+        if (_project is null)
+            return;
+        var result = await GetReport.HandleAsync(new GetReportRequest(_project.Id, report.Id));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["AnErrorOccurred"], Severity.Error);
+            return;
+        }
+        _open = result.Value;
     }
 }
