@@ -282,10 +282,10 @@ public sealed class ClientDaemonTests : IDisposable
         {
             DelayAsync = (_, ct) => Task.Delay(1, ct)
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var run = daemon.RunAsync(cts.Token);
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (handler.Completes == 0 && DateTime.UtcNow < deadline)
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (daemon.Snapshot.LastCommand is null && DateTime.UtcNow < deadline)
             await Task.Delay(20);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }

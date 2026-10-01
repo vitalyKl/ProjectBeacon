@@ -59,7 +59,8 @@ public sealed class ModelHttpTests
             backendType = "OpenAiCompatible",
             launchCommand = "http://127.0.0.1:1234/v1",
             contextSize = 4096,
-            ttl = 0
+            ttl = 0,
+            openCodeModel = "xai/grok-3"
         });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json);
@@ -174,7 +175,8 @@ public sealed class ModelHttpTests
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
-        Assert.Equal(projectId, body.GetProperty("projectId").GetGuid());
+        Assert.True(body.TryGetProperty("backends", out var backends));
+        Assert.Equal(0, backends.GetArrayLength());
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)

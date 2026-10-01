@@ -17,10 +17,7 @@ public sealed class CookieLoginHttpTests
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var boot = await client.PostAsJsonAsync("/v1/auth/bootstrap", new { });
-        boot.EnsureSuccessStatusCode();
-        var bootJson = await boot.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        var password = bootJson.GetProperty("password").GetString();
+        var password = await WebTestFactory.GetBootstrapPasswordAsync(client);
 
         var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -101,10 +98,12 @@ public sealed class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Fea
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
 
+    public const string BootstrapToken = "web-test-bootstrap-token";
+
     public WebTestFactory()
     {
         Environment.SetEnvironmentVariable("POSTGRES_PASSWORD", "test");
-        Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", "");
+        Environment.SetEnvironmentVariable("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
         _connection.Open();
     }
 
@@ -112,7 +111,7 @@ public sealed class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Fea
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
-        builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", "");
+        builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
         builder.ConfigureServices(services =>
         {
             foreach (var descriptor in services.ToList())
@@ -141,5 +140,16 @@ public sealed class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Fea
         if (disposing)
             _connection.Dispose();
         base.Dispose(disposing);
+    }
+
+    public static async Task<string> GetBootstrapPasswordAsync(HttpClient client)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
+        request.Content = System.Net.Http.Json.JsonContent.Create(new { });
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", BootstrapToken);
+        var boot = await client.SendAsync(request);
+        boot.EnsureSuccessStatusCode();
+        var bootJson = await boot.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        return bootJson.GetProperty("password").GetString()!;
     }
 }

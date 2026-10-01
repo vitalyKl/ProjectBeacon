@@ -117,7 +117,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         Assert.True(created.Success, created.Error);
 
         var updated = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(created.Value!.Id, "new", ModelBackendType.OpenAiCompatible, "new-cmd", 2048, 60, AccountA)));
+            new UpsertLocalModelBackendRequest(created.Value!.Id, "new", ModelBackendType.OpenAiCompatible, "new-cmd", 2048, 60, AccountA, null, false, null, "xai/grok-3")));
 
         Assert.True(updated.Success, updated.Error);
         Assert.Equal(created.Value.Id, updated.Value!.Id);
@@ -233,7 +233,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var upsert = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await upsert.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "solo", ModelBackendType.FreeToken, "cmd", 1024, 0, AccountA)));
+            new UpsertLocalModelBackendRequest(null, "solo", ModelBackendType.FreeToken, "cmd", 1024, 0, AccountA, null, false, null, "xai/grok-3")));
         Assert.True(created.Success, created.Error);
 
         var del = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));

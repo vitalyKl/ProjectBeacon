@@ -61,10 +61,7 @@ public sealed class ProjectSwitchHttpTests
         var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var boot = await client.PostAsJsonAsync("/v1/auth/bootstrap", new { });
-        boot.EnsureSuccessStatusCode();
-        var bootJson = await boot.Content.ReadFromJsonAsync<JsonElement>();
-        var password = bootJson.GetProperty("password").GetString();
+        var password = await WebTestFactory.GetBootstrapPasswordAsync(client);
 
         var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {

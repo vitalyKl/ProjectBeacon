@@ -51,10 +51,7 @@ public sealed class ForwardedHeadersHttpTests
 
     private static async Task<string> GetBootstrapPasswordAsync(HttpClient client)
     {
-        var boot = await client.PostAsJsonAsync("/v1/auth/bootstrap", new { });
-        boot.EnsureSuccessStatusCode();
-        var bootJson = await boot.Content.ReadFromJsonAsync<JsonElement>();
-        return bootJson.GetProperty("password").GetString()!;
+        return await WebTestFactory.GetBootstrapPasswordAsync(client);
     }
 
     private static string[] GetBeaconAuthCookieAttributes(HttpResponseMessage response)

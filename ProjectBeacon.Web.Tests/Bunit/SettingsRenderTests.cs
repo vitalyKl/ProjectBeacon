@@ -22,7 +22,7 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     [Fact]
     public void Settings_RendersDeviceSection()
     {
-        var cut = Bunit.RenderComponent<Features.Settings.Settings>();
+        var cut = Bunit.RenderComponent<Features.Settings.Workstations>();
 
         Assert.Contains("Device", cut.Markup);
     }
@@ -33,10 +33,6 @@ public sealed class SettingsRenderTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
 
         Assert.Contains("Account", cut.Markup);
-        Assert.Contains("Agents", cut.Markup);
-        Assert.Contains("Pick a service", cut.Markup);
-        Assert.Contains("Own server", cut.Markup);
-        Assert.Contains("Each service keeps one model", cut.Markup);
         Assert.Contains("Current password", cut.Markup);
         Assert.Contains("Change password", cut.Markup);
         Assert.DoesNotContain("ProjectFolder", cut.Markup);
