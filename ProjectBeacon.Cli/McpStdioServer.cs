@@ -134,6 +134,10 @@ public static class McpStdioServer
         if (string.IsNullOrEmpty(name))
             return ToolError(id, "malformed path");
 
+        var denied = await EnforceSubtaskScopeAsync(name, arguments, api);
+        if (denied is not null)
+            return ToolError(id, denied);
+
         try
         {
             return name switch
@@ -169,6 +173,26 @@ public static class McpStdioServer
         {
             return ToolError(id, ex.Message);
         }
+    }
+
+    private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api)
+    {
+        if (api is null || !TryParseScope(out _, out var taskId, out _) || taskId is null)
+            return null;
+
+        var (ok, _, body) = await api.SendAsync(HttpMethod.Get, $"v1/tasks/{taskId.Value:D}/pipeline", null, CancellationToken.None);
+        if (!ok)
+            return null;
+
+        Guid? explicitId = null;
+        var fromEnv = Environment.GetEnvironmentVariable("BEACON_SUBTASK_ID");
+        if (Guid.TryParse(fromEnv, out var envId))
+            explicitId = envId;
+        else if (Guid.TryParse(OptArg(arguments, "subtaskId"), out var argId))
+            explicitId = argId;
+
+        var paths = SubtaskScopeGuard.UsesPath(tool) ? SplitPrefixes(OptArg(arguments, "path")) : null;
+        return SubtaskScopeGuard.Reject(tool, paths, SubtaskScopeGuard.ParsePipeline(body), explicitId);
     }
 
     private readonly record struct McpScope(IServiceProvider Services, Guid ProjectId, Guid? TaskId);

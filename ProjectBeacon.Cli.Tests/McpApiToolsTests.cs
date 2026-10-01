@@ -104,7 +104,7 @@ public sealed class McpApiToolsTests
             Assert.Contains(handler.Calls, call => call.Method == "GET" && call.Path == "/v1/models/proxy/status");
             Assert.Contains("proxy", frames[4].ToJsonString(), StringComparison.Ordinal);
             Assert.Contains("available", frames[4].ToJsonString(), StringComparison.Ordinal);
-            Assert.Equal("GET", handler.Calls.Single(call => call.Path == $"/v1/tasks/{taskId:D}/pipeline").Method);
+            Assert.Contains(handler.Calls, call => call.Method == "GET" && call.Path == $"/v1/tasks/{taskId:D}/pipeline");
             Assert.All(handler.Calls, call => Assert.Equal(projectId.ToString("D"), call.ProjectHeader));
         }
         finally
