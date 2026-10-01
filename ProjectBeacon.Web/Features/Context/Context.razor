@@ -84,8 +84,13 @@ else
         <MudItem xs="12" md="4">
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
                 <MudText Typo="Typo.caption">@L["ServerCompileNoTree"]</MudText>
-                <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_tokens / @_budget</MudText>
-                <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, _budget)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
+                <div class="beacon-budget mt-2">
+                    <div class="beacon-budget-label">
+                        <span class="mud-typography mud-typography-caption">@L["TokenBudget"]</span>
+                        <span class="mud-typography mud-typography-caption">@_tokens / @_budget</span>
+                    </div>
+                    <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, _budget)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
+                </div>
                 @if (!string.IsNullOrEmpty(_revisionId))
                 {
                     <MudText Typo="Typo.caption" Class="mt-2">@L["Revision"]: @_revisionId</MudText>

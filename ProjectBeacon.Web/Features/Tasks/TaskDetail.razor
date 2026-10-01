@@ -110,7 +110,7 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Error" Class="beacon-action-danger" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
         }
     </div>
-    <MudTabs Rounded="true" ApplyEffectsToContainer="true" Class="mt-2">
+    <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-2 beacon-task-tabs">
     <MudTabPanel Text="@L["Overview"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
         @if (!string.IsNullOrEmpty(_task.Description))
@@ -122,11 +122,19 @@ else
             <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4 beacon-track" />
             <MudText Typo="Typo.caption" Class="mt-1">@ChromeLabels.SubStage(L, _task.SubStage)</MudText>
         }
-        @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
-        {
-            <MudText Typo="Typo.caption" Class="mt-2">@L["Done"] @_task.CompletedAt.Value.ToShortDateString()</MudText>
-        }
-        <MudText Typo="Typo.caption" Class="mt-2">@L["CreatedAt"] @_task.CreatedAt.ToShortDateString()</MudText>
+        <div class="beacon-meta mt-2">
+            @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
+            {
+                <div class="beacon-meta-item">
+                    <span class="mud-typography mud-typography-caption mud-text-secondary">@L["Done"]</span>
+                    <span class="mud-typography mud-typography-caption">@_task.CompletedAt.Value.ToShortDateString()</span>
+                </div>
+            }
+            <div class="beacon-meta-item">
+                <span class="mud-typography mud-typography-caption mud-text-secondary">@L["CreatedAt"]</span>
+                <span class="mud-typography mud-typography-caption">@_task.CreatedAt.ToShortDateString()</span>
+            </div>
+        </div>
         <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">@NextStepText</MudAlert>
         @if (!string.IsNullOrEmpty(_task.ReviewNotes))
         {
@@ -157,7 +165,7 @@ else
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @(ModelName(open.ModelBackendId))</MudText>
                 @foreach (var sub in PhaseSubtasks(open.Id))
                 {
-                    <MudPaper Elevation="0" Outlined="true" Class="pa-3 mt-2">
+                    <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-3 mt-2">
                         <MudText Typo="Typo.body2">@sub.Instructions</MudText>
                         <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
                         @if (!string.IsNullOrWhiteSpace(sub.Summary))
@@ -200,26 +208,25 @@ else
         <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
         @if (_pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
         {
-            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-2">
+            <div class="beacon-stage-track mt-2">
                 @for (var i = 0; i < StageChips.Length; i++)
                 {
                     var current = pipeline.Stage;
+                    var index = StageIndex(current);
                     var label = current == TaskPipelineStage.ReopenedForRevision && i == 1
                         ? L["StageReopenedForRevision"].Value
                         : L[StageChips[i]].Value;
-                    var color = i < StageIndex(current)
-                        ? Color.Success
-                        : (i == StageIndex(current)
-                            ? (current == TaskPipelineStage.ReopenedForRevision ? Color.Warning : Color.Primary)
-                            : Color.Default);
-                    var variant = i <= StageIndex(current) ? Variant.Filled : Variant.Outlined;
-                    <MudChip T="string" Size="Size.Small" Color="@color" Variant="@variant">@label</MudChip>
-                    @if (i < StageChips.Length - 1)
-                    {
-                        <MudText Typo="Typo.caption" Class="mx-1">→</MudText>
-                    }
+                    var mark = i < index
+                        ? "done"
+                        : i == index
+                            ? (current == TaskPipelineStage.ReopenedForRevision ? "warning" : "active")
+                            : string.Empty;
+                    <div class="beacon-stage @(i == index ? "is-current" : null)" aria-current="@(i == index ? "step" : null)">
+                        <span class="beacon-phase-mark @mark" aria-hidden="true"></span>
+                        <span class="mud-typography mud-typography-caption">@label</span>
+                    </div>
                 }
-            </MudStack>
+            </div>
 
             @if (pipeline.Stage == TaskPipelineStage.Closed)
             {
@@ -235,7 +242,7 @@ else
                 }
                 @foreach (var subtask in pipeline.Subtasks)
                 {
-                    <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 mb-2">
+                    <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-4 mb-2">
                         <MudText Typo="Typo.body2" Class="beacon-pre">@subtask.Instructions</MudText>
                         <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@SubtaskStatusColor(subtask.Status)">@SubtaskStatusLabel(subtask.Status)</MudChip>
@@ -348,8 +355,17 @@ else
                 @L["CompileBrief"]
             </MudButton>
         </MudStack>
-        <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_briefTokens / @_briefBudget</MudText>
-        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="Color.Default" Class="mt-1 beacon-track" />
+        <div class="beacon-budget mt-2">
+            <div class="beacon-budget-label">
+                <span class="mud-typography mud-typography-caption">@L["TokenBudget"]</span>
+                <span class="mud-typography mud-typography-caption">@_briefTokens / @_briefBudget</span>
+            </div>
+            <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="@(_briefOverflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
+            @if (_briefOverflow)
+            {
+                <MudText Typo="Typo.caption" Class="mt-1">@L["BudgetOverflow"]</MudText>
+            }
+        </div>
         @if (!string.IsNullOrEmpty(_briefError))
         {
             <MudAlert Severity="Severity.Error" Class="mt-2">@_briefError</MudAlert>
@@ -379,6 +395,7 @@ else
     private string? _briefError;
     private int _briefTokens;
     private int _briefBudget = 8000;
+    private bool _briefOverflow;
     private bool _compiling;
     private string _commentDraft = string.Empty;
     private string _reviewDraft = string.Empty;
@@ -691,6 +708,7 @@ else
             }
             _briefMarkdown = result.Value.BriefMarkdown;
             _briefTokens = result.Value.TokenEstimate;
+            _briefOverflow = result.Value.BudgetOverflow;
         }
         finally
         {

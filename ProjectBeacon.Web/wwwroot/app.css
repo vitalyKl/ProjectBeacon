@@ -337,6 +337,57 @@
     background: var(--mud-palette-error);
 }
 
+.beacon-phase-mark.warning {
+    background: var(--color-warning);
+}
+
+.beacon-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+}
+
+.beacon-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+
+.beacon-stage-track {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+}
+
+.beacon-stage {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.beacon-stage .mud-typography-caption {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+}
+
+.beacon-stage.is-current .mud-typography-caption {
+    color: var(--color-text-primary);
+}
+
+.beacon-stage.is-current:has(.beacon-phase-mark.warning) .mud-typography-caption {
+    color: var(--color-warning);
+}
+
+.beacon-budget-label {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
 .beacon-track {
     height: 6px;
     border-radius: var(--radius-pill);
@@ -397,7 +448,7 @@
 }
 
 .kanban-zone {
-    min-height: 60vh;
+    min-height: calc(var(--space-16) + var(--space-12));
     height: 100%;
     padding: var(--space-4) var(--space-5);
 }
@@ -626,6 +677,10 @@
     max-height: 48vh;
 }
 
+.beacon-chat-dock-compose {
+    flex-shrink: 0;
+}
+
 .beacon-chat-pane {
     min-height: 60vh;
     display: flex;
@@ -641,24 +696,85 @@
     max-width: 520px;
 }
 
+@media (max-width: 767px) {
+    html {
+        scroll-padding-bottom: calc(var(--space-10) + var(--space-3) + var(--space-4) + env(safe-area-inset-bottom, 0px));
+    }
+
+    .mud-main-content > .pa-8.beacon-main {
+        padding-right: calc(var(--space-10) + var(--space-3) + var(--space-2)) !important;
+        padding-bottom: calc(var(--space-10) + var(--space-3) + var(--space-4) + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .beacon-chat-fab {
+        right: max(var(--space-3), env(safe-area-inset-right, 0px));
+        bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
+    }
+
+    .beacon-meta {
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+
+    .beacon-stage-track {
+        flex-direction: column;
+    }
+
+    .beacon-stage {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .beacon-stage .beacon-phase-mark {
+        width: var(--space-8);
+        flex: none;
+    }
+
+    .beacon-stage .mud-typography-caption {
+        white-space: normal;
+    }
+
+    .beacon-task-tabs .mud-tabs-scroll-button {
+        display: none;
+    }
+
+    .beacon-task-tabs .mud-tabs-tabbar-content {
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+    }
+
+    .beacon-task-tabs .mud-tabs-tabbar-wrapper {
+        transform: none !important;
+        transition: none;
+    }
+
+    .beacon-task-tabs .mud-tab {
+        width: auto;
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .beacon-task-tabs .mud-tab.mud-tab-active {
+        background-color: var(--color-bg-accent);
+    }
+}
+
 @media (max-width: 479px) {
     .beacon-chat-dock {
         left: 0;
         right: 0;
         bottom: 0;
         width: auto;
-        max-height: 85vh;
+        max-height: min(85vh, calc(100dvh - env(safe-area-inset-bottom, 0px)));
         border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
     }
 
     .beacon-chat-dock-log,
     .beacon-chat-log {
         max-height: 50vh;
-    }
-
-    .beacon-chat-fab {
-        right: 12px;
-        bottom: 12px;
     }
 }
 

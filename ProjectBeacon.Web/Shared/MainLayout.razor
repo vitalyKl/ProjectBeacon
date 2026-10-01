@@ -95,7 +95,7 @@
                     @L["ProjectSettings"]
                 </MudNavLink>
                 <div class="beacon-nav-label">@L["NavAccount"]</div>
-                <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+                <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
                 </MudNavLink>
                 <MudNavLink Href="/settings/connections" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Link">
@@ -109,7 +109,7 @@
         </div>
     </MudDrawer>
     <MudMainContent>
-        <div class="pa-8">
+        <div class="pa-8 beacon-main">
             <div class="beacon-content-max">
                 @if (_bodyReady)
                 {

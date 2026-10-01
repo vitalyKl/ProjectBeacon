@@ -37,7 +37,7 @@ These should not be reintroduced as broad refactor work unless a regression is d
 ## UI-001 — Mobile Chat FAB overlaps page content
 
 **Priority:** P1  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** mobile 360/390
 
 ### Evidence
@@ -64,7 +64,7 @@ Keep the floating interaction, but guarantee a safe visual/content inset on narr
 ## UI-002 — Duplicate active navigation state for Settings/Agents
 
 **Priority:** P1  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** desktop and responsive layouts
 
 ### Evidence
@@ -88,7 +88,7 @@ Make the parent Settings route active only for the exact `/settings` route while
 ## UI-003 — Task Detail metadata spacing is visually broken
 
 **Priority:** P1  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** Task Detail
 
 ### Evidence
@@ -117,7 +117,7 @@ Use an explicit metadata layout rather than adjacent inline text. Prefer a compa
 ## UI-004 — Desktop Board columns reserve excessive empty height
 
 **Priority:** P2  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** desktop Board
 
 ### Evidence
@@ -144,7 +144,7 @@ Reduce forced empty space while preserving a usable drop target. Prefer a practi
 ## UI-005 — Excessive card/border nesting remains
 
 **Priority:** P2  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** Dashboard, Task Detail, Agents, Workstations, Context
 
 ### Problem
@@ -167,7 +167,7 @@ Do not perform a broad visual rewrite. Review nested containers and remove an ou
 ## UI-006 — Mobile Task Detail tab navigation is difficult to scan
 
 **Priority:** P2  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** mobile Task Detail
 
 ### Problem
@@ -190,7 +190,7 @@ Improve narrow-screen tab discovery without creating a completely separate mobil
 ## UI-007 — Beacon-specific visual identity can be strengthened
 
 **Priority:** P3  
-**Status:** Open  
+**Status:** Fixed  
 **Affected:** product-wide
 
 ### Observation
@@ -238,6 +238,10 @@ When a finding is fixed:
 - verify desktop/mobile impact.
 
 Do not close a finding based only on code inspection when the issue is visual.
+
+## Verification
+
+Code and `ProjectBeacon.Web.Tests` (`TaskDetailRenderTests`, `TokenBudgetMeterTests`, `ChipPaletteTests`) pass. Playwright matrix (`screenshot-matrix.js`, 120 shots, 1440/1280/1024/768/390/360) was re-run against the local Web host. Relevant baselines were updated for board, task detail, context, agents, and the mobile safe-area inset. Unrelated diffs (1280 decisions, 1024 backlog/decisions) were left unchanged. Commit is not recorded until these changes are committed.
 
 ## Verification requirements
 

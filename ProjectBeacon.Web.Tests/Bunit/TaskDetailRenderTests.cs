@@ -20,6 +20,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         Assert.Contains(task.Title, html);
         Assert.Contains("beacon-task-meta", html);
         Assert.Contains("beacon-action-bar", html);
+        Assert.Contains("beacon-meta", html);
     }
 
     [Fact]

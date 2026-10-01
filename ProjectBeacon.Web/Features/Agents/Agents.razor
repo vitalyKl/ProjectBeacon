@@ -35,7 +35,7 @@
 }
 else
 {
-    <MudTabs Rounded="true" ApplyEffectsToContainer="true" Class="mt-2">
+    <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-2">
     <MudTabPanel Text="@L["Overview"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeUserLevel"] · @L["ScopeAccountHint"]</MudText>
@@ -53,9 +53,11 @@ else
             <MudText Typo="Typo.body2">@L["RoleBindingReview"]: @BackendName(_review)</MudText>
         }
         <MudText Typo="Typo.caption" Class="mud-text-secondary mt-4 mb-2">@L["ScopeContextual"] · @L["ScopeWorkstationHint"]</MudText>
-        <StatusChip Color="@ChipPalette.ForRuntime(RuntimeState)" Label="@RuntimeLabel" />
-        <MudText Typo="Typo.body2" Class="mt-2">@L["RuntimeDevice"]: @(SelectedRuntime?.DeviceName ?? L["None"].Value)</MudText>
-        <MudText Typo="Typo.body2">@L["CurrentModel"]: @(_status?.LoadedModel ?? L["None"].Value)</MudText>
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-2">
+            <StatusChip Color="@ChipPalette.ForRuntime(RuntimeState)" Label="@RuntimeLabel" />
+            <MudText Typo="Typo.caption">@L["RuntimeDevice"]: @(SelectedRuntime?.DeviceName ?? L["None"].Value)</MudText>
+            <MudText Typo="Typo.caption">@L["CurrentModel"]: @(_status?.LoadedModel ?? L["None"].Value)</MudText>
+        </MudStack>
     </MudPaper>
     </MudTabPanel>
     <MudTabPanel Text="@L["AgentTemplates"]">

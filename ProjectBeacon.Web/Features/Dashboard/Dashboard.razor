@@ -141,13 +141,19 @@ else
                 }
                 else
                 {
-                    @if (!string.IsNullOrWhiteSpace(_status?.DeviceName))
-                    {
-                        <MudText Typo="Typo.caption" Class="mb-1">@_status.DeviceName</MudText>
-                    }
                     @if (_status is not null)
                     {
-                        <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-2">
+                            <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
+                            @if (!string.IsNullOrWhiteSpace(_status.DeviceName))
+                            {
+                                <MudText Typo="Typo.caption">@_status.DeviceName</MudText>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_status.LoadedModel))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@_status.LoadedModel</MudText>
+                            }
+                        </MudStack>
                         <HostLoadView Status="_status" />
                     }
                     @if (_loadSeries.Count > 0)

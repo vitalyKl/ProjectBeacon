@@ -53,7 +53,7 @@
                 {
                     <MudText Typo="Typo.caption" Class="mb-1">@PhaseLabel</MudText>
                 }
-                <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1">
+                <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1" Class="beacon-chat-dock-compose">
                     <MudTextField @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="_busy" />
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
                 </MudStack>
