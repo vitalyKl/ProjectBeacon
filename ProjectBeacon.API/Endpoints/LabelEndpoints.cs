@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using Application.Projects;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,14 +20,14 @@ public static class LabelEndpoints
         var result = await handler.HandleAsync(new ListLabelsRequest(projectId));
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> MatchLabel(Guid projectId, [FromQuery] string path, MatchLabelHandler handler)
     {
         var result = await handler.HandleAsync(new MatchLabelRequest(projectId, path));
         if (!result.Success)
-            return Results.BadRequest(new { error = result.Error });
+            return result.FromResult();
         return result.Value is null ? Results.NoContent() : Results.Ok(result.Value);
     }
 
@@ -34,7 +36,7 @@ public static class LabelEndpoints
         var result = await handler.HandleAsync(new AddLabelPathRequest(projectId, labelId, body.Path));
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     public record AddLabelPathBody(string Path);

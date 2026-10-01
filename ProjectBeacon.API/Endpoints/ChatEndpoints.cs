@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Chat;
 using Microsoft.AspNetCore.Mvc;
@@ -36,7 +38,7 @@ public static class ChatEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(userId, body?.Title)), ct);
-        return result.Success ? Results.Created($"/v1/chat/sessions/{result.Value!.Id}", result.Value) : Results.BadRequest(new { error = result.Error });
+        return result.Success ? Results.Created($"/v1/chat/sessions/{result.Value!.Id}", result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> GetSession(Guid id, GetChatSessionHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -44,7 +46,7 @@ public static class ChatEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(id, userId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> ListParts(Guid id, ListChatPartsHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -52,7 +54,7 @@ public static class ChatEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(id, userId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> SendPrompt(Guid id, [FromBody] PromptBody body, SendChatPromptHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -60,7 +62,7 @@ public static class ChatEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(id, userId, body.Text, body.Model)), ct);
-        return result.Success ? Results.Accepted($"/v1/chat/sessions/{id}", result.Value) : Results.BadRequest(new { error = result.Error });
+        return result.Success ? Results.Accepted($"/v1/chat/sessions/{id}", result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> Abort(Guid id, AbortChatHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -68,7 +70,7 @@ public static class ChatEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new AbortChatCommand(new AbortChatRequest(id, userId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> AppendPart(Guid id, [FromBody] AppendBody body, AppendChatPartHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -77,7 +79,7 @@ public static class ChatEndpoints
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(
             id, deviceId, body.Role, body.Kind, body.Body, body.ExternalId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> MarkIdle(Guid id, MarkChatIdleHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -85,7 +87,7 @@ public static class ChatEndpoints
         if (!TryDeviceId(user, out var deviceId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new MarkChatIdleCommand(new MarkChatIdleRequest(id, deviceId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static bool TryUserId(ClaimsPrincipal user, out Guid userId)

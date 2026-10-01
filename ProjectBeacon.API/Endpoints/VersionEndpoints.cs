@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Reflection;
 
 public static class VersionEndpoints

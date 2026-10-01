@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Agents;
 using Domain.Enums;
@@ -28,7 +30,7 @@ public static class ModelEndpoints
         var result = await handler.HandleAsync(new GetModelRegistryCommand(userId), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> UpsertModelBackend(HttpContext ctx, [FromBody] UpsertLocalModelBackendRequest request, UpsertLocalModelBackendHandler handler, CancellationToken ct)
@@ -37,7 +39,7 @@ public static class ModelEndpoints
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = userId }), ct);
         if (!result.Success)
-            return Results.BadRequest(new { error = result.Error });
+            return result.FromResult();
 
         return request.Id is null
             ? Results.Created($"/v1/models/{result.Value.Id}", result.Value)
@@ -51,8 +53,8 @@ public static class ModelEndpoints
         var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, userId)), ct);
         if (!result.Success)
             return result.Error!.StartsWith("Model backend not found")
-                ? Results.NotFound(new { error = result.Error })
-                : Results.BadRequest(new { error = result.Error });
+                ? result.FromResult(404)
+                : result.FromResult();
 
         return Results.NoContent();
     }
@@ -64,18 +66,18 @@ public static class ModelEndpoints
         var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(body.Role, body.ModelBackendId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> UnbindRole(string role, RemoveRoleBindingHandler handler, CancellationToken ct)
     {
         if (!Enum.TryParse<PipelineRole>(role, ignoreCase: true, out var parsed))
-            return Results.BadRequest(new { error = $"Unknown role '{role}'." });
+            return ProblemResults.Bad($"Unknown role '{role}'.");
 
         var result = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(parsed)), ct);
         return result.Success
             ? Results.NoContent()
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> GetProxyStatus(GetProxyStatusHandler handler, CancellationToken ct)
@@ -89,7 +91,7 @@ public static class ModelEndpoints
         var result = await handler.HandleAsync(new ReloadProxyCommand(), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            : result.FromResult(503);
     }
 
     private static async Task<IResult> UnloadProxy(UnloadProxyHandler handler, CancellationToken ct)
@@ -97,7 +99,7 @@ public static class ModelEndpoints
         var result = await handler.HandleAsync(new UnloadProxyCommand(), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            : result.FromResult(503);
     }
 
     private static bool TryUser(HttpContext ctx, out Guid userId) =>

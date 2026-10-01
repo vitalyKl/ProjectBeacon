@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Agents;
 using Application.Devices;
@@ -41,7 +43,7 @@ public static class DeviceEndpoints
         var result = await handler.HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest(body.Name, body.Fingerprint, userId)), ct);
         return result.Success
             ? Results.Created($"/v1/devices/{result.Value!.Id}", result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ListDevices(ListDevicesHandler handler, ClaimsPrincipal user, CancellationToken ct)
@@ -58,7 +60,7 @@ public static class DeviceEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(id, userId)), ct);
-        return result.Success ? Results.NoContent() : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
     private static async Task<IResult> Heartbeat(
@@ -89,7 +91,7 @@ public static class DeviceEndpoints
             return Results.Unauthorized();
         var result = await handler.HandleAsync(
             new CompleteCommandCommand(new CompleteCommandRequest(id, deviceId, body.Success, body.ResultJson, body.Error)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> EnqueueCommand(
@@ -102,8 +104,8 @@ public static class DeviceEndpoints
         if (!result.Success)
         {
             return result.Error is "Device is not connected."
-                ? Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status409Conflict)
-                : Results.BadRequest(new { error = result.Error });
+                ? result.FromResult(409)
+                : result.FromResult();
         }
         return Results.Accepted($"/v1/commands/{result.Value!.Id}", result.Value);
     }
@@ -114,7 +116,7 @@ public static class DeviceEndpoints
         if (!TryUserId(user, out var userId))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new GetCommandCommand(new GetCommandRequest(id, userId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> ListRuntimes(
@@ -123,7 +125,7 @@ public static class DeviceEndpoints
         if (!TryUserId(user, out var userId) || IsDevice(user))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, userId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> AttachRuntime(
@@ -135,7 +137,7 @@ public static class DeviceEndpoints
             new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, body.DeviceId, userId, body.LocalRoot)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> DetachRuntime(
@@ -144,7 +146,7 @@ public static class DeviceEndpoints
         if (!TryUserId(user, out var userId) || IsDevice(user))
             return Results.Unauthorized();
         var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, userId)), ct);
-        return result.Success ? Results.NoContent() : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
     private static async Task<IResult> GetOpenCodeConnections(

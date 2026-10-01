@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
@@ -38,7 +40,7 @@ public static class WorkEndpoints
 
         return result.Success
             ? Results.Ok(new { success = true })
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     public record FinishWorkReviewDto(bool ReviewerRun, int RegressionsFound, int RegressionsFixed);

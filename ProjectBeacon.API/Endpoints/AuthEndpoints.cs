@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using Application.Auth;
 using Application.Common;
 using Application.Identity;
@@ -52,7 +54,7 @@ public static class AuthEndpoints
         var statusCode = result.Error == "Bootstrap already completed."
             ? 409
             : 401;
-        return Results.Json(new { error = result.Error }, statusCode: statusCode);
+        return result.FromResult(statusCode);
     }
 
     private static async Task<IResult> RecoverAdmin(RecoverAdminHandler handler, HttpContext ctx)
@@ -77,7 +79,7 @@ public static class AuthEndpoints
         var statusCode = result.Error is "Invalid bootstrap token." or "Bootstrap token is not configured."
             ? 401
             : 400;
-        return Results.Json(new { error = result.Error }, statusCode: statusCode);
+        return result.FromResult(statusCode);
     }
 
     private static async Task<IResult> Login([FromBody] LoginRequest request, LoginHandler handler)
@@ -93,7 +95,7 @@ public static class AuthEndpoints
                 result.Value.IsAdmin,
                 result.Value.Token
             })
-            : Results.Json(new { error = result.Error }, statusCode: 401);
+            : result.FromResult(401);
     }
 
     private static async Task<IResult> Register([FromBody] RegisterRequest request, RegisterHandler handler)
@@ -107,7 +109,7 @@ public static class AuthEndpoints
                 result.Value.Login,
                 result.Value.Email
             })
-            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Invite required." ? 403 : 400);
+            : result.FromResult(result.Error == "Invite required." ? 403 : 400);
     }
 
     private static async Task<IResult> ForgotPassword([FromBody] ForgotPasswordRequest request, ForgotPasswordHandler handler)
@@ -121,7 +123,7 @@ public static class AuthEndpoints
         var result = await handler.HandleAsync(request);
         return result.Success
             ? Results.Ok()
-            : Results.Json(new { error = result.Error }, statusCode: 400);
+            : result.FromResult(400);
     }
 
     private static async Task<IResult> ChangePassword([FromBody] ChangePasswordBody body, ChangePasswordHandler handler, HttpContext ctx)
@@ -132,7 +134,7 @@ public static class AuthEndpoints
         var result = await handler.HandleAsync(new ChangePasswordRequest(userId, body.CurrentPassword, body.NewPassword));
         return result.Success
             ? Results.Ok()
-            : Results.Json(new { error = result.Error }, statusCode: 400);
+            : result.FromResult(400);
     }
 
     private static IResult AuthOptions(IConfiguration configuration) =>
@@ -143,7 +145,7 @@ public static class AuthEndpoints
         var result = await handler.HandleAsync(token);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.Json(new { error = result.Error }, statusCode: 404);
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> AcceptInvite(string token, AcceptInviteHandler handler, HttpContext ctx)
@@ -155,7 +157,7 @@ public static class AuthEndpoints
         if (result.Success)
             return Results.Ok();
         var status = result.Error == "Email does not match invite." ? 403 : 400;
-        return Results.Json(new { error = result.Error }, statusCode: status);
+        return result.FromResult(status);
     }
 
     public record ChangePasswordBody(string CurrentPassword, string NewPassword);

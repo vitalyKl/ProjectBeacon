@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Common;
 using Application.Identity;
@@ -33,19 +35,19 @@ public static class OrgEndpoints
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> UpdateOrg(Guid orgId, [FromBody] UpdateOrgRequest request, UpdateOrgHandler handler)
     {
         if (orgId != request.OrgId)
-            return Results.BadRequest("OrgId mismatch.");
+            return ProblemResults.Bad("OrgId mismatch.");
 
         var result = await handler.HandleAsync(new UpdateOrgCommand(request));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> GetOrg(Guid orgId, GetOrgHandler handler)
@@ -54,7 +56,7 @@ public static class OrgEndpoints
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ListOrgs(ListOrgsHandler handler, BeaconDbContext db, HttpContext ctx)
@@ -78,7 +80,7 @@ public static class OrgEndpoints
         if (result.Success)
             return Results.Ok(result.Value);
         var status = result.Error == "Forbidden." ? 403 : 400;
-        return Results.Json(new { error = result.Error }, statusCode: status);
+        return result.FromResult(status);
     }
 
     private static async Task<IResult> ListInvites(Guid orgId, ListOrgInvitesHandler handler, HttpContext ctx)
@@ -89,7 +91,7 @@ public static class OrgEndpoints
         var result = await handler.HandleAsync(new ListInvitesRequest(orgId, actor.Value, ActorIsAdmin(ctx)));
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 400);
+            : result.FromResult(result.Error == "Forbidden." ? 403 : 400);
     }
 
     private static async Task<IResult> RevokeInvite(Guid orgId, Guid inviteId, RevokeOrgInviteHandler handler, HttpContext ctx)
@@ -100,7 +102,7 @@ public static class OrgEndpoints
         var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor.Value, ActorIsAdmin(ctx)));
         return result.Success
             ? Results.NoContent()
-            : Results.Json(new { error = result.Error }, statusCode: result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
     }
 
     public record CreateInviteBody(string Email, MemberRole Role);

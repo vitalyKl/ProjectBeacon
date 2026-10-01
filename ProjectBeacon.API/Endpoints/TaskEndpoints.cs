@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
@@ -47,26 +49,26 @@ public static class TaskEndpoints
     private static async Task<IResult> CreateTask(Guid projectId, [FromBody] CreateTaskRequest request, HttpContext ctx, CreateTaskHandler handler)
     {
         if (projectId != request.ProjectId)
-            return Results.BadRequest("ProjectId mismatch.");
+            return ProblemResults.Bad("ProjectId mismatch.");
 
         var actor = ActorUserId(ctx);
         var result = await handler.HandleAsync(new CreateTaskCommand(request with { ActorUserId = actor }));
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value.Id}", MapTaskResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> UpdateTask(Guid taskId, [FromBody] UpdateTaskRequest request, UpdateTaskHandler handler)
     {
         if (taskId != request.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new UpdateTaskCommand(request));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> DeleteTask(Guid taskId, DeleteTaskHandler handler)
@@ -75,7 +77,7 @@ public static class TaskEndpoints
 
         return result.Success
             ? Results.NoContent()
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ListTasks(Guid projectId, [FromQuery] string? status, CancellationToken ct, ListProjectTasksHandler handler)
@@ -83,7 +85,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(projectId)), ct);
 
         if (!result.Success)
-            return Results.BadRequest(new { error = result.Error });
+            return result.FromResult();
 
         var tasks = result.Value;
         if (status is not null)
@@ -100,7 +102,7 @@ public static class TaskEndpoints
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> GetTaskInProject(Guid projectId, Guid taskId, GetTaskHandler handler)
@@ -109,7 +111,7 @@ public static class TaskEndpoints
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ChangeStatus(Guid taskId, [FromBody] ChangeTaskStatusBody body, ChangeTaskStatusHandler handler)
@@ -117,7 +119,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status)));
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ChangeStatusInProject(Guid projectId, Guid taskId, [FromBody] ChangeTaskStatusBody body, ChangeTaskStatusHandler handler)
@@ -125,7 +127,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status, projectId)));
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     public record ChangeTaskStatusBody(TaskItemStatus Status);
@@ -136,7 +138,7 @@ public static class TaskEndpoints
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ClaimTask(Guid projectId, Guid taskId, ITenantContext tenant, ClaimTaskHandler handler)
@@ -146,32 +148,32 @@ public static class TaskEndpoints
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> AddComment(Guid taskId, [FromBody] AddCommentRequest request, HttpContext ctx, AddCommentHandler handler)
     {
         if (taskId != request.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var actor = ActorUserId(ctx);
         var result = await handler.HandleAsync(new AddCommentCommand(request with { UserId = actor ?? Guid.Empty }));
 
         return result.Success
             ? Results.Created($"/v1/tasks/{taskId}/comments/{result.Value.Id}", MapCommentResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> SetDependencies(Guid taskId, [FromBody] SetDependenciesRequest request, SetDependenciesHandler handler)
     {
         if (taskId != request.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new SetDependenciesCommand(request));
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> AddReviewNotes(Guid taskId, [FromBody] string reviewNotes, AddReviewNotesHandler handler)
@@ -180,7 +182,7 @@ public static class TaskEndpoints
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static TaskItemDto MapTaskResponse(TaskItemDto dto) =>
@@ -197,7 +199,7 @@ public static class TaskEndpoints
     private static async Task<IResult> ListSteps(Guid taskId, ListTaskStepsHandler handler)
     {
         var result = await handler.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)));
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     public record AddStepBody(string Title);
@@ -207,7 +209,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new AddTaskStepCommand(new AddTaskStepRequest(taskId, body.Title)));
         return result.Success
             ? Results.Created($"/v1/steps/{result.Value!.Id}", result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     public record ToggleStepBody(bool Done);
@@ -215,12 +217,12 @@ public static class TaskEndpoints
     private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, ToggleTaskStepHandler handler)
     {
         var result = await handler.HandleAsync(new ToggleTaskStepCommand(new ToggleTaskStepRequest(stepId, body.Done)));
-        return result.Success ? Results.Ok(result.Value) : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> DeleteStep(Guid stepId, DeleteTaskStepHandler handler)
     {
         var result = await handler.HandleAsync(new DeleteTaskStepCommand(new DeleteTaskStepRequest(stepId)));
-        return result.Success ? Results.NoContent() : Results.NotFound(new { error = result.Error });
+        return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 }

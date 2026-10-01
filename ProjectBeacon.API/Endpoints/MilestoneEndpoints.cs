@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using Application.Common;
 using Application.Milestones;
 using Infrastructure.Data;
@@ -28,25 +30,25 @@ public static class MilestoneEndpoints
     private static async Task<IResult> CreateMilestone(Guid projectId, [FromBody] CreateMilestoneRequest request, CreateMilestoneHandler handler)
     {
         if (projectId != request.ProjectId)
-            return Results.BadRequest("ProjectId mismatch.");
+            return ProblemResults.Bad("ProjectId mismatch.");
 
         var result = await handler.HandleAsync(new CreateMilestoneCommand(request));
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value.Id}", MapMilestoneResponse(result.Value))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> UpdateMilestone(Guid milestoneId, [FromBody] UpdateMilestoneRequest request, UpdateMilestoneHandler handler)
     {
         if (milestoneId != request.MilestoneId)
-            return Results.BadRequest("MilestoneId mismatch.");
+            return ProblemResults.Bad("MilestoneId mismatch.");
 
         var result = await handler.HandleAsync(new UpdateMilestoneCommand(request));
 
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> DeleteMilestone(Guid milestoneId, DeleteMilestoneHandler handler)
@@ -55,7 +57,7 @@ public static class MilestoneEndpoints
 
         return result.Success
             ? Results.NoContent()
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ListMilestones(Guid projectId, CancellationToken ct, ListProjectMilestonesHandler handler)
@@ -64,7 +66,7 @@ public static class MilestoneEndpoints
 
         return result.Success
             ? Results.Ok(result.Value.Select(MapMilestoneResponse))
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> GetMilestone(Guid milestoneId, GetMilestoneHandler handler)
@@ -73,7 +75,7 @@ public static class MilestoneEndpoints
 
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> CloseMilestone(Guid projectId, Guid milestoneId, CloseMilestoneHandler handler)
@@ -81,7 +83,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestoneId)));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ReopenMilestone(Guid projectId, Guid milestoneId, ReopenMilestoneHandler handler)
@@ -89,7 +91,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestoneId)));
         return result.Success
             ? Results.Ok(MapMilestoneResponse(result.Value))
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static MilestoneDto MapMilestoneResponse(MilestoneDto dto) =>

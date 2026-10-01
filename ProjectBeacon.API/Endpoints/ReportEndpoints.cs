@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using Application.Reports;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,7 +27,7 @@ public static class ReportEndpoints
             new GenerateReportRequest(projectId, createdByType, createdById)));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/reports/{result.Value.Id}", result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> List(Guid projectId, ListReportsHandler handler)
@@ -39,7 +41,7 @@ public static class ReportEndpoints
         var result = await handler.HandleAsync(new GetReportRequest(projectId, reportId));
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ContextCost(Guid taskId, ContextCostReportHandler handler)
@@ -47,7 +49,7 @@ public static class ReportEndpoints
         var result = await handler.HandleAsync(new GetContextCostReportRequest(taskId));
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     public record GenerateReportBody(string? CreatedByType, string? CreatedById);

@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
@@ -31,116 +33,116 @@ public static class PipelineEndpoints
         var result = await handler.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(taskId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> StartPipeline(Guid taskId, [FromBody] PipelineStartBody body, StartPipelineHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(body.TaskId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> CreateSubtask(Guid taskId, [FromBody] CreateSubtaskBody body, CreateSubtaskHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
             body.TaskId, body.Instructions, body.AllowedMcpTools, body.AllowedPaths)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> StartActorSession(Guid taskId, Guid subtaskId, [FromBody] ActorSessionBody body, StartActorSessionHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId || subtaskId != body.SubtaskId)
-            return Results.BadRequest("TaskId/SubtaskId mismatch.");
+            return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
 
         var result = await handler.HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(body.TaskId, body.SubtaskId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> LaunchSession(Guid sessionId, [FromBody] LaunchSessionBody body, LaunchSessionHandler handler, CancellationToken ct)
     {
         if (sessionId != body.SessionId)
-            return Results.BadRequest("SessionId mismatch.");
+            return ProblemResults.Bad("SessionId mismatch.");
 
         var result = await handler.HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(body.SessionId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ReportSubtaskResult(Guid taskId, Guid subtaskId, [FromBody] SubtaskResultBody body, ReportSubtaskResultHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId || subtaskId != body.SubtaskId)
-            return Results.BadRequest("TaskId/SubtaskId mismatch.");
+            return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
 
         var result = await handler.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
             body.TaskId, body.SubtaskId, body.DiffRef, body.Summary)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> FailSubtask(Guid taskId, Guid subtaskId, [FromBody] SubtaskFailBody body, FailSubtaskHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId || subtaskId != body.SubtaskId)
-            return Results.BadRequest("TaskId/SubtaskId mismatch.");
+            return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
 
         var result = await handler.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(
             body.TaskId, body.SubtaskId, body.Reason)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> StartReview(Guid taskId, [FromBody] PipelineStartBody body, StartReviewHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new StartReviewCommand(new StartReviewRequest(body.TaskId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> RecordReviewVerdict(Guid taskId, [FromBody] VerdictBody body, RecordReviewVerdictHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(
             body.TaskId, body.Kind, body.Note, body.SubtaskId)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ApprovePipeline(Guid taskId, [FromBody] ApproveBody body, ApprovePipelineHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var result = await handler.HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(body.TaskId, body.Note)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ForceClosePipeline(Guid taskId, [FromBody] ForceCloseBody body, HttpContext ctx, ForceClosePipelineHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
-            return Results.BadRequest("TaskId mismatch.");
+            return ProblemResults.Bad("TaskId mismatch.");
 
         var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(actorId))
@@ -149,7 +151,7 @@ public static class PipelineEndpoints
         var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actorId, body.Reason)), ct);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     public record PipelineStartBody(Guid TaskId);

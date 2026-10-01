@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using Application.Decisions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,7 +23,7 @@ public static class DecisionEndpoints
             projectId, body.Title, body.Context ?? "", body.Body, body.Consequences));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/decisions", result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> List(Guid projectId, ListDecisionsHandler handler)
@@ -35,7 +37,7 @@ public static class DecisionEndpoints
         var result = await handler.HandleAsync(decisionId);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> Deprecate(Guid projectId, Guid decisionId, DeprecateDecisionHandler handler)
@@ -43,7 +45,7 @@ public static class DecisionEndpoints
         var result = await handler.HandleAsync(decisionId);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> Supersede(
@@ -55,7 +57,7 @@ public static class DecisionEndpoints
         var result = await handler.HandleAsync(decisionId, body.ReplacementId);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     public record CreateDecisionBody(string Title, string? Context, string Body, string? Consequences);

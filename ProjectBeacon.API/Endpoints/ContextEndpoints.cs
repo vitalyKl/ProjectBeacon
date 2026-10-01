@@ -1,5 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
+using ProjectBeacon.API;
+
 using Application.Context;
 using Application.Common;
 using Domain.Enums;
@@ -34,7 +36,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Ok(new { created = result.Value })
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ExportAgentsMd(
@@ -48,7 +50,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Text(result.Value, "text/markdown")
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ListNodes(
@@ -60,7 +62,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> UpsertNode(
@@ -85,7 +87,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> GetNode(
@@ -98,7 +100,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> DeleteNode(
@@ -111,7 +113,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Ok(new { success = true })
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> CompileBrief(
@@ -133,7 +135,7 @@ public static class ContextEndpoints
 
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ListConstraints(Guid projectId, ListConstraintsHandler handler)
@@ -147,7 +149,7 @@ public static class ContextEndpoints
         var result = await handler.HandleAsync(new CreateConstraintRequest(projectId, body.Body, body.Kind));
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/constraints", result.Value)
-            : Results.BadRequest(new { error = result.Error });
+            : result.FromResult();
     }
 
     private static async Task<IResult> ActivateConstraint(Guid projectId, Guid constraintId, ActivateConstraintHandler handler)
@@ -155,7 +157,7 @@ public static class ContextEndpoints
         var result = await handler.HandleAsync(constraintId);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> RejectConstraint(Guid projectId, Guid constraintId, RejectConstraintHandler handler)
@@ -163,7 +165,7 @@ public static class ContextEndpoints
         var result = await handler.HandleAsync(constraintId);
         return result.Success
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error });
+            : result.FromResult(404);
     }
 
     public record CreateConstraintBody(string Body, ConstraintKind Kind);

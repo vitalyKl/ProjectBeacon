@@ -71,7 +71,7 @@ public sealed class ModelHttpTests
         var blocked = await client.DeleteAsync($"/v1/models/{modelId}");
         Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
         var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json);
-        Assert.Contains("planner", blockedBody.GetProperty("error").GetString());
+        Assert.Contains("planner", blockedBody.GetProperty("detail").GetString());
 
         var unbind = await client.DeleteAsync("/v1/models/bind/planner");
         Assert.Equal(HttpStatusCode.NoContent, unbind.StatusCode);
@@ -153,7 +153,7 @@ public sealed class ModelHttpTests
         var bad = await client.DeleteAsync("/v1/models/bind/notarole");
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
         var body = await bad.Content.ReadFromJsonAsync<JsonElement>(Json);
-        Assert.Contains("Unknown role", body.GetProperty("error").GetString());
+        Assert.Contains("Unknown role", body.GetProperty("detail").GetString());
     }
 
     [Fact]
