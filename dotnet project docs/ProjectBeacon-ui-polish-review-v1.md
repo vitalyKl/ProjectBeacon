@@ -241,7 +241,7 @@ Do not close a finding based only on code inspection when the issue is visual.
 
 ## Verification
 
-Code and `ProjectBeacon.Web.Tests` (`TaskDetailRenderTests`, `TokenBudgetMeterTests`, `ChipPaletteTests`) pass. Playwright matrix (`screenshot-matrix.js`, 120 shots, 1440/1280/1024/768/390/360) was re-run against the local Web host. Relevant baselines were updated for board, task detail, context, agents, and the mobile safe-area inset. Unrelated diffs (1280 decisions, 1024 backlog/decisions) were left unchanged. Commit is not recorded until these changes are committed.
+Code and `ProjectBeacon.Web.Tests` (`TaskDetailRenderTests`, `TokenBudgetMeterTests`, `ChipPaletteTests`) pass. Playwright matrix (`screenshot-matrix.js`, 120 shots, 1440/1280/1024/768/390/360) was re-run against the local Web host. Relevant baselines were updated for board, task detail, context, agents, and the mobile safe-area inset. Unrelated diffs (1280 decisions, 1024 backlog/decisions) were left unchanged. Recorded in commit `fd34620`.
 
 ## Verification requirements
 
