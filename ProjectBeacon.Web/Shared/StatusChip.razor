@@ -1,0 +1,8 @@
+@using MudBlazor
+
+<MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@Color">@Label</MudChip>
+
+@code {
+    [Parameter] public Color Color { get; set; }
+    [Parameter] public string Label { get; set; } = string.Empty;
+}

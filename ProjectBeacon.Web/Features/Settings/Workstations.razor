@@ -7,6 +7,8 @@
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Auth
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Shared
+@using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject ListDevicesHandler ListDevices
@@ -55,9 +57,7 @@
             <RowTemplate>
                 <MudTd>@context.Name</MudTd>
                 <MudTd>
-                    <MudChip T="string" Size="Size.Small" Color="@(context.Online ? Color.Success : Color.Default)">
-                        @(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)
-                    </MudChip>
+                    <StatusChip Color="@ChipPalette.ForRuntime(context.Online ? "Online" : "Offline")" Label="@(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)" />
                 </MudTd>
                 <MudTd>@(context.LastHeartbeatAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
                 <MudTd>

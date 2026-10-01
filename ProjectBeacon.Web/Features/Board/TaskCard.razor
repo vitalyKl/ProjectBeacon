@@ -2,6 +2,7 @@
 
 @using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Shared
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -20,15 +21,9 @@
         <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Default" Class="mt-2 beacon-track" />
     }
     <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(Task.Status)">
-            @ChromeLabels.Status(L, Task.Status)
-        </MudChip>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(Task.Priority)">
-            @ChromeLabels.Priority(L, Task.Priority)
-        </MudChip>
-        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(Task.Type)">
-            @ChromeLabels.Type(L, Task.Type)
-        </MudChip>
+        <StatusChip Color="@ChipPalette.ForStatus(Task.Status)" Label="@ChromeLabels.Status(L, Task.Status)" />
+        <StatusChip Color="@ChipPalette.ForPriority(Task.Priority)" Label="@ChromeLabels.Priority(L, Task.Priority)" />
+        <StatusChip Color="@ChipPalette.ForType(Task.Type)" Label="@ChromeLabels.Type(L, Task.Type)" />
     </MudStack>
 </MudPaper>
 
