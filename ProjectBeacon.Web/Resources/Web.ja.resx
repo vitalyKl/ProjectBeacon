@@ -27,9 +27,6 @@
   <data name="Close" xml:space="preserve">
     <value>閉じる</value>
   </data>
-  <data name="Clear" xml:space="preserve">
-    <value>クリア</value>
-  </data>
   <data name="Confirm" xml:space="preserve">
     <value>確認</value>
   </data>
@@ -41,12 +38,6 @@
   </data>
   <data name="Delete" xml:space="preserve">
     <value>削除</value>
-  </data>
-  <data name="DeleteTask" xml:space="preserve">
-    <value>タスクを削除</value>
-  </data>
-  <data name="Menu" xml:space="preserve">
-    <value>メニュー</value>
   </data>
   <data name="Edit" xml:space="preserve">
     <value>編集</value>
@@ -72,14 +63,8 @@
   <data name="Next" xml:space="preserve">
     <value>次へ</value>
   </data>
-  <data name="No" xml:space="preserve">
-    <value>いいえ</value>
-  </data>
   <data name="NoData" xml:space="preserve">
     <value>データがありません</value>
-  </data>
-  <data name="of" xml:space="preserve">
-    <value>の</value>
   </data>
   <data name="Page" xml:space="preserve">
     <value>ページ</value>
@@ -96,12 +81,6 @@
   <data name="Projects" xml:space="preserve">
     <value>プロジェクト</value>
   </data>
-  <data name="Tasks" xml:space="preserve">
-    <value>タスク</value>
-  </data>
-  <data name="GoToBoard" xml:space="preserve">
-    <value>ボードへ</value>
-  </data>
   <data name="Save" xml:space="preserve">
     <value>保存</value>
   </data>
@@ -111,13 +90,1878 @@
   <data name="Settings" xml:space="preserve">
     <value>設定</value>
   </data>
+  <data name="SettingsLead" xml:space="preserve">
+    <value>アカウント、このマシン、エージェントのモデル。プロジェクトのフォルダ、メンバー、ラベルはプロジェクト側に残ります。</value>
+  </data>
+  <data name="ThisProject" xml:space="preserve">
+    <value>このプロジェクト</value>
+  </data>
+  <data name="ThisProjectLead" xml:space="preserve">
+    <value>開いているプロジェクトのフォルダ、メンバー、ラベル。</value>
+  </data>
+  <data name="AgentTemplates" xml:space="preserve">
+    <value>テンプレート</value>
+  </data>
+  <data name="AgentTemplatesLead" xml:space="preserve">
+    <value>モデルの使い方を保存します。モデル一覧はこのアカウントに残ります。</value>
+  </data>
+  <data name="AgentTemplateNew" xml:space="preserve">
+    <value>新しいテンプレート</value>
+  </data>
+  <data name="AgentTemplateName" xml:space="preserve">
+    <value>テンプレート名</value>
+  </data>
+  <data name="TemplateSaved" xml:space="preserve">
+    <value>テンプレートを保存しました。</value>
+  </data>
+  <data name="DeleteTemplateConfirm" xml:space="preserve">
+    <value>このテンプレートを削除しますか？</value>
+  </data>
+  <data name="ModelNote" xml:space="preserve">
+    <value>メモ</value>
+  </data>
+  <data name="ModelNoteHint" xml:space="preserve">
+    <value>自分用です。起動コマンドは変わりません。</value>
+  </data>
+  <data name="ChatModel" xml:space="preserve">
+    <value>チャットモデル</value>
+  </data>
+  <data name="ChatModelHint" xml:space="preserve">
+    <value>メッセージが別のモデルを指定しないとき、アプリのチャットが使います。保存すると、実行中のクライアントにエージェント実行環境の更新を指示します。</value>
+  </data>
+  <data name="OpenCodeModel" xml:space="preserve">
+    <value>エージェントモデル</value>
+  </data>
+  <data name="OpenCodeModelHint" xml:space="preserve">
+    <value>OpenCode が既に知っているプロバイダーとモデル。例: xai/grok-3。保存した接続がキーを渡せます。そうでなければ、マシンで opencode auth login してください。</value>
+  </data>
+  <data name="OpenCodeConnections" xml:space="preserve">
+    <value>モデル接続</value>
+  </data>
+  <data name="OpenCodeConnectionsLead" xml:space="preserve">
+    <value>OpenCode が使うオンラインモデルを指定します。ローカルの llama.cpp モデルは Agents で別に追加します。</value>
+  </data>
+  <data name="OpenCodeStepPick" xml:space="preserve">
+    <value>サービスを選ぶか、provider/model を自分で入力します。</value>
+  </data>
+  <data name="OpenCodeStepKey" xml:space="preserve">
+    <value>そのコンピュータでまだサインインしていない場合だけ、API キーを貼り付けます。</value>
+  </data>
+  <data name="OpenCodeStepSave" xml:space="preserve">
+    <value>保存します。実行中の beacon client が OpenCode を更新して再起動します。</value>
+  </data>
+  <data name="OpenCodeOwnServer" xml:space="preserve">
+    <value>独自サーバー</value>
+  </data>
+  <data name="OpenCodeOnePerService" xml:space="preserve">
+    <value>各サービスはモデルを1つだけ保持します。再保存するとそのモデルを置き換えます。</value>
+  </data>
+  <data name="OpenCodeModelExample" xml:space="preserve">
+    <value>provider/model の形で書きます。例: xai/grok-3。</value>
+  </data>
+  <data name="OpenCodeBaseUrlHint" xml:space="preserve">
+    <value>独自の OpenAI 互換サーバーのアドレス。</value>
+  </data>
+  <data name="OpenCodeKeySaved" xml:space="preserve">
+    <value>キーを保存しました</value>
+  </data>
+  <data name="OpenCodeProvider" xml:space="preserve">
+    <value>プロバイダー</value>
+  </data>
+  <data name="OpenCodeBaseUrl" xml:space="preserve">
+    <value>ベース URL</value>
+  </data>
+  <data name="OpenCodeApiKey" xml:space="preserve">
+    <value>API キー</value>
+  </data>
+  <data name="OpenCodeApiKeyHint" xml:space="preserve">
+    <value>任意。このコンピュータが既にサインイン済みなら空のままにします。以前保存したキーを残す場合も空です。</value>
+  </data>
+  <data name="OpenCodeConnectionSaved" xml:space="preserve">
+    <value>保存しました。beacon client が動いていれば、今 OpenCode を更新します。</value>
+  </data>
+  <data name="NoOpenCodeConnections" xml:space="preserve">
+    <value>接続はまだありません。</value>
+  </data>
+  <data name="DangerZone" xml:space="preserve">
+    <value>危険ゾーン</value>
+  </data>
+  <data name="DangerZoneLead" xml:space="preserve">
+    <value>新しいエージェントは、beacon client が動くマシン用のトークンです。追加する前に認証アプリを有効にしてください。</value>
+  </data>
+  <data name="Authenticator" xml:space="preserve">
+    <value>認証アプリ</value>
+  </data>
+  <data name="AuthenticatorOn" xml:space="preserve">
+    <value>認証アプリは有効です。エージェントを追加するとコードを求めます。</value>
+  </data>
+  <data name="AuthenticatorOff" xml:space="preserve">
+    <value>認証アプリは無効です。有効にして Aegis、Authy などのアプリで QR を読み取り、6桁のコードを入力してください。</value>
+  </data>
+  <data name="AuthenticatorScan" xml:space="preserve">
+    <value>認証アプリでこのコードを読み取り、表示された6桁のコードを入力してください。</value>
+  </data>
+  <data name="AuthenticatorQr" xml:space="preserve">
+    <value>認証アプリ用の QR コード</value>
+  </data>
+  <data name="AuthenticatorManual" xml:space="preserve">
+    <value>カメラで読めない場合は、このキーをアプリに入力してください。</value>
+  </data>
+  <data name="AuthenticatorCode" xml:space="preserve">
+    <value>認証コード</value>
+  </data>
+  <data name="TurnOnAuthenticator" xml:space="preserve">
+    <value>認証アプリを有効にする</value>
+  </data>
+  <data name="TurnOffAuthenticator" xml:space="preserve">
+    <value>認証アプリを無効にする</value>
+  </data>
+  <data name="ChatModelSaved" xml:space="preserve">
+    <value>チャットモデルを保存しました。</value>
+  </data>
+  <data name="TaskKinds" xml:space="preserve">
+    <value>タスクの種類</value>
+  </data>
+  <data name="TaskKindsLead" xml:space="preserve">
+    <value>種類は仕事の進め方です。判断モデルが計画とレビューを行い、作業モデルがスクリーンショット1枚のような短い区切りを担当します。</value>
+  </data>
+  <data name="TaskKindNew" xml:space="preserve">
+    <value>新しい種類</value>
+  </data>
+  <data name="TaskKindName" xml:space="preserve">
+    <value>名前</value>
+  </data>
+  <data name="TaskKindHint" xml:space="preserve">
+    <value>この種類のフェーズをこのタスクにコピーします。</value>
+  </data>
+  <data name="BuiltInKind" xml:space="preserve">
+    <value>既定</value>
+  </data>
+  <data name="DecisionModel" xml:space="preserve">
+    <value>判断モデル</value>
+  </data>
+  <data name="DecisionModelHint" xml:space="preserve">
+    <value>作業を計画し、区切りのレビューを読みます。</value>
+  </data>
+  <data name="WorkerModel" xml:space="preserve">
+    <value>作業モデル</value>
+  </data>
+  <data name="WorkerModelHint" xml:space="preserve">
+    <value>フェーズをサブタスクに分けるときに使います。空なら判断モデルです。</value>
+  </data>
+  <data name="PhaseTitle" xml:space="preserve">
+    <value>フェーズ</value>
+  </data>
+  <data name="PhaseInstruction" xml:space="preserve">
+    <value>指示</value>
+  </data>
+  <data name="PhaseModel" xml:space="preserve">
+    <value>モデル</value>
+  </data>
+  <data name="FanOut" xml:space="preserve">
+    <value>このフェーズをサブタスクに分ける</value>
+  </data>
+  <data name="AddPhase" xml:space="preserve">
+    <value>フェーズを追加</value>
+  </data>
+  <data name="ResetKind" xml:space="preserve">
+    <value>既定に戻す</value>
+  </data>
+  <data name="KindSaved" xml:space="preserve">
+    <value>タスクの種類を保存しました。</value>
+  </data>
+  <data name="DeleteKindConfirm" xml:space="preserve">
+    <value>このタスクの種類を削除しますか？</value>
+  </data>
+  <data name="Phase_understand" xml:space="preserve">
+    <value>タスクを理解する</value>
+  </data>
+  <data name="Phase_do" xml:space="preserve">
+    <value>作業する</value>
+  </data>
+  <data name="Phase_check" xml:space="preserve">
+    <value>結果を確認する</value>
+  </data>
   <data name="Submit" xml:space="preserve">
     <value>送信</value>
+  </data>
+  <data name="Clear" xml:space="preserve">
+    <value>クリア</value>
+  </data>
+  <data name="Yes" xml:space="preserve">
+    <value>はい</value>
+  </data>
+  <data name="No" xml:space="preserve">
+    <value>いいえ</value>
+  </data>
+  <data name="of" xml:space="preserve">
+    <value>の</value>
   </data>
   <data name="WelcomeBack" xml:space="preserve">
     <value>おかえりなさい。</value>
   </data>
-  <data name="Yes" xml:space="preserve">
+  <data name="Lang_en" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="Lang_ru" xml:space="preserve">
+    <value>Русский</value>
+  </data>
+  <data name="Lang_de" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="Lang_fr" xml:space="preserve">
+    <value>Français</value>
+  </data>
+  <data name="Lang_es" xml:space="preserve">
+    <value>Español</value>
+  </data>
+  <data name="Lang_it" xml:space="preserve">
+    <value>Italiano</value>
+  </data>
+  <data name="Lang_pt" xml:space="preserve">
+    <value>Português</value>
+  </data>
+  <data name="Lang_nl" xml:space="preserve">
+    <value>Nederlands</value>
+  </data>
+  <data name="Lang_pl" xml:space="preserve">
+    <value>Polski</value>
+  </data>
+  <data name="Lang_cs" xml:space="preserve">
+    <value>Čeština</value>
+  </data>
+  <data name="Lang_hu" xml:space="preserve">
+    <value>Magyar</value>
+  </data>
+  <data name="Lang_ro" xml:space="preserve">
+    <value>Română</value>
+  </data>
+  <data name="Lang_bg" xml:space="preserve">
+    <value>Български</value>
+  </data>
+  <data name="Lang_hr" xml:space="preserve">
+    <value>Hrvatski</value>
+  </data>
+  <data name="Lang_sk" xml:space="preserve">
+    <value>Slovenčina</value>
+  </data>
+  <data name="Lang_sl" xml:space="preserve">
+    <value>Slovenščina</value>
+  </data>
+  <data name="Lang_lt" xml:space="preserve">
+    <value>Lietuvių</value>
+  </data>
+  <data name="Lang_lv" xml:space="preserve">
+    <value>Latviešu</value>
+  </data>
+  <data name="Lang_et" xml:space="preserve">
+    <value>Eesti</value>
+  </data>
+  <data name="Lang_fi" xml:space="preserve">
+    <value>Suomi</value>
+  </data>
+  <data name="Lang_sv" xml:space="preserve">
+    <value>Svenska</value>
+  </data>
+  <data name="Lang_no" xml:space="preserve">
+    <value>Norsk</value>
+  </data>
+  <data name="Lang_da" xml:space="preserve">
+    <value>Dansk</value>
+  </data>
+  <data name="Lang_el" xml:space="preserve">
+    <value>Ελληνικά</value>
+  </data>
+  <data name="Lang_tr" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="Lang_zh" xml:space="preserve">
+    <value>中文</value>
+  </data>
+  <data name="Lang_ja" xml:space="preserve">
+    <value>日本語</value>
+  </data>
+  <data name="Lang_ko" xml:space="preserve">
+    <value>한국어</value>
+  </data>
+  <data name="Lang_ar" xml:space="preserve">
+    <value>العربية</value>
+  </data>
+  <data name="Lang_hi" xml:space="preserve">
+    <value>हिन्दī</value>
+  </data>
+  <data name="Lang_th" xml:space="preserve">
+    <value>ไทย</value>
+  </data>
+  <data name="Lang_vi" xml:space="preserve">
+    <value>Tiếng Việt</value>
+  </data>
+  <data name="Lang_id" xml:space="preserve">
+    <value>Bahasa Indonesia</value>
+  </data>
+  <data name="Lang_ms" xml:space="preserve">
+    <value>Bahasa Melayu</value>
+  </data>
+  <data name="Lang_tl" xml:space="preserve">
+    <value>Filipino</value>
+  </data>
+  <data name="Lang_uk" xml:space="preserve">
+    <value>Українська</value>
+  </data>
+  <data name="Lang_be" xml:space="preserve">
+    <value>Беларуская</value>
+  </data>
+  <data name="Lang_mk" xml:space="preserve">
+    <value>Македонски</value>
+  </data>
+  <data name="Lang_sr" xml:space="preserve">
+    <value>Српски</value>
+  </data>
+  <data name="Lang_bs" xml:space="preserve">
+    <value>Bosanski</value>
+  </data>
+  <data name="Lang_ca" xml:space="preserve">
+    <value>Català</value>
+  </data>
+  <data name="Lang_gl" xml:space="preserve">
+    <value>Galego</value>
+  </data>
+  <data name="Lang_eu" xml:space="preserve">
+    <value>Euskara</value>
+  </data>
+  <data name="Lang_is" xml:space="preserve">
+    <value>Íslenska</value>
+  </data>
+  <data name="Lang_ga" xml:space="preserve">
+    <value>Gaeilge</value>
+  </data>
+  <data name="Lang_cy" xml:space="preserve">
+    <value>Cymraeg</value>
+  </data>
+  <data name="Login" xml:space="preserve">
+    <value>ログイン</value>
+  </data>
+  <data name="Password" xml:space="preserve">
+    <value>パスワード</value>
+  </data>
+  <data name="Account" xml:space="preserve">
+    <value>アカウント</value>
+  </data>
+  <data name="Logout" xml:space="preserve">
+    <value>ログアウト</value>
+  </data>
+  <data name="InvalidCredentials" xml:space="preserve">
+    <value>ログイン名またはパスワードが正しくありません。</value>
+  </data>
+  <data name="Bootstrap" xml:space="preserve">
+    <value>初期設定</value>
+  </data>
+  <data name="BootstrapDescription" xml:space="preserve">
+    <value>最初の管理者アカウントを作成します。実行できるのは一度だけです。</value>
+  </data>
+  <data name="BootstrapSuccess" xml:space="preserve">
+    <value>管理者アカウントを作成しました。このパスワードは再表示されないので保存してください。</value>
+  </data>
+  <data name="ClickToCopy" xml:space="preserve">
+    <value>クリックしてコピー</value>
+  </data>
+  <data name="GoToLogin" xml:space="preserve">
+    <value>ログインへ</value>
+  </data>
+  <data name="Tasks" xml:space="preserve">
+    <value>タスク</value>
+  </data>
+  <data name="Board" xml:space="preserve">
+    <value>ボード</value>
+  </data>
+  <data name="Backlog" xml:space="preserve">
+    <value>バックログ</value>
+  </data>
+  <data name="GoToBoard" xml:space="preserve">
+    <value>ボードへ</value>
+  </data>
+  <data name="ProjectBeaconWelcome" xml:space="preserve">
+    <value>ProjectBeacon へようこそ。</value>
+  </data>
+  <data name="Roadmap" xml:space="preserve">
+    <value>ロードマップ</value>
+  </data>
+  <data name="Status" xml:space="preserve">
+    <value>状態</value>
+  </data>
+  <data name="Priority" xml:space="preserve">
+    <value>優先度</value>
+  </data>
+  <data name="Type" xml:space="preserve">
+    <value>種類</value>
+  </data>
+  <data name="SubStage" xml:space="preserve">
+    <value>サブ段階</value>
+  </data>
+  <data name="Milestone" xml:space="preserve">
+    <value>マイルストーン</value>
+  </data>
+  <data name="Todo" xml:space="preserve">
+    <value>未着手</value>
+  </data>
+  <data name="InProgress" xml:space="preserve">
+    <value>進行中</value>
+  </data>
+  <data name="Done" xml:space="preserve">
+    <value>完了</value>
+  </data>
+  <data name="Low" xml:space="preserve">
+    <value>低</value>
+  </data>
+  <data name="Medium" xml:space="preserve">
+    <value>中</value>
+  </data>
+  <data name="High" xml:space="preserve">
+    <value>高</value>
+  </data>
+  <data name="Critical" xml:space="preserve">
+    <value>緊急</value>
+  </data>
+  <data name="Feature" xml:space="preserve">
+    <value>機能</value>
+  </data>
+  <data name="Bug" xml:space="preserve">
+    <value>不具合</value>
+  </data>
+  <data name="Improvement" xml:space="preserve">
+    <value>改善</value>
+  </data>
+  <data name="Task" xml:space="preserve">
+    <value>タスク</value>
+  </data>
+  <data name="TaskMoved" xml:space="preserve">
+    <value>タスクを {0} に移動しました</value>
+  </data>
+  <data name="StatusChangeFailed" xml:space="preserve">
+    <value>状態を変更できませんでした。</value>
+  </data>
+  <data name="RequirementGathering" xml:space="preserve">
+    <value>要件</value>
+  </data>
+  <data name="Estimation" xml:space="preserve">
+    <value>見積もり</value>
+  </data>
+  <data name="IntermediateResult" xml:space="preserve">
+    <value>進捗</value>
+  </data>
+  <data name="Review" xml:space="preserve">
+    <value>レビュー</value>
+  </data>
+  <data name="Corrections" xml:space="preserve">
+    <value>修正</value>
+  </data>
+  <data name="ReviewCorrections" xml:space="preserve">
+    <value>修正のレビュー</value>
+  </data>
+  <data name="Complete" xml:space="preserve">
+    <value>完了</value>
+  </data>
+  <data name="CreateTask" xml:space="preserve">
+    <value>タスクを作成</value>
+  </data>
+  <data name="UpdateTask" xml:space="preserve">
+    <value>タスクを更新</value>
+  </data>
+  <data name="DeleteTask" xml:space="preserve">
+    <value>タスクを削除</value>
+  </data>
+  <data name="Menu" xml:space="preserve">
+    <value>メニュー</value>
+  </data>
+  <data name="CreateMilestone" xml:space="preserve">
+    <value>マイルストーンを作成</value>
+  </data>
+  <data name="UpdateMilestone" xml:space="preserve">
+    <value>マイルストーンを更新</value>
+  </data>
+  <data name="DeleteMilestone" xml:space="preserve">
+    <value>マイルストーンを削除</value>
+  </data>
+  <data name="ReviewNotes" xml:space="preserve">
+    <value>レビューメモ</value>
+  </data>
+  <data name="Comments" xml:space="preserve">
+    <value>コメント</value>
+  </data>
+  <data name="Dependencies" xml:space="preserve">
+    <value>依存関係</value>
+  </data>
+  <data name="AddTask" xml:space="preserve">
+    <value>タスクを追加</value>
+  </data>
+  <data name="AddComment" xml:space="preserve">
+    <value>コメントを追加</value>
+  </data>
+  <data name="AddDependency" xml:space="preserve">
+    <value>依存関係を追加</value>
+  </data>
+  <data name="TaskCreated" xml:space="preserve">
+    <value>タスクを作成しました。</value>
+  </data>
+  <data name="TaskUpdated" xml:space="preserve">
+    <value>タスクを更新しました。</value>
+  </data>
+  <data name="TaskDeleted" xml:space="preserve">
+    <value>タスクを削除しました。</value>
+  </data>
+  <data name="TaskClaimed" xml:space="preserve">
+    <value>タスクを引き受けました。</value>
+  </data>
+  <data name="MilestoneCreated" xml:space="preserve">
+    <value>マイルストーンを作成しました。</value>
+  </data>
+  <data name="MilestoneUpdated" xml:space="preserve">
+    <value>マイルストーンを更新しました。</value>
+  </data>
+  <data name="MilestoneDeleted" xml:space="preserve">
+    <value>マイルストーンを削除しました。</value>
+  </data>
+  <data name="TaskTitle" xml:space="preserve">
+    <value>タイトル</value>
+  </data>
+  <data name="Description" xml:space="preserve">
+    <value>説明</value>
+  </data>
+  <data name="SaveChanges" xml:space="preserve">
+    <value>変更を保存</value>
+  </data>
+  <data name="NoTasks" xml:space="preserve">
+    <value>タスクはありません。</value>
+  </data>
+  <data name="NoMilestones" xml:space="preserve">
+    <value>マイルストーンはまだありません。</value>
+  </data>
+  <data name="NewTask" xml:space="preserve">
+    <value>新しいタスク</value>
+  </data>
+  <data name="NewMilestone" xml:space="preserve">
+    <value>新しいマイルストーン</value>
+  </data>
+  <data name="TaskDetail" xml:space="preserve">
+    <value>タスクの詳細</value>
+  </data>
+  <data name="BackToBoard" xml:space="preserve">
+    <value>ボードに戻る</value>
+  </data>
+  <data name="BackToBacklog" xml:space="preserve">
+    <value>バックログに戻る</value>
+  </data>
+  <data name="TaskNotFound" xml:space="preserve">
+    <value>タスクが見つかりません。</value>
+  </data>
+  <data name="MilestoneName" xml:space="preserve">
+    <value>名前</value>
+  </data>
+  <data name="TaskCount" xml:space="preserve">
+    <value>タスク</value>
+  </data>
+  <data name="Order" xml:space="preserve">
+    <value>順序</value>
+  </data>
+  <data name="CreatedBy" xml:space="preserve">
+    <value>作成者</value>
+  </data>
+  <data name="CreatedAt" xml:space="preserve">
+    <value>作成日時</value>
+  </data>
+  <data name="Updated" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="FilterByStatus" xml:space="preserve">
+    <value>状態で絞り込み</value>
+  </data>
+  <data name="FilterByPriority" xml:space="preserve">
+    <value>優先度で絞り込み</value>
+  </data>
+  <data name="SortBy" xml:space="preserve">
+    <value>並べ替え</value>
+  </data>
+  <data name="SortByCreated" xml:space="preserve">
+    <value>作成日</value>
+  </data>
+  <data name="SortByPriority" xml:space="preserve">
+    <value>優先度</value>
+  </data>
+  <data name="SortByTitle" xml:space="preserve">
+    <value>タイトル</value>
+  </data>
+  <data name="Content" xml:space="preserve">
+    <value>内容</value>
+  </data>
+  <data name="WriteAComment" xml:space="preserve">
+    <value>コメントを書く…</value>
+  </data>
+  <data name="NoCommentsYet" xml:space="preserve">
+    <value>コメントはまだありません。</value>
+  </data>
+  <data name="NoProjectAvailable" xml:space="preserve">
+    <value>プロジェクトがありません。先にプロジェクトを作成してください。</value>
+  </data>
+  <data name="Context" xml:space="preserve">
+    <value>コンテキスト</value>
+  </data>
+  <data name="Agents" xml:space="preserve">
+    <value>エージェント</value>
+  </data>
+  <data name="Reports" xml:space="preserve">
+    <value>レポート</value>
+  </data>
+  <data name="CompiledBrief" xml:space="preserve">
+    <value>コンパイル済みブリーフ</value>
+  </data>
+  <data name="CompileBrief" xml:space="preserve">
+    <value>ブリーフをコンパイル</value>
+  </data>
+  <data name="TokenBudget" xml:space="preserve">
+    <value>トークン予算</value>
+  </data>
+  <data name="CreateProject" xml:space="preserve">
+    <value>プロジェクトを作成</value>
+  </data>
+  <data name="OrgName" xml:space="preserve">
+    <value>組織名</value>
+  </data>
+  <data name="ProjectName" xml:space="preserve">
+    <value>プロジェクト名</value>
+  </data>
+  <data name="ProjectCreated" xml:space="preserve">
+    <value>プロジェクトを作成しました。</value>
+  </data>
+  <data name="Saved" xml:space="preserve">
+    <value>保存しました。</value>
+  </data>
+  <data name="Section" xml:space="preserve">
+    <value>セクション</value>
+  </data>
+  <data name="Sections" xml:space="preserve">
+    <value>セクション</value>
+  </data>
+  <data name="Title" xml:space="preserve">
+    <value>タイトル</value>
+  </data>
+  <data name="Labels" xml:space="preserve">
+    <value>ラベル</value>
+  </data>
+  <data name="ModelRegistry" xml:space="preserve">
+    <value>モデル登録</value>
+  </data>
+  <data name="ModelsAdd" xml:space="preserve">
+    <value>モデルを追加</value>
+  </data>
+  <data name="ModelsEdit" xml:space="preserve">
+    <value>モデルを編集</value>
+  </data>
+  <data name="ModelName" xml:space="preserve">
+    <value>名前</value>
+  </data>
+  <data name="LaunchCommand" xml:space="preserve">
+    <value>起動コマンド</value>
+  </data>
+  <data name="LaunchCommandHint" xml:space="preserve">
+    <value>モデルバックエンドを起動するコマンドライン。</value>
+  </data>
+  <data name="ContextSize" xml:space="preserve">
+    <value>コンテキストサイズ</value>
+  </data>
+  <data name="Ttl" xml:space="preserve">
+    <value>TTL（秒）</value>
+  </data>
+  <data name="ExtraFlags" xml:space="preserve">
+    <value>追加フラグ</value>
+  </data>
+  <data name="NoModels" xml:space="preserve">
+    <value>モデルバックエンドはまだ登録されていません。</value>
+  </data>
+  <data name="BackendFreeToken" xml:space="preserve">
+    <value>free-token</value>
+  </data>
+  <data name="BackendLlamaCpp" xml:space="preserve">
+    <value>llama.cpp</value>
+  </data>
+  <data name="BackendOpenAiCompatible" xml:space="preserve">
+    <value>OpenAI 互換</value>
+  </data>
+  <data name="RoleBindings" xml:space="preserve">
+    <value>ロールの割り当て</value>
+  </data>
+  <data name="RoleBindingPlanner" xml:space="preserve">
+    <value>プランナー</value>
+  </data>
+  <data name="RoleBindingActor" xml:space="preserve">
+    <value>アクター</value>
+  </data>
+  <data name="Unbound" xml:space="preserve">
+    <value>未割り当て</value>
+  </data>
+  <data name="BindingSaved" xml:space="preserve">
+    <value>ロールの割り当てを保存しました。</value>
+  </data>
+  <data name="BindingRemoved" xml:space="preserve">
+    <value>ロールの割り当てを削除しました。</value>
+  </data>
+  <data name="ModelSaved" xml:space="preserve">
+    <value>モデルを保存しました。</value>
+  </data>
+  <data name="ModelDeleted" xml:space="preserve">
+    <value>モデルを削除しました。</value>
+  </data>
+  <data name="DeleteModelConfirm" xml:space="preserve">
+    <value>このモデルバックエンドを削除しますか？</value>
+  </data>
+  <data name="ProxyStatus" xml:space="preserve">
+    <value>プロキシの状態</value>
+  </data>
+  <data name="Unavailable" xml:space="preserve">
+    <value>利用不可</value>
+  </data>
+  <data name="Unhealthy" xml:space="preserve">
+    <value>異常</value>
+  </data>
+  <data name="LoadedModel" xml:space="preserve">
+    <value>読み込み済みモデル</value>
+  </data>
+  <data name="LoadedModels" xml:space="preserve">
+    <value>読み込み済みモデル</value>
+  </data>
+  <data name="LoadWithOthers" xml:space="preserve">
+    <value>他と同時に読み込む</value>
+  </data>
+  <data name="LoadWithOthersHint" xml:space="preserve">
+    <value>このモデルを他と一緒に読み込んだままにします（llama-swap グループ、swap: false）。起動コマンドは ${PORT} を使う必要があります。</value>
+  </data>
+  <data name="Cpu" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="Ram" xml:space="preserve">
+    <value>RAM</value>
+  </data>
+  <data name="Gpu" xml:space="preserve">
+    <value>GPU</value>
+  </data>
+  <data name="Vram" xml:space="preserve">
+    <value>VRAM</value>
+  </data>
+  <data name="ReportedAt" xml:space="preserve">
+    <value>{0} 時点</value>
+  </data>
+  <data name="Memory" xml:space="preserve">
+    <value>メモリ</value>
+  </data>
+  <data name="LastSwap" xml:space="preserve">
+    <value>最後の切り替え</value>
+  </data>
+  <data name="Reload" xml:space="preserve">
+    <value>再読み込み</value>
+  </data>
+  <data name="Unload" xml:space="preserve">
+    <value>アンロード</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="ProxyReloaded" xml:space="preserve">
+    <value>プロキシを再読み込みしました。</value>
+  </data>
+  <data name="ProxyUnloaded" xml:space="preserve">
+    <value>プロキシをアンロードしました。</value>
+  </data>
+  <data name="ReportsEmpty" xml:space="preserve">
+    <value>レポートはまだありません。ボードのスナップショットを生成してください。</value>
+  </data>
+  <data name="GenerateReport" xml:space="preserve">
+    <value>レポートを生成</value>
+  </data>
+  <data name="ContextCostReport" xml:space="preserve">
+    <value>コンテキストコスト</value>
+  </data>
+  <data name="ContextCostNoTasks" xml:space="preserve">
+    <value>このプロジェクトに使えるタスクはありません。</value>
+  </data>
+  <data name="ContextCostNoPairs" xml:space="preserve">
+    <value>対になった評価実行はまだありません。</value>
+  </data>
+  <data name="ContextCostWithBrief" xml:space="preserve">
+    <value>ブリーフあり</value>
+  </data>
+  <data name="ContextCostWithoutBrief" xml:space="preserve">
+    <value>ブリーフなし</value>
+  </data>
+  <data name="ContextCostPromptDelta" xml:space="preserve">
+    <value>Δ プロンプトトークン</value>
+  </data>
+  <data name="ContextCostCompletionDelta" xml:space="preserve">
+    <value>Δ 完了トークン</value>
+  </data>
+  <data name="ContextCostTotalDelta" xml:space="preserve">
+    <value>Δ 合計トークン</value>
+  </data>
+  <data name="ContextCostTurnDelta" xml:space="preserve">
+    <value>Δ ターン</value>
+  </data>
+  <data name="Pair" xml:space="preserve">
+    <value>ペア</value>
+  </data>
+  <data name="Passed" xml:space="preserve">
+    <value>合格</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>不合格</value>
+  </data>
+  <data name="Decisions" xml:space="preserve">
+    <value>決定</value>
+  </data>
+  <data name="Constraints" xml:space="preserve">
+    <value>制約</value>
+  </data>
+  <data name="Activate" xml:space="preserve">
+    <value>有効化</value>
+  </data>
+  <data name="Reject" xml:space="preserve">
+    <value>却下</value>
+  </data>
+  <data name="Accept" xml:space="preserve">
+    <value>承認</value>
+  </data>
+  <data name="Kind" xml:space="preserve">
+    <value>種類</value>
+  </data>
+  <data name="Consequences" xml:space="preserve">
+    <value>影響</value>
+  </data>
+  <data name="CloseMilestone" xml:space="preserve">
+    <value>閉じる</value>
+  </data>
+  <data name="ReopenMilestone" xml:space="preserve">
+    <value>再開</value>
+  </data>
+  <data name="OrphanWarning" xml:space="preserve">
+    <value>閉じたマイルストーンに未完了のタスクが {0} 件残っています。</value>
+  </data>
+  <data name="ConstraintBody" xml:space="preserve">
+    <value>制約</value>
+  </data>
+  <data name="Username" xml:space="preserve">
+    <value>ユーザー名</value>
+  </data>
+  <data name="Completed" xml:space="preserve">
+    <value>完了</value>
+  </data>
+  <data name="Created" xml:space="preserve">
+    <value>作成</value>
+  </data>
+  <data name="KindMust" xml:space="preserve">
+    <value>必須</value>
+  </data>
+  <data name="KindMustNot" xml:space="preserve">
+    <value>禁止</value>
+  </data>
+  <data name="KindSecurity" xml:space="preserve">
+    <value>セキュリティ</value>
+  </data>
+  <data name="KindCompliance" xml:space="preserve">
+    <value>コンプライアンス</value>
+  </data>
+  <data name="BootstrapToken" xml:space="preserve">
+    <value>初期設定トークン</value>
+  </data>
+  <data name="RecoverPassword" xml:space="preserve">
+    <value>パスワードを復旧</value>
+  </data>
+  <data name="RecoverDescription" xml:space="preserve">
+    <value>管理者パスワードをリセットする初期設定トークンを入力してください。新しいパスワードは一度だけ表示されます。</value>
+  </data>
+  <data name="RecoverSuccess" xml:space="preserve">
+    <value>管理者パスワードをリセットしました。このパスワードは再表示されないので保存してください。</value>
+  </data>
+  <data name="NewPassword" xml:space="preserve">
+    <value>新しいパスワード</value>
+  </data>
+  <data name="MyProjects" xml:space="preserve">
+    <value>マイプロジェクト</value>
+  </data>
+  <data name="NoProjectsYet" xml:space="preserve">
+    <value>プロジェクトはまだありません。作成して始めましょう。</value>
+  </data>
+  <data name="NoProjects" xml:space="preserve">
+    <value>プロジェクトなし</value>
+  </data>
+  <data name="RecentActivity" xml:space="preserve">
+    <value>最近の活動</value>
+  </data>
+  <data name="NoRecentActivity" xml:space="preserve">
+    <value>最近の活動はありません。</value>
+  </data>
+  <data name="LastActivity" xml:space="preserve">
+    <value>最終活動</value>
+  </data>
+  <data name="Active" xml:space="preserve">
+    <value>アクティブ</value>
+  </data>
+  <data name="SwitchProject" xml:space="preserve">
+    <value>プロジェクトを切り替え</value>
+  </data>
+  <data name="Pipeline" xml:space="preserve">
+    <value>パイプライン</value>
+  </data>
+  <data name="PipelineNotStarted" xml:space="preserve">
+    <value>パイプラインは開始されていません。</value>
+  </data>
+  <data name="StagePlanning" xml:space="preserve">
+    <value>計画</value>
+  </data>
+  <data name="StageExecuting" xml:space="preserve">
+    <value>実行</value>
+  </data>
+  <data name="StageReviewing" xml:space="preserve">
+    <value>レビュー中</value>
+  </data>
+  <data name="StageApproved" xml:space="preserve">
+    <value>承認済み</value>
+  </data>
+  <data name="StageReopenedForRevision" xml:space="preserve">
+    <value>修正のため再開</value>
+  </data>
+  <data name="Subtasks" xml:space="preserve">
+    <value>サブタスク</value>
+  </data>
+  <data name="NoSubtasksYet" xml:space="preserve">
+    <value>サブタスクはまだありません。</value>
+  </data>
+  <data name="Instructions" xml:space="preserve">
+    <value>指示</value>
+  </data>
+  <data name="DiffRef" xml:space="preserve">
+    <value>差分参照</value>
+  </data>
+  <data name="Summary" xml:space="preserve">
+    <value>要約</value>
+  </data>
+  <data name="Reopens" xml:space="preserve">
+    <value>再開回数</value>
+  </data>
+  <data name="Pending" xml:space="preserve">
+    <value>保留</value>
+  </data>
+  <data name="Sessions" xml:space="preserve">
+    <value>セッション</value>
+  </data>
+  <data name="NoSessionsYet" xml:space="preserve">
+    <value>セッションはまだありません。</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>準備完了</value>
+  </data>
+  <data name="Closed" xml:space="preserve">
+    <value>閉じました</value>
+  </data>
+  <data name="Launched" xml:space="preserve">
+    <value>起動済み</value>
+  </data>
+  <data name="Verdicts" xml:space="preserve">
+    <value>判定</value>
+  </data>
+  <data name="NoVerdictsYet" xml:space="preserve">
+    <value>判定はまだありません。</value>
+  </data>
+  <data name="VerdictApprove" xml:space="preserve">
+    <value>承認</value>
+  </data>
+  <data name="VerdictReopenSubtask" xml:space="preserve">
+    <value>サブタスクを再開</value>
+  </data>
+  <data name="StartPipeline" xml:space="preserve">
+    <value>パイプラインを開始</value>
+  </data>
+  <data name="CreateSubtask" xml:space="preserve">
+    <value>サブタスクを作成</value>
+  </data>
+  <data name="StartActorSession" xml:space="preserve">
+    <value>アクターセッションを開始</value>
+  </data>
+  <data name="LaunchSession" xml:space="preserve">
+    <value>起動</value>
+  </data>
+  <data name="ReportResult" xml:space="preserve">
+    <value>結果を報告</value>
+  </data>
+  <data name="FailSubtask" xml:space="preserve">
+    <value>失敗</value>
+  </data>
+  <data name="StartReview" xml:space="preserve">
+    <value>レビューを開始</value>
+  </data>
+  <data name="Approve" xml:space="preserve">
+    <value>承認</value>
+  </data>
+  <data name="ReopenSubtask" xml:space="preserve">
+    <value>サブタスクを再開</value>
+  </data>
+  <data name="ConfirmClose" xml:space="preserve">
+    <value>閉じることを確認</value>
+  </data>
+  <data name="ConfirmCloseHint" xml:space="preserve">
+    <value>任意。空なら最新の承認判定のメモを使います。</value>
+  </data>
+  <data name="ForceClose" xml:space="preserve">
+    <value>強制終了</value>
+  </data>
+  <data name="ForceCloseWarning" xml:space="preserve">
+    <value>レビュー判定なしでパイプラインを閉じます。元に戻せません。</value>
+  </data>
+  <data name="Reason" xml:space="preserve">
+    <value>理由</value>
+  </data>
+  <data name="Note" xml:space="preserve">
+    <value>メモ</value>
+  </data>
+  <data name="Subtask" xml:space="preserve">
+    <value>サブタスク</value>
+  </data>
+  <data name="PipelineStarted" xml:space="preserve">
+    <value>パイプラインを開始しました。</value>
+  </data>
+  <data name="SubtaskCreated" xml:space="preserve">
+    <value>サブタスクを作成しました。</value>
+  </data>
+  <data name="SessionStarted" xml:space="preserve">
+    <value>セッションを開始しました。</value>
+  </data>
+  <data name="SessionLaunched" xml:space="preserve">
+    <value>セッションを起動しました。</value>
+  </data>
+  <data name="ResultReported" xml:space="preserve">
+    <value>結果を報告しました。</value>
+  </data>
+  <data name="SubtaskFailedMsg" xml:space="preserve">
+    <value>サブタスクが失敗しました。</value>
+  </data>
+  <data name="ReviewStarted" xml:space="preserve">
+    <value>レビューを開始しました。</value>
+  </data>
+  <data name="VerdictRecorded" xml:space="preserve">
+    <value>判定を記録しました。</value>
+  </data>
+  <data name="SubtaskReopened" xml:space="preserve">
+    <value>サブタスクを修正のため再開しました。</value>
+  </data>
+  <data name="PipelineClosed" xml:space="preserve">
+    <value>パイプラインを閉じました。</value>
+  </data>
+  <data name="SectionGoals" xml:space="preserve">
+    <value>目標</value>
+  </data>
+  <data name="SectionNonGoals" xml:space="preserve">
+    <value>対象外</value>
+  </data>
+  <data name="SectionSecurity" xml:space="preserve">
+    <value>セキュリティ</value>
+  </data>
+  <data name="SectionDefinitionOfDone" xml:space="preserve">
+    <value>完了の定義</value>
+  </data>
+  <data name="SectionArchitecture" xml:space="preserve">
+    <value>アーキテクチャ</value>
+  </data>
+  <data name="SectionConventions" xml:space="preserve">
+    <value>規約</value>
+  </data>
+  <data name="Proposed" xml:space="preserve">
+    <value>提案</value>
+  </data>
+  <data name="Accepted" xml:space="preserve">
+    <value>承認済み</value>
+  </data>
+  <data name="Superseded" xml:space="preserve">
+    <value>置換済み</value>
+  </data>
+  <data name="Deprecated" xml:space="preserve">
+    <value>非推奨</value>
+  </data>
+  <data name="Rejected" xml:space="preserve">
+    <value>却下</value>
+  </data>
+  <data name="NoDecisionsYet" xml:space="preserve">
+    <value>決定はまだありません。</value>
+  </data>
+  <data name="NoLabelsYet" xml:space="preserve">
+    <value>ラベルはまだありません。</value>
+  </data>
+  <data name="NoSectionsYet" xml:space="preserve">
+    <value>セクションはまだありません。</value>
+  </data>
+  <data name="Devices" xml:space="preserve">
+    <value>デバイス</value>
+  </data>
+  <data name="AddDevice" xml:space="preserve">
+    <value>デバイスを追加</value>
+  </data>
+  <data name="DeviceName" xml:space="preserve">
+    <value>デバイス名</value>
+  </data>
+  <data name="NoDevicesYet" xml:space="preserve">
+    <value>デバイスはまだありません。追加して、トークンで beacon client を実行してください。</value>
+  </data>
+  <data name="Commands" xml:space="preserve">
+    <value>コマンド</value>
+  </data>
+  <data name="NoCommands" xml:space="preserve">
+    <value>コマンドはまだありません。</value>
+  </data>
+  <data name="DeviceOffline" xml:space="preserve">
+    <value>未接続</value>
+  </data>
+  <data name="DeviceOnline" xml:space="preserve">
+    <value>接続中</value>
+  </data>
+  <data name="DeviceTokenOnce" xml:space="preserve">
+    <value>このトークンを保存してください。表示は一度だけです。実行: beacon client --url {0} --token {1}</value>
+  </data>
+  <data name="DeviceCreated" xml:space="preserve">
+    <value>デバイスを作成しました。</value>
+  </data>
+  <data name="DeviceRevoked" xml:space="preserve">
+    <value>デバイスを失効しました。</value>
+  </data>
+  <data name="RevokeDeviceConfirm" xml:space="preserve">
+    <value>このデバイスを失効しますか？クライアントはコマンドを受け取れなくなります。</value>
+  </data>
+  <data name="LastSeen" xml:space="preserve">
+    <value>最終確認</value>
+  </data>
+  <data name="RuntimeDevice" xml:space="preserve">
+    <value>実行デバイス</value>
+  </data>
+  <data name="ProjectDirectory" xml:space="preserve">
+    <value>プロジェクトディレクトリ</value>
+  </data>
+  <data name="Browse" xml:space="preserve">
+    <value>参照</value>
+  </data>
+  <data name="InitializeOnDevice" xml:space="preserve">
+    <value>デバイス上で初期化（.gitignore、opencode.json）</value>
+  </data>
+  <data name="ParentDirectory" xml:space="preserve">
+    <value>上へ</value>
+  </data>
+  <data name="SelectFolder" xml:space="preserve">
+    <value>このフォルダを選択</value>
+  </data>
+  <data name="DeviceRequiredForBrowse" xml:space="preserve">
+    <value>フォルダを参照するにはデバイスを接続してください。</value>
+  </data>
+  <data name="McpServers" xml:space="preserve">
+    <value>MCP サーバー</value>
+  </data>
+  <data name="AgentMode" xml:space="preserve">
+    <value>エージェントモード</value>
+  </data>
+  <data name="AgentModeSolo" xml:space="preserve">
+    <value>ソロ</value>
+  </data>
+  <data name="AgentModePipeline" xml:space="preserve">
+    <value>パイプライン</value>
+  </data>
+  <data name="ApplyOnDevice" xml:space="preserve">
+    <value>デバイスに適用</value>
+  </data>
+  <data name="ModelsRoot" xml:space="preserve">
+    <value>ローカルモデルのディレクトリ</value>
+  </data>
+  <data name="ApplyOnDeviceDone" xml:space="preserve">
+    <value>エージェント設定をデバイスに適用しました。</value>
+  </data>
+  <data name="PickGguf" xml:space="preserve">
+    <value>GGUF を選択</value>
+  </data>
+  <data name="NoGgufFiles" xml:space="preserve">
+    <value>デバイスのモデルディレクトリに .gguf ファイルはありません。</value>
+  </data>
+  <data name="SoloModel" xml:space="preserve">
+    <value>ソロモデル</value>
+  </data>
+  <data name="Workstation" xml:space="preserve">
+    <value>ワークステーション</value>
+  </data>
+  <data name="LlamaSwapBin" xml:space="preserve">
+    <value>llama-swap 実行ファイル</value>
+  </data>
+  <data name="LlamaCppBin" xml:space="preserve">
+    <value>llama-server 実行ファイル</value>
+  </data>
+  <data name="HistoryDir" xml:space="preserve">
+    <value>OpenCode の履歴ディレクトリ</value>
+  </data>
+  <data name="ProjectsRoot" xml:space="preserve">
+    <value>プロジェクトのルート</value>
+  </data>
+  <data name="SaveWorkstation" xml:space="preserve">
+    <value>デバイスに保存</value>
+  </data>
+  <data name="WorkstationSaved" xml:space="preserve">
+    <value>ワークステーション設定をデバイスに保存しました。</value>
+  </data>
+  <data name="Probe" xml:space="preserve">
+    <value>インストール済みツール</value>
+  </data>
+  <data name="Install" xml:space="preserve">
+    <value>インストール</value>
+  </data>
+  <data name="InstallConfirm" xml:space="preserve">
+    <value>選択したデバイスに winget で {0} をインストールしますか？</value>
+  </data>
+  <data name="InstallQueued" xml:space="preserve">
+    <value>インストールコマンドをデバイスに送りました。</value>
+  </data>
+  <data name="ProjectBrief" xml:space="preserve">
+    <value>プロジェクトブリーフ</value>
+  </data>
+  <data name="EditInContext" xml:space="preserve">
+    <value>コンテキストで編集</value>
+  </data>
+  <data name="NoBrief" xml:space="preserve">
+    <value>目標も完了の定義もまだありません。コンテキストを開いてそれらのセクションを書いてください。</value>
+  </data>
+  <data name="Queue" xml:space="preserve">
+    <value>キュー</value>
+  </data>
+  <data name="NoReadyTasks" xml:space="preserve">
+    <value>準備できたタスクはありません。カードを未着手に移すと、エージェントが start_work を呼べます。</value>
+  </data>
+  <data name="OpenMilestones" xml:space="preserve">
+    <value>{0} 件が未完了</value>
+  </data>
+  <data name="NoOpenMilestones" xml:space="preserve">
+    <value>未完了のマイルストーンはまだありません。</value>
+  </data>
+  <data name="AgentsActive" xml:space="preserve">
+    <value>{0} 件が稼働中</value>
+  </data>
+  <data name="NoAgentSessions" xml:space="preserve">
+    <value>稼働中のエージェントセッションはありません。</value>
+  </data>
+  <data name="None" xml:space="preserve">
+    <value>なし</value>
+  </data>
+  <data name="EditTask" xml:space="preserve">
+    <value>タスクを編集</value>
+  </data>
+  <data name="PathPrefix" xml:space="preserve">
+    <value>パス接頭辞</value>
+  </data>
+  <data name="DeleteLabelConfirm" xml:space="preserve">
+    <value>このラベルを削除しますか？タスクの他の項目はそのままです。</value>
+  </data>
+  <data name="ExportAgentsMd" xml:space="preserve">
+    <value>AGENTS.md を書き出す</value>
+  </data>
+  <data name="Deprecate" xml:space="preserve">
+    <value>非推奨にする</value>
+  </data>
+  <data name="Supersede" xml:space="preserve">
+    <value>置き換える</value>
+  </data>
+  <data name="Replacement" xml:space="preserve">
+    <value>置き換え先</value>
+  </data>
+  <data name="ProbeGit" xml:space="preserve">
+    <value>git</value>
+  </data>
+  <data name="ProbeOpencode" xml:space="preserve">
+    <value>opencode</value>
+  </data>
+  <data name="ProbeNode" xml:space="preserve">
+    <value>node</value>
+  </data>
+  <data name="ProbeDocker" xml:space="preserve">
+    <value>docker</value>
+  </data>
+  <data name="ProbeLlamaSwap" xml:space="preserve">
+    <value>llama-swap</value>
+  </data>
+  <data name="Register" xml:space="preserve">
+    <value>アカウント作成</value>
+  </data>
+  <data name="Email" xml:space="preserve">
+    <value>メール</value>
+  </data>
+  <data name="ForgotPassword" xml:space="preserve">
+    <value>パスワードを忘れた</value>
+  </data>
+  <data name="ForgotDescription" xml:space="preserve">
+    <value>メールアドレスを入力してください。アカウントがあればリセット用リンクを送ります。</value>
+  </data>
+  <data name="ForgotSuccess" xml:space="preserve">
+    <value>そのメールが登録されていれば、リセット用リンクを送信しています。</value>
+  </data>
+  <data name="ResetPasswordTitle" xml:space="preserve">
+    <value>新しいパスワードを設定</value>
+  </data>
+  <data name="ResetSuccess" xml:space="preserve">
+    <value>パスワードを更新しました。ログインできます。</value>
+  </data>
+  <data name="InviteTitle" xml:space="preserve">
+    <value>招待</value>
+  </data>
+  <data name="InviteDescription" xml:space="preserve">
+    <value>{0} に {1} として招待されました。</value>
+  </data>
+  <data name="InviteAccept" xml:space="preserve">
+    <value>招待を受ける</value>
+  </data>
+  <data name="InviteAccepted" xml:space="preserve">
+    <value>招待を受けました。</value>
+  </data>
+  <data name="AlreadyHaveAccount" xml:space="preserve">
+    <value>すでにアカウントがありますか？ログインしてから、このリンクを開き直してください。</value>
+  </data>
+  <data name="Members" xml:space="preserve">
+    <value>メンバー</value>
+  </data>
+  <data name="InviteMember" xml:space="preserve">
+    <value>招待</value>
+  </data>
+  <data name="PendingInvites" xml:space="preserve">
+    <value>保留中の招待</value>
+  </data>
+  <data name="InviteSent" xml:space="preserve">
+    <value>招待を作成しました。このリンクは一度だけ表示されるので保存してください。</value>
+  </data>
+  <data name="RevokeInvite" xml:space="preserve">
+    <value>取り消す</value>
+  </data>
+  <data name="ChangePassword" xml:space="preserve">
+    <value>パスワードを変更</value>
+  </data>
+  <data name="CurrentPassword" xml:space="preserve">
+    <value>現在のパスワード</value>
+  </data>
+  <data name="PasswordChanged" xml:space="preserve">
+    <value>パスワードを変更しました。</value>
+  </data>
+  <data name="Role" xml:space="preserve">
+    <value>ロール</value>
+  </data>
+  <data name="NoMembersYet" xml:space="preserve">
+    <value>メンバーはまだいません。</value>
+  </data>
+  <data name="RoleMember" xml:space="preserve">
+    <value>メンバー</value>
+  </data>
+  <data name="RoleAdmin" xml:space="preserve">
+    <value>管理者</value>
+  </data>
+  <data name="RoleOwner" xml:space="preserve">
+    <value>オーナー</value>
+  </data>
+  <data name="LandingHeroTitle" xml:space="preserve">
+    <value>次のセッションまで残るコンテキスト。</value>
+  </data>
+  <data name="LandingHeroLead" xml:space="preserve">
+    <value>人とローカルエージェントが混ざる作業のためのコントロールプレーン。Beacon はブリーフを一度コンパイルし、決まったことをエージェントが毎回探し直さなくて済むようにします。</value>
+  </data>
+  <data name="LandingProblemTitle" xml:space="preserve">
+    <value>エージェントは冷たい状態から始まる</value>
+  </data>
+  <data name="LandingProblemBody" xml:space="preserve">
+    <value>新しいセッションのたびに、エージェントは決定、制約、必要なファイルを探し回ります。Beacon は記録の正本であり、代わりに予算付きのブリーフを渡します。</value>
+  </data>
+  <data name="LandingHowTitle" xml:space="preserve">
+    <value>仕組み</value>
+  </data>
+  <data name="LandingHow1" xml:space="preserve">
+    <value>コンテキスト、決定、制約から予算付きブリーフをコンパイルします。</value>
+  </data>
+  <data name="LandingHow2" xml:space="preserve">
+    <value>ボードで作業を引き受けます。状態、レビューメモ、パイプラインは一か所に残ります。</value>
+  </data>
+  <data name="LandingHow3" xml:space="preserve">
+    <value>エージェントは自分のマシンで beacon mcp と beacon client を使って動かします。Beacon 自体はターンを実行しません。</value>
+  </data>
+  <data name="LandingFeaturesTitle" xml:space="preserve">
+    <value>含まれるもの</value>
+  </data>
+  <data name="LandingFeatureContext" xml:space="preserve">
+    <value>トークン予算付きのスコープブリーフ。セキュリティと完了の定義は捨てません。</value>
+  </data>
+  <data name="LandingFeatureBoard" xml:space="preserve">
+    <value>人とエージェントが混ざる作業のためのボード、バックログ、ロードマップ。</value>
+  </data>
+  <data name="LandingFeatureDecisions" xml:space="preserve">
+    <value>決定には影響が付くので、エージェントがそれを尊重する理由があります。</value>
+  </data>
+  <data name="LandingFeatureAgents" xml:space="preserve">
+    <value>自分のハードウェア上のソロとパイプラインのモデル。llama-swap はワークステーションに残ります。</value>
+  </data>
+  <data name="LandingFeatureDevices" xml:space="preserve">
+    <value>beacon client からの発信 HTTPS。Web ホストはディスクを読みません。</value>
+  </data>
+  <data name="LandingFeatureMcpTitle" xml:space="preserve">
+    <value>stdio MCP</value>
+  </data>
+  <data name="LandingFeatureMcp" xml:space="preserve">
+    <value>ローカルのファイルツールとパイプラインツールは stdio 経由です。HTTP MCP は提供しません。</value>
+  </data>
+  <data name="LandingCompareTitle" xml:space="preserve">
+    <value>比較</value>
+  </data>
+  <data name="LandingCompareChat" xml:space="preserve">
+    <value>チャットだけのエージェント</value>
+  </data>
+  <data name="LandingCompareCloud" xml:space="preserve">
+    <value>ホスト型コーディングクラウド</value>
+  </data>
+  <data name="LandingCompareBrief" xml:space="preserve">
+    <value>残るブリーフ</value>
+  </data>
+  <data name="LandingCompareHardware" xml:space="preserve">
+    <value>自分のハードウェア</value>
+  </data>
+  <data name="LandingCompareRecord" xml:space="preserve">
+    <value>記録の正本</value>
+  </data>
+  <data name="LandingCompareExecutes" xml:space="preserve">
+    <value>エージェントのターンを実行する</value>
+  </data>
+  <data name="LandingYes" xml:space="preserve">
     <value>はい</value>
+  </data>
+  <data name="LandingNo" xml:space="preserve">
+    <value>いいえ</value>
+  </data>
+  <data name="LandingMaybe" xml:space="preserve">
+    <value>場合による</value>
+  </data>
+  <data name="LandingVisualTitle" xml:space="preserve">
+    <value>ボードとブリーフを一緒に</value>
+  </data>
+  <data name="LandingMockTodo" xml:space="preserve">
+    <value>タスクブリーフをコンパイル</value>
+  </data>
+  <data name="LandingMockDoing" xml:space="preserve">
+    <value>引き受けて実装</value>
+  </data>
+  <data name="LandingMockBrief" xml:space="preserve">
+    <value>## 目標
+人とエージェントが混ざる作業のためにコンテキストを最新に保つ。
+
+## 対象外
+Beacon がホストするコーディングエージェントは置かない。</value>
+  </data>
+  <data name="LandingFaqTitle" xml:space="preserve">
+    <value>質問</value>
+  </data>
+  <data name="LandingFaq1Q" xml:space="preserve">
+    <value>Beacon はコーディングエージェントを実行しますか？</value>
+  </data>
+  <data name="LandingFaq1A" xml:space="preserve">
+    <value>いいえ。Beacon は中継と編成だけです。エージェントのプロセスは常に自分の制御するハードウェアで動きます。</value>
+  </data>
+  <data name="LandingFaq2Q" xml:space="preserve">
+    <value>コードはどこにありますか？</value>
+  </data>
+  <data name="LandingFaq2A" xml:space="preserve">
+    <value>自分のマシンです。beacon client は発信 HTTPS で話します。Web ホストは作業ツリーを参照しません。</value>
+  </data>
+  <data name="LandingFaq3Q" xml:space="preserve">
+    <value>これはホスト型 SaaS ですか？</value>
+  </data>
+  <data name="LandingFaq3A" xml:space="preserve">
+    <value>v1 の道はセルフホストです。ホスト型マルチテナントは後の、フラグで閉じた段階です。</value>
+  </data>
+  <data name="LandingFaq4Q" xml:space="preserve">
+    <value>人をどう追加しますか？</value>
+  </data>
+  <data name="LandingFaq4A" xml:space="preserve">
+    <value>公開登録、または AUTH_LOCAL_INVITE_ONLY による招待のみ。ダッシュボードの開いているプロジェクトから招待します。リンクは一度だけ表示されます。</value>
+  </data>
+  <data name="LandingFaq5Q" xml:space="preserve">
+    <value>パスワードはどうリセットしますか？</value>
+  </data>
+  <data name="LandingFaq5A" xml:space="preserve">
+    <value>パスワードを忘れたを使います。/recover は初期設定トークンによる管理者の非常手段で、ユーザーのリセットではありません。</value>
+  </data>
+  <data name="LandingCtaTitle" xml:space="preserve">
+    <value>自分のホストで始める</value>
+  </data>
+  <data name="Project" xml:space="preserve">
+    <value>プロジェクト</value>
+  </data>
+  <data name="CreateProjectStepNames" xml:space="preserve">
+    <value>プロジェクトに名前を付ける</value>
+  </data>
+  <data name="CreateProjectStepDevice" xml:space="preserve">
+    <value>beacon client が動いているワークステーションを選ぶ</value>
+  </data>
+  <data name="CreateProjectStepFolder" xml:space="preserve">
+    <value>そのマシン上のフォルダを選ぶ</value>
+  </data>
+  <data name="OrgNameHint" xml:space="preserve">
+    <value>空ならプロジェクト名を再利用します。</value>
+  </data>
+  <data name="RuntimeDeviceHint" xml:space="preserve">
+    <value>これはブラウザではなく、beacon.exe が動いている PC です。</value>
+  </data>
+  <data name="NoDeviceForProject" xml:space="preserve">
+    <value>ワークステーションはまだありません。設定でデバイスを追加し、beacon.exe を起動してください。</value>
+  </data>
+  <data name="DeviceOfflineHint" xml:space="preserve">
+    <value>このデバイスはオフラインです。artifacts/daemon/beacon.exe（または beacon client）を起動し、接続中になるまで待ってください。</value>
+  </data>
+  <data name="BrowseOnDeviceHint" xml:space="preserve">
+    <value>一覧は選択したワークステーション上のフォルダであり、このブラウザ内ではありません。</value>
+  </data>
+  <data name="FolderOptionalHint" xml:space="preserve">
+    <value>今はフォルダを飛ばし、後でダッシュボードから付けられます。</value>
+  </data>
+  <data name="InitializeOnDeviceHint" xml:space="preserve">
+    <value>ワークステーション上のそのフォルダに .gitignore と opencode.json を書き込みます。</value>
+  </data>
+  <data name="ProjectFolder" xml:space="preserve">
+    <value>プロジェクトフォルダ</value>
+  </data>
+  <data name="AttachFolder" xml:space="preserve">
+    <value>フォルダを保存</value>
+  </data>
+  <data name="ProjectFolderSaved" xml:space="preserve">
+    <value>このデバイスにプロジェクトフォルダを保存しました。</value>
+  </data>
+  <data name="HowToAddModel" xml:space="preserve">
+    <value>Llama.cpp: GGUF ファイルを設定 → ローカルモデルのディレクトリに置き、GGUF を選択します。他の種類は詳細設定でモデル ID が必要です。保存でモデルを登録し、デバイスに適用するとエージェント設定を書き込みます。</value>
+  </data>
+  <data name="ModelSaveHint" xml:space="preserve">
+    <value>llama-swap は次のクライアントのハートビートで登録を取り込みます。エージェントにモデルを見せるにはデバイスへの適用が必要です。どちらもタスクは開始しません。</value>
+  </data>
+  <data name="LaunchCommandRequired" xml:space="preserve">
+    <value>このバックエンド種類には起動コマンドが必要です。</value>
+  </data>
+  <data name="PickGgufFirst" xml:space="preserve">
+    <value>GGUF ファイルを選ぶか、--port ${PORT} 付きの llama-server コマンドを貼り付けてください。</value>
+  </data>
+  <data name="NeedProjectFolderForGguf" xml:space="preserve">
+    <value>このページがデバイス上の GGUF を走査できるよう、ダッシュボードでプロジェクトフォルダを付けてください。</value>
+  </data>
+  <data name="NextStepTodo" xml:space="preserve">
+    <value>何も勝手には動きません。ダッシュボードでフォルダを付け、設定でモデルを追加し、パイプラインを開始（手動の段階）するか、MCP の finish_work でタスクを完了してください。</value>
+  </data>
+  <data name="NextStepCreateSubtask" xml:space="preserve">
+    <value>サブタスクを作成してからアクターセッションを開始します。セッションの起動は Beacon 内でセッションを稼働中にするだけで、エージェントは起動しません。</value>
+  </data>
+  <data name="LaunchSessionHint" xml:space="preserve">
+    <value>セッションの起動はデータベースの状態を更新します。エージェントは起動しません。</value>
+  </data>
+  <data name="NoAgentSessionsHint" xml:space="preserve">
+    <value>稼働中のパイプラインセッションはありません。モデルはタスクを開始しません。タスクを開いてパイプラインを開始するか、MCP を使ってください。</value>
+  </data>
+  <data name="WorkstationLoad" xml:space="preserve">
+    <value>ワークステーション</value>
+  </data>
+  <data name="StartClientHint" xml:space="preserve">
+    <value>CPU、RAM、GPU を見るには、この PC で beacon.exe を起動してください。</value>
+  </data>
+  <data name="CpuHistory" xml:space="preserve">
+    <value>CPU</value>
+  </data>
+  <data name="RamHistory" xml:space="preserve">
+    <value>RAM</value>
+  </data>
+  <data name="GpuHistory" xml:space="preserve">
+    <value>GPU</value>
+  </data>
+  <data name="TaskSteps" xml:space="preserve">
+    <value>手順</value>
+  </data>
+  <data name="AddStep" xml:space="preserve">
+    <value>手順を追加</value>
+  </data>
+  <data name="StepTitle" xml:space="preserve">
+    <value>手順</value>
+  </data>
+  <data name="NoStepsYet" xml:space="preserve">
+    <value>独自の手順はまだありません。</value>
+  </data>
+  <data name="Chat" xml:space="preserve">
+    <value>チャット</value>
+  </data>
+  <data name="NewChat" xml:space="preserve">
+    <value>新しいチャット</value>
+  </data>
+  <data name="NoChatsYet" xml:space="preserve">
+    <value>チャットはまだありません。</value>
+  </data>
+  <data name="ChatEmptyHint" xml:space="preserve">
+    <value>チャットを始めてください。エージェントは beacon client 経由でワークステーション上で動きます。</value>
+  </data>
+  <data name="Message" xml:space="preserve">
+    <value>メッセージ</value>
+  </data>
+  <data name="Send" xml:space="preserve">
+    <value>送信</value>
+  </data>
+  <data name="Abort" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="NavWork" xml:space="preserve">
+    <value>作業</value>
+  </data>
+  <data name="NavKnowledge" xml:space="preserve">
+    <value>知識</value>
+  </data>
+  <data name="NavAgents" xml:space="preserve">
+    <value>エージェント</value>
+  </data>
+  <data name="NavProject" xml:space="preserve">
+    <value>プロジェクト</value>
+  </data>
+  <data name="NavAccount" xml:space="preserve">
+    <value>アカウント</value>
+  </data>
+  <data name="ProjectSettings" xml:space="preserve">
+    <value>プロジェクト設定</value>
+  </data>
+  <data name="Connections" xml:space="preserve">
+    <value>接続</value>
+  </data>
+  <data name="Workstations" xml:space="preserve">
+    <value>ワークステーション</value>
+  </data>
+  <data name="FolderExample" xml:space="preserve">
+    <value>C:\\work\
+orthstar</value>
+  </data>
+  <data name="ChatNeedsFolder" xml:space="preserve">
+    <value>チャットの前に、ダッシュボードでプロジェクトフォルダを付けてください。</value>
+  </data>
+  <data name="ChatNeedsClient" xml:space="preserve">
+    <value>このワークステーションで beacon client を起動してから、チャットを開き直してください。</value>
+  </data>
+  <data name="ModelsLocation" xml:space="preserve">
+    <value>モデルの場所</value>
+  </data>
+  <data name="ProjectsLocation" xml:space="preserve">
+    <value>プロジェクトの場所</value>
+  </data>
+  <data name="AgentDataLocation" xml:space="preserve">
+    <value>エージェントデータの場所</value>
+  </data>
+  <data name="RuntimeExecutable" xml:space="preserve">
+    <value>実行環境の実行ファイル</value>
+  </data>
+  <data name="AdvancedDiagnostics" xml:space="preserve">
+    <value>詳細</value>
+  </data>
+  <data name="NoFolderSelected" xml:space="preserve">
+    <value>フォルダが選択されていません</value>
+  </data>
+  <data name="ScopeAccountHint" xml:space="preserve">
+    <value>あなたのエージェント設定です。アカウントに保存され、プロジェクト間で共有されます。</value>
+  </data>
+  <data name="ScopeProjectHint" xml:space="preserve">
+    <value>選択したワークステーション上のこのプロジェクトです。</value>
+  </data>
+  <data name="ScopeWorkstationHint" xml:space="preserve">
+    <value>このワークステーションです。プロジェクトにはコピーされません。</value>
+  </data>
+  <data name="CommandQueued" xml:space="preserve">
+    <value>待機中</value>
+  </data>
+  <data name="CommandRunning" xml:space="preserve">
+    <value>実行中</value>
+  </data>
+  <data name="CommandSucceeded" xml:space="preserve">
+    <value>完了</value>
+  </data>
+  <data name="CommandFailed" xml:space="preserve">
+    <value>失敗</value>
+  </data>
+  <data name="CommandCancelled" xml:space="preserve">
+    <value>取り消し</value>
+  </data>
+  <data name="CommandTimedOut" xml:space="preserve">
+    <value>時間切れ</value>
+  </data>
+  <data name="RuntimeOffline" xml:space="preserve">
+    <value>オフライン</value>
+  </data>
+  <data name="RuntimeStarting" xml:space="preserve">
+    <value>起動中</value>
+  </data>
+  <data name="RuntimeReady" xml:space="preserve">
+    <value>準備完了</value>
+  </data>
+  <data name="RuntimeBusy" xml:space="preserve">
+    <value>使用中</value>
+  </data>
+  <data name="RuntimeDegraded" xml:space="preserve">
+    <value>低下</value>
+  </data>
+  <data name="RuntimeStopping" xml:space="preserve">
+    <value>停止中</value>
+  </data>
+  <data name="RuntimeFailed" xml:space="preserve">
+    <value>失敗</value>
+  </data>
+  <data name="RuntimeReadyHint" xml:space="preserve">
+    <value>モデル実行環境は準備完了です。</value>
+  </data>
+  <data name="RuntimeOfflineHint" xml:space="preserve">
+    <value>このワークステーションは接続されていません。</value>
+  </data>
+  <data name="RuntimeFailedHint" xml:space="preserve">
+    <value>モデル実行環境が失敗しました。</value>
+  </data>
+  <data name="RuntimeDegradedHint" xml:space="preserve">
+    <value>実行環境は起動していますが、確認が必要です。</value>
+  </data>
+  <data name="RuntimeBusyHint" xml:space="preserve">
+    <value>モデルが使用中です。アンロードする前に待ってください。</value>
+  </data>
+  <data name="RuntimeStartingHint" xml:space="preserve">
+    <value>実行環境を起動しています。</value>
+  </data>
+  <data name="RuntimeStoppingHint" xml:space="preserve">
+    <value>実行環境を停止しています。</value>
+  </data>
+  <data name="CurrentModel" xml:space="preserve">
+    <value>現在のモデル</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>再試行</value>
+  </data>
+  <data name="Overview" xml:space="preserve">
+    <value>概要</value>
+  </data>
+  <data name="Work" xml:space="preserve">
+    <value>作業</value>
+  </data>
+  <data name="Discussion" xml:space="preserve">
+    <value>議論</value>
+  </data>
+  <data name="RuntimeDiagnostics" xml:space="preserve">
+    <value>実行環境</value>
+  </data>
+  <data name="Advanced" xml:space="preserve">
+    <value>詳細</value>
+  </data>
+  <data name="ScopeUserLevel" xml:space="preserve">
+    <value>ユーザー単位</value>
+  </data>
+  <data name="ScopeContextual" xml:space="preserve">
+    <value>文脈依存</value>
+  </data>
+  <data name="Connect" xml:space="preserve">
+    <value>接続</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>診断</value>
+  </data>
+  <data name="MoveTo" xml:space="preserve">
+    <value>移動先</value>
+  </data>
+  <data name="RoleBindingReview" xml:space="preserve">
+    <value>レビュー</value>
+  </data>
+  <data name="McpLocal" xml:space="preserve">
+    <value>ローカル</value>
+  </data>
+  <data name="McpRemote" xml:space="preserve">
+    <value>リモート</value>
+  </data>
+  <data name="McpUrl" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="McpCommand" xml:space="preserve">
+    <value>コマンド</value>
+  </data>
+  <data name="NoTemplateSelected" xml:space="preserve">
+    <value>テンプレートが選択されていません。</value>
+  </data>
+  <data name="ModelsCount" xml:space="preserve">
+    <value>モデル {0} 件</value>
+  </data>
+  <data name="ChatGenerating" xml:space="preserve">
+    <value>生成中</value>
+  </data>
+  <data name="ChatUsingTool" xml:space="preserve">
+    <value>ツールを使用中</value>
+  </data>
+  <data name="ChatWaitingRuntime" xml:space="preserve">
+    <value>実行環境を待っています</value>
+  </data>
+  <data name="ChatCompleted" xml:space="preserve">
+    <value>完了</value>
+  </data>
+  <data name="ChatAborted" xml:space="preserve">
+    <value>中断</value>
+  </data>
+  <data name="ChatThinking" xml:space="preserve">
+    <value>思考中</value>
+  </data>
+  <data name="ChatTool" xml:space="preserve">
+    <value>ツール</value>
+  </data>
+  <data name="ChatOpenFull" xml:space="preserve">
+    <value>チャット全体を開く</value>
+  </data>
+  <data name="ChatYou" xml:space="preserve">
+    <value>あなた</value>
+  </data>
+  <data name="Revision" xml:space="preserve">
+    <value>リビジョン</value>
+  </data>
+  <data name="CompiledHash" xml:space="preserve">
+    <value>ハッシュ</value>
+  </data>
+  <data name="BudgetOverflow" xml:space="preserve">
+    <value>予算超過</value>
+  </data>
+  <data name="DroppedSections" xml:space="preserve">
+    <value>除外</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>開く</value>
+  </data>
+  <data name="NoDecisions" xml:space="preserve">
+    <value>決定はまだありません。</value>
+  </data>
+  <data name="NoReports" xml:space="preserve">
+    <value>レポートはまだありません。</value>
+  </data>
+  <data name="Actions" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="Scope" xml:space="preserve">
+    <value>範囲</value>
+  </data>
+  <data name="Generated" xml:space="preserve">
+    <value>生成済み</value>
+  </data>
+  <data name="DeleteTaskConfirm" xml:space="preserve">
+    <value>このタスクを削除しますか？元に戻せません。</value>
+  </data>
+  <data name="DeleteMilestoneConfirm" xml:space="preserve">
+    <value>このマイルストーンを削除しますか？タスクはボードに残ります。</value>
+  </data>
+  <data name="DeleteConnectionConfirm" xml:space="preserve">
+    <value>この接続を削除しますか？</value>
+  </data>
+  <data name="Owner" xml:space="preserve">
+    <value>オーナー</value>
+  </data>
+  <data name="Admin" xml:space="preserve">
+    <value>管理者</value>
+  </data>
+  <data name="Member" xml:space="preserve">
+    <value>メンバー</value>
+  </data>
+  <data name="Viewer" xml:space="preserve">
+    <value>閲覧者</value>
+  </data>
+  <data name="Revoked" xml:space="preserve">
+    <value>失効</value>
   </data>
 </root>
