@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CreateTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CreateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(CreateTaskCommand command, CancellationToken ct = default)
     {
@@ -76,9 +76,9 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
 
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public UpdateTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public UpdateTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(UpdateTaskCommand command, CancellationToken ct = default)
     {
@@ -134,9 +134,9 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
 
 public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DeleteTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
@@ -154,9 +154,9 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 
 public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Result<TaskItemDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ChangeSubStageHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ChangeSubStageHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(ChangeSubStageCommand command, CancellationToken ct = default)
     {
@@ -200,9 +200,9 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
 
 public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskCommentDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AddCommentHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AddCommentHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskCommentDto>> HandleAsync(AddCommentCommand command, CancellationToken ct = default)
     {
@@ -225,9 +225,9 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
 
 public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Result<TaskItemDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public SetDependenciesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public SetDependenciesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(SetDependenciesCommand command, CancellationToken ct = default)
     {
@@ -289,9 +289,9 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
 
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AddReviewNotesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AddReviewNotesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(AddReviewNotesCommand command, CancellationToken ct = default)
     {
@@ -335,9 +335,9 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
 
 public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetTaskHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskItemDto>> HandleAsync(GetTaskCommand command, CancellationToken ct = default)
     {
@@ -375,9 +375,9 @@ public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto
 
 public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, Result<IList<TaskItemDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListProjectTasksHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListProjectTasksHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskItemDto>>> HandleAsync(ListProjectTasksCommand command, CancellationToken ct = default)
     {
@@ -401,9 +401,9 @@ public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, 
 
 public class ListTasksByStatusHandler : ICommandHandler<ListTasksByStatusCommand, Result<IList<TaskItemDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListTasksByStatusHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListTasksByStatusHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskItemDto>>> HandleAsync(ListTasksByStatusCommand command, CancellationToken ct = default)
     {

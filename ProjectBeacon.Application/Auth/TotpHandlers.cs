@@ -1,8 +1,8 @@
 namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
+using Application.Security;
 using Infrastructure.Data;
-using Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 public record TotpStatusDto(bool Enabled, bool Pending, string? OtpAuthUri, string? Secret);
@@ -21,9 +21,16 @@ public record DisableTotpCommand(DisableTotpRequest Request) : ICommand<Result>;
 
 public sealed class GetTotpStatusHandler : ICommandHandler<GetTotpStatusCommand, Result<TotpStatusDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISecretProtector _secrets;
+    private readonly ITotp _totp;
 
-    public GetTotpStatusHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetTotpStatusHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    {
+        _dbFactory = dbFactory;
+        _secrets = secrets;
+        _totp = totp;
+    }
 
     public async Task<Result<TotpStatusDto>> HandleAsync(GetTotpStatusCommand command, CancellationToken ct = default)
     {
@@ -38,8 +45,8 @@ public sealed class GetTotpStatusHandler : ICommandHandler<GetTotpStatusCommand,
         {
             try
             {
-                secret = SecretBox.Open(user.TotpSecretCipher, SecretBox.KeyMaterial());
-                uri = Totp.OtpAuthUri(secret, user.Email);
+                secret = _secrets.Open(user.TotpSecretCipher, _secrets.KeyMaterial());
+                uri = _totp.OtpAuthUri(secret, user.Email);
             }
             catch (System.Security.Cryptography.CryptographicException)
             {
@@ -52,9 +59,16 @@ public sealed class GetTotpStatusHandler : ICommandHandler<GetTotpStatusCommand,
 
 public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<string>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISecretProtector _secrets;
+    private readonly ITotp _totp;
 
-    public BeginTotpHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public BeginTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    {
+        _dbFactory = dbFactory;
+        _secrets = secrets;
+        _totp = totp;
+    }
 
     public async Task<Result<string>> HandleAsync(BeginTotpCommand command, CancellationToken ct = default)
     {
@@ -62,18 +76,25 @@ public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == command.UserId, ct);
         if (user is null)
             return Result.Failure<string>("Account is not resolved.");
-        var secret = Totp.GenerateSecret();
-        user.BeginTotp(SecretBox.Seal(secret, SecretBox.KeyMaterial()));
+        var secret = _totp.GenerateSecret();
+        user.BeginTotp(_secrets.Seal(secret, _secrets.KeyMaterial()));
         await db.SaveChangesAsync(ct);
-        return Result.Ok(Totp.OtpAuthUri(secret, user.Email) + "\n" + secret);
+        return Result.Ok(_totp.OtpAuthUri(secret, user.Email) + "\n" + secret);
     }
 }
 
 public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISecretProtector _secrets;
+    private readonly ITotp _totp;
 
-    public ConfirmTotpHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ConfirmTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    {
+        _dbFactory = dbFactory;
+        _secrets = secrets;
+        _totp = totp;
+    }
 
     public async Task<Result> HandleAsync(ConfirmTotpCommand command, CancellationToken ct = default)
     {
@@ -82,9 +103,9 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
         if (user is null || string.IsNullOrEmpty(user.TotpSecretCipher))
             return Result.Failure("Authenticator is not started.");
         string secret;
-        try { secret = SecretBox.Open(user.TotpSecretCipher, SecretBox.KeyMaterial()); }
+        try { secret = _secrets.Open(user.TotpSecretCipher, _secrets.KeyMaterial()); }
         catch (System.Security.Cryptography.CryptographicException) { return Result.Failure("Authenticator secret cannot be read."); }
-        if (!Totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
+        if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure("Code is not valid.");
         user.ConfirmTotp();
         await db.SaveChangesAsync(ct);
@@ -94,9 +115,16 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
 
 public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISecretProtector _secrets;
+    private readonly ITotp _totp;
 
-    public DisableTotpHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DisableTotpHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets, ITotp totp)
+    {
+        _dbFactory = dbFactory;
+        _secrets = secrets;
+        _totp = totp;
+    }
 
     public async Task<Result> HandleAsync(DisableTotpCommand command, CancellationToken ct = default)
     {
@@ -104,8 +132,8 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == command.Request.UserId, ct);
         if (user is null || !user.TotpEnabled)
             return Result.Failure("Authenticator is not on.");
-        var secret = SecretBox.Open(user.TotpSecretCipher, SecretBox.KeyMaterial());
-        if (!Totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
+        var secret = _secrets.Open(user.TotpSecretCipher, _secrets.KeyMaterial());
+        if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure("Code is not valid.");
         user.ClearTotp();
         await db.SaveChangesAsync(ct);
@@ -115,15 +143,16 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
 
 public static class TotpGate
 {
-    public static async Task<Result> RequireAsync(BeaconDbContext db, Guid userId, string? code, CancellationToken ct)
+    public static async Task<Result> RequireAsync(
+        IBeaconDb db, Guid userId, string? code, ISecretProtector? secrets, ITotp? totp, CancellationToken ct)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (user is null || !user.TotpEnabled)
             return Result.Ok();
-        if (string.IsNullOrEmpty(user.TotpSecretCipher))
+        if (string.IsNullOrEmpty(user.TotpSecretCipher) || secrets is null || totp is null)
             return Result.Failure("Authenticator is not configured.");
-        var secret = SecretBox.Open(user.TotpSecretCipher, SecretBox.KeyMaterial());
-        return Totp.Verify(secret, code ?? "", DateTime.UtcNow)
+        var secret = secrets.Open(user.TotpSecretCipher, secrets.KeyMaterial());
+        return totp.Verify(secret, code ?? "", DateTime.UtcNow)
             ? Result.Ok()
             : Result.Failure("Authenticator code is required.");
     }

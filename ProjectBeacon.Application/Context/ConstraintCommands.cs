@@ -12,9 +12,9 @@ public record CreateConstraintRequest(Guid ProjectId, string Body, ConstraintKin
 
 public class CreateConstraintHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CreateConstraintHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CreateConstraintHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ConstraintDto>> HandleAsync(CreateConstraintRequest request, CancellationToken ct = default)
     {
@@ -34,9 +34,9 @@ public class CreateConstraintHandler
 
 public class ListConstraintsHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListConstraintsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListConstraintsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ConstraintDto>>> HandleAsync(Guid projectId, CancellationToken ct = default)
     {
@@ -52,9 +52,9 @@ public class ListConstraintsHandler
 
 public class ActivateConstraintHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ActivateConstraintHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ActivateConstraintHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ConstraintDto>> HandleAsync(Guid constraintId, CancellationToken ct = default)
     {
@@ -70,9 +70,9 @@ public class ActivateConstraintHandler
 
 public class RejectConstraintHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RejectConstraintHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RejectConstraintHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ConstraintDto>> HandleAsync(Guid constraintId, CancellationToken ct = default)
     {

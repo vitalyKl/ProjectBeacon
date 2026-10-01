@@ -30,7 +30,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         _unscoped.Dispose();
     }
 
-    private IDbContextFactory<BeaconDbContext> Factory() => HandlerSqlite.Factory(_connection);
+    private BeaconDbFactory Factory() => HandlerSqlite.Factory(_connection);
 
     private EvalPairHandler CreateHandler() =>
         new(Factory(), new CompileBriefHandler(Factory()), new RecordEvalRunHandler(Factory()), new EnqueueCommandHandler(Factory()));

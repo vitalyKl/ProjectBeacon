@@ -25,7 +25,7 @@ public sealed class TaskStepHandlerTests : IDisposable
         _connection.Dispose();
     }
 
-    private IDbContextFactory<BeaconDbContext> Factory(ITenantContext? tenant = null) =>
+    private BeaconDbFactory Factory(ITenantContext? tenant = null) =>
         HandlerSqlite.Factory(_connection, tenant);
 
     [Fact]

@@ -8,7 +8,7 @@ using Domain.Entities.Projects;
 using Domain.Entities.Evals;
 using Domain.Enums;
 
-public class BeaconDbContext : DbContext
+public class BeaconDbContext : DbContext, IBeaconDb
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<OpenCodeConnection> OpenCodeConnections => Set<OpenCodeConnection>();
@@ -577,6 +577,9 @@ public class BeaconDbContext : DbContext
             entity.Property(e => e.TokenPrefix).IsRequired().HasMaxLength(20);
             entity.Property(e => e.ProbeJson).IsRequired();
             entity.Property(e => e.WorkstationJson).IsRequired();
+            entity.Property(e => e.DesiredWorkstationJson).IsRequired();
+            entity.Property(e => e.DesiredRevision).IsRequired();
+            entity.Property(e => e.AppliedRevision).IsRequired();
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => e.TokenHash).IsUnique();
             entity.HasIndex(e => new { e.UserId, e.Fingerprint });
@@ -605,6 +608,8 @@ public class BeaconDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.LocalRoot).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.ConfigRevision).IsRequired();
+            entity.Property(e => e.AppliedConfigRevision).IsRequired();
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => new { e.ProjectId, e.DeviceId }).IsUnique();
             entity.HasOne<Project>()

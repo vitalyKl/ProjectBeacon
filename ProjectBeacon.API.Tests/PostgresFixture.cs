@@ -44,7 +44,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         return new BeaconDbContext(CreateOptions());
     }
 
-    public IDbContextFactory<BeaconDbContext> CreateFactory()
+    public BeaconDbFactory CreateFactory()
     {
         return new BeaconDbFactory(CreateOptions(), null);
     }

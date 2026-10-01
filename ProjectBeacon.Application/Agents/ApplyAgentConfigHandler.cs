@@ -20,12 +20,12 @@ public record ApplyAgentConfigCommand(ApplyAgentConfigRequest Request) : IComman
 
 public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCommand, Result<WorkstationCommandDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly SetRoleBindingHandler _setBinding;
     private readonly EnqueueCommandHandler _enqueue;
 
     public ApplyAgentConfigHandler(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         SetRoleBindingHandler setBinding,
         EnqueueCommandHandler enqueue)
     {

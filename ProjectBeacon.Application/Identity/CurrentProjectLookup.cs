@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 public static class CurrentProjectLookup
 {
     public static async Task<(Guid? ProjectId, Guid? OrgId)> ForUserAsync(
-        BeaconDbContext db, Guid userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)
+        IBeaconDb db, Guid userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)
     {
         if (preferredProjectId is { } preferred)
         {

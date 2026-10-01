@@ -8,12 +8,12 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
     private readonly GetCommandHandler _getCommand;
 
     public DeviceLlamaSwapProxy(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         EnqueueCommandHandler enqueue,
         GetCommandHandler getCommand)
     {

@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 public static class ProjectAuthorization
 {
     public static async Task<bool> CanManageProjectAsync(
-        BeaconDbContext db, Guid projectId, ActorContext actor, CancellationToken ct)
+        IBeaconDb db, Guid projectId, ActorContext actor, CancellationToken ct)
     {
         if (actor.IsAdmin)
             return true;
@@ -26,7 +26,7 @@ public static class ProjectAuthorization
     }
 
     public static async Task<bool> CanManageOrgAsync(
-        BeaconDbContext db, Guid orgId, ActorContext actor, CancellationToken ct)
+        IBeaconDb db, Guid orgId, ActorContext actor, CancellationToken ct)
     {
         if (actor.IsAdmin)
             return true;
@@ -36,7 +36,7 @@ public static class ProjectAuthorization
     }
 
     public static async Task<Result> AddMember(
-        BeaconDbContext db, Guid projectId, ActorContext actor,
+        IBeaconDb db, Guid projectId, ActorContext actor,
         Guid targetUserId, MemberRole targetRole, CancellationToken ct)
     {
         if (actor.IsApiToken || !await CanManageProjectAsync(db, projectId, actor, ct))
@@ -50,7 +50,7 @@ public static class ProjectAuthorization
     }
 
     public static async Task<Result> RemoveMember(
-        BeaconDbContext db, Guid projectId, ActorContext actor,
+        IBeaconDb db, Guid projectId, ActorContext actor,
         Guid targetUserId, CancellationToken ct)
     {
         if (actor.IsApiToken)
@@ -88,7 +88,7 @@ public static class ProjectAuthorization
     }
 
     public static async Task<Result> CreateToken(
-        BeaconDbContext db, Guid projectId, ActorContext actor,
+        IBeaconDb db, Guid projectId, ActorContext actor,
         ApiTokenCapability requestedCapabilities, CancellationToken ct)
     {
         if (actor.IsApiToken || !await CanManageProjectAsync(db, projectId, actor, ct))
@@ -105,7 +105,7 @@ public static class ProjectAuthorization
     }
 
     public static async Task<Result> RevokeToken(
-        BeaconDbContext db, Guid projectId, ActorContext actor,
+        IBeaconDb db, Guid projectId, ActorContext actor,
         Guid tokenId, CancellationToken ct)
     {
         if (actor.IsApiToken || !await CanManageProjectAsync(db, projectId, actor, ct))
@@ -114,7 +114,7 @@ public static class ProjectAuthorization
     }
 
     private static async Task<MemberRole?> GetActorRoleAsync(
-        BeaconDbContext db, Guid projectId, ActorContext actor, CancellationToken ct)
+        IBeaconDb db, Guid projectId, ActorContext actor, CancellationToken ct)
     {
         var userId = actor.UserId;
         var projectRole = await db.ProjectMembers.IgnoreQueryFilters()
@@ -138,7 +138,7 @@ public static class ProjectAuthorization
     }
 
     private static async Task<MemberRole?> GetMemberRoleAsync(
-        BeaconDbContext db, Guid projectId, Guid userId, CancellationToken ct)
+        IBeaconDb db, Guid projectId, Guid userId, CancellationToken ct)
     {
         return await db.ProjectMembers.IgnoreQueryFilters()
             .Where(m => m.ProjectId == projectId && m.UserId == userId)

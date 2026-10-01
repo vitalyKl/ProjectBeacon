@@ -29,13 +29,13 @@ public record EvalPairResult(
 
 public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairResult>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly CompileBriefHandler _compileBrief;
     private readonly RecordEvalRunHandler _recordEvalRun;
     private readonly EnqueueCommandHandler _enqueueCommand;
 
     public EvalPairHandler(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         CompileBriefHandler compileBrief,
         RecordEvalRunHandler recordEvalRun,
         EnqueueCommandHandler enqueueCommand)

@@ -29,9 +29,9 @@ public record ContextCostReportDto(
 
 public class ContextCostReportHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ContextCostReportHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ContextCostReportHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ContextCostReportDto>> HandleAsync(GetContextCostReportRequest request, CancellationToken ct = default)
     {

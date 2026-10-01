@@ -5,6 +5,7 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
+using Infrastructure.LlamaSwap;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -140,7 +141,7 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
                 new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work")));
         }
 
-        var result = await new GetLlamaSwapConfigHandler(HandlerSqlite.Factory(_connection))
+        var result = await new GetLlamaSwapConfigHandler(HandlerSqlite.Factory(_connection), new LlamaSwapCatalog())
             .HandleAsync(new GetLlamaSwapConfigCommand(new GetLlamaSwapConfigRequest(deviceId)));
         Assert.True(result.Success, result.Error);
         Assert.Contains("qwen", result.Value!.Yaml);

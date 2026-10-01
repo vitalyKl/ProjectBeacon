@@ -41,9 +41,9 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GenerateReportHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GenerateReportHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ReportDto>> HandleAsync(GenerateReportCommand command, CancellationToken ct = default)
     {
@@ -142,9 +142,9 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
 
 public class ListReportsHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListReportsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListReportsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ReportDto>>> HandleAsync(ListReportsRequest request, CancellationToken ct = default)
     {
@@ -162,9 +162,9 @@ public class ListReportsHandler
 
 public class GetReportHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetReportHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetReportHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ReportDto>> HandleAsync(GetReportRequest request, CancellationToken ct = default)
     {

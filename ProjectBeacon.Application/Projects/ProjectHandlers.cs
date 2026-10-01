@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CreateProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CreateProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
     {
@@ -38,7 +38,7 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
         new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 
-    private static void SeedStarterLabels(BeaconDbContext db, Guid projectId)
+    private static void SeedStarterLabels(IBeaconDb db, Guid projectId)
     {
         (string Name, string Color, string Prefix)[] catalog =
         [
@@ -56,9 +56,9 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
 
 public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result<ProjectDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public UpdateProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public UpdateProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
     {
@@ -83,9 +83,9 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 
 public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<ProjectDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectDto>> HandleAsync(GetProjectCommand command, CancellationToken ct = default)
     {
@@ -103,9 +103,9 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
 
 public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<IList<ProjectDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListProjectsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListProjectsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ProjectDto>>> HandleAsync(ListProjectsCommand command, CancellationToken ct = default)
     {

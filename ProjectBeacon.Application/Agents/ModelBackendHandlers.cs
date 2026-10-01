@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
+using Application.Devices;
 using Domain.Enums;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 public static class ModelProjectScope
 {
-    public static bool TryGet(BeaconDbContext db, out Guid projectId)
+    public static bool TryGet(IBeaconDb db, out Guid projectId)
     {
         projectId = Guid.Empty;
         var scope = db.FilterProjectId;
@@ -43,9 +44,9 @@ internal static class ModelBackendMappers
 
 public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocalModelBackendCommand, Result<LocalModelBackendDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public UpsertLocalModelBackendHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public UpsertLocalModelBackendHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LocalModelBackendDto>> HandleAsync(UpsertLocalModelBackendCommand command, CancellationToken ct = default)
     {
@@ -79,6 +80,8 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
             if (existing is null)
                 return Result.Failure<LocalModelBackendDto>("Model backend not found.");
             existing.Update(name, request.BackendType, launch, request.ContextSize, request.Ttl, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
+            await DesiredState.BumpUserAsync(db, request.UserId, ct);
+            await DesiredState.BumpUserProjectsAsync(db, request.UserId, ct);
             await db.SaveChangesAsync(ct);
             return Result.Ok(ModelBackendMappers.ToDto(existing));
         }
@@ -86,6 +89,8 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         var backend = LocalModelBackend.Create(name, request.BackendType, launch,
             request.ContextSize, request.Ttl, request.UserId, request.ExtraFlags, request.Concurrent, request.Note, openCodeModel);
         db.LocalModelBackends.Add(backend);
+        await DesiredState.BumpUserAsync(db, request.UserId, ct);
+        await DesiredState.BumpUserProjectsAsync(db, request.UserId, ct);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ModelBackendMappers.ToDto(backend));
     }
@@ -93,9 +98,9 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
 
 public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocalModelBackendCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteLocalModelBackendHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DeleteLocalModelBackendHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DeleteLocalModelBackendCommand command, CancellationToken ct = default)
     {
@@ -116,6 +121,8 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
             return Result.Failure($"Model backend is bound to role(s): {string.Join(", ", boundRoles.Select(r => r.ToString().ToLowerInvariant()))}. Unbind first.");
 
         db.LocalModelBackends.Remove(backend);
+        await DesiredState.BumpUserAsync(db, command.Request.UserId, ct);
+        await DesiredState.BumpUserProjectsAsync(db, command.Request.UserId, ct);
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
@@ -123,9 +130,9 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
 
 public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingCommand, Result<RoleBindingDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public SetRoleBindingHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public SetRoleBindingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<RoleBindingDto>> HandleAsync(SetRoleBindingCommand command, CancellationToken ct = default)
     {
@@ -155,6 +162,7 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
             binding.ChangeBackend(command.Request.ModelBackendId);
         }
 
+        await DesiredState.BumpProjectAsync(db, projectId, ct);
         await db.SaveChangesAsync(ct);
         return Result.Ok(ModelBackendMappers.ToDto(binding));
     }
@@ -162,14 +170,14 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
 
 public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBindingCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RemoveRoleBindingHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RemoveRoleBindingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(RemoveRoleBindingCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!ModelProjectScope.TryGet(db, out _))
+        if (!ModelProjectScope.TryGet(db, out var projectId))
             return Result.Failure("Project scope is not resolved.");
 
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);
@@ -177,6 +185,7 @@ public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBinding
             return Result.Failure("Role binding not found.");
 
         db.RoleBindings.Remove(binding);
+        await DesiredState.BumpProjectAsync(db, projectId, ct);
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }
@@ -184,9 +193,9 @@ public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBinding
 
 public sealed class GetModelRegistryHandler : ICommandHandler<GetModelRegistryCommand, Result<ModelRegistryDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetModelRegistryHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetModelRegistryHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ModelRegistryDto>> HandleAsync(GetModelRegistryCommand command, CancellationToken ct = default)
     {
@@ -216,9 +225,9 @@ public sealed class GetModelRegistryHandler : ICommandHandler<GetModelRegistryCo
 
 public sealed class SaveAgentTemplateHandler : ICommandHandler<SaveAgentTemplateCommand, Result<AgentTemplateDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public SaveAgentTemplateHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public SaveAgentTemplateHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<AgentTemplateDto>> HandleAsync(SaveAgentTemplateCommand command, CancellationToken ct = default)
     {
@@ -261,9 +270,9 @@ public sealed class SaveAgentTemplateHandler : ICommandHandler<SaveAgentTemplate
 
 public sealed class DeleteAgentTemplateHandler : ICommandHandler<DeleteAgentTemplateCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteAgentTemplateHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DeleteAgentTemplateHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DeleteAgentTemplateCommand command, CancellationToken ct = default)
     {

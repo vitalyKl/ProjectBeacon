@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ProjectBeacon.Application\ProjectBeacon.Application.csproj" />
+    <ProjectReference Include="..\ProjectBeacon.Infrastructure\ProjectBeacon.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,6 +10,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private Process? _process;
+    private int _unhealthyPolls;
     private Dictionary<string, string> _env = new(StringComparer.Ordinal);
     private string? _cwd;
     private int _port = 4096;
@@ -63,6 +64,18 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         }
 
         Directory.CreateDirectory(_cwd);
+        EnsureProcess(bin ?? "opencode");
+        await PollAsync(ct);
+        if (SkipRealProcess || !IsRunning || Status.Healthy)
+        {
+            _unhealthyPolls = 0;
+            return;
+        }
+
+        if (++_unhealthyPolls < 3)
+            return;
+        _unhealthyPolls = 0;
+        KillProcess();
         EnsureProcess(bin ?? "opencode");
         await PollAsync(ct);
     }

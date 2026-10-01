@@ -12,7 +12,7 @@ public sealed class EvalRunHandlerTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly BeaconDbContext _db;
     private readonly IDisposable _unscoped;
-    private readonly IDbContextFactory<BeaconDbContext> _factory;
+    private readonly BeaconDbFactory _factory;
 
     private readonly Guid _projectId = Guid.NewGuid();
     private readonly Guid _taskId = Guid.NewGuid();

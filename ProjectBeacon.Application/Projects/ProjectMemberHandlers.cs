@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, Result<ProjectMemberDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AddProjectMemberHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AddProjectMemberHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectMemberDto>> HandleAsync(AddProjectMemberCommand command, CancellationToken ct = default)
     {
@@ -41,9 +41,9 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
 
 public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RemoveProjectMemberHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RemoveProjectMemberHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
     {
@@ -69,9 +69,9 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
 
 public class GetProjectMembersHandler : ICommandHandler<GetProjectMembersCommand, Result<IList<ProjectMemberDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetProjectMembersHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetProjectMembersHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ProjectMemberDto>>> HandleAsync(GetProjectMembersCommand command, CancellationToken ct = default)
     {

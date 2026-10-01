@@ -12,9 +12,9 @@ public record GetCurrentProjectQuery : IQuery<Result<ProjectDto?>>;
 
 public class GetCurrentProjectHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetCurrentProjectHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetCurrentProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public Task<Result<ProjectDto?>> HandleAsync(CancellationToken ct = default)
         => HandleAsync(userId: null, isAdmin: false, preferredProjectId: null, ct);
@@ -69,9 +69,9 @@ public record DashboardCountsDto(int Projects, int Tasks, int InProgress, int Do
 
 public class GetDashboardCountsHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetDashboardCountsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetDashboardCountsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<DashboardCountsDto>> HandleAsync(CancellationToken ct = default)
     {
@@ -117,9 +117,9 @@ public class ListMyProjectsHandler
 {
     private const int RecentLimit = 10;
 
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListMyProjectsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListMyProjectsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ListMyProjectsDto>> HandleAsync(
         Guid userId, bool isAdmin, CancellationToken ct = default)
@@ -206,9 +206,9 @@ public class GetProjectOverviewHandler
 {
     private const int RecentLimit = 10;
 
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetProjectOverviewHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetProjectOverviewHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectOverviewDto?>> HandleAsync(
         Guid userId, bool isAdmin, Guid projectId, CancellationToken ct = default)
@@ -282,9 +282,9 @@ public class GetProjectPulseHandler
     private const int PeekLimit = 3;
     private static readonly string[] PulseSectionIds = ["goals", "definition_of_done"];
 
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetProjectPulseHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetProjectPulseHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectPulseDto?>> HandleAsync(
         Guid userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)
@@ -359,9 +359,9 @@ public record ListLabelsRequest(Guid ProjectId);
 
 public class ListLabelsHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListLabelsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListLabelsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<LabelDto>>> HandleAsync(ListLabelsRequest request, CancellationToken ct = default)
     {

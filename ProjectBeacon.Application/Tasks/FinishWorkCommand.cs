@@ -10,9 +10,9 @@ using System.Text;
 
 public class FinishWorkHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public FinishWorkHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public FinishWorkHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(FinishWorkCommand command, CancellationToken ct = default)
     {
@@ -92,7 +92,7 @@ public class FinishWorkHandler
         return Result.Ok();
     }
 
-    private static async Task<bool> ActorHasAccess(BeaconDbContext db, string actorId, Guid projectId, CancellationToken ct)
+    private static async Task<bool> ActorHasAccess(IBeaconDb db, string actorId, Guid projectId, CancellationToken ct)
     {
         var workerToken = Environment.GetEnvironmentVariable("BEACON_WORKER_TOKEN");
         if (!string.IsNullOrEmpty(workerToken) && FixedTimeEquals(actorId, workerToken))

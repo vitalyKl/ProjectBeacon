@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Context;
+using ProjectBeacon.Application.Runtime;
 
 public static class WorkstationActions
 {
@@ -66,6 +67,7 @@ public static class WorkstationActions
         string root,
         string payloadJson,
         ClientOpenCodeServe openCode,
+        IAgentRuntime runtime,
         TimeSpan pollInterval,
         TimeSpan idleTimeout,
         TimeSpan maxDuration,
@@ -110,8 +112,8 @@ public static class WorkstationActions
         if (!openCode.Status.Healthy)
             return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
 
-        var sessionId = await openCode.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
-        await openCode.PromptAsync(sessionId, prompt, model, ct);
+        var sessionId = await runtime.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
+        await runtime.SendPromptAsync(sessionId, prompt, model, ct);
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(idleTimeout / pollInterval));
@@ -120,7 +122,9 @@ public static class WorkstationActions
         var idle = false;
         for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
         {
-            var parts = await openCode.ListPartsAsync(sessionId, ct);
+            var parts = new List<AgentMessagePart>();
+            await foreach (var part in runtime.StreamPartsAsync(sessionId, ct))
+                parts.Add(part);
             var added = 0;
             foreach (var part in parts)
             {
@@ -139,7 +143,7 @@ public static class WorkstationActions
             await Task.Delay(pollInterval, ct);
         }
 
-        var usage = await openCode.ReadUsageAsync(sessionId, ct);
+        var usage = await runtime.ReadUsageAsync(sessionId, ct);
         var passed = idle && seen.Count > 0;
         var result = new
         {

@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Devices;
 
+using Application.Agents;
 using Application.Auth;
 using Application.Common;
+using Application.Security;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -12,9 +14,16 @@ using System.Text.Json;
 
 public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<DaemonDeviceDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISecretProtector? _secrets;
+    private readonly ITotp? _totp;
 
-    public CreateDeviceHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CreateDeviceHandler(IBeaconDbFactory dbFactory, ISecretProtector? secrets = null, ITotp? totp = null)
+    {
+        _dbFactory = dbFactory;
+        _secrets = secrets;
+        _totp = totp;
+    }
 
     public async Task<Result<DaemonDeviceDto>> HandleAsync(CreateDeviceCommand command, CancellationToken ct = default)
     {
@@ -30,7 +39,7 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
         var userExists = await db.Users.IgnoreQueryFilters().AnyAsync(u => u.Id == request.UserId, ct);
         if (!userExists)
             return Result.Failure<DaemonDeviceDto>("User not found.");
-        var gate = await TotpGate.RequireAsync(db, request.UserId, request.TotpCode, ct);
+        var gate = await TotpGate.RequireAsync(db, request.UserId, request.TotpCode, _secrets, _totp, ct);
         if (!gate.Success)
             return Result.Failure<DaemonDeviceDto>(gate.Error ?? "Authenticator code is required.");
 
@@ -58,14 +67,14 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
     internal static DaemonDeviceDto MapDevice(DaemonDevice device, string? token, DateTime utcNow) =>
         new(device.Id, device.Name, device.UserId, device.Fingerprint, device.TokenPrefix, token,
             device.LastHeartbeatAt, device.IsOnline(utcNow), device.ProbeJson, device.WorkstationJson,
-            device.RevokedAt, device.CreatedAt);
+            device.RevokedAt, device.CreatedAt, device.DesiredRevision, device.AppliedRevision);
 }
 
 public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<IList<DaemonDeviceDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListDevicesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListDevicesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<DaemonDeviceDto>>> HandleAsync(ListDevicesCommand command, CancellationToken ct = default)
     {
@@ -82,9 +91,9 @@ public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<ILi
 
 public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RevokeDeviceHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RevokeDeviceHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(RevokeDeviceCommand command, CancellationToken ct = default)
     {
@@ -100,9 +109,9 @@ public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
 
 public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Result<DaemonDeviceDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public HeartbeatDeviceHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public HeartbeatDeviceHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<DaemonDeviceDto>> HandleAsync(HeartbeatDeviceCommand command, CancellationToken ct = default)
     {
@@ -119,6 +128,8 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
             return Result.Failure<DaemonDeviceDto>(ex.Message);
         }
         RecordHostSample(db, device.Id, command.Request.ProbeJson);
+        await QueueReconcileAsync(db, device, ct);
+        await QueueProjectAppliesAsync(db, device, ct);
         await db.SaveChangesAsync(ct);
         var stale = await db.DeviceHostSamples
             .Where(s => s.DeviceId == device.Id)
@@ -133,7 +144,59 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
         return Result.Ok(CreateDeviceHandler.MapDevice(device, null, DateTime.UtcNow));
     }
 
-    private static void RecordHostSample(BeaconDbContext db, Guid deviceId, string? probeJson)
+    private static async Task QueueReconcileAsync(IBeaconDb db, DaemonDevice device, CancellationToken ct)
+    {
+        if (device.AppliedRevision >= device.DesiredRevision)
+            return;
+        var inflight = await db.WorkstationCommands.AnyAsync(c =>
+            c.DeviceId == device.Id
+            && c.Kind == WorkstationCommandKind.ReconcileDesired
+            && (c.Status == WorkstationCommandStatus.Pending || c.Status == WorkstationCommandStatus.Running), ct);
+        if (inflight)
+            return;
+        db.WorkstationCommands.Add(WorkstationCommand.Create(
+            device.Id,
+            WorkstationCommandKind.ReconcileDesired,
+            DesiredState.ReconcilePayload(device),
+            requestedByUserId: device.UserId));
+    }
+
+    private static async Task QueueProjectAppliesAsync(IBeaconDb db, DaemonDevice device, CancellationToken ct)
+    {
+        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
+            .Where(r => r.DeviceId == device.Id && r.AppliedConfigRevision < r.ConfigRevision)
+            .ToListAsync(ct);
+        if (runtimes.Count == 0)
+            return;
+
+        var pending = await db.WorkstationCommands
+            .Where(c => c.DeviceId == device.Id
+                && c.Kind == WorkstationCommandKind.ApplyOpencode
+                && (c.Status == WorkstationCommandStatus.Pending || c.Status == WorkstationCommandStatus.Running))
+            .Select(c => c.ProjectId)
+            .ToListAsync(ct);
+        var backends = await db.LocalModelBackends
+            .Where(b => b.UserId == device.UserId)
+            .ToListAsync(ct);
+        var dtos = backends.Select(ModelBackendMappers.ToDto).ToList();
+        foreach (var runtime in runtimes)
+        {
+            if (pending.Contains(runtime.ProjectId))
+                continue;
+            var bindings = await db.RoleBindings.IgnoreQueryFilters()
+                .Where(r => r.ProjectId == runtime.ProjectId)
+                .ToListAsync(ct);
+            var payload = OpencodePayload.FromBindings(bindings, dtos, runtime.ConfigRevision);
+            db.WorkstationCommands.Add(WorkstationCommand.Create(
+                device.Id,
+                WorkstationCommandKind.ApplyOpencode,
+                payload,
+                runtime.ProjectId,
+                device.UserId));
+        }
+    }
+
+    private static void RecordHostSample(IBeaconDb db, Guid deviceId, string? probeJson)
     {
         var host = DeviceLlamaSwapProxy.ParseProbe(probeJson ?? "{}")?.Host;
         if (host is null)
@@ -153,9 +216,9 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
 
 public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Result<WorkstationCommandDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public EnqueueCommandHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public EnqueueCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(EnqueueCommandCommand command, CancellationToken ct = default)
     {
@@ -176,6 +239,13 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 
         string? payloadJson = command.Request.PayloadJson;
         string? localRoot = null;
+        if (command.Request.Kind == WorkstationCommandKind.SaveWorkstation)
+        {
+            if (!DesiredState.TryStampWorkstation(payloadJson, out var stored, out var error))
+                return Result.Failure<WorkstationCommandDto>(error ?? "Invalid payload.");
+            device.SetDesiredWorkstation(stored);
+            payloadJson = DesiredState.WithRevision(stored, device.DesiredRevision);
+        }
         if (CommandSandbox.IsProjectKind(command.Request.Kind))
         {
             if (command.Request.ProjectId is not { } rootedProjectId)
@@ -189,6 +259,8 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
             payloadJson = sanitized.Value;
             localRoot = runtime.LocalRoot;
+            if (command.Request.Kind == WorkstationCommandKind.ApplyOpencode)
+                payloadJson = DesiredState.WithRevision(payloadJson ?? "{}", runtime.ConfigRevision);
         }
 
         var queued = WorkstationCommand.Create(
@@ -202,7 +274,7 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         return Result.Ok(MapCommand(queued, localRoot));
     }
 
-    internal static async Task<string?> FindLocalRootAsync(BeaconDbContext db, WorkstationCommand command, CancellationToken ct)
+    internal static async Task<string?> FindLocalRootAsync(IBeaconDb db, WorkstationCommand command, CancellationToken ct)
     {
         if (!CommandSandbox.IsProjectKind(command.Kind) || command.ProjectId is not { } projectId)
             return null;
@@ -219,9 +291,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 
 public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, Result<WorkstationCommandDto?>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ClaimNextCommandHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ClaimNextCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<WorkstationCommandDto?>> HandleAsync(ClaimNextCommandCommand command, CancellationToken ct = default)
     {
@@ -272,9 +344,9 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
 
 public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Result<WorkstationCommandDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CompleteCommandHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CompleteCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(CompleteCommandCommand command, CancellationToken ct = default)
     {
@@ -287,6 +359,7 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             if (command.Request.Success)
             {
                 await CompleteEvalRunAsync(db, row, command.Request.ResultJson, ct);
+                await MarkDesiredAppliedAsync(db, row, command.Request.ResultJson, ct);
                 row.Succeed(command.Request.ResultJson);
             }
             else
@@ -303,7 +376,25 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
         return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }
 
-    private static async Task CompleteEvalRunAsync(BeaconDbContext db, WorkstationCommand row, string? resultJson, CancellationToken ct)
+    private static async Task MarkDesiredAppliedAsync(IBeaconDb db, WorkstationCommand row, string? resultJson, CancellationToken ct)
+    {
+        var revision = DesiredState.ReadRevision(row.PayloadJson) ?? DesiredState.ReadRevision(resultJson);
+        if (revision is not { } value)
+            return;
+        if (row.Kind == WorkstationCommandKind.ApplyOpencode && row.ProjectId is { } projectId)
+        {
+            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.DeviceId == row.DeviceId, ct);
+            runtime?.MarkConfigApplied(value);
+            return;
+        }
+        if (row.Kind is not (WorkstationCommandKind.SaveWorkstation or WorkstationCommandKind.ReconcileDesired))
+            return;
+        var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == row.DeviceId, ct);
+        device?.MarkApplied(value);
+    }
+
+    private static async Task CompleteEvalRunAsync(IBeaconDb db, WorkstationCommand row, string? resultJson, CancellationToken ct)
     {
         var runId = ReadEvalRunId(row.PayloadJson) ?? ReadEvalRunId(resultJson);
         if (runId is null || string.IsNullOrWhiteSpace(resultJson))
@@ -360,9 +451,9 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
 
 public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<WorkstationCommandDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetCommandHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(GetCommandCommand command, CancellationToken ct = default)
     {
@@ -380,9 +471,9 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
 
 public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<IList<WorkstationCommandDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListCommandsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListCommandsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<WorkstationCommandDto>>> HandleAsync(ListCommandsCommand command, CancellationToken ct = default)
     {
@@ -419,9 +510,9 @@ public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<I
 
 public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result<ProjectRuntimeDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AttachRuntimeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AttachRuntimeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ProjectRuntimeDto>> HandleAsync(AttachRuntimeCommand command, CancellationToken ct = default)
     {
@@ -461,9 +552,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
 
 public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<IList<ProjectRuntimeDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListRuntimesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListRuntimesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ProjectRuntimeDto>>> HandleAsync(ListRuntimesCommand command, CancellationToken ct = default)
     {
@@ -494,9 +585,9 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
 
 public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DetachRuntimeHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DetachRuntimeHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DetachRuntimeCommand command, CancellationToken ct = default)
     {
@@ -517,9 +608,14 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
 
 public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigCommand, Result<LlamaSwapConfigDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ILlamaSwapCatalog _catalog;
 
-    public GetLlamaSwapConfigHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetLlamaSwapConfigHandler(IBeaconDbFactory dbFactory, ILlamaSwapCatalog catalog)
+    {
+        _dbFactory = dbFactory;
+        _catalog = catalog;
+    }
 
     public async Task<Result<LlamaSwapConfigDto>> HandleAsync(GetLlamaSwapConfigCommand command, CancellationToken ct = default)
     {
@@ -533,17 +629,17 @@ public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigComma
             .OrderBy(b => b.Name)
             .ToListAsync(ct);
         var specs = backends
-            .Select(b => new LlamaSwapModelSpec(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags, b.Concurrent))
+            .Select(b => new LlamaSwapModelBinding(b.Name, b.LaunchCommand, b.ContextSize, b.Ttl, b.ExtraFlags, b.Concurrent))
             .ToList();
-        return Result.Ok(new LlamaSwapConfigDto(LlamaSwapConfigGenerator.Generate(specs), 8080));
+        return Result.Ok(new LlamaSwapConfigDto(_catalog.GenerateYaml(specs), _catalog.Port));
     }
 }
 
 public class ListHostSamplesHandler : ICommandHandler<ListHostSamplesCommand, Result<IList<DeviceHostSampleDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListHostSamplesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListHostSamplesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<DeviceHostSampleDto>>> HandleAsync(ListHostSamplesCommand command, CancellationToken ct = default)
     {

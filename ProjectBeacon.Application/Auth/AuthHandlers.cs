@@ -3,22 +3,24 @@ namespace ProjectBeacon.Application.Auth;
 using Application.Common;
 using Application.Identity;
 using Domain.Entities.Identity;
+using Application.Security;
 using Infrastructure.Data;
 using Infrastructure.Mail;
-using Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
 
 public class BootstrapHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IPasswordHasher _passwords;
     private readonly string _bootstrapToken;
 
-    public BootstrapHandler(IDbContextFactory<BeaconDbContext> dbFactory, IConfiguration? configuration)
+    public BootstrapHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration)
     {
         _dbFactory = dbFactory;
-        _bootstrapToken = configuration?.GetValue<string>("BOOTSTRAP_ADMIN_TOKEN") ?? string.Empty;
+        _passwords = passwords;
+        _bootstrapToken = configuration?["BOOTSTRAP_ADMIN_TOKEN"] ?? string.Empty;
     }
 
     public async Task<Result<BootstrapResponse>> HandleAsync(string bootstrapToken, CancellationToken ct = default)
@@ -34,9 +36,9 @@ public class BootstrapHandler
         if (exists)
             return Result.Failure<BootstrapResponse>("Bootstrap already completed.");
 
-        var password = PasswordHasher.GenerateRandomPassword(32);
+        var password = _passwords.GenerateRandomPassword(32);
         var user = User.Create("admin", "admin@beacon.local",
-            PasswordHasher.Hash(password), isAdmin: true);
+            _passwords.Hash(password), isAdmin: true);
 
         db.Users.Add(user);
         await db.SaveChangesAsync(ct);
@@ -56,13 +58,15 @@ public class BootstrapHandler
 
 public class RecoverAdminHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IPasswordHasher _passwords;
     private readonly string _bootstrapToken;
 
-    public RecoverAdminHandler(IDbContextFactory<BeaconDbContext> dbFactory, IConfiguration? configuration)
+    public RecoverAdminHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration)
     {
         _dbFactory = dbFactory;
-        _bootstrapToken = configuration?.GetValue<string>("BOOTSTRAP_ADMIN_TOKEN") ?? string.Empty;
+        _passwords = passwords;
+        _bootstrapToken = configuration?["BOOTSTRAP_ADMIN_TOKEN"] ?? string.Empty;
     }
 
     public async Task<Result<RecoverAdminResponse>> HandleAsync(string providedToken, CancellationToken ct = default)
@@ -79,8 +83,8 @@ public class RecoverAdminHandler
         if (user is null)
             return Result.Failure<RecoverAdminResponse>("Admin account not found.");
 
-        var password = PasswordHasher.GenerateRandomPassword(32);
-        user.ResetPassword(PasswordHasher.Hash(password));
+        var password = _passwords.GenerateRandomPassword(32);
+        user.ResetPassword(_passwords.Hash(password));
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(new RecoverAdminResponse(user.Id, user.Login, user.Email, user.IsAdmin, password));
@@ -97,12 +101,16 @@ public class RecoverAdminHandler
 
 public class LoginHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IPasswordHasher _passwords;
+    private readonly ITokenIssuer _tokens;
     private readonly IConfiguration? _configuration;
 
-    public LoginHandler(IDbContextFactory<BeaconDbContext> dbFactory, IConfiguration? configuration = null)
+    public LoginHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, ITokenIssuer tokens, IConfiguration? configuration = null)
     {
         _dbFactory = dbFactory;
+        _passwords = passwords;
+        _tokens = tokens;
         _configuration = configuration;
     }
 
@@ -118,7 +126,7 @@ public class LoginHandler
         if (user.IsLockedOut)
             return Result.Failure<LoginResponse>("Account is temporarily locked. Try again later.");
 
-        if (!PasswordHasher.Verify(command.Request.Password, user.PasswordHash))
+        if (!_passwords.Verify(command.Request.Password, user.PasswordHash))
         {
             user.RecordFailedLogin();
             await db.SaveChangesAsync(ct);
@@ -137,7 +145,7 @@ public class LoginHandler
         var secret = _configuration?["JWT:Secret"];
         var token = string.IsNullOrEmpty(secret)
             ? null
-            : JwtTokenService.GenerateToken(user, secret, projectId: projectId, orgId: orgId);
+            : _tokens.GenerateToken(user, secret, projectId: projectId, orgId: orgId);
 
         return Result.Ok(new LoginResponse(user.Id, user.Login, user.Email, user.IsAdmin, token));
     }
@@ -145,12 +153,14 @@ public class LoginHandler
 
 public class RegisterHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IPasswordHasher _passwords;
     private readonly IConfiguration? _configuration;
 
-    public RegisterHandler(IDbContextFactory<BeaconDbContext> dbFactory, IConfiguration? configuration = null)
+    public RegisterHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration = null)
     {
         _dbFactory = dbFactory;
+        _passwords = passwords;
         _configuration = configuration;
     }
 
@@ -201,7 +211,7 @@ public class RegisterHandler
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
         }
 
-        var user = User.Create(login, email, PasswordHasher.Hash(password));
+        var user = User.Create(login, email, _passwords.Hash(password));
         db.Users.Add(user);
 
         if (orgInvite is not null)
@@ -237,12 +247,12 @@ public class RegisterHandler
 
 public class ForgotPasswordHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
     private readonly IConfiguration? _configuration;
 
     public ForgotPasswordHandler(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         IEmailSender email,
         IConfiguration? configuration = null)
     {
@@ -282,9 +292,15 @@ public class ForgotPasswordHandler
 
 public class ResetPasswordHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ResetPasswordHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    private readonly IPasswordHasher _passwords;
+
+    public ResetPasswordHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords)
+    {
+        _dbFactory = dbFactory;
+        _passwords = passwords;
+    }
 
     public async Task<Result> HandleAsync(ResetPasswordRequest request, CancellationToken ct = default)
     {
@@ -305,7 +321,7 @@ public class ResetPasswordHandler
         if (user is null)
             return Result.Failure("Invalid or expired token.");
 
-        user.ResetPassword(PasswordHasher.Hash(password));
+        user.ResetPassword(_passwords.Hash(password));
         var sessions = await db.Sessions.Where(s => s.UserId == user.Id && s.IsActive).ToListAsync(ct);
         foreach (var session in sessions)
             session.Deactivate();
@@ -316,9 +332,15 @@ public class ResetPasswordHandler
 
 public class ChangePasswordHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ChangePasswordHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    private readonly IPasswordHasher _passwords;
+
+    public ChangePasswordHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords)
+    {
+        _dbFactory = dbFactory;
+        _passwords = passwords;
+    }
 
     public async Task<Result> HandleAsync(ChangePasswordRequest request, CancellationToken ct = default)
     {
@@ -327,10 +349,10 @@ public class ChangePasswordHandler
 
         await using var db = _dbFactory.CreateDbContext();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
-        if (user is null || !PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash))
+        if (user is null || !_passwords.Verify(request.CurrentPassword, user.PasswordHash))
             return Result.Failure("Current password is incorrect.");
 
-        user.ResetPassword(PasswordHasher.Hash(request.NewPassword));
+        user.ResetPassword(_passwords.Hash(request.NewPassword));
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }

@@ -13,12 +13,12 @@ using Microsoft.Extensions.Configuration;
 
 public class CreateOrgInviteHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
     private readonly IConfiguration? _configuration;
 
     public CreateOrgInviteHandler(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         IEmailSender email,
         IConfiguration? configuration = null)
     {
@@ -65,12 +65,12 @@ public class CreateOrgInviteHandler
 
 public class CreateProjectInviteHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
     private readonly IConfiguration? _configuration;
 
     public CreateProjectInviteHandler(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         IEmailSender email,
         IConfiguration? configuration = null)
     {
@@ -117,9 +117,9 @@ public class CreateProjectInviteHandler
 
 public class GetInviteHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<InvitePreviewDto>> HandleAsync(string token, CancellationToken ct = default)
     {
@@ -133,9 +133,9 @@ public class GetInviteHandler
 
 public class AcceptInviteHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AcceptInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AcceptInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
     {
@@ -186,9 +186,9 @@ public class AcceptInviteHandler
 
 public class ListOrgInvitesHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListOrgInvitesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListOrgInvitesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
@@ -207,9 +207,9 @@ public class ListOrgInvitesHandler
 
 public class ListProjectInvitesHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListProjectInvitesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListProjectInvitesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
@@ -228,9 +228,9 @@ public class ListProjectInvitesHandler
 
 public class RevokeOrgInviteHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RevokeOrgInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RevokeOrgInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
@@ -248,9 +248,9 @@ public class RevokeOrgInviteHandler
 
 public class RevokeProjectInviteHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RevokeProjectInviteHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RevokeProjectInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
@@ -268,7 +268,7 @@ public class RevokeProjectInviteHandler
 
 internal static class InviteLookup
 {
-    public static async Task<InvitePreviewDto?> FindAsync(BeaconDbContext db, string token, CancellationToken ct)
+    public static async Task<InvitePreviewDto?> FindAsync(IBeaconDb db, string token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
             return null;

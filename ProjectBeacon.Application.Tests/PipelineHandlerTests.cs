@@ -56,7 +56,7 @@ public sealed class PipelineHandlerTests : IDisposable
     {
         public List<(Guid ProjectId, PipelineRole Role)> Calls { get; } = [];
 
-        public Task<SpawnedSession> SpawnAsync(BeaconDbContext db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
+        public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             Calls.Add((projectId, role));
             return Task.FromResult(new SpawnedSession(null, null, null));
@@ -184,7 +184,7 @@ public sealed class PipelineHandlerTests : IDisposable
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Actor, backend.Id, projectId));
             await _db.SaveChangesAsync();
         }
-        var spawner = new ManualSessionSpawner(new LlamaSwapOptions { Port = 8123, ProjectId = projectId });
+        var spawner = new ManualSessionSpawner(new LlamaSwapCatalog(8123));
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
@@ -216,7 +216,7 @@ public sealed class PipelineHandlerTests : IDisposable
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Actor, backend.Id, projectId));
             await _db.SaveChangesAsync();
         }
-        var spawner = new ManualSessionSpawner(new LlamaSwapOptions { Port = 8123, ProjectId = projectId });
+        var spawner = new ManualSessionSpawner(new LlamaSwapCatalog(8123));
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         await new StartPipelineHandler(factory, spawner)

@@ -15,7 +15,9 @@ public record DaemonDeviceDto(
     string ProbeJson,
     string WorkstationJson,
     DateTime? RevokedAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    long DesiredRevision = 0,
+    long AppliedRevision = 0);
 
 public record WorkstationCommandDto(
     Guid Id,

@@ -27,7 +27,7 @@ public sealed class ContextCostReportTests : IDisposable
         _unscoped.Dispose();
     }
 
-    private IDbContextFactory<BeaconDbContext> Factory() => HandlerSqlite.Factory(_connection);
+    private BeaconDbFactory Factory() => HandlerSqlite.Factory(_connection);
 
     private ContextCostReportHandler Handler() => new(Factory());
 

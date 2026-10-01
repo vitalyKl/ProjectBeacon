@@ -7,6 +7,7 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
+using Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -42,7 +43,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         _connection.Dispose();
     }
 
-    private IDbContextFactory<BeaconDbContext> Factory() => HandlerSqlite.Factory(_connection);
+    private BeaconDbFactory Factory() => HandlerSqlite.Factory(_connection);
 
     private async Task<User> SeedAdminAsync()
     {
@@ -55,7 +56,7 @@ public sealed class InviteAndPasswordTests : IDisposable
     [Fact]
     public async Task Register_InviteOnly_WithoutToken_Fails()
     {
-        var result = await new RegisterHandler(Factory(), _inviteOnly).HandleAsync(
+        var result = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _inviteOnly).HandleAsync(
             new RegisterCommand(new RegisterRequest("bob", "bob@test.com", "password1")));
         Assert.False(result.Success);
         Assert.Equal("Invite required.", result.Error);
@@ -79,7 +80,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         Assert.Contains("invite?token=", invited.Value!.Url);
         Assert.Single(_mail.Sent);
 
-        var registered = await new RegisterHandler(Factory(), _inviteOnly).HandleAsync(
+        var registered = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _inviteOnly).HandleAsync(
             new RegisterCommand(new RegisterRequest("bob", "bob@test.com", "password1", invited.Value.Token)));
         Assert.True(registered.Success, registered.Error);
 
@@ -102,7 +103,7 @@ public sealed class InviteAndPasswordTests : IDisposable
             new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, admin.Id, true));
         Assert.True(invited.Success, invited.Error);
 
-        var registered = await new RegisterHandler(Factory(), _open).HandleAsync(
+        var registered = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _open).HandleAsync(
             new RegisterCommand(new RegisterRequest("bob", "other@test.com", "password1", invited.Value!.Token)));
         Assert.False(registered.Success);
         Assert.Equal("Email does not match invite.", registered.Error);
@@ -124,11 +125,11 @@ public sealed class InviteAndPasswordTests : IDisposable
         var body = _mail.Sent[0].Body;
         var token = body.Split("token=", 2)[1].Split('\n', 2)[0].Trim();
 
-        var reset = await new ResetPasswordHandler(Factory()).HandleAsync(
+        var reset = await new ResetPasswordHandler(Factory(), new BcryptPasswordHasher()).HandleAsync(
             new ResetPasswordRequest(token, "newpass12"));
         Assert.True(reset.Success, reset.Error);
 
-        var login = await new LoginHandler(Factory()).HandleAsync(
+        var login = await new LoginHandler(Factory(), new BcryptPasswordHasher(), new JwtTokenIssuer()).HandleAsync(
             new LoginCommand(new LoginRequest("admin", "newpass12")));
         Assert.True(login.Success, login.Error);
     }
@@ -141,11 +142,11 @@ public sealed class InviteAndPasswordTests : IDisposable
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        var bad = await new ChangePasswordHandler(Factory()).HandleAsync(
+        var bad = await new ChangePasswordHandler(Factory(), new BcryptPasswordHasher()).HandleAsync(
             new ChangePasswordRequest(user.Id, "wrong", "newpass12"));
         Assert.False(bad.Success);
 
-        var ok = await new ChangePasswordHandler(Factory()).HandleAsync(
+        var ok = await new ChangePasswordHandler(Factory(), new BcryptPasswordHasher()).HandleAsync(
             new ChangePasswordRequest(user.Id, "oldpass12", "newpass12"));
         Assert.True(ok.Success, ok.Error);
     }

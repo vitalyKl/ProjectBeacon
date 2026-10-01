@@ -37,7 +37,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 - `ProjectBeacon.Cli` — stdio MCP (`beacon mcp`) and workstation client (`beacon client`); AssemblyName `beacon`
 - `ProjectBeacon.Domain.Tests` / `Application.Tests` / `Infrastructure.Tests` / `Web.Tests` / `API.Tests` / `Cli.Tests` — xUnit
 
-**Dependency graph:** Domain → Infrastructure → Application → API → Web. Cli references Application, Domain, and Infrastructure.
+**Dependency graph:** Domain ← Application ← Infrastructure. Hosts (API, Web, Cli, Worker) reference Application and Infrastructure. Application does not reference Infrastructure.
 
 Four pieces (per architecture):
 - **API** — thin `/v1` endpoints; handlers live in Application. Mapped on the Web host (`:5083`) and on the API project for tests.

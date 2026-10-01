@@ -246,7 +246,7 @@ public sealed class P2AuthorizationHttpTests
             name = "api-token",
             capabilities = 1
         });
-        var apiTokenValue = tokenResponse.GetProperty("tokenPrefix").GetString()!;
+        var apiTokenValue = tokenResponse.GetProperty("token").GetString()!;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
         var response = await client.PostAsJsonAsync($"/v1/projects/{projectId}/tokens", new
@@ -277,7 +277,7 @@ public sealed class P2AuthorizationHttpTests
             name = "api-token-m",
             capabilities = 1
         });
-        var apiTokenValue = tokenResponse.GetProperty("tokenPrefix").GetString()!;
+        var apiTokenValue = tokenResponse.GetProperty("token").GetString()!;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
         var outsiderId = Guid.NewGuid();
@@ -354,7 +354,7 @@ public sealed class P2AuthorizationHttpTests
             name = "api-token-upd",
             capabilities = 1
         });
-        var apiTokenValue = tokenResponse.GetProperty("tokenPrefix").GetString()!;
+        var apiTokenValue = tokenResponse.GetProperty("token").GetString()!;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
         var response = await client.PutAsJsonAsync($"/v1/projects/{projectId}", new
@@ -412,7 +412,7 @@ public sealed class P2AuthorizationHttpTests
             name = "api-token-l",
             capabilities = 1
         });
-        var apiTokenValue = tokenResponse.GetProperty("tokenPrefix").GetString()!;
+        var apiTokenValue = tokenResponse.GetProperty("token").GetString()!;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
         var response = await client.GetAsync($"/v1/projects/{projectId}/tokens");

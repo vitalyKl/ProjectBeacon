@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Application.Common;
 using Application.Devices;
+using Application.Runtime;
 using Domain.Enums;
 using Infrastructure.LlamaSwap;
 
@@ -14,6 +15,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
     private readonly ClientOpenCodeServe _openCode;
+    private readonly IAgentRuntime _runtime;
     private readonly bool _ownsOpenCode;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly Action<string>? _log;
@@ -34,6 +36,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _llama.Log = msg => Log(msg);
         _ownsOpenCode = openCode is null;
         _openCode = openCode ?? new ClientOpenCodeServe();
+        _runtime = new OpenCodeAgentRuntime(_openCode);
         _loadSettings = loadSettings ?? (() => WorkstationSettings.Load());
         _log = log;
         _status = new DaemonStatus { Url = http.BaseAddress?.ToString().TrimEnd('/') ?? "" };
@@ -219,7 +222,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                 }
                 if (kind == WorkstationCommandKind.RunEvalTurn)
                 {
-                    var evalAction = await WorkstationActions.RunEvalTurnAsync(command.LocalRoot, payload, _openCode, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
+                    var evalAction = await WorkstationActions.RunEvalTurnAsync(command.LocalRoot, payload, _openCode, _runtime, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
                     if (!evalAction.Success)
                         return (false, null, evalAction.Error);
                     return (true, evalAction.Value, null);
@@ -253,6 +256,8 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             }
             if (kind == WorkstationCommandKind.ConfigureOpenCode)
                 return await ConfigureOpenCodeAsync(ct);
+            if (kind == WorkstationCommandKind.ReconcileDesired)
+                return await ReconcileDesiredAsync(payload, ct);
             var settings = _loadSettings();
             var sandboxed = kind switch
             {
@@ -276,10 +281,30 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             };
             return (true, result, null);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return (false, null, ex.Message);
         }
+    }
+
+    private async Task<(bool Ok, string? Result, string? Error)> ReconcileDesiredAsync(string payload, CancellationToken ct)
+    {
+        await SyncLlamaAsync(_loadSettings(), ct);
+        var configured = await ConfigureOpenCodeAsync(ct);
+        if (!configured.Ok)
+            return configured;
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payload) ? "{}" : payload);
+        if (doc.RootElement.TryGetProperty("workstation", out var workstation)
+            && workstation.ValueKind == JsonValueKind.Object)
+            WorkstationActions.SaveWorkstation(workstation.GetRawText());
+        var revision = doc.RootElement.TryGetProperty("revision", out var rev) && rev.TryGetInt64(out var value)
+            ? value
+            : 0;
+        return (true, JsonSerializer.Serialize(new { revision }), null);
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
@@ -301,7 +326,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         await _openCode.TickAsync(cwd, ct);
         if (!_openCode.Status.Healthy)
             return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
-        var id = await _openCode.CreateSessionAsync(title, ct);
+        var id = await _runtime.CreateSessionAsync(title, ct);
         return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = _openCode.Cwd }), null);
     }
 
@@ -319,7 +344,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
         if (_llama.UseOwnSwapper && model is not null)
             await WithLlamaAsync(() => _llama.EnsureSwapModelAsync(ExtractSwapName(model), ct), ct);
-        await _openCode.PromptAsync(externalId, text, model, ct);
+        await _runtime.SendPromptAsync(externalId, text, model, ct);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(ChatIdleTimeout / ChatPollInterval));
         var maxIterations = Math.Max(1, (int)Math.Ceiling(ChatMaxDuration / ChatPollInterval));
@@ -327,7 +352,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         var idle = false;
         for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
         {
-            var parts = await _openCode.ListPartsAsync(externalId, ct);
+            var parts = await CollectPartsAsync(_runtime, externalId, ct);
             var added = 0;
             foreach (var part in parts)
             {
@@ -359,13 +384,21 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
     }
 
+    private static async Task<IReadOnlyList<AgentMessagePart>> CollectPartsAsync(IAgentRuntime runtime, string sessionId, CancellationToken ct)
+    {
+        var parts = new List<AgentMessagePart>();
+        await foreach (var part in runtime.StreamPartsAsync(sessionId, ct))
+            parts.Add(part);
+        return parts;
+    }
+
     private async Task<(bool Ok, string? Result, string? Error)> ChatAbortAsync(string payload, CancellationToken ct)
     {
         using var doc = JsonDocument.Parse(payload);
         var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
         if (string.IsNullOrWhiteSpace(externalId))
             return (false, null, "externalSessionId is required.");
-        await _openCode.AbortAsync(externalId, ct);
+        await _runtime.AbortAsync(externalId, ct);
         return (true, "{}", null);
     }
 

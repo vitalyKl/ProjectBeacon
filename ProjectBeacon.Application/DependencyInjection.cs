@@ -82,8 +82,6 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<FinishWorkHandler>();
 
-        if (services.All(d => d.ServiceType != typeof(LlamaSwapOptions)))
-            services.AddSingleton(_ => LlamaSwapOptions.FromEnvironment());
         services.AddTransient<ISessionSpawner, ManualSessionSpawner>();
         services.AddTransient<StartPipelineHandler>();
         services.AddTransient<CreateSubtaskHandler>();

@@ -42,3 +42,20 @@ public sealed class UnavailableLlamaSwapProxy : ILlamaSwapProxy
 
     public Task<bool> UnloadAsync(CancellationToken ct = default) => Task.FromResult(false);
 }
+
+public sealed record LlamaSwapModelBinding(
+    string Name,
+    string LaunchCommand,
+    int ContextSize,
+    int Ttl,
+    IReadOnlyList<string> ExtraFlags,
+    bool Concurrent = false);
+
+public interface ILlamaSwapCatalog
+{
+    int Port { get; }
+
+    string BuildLaunchSpec(string name, string launchCommand, int contextSize, int ttl, IReadOnlyList<string> extraFlags);
+
+    string GenerateYaml(IReadOnlyList<LlamaSwapModelBinding> models);
+}

@@ -2,6 +2,8 @@ namespace ProjectBeacon.Application.Agents;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Application.Devices;
+using Domain.Entities.Projects;
 using Domain.Enums;
 
 public static class OpencodePayload
@@ -78,6 +80,30 @@ public static class OpencodePayload
         if (agent is not null)
             root["agent"] = agent;
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    public static string FromBindings(
+        IReadOnlyList<RoleBinding> bindings,
+        IReadOnlyList<LocalModelBackendDto> backends,
+        long revision)
+    {
+        Guid? Bind(PipelineRole role)
+        {
+            foreach (var binding in bindings)
+            {
+                if (binding.Role == role)
+                    return binding.ModelBackendId;
+            }
+            return null;
+        }
+
+        var planner = Bind(PipelineRole.Planner);
+        var actor = Bind(PipelineRole.Actor);
+        var review = Bind(PipelineRole.Review);
+        var chosen = new[] { planner, actor, review }.Where(id => id is not null).Select(id => id!.Value).Distinct().Count();
+        var mode = chosen > 1 ? AgentRunMode.Pipeline : AgentRunMode.Solo;
+        var json = BuildApply(mode, backends, actor ?? planner ?? review, planner, actor, review);
+        return DesiredState.WithRevision(json, revision);
     }
 
     public static string OpenCodeId(LocalModelBackendDto backend) =>

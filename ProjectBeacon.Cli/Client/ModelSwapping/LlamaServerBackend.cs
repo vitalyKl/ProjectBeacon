@@ -27,6 +27,7 @@ public sealed class LlamaServerBackend : IModelBackend
     public string Name { get; init; } = "";
     public int Port { get; init; }
     internal bool SkipRealProcess { get; init; }
+    internal bool FakeHealthyProcess { get; init; }
     internal int RestartCount => _restartCount;
     internal Action<string>? Log { get; set; }
 
@@ -62,6 +63,13 @@ public sealed class LlamaServerBackend : IModelBackend
             Log?.Invoke($"{Name}: start FAILED 0ms — empty launch command");
             return;
         }
+        if (FakeHealthyProcess)
+        {
+            _fsm.TryTransition(BackendState.Ready);
+            _restartCount = 0;
+            Log?.Invoke($"{Name}: start (fake) {sw.ElapsedMilliseconds}ms");
+            return;
+        }
         exe = ResolveExe(exe);
 
         var psi = new ProcessStartInfo
@@ -94,29 +102,52 @@ public sealed class LlamaServerBackend : IModelBackend
         }
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
+        KillQuiet();
         _process = process;
 
-        for (var i = 0; i < 40 && !ct.IsCancellationRequested; i++)
+        try
         {
-            if (process.HasExited)
+            for (var i = 0; i < 40 && !ct.IsCancellationRequested; i++)
             {
-                _fsm.TryTransition(BackendState.Faulted, $"{Name}: exited early (code {process.ExitCode}).");
-                Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — exited early (code {process.ExitCode})");
-                return;
+                if (process.HasExited)
+                {
+                    _fsm.TryTransition(BackendState.Faulted, $"{Name}: exited early (code {process.ExitCode}).");
+                    Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — exited early (code {process.ExitCode})");
+                    return;
+                }
+                if (await IsHealthyAsync(ct))
+                {
+                    _fsm.TryTransition(BackendState.Ready);
+                    _restartCount = 0;
+                    VramFootprintMb = WorkingSetMb(process);
+                    StartSupervision(spec);
+                    Log?.Invoke($"{Name}: start OK {sw.ElapsedMilliseconds}ms");
+                    return;
+                }
+                await Task.Delay(250, ct);
             }
-            if (await IsHealthyAsync(ct))
-            {
-                _fsm.TryTransition(BackendState.Ready);
-                _restartCount = 0;
-                VramFootprintMb = WorkingSetMb(process);
-                StartSupervision(spec);
-                Log?.Invoke($"{Name}: start OK {sw.ElapsedMilliseconds}ms");
-                return;
-            }
-            await Task.Delay(250, ct);
         }
+        catch (OperationCanceledException)
+        {
+            KillQuiet();
+            _fsm.TryTransition(BackendState.Faulted, $"{Name}: start cancelled.");
+            throw;
+        }
+
+        KillQuiet();
         _fsm.TryTransition(BackendState.Faulted, $"{Name}: did not become healthy.");
         Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — health timeout");
+    }
+
+    private void KillQuiet()
+    {
+        if (_process is { HasExited: false })
+        {
+            try { _process.Kill(entireProcessTree: true); } catch { }
+            try { _process.WaitForExit(2000); } catch { }
+        }
+        _process?.Dispose();
+        _process = null;
     }
 
     public async Task StopAsync(CancellationToken ct)

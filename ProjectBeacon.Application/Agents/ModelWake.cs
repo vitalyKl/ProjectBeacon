@@ -11,10 +11,10 @@ public record NudgeModelsCommand(Guid UserId) : ICommand<Result>;
 
 public sealed class NudgeModelsHandler : ICommandHandler<NudgeModelsCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
 
-    public NudgeModelsHandler(IDbContextFactory<BeaconDbContext> dbFactory, EnqueueCommandHandler enqueue)
+    public NudgeModelsHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
     {
         _dbFactory = dbFactory;
         _enqueue = enqueue;

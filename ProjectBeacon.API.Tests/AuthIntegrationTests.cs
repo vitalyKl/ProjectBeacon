@@ -2,6 +2,7 @@ namespace ProjectBeacon.API.Tests;
 
 using Application.Auth;
 using Infrastructure.Data;
+using Infrastructure.Security;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -10,7 +11,7 @@ using ProjectBeacon.Domain.Entities.Identity;
 public sealed class AuthIntegrationTests : IDisposable
 {
     private readonly BeaconDbContext _db;
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly BeaconDbFactory _dbFactory;
     private readonly SqliteConnection _connection;
     private readonly IDisposable _unscoped;
 
@@ -45,7 +46,7 @@ public sealed class AuthIntegrationTests : IDisposable
 
     private async Task<string> SeedBootstrapAsync()
     {
-        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
         var result = await handler.HandleAsync("test-bootstrap-token");
 
         return result.Value!.Password;
@@ -54,7 +55,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Bootstrap_CreatesAdminUser()
     {
-        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
         var result = await handler.HandleAsync("test-bootstrap-token");
 
         Assert.True(result.Success);
@@ -74,7 +75,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Bootstrap_AlreadyCompleted_ReturnsFailure()
     {
-        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
         await handler.HandleAsync("test-bootstrap-token");
 
         var result = await handler.HandleAsync("test-bootstrap-token");
@@ -86,7 +87,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Bootstrap_WithoutConfiguredToken_ReturnsFailure()
     {
-        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig(token: ""));
+        var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig(token: ""));
         var result = await handler.HandleAsync("anything");
 
         Assert.False(result.Success);
@@ -96,7 +97,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Bootstrap_WithWrongToken_ReturnsFailure()
     {
-        var handler = new BootstrapHandler(_dbFactory, BootstrapConfig());
+        var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
         var result = await handler.HandleAsync("wrong-token");
 
         Assert.False(result.Success);
@@ -108,7 +109,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         await SeedBootstrapAsync();
 
-        var handler = new LoginHandler(_dbFactory);
+        var handler = new LoginHandler(_dbFactory, new BcryptPasswordHasher(), new JwtTokenIssuer());
         var result = await handler.HandleAsync(
             new LoginCommand(new LoginRequest("admin", "wrong-password")));
 
@@ -125,7 +126,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var password = await SeedBootstrapAsync();
 
-        var handler = new LoginHandler(_dbFactory);
+        var handler = new LoginHandler(_dbFactory, new BcryptPasswordHasher(), new JwtTokenIssuer());
         var result = await handler.HandleAsync(
             new LoginCommand(new LoginRequest("admin", password)));
 
@@ -145,7 +146,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var correctPassword = await SeedBootstrapAsync();
 
-        var handler = new LoginHandler(_dbFactory);
+        var handler = new LoginHandler(_dbFactory, new BcryptPasswordHasher(), new JwtTokenIssuer());
 
         for (var i = 0; i < 5; i++)
         {
@@ -168,7 +169,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_CreatesUser()
     {
-        var handler = new RegisterHandler(_dbFactory);
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
         var result = await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")));
 
@@ -184,7 +185,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_DuplicateLogin_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_dbFactory);
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
         await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")));
 
@@ -198,7 +199,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_DuplicateEmail_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_dbFactory);
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
         await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password")));
 

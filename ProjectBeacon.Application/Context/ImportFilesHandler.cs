@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class ImportFilesHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ImportFilesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ImportFilesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<int>> HandleAsync(ImportFilesCommand command, CancellationToken ct = default)
     {

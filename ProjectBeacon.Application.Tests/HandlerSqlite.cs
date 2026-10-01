@@ -16,6 +16,6 @@ internal static class HandlerSqlite
         return (connection, db, unscoped);
     }
 
-    public static IDbContextFactory<BeaconDbContext> Factory(SqliteConnection connection, ITenantContext? tenant = null)
+    public static BeaconDbFactory Factory(SqliteConnection connection, ITenantContext? tenant = null)
         => new BeaconDbFactory(new DbContextOptionsBuilder<BeaconDbContext>().UseSqlite(connection).Options, tenant);
 }

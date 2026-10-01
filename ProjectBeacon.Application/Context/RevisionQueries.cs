@@ -8,9 +8,9 @@ public record ContextRevisionDto(Guid Id, DateTime CreatedAt, int TokenEstimate,
 
 public class ListContextRevisionsHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListContextRevisionsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListContextRevisionsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ContextRevisionDto>>> HandleAsync(CancellationToken ct = default)
     {

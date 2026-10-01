@@ -47,7 +47,8 @@ public sealed class LlamaServerBackendCrashRecoveryTests : IDisposable
         {
             Name = "retry-test",
             Port = 8080,
-            SkipRealProcess = false
+            SkipRealProcess = false,
+            FakeHealthyProcess = true
         };
         _backends.Add(b);
 

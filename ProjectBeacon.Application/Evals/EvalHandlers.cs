@@ -32,9 +32,9 @@ public record EvalRunDto(
 
 public class RecordEvalRunHandler : ICommandHandler<RecordEvalRunCommand, Result<EvalRunDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RecordEvalRunHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RecordEvalRunHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<EvalRunDto>> HandleAsync(RecordEvalRunCommand command, CancellationToken ct = default)
     {
@@ -48,9 +48,9 @@ public class RecordEvalRunHandler : ICommandHandler<RecordEvalRunCommand, Result
 
 public class CompleteEvalRunHandler : ICommandHandler<CompleteEvalRunCommand, Result<EvalRunDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CompleteEvalRunHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CompleteEvalRunHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<EvalRunDto>> HandleAsync(CompleteEvalRunCommand command, CancellationToken ct = default)
     {
@@ -72,9 +72,9 @@ public class CompleteEvalRunHandler : ICommandHandler<CompleteEvalRunCommand, Re
 
 public class ListEvalRunsHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListEvalRunsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListEvalRunsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<EvalRunDto>>> HandleAsync(ListEvalRunsRequest request, CancellationToken ct = default)
     {

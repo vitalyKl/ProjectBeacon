@@ -190,7 +190,7 @@ public static class ProjectEndpoints
     }
 
     private static ApiTokenDto MapTokenResponse(ApiTokenDto dto) =>
-        new(dto.Id, dto.Name, dto.TokenPrefix, dto.ProjectId, dto.Capabilities, dto.ExpiresAt, dto.LastUsedAt, dto.CreatedAt);
+        new(dto.Id, dto.Name, dto.TokenPrefix, dto.ProjectId, dto.Capabilities, dto.ExpiresAt, dto.LastUsedAt, dto.CreatedAt, dto.Token);
 
     private static async Task<IResult> CreateInvite(
         Guid projectId, [FromBody] CreateInviteBody body, CreateProjectInviteHandler handler, HttpContext ctx)

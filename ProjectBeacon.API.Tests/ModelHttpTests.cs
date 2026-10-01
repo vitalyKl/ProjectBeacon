@@ -28,7 +28,7 @@ public sealed class ModelHttpTests
             name = "rw",
             capabilities = 3
         });
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("tokenPrefix").GetString()!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var empty = await client.GetFromJsonAsync<JsonElement>("/v1/models");
         Assert.Equal(0, empty.GetProperty("backends").GetArrayLength());
@@ -108,7 +108,7 @@ public sealed class ModelHttpTests
             name = "ro",
             capabilities = 1
         });
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("tokenPrefix").GetString()!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var read = await client.GetAsync("/v1/models");
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
@@ -149,7 +149,7 @@ public sealed class ModelHttpTests
             name = "rw",
             capabilities = 3
         });
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("tokenPrefix").GetString()!);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
         var bad = await client.DeleteAsync("/v1/models/bind/notarole");
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);

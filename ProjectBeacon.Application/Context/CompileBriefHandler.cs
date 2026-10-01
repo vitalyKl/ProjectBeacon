@@ -36,9 +36,9 @@ public class CompileBriefHandler
     private static readonly string[] NeverDropSections =
         ["non_goals", "security", "definition_of_done"];
 
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CompileBriefHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CompileBriefHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<CompileBriefResult>> HandleAsync(CompileBriefCommand command, CancellationToken ct = default)
     {

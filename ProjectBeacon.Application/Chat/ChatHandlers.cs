@@ -14,12 +14,12 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
     public const string ProjectFolderRequired = "Attach a project folder on the dashboard first.";
     public const string ClientRequired = "Start beacon client to chat.";
 
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
     private readonly GetCommandHandler _getCommand;
 
     public CreateChatSessionHandler(
-        IDbContextFactory<BeaconDbContext> dbFactory,
+        IBeaconDbFactory dbFactory,
         EnqueueCommandHandler enqueue,
         GetCommandHandler getCommand)
     {
@@ -107,9 +107,9 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
 
 public class ListChatSessionsHandler : ICommandHandler<ListChatSessionsCommand, Result<IList<ChatSessionDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListChatSessionsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListChatSessionsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ChatSessionDto>>> HandleAsync(ListChatSessionsCommand command, CancellationToken ct = default)
     {
@@ -121,9 +121,9 @@ public class ListChatSessionsHandler : ICommandHandler<ListChatSessionsCommand, 
 
 public class GetChatSessionHandler : ICommandHandler<GetChatSessionCommand, Result<ChatSessionDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetChatSessionHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetChatSessionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ChatSessionDto>> HandleAsync(GetChatSessionCommand command, CancellationToken ct = default)
     {
@@ -137,9 +137,9 @@ public class GetChatSessionHandler : ICommandHandler<GetChatSessionCommand, Resu
 
 public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result<IList<ChatPartDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListChatPartsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListChatPartsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ChatPartDto>>> HandleAsync(ListChatPartsCommand command, CancellationToken ct = default)
     {
@@ -159,10 +159,10 @@ public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result
 
 public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Result<ChatSessionDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
 
-    public SendChatPromptHandler(IDbContextFactory<BeaconDbContext> dbFactory, EnqueueCommandHandler enqueue)
+    public SendChatPromptHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
     {
         _dbFactory = dbFactory;
         _enqueue = enqueue;
@@ -203,10 +203,10 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
 
 public class AbortChatHandler : ICommandHandler<AbortChatCommand, Result<ChatSessionDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
 
-    public AbortChatHandler(IDbContextFactory<BeaconDbContext> dbFactory, EnqueueCommandHandler enqueue)
+    public AbortChatHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
     {
         _dbFactory = dbFactory;
         _enqueue = enqueue;
@@ -232,9 +232,9 @@ public class AbortChatHandler : ICommandHandler<AbortChatCommand, Result<ChatSes
 
 public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Result<ChatPartDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AppendChatPartHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AppendChatPartHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ChatPartDto>> HandleAsync(AppendChatPartCommand command, CancellationToken ct = default)
     {
@@ -264,9 +264,9 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
 
 public class MarkChatIdleHandler : ICommandHandler<MarkChatIdleCommand, Result<ChatSessionDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public MarkChatIdleHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public MarkChatIdleHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ChatSessionDto>> HandleAsync(MarkChatIdleCommand command, CancellationToken ct = default)
     {

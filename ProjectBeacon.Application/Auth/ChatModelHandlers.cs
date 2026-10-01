@@ -13,9 +13,9 @@ public record SetChatModelCommand(SetChatModelRequest Request) : ICommand<Result
 
 public sealed class GetChatModelHandler : ICommandHandler<GetChatModelCommand, Result<Guid?>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetChatModelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetChatModelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<Guid?>> HandleAsync(GetChatModelCommand command, CancellationToken ct = default)
     {
@@ -29,9 +29,9 @@ public sealed class GetChatModelHandler : ICommandHandler<GetChatModelCommand, R
 
 public sealed class SetChatModelHandler : ICommandHandler<SetChatModelCommand, Result<Guid?>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public SetChatModelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public SetChatModelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<Guid?>> HandleAsync(SetChatModelCommand command, CancellationToken ct = default)
     {
@@ -53,7 +53,7 @@ public sealed class SetChatModelHandler : ICommandHandler<SetChatModelCommand, R
 
 public static class ChatModelSelection
 {
-    public static async Task<string?> ResolveAsync(BeaconDbContext db, Guid userId, string? requested, CancellationToken ct)
+    public static async Task<string?> ResolveAsync(IBeaconDb db, Guid userId, string? requested, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(requested))
             return requested.Trim();

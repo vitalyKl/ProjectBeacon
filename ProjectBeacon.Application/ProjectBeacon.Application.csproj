@@ -12,7 +12,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ProjectBeacon.Domain\ProjectBeacon.Domain.csproj" />
-    <ProjectReference Include="..\ProjectBeacon.Infrastructure\ProjectBeacon.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

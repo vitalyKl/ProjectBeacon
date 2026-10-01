@@ -7,9 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class ListTaskStepsHandler : ICommandHandler<ListTaskStepsCommand, Result<IList<TaskStepDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListTaskStepsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListTaskStepsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskStepDto>>> HandleAsync(ListTaskStepsCommand command, CancellationToken ct = default)
     {
@@ -31,9 +31,9 @@ public class ListTaskStepsHandler : ICommandHandler<ListTaskStepsCommand, Result
 
 public class AddTaskStepHandler : ICommandHandler<AddTaskStepCommand, Result<TaskStepDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AddTaskStepHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AddTaskStepHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskStepDto>> HandleAsync(AddTaskStepCommand command, CancellationToken ct = default)
     {
@@ -56,9 +56,9 @@ public class AddTaskStepHandler : ICommandHandler<AddTaskStepCommand, Result<Tas
 
 public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Result<TaskStepDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ToggleTaskStepHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ToggleTaskStepHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskStepDto>> HandleAsync(ToggleTaskStepCommand command, CancellationToken ct = default)
     {
@@ -74,9 +74,9 @@ public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Resu
 
 public class DeleteTaskStepHandler : ICommandHandler<DeleteTaskStepCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteTaskStepHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DeleteTaskStepHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DeleteTaskStepCommand command, CancellationToken ct = default)
     {

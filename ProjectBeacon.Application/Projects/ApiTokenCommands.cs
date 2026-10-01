@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
+using System.Text.Json.Serialization;
 using Application.Common;
 using Domain.Enums;
 
@@ -27,4 +28,5 @@ public record ApiTokenDto(
     ApiTokenCapability Capabilities,
     DateTime? ExpiresAt,
     DateTime? LastUsedAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Token = null);

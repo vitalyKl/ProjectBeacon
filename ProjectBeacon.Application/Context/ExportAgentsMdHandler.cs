@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class ExportAgentsMdHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ExportAgentsMdHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ExportAgentsMdHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<string>> HandleAsync(ExportAgentsMdCommand command, CancellationToken ct = default)
     {

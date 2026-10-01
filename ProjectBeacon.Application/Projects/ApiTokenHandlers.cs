@@ -10,10 +10,10 @@ using Microsoft.Extensions.Configuration;
 
 public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Result<ApiTokenDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly IConfiguration _config;
 
-    public CreateApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory, IConfiguration config)
+    public CreateApiTokenHandler(IBeaconDbFactory dbFactory, IConfiguration config)
     {
         _dbFactory = dbFactory;
         _config = config;
@@ -53,12 +53,13 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
         return Result.Ok(new ApiTokenDto(
             token.Id,
             token.Name,
-            tokenValue,
+            prefix,
             token.ProjectId,
             token.Capabilities,
             token.ExpiresAt,
             token.LastUsedAt,
-            token.CreatedAt));
+            token.CreatedAt,
+            tokenValue));
     }
 
     private static string GenerateToken()
@@ -77,9 +78,9 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
 
 public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public RevokeApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public RevokeApiTokenHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
     {
@@ -118,9 +119,9 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
 
 public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<ApiTokenDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetApiTokenHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetApiTokenHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<ApiTokenDto>> HandleAsync(GetApiTokenCommand command, CancellationToken ct = default)
     {
@@ -162,9 +163,9 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
 
 public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result<IList<ApiTokenDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListApiTokensHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListApiTokensHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<ApiTokenDto>>> HandleAsync(ListApiTokensCommand command, CancellationToken ct = default)
     {
@@ -185,7 +186,8 @@ public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result
                 t.Capabilities,
                 t.ExpiresAt,
                 t.LastUsedAt,
-                t.CreatedAt))
+                t.CreatedAt,
+                null))
             .ToListAsync(ct);
         return Result.Ok((IList<ApiTokenDto>)tokens);
     }

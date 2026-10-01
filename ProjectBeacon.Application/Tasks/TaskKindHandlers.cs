@@ -71,7 +71,7 @@ public static class BuiltInTaskKind
         ("check", "Check the result")
     ];
 
-    public static async Task<TaskKind> EnsureAsync(BeaconDbContext db, Guid userId, CancellationToken ct)
+    public static async Task<TaskKind> EnsureAsync(IBeaconDb db, Guid userId, CancellationToken ct)
     {
         var existing = await db.TaskKinds.FirstOrDefaultAsync(k => k.UserId == userId && k.IsBuiltIn, ct);
         if (existing is not null)
@@ -91,9 +91,9 @@ public static class BuiltInTaskKind
 
 public sealed class ListTaskKindsHandler : ICommandHandler<ListTaskKindsCommand, Result<IList<TaskKindDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListTaskKindsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListTaskKindsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskKindDto>>> HandleAsync(ListTaskKindsCommand command, CancellationToken ct = default)
     {
@@ -107,9 +107,9 @@ public sealed class ListTaskKindsHandler : ICommandHandler<ListTaskKindsCommand,
 
 public sealed class SaveTaskKindHandler : ICommandHandler<SaveTaskKindCommand, Result<TaskKindDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public SaveTaskKindHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public SaveTaskKindHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskKindDto>> HandleAsync(SaveTaskKindCommand command, CancellationToken ct = default)
     {
@@ -175,9 +175,9 @@ public sealed class SaveTaskKindHandler : ICommandHandler<SaveTaskKindCommand, R
 
 public sealed class DeleteTaskKindHandler : ICommandHandler<DeleteTaskKindCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteTaskKindHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DeleteTaskKindHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DeleteTaskKindCommand command, CancellationToken ct = default)
     {
@@ -197,9 +197,9 @@ public sealed class DeleteTaskKindHandler : ICommandHandler<DeleteTaskKindComman
 
 public sealed class ResetBuiltInTaskKindHandler : ICommandHandler<ResetBuiltInTaskKindCommand, Result<TaskKindDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ResetBuiltInTaskKindHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ResetBuiltInTaskKindHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskKindDto>> HandleAsync(ResetBuiltInTaskKindCommand command, CancellationToken ct = default)
     {
@@ -223,9 +223,9 @@ public sealed class ResetBuiltInTaskKindHandler : ICommandHandler<ResetBuiltInTa
 
 public sealed class ListTaskPhasesHandler : ICommandHandler<ListTaskPhasesCommand, Result<IList<TaskPhaseDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListTaskPhasesHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListTaskPhasesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<TaskPhaseDto>>> HandleAsync(ListTaskPhasesCommand command, CancellationToken ct = default)
     {
@@ -237,9 +237,9 @@ public sealed class ListTaskPhasesHandler : ICommandHandler<ListTaskPhasesComman
 
 public sealed class SetTaskPhaseModelHandler : ICommandHandler<SetTaskPhaseModelCommand, Result<TaskPhaseDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public SetTaskPhaseModelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public SetTaskPhaseModelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<TaskPhaseDto>> HandleAsync(SetTaskPhaseModelCommand command, CancellationToken ct = default)
     {
@@ -255,7 +255,7 @@ public sealed class SetTaskPhaseModelHandler : ICommandHandler<SetTaskPhaseModel
 
 internal static class TaskKindReader
 {
-    public static async Task<IList<TaskKindDto>> ListAsync(BeaconDbContext db, Guid userId, CancellationToken ct)
+    public static async Task<IList<TaskKindDto>> ListAsync(IBeaconDb db, Guid userId, CancellationToken ct)
     {
         var kinds = await db.TaskKinds.Where(k => k.UserId == userId).OrderByDescending(k => k.IsBuiltIn).ThenBy(k => k.Name).ToListAsync(ct);
         var ids = kinds.Select(k => k.Id).ToList();
@@ -276,7 +276,7 @@ internal static class TaskKindReader
 
 public static class TaskKindCopy
 {
-    public static async Task CopyOntoTaskAsync(BeaconDbContext db, TaskItem task, Guid userId, Guid? kindId, CancellationToken ct)
+    public static async Task CopyOntoTaskAsync(IBeaconDb db, TaskItem task, Guid userId, Guid? kindId, CancellationToken ct)
     {
         if (userId == Guid.Empty)
             return;

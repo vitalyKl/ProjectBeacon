@@ -6,10 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed class TenantContextBinder
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly ITenantContext _tenant;
 
-    public TenantContextBinder(IDbContextFactory<BeaconDbContext> dbFactory, ITenantContext tenant)
+    public TenantContextBinder(IBeaconDbFactory dbFactory, ITenantContext tenant)
     {
         _dbFactory = dbFactory;
         _tenant = tenant;

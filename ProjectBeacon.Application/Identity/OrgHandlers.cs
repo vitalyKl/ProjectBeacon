@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CreateOrgHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CreateOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
     {
@@ -35,9 +35,9 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 
 public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public UpdateOrgHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public UpdateOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<OrgDto>> HandleAsync(UpdateOrgCommand command, CancellationToken ct = default)
     {
@@ -58,9 +58,9 @@ public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>
 
 public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public GetOrgHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public GetOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<OrgDto>> HandleAsync(GetOrgCommand command, CancellationToken ct = default)
     {
@@ -78,9 +78,9 @@ public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 
 public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<OrgDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListOrgsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListOrgsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<OrgDto>>> HandleAsync(ListOrgsCommand command, CancellationToken ct = default)
     {

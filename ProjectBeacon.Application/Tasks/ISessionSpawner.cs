@@ -11,17 +11,17 @@ public sealed record SpawnedSession(Guid? ModelBackendId, string? ModelName, str
 
 public interface ISessionSpawner
 {
-    Task<SpawnedSession> SpawnAsync(BeaconDbContext db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct);
+    Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct);
 }
 
 /// <summary>v1 spawner: fills LaunchSpec from the registry; the real spawn happens in the Phase 7 harness.</summary>
 public sealed class ManualSessionSpawner : ISessionSpawner
 {
-    private readonly LlamaSwapOptions _options;
+    private readonly ILlamaSwapCatalog _catalog;
 
-    public ManualSessionSpawner(LlamaSwapOptions options) => _options = options;
+    public ManualSessionSpawner(ILlamaSwapCatalog catalog) => _catalog = catalog;
 
-    public async Task<SpawnedSession> SpawnAsync(BeaconDbContext db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
+    public async Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
     {
         var phases = await db.TaskPhases.Where(p => p.TaskId == taskId).OrderBy(p => p.SortOrder).ToListAsync(ct);
         if (phases.Count > 0)
@@ -52,10 +52,9 @@ public sealed class ManualSessionSpawner : ISessionSpawner
 
     private SpawnedSession SessionFrom(LocalModelBackend backend)
     {
-        var port = (_options?.Port ?? 8080).ToString(CultureInfo.InvariantCulture);
+        var port = _catalog.Port.ToString(CultureInfo.InvariantCulture);
         var command = backend.LaunchCommand.Replace("${PORT}", port, StringComparison.Ordinal);
-        var spec = LlamaSwapConfigGenerator.BuildCommand(new LlamaSwapModelSpec(
-            backend.Name, command, backend.ContextSize, backend.Ttl, backend.ExtraFlags));
+        var spec = _catalog.BuildLaunchSpec(backend.Name, command, backend.ContextSize, backend.Ttl, backend.ExtraFlags);
         if (backend.BackendType == ModelBackendType.LlamaCpp
             && !spec.Contains("--no-reasoning-preserve", StringComparison.Ordinal))
             spec += " --no-reasoning-preserve";

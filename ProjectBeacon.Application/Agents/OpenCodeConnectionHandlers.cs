@@ -3,10 +3,10 @@ namespace ProjectBeacon.Application.Agents;
 using System.Security.Cryptography;
 using Application.Common;
 using Application.Devices;
+using Application.Security;
 using Domain.Entities.Agents;
 using Domain.Enums;
 using Infrastructure.Data;
-using Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 public record OpenCodeConnectionDto(Guid Id, string ProviderId, string ModelId, string BaseUrl, bool HasApiKey);
@@ -27,9 +27,9 @@ public record DeviceOpenCodeConnectionsCommand(Guid DeviceId) : ICommand<Result<
 
 public sealed class ListOpenCodeConnectionsHandler : ICommandHandler<ListOpenCodeConnectionsCommand, Result<IList<OpenCodeConnectionDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public ListOpenCodeConnectionsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ListOpenCodeConnectionsHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<IList<OpenCodeConnectionDto>>> HandleAsync(ListOpenCodeConnectionsCommand command, CancellationToken ct = default)
     {
@@ -44,13 +44,16 @@ public sealed class ListOpenCodeConnectionsHandler : ICommandHandler<ListOpenCod
 
 public sealed class SaveOpenCodeConnectionHandler : ICommandHandler<SaveOpenCodeConnectionCommand, Result<OpenCodeConnectionDto>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly NudgeOpenCodeHandler _nudge;
 
-    public SaveOpenCodeConnectionHandler(IDbContextFactory<BeaconDbContext> dbFactory, NudgeOpenCodeHandler nudge)
+    private readonly ISecretProtector _secrets;
+
+    public SaveOpenCodeConnectionHandler(IBeaconDbFactory dbFactory, NudgeOpenCodeHandler nudge, ISecretProtector secrets)
     {
         _dbFactory = dbFactory;
         _nudge = nudge;
+        _secrets = secrets;
     }
 
     public async Task<Result<OpenCodeConnectionDto>> HandleAsync(SaveOpenCodeConnectionCommand command, CancellationToken ct = default)
@@ -67,7 +70,7 @@ public sealed class SaveOpenCodeConnectionHandler : ICommandHandler<SaveOpenCode
 
         await using var db = _dbFactory.CreateDbContext();
         var existing = await db.OpenCodeConnections.FirstOrDefaultAsync(c => c.UserId == request.UserId && c.ProviderId == provider, ct);
-        var cipher = string.IsNullOrWhiteSpace(request.ApiKey) ? null : SecretBox.Seal(request.ApiKey.Trim(), SecretBox.KeyMaterial());
+        var cipher = string.IsNullOrWhiteSpace(request.ApiKey) ? null : _secrets.Seal(request.ApiKey.Trim(), _secrets.KeyMaterial());
         if (existing is null)
         {
             existing = OpenCodeConnection.Create(request.UserId, provider, model, request.BaseUrl, cipher ?? "");
@@ -77,6 +80,7 @@ public sealed class SaveOpenCodeConnectionHandler : ICommandHandler<SaveOpenCode
         {
             existing.Update(model, request.BaseUrl, cipher);
         }
+        await DesiredState.BumpUserAsync(db, request.UserId, ct);
         await db.SaveChangesAsync(ct);
         await _nudge.HandleAsync(new NudgeOpenCodeCommand(request.UserId), ct);
         return Result.Ok(ListOpenCodeConnectionsHandler.Map(existing));
@@ -85,10 +89,10 @@ public sealed class SaveOpenCodeConnectionHandler : ICommandHandler<SaveOpenCode
 
 public sealed class DeleteOpenCodeConnectionHandler : ICommandHandler<DeleteOpenCodeConnectionCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly NudgeOpenCodeHandler _nudge;
 
-    public DeleteOpenCodeConnectionHandler(IDbContextFactory<BeaconDbContext> dbFactory, NudgeOpenCodeHandler nudge)
+    public DeleteOpenCodeConnectionHandler(IBeaconDbFactory dbFactory, NudgeOpenCodeHandler nudge)
     {
         _dbFactory = dbFactory;
         _nudge = nudge;
@@ -101,6 +105,7 @@ public sealed class DeleteOpenCodeConnectionHandler : ICommandHandler<DeleteOpen
         if (row is null)
             return Result.Failure("Connection not found.");
         db.OpenCodeConnections.Remove(row);
+        await DesiredState.BumpUserAsync(db, command.Request.UserId, ct);
         await db.SaveChangesAsync(ct);
         await _nudge.HandleAsync(new NudgeOpenCodeCommand(command.Request.UserId), ct);
         return Result.Ok();
@@ -111,10 +116,10 @@ public record NudgeOpenCodeCommand(Guid UserId) : ICommand<Result>;
 
 public sealed class NudgeOpenCodeHandler : ICommandHandler<NudgeOpenCodeCommand, Result>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
     private readonly EnqueueCommandHandler _enqueue;
 
-    public NudgeOpenCodeHandler(IDbContextFactory<BeaconDbContext> dbFactory, EnqueueCommandHandler enqueue)
+    public NudgeOpenCodeHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
     {
         _dbFactory = dbFactory;
         _enqueue = enqueue;
@@ -136,9 +141,15 @@ public sealed class NudgeOpenCodeHandler : ICommandHandler<NudgeOpenCodeCommand,
 
 public sealed class DeviceOpenCodeConnectionsHandler : ICommandHandler<DeviceOpenCodeConnectionsCommand, Result<IList<OpenCodeConnectionSecretDto>>>
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeviceOpenCodeConnectionsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    private readonly ISecretProtector _secrets;
+
+    public DeviceOpenCodeConnectionsHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
+    {
+        _dbFactory = dbFactory;
+        _secrets = secrets;
+    }
 
     public async Task<Result<IList<OpenCodeConnectionSecretDto>>> HandleAsync(DeviceOpenCodeConnectionsCommand command, CancellationToken ct = default)
     {
@@ -147,13 +158,13 @@ public sealed class DeviceOpenCodeConnectionsHandler : ICommandHandler<DeviceOpe
         if (device is null)
             return Result.Failure<IList<OpenCodeConnectionSecretDto>>("Device not found.");
         var rows = await db.OpenCodeConnections.Where(c => c.UserId == device.UserId).OrderBy(c => c.ProviderId).ToListAsync(ct);
-        var key = SecretBox.KeyMaterial();
+        var key = _secrets.KeyMaterial();
         var list = rows.Select(row =>
         {
             string? api = null;
             if (!string.IsNullOrEmpty(row.ApiKeyCipher))
             {
-                try { api = SecretBox.Open(row.ApiKeyCipher, key); }
+                try { api = _secrets.Open(row.ApiKeyCipher, key); }
                 catch (CryptographicException) { api = null; }
             }
             return new OpenCodeConnectionSecretDto(row.ProviderId, row.ModelId, row.BaseUrl, api);

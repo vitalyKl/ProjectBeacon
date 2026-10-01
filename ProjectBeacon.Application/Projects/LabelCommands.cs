@@ -17,9 +17,9 @@ public record DeleteLabelRequest(Guid ProjectId, Guid LabelId);
 
 public class MatchLabelHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public MatchLabelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public MatchLabelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LabelDto?>> HandleAsync(MatchLabelRequest request, CancellationToken ct = default)
     {
@@ -37,9 +37,9 @@ public class MatchLabelHandler
 
 public class AddLabelPathHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public AddLabelPathHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public AddLabelPathHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LabelDto>> HandleAsync(AddLabelPathRequest request, CancellationToken ct = default)
     {
@@ -65,9 +65,9 @@ public class AddLabelPathHandler
 
 public class CreateLabelHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public CreateLabelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public CreateLabelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LabelDto>> HandleAsync(CreateLabelRequest request, CancellationToken ct = default)
     {
@@ -90,9 +90,9 @@ public class CreateLabelHandler
 
 public class UpdateLabelHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public UpdateLabelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public UpdateLabelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result<LabelDto>> HandleAsync(UpdateLabelRequest request, CancellationToken ct = default)
     {
@@ -116,9 +116,9 @@ public class UpdateLabelHandler
 
 public class DeleteLabelHandler
 {
-    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+    private readonly IBeaconDbFactory _dbFactory;
 
-    public DeleteLabelHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+    public DeleteLabelHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
     public async Task<Result> HandleAsync(DeleteLabelRequest request, CancellationToken ct = default)
     {

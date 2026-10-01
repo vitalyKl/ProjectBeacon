@@ -31,8 +31,7 @@ public sealed class CapabilityAndWorkHttpTests
             name = "read-only",
             capabilities = 1
         });
-        var raw = token.GetProperty("tokenPrefix").GetString()
-                  ?? token.GetProperty("TokenPrefix").GetString();
+        var raw = token.GetProperty("token").GetString();
         Assert.False(string.IsNullOrEmpty(raw));
         Assert.StartsWith("bcn_", raw);
 

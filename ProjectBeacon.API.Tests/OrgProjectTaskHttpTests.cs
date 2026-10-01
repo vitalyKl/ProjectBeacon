@@ -67,8 +67,12 @@ public sealed class OrgProjectTaskHttpTests
             name = "ci",
             capabilities = 1
         });
-        var raw = token.GetProperty("tokenPrefix").GetString();
+        var raw = token.GetProperty("token").GetString();
+        var createdPrefix = token.GetProperty("tokenPrefix").GetString();
         Assert.StartsWith("bcn_", raw);
+        Assert.Equal(8, createdPrefix!.Length);
+        Assert.StartsWith(createdPrefix, raw);
+        Assert.NotEqual(raw, createdPrefix);
         var tokenId = token.GetProperty("id").GetGuid();
 
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -86,8 +90,24 @@ public sealed class OrgProjectTaskHttpTests
         var tokens = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens");
         Assert.True(tokens.GetArrayLength() >= 1);
         var listedPrefix = tokens[0].GetProperty("tokenPrefix").GetString();
-        Assert.False(string.IsNullOrEmpty(listedPrefix));
-        Assert.False(listedPrefix!.StartsWith("bcn_") && listedPrefix.Length > 12);
+        Assert.Equal(createdPrefix, listedPrefix);
+        Assert.False(tokens[0].TryGetProperty("token", out _));
+
+        var one = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens/{tokenId}");
+        Assert.Equal(createdPrefix, one.GetProperty("tokenPrefix").GetString());
+        Assert.False(one.TryGetProperty("token", out _));
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", raw);
+        var asToken = await client.GetAsync($"/v1/projects/{projectId}/tasks");
+        Assert.Equal(HttpStatusCode.OK, asToken.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+        var revoked = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}");
+        Assert.Equal(HttpStatusCode.NoContent, revoked.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", raw);
+        var after = await client.GetAsync($"/v1/projects/{projectId}/tasks");
+        Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
     }
 
     [Fact]
