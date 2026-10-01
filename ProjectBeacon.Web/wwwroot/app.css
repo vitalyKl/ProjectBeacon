@@ -266,7 +266,7 @@
 }
 
 .beacon-board-card {
-    padding: var(--space-3);
+    padding: var(--beacon-board-card-pad);
 }
 
 .beacon-board-card .beacon-card-title {

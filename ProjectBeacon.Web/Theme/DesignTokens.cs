@@ -47,8 +47,12 @@ public static class DesignTokens
 
     public const string BorderHairline = "0.5px";
 
+    // Component geometry
+    public const string BoardCardPad = "10px";
+
     private static readonly (string Name, string Value)[] Custom =
     [
+        ("--beacon-board-card-pad", BoardCardPad),
         ("--color-bg-app", BgApp),
         ("--color-surface-1", Surface1),
         ("--color-surface-2", Surface2),
