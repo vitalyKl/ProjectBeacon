@@ -6,30 +6,6 @@ public static class BeaconTheme
 {
     public static readonly MudTheme Theme = new()
     {
-        PaletteLight = new PaletteLight
-        {
-            Background = "#f4f4f5",
-            Surface = "#ffffff",
-            TextPrimary = "#18181b",
-            TextSecondary = "#71717a",
-            TextDisabled = "#a1a1aa",
-            LinesDefault = "#e4e4e7",
-            Primary = "#2563eb",
-            PrimaryContrastText = "#fafafa",
-            Info = "#2563eb",
-            InfoContrastText = "#fafafa",
-            Error = "#dc2626",
-            ErrorContrastText = "#fafafa",
-            Warning = "#d97706",
-            WarningContrastText = "#1c1403",
-            Success = "#059669",
-            SuccessContrastText = "#000000",
-            AppbarBackground = "#f4f4f5",
-            AppbarText = "#18181b",
-            DrawerBackground = "#f4f4f5",
-            DrawerText = "#3f3f46",
-            DrawerIcon = "#71717a",
-        },
         PaletteDark = new PaletteDark
         {
             Black = "#0c0c0c",
