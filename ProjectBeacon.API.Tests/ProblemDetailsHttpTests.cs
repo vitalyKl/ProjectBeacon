@@ -29,6 +29,7 @@ public sealed class ProblemDetailsHttpTests
         Assert.Equal("Not Found", root.GetProperty("title").GetString());
         Assert.True(root.TryGetProperty("type", out var type) && type.GetString() is not null);
         Assert.True(root.TryGetProperty("detail", out _));
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("traceId").GetString()));
     }
 
     [Fact]

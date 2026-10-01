@@ -51,10 +51,7 @@ public static class AuthEndpoints
                 result.Value.Password
             });
 
-        var statusCode = result.Error == "Bootstrap already completed."
-            ? 409
-            : 401;
-        return result.FromResult(statusCode);
+        return result.FromResult(401);
     }
 
     private static async Task<IResult> RecoverAdmin(RecoverAdminHandler handler, HttpContext ctx)
@@ -76,10 +73,7 @@ public static class AuthEndpoints
                 result.Value.Password
             });
 
-        var statusCode = result.Error is "Invalid bootstrap token." or "Bootstrap token is not configured."
-            ? 401
-            : 400;
-        return result.FromResult(statusCode);
+        return result.FromResult();
     }
 
     private static async Task<IResult> Login([FromBody] LoginRequest request, LoginHandler handler)
@@ -109,7 +103,7 @@ public static class AuthEndpoints
                 result.Value.Login,
                 result.Value.Email
             })
-            : result.FromResult(result.Error == "Invite required." ? 403 : 400);
+            : result.FromResult();
     }
 
     private static async Task<IResult> ForgotPassword([FromBody] ForgotPasswordRequest request, ForgotPasswordHandler handler)
@@ -130,7 +124,7 @@ public static class AuthEndpoints
     {
         var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
         if (!Guid.TryParse(userIdStr, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ChangePasswordRequest(userId, body.CurrentPassword, body.NewPassword));
         return result.Success
             ? Results.Ok()
@@ -152,7 +146,7 @@ public static class AuthEndpoints
     {
         var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
         if (!Guid.TryParse(userIdStr, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new AcceptInviteRequest(token, userId));
         if (result.Success)
             return Results.Ok();
@@ -166,7 +160,7 @@ public static class AuthEndpoints
     {
         var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
         if (!Guid.TryParse(userIdStr, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         await db.Sessions
             .Where(s => s.UserId == userId && s.IsActive)
@@ -179,11 +173,11 @@ public static class AuthEndpoints
     {
         var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
         if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var user = await db.Users.FindAsync([userId]);
         if (user is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         return Results.Ok(new
         {

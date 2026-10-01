@@ -227,7 +227,7 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
             return Result.Failure<WorkstationCommandDto>("Device not found.");
         if (!device.IsOnline(DateTime.UtcNow))
-            return Result.Failure<WorkstationCommandDto>("Device is not connected.");
+            return Result.Failure<WorkstationCommandDto>("Device is not connected.", ErrorKind.Conflict);
 
         if (command.Request.ProjectId is { } projectId)
         {

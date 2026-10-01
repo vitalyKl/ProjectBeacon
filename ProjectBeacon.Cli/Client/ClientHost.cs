@@ -70,7 +70,7 @@ public static class ClientHost
 
             using var http = new HttpClient { BaseAddress = new Uri(store.Url.TrimEnd('/') + "/") };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", store.Token);
-            await using var llama = new ClientLlamaSwap();
+            await using var llama = new ClientLlamaSwap { VramChecker = new ModelSwapping.NvidiaSmiVramChecker() };
             await using var openCode = new ClientOpenCodeServe();
             await using var daemon = new WorkstationDaemon(
                 http,

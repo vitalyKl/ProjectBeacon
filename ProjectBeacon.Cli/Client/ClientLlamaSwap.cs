@@ -33,9 +33,12 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
     private readonly Dictionary<string, LlamaServerBackend> _own = new();
     private readonly SwapGroupCoordinator _coordinator = new();
     internal IVramChecker VramChecker { get; set; } = new NoopVramChecker();
+    internal LlamaServerBackend? OwnBackend(string name) => _own.TryGetValue(name, out var backend) ? backend : null;
     internal Action<string>? Log { get; set; }
     private string? _ownLastYaml;
     private string? _desiredSwapModel;
+    private int _externalCrashes;
+    private const int MaxExternalCrashes = 5;
 
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -73,16 +76,35 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             bin = WorkstationActions.Which("llama-swap") ?? WorkstationActions.Which("llama-swap.exe");
         if (string.IsNullOrWhiteSpace(bin))
         {
-            KillProcess();
+            await KillProcessAsync();
             _lastHash = hash;
             _port = nextPort;
             _lastBin = null;
+            _externalCrashes = 0;
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap binary not found on this device.");
             return;
         }
 
         if (ShouldRestart(hash, _lastHash, nextPort, _port, bin, _lastBin, IsRunning))
-            KillProcess();
+        {
+            var crashed = _lastBin is not null
+                && !IsRunning
+                && string.Equals(hash, _lastHash, StringComparison.Ordinal)
+                && nextPort == _port
+                && string.Equals(bin, _lastBin, StringComparison.OrdinalIgnoreCase);
+            if (crashed)
+            {
+                if (_externalCrashes >= MaxExternalCrashes)
+                {
+                    Status = new LlamaSwapStatusDto(false, false, null, null, _lastSwap, $"llama-swap restart limit ({MaxExternalCrashes}).");
+                    return;
+                }
+                _externalCrashes++;
+            }
+            else
+                _externalCrashes = 0;
+            await KillProcessAsync();
+        }
 
         _lastHash = hash;
         _port = nextPort;
@@ -106,7 +128,8 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             return;
         }
 
-        KillProcess();
+        _externalCrashes = 0;
+        await KillProcessAsync();
         if (string.IsNullOrWhiteSpace(_lastBin))
         {
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap binary not found on this device.");
@@ -192,25 +215,28 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             Status = new LlamaSwapStatusDto(false, false, null, null, null, $"llama-swap failed to start: {ex.Message}");
             return;
         }
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        if (!ProcessControl.TryBeginDrain(process))
+        {
+            process.Dispose();
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to drain output.");
+            return;
+        }
         _process = process;
     }
 
-    private void KillProcess()
+    private async Task KillProcessAsync()
     {
         if (SkipRealProcess)
         {
             _runningFake = false;
             return;
         }
-        if (_process is { HasExited: false })
-        {
-            try { _process.Kill(entireProcessTree: true); } catch { }
-            try { _process.WaitForExit(2000); } catch { }
-        }
-        _process?.Dispose();
+        var process = _process;
         _process = null;
+        if (process is null)
+            return;
+        await ProcessControl.KillAsync(process);
+        try { process.Dispose(); } catch { }
     }
 
     private async Task PollAsync(CancellationToken ct)
@@ -233,6 +259,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             if (joined is not null && joined != _lastLoaded)
                 _lastSwap = DateTime.UtcNow;
             _lastLoaded = joined;
+            _externalCrashes = 0;
             Status = new LlamaSwapStatusDto(true, true, joined, await FetchMemoryAsync(ct), _lastSwap, null, loaded);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -297,22 +324,49 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         return null;
     }
 
-    private async Task<bool> TryCheckVramAsync(LlamaSwapModelSpec spec, CancellationToken ct)
+    private async Task<bool> TryAdmitAsync(long need, CancellationToken ct)
     {
+        if (need <= 0)
+            return true;
+        VramReading reading;
         try
         {
-            var free = await VramChecker.GetFreeVramMbAsync(ct);
-            if (free < 0)
-                return true;
-            var need = VramEstimate.FromSpec(spec);
-            if (need <= 0)
-                return free > 0;
-            return free >= need;
+            reading = await VramChecker.ReadFreeAsync(ct);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return true;
+            return false;
         }
+
+        if (reading.QueryFailed)
+            return false;
+        if (reading.FreeMb < 0)
+            return true;
+        return reading.FreeMb >= need;
+    }
+
+    private static long Footprint(LlamaServerBackend backend, LlamaSwapModelSpec spec)
+    {
+        if (backend.ActualVramMb > 0)
+            return backend.ActualVramMb;
+        if (backend.EstimatedVramMb > 0)
+            return backend.EstimatedVramMb;
+        return VramEstimate.FromSpec(spec);
+    }
+
+    private long ReservedExcept(string name)
+    {
+        long sum = 0;
+        foreach (var backend in _own.Values)
+        {
+            if (backend.Name == name)
+                continue;
+            if (backend.State is not (BackendState.Ready or BackendState.Starting))
+                continue;
+            sum += backend.ActualVramMb > 0 ? backend.ActualVramMb : backend.EstimatedVramMb;
+        }
+
+        return sum;
     }
 
     private async Task StopOwnBackendsAsync(CancellationToken ct)
@@ -378,20 +432,24 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         {
             _coordinator.Register(name, spec.Concurrent);
 
-            if (!spec.Concurrent && !await TryCheckVramAsync(spec, ct))
-                continue;
-
             if (!spec.Concurrent && _coordinator.IsGroupBusy("swap"))
                 continue;
 
-            if (!_own.TryGetValue(name, out var backend) || backend.Port != p)
+            if (_own.TryGetValue(name, out var backend) && backend.Port != p)
             {
-                if (backend is not null)
-                {
-                    await backend.StopAsync(ct);
-                    backend.Dispose();
-                    _coordinator.Deactivate(name);
-                }
+                await backend.StopAsync(ct);
+                backend.Dispose();
+                _coordinator.Deactivate(name);
+                _own.Remove(name);
+                backend = null;
+            }
+
+            var cost = backend is not null ? Footprint(backend, spec) : VramEstimate.FromSpec(spec);
+            if (!await TryAdmitAsync(ReservedExcept(name) + cost, ct))
+                continue;
+
+            if (backend is null)
+            {
                 backend = new LlamaServerBackend
                 {
                     Name = name,
@@ -459,7 +517,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         }
         _coordinator.UnregisterAll();
         _own.Clear();
-        KillProcess();
+        await KillProcessAsync();
         _http.Dispose();
     }
 }

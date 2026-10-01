@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
 using System.Text;
@@ -16,6 +17,7 @@ using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.LlamaSwap;
+using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;
 
@@ -79,6 +81,16 @@ public static class ServiceCollectionExtensions
             options.LoginPath = "/login";
             options.LogoutPath = "/logout";
             options.Cookie.Name = "BeaconAuth";
+            options.Events.OnRedirectToLogin = ctx =>
+                ctx.HttpContext.Request.Path.StartsWithSegments("/v1")
+                    ? ProblemJson.WriteAsync(ctx.HttpContext, StatusCodes.Status401Unauthorized, "Unauthorized",
+                        "https://tools.ietf.org/html/rfc9110#section-15.5.2", "Authentication is required.")
+                    : Redirect(ctx);
+            options.Events.OnRedirectToAccessDenied = ctx =>
+                ctx.HttpContext.Request.Path.StartsWithSegments("/v1")
+                    ? ProblemJson.WriteAsync(ctx.HttpContext, StatusCodes.Status403Forbidden, "Forbidden",
+                        "https://tools.ietf.org/html/rfc9110#section-15.5.4", "Forbidden.")
+                    : Redirect(ctx);
         })
         .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
         {
@@ -96,7 +108,13 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddAuthorization();
-        services.AddProblemDetails();
+        services.AddProblemDetails(options =>
+        {
+            options.CustomizeProblemDetails = ctx =>
+            {
+                ctx.ProblemDetails.Extensions["traceId"] = Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier;
+            };
+        });
         services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -124,4 +142,10 @@ public static class ServiceCollectionExtensions
     }
 
     public static string[] GetSupportedCultures() => SupportedCultures;
+
+    private static Task Redirect(RedirectContext<CookieAuthenticationOptions> ctx)
+    {
+        ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    }
 }

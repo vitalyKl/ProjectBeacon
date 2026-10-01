@@ -88,7 +88,7 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
                 return Result.Failure<EvalPairResult>("Device not found.");
 
             if (!device.IsOnline(DateTime.UtcNow))
-                return Result.Failure<EvalPairResult>("Device is not connected.");
+                return Result.Failure<EvalPairResult>("Device is not connected.", ErrorKind.Conflict);
         }
 
         var briefResult = await _compileBrief.HandleAsync(

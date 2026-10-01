@@ -40,7 +40,7 @@ public static class ProjectAuthorization
         Guid targetUserId, MemberRole targetRole, CancellationToken ct)
     {
         if (actor.IsApiToken || !await CanManageProjectAsync(db, projectId, actor, ct))
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
 
         var actorRole = await GetActorRoleAsync(db, projectId, actor, ct);
         if (!actor.IsAdmin && actorRole != MemberRole.Owner && targetRole == MemberRole.Owner)
@@ -54,13 +54,13 @@ public static class ProjectAuthorization
         Guid targetUserId, CancellationToken ct)
     {
         if (actor.IsApiToken)
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
 
         if (actor.UserId == targetUserId)
             return Result.Ok();
 
         if (!await CanManageProjectAsync(db, projectId, actor, ct))
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
 
         var targetRole = await GetMemberRoleAsync(db, projectId, targetUserId, ct);
         if (targetRole == MemberRole.Owner)
@@ -83,7 +83,7 @@ public static class ProjectAuthorization
     public static async Task<Result> ManageTokens(ActorContext actor)
     {
         if (actor.IsApiToken || !actor.IsAdmin)
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
         return Result.Ok();
     }
 
@@ -92,7 +92,7 @@ public static class ProjectAuthorization
         ApiTokenCapability requestedCapabilities, CancellationToken ct)
     {
         if (actor.IsApiToken || !await CanManageProjectAsync(db, projectId, actor, ct))
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
 
         if (requestedCapabilities.HasFlag(ApiTokenCapability.Admin) && !actor.IsAdmin)
         {
@@ -109,7 +109,7 @@ public static class ProjectAuthorization
         Guid tokenId, CancellationToken ct)
     {
         if (actor.IsApiToken || !await CanManageProjectAsync(db, projectId, actor, ct))
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
         return Result.Ok();
     }
 

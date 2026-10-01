@@ -26,15 +26,15 @@ public class BootstrapHandler
     public async Task<Result<BootstrapResponse>> HandleAsync(string bootstrapToken, CancellationToken ct = default)
     {
         if (_bootstrapToken.Length == 0)
-            return Result.Failure<BootstrapResponse>("Bootstrap token is not configured.");
+            return Result.Failure<BootstrapResponse>("Bootstrap token is not configured.", ErrorKind.Unauthorized);
 
         if (!FixedTimeEquals(bootstrapToken, _bootstrapToken))
-            return Result.Failure<BootstrapResponse>("Invalid bootstrap token.");
+            return Result.Failure<BootstrapResponse>("Invalid bootstrap token.", ErrorKind.Unauthorized);
 
         await using var db = _dbFactory.CreateDbContext();
         var exists = await db.Users.AnyAsync(u => u.IsAdmin, ct);
         if (exists)
-            return Result.Failure<BootstrapResponse>("Bootstrap already completed.");
+            return Result.Failure<BootstrapResponse>("Bootstrap already completed.", ErrorKind.Conflict);
 
         var password = _passwords.GenerateRandomPassword(32);
         var user = User.Create("admin", "admin@beacon.local",
@@ -72,10 +72,10 @@ public class RecoverAdminHandler
     public async Task<Result<RecoverAdminResponse>> HandleAsync(string providedToken, CancellationToken ct = default)
     {
         if (_bootstrapToken.Length == 0)
-            return Result.Failure<RecoverAdminResponse>("Bootstrap token is not configured.");
+            return Result.Failure<RecoverAdminResponse>("Bootstrap token is not configured.", ErrorKind.Unauthorized);
 
         if (!FixedTimeEquals(providedToken, _bootstrapToken))
-            return Result.Failure<RecoverAdminResponse>("Invalid bootstrap token.");
+            return Result.Failure<RecoverAdminResponse>("Invalid bootstrap token.", ErrorKind.Unauthorized);
 
         await using var db = _dbFactory.CreateDbContext();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Login == "admin", ct)
@@ -178,7 +178,7 @@ public class RegisterHandler
 
         var inviteOnly = LocalAuthOptions.InviteOnly(_configuration);
         if (inviteOnly && string.IsNullOrEmpty(inviteToken))
-            return Result.Failure<RegisterResponse>("Invite required.");
+            return Result.Failure<RegisterResponse>("Invite required.", ErrorKind.Forbidden);
 
         await using var db = _dbFactory.CreateDbContext();
         var existing = await db.Users.AnyAsync(u => u.Login == login, ct);

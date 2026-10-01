@@ -136,7 +136,7 @@ public static class PipelineEndpoints
 
         var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(actorId, out var actor))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(
             body.TaskId, body.DeviceId, actor, body.CheckCommand, body.Path)), ct);
@@ -163,7 +163,7 @@ public static class PipelineEndpoints
 
         var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(actorId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actorId, body.Reason)), ct);
         return result.Success

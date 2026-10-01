@@ -26,7 +26,7 @@ public static class ModelEndpoints
     private static async Task<IResult> GetModelRegistry(HttpContext ctx, GetModelRegistryHandler handler, CancellationToken ct)
     {
         if (!TryUser(ctx, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new GetModelRegistryCommand(userId), ct);
         return result.Success
             ? Results.Ok(result.Value)
@@ -36,7 +36,7 @@ public static class ModelEndpoints
     private static async Task<IResult> UpsertModelBackend(HttpContext ctx, [FromBody] UpsertLocalModelBackendRequest request, UpsertLocalModelBackendHandler handler, CancellationToken ct)
     {
         if (!TryUser(ctx, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = userId }), ct);
         if (!result.Success)
             return result.FromResult();
@@ -49,7 +49,7 @@ public static class ModelEndpoints
     private static async Task<IResult> DeleteModelBackend(HttpContext ctx, Guid id, DeleteLocalModelBackendHandler handler, CancellationToken ct)
     {
         if (!TryUser(ctx, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, userId)), ct);
         if (!result.Success)
             return result.Error!.StartsWith("Model backend not found")

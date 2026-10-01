@@ -49,6 +49,7 @@ public sealed class ExpiredRecordsCleanupService : BackgroundService
         await using var db = dbFactory.CreateDbContext();
         using (TenantScope.EnterUnscoped())
         {
+            await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
             var now = DateTime.UtcNow;
 
             var expiredSessions = await db.Sessions

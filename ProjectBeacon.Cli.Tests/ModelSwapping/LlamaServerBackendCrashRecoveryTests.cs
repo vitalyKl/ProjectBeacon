@@ -98,6 +98,27 @@ public sealed class LlamaServerBackendCrashRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task StopAsync_CancelsSupervisionWithoutFaulting()
+    {
+        var b = new LlamaServerBackend
+        {
+            Name = "sup",
+            Port = 8081,
+            SkipRealProcess = true,
+            SupervisePollDelay = TimeSpan.FromSeconds(30)
+        };
+        _backends.Add(b);
+        b.ArmSupervision(new LlamaSwapModelSpec("sup", "llama-server -m t.gguf", 0, 0, []));
+        var task = b.Supervision;
+        Assert.NotNull(task);
+
+        await b.StopAsync(CancellationToken.None);
+
+        Assert.Equal(TaskStatus.RanToCompletion, task!.Status);
+        Assert.Equal(BackendState.Idle, b.State);
+    }
+
+    [Fact]
     public async Task StopAsync_FromFaultedState_ResetsToIdle()
     {
         var b = new LlamaServerBackend

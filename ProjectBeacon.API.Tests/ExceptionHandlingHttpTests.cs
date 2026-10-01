@@ -20,7 +20,8 @@ public sealed class ExceptionHandlingHttpTests
         var body = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
         Assert.Equal(500, doc.RootElement.GetProperty("status").GetInt32());
-        Assert.Equal("An unexpected error occurred.", doc.RootElement.GetProperty("title").GetString());
+        Assert.Equal("Internal Server Error", doc.RootElement.GetProperty("title").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(doc.RootElement.GetProperty("traceId").GetString()));
         Assert.False(doc.RootElement.TryGetProperty("detail", out _));
         Assert.False(doc.RootElement.TryGetProperty("exceptionType", out _));
         Assert.DoesNotContain("test unhandled exception", body);

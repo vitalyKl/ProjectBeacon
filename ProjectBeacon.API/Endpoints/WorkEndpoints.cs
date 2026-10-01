@@ -25,7 +25,7 @@ public static class WorkEndpoints
     {
         var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(actorId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var command = new FinishWorkCommand(new Application.Tasks.FinishWorkRequest(
             request.TaskId,

@@ -42,11 +42,11 @@ These tools talk to the database and require Beacon environment:
 
 `allowedMcpTools` and `allowedPaths` are comma-separated lists.
 
-When `BEACON_API_URL` and `BEACON_API_TOKEN` are set, these six tools call `/v1` instead of opening the database: `model_bind`, `model_status`, `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status`. Without that pair they keep the database path below.
+When `BEACON_API_URL` and `BEACON_API_TOKEN` are both set, these six tools call `/v1` instead of opening the database: `model_bind`, `model_status`, `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status`. When neither is set they keep the database path below. Setting only one of the two is a misconfiguration: those six tools return an error and do not open the database. A failed pipeline read on the API path denies the tool instead of skipping the allowlist.
 
 ## Trust boundary
 
-A `beacon mcp` process that has no `BEACON_API_URL` and `BEACON_API_TOKEN` opens the local database for those six tools. That process is a trusted local user process. It is not the remote API security model: it does not apply API-token project scope, actor capabilities, or rate limits. Whoever can start the process can read and write whatever that database connection allows.
+A `beacon mcp` process that has neither `BEACON_API_URL` nor `BEACON_API_TOKEN` opens the local database for those six tools. That process is a trusted local user process. It is not the remote API security model: it does not apply API-token project scope, actor capabilities, or rate limits. Whoever can start the process can read and write whatever that database connection allows. Database mode still sets the Postgres tenant session (`app.tenant_project_id`) from `BEACON_PROJECT_ID`. `BEACON_ACTOR_ID` is not enforced.
 
 With the URL and token set, those tools go through the control plane instead. File tools stay inside `--root` either way. Do not treat a local database session as equivalent to a remote `bcn_` token.
 

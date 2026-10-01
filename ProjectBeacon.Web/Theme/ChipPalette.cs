@@ -49,6 +49,15 @@ public static class ChipPalette
         _ => Color.Default
     };
 
+    public static Color ForCommandState(string? state) => state switch
+    {
+        "Succeeded" => Color.Success,
+        "Running" or "Queued" or "Pending" => Color.Info,
+        "Failed" or "TimedOut" => Color.Error,
+        "Cancelled" => Color.Warning,
+        _ => Color.Default
+    };
+
     public static Color ForCommandStatus(WorkstationCommandStatus status) => status switch
     {
         WorkstationCommandStatus.Succeeded => Color.Success,

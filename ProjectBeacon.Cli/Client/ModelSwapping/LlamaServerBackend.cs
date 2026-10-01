@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Infrastructure.LlamaSwap;
 
 namespace ProjectBeacon.Cli.Client.ModelSwapping;
@@ -20,9 +21,16 @@ public sealed class LlamaServerBackend : IModelBackend
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
     private readonly ModelBackendFsm _fsm = new();
     private readonly object _restartGate = new();
+    private readonly SemaphoreSlim _startGate = new(1, 1);
     private Process? _process;
     private int _restartCount;
+    private int _stopRequested;
+    private bool _readersOpen;
+    private DateTimeOffset _readySince;
     private CancellationTokenSource? _superviseCts;
+    private Task? _superviseTask;
+    internal TimeSpan SupervisePollDelay { get; set; } = TimeSpan.FromSeconds(2);
+    internal Task? Supervision => _superviseTask;
 
     public string Name { get; init; } = "";
     public int Port { get; init; }
@@ -40,9 +48,35 @@ public sealed class LlamaServerBackend : IModelBackend
     public long VramFootprintMb { get; private set; }
     internal Func<int, CancellationToken, Task<long>>? ReadProcessVramMb { get; set; }
 
+    internal void SetActualVramMb(long mb)
+    {
+        ActualVramMb = mb < 0 ? 0 : mb;
+        VramFootprintMb = ActualVramMb > 0 ? ActualVramMb : EstimatedVramMb;
+    }
+
+    internal void ArmSupervision(LlamaSwapModelSpec spec) => StartSupervision(spec);
+
     public async Task StartAsync(LlamaSwapModelSpec spec, CancellationToken ct)
     {
-        if (_fsm.Current == BackendState.Ready && _process is { HasExited: false })
+        await _startGate.WaitAsync(ct);
+        try
+        {
+            if (Volatile.Read(ref _stopRequested) == 1)
+                return;
+            await StartCoreAsync(spec, ct);
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync(LlamaSwapModelSpec spec, CancellationToken ct)
+    {
+        if (Volatile.Read(ref _stopRequested) == 1)
+            return;
+
+        if (_fsm.Current == BackendState.Ready && HasLiveProcess())
         {
             await HealthCheckAsync(ct);
             return;
@@ -57,6 +91,7 @@ public sealed class LlamaServerBackend : IModelBackend
         {
             ApplyEstimate(spec);
             _fsm.TryTransition(BackendState.Ready);
+            _readySince = DateTimeOffset.UtcNow;
             Log?.Invoke($"{Name}: start (skip) 0ms");
             return;
         }
@@ -72,7 +107,7 @@ public sealed class LlamaServerBackend : IModelBackend
         {
             ApplyEstimate(spec);
             _fsm.TryTransition(BackendState.Ready);
-            _restartCount = 0;
+            _readySince = DateTimeOffset.UtcNow;
             Log?.Invoke($"{Name}: start (fake) {sw.ElapsedMilliseconds}ms");
             return;
         }
@@ -106,10 +141,16 @@ public sealed class LlamaServerBackend : IModelBackend
             Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — {ex.Message}");
             return;
         }
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        KillQuiet();
+        if (!ProcessControl.TryBeginDrain(process))
+        {
+            process.Dispose();
+            _fsm.TryTransition(BackendState.Faulted, $"{Name}: failed to drain output.");
+            Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — output drain");
+            return;
+        }
+        await KillProcessAsync();
         _process = process;
+        _readersOpen = true;
 
         try
         {
@@ -123,8 +164,14 @@ public sealed class LlamaServerBackend : IModelBackend
                 }
                 if (await IsHealthyAsync(ct))
                 {
+                    if (Volatile.Read(ref _stopRequested) == 1)
+                    {
+                        await KillProcessAsync();
+                        _fsm.ForceReset();
+                        return;
+                    }
                     _fsm.TryTransition(BackendState.Ready);
-                    _restartCount = 0;
+                    _readySince = DateTimeOffset.UtcNow;
                     await ApplyMeasuredAsync(process, spec, ct);
                     StartSupervision(spec);
                     Log?.Invoke($"{Name}: start OK {sw.ElapsedMilliseconds}ms");
@@ -135,52 +182,69 @@ public sealed class LlamaServerBackend : IModelBackend
         }
         catch (OperationCanceledException)
         {
-            KillQuiet();
+            await KillProcessAsync();
             _fsm.TryTransition(BackendState.Faulted, $"{Name}: start cancelled.");
             throw;
         }
 
-        KillQuiet();
+        await KillProcessAsync();
         _fsm.TryTransition(BackendState.Faulted, $"{Name}: did not become healthy.");
         Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — health timeout");
     }
 
-    private void KillQuiet()
+    private bool HasLiveProcess() => _process is { HasExited: false };
+
+    private async Task KillProcessAsync()
     {
-        if (_process is { HasExited: false })
-        {
-            try { _process.Kill(entireProcessTree: true); } catch { }
-            try { _process.WaitForExit(2000); } catch { }
-        }
-        _process?.Dispose();
+        var process = _process;
         _process = null;
+        if (process is null)
+            return;
+        await ProcessControl.KillAsync(process);
+        _readersOpen = false;
+        try { process.Dispose(); } catch { }
     }
 
     public async Task StopAsync(CancellationToken ct)
     {
-        StopSupervision();
-        if (SkipRealProcess)
+        Interlocked.Exchange(ref _stopRequested, 1);
+        try
         {
-            _fsm.ForceReset();
-            ClearFootprint();
-            Log?.Invoke($"{Name}: stop (skip)");
-            return;
-        }
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        if (_fsm.Current == BackendState.Ready)
-            _fsm.TryTransition(BackendState.Stopping);
+            var supervise = DetachSupervision();
+            if (supervise is not null)
+            {
+                try
+                {
+                    await supervise.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                }
+            }
 
-        if (_process is { HasExited: false })
-        {
-            try { _process.Kill(entireProcessTree: true); } catch { }
-            try { _process.WaitForExit(2000); } catch { }
+            await _startGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                if (_fsm.Current == BackendState.Ready)
+                    _fsm.TryTransition(BackendState.Stopping);
+                await KillProcessAsync().ConfigureAwait(false);
+                ClearFootprint();
+                _restartCount = 0;
+                _readySince = default;
+                _fsm.ForceReset();
+                Log?.Invoke(SkipRealProcess ? $"{Name}: stop (skip)" : $"{Name}: stop");
+            }
+            finally
+            {
+                _startGate.Release();
+            }
         }
-        _process?.Dispose();
-        _process = null;
-        ClearFootprint();
-        _fsm.ForceReset();
-        Log?.Invoke($"{Name}: stop {sw.ElapsedMilliseconds}ms");
-        await Task.Delay(0, ct).ConfigureAwait(false);
+        finally
+        {
+            Interlocked.Exchange(ref _stopRequested, 0);
+        }
+
+        ct.ThrowIfCancellationRequested();
     }
 
     public async Task<bool> HealthCheckAsync(CancellationToken ct)
@@ -197,40 +261,79 @@ public sealed class LlamaServerBackend : IModelBackend
 
     public void Dispose()
     {
-        StopSupervision();
+        Interlocked.Exchange(ref _stopRequested, 1);
+        var supervise = DetachSupervision();
+        try { supervise?.Wait(TimeSpan.FromSeconds(5)); } catch { }
         if (_process is { HasExited: false })
         {
             try { _process.Kill(entireProcessTree: true); } catch { }
+            if (_readersOpen)
+            {
+                try { _process.CancelOutputRead(); } catch { }
+                try { _process.CancelErrorRead(); } catch { }
+            }
         }
         _process?.Dispose();
         _process = null;
         _http.Dispose();
+        _startGate.Dispose();
     }
 
     private void StartSupervision(LlamaSwapModelSpec spec)
     {
-        StopSupervision();
+        if (Volatile.Read(ref _stopRequested) == 1)
+            return;
+        if (_superviseTask is { IsCompleted: false })
+            return;
+        _superviseCts?.Dispose();
         var cts = new CancellationTokenSource();
         _superviseCts = cts;
-        _ = SuperviseLoopAsync(spec, cts.Token);
+        _superviseTask = SuperviseLoopAsync(spec, cts.Token);
     }
 
-    private void StopSupervision()
+    private Task? DetachSupervision()
     {
-        _superviseCts?.Cancel();
+        var cts = _superviseCts;
+        var task = _superviseTask;
         _superviseCts = null;
+        _superviseTask = null;
+        try { cts?.Cancel(); } catch { }
+        if (task is null)
+            cts?.Dispose();
+        else
+            _ = task.ContinueWith(_ => cts?.Dispose(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        return task;
     }
 
     private async Task SuperviseLoopAsync(LlamaSwapModelSpec spec, CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        try
         {
-            await Task.Delay(2000, ct).ConfigureAwait(false);
-            if (ct.IsCancellationRequested) return;
-
-            if (_process is not { HasExited: false })
+            while (!ct.IsCancellationRequested && Volatile.Read(ref _stopRequested) == 0)
             {
-                var delay = TimeSpan.Zero;
+                try
+                {
+                    await Task.Delay(SupervisePollDelay, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                if (ct.IsCancellationRequested || Volatile.Read(ref _stopRequested) == 1)
+                    return;
+
+                if (HasLiveProcess())
+                {
+                    if (_readySince != default && DateTimeOffset.UtcNow - _readySince > Backoff[^1])
+                    {
+                        lock (_restartGate)
+                            _restartCount = 0;
+                    }
+                    continue;
+                }
+
+                TimeSpan delay;
                 lock (_restartGate)
                 {
                     if (_restartCount >= MaxRestarts)
@@ -244,32 +347,46 @@ public sealed class LlamaServerBackend : IModelBackend
                     Log?.Invoke($"{Name}: crash detected, restart {_restartCount}/{MaxRestarts} (backoff {delay.TotalSeconds:0}s)");
                 }
 
-                if (_process is not null)
-                {
-                    try { _process.Dispose(); } catch { }
-                    _process = null;
-                }
+                await KillProcessAsync().ConfigureAwait(false);
 
                 try
                 {
                     await Task.Delay(delay, ct).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) { return; }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
 
-                if (ct.IsCancellationRequested) return;
+                if (ct.IsCancellationRequested || Volatile.Read(ref _stopRequested) == 1)
+                    return;
 
                 _fsm.ForceReset();
-                _fsm.TryTransition(BackendState.Starting);
                 try
                 {
-                    await StartAsync(spec, ct).ConfigureAwait(false);
+                    await _startGate.WaitAsync(ct).ConfigureAwait(false);
+                    try
+                    {
+                        if (Volatile.Read(ref _stopRequested) == 1)
+                            return;
+                        await StartCoreAsync(spec, ct).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _startGate.Release();
+                    }
                 }
-                catch (OperationCanceledException) { return; }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
                 catch (Exception)
                 {
-                    // StartAsync recorded the fault; next supervise cycle retries.
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
         }
     }
 

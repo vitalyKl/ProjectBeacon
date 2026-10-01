@@ -142,6 +142,26 @@ public sealed class McpApiToolsTests
         }
     }
 
+    [Fact]
+    public void Resolve_PartialApiConfig_DoesNotOpenDatabaseMode()
+    {
+        var url = Environment.GetEnvironmentVariable("BEACON_API_URL");
+        var token = Environment.GetEnvironmentVariable("BEACON_API_TOKEN");
+        try
+        {
+            Environment.SetEnvironmentVariable("BEACON_API_URL", "http://127.0.0.1:5083");
+            Environment.SetEnvironmentVariable("BEACON_API_TOKEN", null);
+            var resolved = BeaconApiClient.Resolve();
+            Assert.True(resolved.Misconfigured);
+            Assert.Null(resolved.Client);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BEACON_API_URL", url);
+            Environment.SetEnvironmentVariable("BEACON_API_TOKEN", token);
+        }
+    }
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         public List<(string Method, string Path, string Body, string? ProjectHeader)> Calls { get; } = [];

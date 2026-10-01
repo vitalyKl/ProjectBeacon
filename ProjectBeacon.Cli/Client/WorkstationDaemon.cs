@@ -20,6 +20,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly Action<string>? _log;
     private readonly SemaphoreSlim _llamaLock = new(1, 1);
+    private readonly SemaphoreSlim _openCodeLock = new(1, 1);
     private readonly object _gate = new();
     private readonly Queue<string> _logLines = new();
     private DaemonStatus _status = new();
@@ -72,7 +73,17 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             {
                 var settings = _loadSettings();
                 await WithLlamaAsync(() => SyncLlamaAsync(settings, ct), ct);
-                await _openCode.TickAsync(settings.ProjectsRoot, ct);
+                if (await _openCodeLock.WaitAsync(0, ct))
+                {
+                    try
+                    {
+                        await _openCode.TickAsync(settings.ProjectsRoot, ct);
+                    }
+                    finally
+                    {
+                        _openCodeLock.Release();
+                    }
+                }
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
                 {
@@ -322,7 +333,15 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         var body = await response.Content.ReadAsStringAsync(ct);
         var applied = WorkstationActions.ApplyOpenCodeConnections(body);
         _openCode.SetEnvironment(applied.Environment);
-        await _openCode.RestartAsync(_loadSettings().ProjectsRoot, ct);
+        await _openCodeLock.WaitAsync(ct);
+        try
+        {
+            await _openCode.RestartAsync(_loadSettings().ProjectsRoot, ct);
+        }
+        finally
+        {
+            _openCodeLock.Release();
+        }
         return (true, JsonSerializer.Serialize(new { config = applied.ConfigPath, restarted = true, providers = applied.Environment.Count }), null);
     }
 
@@ -330,11 +349,19 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     {
         using var doc = JsonDocument.Parse(payload);
         var title = doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() ?? "Chat" : "Chat";
-        await _openCode.TickAsync(cwd, ct);
-        if (!_openCode.Status.Healthy)
-            return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
-        var id = await _runtime.CreateSessionAsync(title, ct);
-        return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = _openCode.Cwd }), null);
+        await _openCodeLock.WaitAsync(ct);
+        try
+        {
+            await _openCode.TickAsync(cwd, ct);
+            if (!_openCode.Status.Healthy)
+                return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
+            var id = await _runtime.CreateSessionAsync(title, ct);
+            return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = _openCode.Cwd }), null);
+        }
+        finally
+        {
+            _openCodeLock.Release();
+        }
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> ChatPromptAsync(string cwd, string payload, CancellationToken ct)
@@ -346,49 +373,68 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
-        await _openCode.TickAsync(cwd, ct);
-        if (!_openCode.Status.Healthy)
-            return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
-        if (_llama.UseOwnSwapper && model is not null)
-            await WithLlamaAsync(() => _llama.EnsureSwapModelAsync(ExtractSwapName(model), ct), ct);
-        await _runtime.SendPromptAsync(externalId, text, model, ct);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var maxQuiet = Math.Max(1, (int)Math.Ceiling(ChatIdleTimeout / ChatPollInterval));
-        var maxIterations = Math.Max(1, (int)Math.Ceiling(ChatMaxDuration / ChatPollInterval));
-        var quiet = 0;
-        var idle = false;
-        for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
+        await _openCodeLock.WaitAsync(ct);
+        try
         {
-            var parts = await CollectPartsAsync(_runtime, externalId, ct);
-            var added = 0;
-            foreach (var part in parts)
+            await _openCode.TickAsync(cwd, ct);
+            if (!_openCode.Status.Healthy)
+                return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
+            if (_llama.UseOwnSwapper && model is not null)
+                await WithLlamaAsync(() => _llama.EnsureSwapModelAsync(ExtractSwapName(model), ct), ct);
+            await _runtime.SendPromptAsync(externalId, text, model, ct);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var maxQuiet = Math.Max(1, (int)Math.Ceiling(ChatIdleTimeout / ChatPollInterval));
+            var maxIterations = Math.Max(1, (int)Math.Ceiling(ChatMaxDuration / ChatPollInterval));
+            var quiet = 0;
+            var idle = false;
+            try
             {
-                var key = part.ExternalId ?? $"{part.Role}:{part.Kind}:{part.Body}";
-                if (!seen.Add(key) || string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                added++;
-                await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
+                for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
                 {
-                    role = part.Role,
-                    kind = part.Kind,
-                    body = part.Body,
-                    externalId = part.ExternalId
-                }, ct);
+                    var parts = await CollectPartsAsync(_runtime, externalId, ct);
+                    var added = 0;
+                    foreach (var part in parts)
+                    {
+                        var key = part.ExternalId ?? $"{part.Role}:{part.Kind}:{part.Body}";
+                        if (!seen.Add(key) || string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        added++;
+                        await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
+                        {
+                            role = part.Role,
+                            kind = part.Kind,
+                            body = part.Body,
+                            externalId = part.ExternalId
+                        }, ct);
+                    }
+                    quiet = added > 0 ? 0 : quiet + 1;
+                    if (quiet >= maxQuiet && seen.Count > 0)
+                    {
+                        idle = true;
+                        break;
+                    }
+                    await DelayAsync(ChatPollInterval, ct);
+                }
             }
-            quiet = added > 0 ? 0 : quiet + 1;
-            if (quiet >= maxQuiet && seen.Count > 0)
+            catch (OperationCanceledException)
             {
-                idle = true;
-                break;
+                try { await _runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
+                throw;
             }
-            await DelayAsync(ChatPollInterval, ct);
+            if (idle)
+                Log($"chat prompt done: {seen.Count} parts, idle");
+            else
+            {
+                Log($"chat prompt interrupted: max duration {ChatMaxDuration.TotalSeconds:0}s reached, {seen.Count} parts");
+                try { await _runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
+            }
+            await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/idle", new { }, ct);
+            return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
         }
-        if (idle)
-            Log($"chat prompt done: {seen.Count} parts, idle");
-        else if (!ct.IsCancellationRequested)
-            Log($"chat prompt interrupted: max duration {ChatMaxDuration.TotalSeconds:0}s reached, {seen.Count} parts");
-        await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/idle", new { }, ct);
-        return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
+        finally
+        {
+            _openCodeLock.Release();
+        }
     }
 
     private static async Task<IReadOnlyList<AgentMessagePart>> CollectPartsAsync(IAgentRuntime runtime, string sessionId, CancellationToken ct)
@@ -495,6 +541,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     {
         await _llama.DisposeAsync();
         _llamaLock.Dispose();
+        _openCodeLock.Dispose();
         if (_ownsOpenCode)
             await _openCode.DisposeAsync();
     }

@@ -74,35 +74,34 @@ public static class OrgEndpoints
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateOrgInviteRequest(
             orgId, body.Email, body.Role, actor.Value, ActorIsAdmin(ctx)));
         if (result.Success)
             return Results.Ok(result.Value);
-        var status = result.Error == "Forbidden." ? 403 : 400;
-        return result.FromResult(status);
+        return result.FromResult();
     }
 
     private static async Task<IResult> ListInvites(Guid orgId, ListOrgInvitesHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ListInvitesRequest(orgId, actor.Value, ActorIsAdmin(ctx)));
         return result.Success
             ? Results.Ok(result.Value)
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 400);
+            : result.FromResult();
     }
 
     private static async Task<IResult> RevokeInvite(Guid orgId, Guid inviteId, RevokeOrgInviteHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor.Value, ActorIsAdmin(ctx)));
         return result.Success
             ? Results.NoContent()
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(404);
     }
 
     public record CreateInviteBody(string Email, MemberRole Role);

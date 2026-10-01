@@ -418,6 +418,40 @@
     gap: var(--space-3);
 }
 
+.beacon-page-header .mud-typography-h4 {
+    font-size: var(--type-page);
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.mud-typography-h6 {
+    font-size: var(--type-section);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.mud-typography-subtitle1,
+.mud-typography-subtitle2 {
+    font-size: var(--type-card);
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.mud-typography-body1,
+.mud-typography-body2 {
+    font-size: var(--type-body);
+    line-height: 1.5;
+}
+
+.mud-text-secondary {
+    font-size: var(--type-secondary);
+}
+
+.mud-typography-caption {
+    font-size: var(--type-caption);
+    line-height: 1.4;
+}
+
 .beacon-page-actions {
     display: flex;
     flex-wrap: wrap;

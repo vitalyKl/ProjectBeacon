@@ -59,14 +59,14 @@ public static class ProjectEndpoints
 
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var ac = new ActorContext(actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx));
         var result = await handler.HandleAsync(new UpdateProjectCommand(request, ac));
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value))
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler)
@@ -101,26 +101,26 @@ public static class ProjectEndpoints
             return ProblemResults.Bad("ProjectId mismatch.");
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new AddProjectMemberCommand(request, actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.Ok(MapMemberResponse(result.Value))
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 400);
+            : result.FromResult();
     }
 
     private static async Task<IResult> RemoveMember(Guid projectId, Guid userId, RemoveProjectMemberHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new RemoveProjectMemberCommand(new RemoveProjectMemberRequest(projectId, userId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.NoContent()
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ListMembers(Guid projectId, GetProjectMembersHandler handler)
@@ -137,54 +137,54 @@ public static class ProjectEndpoints
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateApiTokenCommand(
             new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.Value),
             actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 400);
+            : result.FromResult();
     }
 
     private static async Task<IResult> RevokeToken(Guid projectId, Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var resolvedProject = projectId == Guid.Empty ? Guid.Empty : projectId;
         var result = await handler.HandleAsync(new RevokeApiTokenCommand(
             new RevokeApiTokenRequest(resolvedProject, tokenId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.NoContent()
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> GetToken(Guid projectId, Guid tokenId, GetApiTokenHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new GetApiTokenCommand(
             new GetApiTokenRequest(projectId, tokenId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(404);
     }
 
     private static async Task<IResult> ListTokens(Guid projectId, ListApiTokensHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new ListApiTokensCommand(
             new ListApiTokensRequest(projectId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
         if (!result.Success)
-            return result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            return result.FromResult(404);
 
         return Results.Ok(result.Value?.Select(MapTokenResponse));
     }
@@ -197,24 +197,23 @@ public static class ProjectEndpoints
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateProjectInviteRequest(
             projectId, body.Email, body.Role, actor.Value, ActorIsAdmin(ctx)));
         if (result.Success)
             return Results.Ok(result.Value);
-        var status = result.Error == "Forbidden." ? 403 : 400;
-        return result.FromResult(status);
+        return result.FromResult();
     }
 
     private static async Task<IResult> ListInvites(Guid projectId, ListProjectInvitesHandler handler, HttpContext ctx)
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ListInvitesRequest(projectId, actor.Value, ActorIsAdmin(ctx)));
         return result.Success
             ? Results.Ok(result.Value)
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 400);
+            : result.FromResult();
     }
 
     private static async Task<IResult> RevokeInvite(
@@ -222,11 +221,11 @@ public static class ProjectEndpoints
     {
         var actor = ActorUserId(ctx);
         if (actor is null)
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor.Value, ActorIsAdmin(ctx)));
         return result.Success
             ? Results.NoContent()
-            : result.FromResult(result.Error == "Forbidden." ? 403 : 404);
+            : result.FromResult(404);
     }
 
     public record CreateInviteBody(string Email, MemberRole Role);

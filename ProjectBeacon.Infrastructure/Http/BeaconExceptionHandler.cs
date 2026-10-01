@@ -40,8 +40,9 @@ public static class BeaconExceptionHandler
                 var problem = new Dictionary<string, object?>
                 {
                     ["type"] = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
-                    ["title"] = "An unexpected error occurred.",
-                    ["status"] = StatusCodes.Status500InternalServerError
+                    ["title"] = "Internal Server Error",
+                    ["status"] = StatusCodes.Status500InternalServerError,
+                    ["traceId"] = ProblemJson.TraceId(context)
                 };
 
                 if (exception is not null && isDevelopment)

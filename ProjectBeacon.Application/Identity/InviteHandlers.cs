@@ -35,7 +35,7 @@ public class CreateOrgInviteHandler
 
         await using var db = _dbFactory.CreateDbContext();
         if (!await ProjectAuthorization.CanManageOrgAsync(db, request.OrgId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
-            return Result.Failure<InviteCreatedDto>("Forbidden.");
+            return Result.Forbidden<InviteCreatedDto>();
 
         var org = await db.Orgs.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
         if (org is null)
@@ -87,7 +87,7 @@ public class CreateProjectInviteHandler
 
         await using var db = _dbFactory.CreateDbContext();
         if (!await ProjectAuthorization.CanManageProjectAsync(db, request.ProjectId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
-            return Result.Failure<InviteCreatedDto>("Forbidden.");
+            return Result.Forbidden<InviteCreatedDto>();
 
         var project = await db.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
         if (project is null)
@@ -194,7 +194,7 @@ public class ListOrgInvitesHandler
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!await ProjectAuthorization.CanManageOrgAsync(db, request.TargetId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
-            return Result.Failure<IList<InviteListDto>>("Forbidden.");
+            return Result.Forbidden<IList<InviteListDto>>();
 
         var items = await db.OrgInvites.IgnoreQueryFilters()
             .Where(i => i.OrgId == request.TargetId)
@@ -215,7 +215,7 @@ public class ListProjectInvitesHandler
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!await ProjectAuthorization.CanManageProjectAsync(db, request.TargetId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
-            return Result.Failure<IList<InviteListDto>>("Forbidden.");
+            return Result.Forbidden<IList<InviteListDto>>();
 
         var items = await db.ProjectInvites.IgnoreQueryFilters()
             .Where(i => i.ProjectId == request.TargetId)
@@ -239,7 +239,7 @@ public class RevokeOrgInviteHandler
         if (invite is null)
             return Result.Failure("Invite not found.");
         if (!await ProjectAuthorization.CanManageOrgAsync(db, invite.OrgId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
         invite.Revoke();
         await db.SaveChangesAsync(ct);
         return Result.Ok();
@@ -259,7 +259,7 @@ public class RevokeProjectInviteHandler
         if (invite is null)
             return Result.Failure("Invite not found.");
         if (!await ProjectAuthorization.CanManageProjectAsync(db, invite.ProjectId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
-            return Result.Failure("Forbidden.");
+            return Result.Forbidden();
         invite.Revoke();
         await db.SaveChangesAsync(ct);
         return Result.Ok();

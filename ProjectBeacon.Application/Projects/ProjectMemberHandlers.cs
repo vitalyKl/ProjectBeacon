@@ -20,7 +20,7 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
             db, command.Request.ProjectId, actor,
             command.Request.UserId, command.Request.Role, ct);
         if (!auth.Success)
-            return Result.Failure<ProjectMemberDto>(auth.Error!);
+            return Result.Failure<ProjectMemberDto>(auth);
 
         var alreadyMember = await db.ProjectMembers
             .AnyAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);
@@ -53,7 +53,7 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
             db, command.Request.ProjectId, actor,
             command.Request.UserId, ct);
         if (!auth.Success)
-            return Result.Failure(auth.Error!);
+            return Result.Failure(auth);
 
         var member = await db.ProjectMembers
             .FirstOrDefaultAsync(m => m.ProjectId == command.Request.ProjectId && m.UserId == command.Request.UserId, ct);

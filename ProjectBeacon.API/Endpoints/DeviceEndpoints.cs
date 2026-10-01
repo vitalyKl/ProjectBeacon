@@ -39,7 +39,7 @@ public static class DeviceEndpoints
         [FromBody] CreateDeviceBody body, CreateDeviceHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest(body.Name, body.Fingerprint, userId)), ct);
         return result.Success
             ? Results.Created($"/v1/devices/{result.Value!.Id}", result.Value)
@@ -49,7 +49,7 @@ public static class DeviceEndpoints
     private static async Task<IResult> ListDevices(ListDevicesHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(userId)), ct);
         return Results.Ok(result.Value);
     }
@@ -58,7 +58,7 @@ public static class DeviceEndpoints
         Guid id, RevokeDeviceHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new RevokeDeviceCommand(new RevokeDeviceRequest(id, userId)), ct);
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
@@ -67,17 +67,17 @@ public static class DeviceEndpoints
         [FromBody] HeartbeatBody? body, HeartbeatDeviceHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryDeviceId(user, out var deviceId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, body?.ProbeJson, body?.WorkstationJson)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.Unauthorized();
+        return result.Success ? Results.Ok(result.Value) : ProblemResults.Unauthorized();
     }
 
     private static async Task<IResult> ClaimCommand(
         ClaimNextCommandHandler handler, ClaimsPrincipal user, int? wait, CancellationToken ct)
     {
         if (!TryDeviceId(user, out var deviceId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var seconds = wait is > 0 and <= 30 ? wait.Value : 0;
         var result = await handler.HandleAsync(
             new ClaimNextCommandCommand(new ClaimNextCommandRequest(deviceId, TimeSpan.FromSeconds(seconds))), ct);
@@ -88,7 +88,7 @@ public static class DeviceEndpoints
         Guid id, [FromBody] CompleteBody body, CompleteCommandHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryDeviceId(user, out var deviceId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(
             new CompleteCommandCommand(new CompleteCommandRequest(id, deviceId, body.Success, body.ResultJson, body.Error)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
@@ -98,14 +98,12 @@ public static class DeviceEndpoints
         Guid id, [FromBody] EnqueueBody body, EnqueueCommandHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId) || IsDevice(user))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(id, userId, body.Kind, body.PayloadJson, body.ProjectId)), ct);
         if (!result.Success)
         {
-            return result.Error is "Device is not connected."
-                ? result.FromResult(409)
-                : result.FromResult();
+            return result.FromResult();
         }
         return Results.Accepted($"/v1/commands/{result.Value!.Id}", result.Value);
     }
@@ -114,7 +112,7 @@ public static class DeviceEndpoints
         Guid id, GetCommandHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new GetCommandCommand(new GetCommandRequest(id, userId)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
@@ -123,7 +121,7 @@ public static class DeviceEndpoints
         Guid projectId, ListRuntimesHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId) || IsDevice(user))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ListRuntimesCommand(new ListRuntimesRequest(projectId, userId)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
@@ -132,7 +130,7 @@ public static class DeviceEndpoints
         Guid projectId, [FromBody] AttachRuntimeBody body, AttachRuntimeHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId) || IsDevice(user))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(
             new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, body.DeviceId, userId, body.LocalRoot)), ct);
         return result.Success
@@ -144,7 +142,7 @@ public static class DeviceEndpoints
         Guid projectId, Guid id, DetachRuntimeHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryUserId(user, out var userId) || IsDevice(user))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, userId)), ct);
         return result.Success ? Results.NoContent() : result.FromResult(404);
     }
@@ -153,18 +151,18 @@ public static class DeviceEndpoints
         DeviceOpenCodeConnectionsHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryDeviceId(user, out var deviceId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new DeviceOpenCodeConnectionsCommand(deviceId), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.Unauthorized();
+        return result.Success ? Results.Ok(result.Value) : ProblemResults.Unauthorized();
     }
 
     private static async Task<IResult> GetLlamaSwapConfig(
         GetLlamaSwapConfigHandler handler, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!TryDeviceId(user, out var deviceId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new GetLlamaSwapConfigCommand(new GetLlamaSwapConfigRequest(deviceId)), ct);
-        return result.Success ? Results.Ok(result.Value) : Results.Unauthorized();
+        return result.Success ? Results.Ok(result.Value) : ProblemResults.Unauthorized();
     }
 
     private static bool TryUserId(ClaimsPrincipal user, out Guid userId)

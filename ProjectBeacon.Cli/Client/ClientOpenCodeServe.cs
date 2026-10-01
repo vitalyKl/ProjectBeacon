@@ -10,7 +10,9 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private Process? _process;
+    private const int MaxRestarts = 5;
     private int _unhealthyPolls;
+    private int _restarts;
     private Dictionary<string, string> _env = new(StringComparer.Ordinal);
     private string? _cwd;
     private int _port = 4096;
@@ -38,7 +40,9 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 
     public async Task RestartAsync(string? cwd, CancellationToken ct)
     {
-        KillProcess();
+        _restarts = 0;
+        _unhealthyPolls = 0;
+        await KillProcessAsync();
         await TickAsync(cwd, ct);
     }
 
@@ -48,13 +52,16 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         var bin = WorkstationActions.Which("opencode") ?? WorkstationActions.Which("opencode.exe");
         if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess)
         {
-            KillProcess();
+            await KillProcessAsync();
             Status = OpenCodeServeStatus.Missing("opencode binary not found on this device.");
             return;
         }
 
         if (!string.Equals(next, _cwd, StringComparison.OrdinalIgnoreCase) || !IsRunning)
-            KillProcess();
+        {
+            _restarts = 0;
+            await KillProcessAsync();
+        }
 
         _cwd = next;
         if (string.IsNullOrWhiteSpace(_cwd))
@@ -69,13 +76,21 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (SkipRealProcess || !IsRunning || Status.Healthy)
         {
             _unhealthyPolls = 0;
+            if (Status.Healthy)
+                _restarts = 0;
             return;
         }
 
         if (++_unhealthyPolls < 3)
             return;
         _unhealthyPolls = 0;
-        KillProcess();
+        if (_restarts >= MaxRestarts)
+        {
+            Status = new OpenCodeServeStatus(Status.Available, false, Status.Version, $"opencode restart limit ({MaxRestarts}).");
+            return;
+        }
+        _restarts++;
+        await KillProcessAsync();
         EnsureProcess(bin ?? "opencode");
         await PollAsync(ct);
     }
@@ -121,8 +136,11 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             response.EnsureSuccessStatusCode();
     }
 
+    internal int AbortCount { get; private set; }
+
     public async Task AbortAsync(string sessionId, CancellationToken ct)
     {
+        AbortCount++;
         if (SkipRealProcess)
             return;
         using var response = await Send(HttpMethod.Post, $"/session/{sessionId}/abort", new { }, ct);
@@ -205,25 +223,28 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             Status = OpenCodeServeStatus.Missing($"opencode serve failed to start: {ex.Message}");
             return;
         }
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        if (!ProcessControl.TryBeginDrain(process))
+        {
+            process.Dispose();
+            Status = OpenCodeServeStatus.Missing("opencode serve failed to drain output.");
+            return;
+        }
         _process = process;
     }
 
-    private void KillProcess()
+    private async Task KillProcessAsync()
     {
         if (SkipRealProcess)
         {
             _runningFake = false;
             return;
         }
-        if (_process is { HasExited: false })
-        {
-            try { _process.Kill(entireProcessTree: true); } catch { }
-            try { _process.WaitForExit(2000); } catch { }
-        }
-        _process?.Dispose();
+        var process = _process;
         _process = null;
+        if (process is null)
+            return;
+        await ProcessControl.KillAsync(process);
+        try { process.Dispose(); } catch { }
     }
 
     private async Task PollAsync(CancellationToken ct)
@@ -397,9 +418,8 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        KillProcess();
+        await KillProcessAsync();
         _http.Dispose();
-        await Task.CompletedTask;
     }
 }
 

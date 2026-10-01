@@ -28,7 +28,7 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
             db, command.Request.ProjectId, actor,
             command.Request.Capabilities, ct);
         if (!auth.Success)
-            return Result.Failure<ApiTokenDto>(auth.Error!);
+            return Result.Failure<ApiTokenDto>(auth);
 
         var project = await db.Projects.FindAsync([command.Request.ProjectId], ct);
         if (project is null)
@@ -103,7 +103,7 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
             db, projectId, actor,
             command.Request.TokenId, ct);
         if (!auth.Success)
-            return Result.Failure(auth.Error!);
+            return Result.Failure(auth);
 
         var token = await db.ApiTokens
             .FirstOrDefaultAsync(t => t.Id == command.Request.TokenId && t.ProjectId == projectId, ct);
@@ -142,7 +142,7 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
 
         var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
         if (!await ProjectAuthorization.CanManageProjectAsync(db, projectId, actor, ct))
-            return Result.Failure<ApiTokenDto>("Forbidden.");
+            return Result.Forbidden<ApiTokenDto>();
 
         var token = await db.ApiTokens
             .FirstOrDefaultAsync(t => t.Id == tokenId && t.ProjectId == projectId, ct);
@@ -173,7 +173,7 @@ public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result
 
         var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
         if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, actor, ct))
-            return Result.Failure<IList<ApiTokenDto>>("Forbidden.");
+            return Result.Forbidden<IList<ApiTokenDto>>();
 
         var tokens = await db.ApiTokens
             .Where(t => t.ProjectId == command.Request.ProjectId)

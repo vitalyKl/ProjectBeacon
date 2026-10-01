@@ -36,11 +36,25 @@ public static class McpStdioServer
     private static readonly object DbLock = new();
     private static ServiceProvider? _dbProvider;
 
+    private static bool _apiMisconfigured;
+
     public static Task<int> RunAsync(string root)
-        => RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), BeaconApiClient.FromEnvironment());
+    {
+        var resolved = BeaconApiClient.Resolve();
+        _apiMisconfigured = resolved.Misconfigured;
+        Console.Error.WriteLine(resolved.Misconfigured
+            ? "beacon mcp: BEACON_API_URL and BEACON_API_TOKEN must both be set, or both be unset."
+            : resolved.Client is null
+                ? "beacon mcp: local database mode."
+                : "beacon mcp: API mode.");
+        return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client);
+    }
 
     public static Task<int> RunAsync(string root, Stream input, Stream output)
-        => RunAsync(root, input, output, null);
+    {
+        _apiMisconfigured = false;
+        return RunAsync(root, input, output, null);
+    }
 
     internal static async Task<int> RunAsync(string root, Stream input, Stream output, BeaconApiClient? api)
     {
@@ -182,7 +196,7 @@ public static class McpStdioServer
 
         var (ok, _, body) = await api.SendAsync(HttpMethod.Get, $"v1/tasks/{taskId.Value:D}/pipeline", null, CancellationToken.None);
         if (!ok)
-            return null;
+            return "pipeline scope could not be loaded.";
 
         Guid? explicitId = null;
         var fromEnv = Environment.GetEnvironmentVariable("BEACON_SUBTASK_ID");
@@ -234,6 +248,9 @@ public static class McpStdioServer
 
         using var scope = provider.CreateScope();
         using var _ = TenantScope.EnterProjectScope(projectId);
+        var db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<BeaconDbContext>>().CreateDbContext();
+        await using (db)
+            await TenantRlsSession.ApplyAsync(db, projectId, null, unscoped: false);
         try
         {
             return await invoke(new McpScope(scope.ServiceProvider, projectId, taskId));
@@ -343,6 +360,8 @@ public static class McpStdioServer
         if (modelId is null)
             return ToolError(id, "missing or invalid 'modelBackendId' (expected a GUID)");
 
+        if (RejectPartialApi(id) is { } partialBind)
+            return partialBind;
         if (api is not null)
         {
             if (!TryParseScope(out _, out _, out var error))
@@ -360,6 +379,8 @@ public static class McpStdioServer
 
     private static async Task<JsonObject> ModelStatusAsync(JsonNode id, BeaconApiClient? api)
     {
+        if (RejectPartialApi(id) is { } partialStatus)
+            return partialStatus;
         if (api is not null)
         {
             if (!TryParseScope(out _, out _, out var error))
@@ -402,6 +423,8 @@ public static class McpStdioServer
         if (string.IsNullOrWhiteSpace(instructions))
             return ToolError(id, "missing 'instructions'");
 
+        if (RejectPartialApi(id) is { } partialCreate)
+            return partialCreate;
         if (api is not null)
         {
             if (!TrySessionTask(out var taskId, out var error))
@@ -434,6 +457,8 @@ public static class McpStdioServer
         if (string.IsNullOrWhiteSpace(summary))
             return ToolError(id, "missing 'summary'");
 
+        if (RejectPartialApi(id) is { } partialReport)
+            return partialReport;
         if (api is not null)
         {
             if (!TrySessionTask(out var taskId, out var error))
@@ -460,6 +485,8 @@ public static class McpStdioServer
             return ToolError(id, "missing 'note'");
         var subtaskId = ParseGuid(args, "subtaskId");
 
+        if (RejectPartialApi(id) is { } partialVerdict)
+            return partialVerdict;
         if (api is not null)
         {
             if (!TrySessionTask(out var taskId, out var error))
@@ -497,8 +524,13 @@ public static class McpStdioServer
         return true;
     }
 
+    private static JsonObject? RejectPartialApi(JsonNode id) =>
+        _apiMisconfigured ? ToolError(id, "BEACON_API_URL and BEACON_API_TOKEN must both be set, or both be unset.") : null;
+
     private static async Task<JsonObject> TaskPipelineStatusAsync(JsonNode id, BeaconApiClient? api)
     {
+        if (RejectPartialApi(id) is { } partialPipeline)
+            return partialPipeline;
         if (api is not null)
         {
             if (!TrySessionTask(out var taskId, out var error))

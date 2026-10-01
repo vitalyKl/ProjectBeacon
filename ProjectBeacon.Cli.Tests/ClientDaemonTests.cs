@@ -343,6 +343,7 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.True(ok, error);
         Assert.Contains("idle", string.Join("\n", logs));
         Assert.Contains("\"interrupted\":false", result);
+        Assert.Equal(0, openCode.AbortCount);
     }
 
     [Fact]
@@ -375,6 +376,7 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.True(ok, error);
         Assert.Contains("interrupted", string.Join("\n", logs));
         Assert.Contains("\"interrupted\":true", result);
+        Assert.Equal(1, openCode.AbortCount);
     }
 
     [Fact]

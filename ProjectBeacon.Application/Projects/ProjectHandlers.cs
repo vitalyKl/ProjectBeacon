@@ -64,7 +64,7 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, command.Actor, ct))
-            return Result.Failure<ProjectDto>("Forbidden.");
+            return Result.Forbidden<ProjectDto>();
 
         var project = await db.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);

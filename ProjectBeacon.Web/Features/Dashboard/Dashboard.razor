@@ -147,7 +147,7 @@ else
                     }
                     @if (_status is not null)
                     {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ProxyColor">@ProxyText</MudChip>
+                        <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
                         <HostLoadView Status="_status" />
                     }
                     @if (_loadSeries.Count > 0)
@@ -177,19 +177,19 @@ else
         MaxNumYAxisTicks = 3
     };
 
-    private Color ProxyColor =>
-        _status is null ? Color.Default
-        : _status.Available && _status.Healthy ? Color.Success
-        : _status.Available ? Color.Warning
-        : _status.Host is not null ? Color.Info
-        : Color.Default;
+    private string ProxyState => RuntimeHealth.ForDashboard(_status);
 
-    private string ProxyText =>
-        _status is null ? L["Unavailable"].Value
-        : _status.Available && _status.Healthy ? L["Healthy"].Value
-        : _status.Available ? L["Unhealthy"].Value
-        : _status.Host is not null ? L["DeviceOnline"].Value
-        : L["Unavailable"].Value;
+    private string ProxyText => ProxyState switch
+    {
+        "Online" => L["DeviceOnline"].Value,
+        "Starting" => L["RuntimeStarting"].Value,
+        "Ready" => L["RuntimeReady"].Value,
+        "Busy" => L["RuntimeBusy"].Value,
+        "Degraded" => L["RuntimeDegraded"].Value,
+        "Stopping" => L["RuntimeStopping"].Value,
+        "Failed" => L["RuntimeFailed"].Value,
+        _ => L["RuntimeOffline"].Value
+    };
 
     protected override async Task OnInitializedAsync()
     {

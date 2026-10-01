@@ -14,7 +14,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<ITenantContext, TenantContext>();
         services.AddDbContext<BeaconDbContext>(options =>
-            options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null)));
+            options.UseNpgsql(connectionString, o => o.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null))
+                .AddInterceptors(new TenantRlsConnectionInterceptor()));
         services.AddBeaconDbFactory();
         services.AddApplicationPorts();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();

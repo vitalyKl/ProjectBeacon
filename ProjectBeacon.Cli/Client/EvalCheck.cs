@@ -26,9 +26,16 @@ internal static class EvalCheck
             return (-1, "check timed out");
         }
 
-        var text = (stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult()).Trim();
+        var text = (ReadReady(stdout) + ReadReady(stderr)).Trim();
         if (text.Length > 4000)
             text = text[..4000];
         return (process.ExitCode, text);
+    }
+
+    private static string ReadReady(Task<string> read)
+    {
+        if (!read.Wait(2000) || !read.IsCompletedSuccessfully)
+            return "";
+        return read.Result;
     }
 }

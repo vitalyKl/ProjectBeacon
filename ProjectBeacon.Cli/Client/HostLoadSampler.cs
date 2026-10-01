@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Cli.Client;
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Infrastructure.LlamaSwap;
@@ -188,21 +187,13 @@ public static class HostLoadSampler
             return null;
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = bin,
-                Arguments = "--query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var proc = Process.Start(psi);
-            if (proc is null)
+            var run = ModelSwapping.NvidiaSmiRunner.RunAsync(
+                bin,
+                "--query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits",
+                CancellationToken.None).GetAwaiter().GetResult();
+            if (!run.Found || run.TimedOut || run.ExitCode != 0)
                 return null;
-            var output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(2000);
-            return ParseNvidiaSmi(output);
+            return ParseNvidiaSmi(run.Stdout);
         }
         catch
         {

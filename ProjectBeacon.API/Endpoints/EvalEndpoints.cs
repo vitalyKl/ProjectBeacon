@@ -21,7 +21,7 @@ public static class EvalEndpoints
     {
         var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(actorId, out var userId))
-            return Results.Unauthorized();
+            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
             projectId,

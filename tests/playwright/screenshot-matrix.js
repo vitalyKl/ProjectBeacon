@@ -10,7 +10,7 @@ const TASK_ID = process.env.BEACON_SCREENSHOT_TASK_ID || '';
 const anonRoutes = [
   { path: '/', name: 'landing' },
   { path: '/login', name: 'login' },
-  { path: '/register', name: 'register' },
+  { path: '/register?token=preview', name: 'register' },
   { path: '/forgot', name: 'forgot' },
   { path: '/reset', name: 'reset' },
   { path: '/recover', name: 'recover' },
@@ -30,6 +30,7 @@ const moduleRoutes = [
   { path: '/reports', name: 'reports' },
   { path: '/chat', name: 'chat' },
   { path: '/settings', name: 'settings' },
+  { path: '/settings/agents', name: 'settings-agents' },
   { path: '/projects/new', name: 'projects-new' },
 ];
 
@@ -70,6 +71,8 @@ async function login(page, login, password) {
   if (page.url().includes('error')) throw new Error('login failed: ' + page.url());
 }
 
+const written = [];
+
 async function shot(page, bp, name, urlPath, results) {
   const file = path.join(OUT, bp, name + '.png');
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -87,6 +90,7 @@ async function shot(page, bp, name, urlPath, results) {
       return;
     }
     await page.screenshot({ path: file, fullPage: true });
+    written.push({ bp, name, file });
     results.push('OK   ' + bp + ' ' + urlPath + ' -> ' + cur.pathname);
   } catch (e) {
     results.push('ERR  ' + bp + ' ' + urlPath + ' - ' + e.message);
@@ -118,6 +122,39 @@ async function shot(page, bp, name, urlPath, results) {
   }
 
   await browser.close();
+  const baselineRoot = path.resolve(__dirname, 'baseline');
+  const crypto = require('crypto');
+  const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  if (process.env.BEACON_SCREENSHOT_UPDATE === '1') {
+    const bad = results.filter((l) => !l.startsWith('OK'));
+    if (bad.length) {
+      console.error('refusing baseline update\n' + bad.join('\n'));
+      process.exit(1);
+    }
+    for (const shotFile of written) {
+      const dest = path.join(baselineRoot, shotFile.bp, shotFile.name + '.png');
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(shotFile.file, dest);
+    }
+    console.log('baseline updated: ' + written.length);
+  } else if (fs.existsSync(baselineRoot)) {
+    const mismatches = [];
+    for (const shotFile of written) {
+      const dest = path.join(baselineRoot, shotFile.bp, shotFile.name + '.png');
+      if (!fs.existsSync(dest)) {
+        mismatches.push('MISSING ' + shotFile.bp + '/' + shotFile.name);
+        continue;
+      }
+      if (hash(shotFile.file) !== hash(dest))
+        mismatches.push('DIFF ' + shotFile.bp + '/' + shotFile.name);
+    }
+    if (mismatches.length) {
+      console.error(mismatches.join('\n'));
+      process.exitCode = 1;
+    } else {
+      console.log('baseline match: ' + written.length);
+    }
+  }
   const ok = results.filter((l) => l.startsWith('OK')).length;
   const warn = results.filter((l) => l.startsWith('REDIRECT')).length;
   const err = results.filter((l) => l.startsWith('ERR')).length;

@@ -1,0 +1,24 @@
+@if (!string.IsNullOrEmpty(Label))
+{
+    <MudAlert Severity="@SeverityFor(State)" Class="mt-3" Dense="true">
+        <StatusChip Color="@ChipPalette.ForCommandState(State)" Label="@Label" />
+        @if (!string.IsNullOrEmpty(Detail))
+        {
+            <MudText Typo="Typo.body2" Class="mt-1">@Detail</MudText>
+        }
+    </MudAlert>
+}
+
+@code {
+    [Parameter] public string? State { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Detail { get; set; }
+
+    private static Severity SeverityFor(string? state) => state switch
+    {
+        "Failed" or "TimedOut" => Severity.Error,
+        "Succeeded" => Severity.Success,
+        "Cancelled" => Severity.Warning,
+        _ => Severity.Info
+    };
+}

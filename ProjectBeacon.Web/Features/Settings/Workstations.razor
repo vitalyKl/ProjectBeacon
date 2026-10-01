@@ -99,16 +99,7 @@
                 </MudExpansionPanel>
             </MudExpansionPanels>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
-            @if (!string.IsNullOrEmpty(_lifecycle))
-            {
-                <MudAlert Severity="@LifecycleSeverity" Class="mt-3" Dense="true">
-                    <StatusChip Color="@ChipPalette.ForRuntime(_lifecycleState)" Label="@_lifecycle" />
-                    @if (!string.IsNullOrEmpty(_lifecycleDetail))
-                    {
-                        <MudText Typo="Typo.body2" Class="mt-1">@_lifecycleDetail</MudText>
-                    }
-                </MudAlert>
-            }
+            <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
         </div>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
         <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
@@ -143,6 +134,7 @@
                 <MudTh>@L["Status"]</MudTh>
                 <MudTh>@L["Created"]</MudTh>
                 <MudTh>@L["Completed"]</MudTh>
+                <MudTh>@L["Error"]</MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="@L["Kind"]">@ChromeLabels.CommandKind(L, context.Kind)</MudTd>
@@ -151,6 +143,7 @@
                 </MudTd>
                 <MudTd DataLabel="@L["Created"]">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
                 <MudTd DataLabel="@L["Completed"]">@(context.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd DataLabel="@L["Error"]">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
         </MudTable>
@@ -182,14 +175,6 @@
     private string? _lifecycleState;
 
     private bool WorkstationOnline => _devices.FirstOrDefault(d => d.Id == _wsDeviceId)?.Online == true;
-
-    private Severity LifecycleSeverity => _lifecycleState switch
-    {
-        "Failed" or "TimedOut" => Severity.Error,
-        "Succeeded" => Severity.Success,
-        "Cancelled" => Severity.Warning,
-        _ => Severity.Info
-    };
 
     private Task OnModelsRootChanged(string value)
     {

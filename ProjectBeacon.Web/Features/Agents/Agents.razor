@@ -187,16 +187,7 @@ else
             @L["ApplyOnDevice"]
         </MudButton>
         <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["ModelSaveHint"]</MudText>
-        @if (!string.IsNullOrEmpty(_lifecycle))
-        {
-            <MudAlert Severity="@LifecycleSeverity" Class="mt-3" Dense="true">
-                <StatusChip Color="@ChipPalette.ForRuntime(_lifecycleState)" Label="@_lifecycle" />
-                @if (!string.IsNullOrEmpty(_lifecycleDetail))
-                {
-                    <MudText Typo="Typo.body2" Class="mt-1">@_lifecycleDetail</MudText>
-                }
-            </MudAlert>
-        }
+        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
     </MudPaper>
     </MudTabPanel>
     <MudTabPanel Text="@L["McpServers"]">
@@ -231,16 +222,7 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyMcp" Disabled="_busy || _runtimeDeviceId is null">
             @L["ApplyOnDevice"]
         </MudButton>
-        @if (!string.IsNullOrEmpty(_lifecycle))
-        {
-            <MudAlert Severity="@LifecycleSeverity" Class="mt-3" Dense="true">
-                <StatusChip Color="@ChipPalette.ForRuntime(_lifecycleState)" Label="@_lifecycle" />
-                @if (!string.IsNullOrEmpty(_lifecycleDetail))
-                {
-                    <MudText Typo="Typo.body2" Class="mt-1">@_lifecycleDetail</MudText>
-                }
-            </MudAlert>
-        }
+        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
     </MudPaper>
     </MudTabPanel>
     <MudTabPanel Text="@L["RuntimeDiagnostics"]">
@@ -259,10 +241,7 @@ else
                 {
                     <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload" Disabled="@UnloadDisabled">@L["Unload"]</MudButton>
                 }
-                @if (RuntimeState == "Failed")
-                {
-                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RefreshStatus" Disabled="_busy">@L["Diagnostics"]</MudButton>
-                }
+
             </MudStack>
         </MudStack>
         @if (_status is null && _runtimePhase is null)
@@ -566,33 +545,7 @@ else
         await ReloadAsync();
     }
 
-    private string RuntimeState
-    {
-        get
-        {
-            if (_runtimePhase is not null)
-                return _runtimePhase;
-            if (_status is null || !_status.Available)
-                return "Offline";
-            var models = _status.LoadedModels;
-            if (models is not null)
-            {
-                if (models.Any(m => IsModelState(m.State, "starting")))
-                    return "Starting";
-                if (models.Any(m => IsModelState(m.State, "stopping")))
-                    return "Stopping";
-                if (models.Any(m => IsModelState(m.State, "busy", "running")))
-                    return "Busy";
-                if (models.Any(m => IsModelState(m.State, "faulted", "failed", "error")))
-                    return models.Any(m => IsModelState(m.State, "ready")) ? "Degraded" : "Failed";
-            }
-            if (!_status.Healthy)
-                return "Failed";
-            if (!string.IsNullOrWhiteSpace(_status.Error))
-                return "Degraded";
-            return "Ready";
-        }
-    }
+    private string RuntimeState => _runtimePhase ?? RuntimeHealth.From(_status);
 
     private string RuntimeLabel => RuntimeState switch
     {
@@ -620,9 +573,6 @@ else
     private bool CanReload => RuntimeState is "Ready" or "Failed" or "Degraded";
     private bool CanUnload => RuntimeState == "Ready" && !string.IsNullOrWhiteSpace(_status?.LoadedModel);
     private bool UnloadDisabled => _busy || RuntimeState == "Busy";
-
-    private static bool IsModelState(string? state, params string[] names) =>
-        names.Any(name => string.Equals(state, name, StringComparison.OrdinalIgnoreCase));
 
     private async Task RefreshStatus()
     {
@@ -797,14 +747,6 @@ else
         _mode = AgentRunMode.Solo;
         _solo = _planner = _actor = _review = null;
     }
-
-    private Severity LifecycleSeverity => _lifecycleState switch
-    {
-        "Failed" or "TimedOut" => Severity.Error,
-        "Succeeded" => Severity.Success,
-        "Cancelled" => Severity.Warning,
-        _ => Severity.Info
-    };
 
     private string StatusLabel(WorkstationCommandStatus status) => status switch
     {

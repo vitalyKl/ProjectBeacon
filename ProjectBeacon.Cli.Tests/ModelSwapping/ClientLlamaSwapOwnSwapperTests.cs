@@ -148,7 +148,94 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
     private sealed class FixedVram(long free) : IVramChecker
     {
-        public Task<long> GetFreeVramMbAsync(CancellationToken ct) => Task.FromResult(free);
+        public Task<VramReading> ReadFreeAsync(CancellationToken ct) =>
+            Task.FromResult(new VramReading(free, false));
+    }
+
+    private sealed class FailedVram : IVramChecker
+    {
+        public Task<VramReading> ReadFreeAsync(CancellationToken ct) =>
+            Task.FromResult(new VramReading(-1, true));
+    }
+
+    [Fact]
+    public async Task TickOwn_SkipsConcurrentModelWhenFreeVramBelowEstimate()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("embed", "llama-server -m e.gguf", 4096, 0, [], Concurrent: true),
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 0, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            UseOwnSwapper = true,
+            SkipRealProcess = true,
+            VramChecker = new FixedVram(1)
+        };
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.Equal("qwen", ll.Status.LoadedModel);
+        Assert.DoesNotContain(ll.Status.LoadedModels!, m => m.Name == "embed");
+    }
+
+    [Fact]
+    public async Task TickOwn_ReservesEstimatesAdmittedEarlierInTheTick()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("embed", "llama-server -m e.gguf", 4096, 0, [], Concurrent: true),
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 4096, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            UseOwnSwapper = true,
+            SkipRealProcess = true,
+            VramChecker = new FixedVram(6)
+        };
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.Contains(ll.Status.LoadedModels!, m => m.Name == "embed");
+        Assert.DoesNotContain(ll.Status.LoadedModels!, m => m.Name == "qwen");
+    }
+
+    [Fact]
+    public async Task TickOwn_AdmissionUsesActualVramOfResidentBackend()
+    {
+        var qwen = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 4096, 300, [])]);
+        var both = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 4096, 300, []),
+            new LlamaSwapModelSpec("embed", "llama-server -m e.gguf", 4096, 0, [], Concurrent: true)]);
+
+        var ll = new ClientLlamaSwap
+        {
+            UseOwnSwapper = true,
+            SkipRealProcess = true,
+            VramChecker = new FixedVram(100)
+        };
+        await ll.TickAsync(qwen, 8080, null, CancellationToken.None);
+        ll.OwnBackend("qwen")!.SetActualVramMb(50);
+        ll.VramChecker = new FixedVram(20);
+        await ll.TickAsync(both, 8080, null, CancellationToken.None);
+
+        Assert.Equal("qwen", ll.Status.LoadedModel);
+        Assert.DoesNotContain(ll.Status.LoadedModels!, m => m.Name == "embed");
+    }
+
+    [Fact]
+    public async Task TickOwn_CheckerFailureWithEstimateDoesNotStart()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 4096, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            UseOwnSwapper = true,
+            SkipRealProcess = true,
+            VramChecker = new FailedVram()
+        };
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.False(ll.Status.Available);
+        Assert.Null(ll.Status.LoadedModel);
     }
 
     [Fact]

@@ -310,14 +310,17 @@ public static class WorkstationActions
             };
             if (!process.Start())
                 return null;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(5000))
             {
-                process.Kill(entireProcessTree: true);
+                try { process.Kill(entireProcessTree: true); } catch { }
                 return null;
             }
-            if (process.ExitCode != 0)
+            if (process.ExitCode != 0 || !stdout.Wait(1000))
                 return null;
-            return process.StandardOutput.ReadToEnd().Trim();
+            stderr.Wait(1000);
+            return stdout.Result.Trim();
         }
         catch (Exception)
         {
@@ -600,10 +603,17 @@ public static class WorkstationActions
             using var proc = Process.Start(psi);
             if (proc is null)
                 return null;
-            var output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit();
-            if (proc.ExitCode != 0)
+            var stdout = proc.StandardOutput.ReadToEndAsync();
+            var stderr = proc.StandardError.ReadToEndAsync();
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
                 return null;
+            }
+            if (proc.ExitCode != 0 || !stdout.Wait(1000))
+                return null;
+            stderr.Wait(1000);
+            var output = stdout.Result;
             var lines = output
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
                 .Select(l => l.Trim())
@@ -651,8 +661,18 @@ public static class WorkstationActions
             CreateNoWindow = true
         };
         using var proc = Process.Start(psi);
-        proc?.WaitForExit();
-        if (proc is { ExitCode: not 0 })
+        if (proc is null)
+            throw new InvalidOperationException($"{file} {args} failed to start");
+        var stdout = proc.StandardOutput.ReadToEndAsync();
+        var stderr = proc.StandardError.ReadToEndAsync();
+        if (!proc.WaitForExit(120_000))
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidOperationException($"{file} {args} timed out");
+        }
+        stdout.Wait(1000);
+        stderr.Wait(1000);
+        if (proc.ExitCode != 0)
             throw new InvalidOperationException($"{file} {args} exited {proc.ExitCode}");
     }
 
@@ -670,9 +690,22 @@ public static class WorkstationActions
         using var proc = Process.Start(psi);
         if (proc is null)
             return (1, "failed to start");
-        var output = proc.StandardOutput.ReadToEnd() + proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
+        var stdout = proc.StandardOutput.ReadToEndAsync();
+        var stderr = proc.StandardError.ReadToEndAsync();
+        if (!proc.WaitForExit(120_000))
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { }
+            return (-1, "timed out");
+        }
+        var output = (ReadReady(stdout) + ReadReady(stderr)).Trim();
         return (proc.ExitCode, output);
+    }
+
+    private static string ReadReady(Task<string> read)
+    {
+        if (!read.Wait(2000) || !read.IsCompletedSuccessfully)
+            return "";
+        return read.Result;
     }
 
     private static void WriteToolDisciplineInstructions(string projectRoot)

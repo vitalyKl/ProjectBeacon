@@ -10,18 +10,26 @@ internal sealed class BeaconApiClient
 
     public BeaconApiClient(HttpClient http) => _http = http;
 
-    public static BeaconApiClient? FromEnvironment()
+    internal readonly record struct Resolution(BeaconApiClient? Client, bool Misconfigured);
+
+    public static BeaconApiClient? FromEnvironment() => Resolve().Client;
+
+    internal static Resolution Resolve()
     {
         var url = Environment.GetEnvironmentVariable("BEACON_API_URL");
         var token = Environment.GetEnvironmentVariable("BEACON_API_TOKEN");
-        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(token))
-            return null;
-        if (!Uri.TryCreate(url.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var baseUri))
-            return null;
+        var hasUrl = !string.IsNullOrWhiteSpace(url);
+        var hasToken = !string.IsNullOrWhiteSpace(token);
+        if (hasUrl != hasToken)
+            return new Resolution(null, true);
+        if (!hasUrl)
+            return new Resolution(null, false);
+        if (!Uri.TryCreate(url!.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var baseUri))
+            return new Resolution(null, true);
 
         var http = new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(60) };
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
-        return new BeaconApiClient(http);
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token!.Trim());
+        return new Resolution(new BeaconApiClient(http), false);
     }
 
     public async Task<(bool Ok, int Status, string Body)> SendAsync(

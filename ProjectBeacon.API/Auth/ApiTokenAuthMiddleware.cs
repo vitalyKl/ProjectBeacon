@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Auth;
 
+using ProjectBeacon.API;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -77,7 +78,7 @@ public static class CapabilityExtensions
             if (ctx.HttpContext.User.HasApiCapability(capability))
                 return await next(ctx);
 
-            return Results.Json(new { error = "Missing capability." }, statusCode: StatusCodes.Status403Forbidden);
+            return ProblemResults.Forbidden();
         });
     }
 }

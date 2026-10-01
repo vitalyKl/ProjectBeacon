@@ -47,6 +47,13 @@ public static class DesignTokens
 
     public const string BorderHairline = "0.5px";
 
+    public const string TypePage = "24px";
+    public const string TypeSection = "16px";
+    public const string TypeCard = "14px";
+    public const string TypeBody = "14px";
+    public const string TypeSecondary = "13px";
+    public const string TypeCaption = "12px";
+
     // Component geometry
     public const string BoardCardPad = "10px";
 
@@ -94,6 +101,12 @@ public static class DesignTokens
         ("--radius-small", RadiusSmall),
         ("--radius-pill", RadiusPill),
         ("--border-hairline", BorderHairline),
+        ("--type-page", TypePage),
+        ("--type-section", TypeSection),
+        ("--type-card", TypeCard),
+        ("--type-body", TypeBody),
+        ("--type-secondary", TypeSecondary),
+        ("--type-caption", TypeCaption),
     ];
 
     public static readonly string RootCss = BuildRoot();
