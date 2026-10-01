@@ -10,7 +10,7 @@ public record RecordEvalRunRequest(Guid ProjectId, Guid TaskId, string? PairId, 
 
 public record RecordEvalRunCommand(RecordEvalRunRequest Request) : ICommand<Result<EvalRunDto>>;
 
-public record CompleteEvalRunRequest(Guid EvalRunId, int PromptTokens, int CompletionTokens, int TurnCount, bool Passed, string? TranscriptRef);
+public record CompleteEvalRunRequest(Guid EvalRunId, int PromptTokens, int CompletionTokens, int TurnCount, bool? Passed, string? TranscriptRef);
 
 public record CompleteEvalRunCommand(CompleteEvalRunRequest Request) : ICommand<Result<EvalRunDto>>;
 

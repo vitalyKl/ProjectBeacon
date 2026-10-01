@@ -30,7 +30,7 @@ public sealed class EvalRun : Entity, IProjectScoped
         return run;
     }
 
-    public void Complete(int promptTokens, int completionTokens, int turnCount, bool passed, string? transcriptRef = null)
+    public void Complete(int promptTokens, int completionTokens, int turnCount, bool? passed, string? transcriptRef = null)
     {
         PromptTokens = promptTokens;
         CompletionTokens = completionTokens;

@@ -16,7 +16,8 @@ public record EvalPairRequest(
     string Prompt,
     string? Path = null,
     string? Model = null,
-    int? BudgetTokens = null);
+    int? BudgetTokens = null,
+    string? CheckCommand = null);
 
 public record EvalPairCommand(EvalPairRequest Request) : ICommand<Result<EvalPairResult>>;
 
@@ -136,6 +137,8 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
             payload["path"] = request.Path;
         if (!string.IsNullOrWhiteSpace(request.Model))
             payload["model"] = request.Model;
+        if (!string.IsNullOrWhiteSpace(request.CheckCommand))
+            payload["checkCommand"] = request.CheckCommand;
 
         return payload.ToJsonString();
     }

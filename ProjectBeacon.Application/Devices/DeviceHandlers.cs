@@ -406,7 +406,14 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             var promptTokens = ReadInt(r, "promptTokens");
             var completionTokens = ReadInt(r, "completionTokens");
             var turnCount = ReadInt(r, "turnCount");
-            var passed = r.TryGetProperty("passed", out var passedElement) && passedElement.ValueKind == JsonValueKind.True;
+            bool? passed = r.TryGetProperty("passed", out var passedElement)
+                ? passedElement.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => null
+                }
+                : null;
             string? transcriptRef = r.TryGetProperty("transcriptRef", out var transcriptElement) && transcriptElement.ValueKind == JsonValueKind.String
                 ? transcriptElement.GetString()
                 : null;

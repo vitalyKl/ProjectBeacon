@@ -144,7 +144,18 @@ public static class WorkstationActions
         }
 
         var usage = await runtime.ReadUsageAsync(sessionId, ct);
-        var passed = idle && seen.Count > 0;
+        bool? passed = null;
+        string? checkOutput = null;
+        if (idle && seen.Count > 0)
+        {
+            var check = payload.TryGetProperty("checkCommand", out var checkElement) ? checkElement.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(check))
+            {
+                var checkResult = EvalCheck.Execute(validatedPath.Value!, check);
+                passed = checkResult.ExitCode == 0;
+                checkOutput = checkResult.Output;
+            }
+        }
         var result = new
         {
             evalRunId,
@@ -153,6 +164,7 @@ public static class WorkstationActions
             completionTokens = usage.CompletionTokens,
             turnCount = Math.Max(usage.AssistantMessages, seen.Count),
             passed,
+            checkOutput,
             interrupted = !idle,
             transcriptRef = $"opencode:session/{sessionId}"
         };
