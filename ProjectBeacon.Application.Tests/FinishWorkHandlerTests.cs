@@ -49,13 +49,17 @@ public sealed class FinishWorkHandlerTests : IDisposable
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
+        _db.ReviewRuns.Add(ReviewRun.Create(_projectId, task.Id, "transcript-todo"));
+        await _db.SaveChangesAsync();
+
         var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
             task.Id.ToString(),
             "done",
             "ok",
             _userId.ToString(),
-            new FinishWorkReview(true, 0, 0))));
+            new FinishWorkReview(true, 0, 0),
+            ReviewTranscriptRef: "transcript-todo")));
 
         Assert.True(result.Success, result.Error);
         await _db.Entry(task).ReloadAsync();
@@ -107,5 +111,24 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Contains("Review run not found", result.Error);
+    }
+
+    [Fact]
+    public async Task Done_WithoutReviewRun_Fails()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(),
+            "done",
+            "ok",
+            _userId.ToString(),
+            new FinishWorkReview(true, 0, 0))));
+
+        Assert.False(result.Success);
+        Assert.Contains("completed review run", result.Error);
     }
 }

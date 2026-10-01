@@ -34,7 +34,8 @@ public static class WorkEndpoints
             actorId,
             request.Review is null
                 ? null
-                : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed)));
+                : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed),
+            request.ReviewTranscriptRef));
 
         var result = await handler.HandleAsync(command, ct);
 
@@ -49,5 +50,6 @@ public static class WorkEndpoints
         string TaskId,
         string Result,
         string? Output,
-        FinishWorkReviewDto? Review = null);
+        FinishWorkReviewDto? Review = null,
+        string? ReviewTranscriptRef = null);
 }

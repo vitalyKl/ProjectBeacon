@@ -687,8 +687,13 @@ public class BeaconDbContext : DbContext, IBeaconDb
         modelBuilder.Entity<ReviewRun>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.ReviewerType).HasConversion<string>().IsRequired();
+            entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+            entity.Property(e => e.Findings);
+            entity.Property(e => e.ArtifactRef).HasMaxLength(500);
             entity.Property(e => e.TranscriptRef).HasMaxLength(500).IsRequired();
             entity.Property(e => e.ReviewerActorId).HasMaxLength(100);
+            entity.Property(e => e.StartedAt).IsRequired();
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.HasIndex(e => new { e.ProjectId, e.TaskId });
         });

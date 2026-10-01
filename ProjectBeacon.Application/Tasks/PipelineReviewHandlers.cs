@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
+using Domain.Entities.Evals;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -105,6 +106,18 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
 
         var verdict = ReviewVerdict.Create(task.Id, task.ProjectId, command.Request.Kind, note, subtaskId);
         db.ReviewVerdicts.Add(verdict);
+
+        if (command.Request.Kind == ReviewVerdictKind.Approve)
+        {
+            var reviewSessionId = await db.PipelineSessions
+                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Review)
+                .OrderByDescending(s => s.LaunchedAt)
+                .Select(s => (Guid?)s.Id)
+                .FirstOrDefaultAsync(ct);
+            var reviewRun = ReviewRun.Start(task.ProjectId, task.Id, ReviewerType.Agent, reviewSessionId);
+            reviewRun.Complete(note, $"verdict:{verdict.Id:D}");
+            db.ReviewRuns.Add(reviewRun);
+        }
 
         try
         {

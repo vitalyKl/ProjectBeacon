@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -126,13 +127,24 @@ public sealed class P0SecurityHttpTests
         var taskId = task.GetProperty("id").GetGuid();
 
         var spoofedActor = Guid.NewGuid().ToString();
+        await using (var seed = factory.Services.CreateAsyncScope())
+        {
+            var seedDb = seed.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                seedDb.ReviewRuns.Add(ReviewRun.Create(projectId, taskId, "transcript-spoof"));
+                await seedDb.SaveChangesAsync();
+            }
+        }
+
         var response = await client.PostAsJsonAsync("/v1/work/finish_work", new
         {
             taskId = taskId.ToString(),
             result = "done",
             output = "spoofoo output",
             actorId = spoofedActor,
-            review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 }
+            review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
+            reviewTranscriptRef = "transcript-spoof"
         });
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
 

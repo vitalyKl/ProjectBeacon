@@ -70,7 +70,7 @@ internal static class McpApiTools
             Props(("stepId", "string", true), ("done", "boolean", true)));
         yield return Tool("delete_task_step", "Delete a checklist step.",
             Props(("stepId", "string", true)));
-        yield return Tool("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires review.",
+        yield return Tool("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run (reviewTranscriptRef).",
             FinishSchema());
         yield return Tool("context_compile", "Compile the project brief the same way the Context page does.",
             Props(("taskId", "string", false), ("path", "string", false), ("repoId", "string", false),
@@ -524,6 +524,7 @@ internal static class McpApiTools
             ["result"] = result
         };
         Put(body, "output", Text(args, "output"));
+        Put(body, "reviewTranscriptRef", Text(args, "reviewTranscriptRef"));
         if (args?["review"] is JsonObject review)
             body["review"] = review.DeepClone();
         return await SendAsync(api, HttpMethod.Post, "v1/work/finish_work", body, ct);
@@ -1149,7 +1150,8 @@ internal static class McpApiTools
         var schema = Props(
             ("taskId", "string", false),
             ("result", "string", true),
-            ("output", "string", false));
+            ("output", "string", false),
+            ("reviewTranscriptRef", "string", false));
         var properties = schema["properties"]!.AsObject();
         properties["review"] = new JsonObject
         {

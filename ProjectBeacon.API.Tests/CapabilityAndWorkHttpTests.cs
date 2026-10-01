@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Domain.Entities.Evals;
 using Infrastructure.Data;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -80,13 +81,34 @@ public sealed class CapabilityAndWorkHttpTests
         });
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
 
-        var ok = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        var selfReported = await client.PostAsJsonAsync("/v1/work/finish_work", new
         {
             taskId = taskId.ToString(),
             result = "done",
             output = "reviewed",
             actorId,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, selfReported.StatusCode);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                db.ReviewRuns.Add(ReviewRun.Create(projectId, taskId, "transcript-abc"));
+                await db.SaveChangesAsync();
+            }
+        }
+
+        var ok = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        {
+            taskId = taskId.ToString(),
+            result = "done",
+            output = "reviewed",
+            actorId,
+            review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
+            reviewTranscriptRef = "transcript-abc"
         });
         Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync());
 
