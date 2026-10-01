@@ -107,6 +107,32 @@ public static class WorkstationActions
 
         var model = payload.TryGetProperty("model", out var modelElement) ? modelElement.GetString() : null;
         var title = payload.TryGetProperty("title", out var titleElement) ? titleElement.GetString() : "Beacon eval";
+        var controls = payload.TryGetProperty("controls", out var controlsElement) && controlsElement.ValueKind == JsonValueKind.Object
+            ? controlsElement
+            : default;
+        if (controls.ValueKind == JsonValueKind.Object)
+        {
+            if (controls.TryGetProperty("model", out var pinnedModel) && pinnedModel.ValueKind == JsonValueKind.String)
+            {
+                var pinned = pinnedModel.GetString();
+                if (!string.IsNullOrWhiteSpace(pinned))
+                    model = pinned;
+            }
+            if (controls.TryGetProperty("timeoutSeconds", out var timeoutElement)
+                && timeoutElement.TryGetInt32(out var timeoutSeconds)
+                && timeoutSeconds > 0)
+                maxDuration = TimeSpan.FromSeconds(timeoutSeconds);
+            if (controls.TryGetProperty("repoRevision", out var revisionElement))
+            {
+                var expected = revisionElement.GetString();
+                if (!string.IsNullOrWhiteSpace(expected))
+                {
+                    var head = GitHead(validatedPath.Value!);
+                    if (!string.Equals(head, expected.Trim(), StringComparison.OrdinalIgnoreCase))
+                        return Result.Failure<string>("Repository revision does not match the eval pin.");
+                }
+            }
+        }
 
         await openCode.TickAsync(validatedPath.Value, ct);
         if (!openCode.Status.Healthy)
@@ -169,6 +195,38 @@ public static class WorkstationActions
             transcriptRef = $"opencode:session/{sessionId}"
         };
         return Result.Ok(JsonSerializer.Serialize(result));
+    }
+
+    private static string? GitHead(string path)
+    {
+        try
+        {
+            using var process = new System.Diagnostics.Process();
+            process.StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = "rev-parse HEAD",
+                WorkingDirectory = path,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            if (!process.Start())
+                return null;
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                return null;
+            }
+            if (process.ExitCode != 0)
+                return null;
+            return process.StandardOutput.ReadToEnd().Trim();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     public static Result<string> ScanGguf(string root, string? path)

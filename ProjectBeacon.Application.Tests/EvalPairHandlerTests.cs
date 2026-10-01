@@ -123,6 +123,12 @@ public sealed class EvalPairHandlerTests : IDisposable
         var withoutPrompt = withoutPayload["prompt"]!.GetValue<string>();
         Assert.Equal("Do the work", withoutPrompt);
         Assert.DoesNotContain("BriefProject", withoutPrompt);
+
+        Assert.Equal(withPayload["controls"]!.ToJsonString(), withoutPayload["controls"]!.ToJsonString());
+        var controls = withPayload["controls"]!.AsObject();
+        Assert.Equal(180, controls["timeoutSeconds"]!.GetValue<int>());
+        Assert.Equal("", controls["model"]!.GetValue<string>());
+        Assert.Equal("", controls["checkCommand"]!.GetValue<string>());
     }
 
     [Fact]

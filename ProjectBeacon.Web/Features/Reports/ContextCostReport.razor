@@ -37,13 +37,13 @@ else
                 <MudTh>@L["ContextCostTurnDelta"]</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.PairId</MudTd>
-                <MudTd>@FormatRun(context.WithBrief)</MudTd>
-                <MudTd>@FormatRun(context.WithoutBrief)</MudTd>
-                <MudTd>@FormatDelta(context.PromptTokensDelta)</MudTd>
-                <MudTd>@FormatDelta(context.CompletionTokensDelta)</MudTd>
-                <MudTd>@FormatDelta(context.TotalTokensDelta)</MudTd>
-                <MudTd>@FormatDelta(context.TurnCountDelta)</MudTd>
+                <MudTd DataLabel="@L["Pair"]">@context.PairId</MudTd>
+                <MudTd DataLabel="@L["ContextCostWithBrief"]">@FormatRun(context.WithBrief)</MudTd>
+                <MudTd DataLabel="@L["ContextCostWithoutBrief"]">@FormatRun(context.WithoutBrief)</MudTd>
+                <MudTd DataLabel="@L["ContextCostPromptDelta"]">@FormatDelta(context.PromptTokensDelta)</MudTd>
+                <MudTd DataLabel="@L["ContextCostCompletionDelta"]">@FormatDelta(context.CompletionTokensDelta)</MudTd>
+                <MudTd DataLabel="@L["ContextCostTotalDelta"]">@FormatDelta(context.TotalTokensDelta)</MudTd>
+                <MudTd DataLabel="@L["ContextCostTurnDelta"]">@FormatDelta(context.TurnCountDelta)</MudTd>
             </RowTemplate>
         </MudTable>
     }
@@ -93,7 +93,12 @@ else
         if (run is null || run.CompletedAt is null)
             return L["Pending"].Value;
 
-        var status = run.Passed is true ? L["Passed"].Value : L["Failed"].Value;
+        var status = run.Passed switch
+        {
+            true => L["Passed"].Value,
+            false => L["Failed"].Value,
+            _ => L["Completed"].Value
+        };
         return $"{run.PromptTokens} / {run.CompletionTokens} / {run.TurnCount} / {status}";
     }
 

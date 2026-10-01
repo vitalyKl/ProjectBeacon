@@ -17,7 +17,12 @@ public record EvalPairRequest(
     string? Path = null,
     string? Model = null,
     int? BudgetTokens = null,
-    string? CheckCommand = null);
+    string? CheckCommand = null,
+    double? Temperature = null,
+    string? ReasoningEffort = null,
+    string? ToolPermissions = null,
+    int? TimeoutSeconds = null,
+    string? RepoRevision = null);
 
 public record EvalPairCommand(EvalPairRequest Request) : ICommand<Result<EvalPairResult>>;
 
@@ -139,6 +144,18 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
             payload["model"] = request.Model;
         if (!string.IsNullOrWhiteSpace(request.CheckCommand))
             payload["checkCommand"] = request.CheckCommand;
+
+        var timeout = request.TimeoutSeconds is > 0 and <= 3600 ? request.TimeoutSeconds.Value : 180;
+        payload["controls"] = new JsonObject
+        {
+            ["model"] = request.Model ?? "",
+            ["temperature"] = request.Temperature is double temperature ? JsonValue.Create(temperature) : null,
+            ["reasoningEffort"] = request.ReasoningEffort ?? "",
+            ["toolPermissions"] = request.ToolPermissions ?? "",
+            ["timeoutSeconds"] = timeout,
+            ["repoRevision"] = request.RepoRevision ?? "",
+            ["checkCommand"] = request.CheckCommand ?? ""
+        };
 
         return payload.ToJsonString();
     }
