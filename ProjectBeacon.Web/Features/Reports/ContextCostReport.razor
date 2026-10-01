@@ -96,7 +96,7 @@ else
         var status = run.Passed switch
         {
             true => L["Passed"].Value,
-            false => L["Failed"].Value,
+            false => L["EvalFailed"].Value,
             _ => L["Completed"].Value
         };
         return $"{run.PromptTokens} / {run.CompletionTokens} / {run.TurnCount} / {status}";

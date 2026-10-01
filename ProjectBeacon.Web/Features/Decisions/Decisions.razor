@@ -33,9 +33,13 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
     </MudPaper>
 
-    @if (_decisions.Count == 0)
+    @if (_loading)
     {
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoDecisions"]</MudText>
+        <LoadingState />
+    }
+    else if (_decisions.Count == 0)
+    {
+        <EmptyState>@L["NoDecisions"]</EmptyState>
     }
     else
     {
@@ -44,6 +48,7 @@ else
                 <MudTh>@L["Title"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
                 <MudTh>@L["Context"]</MudTh>
+                <MudTh>@L["Consequences"]</MudTh>
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -56,20 +61,29 @@ else
                 <MudTd DataLabel="@L["Context"]">
                     <MudText Typo="Typo.caption">@context.Context</MudText>
                 </MudTd>
+                <MudTd DataLabel="@L["Consequences"]">
+                    <MudText Typo="Typo.caption">@context.Consequences</MudText>
+                </MudTd>
                 <MudTd DataLabel="@L["Actions"]">
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Select(context)">@L["Open"]</MudButton>
                 </MudTd>
             </RowTemplate>
         </MudTable>
-        @if (_selected is not null)
-        {
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudDialog @bind-Visible="_detailOpen" Options="_dialogOptions">
+            <TitleContent>
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                    <MudText Typo="Typo.h6">@_selected.Title</MudText>
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(_selected.Status)">
-                        @ChromeLabels.Decision(L, _selected.Status)
-                    </MudChip>
+                    <MudText Typo="Typo.h6">@_selected?.Title</MudText>
+                    @if (_selected is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(_selected.Status)">
+                            @ChromeLabels.Decision(L, _selected.Status)
+                        </MudChip>
+                    }
                 </MudStack>
+            </TitleContent>
+            <DialogContent>
+                @if (_selected is not null)
+                {
                 @if (!string.IsNullOrWhiteSpace(_selected.Context))
                 {
                     <MudText Typo="Typo.caption" Class="mt-2">@_selected.Context</MudText>
@@ -87,6 +101,12 @@ else
                         @L["Replacement"]: @(replacement?.Title ?? replacementId.ToString())
                     </MudButton>
                 }
+                @foreach (var earlier in _decisions.Where(d => d.SupersededById == _selected.Id))
+                {
+                    <MudButton Variant="Variant.Text" Class="mt-1" OnClick="() => Select(earlier)">
+                        @L["Supersede"]: @earlier.Title
+                    </MudButton>
+                }
                 <MudStack Row="true" Spacing="1" Class="mt-3">
                     @if (_selected.Status == DecisionStatus.Proposed)
                     {
@@ -101,8 +121,9 @@ else
                         <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartSupersede(_selected)">@L["Supersede"]</MudButton>
                     }
                 </MudStack>
-            </MudPaper>
-        }
+                }
+            </DialogContent>
+        </MudDialog>
         @if (_superseding is not null)
         {
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -132,12 +153,16 @@ else
     private DecisionDto? _selected;
     private DecisionDto? _superseding;
     private Guid? _replacementId;
+    private bool _loading = true;
+    private bool _detailOpen;
+    private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
 
     protected override async Task OnInitializedAsync()
     {
         var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         _project = current.Value;
         await Reload();
+        _loading = false;
     }
 
     private async Task Reload()
@@ -192,7 +217,11 @@ else
         await Reload();
     }
 
-    private void Select(DecisionDto? decision) => _selected = decision;
+    private void Select(DecisionDto? decision)
+    {
+        _selected = decision;
+        _detailOpen = decision is not null;
+    }
 
     private void StartSupersede(DecisionDto decision)
     {

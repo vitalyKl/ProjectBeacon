@@ -2,6 +2,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
@@ -12,6 +13,7 @@
 @inject UpsertContextNodeHandler Upsert
 @inject ListContextNodesHandler ListNodes
 @inject CompileBriefHandler CompileBrief
+@inject ListContextRevisionsHandler ListRevisions
 @inject ExportAgentsMdHandler ExportAgents
 @inject CreateConstraintHandler CreateConstraint
 @inject ListConstraintsHandler ListConstraints
@@ -35,9 +37,36 @@
 else
 {
     <MudText Typo="Typo.caption" Class="mb-4">@_project.Name</MudText>
+    @if (_loading)
+    {
+        <LoadingState />
+    }
+    <ErrorState Message="@_error" />
 
     <MudGrid>
-        <MudItem xs="12" md="6">
+        <MudItem xs="12" md="4">
+            <MudText Typo="Typo.h6" Class="mb-3">@L["Sections"]</MudText>
+            @if (_nodes.Count == 0)
+            {
+                <EmptyState>@L["NoSectionsYet"]</EmptyState>
+            }
+            else
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
+                    <MudList T="string" Dense="true">
+                        @foreach (var node in _nodes)
+                        {
+                            <MudListItem T="string">
+                                <div role="button" tabindex="0" class="beacon-section-row" @onclick="() => LoadSection(node)" @onkeydown="e => OnSectionKey(e, node)">
+                                    @ChromeLabels.Section(L, node.SectionId) — @node.Title
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudPaper>
+            }
+        </MudItem>
+        <MudItem xs="12" md="4">
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
                 <MudTextField @bind-Value="_title" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 <MudSelect T="string" @bind-Value="_sectionId" Label="@L["Section"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
@@ -49,13 +78,14 @@ else
                     <MudSelectItem Value="@("conventions")">@L["SectionConventions"]</MudSelectItem>
                 </MudSelect>
                 <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="8" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Save">@L["Save"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy" OnClick="Save">@L["Save"]</MudButton>
             </MudPaper>
         </MudItem>
-        <MudItem xs="12" md="6">
+        <MudItem xs="12" md="4">
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
-                <MudText Typo="Typo.caption">@L["TokenBudget"]: @_tokens / 8000</MudText>
-                <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, 8000)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
+                <MudText Typo="Typo.caption">@L["ServerCompileNoTree"]</MudText>
+                <MudText Typo="Typo.caption" Class="mt-2">@L["TokenBudget"]: @_tokens / @_budget</MudText>
+                <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, _budget)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
                 @if (!string.IsNullOrEmpty(_revisionId))
                 {
                     <MudText Typo="Typo.caption" Class="mt-2">@L["Revision"]: @_revisionId</MudText>
@@ -73,26 +103,13 @@ else
                 {
                     <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_preview</MudText>
                 }
+                @foreach (var revision in _revisions.Take(5))
+                {
+                    <MudText Typo="Typo.caption" Class="mt-1">@revision.CreatedAt.ToUniversalTime().ToString("u") · @revision.TokenEstimate · @ShortHash(revision.CompiledHash)</MudText>
+                }
             </MudPaper>
         </MudItem>
     </MudGrid>
-
-    <MudText Typo="Typo.h6" Class="mt-6 mb-3">@L["Sections"]</MudText>
-    @if (_nodes.Count == 0)
-    {
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">@L["NoSectionsYet"]</MudText>
-    }
-    else
-    {
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-card">
-            <MudList T="string" Dense="true">
-                @foreach (var node in _nodes)
-                {
-                    <MudListItem T="string" OnClick="() => LoadSection(node)">@ChromeLabels.Section(L, node.SectionId) — @node.Title</MudListItem>
-                }
-            </MudList>
-        </MudPaper>
-    }
 
     <MudText Typo="Typo.h6" Class="mt-6 mb-3">@L["Constraints"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
@@ -136,6 +153,11 @@ else
     private string? _compiledHash;
     private bool _overflow;
     private string? _dropped;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private int _budget = 8000;
+    private List<ContextRevisionDto> _revisions = [];
     private List<ConstraintDto> _constraints = [];
     private string _constraintBody = string.Empty;
     private ConstraintKind _constraintKind = ConstraintKind.Must;
@@ -146,6 +168,7 @@ else
         _project = current.Value;
         if (_project is not null)
             await Reload();
+        _loading = false;
     }
 
     private async Task Reload()
@@ -153,16 +176,30 @@ else
         if (_project is null) return;
         var nodes = await ListNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
         _nodes = nodes.Success ? nodes.Value!.ToList() : [];
+        if (!nodes.Success)
+            _error = nodes.Error;
         var constraints = await ListConstraints.HandleAsync(_project.Id);
         _constraints = constraints.Success ? constraints.Value!.ToList() : [];
+        var revisions = await ListRevisions.HandleAsync();
+        _revisions = revisions.Success ? revisions.Value!.ToList() : [];
     }
+
+    private void OnSectionKey(KeyboardEventArgs e, ContextSectionDto node)
+    {
+        if (e.Key is "Enter" or " ")
+            LoadSection(node);
+    }
+
+    private static string ShortHash(string hash) => hash.Length > 12 ? hash[..12] : hash;
 
     private async Task Save()
     {
         if (_project is null) return;
+        _busy = true;
         var result = await Upsert.HandleAsync(new UpsertContextNodeCommand(new UpsertContextNodeRequest(
             _project.Id, _title, _body, _sectionId, ContextScopeType.Project,
             null, null, null, null, ContextSource.Native, null)));
+        _busy = false;
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -182,8 +219,10 @@ else
     private async Task Compile()
     {
         if (_project is null) return;
+        _busy = true;
         var result = await CompileBrief.HandleAsync(new CompileBriefCommand(new CompileBriefRequest(
-            _project.Id, null, null, null, 8000, false, false, false)));
+            _project.Id, null, null, null, _budget, false, false, false)));
+        _busy = false;
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
@@ -198,7 +237,9 @@ else
         _overflow = result.Value.BudgetOverflow;
         _dropped = result.Value.DroppedSections.Count == 0
             ? null
-            : string.Join(", ", result.Value.DroppedSections);
+            : string.Join(", ", result.Value.DroppedSections.Select(id => ChromeLabels.Section(L, id)));
+        _busy = false;
+        await Reload();
     }
 
     private async Task Export()

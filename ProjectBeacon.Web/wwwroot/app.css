@@ -289,6 +289,16 @@
     overflow-x: auto;
 }
 
+.beacon-section-row {
+    cursor: pointer;
+    width: 100%;
+}
+
+.beacon-section-row:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
 .beacon-phase-tick {
     display: flex;
     flex-direction: column;
@@ -315,9 +325,12 @@
     background: var(--color-surface-1);
 }
 
-.beacon-phase-mark.active,
+.beacon-phase-mark.active {
+    background: var(--mud-palette-info);
+}
+
 .beacon-phase-mark.done {
-    background: var(--mud-palette-primary);
+    background: var(--mud-palette-success);
 }
 
 .beacon-phase-mark.failed {
@@ -643,7 +656,12 @@
 @media (prefers-reduced-motion: reduce) {
     .beacon-nav.mud-navmenu .mud-nav-link,
     .beacon-nav.mud-navmenu .mud-nav-link .mud-nav-link-icon,
-    .beacon-card-interactive {
+    .beacon-card-interactive,
+    .beacon-track,
+    .beacon-phase-mark,
+    .mud-progress-linear-bar,
+    .mud-dialog {
         transition: none;
+        animation: none;
     }
 }

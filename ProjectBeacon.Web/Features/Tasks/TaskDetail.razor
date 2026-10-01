@@ -145,8 +145,8 @@ else
             <div class="beacon-phase-strip">
                 @foreach (var phase in _phases)
                 {
-                    <button type="button" class="beacon-phase-tick @(_openPhaseId == phase.Id ? "is-open" : "")" @onclick="() => TogglePhase(phase.Id)">
-                        <span class="beacon-phase-mark @phase.Status.ToString().ToLowerInvariant()"></span>
+                    <button type="button" class="beacon-phase-tick @(_openPhaseId == phase.Id ? "is-open" : "")" aria-label="@($"{phase.Title} {phase.Status}")" @onclick="() => TogglePhase(phase.Id)">
+                        <span class="beacon-phase-mark @phase.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
                         <span>@(string.IsNullOrEmpty(phase.Key) ? phase.Title : L["Phase_" + phase.Key].Value)</span>
                     </button>
                 }
@@ -159,7 +159,7 @@ else
                 {
                     <MudPaper Elevation="0" Outlined="true" Class="pa-3 mt-2">
                         <MudText Typo="Typo.body2">@sub.Instructions</MudText>
-                        <MudText Typo="Typo.caption">@sub.Status</MudText>
+                        <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
                         @if (!string.IsNullOrWhiteSpace(sub.Summary))
                         {
                             <MudText Typo="Typo.body2" Class="mt-1">@sub.Summary</MudText>
@@ -738,11 +738,13 @@ else
         _ => L["Pipeline"].Value
     };
 
-    private string SubtaskStatusLabel(SubtaskStatus status) => L[status.ToString()].Value;
+    private string SubtaskStatusLabel(SubtaskStatus status) => status == SubtaskStatus.Done
+        ? L["SubtaskReported"].Value
+        : L[status.ToString()].Value;
 
     private Color SubtaskStatusColor(SubtaskStatus status) => status switch
     {
-        SubtaskStatus.Done => Color.Success,
+        SubtaskStatus.Done => Color.Info,
         SubtaskStatus.InProgress => Color.Info,
         SubtaskStatus.Failed => Color.Error,
         _ => Color.Default
@@ -753,7 +755,7 @@ else
     private Color SessionStatusColor(SessionStatus status) => status switch
     {
         SessionStatus.Active => Color.Info,
-        SessionStatus.Closed => Color.Success,
+        SessionStatus.Closed => Color.Default,
         SessionStatus.Failed => Color.Error,
         _ => Color.Default
     };

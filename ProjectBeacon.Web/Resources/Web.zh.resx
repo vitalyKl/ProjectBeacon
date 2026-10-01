@@ -909,6 +909,9 @@
   <data name="Passed" xml:space="preserve">
     <value>通过</value>
   </data>
+  <data name="EvalFailed" xml:space="preserve">
+    <value>未通过</value>
+  </data>
   <data name="Failed" xml:space="preserve">
     <value>失败</value>
   </data>

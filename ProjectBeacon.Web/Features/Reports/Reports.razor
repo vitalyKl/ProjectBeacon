@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Projects
+@using System.Text.Json
 @using ProjectBeacon.Application.Reports
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
@@ -25,9 +26,13 @@
 }
 else
 {
-    @if (_reports.Count == 0)
+    @if (_loading)
     {
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoReports"]</MudText>
+        <LoadingState />
+    }
+    else if (_reports.Count == 0)
+    {
+        <EmptyState>@L["NoReports"]</EmptyState>
     }
     else
     {
@@ -42,8 +47,8 @@ else
             <RowTemplate>
                 <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
                 <MudTd DataLabel="@L["Title"]">@context.Title</MudTd>
-                <MudTd DataLabel="@L["Scope"]">@L["Project"]</MudTd>
-                <MudTd DataLabel="@L["Status"]">@L["Generated"]</MudTd>
+                <MudTd DataLabel="@L["Scope"]">@ScopeLabel(context)</MudTd>
+                <MudTd DataLabel="@L["Status"]">@StatusLabel(context)</MudTd>
                 <MudTd DataLabel="@L["Open"]">
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Open(context)">@L["Open"]</MudButton>
                 </MudTd>
@@ -53,13 +58,12 @@ else
         {
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
                 <MudText Typo="Typo.h6">@_open.Title</MudText>
-                <MudText Typo="Typo.caption">@_open.CreatedAt.ToUniversalTime().ToString("u") · @L["Project"] · @L["Generated"]</MudText>
+                <MudText Typo="Typo.caption">@ScopeLabel(_open) · @StatusLabel(_open)</MudText>
                 <MudText Typo="Typo.body2" Class="mt-3 beacon-pre">@_open.BodyMarkdown</MudText>
+                <ContextCostReport ProjectId="_project.Id" />
             </MudPaper>
         }
     }
-
-    <ContextCostReport ProjectId="_project.Id" />
 }
 
 @code {
@@ -67,12 +71,15 @@ else
     private List<ReportDto> _reports = [];
     private ReportDto? _open;
     private bool _busy;
+    private bool _loading = true;
+    private static readonly JsonSerializerOptions SnapshotJson = new() { PropertyNameCaseInsensitive = true };
 
     protected override async Task OnInitializedAsync()
     {
         var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
         _project = current.Value;
         await Reload();
+        _loading = false;
     }
 
     private async Task Reload()
@@ -110,5 +117,32 @@ else
             return;
         }
         _open = result.Value;
+    }
+
+    private string ScopeLabel(ReportDto report)
+    {
+        var snapshot = ReadSnapshot(report.SnapshotJson);
+        return snapshot is null
+            ? L["Project"].Value
+            : string.Format(L["MilestoneCounts"].Value, snapshot.Milestones.Open, snapshot.Milestones.Closed);
+    }
+
+    private string StatusLabel(ReportDto report)
+    {
+        var snapshot = ReadSnapshot(report.SnapshotJson);
+        var tasks = snapshot?.Tasks.Values.Sum() ?? 0;
+        return string.Format(L["ReportTaskCount"].Value, tasks);
+    }
+
+    private static ReportSnapshot? ReadSnapshot(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ReportSnapshot>(json, SnapshotJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

@@ -909,8 +909,11 @@
   <data name="Passed" xml:space="preserve">
     <value>bestanden</value>
   </data>
-  <data name="Failed" xml:space="preserve">
+  <data name="EvalFailed" xml:space="preserve">
     <value>fehlgeschlagen</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>Fehlgeschlagen</value>
   </data>
   <data name="Decisions" xml:space="preserve">
     <value>Entscheidungen</value>

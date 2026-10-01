@@ -909,8 +909,11 @@
   <data name="Passed" xml:space="preserve">
     <value>合格</value>
   </data>
-  <data name="Failed" xml:space="preserve">
+  <data name="EvalFailed" xml:space="preserve">
     <value>不合格</value>
+  </data>
+  <data name="Failed" xml:space="preserve">
+    <value>失敗</value>
   </data>
   <data name="Decisions" xml:space="preserve">
     <value>決定</value>

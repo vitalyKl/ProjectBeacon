@@ -952,7 +952,7 @@
   <data name="Passed" xml:space="preserve">
     <value>passed</value>
   </data>
-  <data name="Failed" xml:space="preserve">
+  <data name="EvalFailed" xml:space="preserve">
     <value>failed</value>
   </data>
   <data name="Decisions" xml:space="preserve">
@@ -1975,6 +1975,21 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="NoReports" xml:space="preserve">
     <value>No reports yet.</value>
+  </data>
+  <data name="ServerCompileNoTree" xml:space="preserve">
+    <value>Server compile does not include the working tree. The agent brief is filled on the workstation.</value>
+  </data>
+  <data name="MilestoneCounts" xml:space="preserve">
+    <value>{0} open milestones / {1} closed</value>
+  </data>
+  <data name="ReportTaskCount" xml:space="preserve">
+    <value>{0} tasks</value>
+  </data>
+  <data name="SubtaskReported" xml:space="preserve">
+    <value>Reported</value>
+  </data>
+  <data name="MoreTasks" xml:space="preserve">
+    <value>+{0} more</value>
   </data>
   <data name="Actions" xml:space="preserve">
     <value>Actions</value>

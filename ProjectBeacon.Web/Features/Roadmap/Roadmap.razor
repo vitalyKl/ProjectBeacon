@@ -25,15 +25,15 @@
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+    <LoadingState />
 }
 else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
-else if (_milestones.Count == 0 && !_showCreateForm)
+    else if (_milestones.Count == 0 && !_showCreateForm)
 {
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoMilestones"]</MudText>
+    <EmptyState>@L["NoMilestones"]</EmptyState>
 }
 else
 {
@@ -89,7 +89,7 @@ else
                     }
                     @if (milestoneTasks.Count > 3)
                     {
-                        <MudText Typo="Typo.caption">+@(milestoneTasks.Count - 3)</MudText>
+                        <MudText Typo="Typo.caption">@string.Format(L["MoreTasks"].Value, milestoneTasks.Count - 3)</MudText>
                     }
                     <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1" OnClick="() => OpenMilestone(milestone)">@L["Open"]</MudButton>
                     @if (milestone.ClosedAt is not null)
@@ -120,28 +120,32 @@ else
             </MudItem>
         }
     </MudGrid>
-    @if (_open is not null)
-    {
-        var openTasks = _tasks.Where(t => t.MilestoneId == _open.Id).ToList();
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-            <MudText Typo="Typo.h6">@_open.Name</MudText>
-            @if (!string.IsNullOrEmpty(_open.Description))
+    <MudDialog @bind-Visible="_detailOpen" Options="_dialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@_open?.Name</MudText>
+        </TitleContent>
+        <DialogContent>
+            @if (_open is not null)
             {
-                <MudText Typo="Typo.body2" Class="mt-2">@_open.Description</MudText>
-            }
-            @if (openTasks.Count == 0)
-            {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">@L["NoTasks"]</MudText>
-            }
-            else
-            {
-                @foreach (var task in openTasks)
+                var openTasks = _tasks.Where(t => t.MilestoneId == _open.Id).ToList();
+                @if (!string.IsNullOrEmpty(_open.Description))
                 {
-                    <MudButton Variant="Variant.Text" Class="mt-1" Href="@($"/task/{task.Id}")">@task.Title</MudButton>
+                    <MudText Typo="Typo.body2">@_open.Description</MudText>
+                }
+                @if (openTasks.Count == 0)
+                {
+                    <EmptyState>@L["NoTasks"]</EmptyState>
+                }
+                else
+                {
+                    @foreach (var task in openTasks)
+                    {
+                        <MudButton Variant="Variant.Text" Class="mt-1" Href="@($"/task/{task.Id}")">@task.Title</MudButton>
+                    }
                 }
             }
-        </MudPaper>
-    }
+        </DialogContent>
+    </MudDialog>
 }
 
 @code {
@@ -152,6 +156,8 @@ else
     private bool _showCreateForm;
     private Guid? _editingId;
     private MilestoneDto? _open;
+    private bool _detailOpen;
+    private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
     private string? _editName;
     private string? _editDescription;
     private int _editOrder;
@@ -240,7 +246,11 @@ else
 
     private void CancelEdit() => _editingId = null;
 
-    private void OpenMilestone(MilestoneDto milestone) => _open = milestone;
+    private void OpenMilestone(MilestoneDto milestone)
+    {
+        _open = milestone;
+        _detailOpen = true;
+    }
 
     private async Task CloseMilestone(MilestoneDto milestone)
     {

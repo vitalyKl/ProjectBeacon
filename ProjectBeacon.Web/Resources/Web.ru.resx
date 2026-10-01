@@ -933,7 +933,7 @@
   <data name="Passed" xml:space="preserve">
     <value>пройдено</value>
   </data>
-  <data name="Failed" xml:space="preserve">
+  <data name="EvalFailed" xml:space="preserve">
     <value>не пройдено</value>
   </data>
   <data name="Constraints" xml:space="preserve">
@@ -1845,6 +1845,21 @@
   </data>
   <data name="NoReports" xml:space="preserve">
     <value>Отчётов пока нет.</value>
+  </data>
+  <data name="ServerCompileNoTree" xml:space="preserve">
+    <value>Серверная сборка не включает рабочее дерево. Brief агента заполняется на рабочей станции.</value>
+  </data>
+  <data name="MilestoneCounts" xml:space="preserve">
+    <value>{0} открытых вех / {1} закрытых</value>
+  </data>
+  <data name="ReportTaskCount" xml:space="preserve">
+    <value>{0} задач</value>
+  </data>
+  <data name="SubtaskReported" xml:space="preserve">
+    <value>Сдан отчёт</value>
+  </data>
+  <data name="MoreTasks" xml:space="preserve">
+    <value>ещё {0}</value>
   </data>
   <data name="Actions" xml:space="preserve">
     <value>Действия</value>
