@@ -13,6 +13,13 @@ public interface IModelBackend
     int Endpoint { get; }
     BackendState State { get; }
     string? Error { get; }
+
+    long WorkingSetMb { get; }
+
+    long ActualVramMb { get; }
+
+    long EstimatedVramMb { get; }
+
     long VramFootprintMb { get; }
 
     Task StartAsync(LlamaSwapModelSpec spec, CancellationToken ct);

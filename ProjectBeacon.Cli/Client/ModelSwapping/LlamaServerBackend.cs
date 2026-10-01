@@ -34,7 +34,11 @@ public sealed class LlamaServerBackend : IModelBackend
     public int Endpoint => Port;
     public BackendState State => _fsm.Current;
     public string? Error => _fsm.LastError;
+    public long WorkingSetMb { get; private set; }
+    public long ActualVramMb { get; private set; }
+    public long EstimatedVramMb { get; private set; }
     public long VramFootprintMb { get; private set; }
+    internal Func<int, CancellationToken, Task<long>>? ReadProcessVramMb { get; set; }
 
     public async Task StartAsync(LlamaSwapModelSpec spec, CancellationToken ct)
     {
@@ -51,6 +55,7 @@ public sealed class LlamaServerBackend : IModelBackend
 
         if (SkipRealProcess)
         {
+            ApplyEstimate(spec);
             _fsm.TryTransition(BackendState.Ready);
             Log?.Invoke($"{Name}: start (skip) 0ms");
             return;
@@ -65,6 +70,7 @@ public sealed class LlamaServerBackend : IModelBackend
         }
         if (FakeHealthyProcess)
         {
+            ApplyEstimate(spec);
             _fsm.TryTransition(BackendState.Ready);
             _restartCount = 0;
             Log?.Invoke($"{Name}: start (fake) {sw.ElapsedMilliseconds}ms");
@@ -119,7 +125,7 @@ public sealed class LlamaServerBackend : IModelBackend
                 {
                     _fsm.TryTransition(BackendState.Ready);
                     _restartCount = 0;
-                    VramFootprintMb = WorkingSetMb(process);
+                    await ApplyMeasuredAsync(process, spec, ct);
                     StartSupervision(spec);
                     Log?.Invoke($"{Name}: start OK {sw.ElapsedMilliseconds}ms");
                     return;
@@ -156,7 +162,7 @@ public sealed class LlamaServerBackend : IModelBackend
         if (SkipRealProcess)
         {
             _fsm.ForceReset();
-            VramFootprintMb = 0;
+            ClearFootprint();
             Log?.Invoke($"{Name}: stop (skip)");
             return;
         }
@@ -171,7 +177,7 @@ public sealed class LlamaServerBackend : IModelBackend
         }
         _process?.Dispose();
         _process = null;
-        VramFootprintMb = 0;
+        ClearFootprint();
         _fsm.ForceReset();
         Log?.Invoke($"{Name}: stop {sw.ElapsedMilliseconds}ms");
         await Task.Delay(0, ct).ConfigureAwait(false);
@@ -287,8 +293,43 @@ public sealed class LlamaServerBackend : IModelBackend
     private static string ResolveExe(string exe) =>
         exe.Contains('/') || exe.Contains('\\') ? exe : WorkstationActions.Which(exe) ?? exe;
 
-    private static long WorkingSetMb(Process p)
+    private static long ReadWorkingSetMb(Process p)
     {
         try { return p.WorkingSet64 / (1024 * 1024); } catch { return 0; }
+    }
+
+    private void ApplyEstimate(LlamaSwapModelSpec spec)
+    {
+        WorkingSetMb = 0;
+        ActualVramMb = 0;
+        EstimatedVramMb = VramEstimate.FromSpec(spec);
+        VramFootprintMb = EstimatedVramMb;
+    }
+
+    private async Task ApplyMeasuredAsync(Process process, LlamaSwapModelSpec spec, CancellationToken ct)
+    {
+        WorkingSetMb = ReadWorkingSetMb(process);
+        EstimatedVramMb = VramEstimate.FromSpec(spec);
+        ActualVramMb = 0;
+        try
+        {
+            var read = ReadProcessVramMb ?? NvidiaSmiVramChecker.QueryProcessMbAsync;
+            var actual = await read(process.Id, ct);
+            if (actual > 0)
+                ActualVramMb = actual;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+        }
+
+        VramFootprintMb = ActualVramMb > 0 ? ActualVramMb : EstimatedVramMb;
+    }
+
+    private void ClearFootprint()
+    {
+        WorkingSetMb = 0;
+        ActualVramMb = 0;
+        EstimatedVramMb = 0;
+        VramFootprintMb = 0;
     }
 }

@@ -297,12 +297,17 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         return null;
     }
 
-    private async Task<bool> TryCheckVramAsync(CancellationToken ct)
+    private async Task<bool> TryCheckVramAsync(LlamaSwapModelSpec spec, CancellationToken ct)
     {
         try
         {
             var free = await VramChecker.GetFreeVramMbAsync(ct);
-            return free < 0 || free > 0;
+            if (free < 0)
+                return true;
+            var need = VramEstimate.FromSpec(spec);
+            if (need <= 0)
+                return free > 0;
+            return free >= need;
         }
         catch
         {
@@ -373,7 +378,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         {
             _coordinator.Register(name, spec.Concurrent);
 
-            if (!spec.Concurrent && !await TryCheckVramAsync(ct))
+            if (!spec.Concurrent && !await TryCheckVramAsync(spec, ct))
                 continue;
 
             if (!spec.Concurrent && _coordinator.IsGroupBusy("swap"))
@@ -430,8 +435,9 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
             _lastSwap = DateTime.UtcNow;
         }
 
-        var memory = backends.Where(b => b.VramFootprintMb > 0)
-            .Sum(b => b.VramFootprintMb).ToString(CultureInfo.InvariantCulture) + " MiB";
+        var reported = backends.Where(b => b.VramFootprintMb > 0).Sum(b => b.VramFootprintMb);
+        var anyActual = backends.Any(b => b.ActualVramMb > 0);
+        var memory = (anyActual ? "" : "est ") + reported.ToString(CultureInfo.InvariantCulture) + " MiB";
         var error = faulted.Length > 0 ? faulted[0].Error : null;
 
         var loadedModels = backends

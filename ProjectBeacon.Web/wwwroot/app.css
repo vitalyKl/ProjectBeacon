@@ -571,11 +571,12 @@
 
 @media (max-width: 479px) {
     .beacon-chat-dock {
-        left: 12px;
-        right: 12px;
-        bottom: 12px;
+        left: 0;
+        right: 0;
+        bottom: 0;
         width: auto;
-        max-height: 80vh;
+        max-height: 85vh;
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
     }
 
     .beacon-chat-dock-log,

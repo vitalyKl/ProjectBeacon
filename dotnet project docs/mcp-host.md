@@ -44,6 +44,12 @@ These tools talk to the database and require Beacon environment:
 
 When `BEACON_API_URL` and `BEACON_API_TOKEN` are set, these six tools call `/v1` instead of opening the database: `model_bind`, `model_status`, `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status`. Without that pair they keep the database path below.
 
+## Trust boundary
+
+A `beacon mcp` process that has no `BEACON_API_URL` and `BEACON_API_TOKEN` opens the local database for those six tools. That process is a trusted local user process. It is not the remote API security model: it does not apply API-token project scope, actor capabilities, or rate limits. Whoever can start the process can read and write whatever that database connection allows.
+
+With the URL and token set, those tools go through the control plane instead. File tools stay inside `--root` either way. Do not treat a local database session as equivalent to a remote `bcn_` token.
+
 ## Control-plane tools
 
 These tools call the same `/v1` routes the Web host serves. They need `BEACON_API_URL` (for example `http://127.0.0.1:5083`) and `BEACON_API_TOKEN` (project token `bcn_…` or a user JWT). `BEACON_PROJECT_ID` is the default project. `BEACON_TASK_ID` is the default task for `claim_task`, `context_compile`, `finish_work`, and the `pipeline_*` tools. A missing URL or token returns MCP `isError`; file tools keep working. There is no HTTP MCP server.

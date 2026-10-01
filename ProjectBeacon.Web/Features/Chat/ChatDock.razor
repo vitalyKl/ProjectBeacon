@@ -23,7 +23,7 @@
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
                 <MudText Typo="Typo.subtitle2">@L["Chat"]</MudText>
                 <MudStack Row="true" Spacing="1">
-                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="/chat">@L["Chat"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="/chat">@L["ChatOpenFull"]</MudButton>
                     <MudIconButton
                         Size="Size.Small"
                         Icon="@Icons.Material.Filled.Close"
@@ -44,12 +44,15 @@
             else
             {
                 <div class="beacon-chat-dock-log">
-                    @foreach (var part in _parts)
+                    @foreach (var part in DockParts)
                     {
-                        <MudText Typo="Typo.caption">@part.Role</MudText>
-                        <MudText Typo="Typo.body2" Class="beacon-pre mb-2">@part.Body</MudText>
+                        <ChatPartView Part="part" />
                     }
                 </div>
+                @if (!string.IsNullOrEmpty(Phase))
+                {
+                    <MudText Typo="Typo.caption" Class="mb-1">@PhaseLabel</MudText>
+                }
                 <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1">
                     <MudTextField @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="_busy" />
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
@@ -72,6 +75,7 @@
     private List<ChatPartDto> _parts = [];
     private string _draft = string.Empty;
     private bool _busy;
+    private bool _failed;
     private CancellationTokenSource? _poll;
 
     protected override async Task OnInitializedAsync()
@@ -139,11 +143,13 @@
         if (_session is null || string.IsNullOrWhiteSpace(_draft))
             return;
         _busy = true;
+        _failed = false;
         try
         {
             var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, null)));
             if (!sent.Success)
             {
+                _failed = true;
                 Snackbar.Add(sent.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
@@ -186,6 +192,12 @@
         {
         }
     }
+
+    private IEnumerable<ChatPartDto> DockParts => _parts.TakeLast(2);
+
+    private string Phase => ChatPhase.Resolve(_session?.Status, _parts.LastOrDefault()?.Kind, _failed, _parts.Count);
+
+    private string PhaseLabel => L[ChatPhase.LabelKey(Phase)].Value;
 
     public void Dispose()
     {

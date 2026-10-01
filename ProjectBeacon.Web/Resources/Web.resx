@@ -1907,4 +1907,52 @@ No Beacon-hosted coding agent.</value>
   <data name="MoveTo" xml:space="preserve">
     <value>Move to</value>
   </data>
+  <data name="RoleBindingReview" xml:space="preserve">
+    <value>Review</value>
+  </data>
+  <data name="McpLocal" xml:space="preserve">
+    <value>Local</value>
+  </data>
+  <data name="McpRemote" xml:space="preserve">
+    <value>Remote</value>
+  </data>
+  <data name="McpUrl" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="McpCommand" xml:space="preserve">
+    <value>Command</value>
+  </data>
+  <data name="NoTemplateSelected" xml:space="preserve">
+    <value>No template selected.</value>
+  </data>
+  <data name="ModelsCount" xml:space="preserve">
+    <value>{0} models</value>
+  </data>
+  <data name="ChatGenerating" xml:space="preserve">
+    <value>Generating</value>
+  </data>
+  <data name="ChatUsingTool" xml:space="preserve">
+    <value>Using tool</value>
+  </data>
+  <data name="ChatWaitingRuntime" xml:space="preserve">
+    <value>Waiting for runtime</value>
+  </data>
+  <data name="ChatCompleted" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="ChatAborted" xml:space="preserve">
+    <value>Aborted</value>
+  </data>
+  <data name="ChatThinking" xml:space="preserve">
+    <value>Thinking</value>
+  </data>
+  <data name="ChatTool" xml:space="preserve">
+    <value>Tool</value>
+  </data>
+  <data name="ChatOpenFull" xml:space="preserve">
+    <value>Open full chat</value>
+  </data>
+  <data name="ChatYou" xml:space="preserve">
+    <value>You</value>
+  </data>
 </root>

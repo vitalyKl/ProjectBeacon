@@ -38,6 +38,10 @@ public sealed class LlamaServerBackendTests : IDisposable
         await b.StartAsync(Spec(), CancellationToken.None);
         Assert.Equal(BackendState.Ready, b.State);
         Assert.Null(b.Error);
+        Assert.Equal(0, b.ActualVramMb);
+        Assert.Equal(0, b.WorkingSetMb);
+        Assert.Equal(4, b.EstimatedVramMb);
+        Assert.Equal(b.EstimatedVramMb, b.VramFootprintMb);
     }
 
     [Fact]

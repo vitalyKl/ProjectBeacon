@@ -273,16 +273,53 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             if (!message.TryGetProperty("parts", out var parts) || parts.ValueKind != JsonValueKind.Array)
                 continue;
             foreach (var part in parts.EnumerateArray())
-            {
-                var kind = part.TryGetProperty("type", out var t) ? t.GetString() ?? "text" : "text";
-                var text = part.TryGetProperty("text", out var tx) ? tx.GetString()
-                    : part.TryGetProperty("content", out var c) ? c.GetString() : "";
-                var id = part.TryGetProperty("id", out var pid) ? pid.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(text))
-                    list.Add(new OpenCodeMessagePart(role, kind, text!, id));
-            }
+                AddPart(list, role, part);
         }
         return list;
+    }
+
+    private static void AddPart(List<OpenCodeMessagePart> list, string role, JsonElement part)
+    {
+        var kind = part.TryGetProperty("type", out var t) ? t.GetString() ?? "text" : "text";
+        var id = part.TryGetProperty("id", out var pid) ? pid.GetString() : null;
+        if (kind is "tool" or "tool-call" or "tool_use" or "tool_call")
+        {
+            var name = ReadString(part, "tool") ?? ReadString(part, "name") ?? "tool";
+            var status = "";
+            var summary = "";
+            if (part.TryGetProperty("state", out var state))
+            {
+                if (state.ValueKind == JsonValueKind.Object)
+                {
+                    status = ReadString(state, "status") ?? "";
+                    summary = ReadString(state, "output") ?? ReadString(state, "error") ?? ReadString(state, "title") ?? "";
+                }
+                else if (state.ValueKind == JsonValueKind.String)
+                {
+                    status = state.GetString() ?? "";
+                }
+            }
+
+            summary = summary.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            if (summary.Length > 240)
+                summary = summary[..240];
+            var body = summary.Length == 0 ? name + "\n" + status : name + "\n" + status + "\n" + summary;
+            list.Add(new OpenCodeMessagePart(role, "tool", body, id));
+            return;
+        }
+
+        var text = ReadString(part, "text") ?? ReadString(part, "content");
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+        var normalized = kind is "reasoning" or "thinking" ? "reasoning" : kind;
+        list.Add(new OpenCodeMessagePart(role, normalized, text, id));
+    }
+
+    private static string? ReadString(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+            return null;
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
     }
 
     private static OpenCodeSessionUsage ParseUsage(JsonElement root)

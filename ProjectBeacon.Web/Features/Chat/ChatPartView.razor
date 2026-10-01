@@ -1,0 +1,61 @@
+@using ProjectBeacon.Application.Chat
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+@if (IsTool)
+{
+    <MudExpansionPanels Elevation="0" Class="mb-2">
+        <MudExpansionPanel Text="@ToolTitle">
+            @if (!string.IsNullOrWhiteSpace(ToolDetail))
+            {
+                <MudText Typo="Typo.body2" Class="beacon-pre">@ToolDetail</MudText>
+            }
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
+else if (IsReasoning)
+{
+    <MudExpansionPanels Elevation="0" Class="mb-2">
+        <MudExpansionPanel Text="@L["ChatThinking"].Value">
+            <MudText Typo="Typo.body2" Class="beacon-pre">@Part.Body</MudText>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
+else
+{
+    <MudPaper Elevation="0" Class="@PartClass" Outlined="true">
+        <MudText Typo="Typo.caption">@RoleLabel</MudText>
+        <MudText Typo="Typo.body2" Class="beacon-pre">@Part.Body</MudText>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public ChatPartDto Part { get; set; } = default!;
+
+    private bool IsTool => string.Equals(Part.Kind, "tool", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsReasoning => string.Equals(Part.Kind, "reasoning", StringComparison.OrdinalIgnoreCase);
+
+    private string RoleLabel => string.Equals(Part.Role, "user", StringComparison.OrdinalIgnoreCase)
+        ? L["ChatYou"].Value
+        : Part.Role;
+
+    private string PartClass => string.Equals(Part.Role, "user", StringComparison.OrdinalIgnoreCase)
+        ? "pa-3 mb-2 beacon-chat-user"
+        : "pa-3 mb-2";
+
+    private string[] ToolLines => (Part.Body ?? "").Replace("\r\n", "\n").Split('\n', 3);
+
+    private string ToolTitle
+    {
+        get
+        {
+            var name = ToolLines.Length > 0 && ToolLines[0].Length > 0 ? ToolLines[0] : L["ChatTool"].Value;
+            var status = ToolLines.Length > 1 ? ToolLines[1] : "";
+            return string.IsNullOrWhiteSpace(status)
+                ? $"{L["ChatTool"].Value} · {name}"
+                : $"{L["ChatTool"].Value} · {name} · {status}";
+        }
+    }
+
+    private string ToolDetail => ToolLines.Length > 2 ? ToolLines[2] : "";
+}

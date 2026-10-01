@@ -42,4 +42,34 @@ public sealed class OpenCodeServeTests : IDisposable
         var parts = await serve.ListPartsAsync(id, CancellationToken.None);
         Assert.Contains(parts, p => p.Role == "assistant");
     }
+
+    [Fact]
+    public async Task ListParts_ParsesTextReasoningAndTool()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (_, _) =>
+            {
+                const string json = """
+                    [{"info":{"role":"assistant"},"parts":[
+                      {"id":"t1","type":"text","text":"hello"},
+                      {"id":"r1","type":"reasoning","text":"think"},
+                      {"id":"c1","type":"tool","tool":"read","state":{"status":"completed","output":"src/a.cs"}}
+                    ]}]
+                    """;
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+                });
+            }
+        };
+
+        var parts = await serve.ListPartsAsync("s", CancellationToken.None);
+        Assert.Equal(3, parts.Count);
+        Assert.Equal("text", parts[0].Kind);
+        Assert.Equal("hello", parts[0].Body);
+        Assert.Equal("reasoning", parts[1].Kind);
+        Assert.Equal("tool", parts[2].Kind);
+        Assert.Equal("read\ncompleted\nsrc/a.cs", parts[2].Body);
+    }
 }

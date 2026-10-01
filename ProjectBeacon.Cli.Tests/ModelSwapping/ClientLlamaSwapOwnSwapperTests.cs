@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Tests.ModelSwapping;
 
 using ProjectBeacon.Cli.Client;
+using ProjectBeacon.Cli.Client.ModelSwapping;
 using ProjectBeacon.Infrastructure.LlamaSwap;
 
 public sealed class ClientLlamaSwapOwnSwapperTests
@@ -108,9 +109,46 @@ public sealed class ClientLlamaSwapOwnSwapperTests
         };
         await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
 
-        // SkipRealProcess means no real process, VramFootprintMb will be 0,
-        // but the memory string should still be formatted.
-        Assert.NotNull(ll.Status.Memory);
+        Assert.Equal("est 0 MiB", ll.Status.Memory);
+    }
+
+    [Fact]
+    public async Task TickOwn_MemoryUsesEstimateNotWorkingSet()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 4096, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            UseOwnSwapper = true,
+            SkipRealProcess = true
+        };
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.Equal("est 4 MiB", ll.Status.Memory);
+    }
+
+    [Fact]
+    public async Task TickOwn_SkipsSwapModelWhenFreeVramBelowEstimate()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 4096, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            UseOwnSwapper = true,
+            SkipRealProcess = true,
+            VramChecker = new FixedVram(1)
+        };
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.False(ll.Status.Available);
+        Assert.Null(ll.Status.LoadedModel);
+    }
+
+    private sealed class FixedVram(long free) : IVramChecker
+    {
+        public Task<long> GetFreeVramMbAsync(CancellationToken ct) => Task.FromResult(free);
     }
 
     [Fact]
