@@ -155,9 +155,9 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
     {
         if (host.ValueKind != JsonValueKind.Object)
             return null;
-        double? cpu = host.TryGetProperty("cpuPercent", out var cpuEl) && cpuEl.TryGetDouble(out var cpuVal) ? cpuVal : null;
-        long? ramUsed = host.TryGetProperty("ramUsedBytes", out var usedEl) && usedEl.TryGetInt64(out var usedVal) ? usedVal : null;
-        long? ramTotal = host.TryGetProperty("ramTotalBytes", out var totalEl) && totalEl.TryGetInt64(out var totalVal) ? totalVal : null;
+        double? cpu = ReadDouble(host, "cpuPercent");
+        long? ramUsed = ReadLong(host, "ramUsedBytes");
+        long? ramTotal = ReadLong(host, "ramTotalBytes");
         DateTimeOffset? sampled = null;
         if (host.TryGetProperty("sampledAt", out var atEl) && atEl.ValueKind == JsonValueKind.String
             && DateTimeOffset.TryParse(atEl.GetString(), out var parsed))
@@ -166,14 +166,26 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
         if (host.TryGetProperty("gpu", out var gpuEl) && gpuEl.ValueKind == JsonValueKind.Object)
         {
             var name = gpuEl.TryGetProperty("name", out var n) ? n.GetString() : null;
-            double? util = gpuEl.TryGetProperty("utilizationPercent", out var u) && u.TryGetDouble(out var uv) ? uv : null;
-            long? gUsed = gpuEl.TryGetProperty("memoryUsedBytes", out var gu) && gu.TryGetInt64(out var guv) ? guv : null;
-            long? gTotal = gpuEl.TryGetProperty("memoryTotalBytes", out var gt) && gt.TryGetInt64(out var gtv) ? gtv : null;
+            double? util = ReadDouble(gpuEl, "utilizationPercent");
+            long? gUsed = ReadLong(gpuEl, "memoryUsedBytes");
+            long? gTotal = ReadLong(gpuEl, "memoryTotalBytes");
             if (name is not null || util is not null || gUsed is not null)
                 gpu = new GpuLoadDto(name, util, gUsed, gTotal);
         }
         if (cpu is null && ramUsed is null && ramTotal is null && gpu is null)
             return null;
         return new HostLoadDto(cpu, ramUsed, ramTotal, gpu, sampled);
+    }
+
+    private static double? ReadDouble(JsonElement parent, string name)
+    {
+        return parent.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Number
+            && el.TryGetDouble(out var value) ? value : null;
+    }
+
+    private static long? ReadLong(JsonElement parent, string name)
+    {
+        return parent.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Number
+            && el.TryGetInt64(out var value) ? value : null;
     }
 }

@@ -53,6 +53,22 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
     }
 
     [Fact]
+    public void ParseProbe_HostLoadWithNullFields_DoesNotThrow()
+    {
+        var status = DeviceLlamaSwapProxy.ParseProbe(
+            """{"hostLoad":{"cpuPercent":null,"ramUsedBytes":null,"ramTotalBytes":null,"gpu":null,"sampledAt":null}}""");
+        Assert.Null(status);
+
+        var partial = DeviceLlamaSwapProxy.ParseProbe(
+            """{"hostLoad":{"cpuPercent":null,"ramUsedBytes":1024,"ramTotalBytes":4096,"gpu":{"name":"RTX","utilizationPercent":null,"memoryUsedBytes":null,"memoryTotalBytes":null},"sampledAt":"2026-09-18T12:00:00Z"}}""");
+        Assert.NotNull(partial);
+        Assert.Null(partial!.Host!.CpuPercent);
+        Assert.Equal(1024, partial.Host.RamUsedBytes);
+        Assert.Equal("RTX", partial.Host.Gpu!.Name);
+        Assert.Null(partial.Host.Gpu.UtilizationPercent);
+    }
+
+    [Fact]
     public async Task GetStatus_UsesOnlineDeviceProbe()
     {
         Guid projectId;
