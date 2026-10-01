@@ -38,14 +38,23 @@ else if (_error)
     }
     else
     {
+        <MudButtonGroup Variant="Variant.Outlined" Class="beacon-board-filter mb-3">
+            @foreach (var column in MobileColumns)
+            {
+                var selected = _mobileColumn == column;
+                <MudButton Variant="@(selected ? Variant.Filled : Variant.Text)" Color="Color.Primary" OnClick="@(() => _mobileColumn = column)">
+                    @ChromeLabels.Status(L, column)
+                </MudButton>
+            }
+        </MudButtonGroup>
         <MudDropContainer @ref="_container"
             T="TaskItemDto"
             Items="_allTasks"
             ItemsSelector="@((task, zoneId) => task.Status == GetStatusFromZone(zoneId))"
             ItemDropped="OnItemDropped"
-            Class="kanban-board">
+            Class="@($"kanban-board kanban-show-{_mobileColumn.ToLowerInvariant()}")">
         <ChildContent>
-            <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
+            <MudPaper Class="kanban-column kanban-column-todo" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="Todo" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["Todo"]</MudText>
@@ -54,7 +63,7 @@ else if (_error)
                 </MudDropZone>
             </MudPaper>
 
-            <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
+            <MudPaper Class="kanban-column kanban-column-inprogress" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="InProgress" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["InProgress"]</MudText>
@@ -63,7 +72,7 @@ else if (_error)
                 </MudDropZone>
             </MudPaper>
 
-            <MudPaper Class="kanban-column" Elevation="0" Outlined="true">
+            <MudPaper Class="kanban-column kanban-column-done" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="Done" T="TaskItemDto" Class="kanban-zone">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
                         <MudText Typo="Typo.subtitle1">@L["Done"]</MudText>
@@ -73,12 +82,14 @@ else if (_error)
             </MudPaper>
         </ChildContent>
         <ItemRenderer>
-            <TaskCard Task="context" />
+            <TaskCard Task="context" OnMove="status => MoveTask(context, status)" />
         </ItemRenderer>
     </MudDropContainer>
 }
 
 @code {
+    private static readonly string[] MobileColumns = ["Todo", "InProgress", "Done"];
+    private string _mobileColumn = "Todo";
     private List<TaskItemDto> _allTasks = [];
     private List<LabelDto> _labels = [];
     private List<MilestoneDto> _milestones = [];
@@ -133,6 +144,30 @@ else if (_error)
 
         await ReloadTasks();
         Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, ParseStatus(dropInfo.DropzoneIdentifier))), Severity.Info);
+    }
+
+    private async Task MoveTask(TaskItemDto task, TaskItemStatus status)
+    {
+        var next = status.ToString();
+        if (task.Status == next)
+            return;
+
+        _allTasks = _allTasks
+            .Select(t => t.Id == task.Id ? t with { Status = next } : t)
+            .ToList();
+        _container?.Refresh();
+
+        var result = await ChangeStatus.HandleAsync(new ChangeTaskStatusCommand(
+            new ChangeTaskStatusRequest(task.Id, status)));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Warning);
+            await ReloadTasks();
+            return;
+        }
+
+        await ReloadTasks();
+        Snackbar.Add(string.Format(L["TaskMoved"].Value, ChromeLabels.Status(L, status)), Severity.Info);
     }
 
     private async Task ReloadTasks()

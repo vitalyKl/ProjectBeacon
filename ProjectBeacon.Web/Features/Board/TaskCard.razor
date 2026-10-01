@@ -20,15 +20,25 @@
     {
         <MudProgressLinear Value="@(SubStageToPercent(Task.SubStage.Value))" Color="Color.Default" Class="mt-2 beacon-track" />
     }
-    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-2">
         <StatusChip Color="@ChipPalette.ForStatus(Task.Status)" Label="@ChromeLabels.Status(L, Task.Status)" />
         <StatusChip Color="@ChipPalette.ForPriority(Task.Priority)" Label="@ChromeLabels.Priority(L, Task.Priority)" />
         <StatusChip Color="@ChipPalette.ForType(Task.Type)" Label="@ChromeLabels.Type(L, Task.Type)" />
+        <MudMenu Label="@L["MoveTo"]" Size="Size.Small" Variant="Variant.Text" Dense="true" Class="beacon-move-task">
+            @foreach (var status in MoveTargets)
+            {
+                <MudMenuItem OnClick="@(() => OnMove.InvokeAsync(status))">@ChromeLabels.Status(L, status)</MudMenuItem>
+            }
+        </MudMenu>
     </MudStack>
 </MudPaper>
 
 @code {
     [Parameter] public TaskItemDto Task { get; set; } = null!;
+    [Parameter] public EventCallback<TaskItemStatus> OnMove { get; set; }
+
+    private IEnumerable<TaskItemStatus> MoveTargets =>
+        Enum.GetValues<TaskItemStatus>().Where(status => status.ToString() != Task.Status);
 
     private void Open() => Navigation.NavigateTo($"/task/{Task.Id}");
 

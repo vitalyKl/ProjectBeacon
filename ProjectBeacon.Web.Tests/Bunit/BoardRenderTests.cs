@@ -13,6 +13,8 @@ public sealed class BoardRenderTests : BUnitRenderBase
         // Assert
         var html = cut.Markup;
         Assert.Contains("kanban-board", html);
+        Assert.Contains("beacon-board-filter", html);
+        Assert.Contains("beacon-move-task", html);
         Assert.Contains("Task One", html);
         Assert.Contains("Task Two", html);
         Assert.Contains("Task Three", html);

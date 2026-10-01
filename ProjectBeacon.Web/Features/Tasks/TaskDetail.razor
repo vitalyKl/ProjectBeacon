@@ -36,9 +36,9 @@
 <PageHeader Title="@(_task?.Title ?? L["TaskDetail"].Value)">
     @if (_task is not null)
     {
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="EditTask">@L["Edit"]</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="EditTask">@L["Edit"]</MudButton>
     }
-    <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/board"))">
+    <MudButton Variant="Variant.Text" OnClick="@(() => Navigation.NavigateTo("/board"))">
         @L["BackToBoard"]
     </MudButton>
 </PageHeader>
@@ -53,14 +53,15 @@ else if (_task is null)
 }
 else
 {
-    <MudTabs Rounded="true" ApplyEffectsToContainer="true" Class="mt-2">
-    <MudTabPanel Text="@L["Overview"]">
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
-        @if (!string.IsNullOrEmpty(_task.Description))
-        {
-            <MudText Typo="Typo.body1">@_task.Description</MudText>
-        }
-        <MudStack Row="true" Spacing="2" Class="mt-4">
+    <div class="beacon-task-meta mb-3">
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+            <StatusChip Color="@ChipPalette.ForStatus(_task.Status)" Label="@ChromeLabels.Status(L, _task.Status)" />
+            <StatusChip Color="@ChipPalette.ForPriority(_task.Priority)" Label="@ChromeLabels.Priority(L, _task.Priority)" />
+            <StatusChip Color="@ChipPalette.ForType(_task.Type)" Label="@ChromeLabels.Type(L, _task.Type)" />
+            @if (_pipeline?.Stage is { } headerStage && headerStage != TaskPipelineStage.None)
+            {
+                <StatusChip Color="Color.Primary" Label="@PipelineStageLabel(headerStage)" />
+            }
             <MudSelect T="TaskItemStatus"
                 Value="_status"
                 ValueChanged="OnStatusChanged"
@@ -75,13 +76,47 @@ else
                     <MudSelectItem Value="status">@ChromeLabels.Status(L, status)</MudSelectItem>
                 }
             </MudSelect>
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(_task.Priority)">
-                @L["Priority"]: @ChromeLabels.Priority(L, _task.Priority)
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(_task.Type)">
-                @L["Type"]: @ChromeLabels.Type(L, _task.Type)
-            </MudChip>
         </MudStack>
+    </div>
+    <div class="beacon-action-bar mb-3">
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+            @if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
+            }
+            else
+            {
+                @switch (_pipeline.Stage)
+                {
+                    case TaskPipelineStage.Planning:
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
+                        break;
+                    case TaskPipelineStage.Executing:
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy">@L["StartReview"]</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
+                        break;
+                    case TaskPipelineStage.Reviewing:
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewApprove))" Disabled="_busy">@L["Approve"]</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewReopen))" Disabled="_busy">@L["ReopenSubtask"]</MudButton>
+                        break;
+                    case TaskPipelineStage.Approved:
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ConfirmClose))" Disabled="_busy">@L["ConfirmClose"]</MudButton>
+                        break;
+                }
+            }
+        </MudStack>
+        @if (_isAdmin && _pipeline?.Stage is TaskPipelineStage.ReopenedForRevision or TaskPipelineStage.Approved)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Class="beacon-action-danger" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
+        }
+    </div>
+    <MudTabs Rounded="true" ApplyEffectsToContainer="true" Class="mt-2">
+    <MudTabPanel Text="@L["Overview"]">
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
+        @if (!string.IsNullOrEmpty(_task.Description))
+        {
+            <MudText Typo="Typo.body1">@_task.Description</MudText>
+        }
         @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
         {
             <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-4 beacon-track" />
@@ -186,38 +221,10 @@ else
                 }
             </MudStack>
 
-            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
-                @switch (pipeline.Stage)
-                {
-                    case TaskPipelineStage.Planning:
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
-                        break;
-                    case TaskPipelineStage.Executing:
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy">@L["StartReview"]</MudButton>
-                        break;
-                    case TaskPipelineStage.ReopenedForRevision:
-                        @if (_isAdmin)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
-                        }
-                        break;
-                    case TaskPipelineStage.Reviewing:
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewApprove))" Disabled="_busy">@L["Approve"]</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewReopen))" Disabled="_busy">@L["ReopenSubtask"]</MudButton>
-                        break;
-                    case TaskPipelineStage.Approved:
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ConfirmClose))" Disabled="_busy">@L["ConfirmClose"]</MudButton>
-                        @if (_isAdmin)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
-                        }
-                        break;
-                    case TaskPipelineStage.Closed:
-                        <MudText Typo="Typo.caption">@L["PipelineClosed"]</MudText>
-                        break;
-                }
-            </MudStack>
+            @if (pipeline.Stage == TaskPipelineStage.Closed)
+            {
+                <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineClosed"]</MudText>
+            }
 
             @if (pipeline.Stage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision)
             {
@@ -253,9 +260,12 @@ else
                             @if (subtask.Status == SubtaskStatus.InProgress)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))" Disabled="_busy">@L["ReportResult"]</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))" Disabled="_busy">@L["FailSubtask"]</MudButton>
                             }
                         </MudStack>
+                        @if (subtask.Status == SubtaskStatus.InProgress)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Class="mt-1" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))" Disabled="_busy">@L["FailSubtask"]</MudButton>
+                        }
                     </MudPaper>
                 }
             }
@@ -309,7 +319,6 @@ else
         else
         {
             <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineNotStarted"]</MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
         }
     </MudPaper>
     </MudTabPanel>
@@ -747,6 +756,17 @@ else
         SessionStatus.Closed => Color.Success,
         SessionStatus.Failed => Color.Error,
         _ => Color.Default
+    };
+
+    private string PipelineStageLabel(TaskPipelineStage stage) => stage switch
+    {
+        TaskPipelineStage.Planning => L["StagePlanning"].Value,
+        TaskPipelineStage.Executing => L["StageExecuting"].Value,
+        TaskPipelineStage.ReopenedForRevision => L["StageReopenedForRevision"].Value,
+        TaskPipelineStage.Reviewing => L["StageReviewing"].Value,
+        TaskPipelineStage.Approved => L["StageApproved"].Value,
+        TaskPipelineStage.Closed => L["Closed"].Value,
+        _ => L["PipelineNotStarted"].Value
     };
 
     private string RoleLabel(PipelineRole role) => role switch

@@ -413,7 +413,27 @@
     gap: var(--space-2);
 }
 
+.beacon-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.beacon-action-danger {
+    margin-left: auto;
+}
+
+.beacon-board-filter {
+    display: none;
+}
+
 @media (max-width: 959px) {
+    .beacon-board-filter {
+        display: inline-flex;
+    }
+
     .kanban-board.mud-drop-container,
     .kanban-board {
         flex-direction: column;
@@ -429,6 +449,12 @@
     .kanban-zone {
         min-height: 0;
         height: auto;
+    }
+
+    .kanban-board.kanban-show-todo .kanban-column:not(.kanban-column-todo),
+    .kanban-board.kanban-show-inprogress .kanban-column:not(.kanban-column-inprogress),
+    .kanban-board.kanban-show-done .kanban-column:not(.kanban-column-done) {
+        display: none;
     }
 }
 

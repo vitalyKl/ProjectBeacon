@@ -18,7 +18,8 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         // Assert
         var html = cut.Markup;
         Assert.Contains(task.Title, html);
-        Assert.Contains("<div", html);
+        Assert.Contains("beacon-task-meta", html);
+        Assert.Contains("beacon-action-bar", html);
     }
 
     [Fact]

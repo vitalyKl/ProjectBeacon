@@ -1904,4 +1904,7 @@ No Beacon-hosted coding agent.</value>
   <data name="Diagnostics" xml:space="preserve">
     <value>Diagnostics</value>
   </data>
+  <data name="MoveTo" xml:space="preserve">
+    <value>Move to</value>
+  </data>
 </root>
