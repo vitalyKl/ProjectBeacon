@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Cli.Tests;
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.CodeIndex;
 using ProjectBeacon.Cli.Mcp;
@@ -115,93 +114,5 @@ public sealed class BriefPatcherTests
         var extracted = BriefPatcher.ExtractBriefMarkdown(serialized);
 
         Assert.Null(extracted);
-    }
-
-    [Fact]
-    public void PatchBriefMarkdown_ReplacesTreeSection()
-    {
-        var brief = "# Project\n\n## Tree\n\nstub tree\n\n## Goals\n\nDone.";
-        var index = new CodeIndex(Path.GetTempPath());
-
-        var patched = BriefPatcher.PatchBriefMarkdown(brief, index);
-
-        Assert.DoesNotContain("stub tree", patched, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("# Tree", patched);
-        // Goals section should still be there
-        Assert.Contains("## Goals", patched);
-    }
-
-    [Fact]
-    public void PatchBriefMarkdown_FallbackWhenNotGit()
-    {
-        var nonGitRoot = Path.Combine(Path.GetTempPath(), "beacon-notgit-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            Directory.CreateDirectory(nonGitRoot);
-            var brief = "# Project\n\n## Tree\n\nstub tree\n\n## Changed scope\n\nstub scope\n\n## Goals\n\nDone.";
-            var index = new CodeIndex(nonGitRoot);
-
-            var patched = BriefPatcher.PatchBriefMarkdown(brief, index);
-
-            // Tree section gets replaced (GetTree works on any dir), Changed scope stays as stub (needs git)
-            Assert.DoesNotContain("stub tree", patched, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("# Tree", patched);
-            Assert.Contains("stub scope", patched, StringComparison.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            if (Directory.Exists(nonGitRoot))
-                Directory.Delete(nonGitRoot, true);
-        }
-    }
-
-    [Fact]
-    public void PatchBriefMarkdown_NoStubSections_ReturnsOriginal()
-    {
-        var brief = "# Project\n\n## Goals\n\nDone.";
-        var index = new CodeIndex(Path.GetTempPath());
-
-        var patched = BriefPatcher.PatchBriefMarkdown(brief, index);
-
-        Assert.Equal(brief, patched);
-    }
-
-    [Fact]
-    public void PatchBriefMarkdown_ReplacesBothSections_InGitRepo()
-    {
-        var gitRoot = TempGitRoot();
-        try
-        {
-            File.WriteAllText(Path.Combine(gitRoot, "README.md"), "# Hello");
-            var brief = "# Project\n\n## Tree\n\nstub tree\n\n## Changed scope\n\nstub scope\n\n## Goals\n\nDone.";
-            var index = new CodeIndex(gitRoot);
-
-            var patched = BriefPatcher.PatchBriefMarkdown(brief, index);
-
-            Assert.DoesNotContain("stub tree", patched, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("stub scope", patched, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("# Tree", patched);
-            Assert.Contains("README.md", patched);
-        }
-        finally
-        {
-            Directory.Delete(gitRoot, true);
-        }
-    }
-
-    private static string TempGitRoot()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "beacon-test-git-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        var psi = new System.Diagnostics.ProcessStartInfo("git", "init")
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        using var proc = System.Diagnostics.Process.Start(psi);
-        proc?.WaitForExit();
-        return root;
     }
 }

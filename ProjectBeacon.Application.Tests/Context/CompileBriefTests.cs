@@ -353,9 +353,9 @@ public sealed class CompileBriefTests : IDisposable
             new CompileBriefRequest(_projectId, Guid.NewGuid(), null, null, 8000, false, false, false)));
 
         Assert.True(result.Success);
-        Assert.Contains("## Tree", result.Value.BriefMarkdown);
-        Assert.Contains("## Changed scope", result.Value.BriefMarkdown);
-        Assert.Contains("code index is not in this process", result.Value.BriefMarkdown);
+        Assert.DoesNotContain("## Tree", result.Value.BriefMarkdown);
+        Assert.DoesNotContain("## Changed scope", result.Value.BriefMarkdown);
+        Assert.DoesNotContain("code index is not in this process", result.Value.BriefMarkdown);
     }
 
     [Fact]

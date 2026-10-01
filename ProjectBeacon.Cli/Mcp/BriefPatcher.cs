@@ -19,13 +19,15 @@ internal static class BriefPatcher
                 ["includeChangedScope"] = false,
                 ["includeTreeCapsule"] = false
             };
-            var tree = index.GetTree();
+            var prefix = await LabelPrefixAsync(api, projectId, taskId, ct);
+            var prefixes = prefix is null ? null : new[] { prefix };
+            var tree = index.GetTree(prefix);
             if (tree.Success && tree.Value is not null)
             {
                 body["includeTreeCapsule"] = true;
                 body["treeCapsule"] = FormatTree(tree.Value);
             }
-            var changed = index.GetChangedScope();
+            var changed = index.GetChangedScope(prefixes);
             if (changed.Success && changed.Value is not null)
             {
                 body["includeChangedScope"] = true;
@@ -38,11 +40,10 @@ internal static class BriefPatcher
             if (!result.Ok)
                 return new McpToolText(true, $"API error: {result.Status}: {result.Body}");
 
-            var briefMarkdown = ExtractBriefMarkdown(result.Body);
-            if (briefMarkdown is null)
+            if (ExtractBriefMarkdown(result.Body) is null)
                 return new McpToolText(true, "Could not extract brief markdown from API response.");
 
-            return new McpToolText(false, briefMarkdown);
+            return new McpToolText(false, result.Body);
         }
         catch (Exception ex)
         {
@@ -80,64 +81,61 @@ internal static class BriefPatcher
         }
     }
 
-    internal static string PatchBriefMarkdown(string briefMarkdown, CodeIndex index)
+    private static async Task<string?> LabelPrefixAsync(BeaconApiClient api, string projectId, string? taskId, CancellationToken ct)
     {
-        var patched = ReplaceTreeSection(briefMarkdown, index);
-        patched = ReplaceScopeSection(patched, index);
-        return patched;
-    }
-
-    private static string ReplaceTreeSection(string text, CodeIndex index)
-    {
-        var headerIdx = text.IndexOf("## Tree", StringComparison.Ordinal);
-        if (headerIdx < 0)
-            return text;
-
-        var headerEnd = headerIdx + "## Tree".Length;
-        var endOfSection = FindSectionEnd(text, headerEnd);
-        var treeResult = index.GetTree();
-        if (!treeResult.Success || treeResult.Value is null)
-            return text;
-
-        var newContent = FormatTree(treeResult.Value);
-        // Keep header, replace content up to next section, add newline separator
-        return text[..headerEnd] + "\n\n" + newContent + text[endOfSection..];
-    }
-
-    private static string ReplaceScopeSection(string text, CodeIndex index)
-    {
-        var headerIdx = text.IndexOf("## Changed scope", StringComparison.Ordinal);
-        if (headerIdx < 0)
-            return text;
-
-        var headerEnd = headerIdx + "## Changed scope".Length;
-        var endOfSection = FindSectionEnd(text, headerEnd);
-        var changedResult = index.GetChangedScope();
-        if (!changedResult.Success)
-            return text;
-
-        var newContent = FormatFileList(changedResult.Value!);
-        return text[..headerEnd] + "\n\n" + newContent + text[endOfSection..];
-    }
-
-    private static int FindSectionEnd(string text, int contentStart)
-    {
-        // contentStart is right after the header, e.g. in "...## Tree\n\nstub..."
-        // it points to the first \n. We need to find the NEXT line starting with ##
-        var searchFrom = contentStart + 1;
-        while (searchFrom < text.Length)
+        if (string.IsNullOrWhiteSpace(taskId))
+            return null;
+        var task = await api.SendAsync(HttpMethod.Get, $"v1/tasks/{taskId}", null, ct);
+        if (!task.Ok)
+            return null;
+        var labelId = ReadString(task.Body, "labelId");
+        if (string.IsNullOrWhiteSpace(labelId))
+            return null;
+        var labels = await api.SendAsync(HttpMethod.Get, $"v1/projects/{projectId}/labels", null, ct);
+        if (!labels.Ok)
+            return null;
+        try
         {
-            var nl = text.IndexOf('\n', searchFrom);
-            if (nl < 0)
-                return text.Length;
-
-            var nextLineStart = nl + 1;
-            if (nextLineStart + 1 < text.Length && text[nextLineStart] == '#' && text[nextLineStart + 1] == '#')
-                return nextLineStart;
-
-            searchFrom = nextLineStart;
+            var node = JsonNode.Parse(labels.Body);
+            var array = node switch
+            {
+                JsonArray direct => direct,
+                JsonObject obj when obj["value"] is JsonArray value => value,
+                _ => null
+            };
+            if (array is null)
+                return null;
+            foreach (var item in array)
+            {
+                if (item is not JsonObject label)
+                    continue;
+                var id = label["id"]?.ToString();
+                if (!string.Equals(id, labelId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var prefix = label["pathPrefix"]?.ToString();
+                return string.IsNullOrWhiteSpace(prefix) ? null : prefix;
+            }
         }
-        return text.Length;
+        catch (JsonException)
+        {
+        }
+        return null;
+    }
+
+    private static string? ReadString(string json, string name)
+    {
+        try
+        {
+            var node = JsonNode.Parse(json);
+            if (node?[name] is JsonValue direct && direct.TryGetValue<string>(out var value))
+                return value;
+            if (node?["value"]?[name] is JsonValue nested && nested.TryGetValue<string>(out var nestedValue))
+                return nestedValue;
+        }
+        catch (JsonException)
+        {
+        }
+        return null;
     }
 
     internal static string FormatTree(TreeResult tree)

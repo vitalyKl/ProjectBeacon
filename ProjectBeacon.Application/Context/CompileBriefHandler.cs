@@ -115,22 +115,18 @@ public class CompileBriefHandler
             "## Tools for this task\n\n- `context_compile` — compile this brief\n- `claim_task` / `finish_work` — task lifecycle\n- `get_tree` / `search_code` / `get_changed_scope` — code index (when the local daemon is connected)\n- `read_file` / `write_file` / `apply_patch` — Beacon file tools (when the local daemon is connected)",
             true));
 
-        var includeTree = command.Request.IncludeTreeCapsule || command.Request.RepoId != null;
-        var includeChanged = command.Request.IncludeChangedScope || command.Request.RepoId != null;
-        if (includeTree)
+        if (!string.IsNullOrWhiteSpace(command.Request.TreeCapsule))
         {
-            var tree = string.IsNullOrWhiteSpace(command.Request.TreeCapsule)
-                ? "Repo is linked but the code index is not in this process yet (Phase 7). Prefer Beacon file tools over guessing paths."
-                : TrimCapsule(command.Request.TreeCapsule);
-            briefParts.Add(("tree_capsule", "## Tree\n\n" + tree, false));
+            var tree = TrimToTokens(command.Request.TreeCapsule, budget);
+            if (tree.Length > 0)
+                briefParts.Add(("tree_capsule", "## Tree\n\n" + tree, false));
         }
 
-        if (includeChanged)
+        if (!string.IsNullOrWhiteSpace(command.Request.ChangedScope))
         {
-            var scope = string.IsNullOrWhiteSpace(command.Request.ChangedScope)
-                ? "No local index is attached. Re-query after the daemon indexes the working tree."
-                : TrimCapsule(command.Request.ChangedScope);
-            briefParts.Add(("changed_scope", "## Changed scope\n\n" + scope, false));
+            var scope = TrimToTokens(command.Request.ChangedScope, budget);
+            if (scope.Length > 0)
+                briefParts.Add(("changed_scope", "## Changed scope\n\n" + scope, false));
         }
 
         foreach (var section in ordered.Where(s => !NeverDropSections.Contains(s.SectionId)))
@@ -189,10 +185,24 @@ public class CompileBriefHandler
             DroppedSections: dropped));
     }
 
-    private static string TrimCapsule(string text)
+    private static string TrimToTokens(string text, int maxTokens)
     {
         var trimmed = text.Trim();
-        return trimmed.Length <= 8000 ? trimmed : trimmed[..8000];
+        if (maxTokens <= 0 || Tokenizer.CountTokens(trimmed) <= maxTokens)
+            return maxTokens <= 0 ? "" : trimmed;
+
+        var low = 0;
+        var high = trimmed.Length;
+        while (low < high)
+        {
+            var mid = (low + high + 1) / 2;
+            if (Tokenizer.CountTokens(trimmed[..mid]) <= maxTokens)
+                low = mid;
+            else
+                high = mid - 1;
+        }
+
+        return low == 0 ? "" : trimmed[..low];
     }
 
     private static string? FindContradiction(IReadOnlyList<Constraint> constraints)
