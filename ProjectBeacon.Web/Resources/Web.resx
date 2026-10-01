@@ -170,16 +170,16 @@
     <value>Chat model</value>
   </data>
   <data name="ChatModelHint" xml:space="preserve">
-    <value>Used by the app chat when a message does not name another model. Saving tells the running client to refresh OpenCode.</value>
+    <value>Used by the app chat when a message does not name another model. Saving tells the running client to refresh the agent runtime.</value>
   </data>
   <data name="OpenCodeModel" xml:space="preserve">
-    <value>OpenCode model</value>
+    <value>Agent model</value>
   </data>
   <data name="OpenCodeModelHint" xml:space="preserve">
     <value>Provider and model OpenCode already knows, like xai/grok-3. A saved connection can supply the key; otherwise sign in on the machine with opencode auth login.</value>
   </data>
   <data name="OpenCodeConnections" xml:space="preserve">
-    <value>OpenCode connections</value>
+    <value>Model connections</value>
   </data>
   <data name="OpenCodeConnectionsLead" xml:space="preserve">
     <value>Tell OpenCode which online model to use. A local llama.cpp model is added separately, under Agents.</value>
@@ -1319,7 +1319,7 @@
     <value>Local models directory</value>
   </data>
   <data name="ApplyOnDeviceDone" xml:space="preserve">
-    <value>OpenCode config applied on the device.</value>
+    <value>Agent config applied on the device.</value>
   </data>
   <data name="PickGguf" xml:space="preserve">
     <value>Pick GGUF</value>
@@ -1677,10 +1677,10 @@ No Beacon-hosted coding agent.</value>
     <value>Project folder saved on this device.</value>
   </data>
   <data name="HowToAddModel" xml:space="preserve">
-    <value>Llama.cpp: put GGUF files in Settings → Local models directory, then Pick GGUF. Other types need a launch command. Save registers the model; Apply on device writes OpenCode config.</value>
+    <value>Llama.cpp: put GGUF files in Settings → Local models directory, then Pick GGUF. Other types need a model id under Advanced. Save registers the model; Apply on device writes the agent config.</value>
   </data>
   <data name="ModelSaveHint" xml:space="preserve">
-    <value>llama-swap picks up the registry on the next client heartbeat. Apply on device is required for OpenCode to see the model. Neither starts a task.</value>
+    <value>llama-swap picks up the registry on the next client heartbeat. Apply on device is required for the agent to see the model. Neither starts a task.</value>
   </data>
   <data name="LaunchCommandRequired" xml:space="preserve">
     <value>Launch command is required for this backend type.</value>
@@ -1695,10 +1695,10 @@ No Beacon-hosted coding agent.</value>
     <value>Nothing runs by itself. Attach a folder on the dashboard, add a model in Settings, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
   </data>
   <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>Create a subtask, then Start Actor Session. Launch Session only marks the session Active in Beacon — it does not start OpenCode.</value>
+    <value>Create a subtask, then Start Actor Session. Launch Session only marks the session Active in Beacon — it does not start the agent.</value>
   </data>
   <data name="LaunchSessionHint" xml:space="preserve">
-    <value>Launch Session updates status in the database. It does not spawn OpenCode.</value>
+    <value>Launch Session updates status in the database. It does not spawn the agent.</value>
   </data>
   <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>No active pipeline sessions. Models do not start tasks; open a task and Start Pipeline, or use MCP.</value>
@@ -1740,7 +1740,7 @@ No Beacon-hosted coding agent.</value>
     <value>No chats yet.</value>
   </data>
   <data name="ChatEmptyHint" xml:space="preserve">
-    <value>Start a chat. OpenCode runs on the workstation via beacon client.</value>
+    <value>Start a chat. The agent runs on the workstation via beacon client.</value>
   </data>
   <data name="Message" xml:space="preserve">
     <value>Message</value>
@@ -1876,5 +1876,32 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="Retry" xml:space="preserve">
     <value>Retry</value>
+  </data>
+  <data name="Overview" xml:space="preserve">
+    <value>Overview</value>
+  </data>
+  <data name="Work" xml:space="preserve">
+    <value>Work</value>
+  </data>
+  <data name="Discussion" xml:space="preserve">
+    <value>Discussion</value>
+  </data>
+  <data name="RuntimeDiagnostics" xml:space="preserve">
+    <value>Runtime</value>
+  </data>
+  <data name="Advanced" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="ScopeUserLevel" xml:space="preserve">
+    <value>User-level</value>
+  </data>
+  <data name="ScopeContextual" xml:space="preserve">
+    <value>Contextual</value>
+  </data>
+  <data name="Connect" xml:space="preserve">
+    <value>Connect</value>
+  </data>
+  <data name="Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
   </data>
 </root>

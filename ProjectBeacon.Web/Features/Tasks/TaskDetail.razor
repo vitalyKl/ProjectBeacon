@@ -53,6 +53,8 @@ else if (_task is null)
 }
 else
 {
+    <MudTabs Rounded="true" ApplyEffectsToContainer="true" Class="mt-2">
+    <MudTabPanel Text="@L["Overview"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
         @if (!string.IsNullOrEmpty(_task.Description))
         {
@@ -99,6 +101,8 @@ else
         <MudTextField @bind-Value="_reviewDraft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveReview">@L["Save"]</MudButton>
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["Work"]">
 
     @if (_phases.Count > 0)
     {
@@ -154,6 +158,8 @@ else
             </MudStack>
         }
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["Pipeline"]">
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
@@ -306,6 +312,8 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
         }
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["Discussion"]">
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudText Typo="Typo.h6">@L["Comments"]</MudText>
@@ -321,6 +329,8 @@ else
         <MudTextField @bind-Value="_commentDraft" Label="@L["WriteAComment"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveComment">@L["AddComment"]</MudButton>
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["Context"]">
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
@@ -340,6 +350,8 @@ else
             <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_briefMarkdown</MudText>
         }
     </MudPaper>
+    </MudTabPanel>
+    </MudTabs>
 }
 
 @code {

@@ -35,8 +35,10 @@
 }
 else
 {
+    <MudTabs Rounded="true" ApplyEffectsToContainer="true" Class="mt-2">
+    <MudTabPanel Text="@L["ModelRegistry"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeAccountHint"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeUserLevel"] · @L["ScopeAccountHint"]</MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
             <MudText Typo="Typo.subtitle1">@L["ModelRegistry"]</MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
@@ -86,11 +88,15 @@ else
             </MudTable>
         }
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["TaskKinds"]">
 
     <TaskKindEditor UserId="_userId" Backends="_backends" />
+    </MudTabPanel>
+    <MudTabPanel Text="@L["ApplyOnDevice"]">
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeProjectHint"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeContextual"] · @L["ScopeProjectHint"]</MudText>
         <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ApplyOnDevice"]</MudText>
         <MudSelect T="Guid?" @bind-Value="_runtimeDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
             @foreach (var runtime in _runtimes)
@@ -103,8 +109,11 @@ else
         </MudButton>
         <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["ModelSaveHint"]</MudText>
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["McpServers"]">
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeContextual"]</MudText>
         <MudText Typo="Typo.subtitle1" Class="mb-3">@L["McpServers"]</MudText>
         <MudCheckBox T="bool" Value="true" Disabled="true" Label="beacon" />
         <MudCheckBox @bind-Value="_mcpContext7" Label="context7" />
@@ -134,20 +143,26 @@ else
             @L["ApplyOnDevice"]
         </MudButton>
     </MudPaper>
+    </MudTabPanel>
+    <MudTabPanel Text="@L["RuntimeDiagnostics"]">
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeWorkstationHint"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeContextual"] · @L["ScopeWorkstationHint"]</MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-            <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
+            <MudText Typo="Typo.subtitle1">@L["RuntimeDiagnostics"]</MudText>
             <MudStack Row="true" Spacing="2">
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="RefreshStatus" Disabled="_busy || !CanRefresh">@L["Refresh"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="RefreshStatus" Disabled="_busy || !CanRefresh">@(RuntimeState == "Offline" ? L["Connect"].Value : L["Refresh"].Value)</MudButton>
                 @if (CanReload)
                 {
                     <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="Reload" Disabled="_busy">@(RuntimeState == "Failed" ? L["Retry"].Value : L["Reload"].Value)</MudButton>
                 }
-                @if (CanUnload)
+                @if (CanUnload || RuntimeState == "Busy")
                 {
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload" Disabled="_busy">@L["Unload"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload" Disabled="@UnloadDisabled">@L["Unload"]</MudButton>
+                }
+                @if (RuntimeState == "Failed")
+                {
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RefreshStatus" Disabled="_busy">@L["Diagnostics"]</MudButton>
                 }
             </MudStack>
         </MudStack>
@@ -175,6 +190,8 @@ else
             }
         }
     </MudPaper>
+    </MudTabPanel>
+    </MudTabs>
 }
 
 @code {
@@ -500,6 +517,7 @@ else
     private bool CanRefresh => RuntimeState is not "Starting" and not "Stopping" and not "Busy";
     private bool CanReload => RuntimeState is "Ready" or "Failed" or "Degraded";
     private bool CanUnload => RuntimeState == "Ready" && !string.IsNullOrWhiteSpace(_status?.LoadedModel);
+    private bool UnloadDisabled => _busy || RuntimeState == "Busy";
 
     private static bool IsModelState(string? state, params string[] names) =>
         names.Any(name => string.Equals(state, name, StringComparison.OrdinalIgnoreCase));

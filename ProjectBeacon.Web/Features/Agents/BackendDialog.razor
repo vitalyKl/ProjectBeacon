@@ -18,14 +18,6 @@
 <MudTextField @bind-Value="_name" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
 @if (_type == ModelBackendType.LlamaCpp)
 {
-    <MudTextField @bind-Value="_launchCommand" Label="@L["LaunchCommand"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@LaunchHint" />
-}
-else
-{
-    <MudTextField @bind-Value="_openCodeModel" Label="@L["OpenCodeModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["OpenCodeModelHint"]" />
-}
-@if (_type == ModelBackendType.LlamaCpp)
-{
     @if (DeviceId is null)
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@L["NeedProjectFolderForGguf"]</MudAlert>
@@ -42,11 +34,23 @@ else
     }
 }
 <MudNumericField T="int" @bind-Value="_contextSize" Label="@L["ContextSize"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
-<MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
-<MudSwitch @bind-Value="_concurrent" Label="@L["LoadWithOthers"]" Color="Color.Primary" Class="mt-3" />
-<MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LoadWithOthersHint"]</MudText>
-<MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
-<MudTextField @bind-Value="_note" Label="@L["ModelNote"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["ModelNoteHint"]" />
+<MudExpansionPanels Class="mt-3" Elevation="0">
+    <MudExpansionPanel Text="@L["Advanced"]">
+        @if (_type == ModelBackendType.LlamaCpp)
+        {
+            <MudTextField @bind-Value="_launchCommand" Label="@L["LaunchCommand"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@LaunchHint" />
+        }
+        else
+        {
+            <MudTextField @bind-Value="_openCodeModel" Label="@L["OpenCodeModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["OpenCodeModelHint"]" />
+        }
+        <MudNumericField T="int" @bind-Value="_ttl" Label="@L["Ttl"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" Min="0" />
+        <MudSwitch @bind-Value="_concurrent" Label="@L["LoadWithOthers"]" Color="Color.Primary" Class="mt-3" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["LoadWithOthersHint"]</MudText>
+        <MudTextField @bind-Value="_extraFlags" Label="@L["ExtraFlags"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+        <MudTextField @bind-Value="_note" Label="@L["ModelNote"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["ModelNoteHint"]" />
+    </MudExpansionPanel>
+</MudExpansionPanels>
 <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
     <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">@L["Save"]</MudButton>
