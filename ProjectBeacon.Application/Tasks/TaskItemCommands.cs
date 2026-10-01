@@ -60,7 +60,8 @@ public record FinishWorkRequest(
     string? Output,
     string ActorId,
     FinishWorkReview? Review = null,
-    string? ReviewTranscriptRef = null);
+    string? ReviewTranscriptRef = null,
+    Guid? ReviewRunId = null);
 
 public record FinishWorkCommand(FinishWorkRequest Request) : ICommand<Result>;
 

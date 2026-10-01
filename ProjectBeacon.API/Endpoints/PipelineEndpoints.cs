@@ -22,6 +22,7 @@ public static class PipelineEndpoints
         app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail", FailSubtask).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/start", StartReview).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/verdict", RecordReviewVerdict).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/review/check", RecordReviewCheck).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/approve", ApprovePipeline).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/force-close", ForceClosePipeline).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.Admin);
 
@@ -128,6 +129,18 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
+    private static async Task<IResult> RecordReviewCheck(Guid taskId, [FromBody] ReviewCheckBody body, RecordReviewCheckHandler handler, CancellationToken ct)
+    {
+        if (taskId != body.TaskId)
+            return ProblemResults.Bad("TaskId mismatch.");
+
+        var result = await handler.HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(
+            body.TaskId, body.Passed, body.ArtifactRef, body.Findings)), ct);
+        return result.Success
+            ? Results.Ok(result.Value)
+            : result.FromResult();
+    }
+
     private static async Task<IResult> ApprovePipeline(Guid taskId, [FromBody] ApproveBody body, ApprovePipelineHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
@@ -171,6 +184,8 @@ public static class PipelineEndpoints
     public record SubtaskFailBody(Guid TaskId, Guid SubtaskId, string Reason);
 
     public record VerdictBody(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
+
+    public record ReviewCheckBody(Guid TaskId, bool Passed, string ArtifactRef, string? Findings = null);
 
     public record ApproveBody(Guid TaskId, string? Note = null);
 

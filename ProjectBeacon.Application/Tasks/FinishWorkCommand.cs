@@ -33,21 +33,26 @@ public class FinishWorkHandler
         switch (resultType)
         {
             case "done":
-                if (command.Request.Review is null || !command.Request.Review.ReviewerRun)
-                    return Result.Failure("done requires a structured review (reviewer_run, regressions_found, regressions_fixed).");
-
-                if (command.Request.Review.RegressionsFound > command.Request.Review.RegressionsFixed)
+                if (command.Request.Review is { } review
+                    && review.RegressionsFound > review.RegressionsFixed)
                     return Result.Failure("Unfixed regressions remain; cannot mark done.");
 
-                if (string.IsNullOrEmpty(command.Request.ReviewTranscriptRef))
+                if (command.Request.ReviewRunId is null && string.IsNullOrEmpty(command.Request.ReviewTranscriptRef))
                     return Result.Failure("done requires a completed review run.");
 
-                var reviewRun = await db.ReviewRuns.FirstOrDefaultAsync(
-                    r => r.TaskId == taskId && r.TranscriptRef == command.Request.ReviewTranscriptRef, ct);
-                if (reviewRun is null || reviewRun.Status != ReviewRunStatus.Completed)
-                    return Result.Failure($"Review run not found for transcript ref '{command.Request.ReviewTranscriptRef}'.");
+                var reviewRun = await FindReviewRun(db, taskId, command.Request, ct);
+                if (reviewRun is null)
+                    return Result.Failure("Review run not found.");
+                if (reviewRun.Status == ReviewRunStatus.Failed)
+                    return Result.Failure("Review run did not pass.");
+                if (!reviewRun.IsCheckProof())
+                    return Result.Failure("Review run is not check proof.");
 
-                var notes = FormatReview(command.Request.Review, command.Request.Output);
+                var notes = command.Request.Review is null
+                    ? (command.Request.Output ?? "").Trim()
+                    : FormatReview(command.Request.Review, command.Request.Output);
+                if (string.IsNullOrWhiteSpace(notes))
+                    return Result.Failure("done requires review notes or output.");
                 try
                 {
                     task.SetReviewNotes(notes);
@@ -90,6 +95,19 @@ public class FinishWorkHandler
 
         await db.SaveChangesAsync(ct);
         return Result.Ok();
+    }
+
+    private static async Task<Domain.Entities.Evals.ReviewRun?> FindReviewRun(
+        IBeaconDb db, Guid taskId, FinishWorkRequest request, CancellationToken ct)
+    {
+        if (request.ReviewRunId is Guid reviewRunId)
+            return await db.ReviewRuns.FirstOrDefaultAsync(r => r.Id == reviewRunId && r.TaskId == taskId, ct);
+
+        if (string.IsNullOrEmpty(request.ReviewTranscriptRef))
+            return null;
+
+        return await db.ReviewRuns.FirstOrDefaultAsync(
+            r => r.TaskId == taskId && r.TranscriptRef == request.ReviewTranscriptRef, ct);
     }
 
     private static async Task<bool> ActorHasAccess(IBeaconDb db, string actorId, Guid projectId, CancellationToken ct)

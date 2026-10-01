@@ -21,6 +21,19 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
 
+        if (command.Request.Status == TaskItemStatus.Done)
+        {
+            var proved = await db.ReviewRuns.AnyAsync(
+                r => r.TaskId == task.Id
+                    && r.Status == ReviewRunStatus.Completed
+                    && r.TargetRunId != null
+                    && r.ArtifactRef != null
+                    && r.ArtifactRef != "",
+                ct);
+            if (!proved)
+                return Result.Failure<TaskItemDto>("done requires a completed review run.");
+        }
+
         try
         {
             task.TransitionTo(command.Request.Status);

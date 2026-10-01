@@ -122,6 +122,16 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
         if (string.IsNullOrWhiteSpace(notes))
             return Result.Failure<PipelineStateDto>("No review notes available to close the pipeline.");
 
+        var proved = await db.ReviewRuns.AnyAsync(
+            r => r.TaskId == task.Id
+                && r.Status == ReviewRunStatus.Completed
+                && r.TargetRunId != null
+                && r.ArtifactRef != null
+                && r.ArtifactRef != "",
+            ct);
+        if (!proved)
+            return Result.Failure<PipelineStateDto>("Close requires a completed review check.");
+
         try
         {
             task.ClosePipeline(notes);

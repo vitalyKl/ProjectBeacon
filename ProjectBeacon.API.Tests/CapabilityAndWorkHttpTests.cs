@@ -101,7 +101,7 @@ public sealed class CapabilityAndWorkHttpTests
             }
         }
 
-        var ok = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        var transcriptOnly = await client.PostAsJsonAsync("/v1/work/finish_work", new
         {
             taskId = taskId.ToString(),
             result = "done",
@@ -109,6 +109,29 @@ public sealed class CapabilityAndWorkHttpTests
             actorId,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
             reviewTranscriptRef = "transcript-abc"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, transcriptOnly.StatusCode);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+            using (TenantScope.EnterUnscoped())
+            {
+                var proof = ReviewRun.Start(projectId, taskId, Domain.Enums.ReviewerType.Agent, Guid.NewGuid());
+                proof.Complete("checked", "check:exit0");
+                db.ReviewRuns.Add(proof);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        var ok = await client.PostAsJsonAsync("/v1/work/finish_work", new
+        {
+            taskId = taskId.ToString(),
+            result = "done",
+            output = "reviewed",
+            actorId,
+            review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
+            reviewTranscriptRef = "check:exit0"
         });
         Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync());
 

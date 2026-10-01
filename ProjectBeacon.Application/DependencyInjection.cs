@@ -91,6 +91,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<FailSubtaskHandler>();
         services.AddTransient<StartReviewHandler>();
         services.AddTransient<RecordReviewVerdictHandler>();
+        services.AddTransient<RecordReviewCheckHandler>();
         services.AddTransient<ApprovePipelineHandler>();
         services.AddTransient<ForceClosePipelineHandler>();
         services.AddTransient<GetPipelineHandler>();

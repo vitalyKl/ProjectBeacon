@@ -53,6 +53,21 @@ public sealed class ReviewRun : Entity, IProjectScoped
         CompletedAt = DateTime.UtcNow;
     }
 
+    public void Fail(string? findings)
+    {
+        if (Status != ReviewRunStatus.Started)
+            throw new InvalidOperationException($"Cannot fail a review run in status {Status}.");
+
+        Findings = findings;
+        Status = ReviewRunStatus.Failed;
+        CompletedAt = DateTime.UtcNow;
+    }
+
+    public bool IsCheckProof() =>
+        Status == ReviewRunStatus.Completed
+        && TargetRunId is not null
+        && !string.IsNullOrWhiteSpace(ArtifactRef);
+
     public static ReviewRun Create(Guid projectId, Guid taskId, string transcriptRef, string? reviewerActorId = null)
     {
         var run = Start(projectId, taskId, ReviewerType.Agent, reviewerActorId: reviewerActorId);

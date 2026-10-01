@@ -49,7 +49,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
-        _db.ReviewRuns.Add(ReviewRun.Create(_projectId, task.Id, "transcript-todo"));
+        var proof = Proof(task.Id);
+        _db.ReviewRuns.Add(proof);
         await _db.SaveChangesAsync();
 
         var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
@@ -58,8 +59,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
             "done",
             "ok",
             _userId.ToString(),
-            new FinishWorkReview(true, 0, 0),
-            ReviewTranscriptRef: "transcript-todo")));
+            ReviewRunId: proof.Id)));
 
         Assert.True(result.Success, result.Error);
         await _db.Entry(task).ReloadAsync();
@@ -73,7 +73,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
 
-        _db.ReviewRuns.Add(ReviewRun.Create(_projectId, task.Id, "transcript-abc"));
+        var proof = Proof(task.Id, "check:exit0");
+        _db.ReviewRuns.Add(proof);
         await _db.SaveChangesAsync();
 
         var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
@@ -82,8 +83,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
             "done",
             "ok",
             _userId.ToString(),
-            new FinishWorkReview(true, 0, 0),
-            ReviewTranscriptRef: "transcript-abc")));
+            new FinishWorkReview(false, 0, 0),
+            ReviewTranscriptRef: "check:exit0")));
 
         Assert.True(result.Success, result.Error);
         await _db.Entry(task).ReloadAsync();
@@ -130,5 +131,55 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Contains("completed review run", result.Error);
+    }
+
+    [Fact]
+    public async Task Done_WithTranscriptOnlyCreate_Fails()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        _db.ReviewRuns.Add(ReviewRun.Create(_projectId, task.Id, "transcript-only"));
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(),
+            "done",
+            "ok",
+            _userId.ToString(),
+            new FinishWorkReview(true, 0, 0),
+            ReviewTranscriptRef: "transcript-only")));
+
+        Assert.False(result.Success);
+        Assert.Contains("not check proof", result.Error);
+    }
+
+    [Fact]
+    public async Task Done_WithFailedReviewRun_Fails()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        var run = ReviewRun.Start(_projectId, task.Id, ReviewerType.Agent, Guid.NewGuid());
+        run.Fail("tests failed");
+        _db.ReviewRuns.Add(run);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(),
+            "done",
+            "ok",
+            _userId.ToString(),
+            ReviewRunId: run.Id)));
+
+        Assert.False(result.Success);
+        Assert.Contains("did not pass", result.Error);
+    }
+
+    private ReviewRun Proof(Guid taskId, string artifact = "check:exit0")
+    {
+        var run = ReviewRun.Start(_projectId, taskId, ReviewerType.Agent, Guid.NewGuid());
+        run.Complete("checked", artifact);
+        return run;
     }
 }

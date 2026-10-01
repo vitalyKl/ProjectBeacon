@@ -35,7 +35,8 @@ public static class WorkEndpoints
             request.Review is null
                 ? null
                 : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed),
-            request.ReviewTranscriptRef));
+            request.ReviewTranscriptRef,
+            request.ReviewRunId));
 
         var result = await handler.HandleAsync(command, ct);
 
@@ -51,5 +52,6 @@ public static class WorkEndpoints
         string Result,
         string? Output,
         FinishWorkReviewDto? Review = null,
-        string? ReviewTranscriptRef = null);
+        string? ReviewTranscriptRef = null,
+        Guid? ReviewRunId = null);
 }

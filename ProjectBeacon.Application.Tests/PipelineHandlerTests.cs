@@ -117,7 +117,16 @@ public sealed class PipelineHandlerTests : IDisposable
             .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.Approve, "Looks solid")));
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.Approved, verdict.Value!.Stage);
-        Assert.Equal(TaskItemStatus.Done, verdict.Value.Status);
+        Assert.Equal(TaskItemStatus.InProgress, verdict.Value.Status);
+
+        var blocked = await new ApprovePipelineHandler(factory)
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));
+        Assert.False(blocked.Success);
+        Assert.Equal("Close requires a completed review check.", blocked.Error);
+
+        var check = await new RecordReviewCheckHandler(factory)
+            .HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(task.Id, true, "check:exit0", "build passed")));
+        Assert.True(check.Success, check.Error);
 
         var closed = await new ApprovePipelineHandler(factory)
             .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));
@@ -290,6 +299,14 @@ public sealed class PipelineHandlerTests : IDisposable
         var secondVerdict = await new RecordReviewVerdictHandler(factory)
             .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(task.Id, ReviewVerdictKind.Approve, "again")));
         Assert.False(secondVerdict.Success);
+
+        var uncheckedClose = await new ApprovePipelineHandler(factory)
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));
+        Assert.False(uncheckedClose.Success);
+
+        var check = await new RecordReviewCheckHandler(factory)
+            .HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(task.Id, true, "check:exit0", "ok")));
+        Assert.True(check.Success, check.Error);
 
         var doubleApprove = await new ApprovePipelineHandler(factory)
             .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));

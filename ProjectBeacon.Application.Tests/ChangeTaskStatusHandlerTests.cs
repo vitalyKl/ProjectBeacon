@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Tasks;
+using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -64,8 +65,44 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
             new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
 
         Assert.False(result.Success);
-        Assert.Contains("review notes", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("completed review run", result.Error, StringComparison.OrdinalIgnoreCase);
         var stored = await _db.Tasks.FindAsync([task.Id]);
         Assert.Equal(TaskItemStatus.InProgress, stored!.Status);
+    }
+
+    [Fact]
+    public async Task InProgressToDone_WithNotesButNoCheck_Fails()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        task.TransitionTo(TaskItemStatus.InProgress);
+        task.SetReviewNotes("notes only");
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
+
+        Assert.False(result.Success);
+        Assert.Contains("completed review run", result.Error);
+    }
+
+    [Fact]
+    public async Task InProgressToDone_WithCheckButNoNotes_FailsOnNotes()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        task.TransitionTo(TaskItemStatus.InProgress);
+        var run = ReviewRun.Start(_projectId, task.Id, ReviewerType.Agent, Guid.NewGuid());
+        run.Complete("checked", "check:exit0");
+        _db.Tasks.Add(task);
+        _db.ReviewRuns.Add(run);
+        await _db.SaveChangesAsync();
+
+        var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
+
+        Assert.False(result.Success);
+        Assert.Contains("review notes", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -114,9 +114,10 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
                 .OrderByDescending(s => s.LaunchedAt)
                 .Select(s => (Guid?)s.Id)
                 .FirstOrDefaultAsync(ct);
-            var reviewRun = ReviewRun.Start(task.ProjectId, task.Id, ReviewerType.Agent, reviewSessionId);
-            reviewRun.Complete(note, $"verdict:{verdict.Id:D}");
-            db.ReviewRuns.Add(reviewRun);
+            if (reviewSessionId is null)
+                return Result.Failure<PipelineStateDto>("No review session found for this task.");
+
+            db.ReviewRuns.Add(ReviewRun.Start(task.ProjectId, task.Id, ReviewerType.Agent, reviewSessionId));
         }
 
         try
@@ -132,6 +133,46 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
 
         foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Review, ct))
             session.Close();
+
+        await db.SaveChangesAsync(ct);
+        return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+    }
+}
+
+public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand, Result<PipelineStateDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public RecordReviewCheckHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<PipelineStateDto>> HandleAsync(RecordReviewCheckCommand command, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(command.Request.ArtifactRef))
+            return Result.Failure<PipelineStateDto>("Artifact ref is required.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
+        if (task is null)
+            return Result.Failure<PipelineStateDto>("Task not found.");
+
+        var reviewRun = await db.ReviewRuns
+            .Where(r => r.TaskId == task.Id && r.Status == ReviewRunStatus.Started && r.TargetRunId != null)
+            .OrderByDescending(r => r.StartedAt)
+            .FirstOrDefaultAsync(ct);
+        if (reviewRun is null)
+            return Result.Failure<PipelineStateDto>("No open review run to check.");
+
+        try
+        {
+            if (command.Request.Passed)
+                reviewRun.Complete(command.Request.Findings, command.Request.ArtifactRef);
+            else
+                reviewRun.Fail(command.Request.Findings);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<PipelineStateDto>(ex.Message);
+        }
 
         await db.SaveChangesAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));

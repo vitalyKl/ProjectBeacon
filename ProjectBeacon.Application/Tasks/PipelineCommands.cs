@@ -82,6 +82,10 @@ public record RecordReviewVerdictRequest(Guid TaskId, ReviewVerdictKind Kind, st
 
 public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request) : ICommand<Result<PipelineStateDto>>;
 
+public record RecordReviewCheckRequest(Guid TaskId, bool Passed, string ArtifactRef, string? Findings = null);
+
+public record RecordReviewCheckCommand(RecordReviewCheckRequest Request) : ICommand<Result<PipelineStateDto>>;
+
 public record ApprovePipelineRequest(Guid TaskId, string? Note = null);
 
 public record ApprovePipelineCommand(ApprovePipelineRequest Request) : ICommand<Result<PipelineStateDto>>;

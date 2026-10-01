@@ -174,12 +174,6 @@ public class TaskItem : Entity, IProjectScoped
         if (PipelineStage != TaskPipelineStage.Reviewing)
             throw new InvalidOperationException($"Cannot approve from stage {StageName}");
         PipelineStage = TaskPipelineStage.Approved;
-        // D1: Approved maps to the board as Done; the pipeline review replaces the cold-diff gate here.
-        if (Status != TaskItemStatus.Done)
-        {
-            Status = TaskItemStatus.Done;
-            CompletedAt ??= DateTime.UtcNow;
-        }
     }
 
     public void ReopenForRevision()

@@ -209,14 +209,14 @@ public sealed class PipelineTransitionTests
     }
 
     [Fact]
-    public void SetApproved_FromReviewing_SetsApprovedAndDone()
+    public void SetApproved_FromReviewing_StaysInProgress()
     {
         var task = TaskAtReviewing();
         task.SetApproved();
 
         Assert.Equal(TaskPipelineStage.Approved, task.PipelineStage);
-        Assert.Equal(TaskItemStatus.Done, task.Status);
-        Assert.NotNull(task.CompletedAt);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Null(task.CompletedAt);
     }
 
     [Fact]
@@ -303,6 +303,6 @@ public sealed class PipelineTransitionTests
 
         Assert.Equal(TaskPipelineStage.Approved, task.PipelineStage);
         Assert.Null(task.ReviewNotes);
-        Assert.Equal(TaskItemStatus.Done, task.Status);
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
     }
 }
