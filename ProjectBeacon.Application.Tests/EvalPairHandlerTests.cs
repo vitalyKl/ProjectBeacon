@@ -78,8 +78,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         await MakeOnlineAsync(device, project, user);
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
-            project.Id, task.Id, device.Id, user.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work")));
 
         Assert.True(result.Success, result.Error);
         var value = result.Value!;
@@ -127,9 +126,39 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.Equal(withPayload["controls"]!.ToJsonString(), withoutPayload["controls"]!.ToJsonString());
         var controls = withPayload["controls"]!.AsObject();
         Assert.Equal(180, controls["timeoutSeconds"]!.GetValue<int>());
-        Assert.Equal("", controls["model"]!.GetValue<string>());
-        Assert.Equal("", controls["checkCommand"]!.GetValue<string>());
+        Assert.Equal("opencode/test", controls["model"]!.GetValue<string>());
+        Assert.Equal("dotnet test", controls["checkCommand"]!.GetValue<string>());
+        Assert.Equal(0.2, controls["temperature"]!.GetValue<double>());
+
+        var stored = await _db.EvalRuns.SingleAsync(r => r.Id == value.WithBriefRunId);
+        Assert.Equal("opencode/test", stored.Model);
+        Assert.Equal(0.2, stored.Temperature);
+        Assert.Equal("abc123", stored.RepoRevision);
+        Assert.Equal("dotnet test", stored.CheckCommand);
     }
+
+    [Fact]
+    public async Task Pair_MissingControls_Fails()
+    {
+        var (user, project, task, device) = await SeedAsync();
+        await MakeOnlineAsync(device, project, user);
+
+        var result = await CreateHandler().HandleAsync(new EvalPairCommand(new EvalPairRequest(
+            project.Id, task.Id, device.Id, user.Id, "Do the work")));
+
+        Assert.False(result.Success);
+        Assert.Contains("Eval controls", result.Error);
+    }
+
+    private static EvalPairRequest Pinned(Guid projectId, Guid taskId, Guid deviceId, Guid actorId, string prompt) =>
+        new(projectId, taskId, deviceId, actorId, prompt,
+            Model: "opencode/test",
+            Temperature: 0.2,
+            ReasoningEffort: "low",
+            ToolPermissions: "read",
+            TimeoutSeconds: 180,
+            RepoRevision: "abc123",
+            CheckCommand: "dotnet test");
 
     [Fact]
     public async Task Pair_OfflineDevice_Fails()
@@ -137,8 +166,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         var (user, project, task, device) = await SeedAsync();
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
-            project.Id, task.Id, device.Id, user.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work")));
 
         Assert.False(result.Success);
         Assert.Equal("Device is not connected.", result.Error);
@@ -155,8 +183,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         await MakeOnlineAsync(device, project, user);
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
-            project.Id, Guid.NewGuid(), device.Id, user.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, Guid.NewGuid(), device.Id, user.Id, "Do the work")));
 
         Assert.False(result.Success);
         Assert.Equal("Task not found.", result.Error);
@@ -176,8 +203,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         }
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
-            project.Id, task.Id, device.Id, otherUser.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, otherUser.Id, "Do the work")));
 
         Assert.False(result.Success);
     }

@@ -359,12 +359,16 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             if (command.Request.Success)
             {
                 await CompleteEvalRunAsync(db, row, command.Request.ResultJson, ct);
+                await ApplyReviewCheckAsync(db, row, true, command.Request.ResultJson, null, ct);
                 await MarkDesiredAppliedAsync(db, row, command.Request.ResultJson, ct);
                 row.Succeed(command.Request.ResultJson);
             }
             else
             {
-                row.Fail(string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error);
+                var error = string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error;
+                await FailEvalRunAsync(db, row, error, ct);
+                await ApplyReviewCheckAsync(db, row, false, command.Request.ResultJson, error, ct);
+                row.Fail(error);
             }
         }
         catch (InvalidOperationException ex)
@@ -406,25 +410,107 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             var promptTokens = ReadInt(r, "promptTokens");
             var completionTokens = ReadInt(r, "completionTokens");
             var turnCount = ReadInt(r, "turnCount");
-            bool? passed = r.TryGetProperty("passed", out var passedElement)
-                ? passedElement.ValueKind switch
-                {
-                    JsonValueKind.True => true,
-                    JsonValueKind.False => false,
-                    _ => null
-                }
+            var interrupted = r.TryGetProperty("interrupted", out var interruptedElement)
+                && interruptedElement.ValueKind == JsonValueKind.True;
+            int? exitCode = interrupted ? null : ReadNullableInt(r, "exitCode");
+            string? checkOutput = r.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String
+                ? outputElement.GetString()
                 : null;
             string? transcriptRef = r.TryGetProperty("transcriptRef", out var transcriptElement) && transcriptElement.ValueKind == JsonValueKind.String
                 ? transcriptElement.GetString()
                 : null;
-            var run = await db.EvalRuns.FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
-            if (run is null)
+            var run = await db.EvalRuns.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
+            if (run is null || run.CompletedAt is not null)
                 return;
-            run.Complete(promptTokens, completionTokens, turnCount, passed, transcriptRef);
+            run.Complete(promptTokens, completionTokens, turnCount, exitCode, transcriptRef, checkOutput);
         }
         catch (JsonException)
         {
         }
+    }
+
+    private static async Task FailEvalRunAsync(IBeaconDb db, WorkstationCommand row, string error, CancellationToken ct)
+    {
+        if (row.Kind != WorkstationCommandKind.RunEvalTurn)
+            return;
+        var runId = ReadEvalRunId(row.PayloadJson);
+        if (runId is null)
+            return;
+        var run = await db.EvalRuns.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
+        if (run is null || run.CompletedAt is not null)
+            return;
+        run.Complete(0, 0, 0, null, null, error);
+    }
+
+    private static async Task ApplyReviewCheckAsync(
+        IBeaconDb db, WorkstationCommand row, bool commandSucceeded, string? resultJson, string? error, CancellationToken ct)
+    {
+        if (row.Kind != WorkstationCommandKind.RunReviewCheck)
+            return;
+        var reviewRunId = ReadGuid(row.PayloadJson, "reviewRunId");
+        if (reviewRunId is null)
+            return;
+        var run = await db.ReviewRuns.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == reviewRunId.Value, ct);
+        if (run is null || run.Status != ReviewRunStatus.Started)
+            return;
+        if (row.ProjectId is Guid projectId && run.ProjectId != projectId)
+            return;
+
+        if (!commandSucceeded)
+        {
+            run.Fail(error);
+            return;
+        }
+
+        int? exitCode = null;
+        string? output = null;
+        if (!string.IsNullOrWhiteSpace(resultJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(resultJson);
+                exitCode = ReadNullableInt(doc.RootElement, "exitCode");
+                if (doc.RootElement.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String)
+                    output = outputElement.GetString();
+            }
+            catch (JsonException)
+            {
+                exitCode = null;
+            }
+        }
+
+        if (exitCode == 0)
+            run.Complete(output, $"cmd:{row.Id:D}");
+        else
+            run.Fail(string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
+    }
+
+    private static Guid? ReadGuid(string? json, string name)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                && Guid.TryParse(value.GetString(), out var id))
+                return id;
+        }
+        catch (JsonException)
+        {
+        }
+        return null;
+    }
+
+    private static int? ReadNullableInt(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out var value))
+            return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed))
+            return parsed;
+        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var number))
+            return number;
+        return null;
     }
 
     private static Guid? ReadEvalRunId(string? json)

@@ -64,7 +64,7 @@ public sealed class ContextCostReportTests : IDisposable
 
         var complete = new CompleteEvalRunHandler(Factory());
         var done = await complete.HandleAsync(new CompleteEvalRunCommand(
-            new CompleteEvalRunRequest(rec.Value!.Id, promptTokens, completionTokens, turnCount, passed, "ref://test")));
+            new CompleteEvalRunRequest(rec.Value!.Id, promptTokens, completionTokens, turnCount, passed ? 0 : 1, "ref://test")));
         Assert.True(done.Success, done.Error);
         return rec.Value.Id;
     }

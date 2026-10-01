@@ -129,13 +129,17 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
-    private static async Task<IResult> RecordReviewCheck(Guid taskId, [FromBody] ReviewCheckBody body, RecordReviewCheckHandler handler, CancellationToken ct)
+    private static async Task<IResult> RecordReviewCheck(Guid taskId, [FromBody] ReviewCheckBody body, HttpContext ctx, RecordReviewCheckHandler handler, CancellationToken ct)
     {
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
+        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(actorId, out var actor))
+            return Results.Unauthorized();
+
         var result = await handler.HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(
-            body.TaskId, body.Passed, body.ArtifactRef, body.Findings)), ct);
+            body.TaskId, body.DeviceId, actor, body.CheckCommand, body.Path)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -185,7 +189,7 @@ public static class PipelineEndpoints
 
     public record VerdictBody(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
 
-    public record ReviewCheckBody(Guid TaskId, bool Passed, string ArtifactRef, string? Findings = null);
+    public record ReviewCheckBody(Guid TaskId, Guid DeviceId, string CheckCommand, string? Path = null);
 
     public record ApproveBody(Guid TaskId, string? Note = null);
 

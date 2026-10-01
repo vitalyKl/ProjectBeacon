@@ -1,6 +1,9 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Devices;
 using Application.Tasks;
+using Domain.Entities.Devices;
+using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -45,6 +48,51 @@ public sealed class PipelineHandlerTests : IDisposable
         }
     }
 
+    private async Task ProveReviewAsync(Guid projectId, Guid taskId, BeaconDbFactory factory, int exitCode)
+    {
+        User user;
+        DaemonDevice device;
+        using (TenantScope.EnterUnscoped())
+        {
+            user = User.Create("rev", $"rev-{Guid.NewGuid():N}@beacon.local", "hash");
+            _db.Users.Add(user);
+            _db.ProjectMembers.Add(ProjectMember.Create(projectId, user.Id, MemberRole.Owner));
+            device = DaemonDevice.Create("review", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash", "bcd_" + Guid.NewGuid().ToString("N"));
+            _db.DaemonDevices.Add(device);
+            await _db.SaveChangesAsync();
+        }
+
+        var beat = await new HeartbeatDeviceHandler(factory).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")));
+        Assert.True(beat.Success, beat.Error);
+        var attach = await new AttachRuntimeHandler(factory).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, device.Id, user.Id, @"A:\work\review")));
+        Assert.True(attach.Success, attach.Error);
+
+        var check = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
+            .HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(taskId, device.Id, user.Id, "dotnet test")));
+        Assert.True(check.Success, check.Error);
+
+        var stillOpen = await new ApprovePipelineHandler(factory)
+            .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(taskId)));
+        Assert.False(stillOpen.Success);
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            commandId = _db.WorkstationCommands
+                .Where(c => c.DeviceId == device.Id && c.Kind == WorkstationCommandKind.RunReviewCheck)
+                .OrderByDescending(c => c.CreatedAt)
+                .Select(c => c.Id)
+                .First();
+        }
+
+        var resultJson = "{\"exitCode\":" + exitCode + ",\"passed\":true,\"checkOutput\":\"build\"}";
+        var done = await new CompleteCommandHandler(factory).HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(commandId, device.Id, true, resultJson, null)));
+        Assert.True(done.Success, done.Error);
+    }
+
     private static TenantContext Scope(Guid projectId)
     {
         var tenant = new TenantContext();
@@ -62,6 +110,28 @@ public sealed class PipelineHandlerTests : IDisposable
             return Task.FromResult(new SpawnedSession(null, null, null));
         }
     }
+    [Fact]
+    public async Task SelfReportedPass_DoesNotProve()
+    {
+        var (projectId, task) = await SeedTaskAsync("Check");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.ReviewRuns.Add(ReviewRun.Start(projectId, task.Id, ReviewerType.Agent, Guid.NewGuid()));
+            await _db.SaveChangesAsync();
+        }
+
+        await ProveReviewAsync(projectId, task.Id, factory, 3);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var run = _db.ReviewRuns.Single(r => r.TaskId == task.Id);
+            await _db.Entry(run).ReloadAsync();
+            Assert.Equal(ReviewRunStatus.Failed, run.Status);
+            Assert.False(run.IsCheckProof());
+        }
+    }
+
     [Fact]
     public async Task HappyPath_PlannerActorReviewApprove_ClosesTaskDone()
     {
@@ -124,9 +194,7 @@ public sealed class PipelineHandlerTests : IDisposable
         Assert.False(blocked.Success);
         Assert.Equal("Close requires a completed review check.", blocked.Error);
 
-        var check = await new RecordReviewCheckHandler(factory)
-            .HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(task.Id, true, "check:exit0", "build passed")));
-        Assert.True(check.Success, check.Error);
+        await ProveReviewAsync(projectId, task.Id, factory, 0);
 
         var closed = await new ApprovePipelineHandler(factory)
             .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));
@@ -304,9 +372,7 @@ public sealed class PipelineHandlerTests : IDisposable
             .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));
         Assert.False(uncheckedClose.Success);
 
-        var check = await new RecordReviewCheckHandler(factory)
-            .HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(task.Id, true, "check:exit0", "ok")));
-        Assert.True(check.Success, check.Error);
+        await ProveReviewAsync(projectId, task.Id, factory, 0);
 
         var doubleApprove = await new ApprovePipelineHandler(factory)
             .HandleAsync(new ApprovePipelineCommand(new ApprovePipelineRequest(task.Id)));

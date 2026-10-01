@@ -90,7 +90,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         return ReadId(doc.RootElement) ?? throw new InvalidOperationException("OpenCode session id missing.");
     }
 
-    public async Task PromptAsync(string sessionId, string text, string? model, CancellationToken ct)
+    public async Task PromptAsync(string sessionId, string text, string? model, Application.Runtime.AgentPromptControls? controls, CancellationToken ct)
     {
         if (SkipRealProcess)
             return;
@@ -98,11 +98,24 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         {
             ["parts"] = new object[] { new { type = "text", text } }
         };
-        if (!string.IsNullOrWhiteSpace(model) && model.Contains('/', StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(model))
         {
-            var i = model.IndexOf('/');
-            body["model"] = new { providerID = model[..i], modelID = model[(i + 1)..] };
+            if (model.Contains('/', StringComparison.Ordinal))
+            {
+                var i = model.IndexOf('/');
+                body["model"] = new { providerID = model[..i], modelID = model[(i + 1)..] };
+            }
+            else
+            {
+                body["model"] = new { providerID = "opencode", modelID = model };
+            }
         }
+        if (controls?.Temperature is double temperature)
+            body["temperature"] = temperature;
+        if (!string.IsNullOrWhiteSpace(controls?.ReasoningEffort))
+            body["reasoningEffort"] = controls.ReasoningEffort;
+        if (!string.IsNullOrWhiteSpace(controls?.ToolPermissions))
+            body["tools"] = controls.ToolPermissions;
         using var response = await Send(HttpMethod.Post, $"/session/{sessionId}/prompt_async", body, ct);
         if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
             response.EnsureSuccessStatusCode();

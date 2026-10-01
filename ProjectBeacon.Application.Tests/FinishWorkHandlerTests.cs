@@ -67,7 +67,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Done_WithValidReviewTranscriptRef_Succeeds()
+    public async Task Done_WithTranscriptRefOnly_Fails()
     {
         var task = TaskItem.Create("t", _projectId);
         _db.Tasks.Add(task);
@@ -86,9 +86,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
             new FinishWorkReview(false, 0, 0),
             ReviewTranscriptRef: "check:exit0")));
 
-        Assert.True(result.Success, result.Error);
-        await _db.Entry(task).ReloadAsync();
-        Assert.Equal(TaskItemStatus.Done, task.Status);
+        Assert.False(result.Success);
+        Assert.Contains("completed review run", result.Error);
     }
 
     [Fact]
@@ -111,7 +110,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
             ReviewTranscriptRef: "transcript-WRONG")));
 
         Assert.False(result.Success);
-        Assert.Contains("Review run not found", result.Error);
+        Assert.Contains("completed review run", result.Error);
     }
 
     [Fact]
@@ -151,7 +150,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
             ReviewTranscriptRef: "transcript-only")));
 
         Assert.False(result.Success);
-        Assert.Contains("not check proof", result.Error);
+        Assert.Contains("completed review run", result.Error);
     }
 
     [Fact]

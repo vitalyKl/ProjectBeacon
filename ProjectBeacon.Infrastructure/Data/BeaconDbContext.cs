@@ -677,6 +677,12 @@ public class BeaconDbContext : DbContext, IBeaconDb
             entity.Property(e => e.PromptTokens).IsRequired();
             entity.Property(e => e.CompletionTokens).IsRequired();
             entity.Property(e => e.TurnCount).IsRequired();
+            entity.Property(e => e.Model).HasMaxLength(200);
+            entity.Property(e => e.ReasoningEffort).HasMaxLength(50);
+            entity.Property(e => e.ToolPermissions).HasMaxLength(500);
+            entity.Property(e => e.RepoRevision).HasMaxLength(100);
+            entity.Property(e => e.CheckCommand).HasMaxLength(500);
+            entity.Property(e => e.CheckOutput).HasMaxLength(4000);
             entity.Property(e => e.StartedAt).IsRequired();
             entity.Property(e => e.CompletedAt);
             entity.Property(e => e.TranscriptRef).HasMaxLength(500);

@@ -82,7 +82,7 @@ public record RecordReviewVerdictRequest(Guid TaskId, ReviewVerdictKind Kind, st
 
 public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request) : ICommand<Result<PipelineStateDto>>;
 
-public record RecordReviewCheckRequest(Guid TaskId, bool Passed, string ArtifactRef, string? Findings = null);
+public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId, string CheckCommand, string? Path = null);
 
 public record RecordReviewCheckCommand(RecordReviewCheckRequest Request) : ICommand<Result<PipelineStateDto>>;
 

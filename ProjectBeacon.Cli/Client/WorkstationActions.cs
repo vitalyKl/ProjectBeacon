@@ -130,8 +130,26 @@ public static class WorkstationActions
                     var head = GitHead(validatedPath.Value!);
                     if (!string.Equals(head, expected.Trim(), StringComparison.OrdinalIgnoreCase))
                         return Result.Failure<string>("Repository revision does not match the eval pin.");
+                    var porcelain = GitPorcelain(validatedPath.Value!);
+                    if (porcelain is null)
+                        return Result.Failure<string>("Repository status could not be read.");
+                    if (porcelain.Length > 0)
+                        return Result.Failure<string>("Working tree is dirty; eval requires a clean revision.");
                 }
             }
+        }
+
+        double? temperature = null;
+        string? reasoningEffort = null;
+        string? toolPermissions = null;
+        if (controls.ValueKind == JsonValueKind.Object)
+        {
+            if (controls.TryGetProperty("temperature", out var temperatureElement) && temperatureElement.TryGetDouble(out var pinnedTemperature))
+                temperature = pinnedTemperature;
+            if (controls.TryGetProperty("reasoningEffort", out var reasoningElement) && reasoningElement.ValueKind == JsonValueKind.String)
+                reasoningEffort = reasoningElement.GetString();
+            if (controls.TryGetProperty("toolPermissions", out var toolsElement) && toolsElement.ValueKind == JsonValueKind.String)
+                toolPermissions = toolsElement.GetString();
         }
 
         await openCode.TickAsync(validatedPath.Value, ct);
@@ -139,7 +157,7 @@ public static class WorkstationActions
             return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
 
         var sessionId = await runtime.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
-        await runtime.SendPromptAsync(sessionId, prompt, model, ct);
+        await runtime.SendPromptAsync(sessionId, prompt, model, ct, new AgentPromptControls(temperature, reasoningEffort, toolPermissions));
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(idleTimeout / pollInterval));
@@ -170,15 +188,15 @@ public static class WorkstationActions
         }
 
         var usage = await runtime.ReadUsageAsync(sessionId, ct);
-        bool? passed = null;
+        int? exitCode = null;
         string? checkOutput = null;
         if (idle && seen.Count > 0)
         {
-            var check = payload.TryGetProperty("checkCommand", out var checkElement) ? checkElement.GetString() : null;
+            var check = ReadCheckCommand(payload, controls);
             if (!string.IsNullOrWhiteSpace(check))
             {
                 var checkResult = EvalCheck.Execute(validatedPath.Value!, check);
-                passed = checkResult.ExitCode == 0;
+                exitCode = checkResult.ExitCode;
                 checkOutput = checkResult.Output;
             }
         }
@@ -189,12 +207,90 @@ public static class WorkstationActions
             promptTokens = usage.PromptTokens,
             completionTokens = usage.CompletionTokens,
             turnCount = Math.Max(usage.AssistantMessages, seen.Count),
-            passed,
+            exitCode,
             checkOutput,
             interrupted = !idle,
             transcriptRef = $"opencode:session/{sessionId}"
         };
         return Result.Ok(JsonSerializer.Serialize(result));
+    }
+
+    public static Result<string> RunReviewCheck(string root, string payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("root is required.");
+        JsonElement payload;
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            payload = doc.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<string>("payload must be valid JSON.");
+        }
+
+        var reviewRunId = payload.TryGetProperty("reviewRunId", out var runElement) ? runElement.GetString() : null;
+        if (!Guid.TryParse(reviewRunId, out _))
+            return Result.Failure<string>("reviewRunId is required.");
+        var check = payload.TryGetProperty("checkCommand", out var checkElement) ? checkElement.GetString() : null;
+        if (string.IsNullOrWhiteSpace(check))
+            return Result.Failure<string>("checkCommand is required.");
+        var relativePath = payload.TryGetProperty("path", out var pathElement) ? pathElement.GetString() : null;
+        var validatedPath = WorkspacePath.ResolveInRoot(root, relativePath, relativeOnly: true);
+        if (!validatedPath.Success)
+            return Result.Failure<string>(validatedPath.Error ?? "path is not inside root.");
+
+        var checkResult = EvalCheck.Execute(validatedPath.Value!, check);
+        var result = new
+        {
+            reviewRunId,
+            exitCode = checkResult.ExitCode,
+            checkOutput = checkResult.Output
+        };
+        return Result.Ok(JsonSerializer.Serialize(result));
+    }
+
+    private static string? ReadCheckCommand(JsonElement payload, JsonElement controls)
+    {
+        if (controls.ValueKind == JsonValueKind.Object
+            && controls.TryGetProperty("checkCommand", out var pinned)
+            && pinned.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(pinned.GetString()))
+            return pinned.GetString();
+        return payload.TryGetProperty("checkCommand", out var checkElement) ? checkElement.GetString() : null;
+    }
+
+    private static string? GitPorcelain(string path)
+    {
+        try
+        {
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = "status --porcelain",
+                WorkingDirectory = path,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            if (!process.Start())
+                return null;
+            var output = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                return null;
+            }
+            if (process.ExitCode != 0)
+                return null;
+            return output.Trim();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static string? GitHead(string path)

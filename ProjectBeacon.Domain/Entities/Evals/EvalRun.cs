@@ -15,6 +15,15 @@ public sealed class EvalRun : Entity, IProjectScoped
     public int CompletionTokens { get; private set; }
     public int TurnCount { get; private set; }
     public bool? Passed { get; private set; }
+    public string? Model { get; private set; }
+    public double? Temperature { get; private set; }
+    public string? ReasoningEffort { get; private set; }
+    public string? ToolPermissions { get; private set; }
+    public int? TimeoutSeconds { get; private set; }
+    public string? RepoRevision { get; private set; }
+    public string? CheckCommand { get; private set; }
+    public int? CheckExitCode { get; private set; }
+    public string? CheckOutput { get; private set; }
     public DateTime StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public string? TranscriptRef { get; private set; }
@@ -30,13 +39,34 @@ public sealed class EvalRun : Entity, IProjectScoped
         return run;
     }
 
-    public void Complete(int promptTokens, int completionTokens, int turnCount, bool? passed, string? transcriptRef = null)
+    public void Pin(string model, double temperature, string reasoningEffort, string toolPermissions, int timeoutSeconds, string repoRevision, string checkCommand)
+    {
+        Model = model.Trim();
+        Temperature = temperature;
+        ReasoningEffort = reasoningEffort.Trim();
+        ToolPermissions = toolPermissions.Trim();
+        TimeoutSeconds = timeoutSeconds;
+        RepoRevision = repoRevision.Trim();
+        CheckCommand = checkCommand.Trim();
+    }
+
+    public void Complete(int promptTokens, int completionTokens, int turnCount, int? checkExitCode, string? transcriptRef = null, string? checkOutput = null)
     {
         PromptTokens = promptTokens;
         CompletionTokens = completionTokens;
         TurnCount = turnCount;
-        Passed = passed;
+        CheckExitCode = checkExitCode;
+        CheckOutput = Truncate(checkOutput);
+        Passed = checkExitCode == 0;
         CompletedAt = DateTime.UtcNow;
         TranscriptRef = transcriptRef;
+    }
+
+    private static string? Truncate(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        var trimmed = text.Trim();
+        return trimmed.Length <= 4000 ? trimmed : trimmed[..4000];
     }
 }

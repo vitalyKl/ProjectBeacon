@@ -127,6 +127,7 @@ public sealed class P0SecurityHttpTests
         var taskId = task.GetProperty("id").GetGuid();
 
         var spoofedActor = Guid.NewGuid().ToString();
+        Guid proofId;
         await using (var seed = factory.Services.CreateAsyncScope())
         {
             var seedDb = seed.ServiceProvider.GetRequiredService<BeaconDbContext>();
@@ -134,6 +135,7 @@ public sealed class P0SecurityHttpTests
             {
                 var proof = ReviewRun.Start(projectId, taskId, Domain.Enums.ReviewerType.Agent, Guid.NewGuid());
                 proof.Complete("checked", "check:spoof");
+                proofId = proof.Id;
                 seedDb.ReviewRuns.Add(proof);
                 await seedDb.SaveChangesAsync();
             }
@@ -146,7 +148,7 @@ public sealed class P0SecurityHttpTests
             output = "spoofoo output",
             actorId = spoofedActor,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
-            reviewTranscriptRef = "check:spoof"
+            reviewRunId = proofId
         });
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
 

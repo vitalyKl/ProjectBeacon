@@ -227,6 +227,13 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                         return (false, null, evalAction.Error);
                     return (true, evalAction.Value, null);
                 }
+                if (kind == WorkstationCommandKind.RunReviewCheck)
+                {
+                    var reviewAction = WorkstationActions.RunReviewCheck(command.LocalRoot, payload);
+                    if (!reviewAction.Success)
+                        return (false, null, reviewAction.Error);
+                    return (true, reviewAction.Value, null);
+                }
                 var projectAction = kind switch
                 {
                     WorkstationCommandKind.InitProject => WorkstationActions.InitProject(command.LocalRoot, payload),

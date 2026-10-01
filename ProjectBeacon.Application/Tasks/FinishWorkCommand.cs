@@ -37,7 +37,7 @@ public class FinishWorkHandler
                     && review.RegressionsFound > review.RegressionsFixed)
                     return Result.Failure("Unfixed regressions remain; cannot mark done.");
 
-                if (command.Request.ReviewRunId is null && string.IsNullOrEmpty(command.Request.ReviewTranscriptRef))
+                if (command.Request.ReviewRunId is null)
                     return Result.Failure("done requires a completed review run.");
 
                 var reviewRun = await FindReviewRun(db, taskId, command.Request, ct);
@@ -100,14 +100,10 @@ public class FinishWorkHandler
     private static async Task<Domain.Entities.Evals.ReviewRun?> FindReviewRun(
         IBeaconDb db, Guid taskId, FinishWorkRequest request, CancellationToken ct)
     {
-        if (request.ReviewRunId is Guid reviewRunId)
-            return await db.ReviewRuns.FirstOrDefaultAsync(r => r.Id == reviewRunId && r.TaskId == taskId, ct);
-
-        if (string.IsNullOrEmpty(request.ReviewTranscriptRef))
+        if (request.ReviewRunId is not Guid reviewRunId)
             return null;
 
-        return await db.ReviewRuns.FirstOrDefaultAsync(
-            r => r.TaskId == taskId && r.TranscriptRef == request.ReviewTranscriptRef, ct);
+        return await db.ReviewRuns.FirstOrDefaultAsync(r => r.Id == reviewRunId && r.TaskId == taskId, ct);
     }
 
     private static async Task<bool> ActorHasAccess(IBeaconDb db, string actorId, Guid projectId, CancellationToken ct)

@@ -10,7 +10,14 @@ public record RecordEvalRunRequest(Guid ProjectId, Guid TaskId, string? PairId, 
 
 public record RecordEvalRunCommand(RecordEvalRunRequest Request) : ICommand<Result<EvalRunDto>>;
 
-public record CompleteEvalRunRequest(Guid EvalRunId, int PromptTokens, int CompletionTokens, int TurnCount, bool? Passed, string? TranscriptRef);
+public record CompleteEvalRunRequest(
+    Guid EvalRunId,
+    int PromptTokens,
+    int CompletionTokens,
+    int TurnCount,
+    int? CheckExitCode,
+    string? TranscriptRef,
+    string? CheckOutput = null);
 
 public record CompleteEvalRunCommand(CompleteEvalRunRequest Request) : ICommand<Result<EvalRunDto>>;
 
@@ -63,8 +70,9 @@ public class CompleteEvalRunHandler : ICommandHandler<CompleteEvalRunCommand, Re
             command.Request.PromptTokens,
             command.Request.CompletionTokens,
             command.Request.TurnCount,
-            command.Request.Passed,
-            command.Request.TranscriptRef);
+            command.Request.CheckExitCode,
+            command.Request.TranscriptRef,
+            command.Request.CheckOutput);
         await db.SaveChangesAsync(ct);
         return Result.Ok(EvalRunMapper.Map(run));
     }

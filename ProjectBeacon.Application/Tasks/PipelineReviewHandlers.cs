@@ -2,7 +2,9 @@ namespace ProjectBeacon.Application.Tasks;
 
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Application.Common;
+using Application.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -142,13 +144,18 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
 public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly EnqueueCommandHandler _enqueue;
 
-    public RecordReviewCheckHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RecordReviewCheckHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue)
+    {
+        _dbFactory = dbFactory;
+        _enqueue = enqueue;
+    }
 
     public async Task<Result<PipelineStateDto>> HandleAsync(RecordReviewCheckCommand command, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(command.Request.ArtifactRef))
-            return Result.Failure<PipelineStateDto>("Artifact ref is required.");
+        if (string.IsNullOrWhiteSpace(command.Request.CheckCommand))
+            return Result.Failure<PipelineStateDto>("Check command is required.");
 
         await using var db = _dbFactory.CreateDbContext();
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
@@ -162,19 +169,26 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (reviewRun is null)
             return Result.Failure<PipelineStateDto>("No open review run to check.");
 
-        try
-        {
-            if (command.Request.Passed)
-                reviewRun.Complete(command.Request.Findings, command.Request.ArtifactRef);
-            else
-                reviewRun.Fail(command.Request.Findings);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineStateDto>(ex.Message);
-        }
-
+        reviewRun.BindReviewer(command.Request.ActorId.ToString());
         await db.SaveChangesAsync(ct);
+
+        var payload = new JsonObject
+        {
+            ["reviewRunId"] = reviewRun.Id.ToString("D"),
+            ["checkCommand"] = command.Request.CheckCommand.Trim()
+        };
+        if (!string.IsNullOrWhiteSpace(command.Request.Path))
+            payload["path"] = command.Request.Path;
+
+        var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
+            command.Request.DeviceId,
+            command.Request.ActorId,
+            WorkstationCommandKind.RunReviewCheck,
+            payload.ToJsonString(),
+            task.ProjectId)), ct);
+        if (!queued.Success)
+            return Result.Failure<PipelineStateDto>(queued.Error ?? "Failed to enqueue review check.");
+
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }

@@ -112,6 +112,7 @@ public sealed class CapabilityAndWorkHttpTests
         });
         Assert.Equal(HttpStatusCode.BadRequest, transcriptOnly.StatusCode);
 
+        Guid proofId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
@@ -119,6 +120,7 @@ public sealed class CapabilityAndWorkHttpTests
             {
                 var proof = ReviewRun.Start(projectId, taskId, Domain.Enums.ReviewerType.Agent, Guid.NewGuid());
                 proof.Complete("checked", "check:exit0");
+                proofId = proof.Id;
                 db.ReviewRuns.Add(proof);
                 await db.SaveChangesAsync();
             }
@@ -131,7 +133,7 @@ public sealed class CapabilityAndWorkHttpTests
             output = "reviewed",
             actorId,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
-            reviewTranscriptRef = "check:exit0"
+            reviewRunId = proofId
         });
         Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync());
 

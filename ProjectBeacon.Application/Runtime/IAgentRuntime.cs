@@ -4,11 +4,13 @@ public sealed record AgentMessagePart(string Role, string Kind, string Body, str
 
 public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
 
+public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions);
+
 public interface IAgentRuntime : IAsyncDisposable
 {
     Task<string> CreateSessionAsync(string title, CancellationToken ct);
 
-    Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct);
+    Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null);
 
     IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct);
 

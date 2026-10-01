@@ -13,6 +13,7 @@ public static class CommandSandbox
         WorkstationCommandKind.InitProject
         or WorkstationCommandKind.ApplyOpencode
         or WorkstationCommandKind.RunEvalTurn
+        or WorkstationCommandKind.RunReviewCheck
         or WorkstationCommandKind.ChatEnsureSession
         or WorkstationCommandKind.ChatPrompt;
 

@@ -62,7 +62,7 @@ public sealed class EvalRunHandlerTests : IDisposable
 
         var complete = new CompleteEvalRunHandler(_factory);
         var completeResult = await complete.HandleAsync(new CompleteEvalRunCommand(
-            new CompleteEvalRunRequest(recordResult.Value!.Id, 100, 200, 5, true, "ref://1")));
+            new CompleteEvalRunRequest(recordResult.Value!.Id, 100, 200, 5, 0, "ref://1")));
 
         Assert.True(completeResult.Success);
         Assert.Equal(100, completeResult.Value.PromptTokens);
@@ -78,7 +78,7 @@ public sealed class EvalRunHandlerTests : IDisposable
         var complete = new CompleteEvalRunHandler(_factory);
 
         var result = await complete.HandleAsync(new CompleteEvalRunCommand(
-            new CompleteEvalRunRequest(Guid.NewGuid(), 100, 200, 5, true, "ref://1")));
+            new CompleteEvalRunRequest(Guid.NewGuid(), 100, 200, 5, 0, "ref://1")));
 
         Assert.False(result.Success);
         Assert.Equal("EvalRun not found.", result.Error);

@@ -42,9 +42,9 @@ public sealed class ContextCostHttpTests
             using (TenantScope.EnterUnscoped())
             {
                 var withBrief = EvalRun.Create(projectId, taskId, pairId, EvalCondition.WithBrief);
-                withBrief.Complete(100, 200, 5, true, "ref://1");
+                withBrief.Complete(100, 200, 5, 0, "ref://1");
                 var withoutBrief = EvalRun.Create(projectId, taskId, pairId, EvalCondition.WithoutBrief);
-                withoutBrief.Complete(50, 100, 3, false, "ref://2");
+                withoutBrief.Complete(50, 100, 3, 1, "ref://2");
                 db.EvalRuns.Add(withBrief);
                 db.EvalRuns.Add(withoutBrief);
                 await db.SaveChangesAsync();

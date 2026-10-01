@@ -39,6 +39,13 @@ public sealed class ReviewRun : Entity, IProjectScoped
         return run;
     }
 
+    public void BindReviewer(string actorId)
+    {
+        if (Status != ReviewRunStatus.Started || string.IsNullOrWhiteSpace(actorId))
+            return;
+        ReviewerActorId ??= actorId.Trim();
+    }
+
     public void Complete(string? findings, string artifactRef)
     {
         if (Status != ReviewRunStatus.Started)

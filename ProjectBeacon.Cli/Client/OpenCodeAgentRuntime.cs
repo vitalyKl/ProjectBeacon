@@ -12,8 +12,8 @@ public sealed class OpenCodeAgentRuntime : IAgentRuntime
     public Task<string> CreateSessionAsync(string title, CancellationToken ct)
         => _serve.CreateSessionAsync(title, ct);
 
-    public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct)
-        => _serve.PromptAsync(sessionId, text, model, ct);
+    public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null)
+        => _serve.PromptAsync(sessionId, text, model, controls, ct);
 
     public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, [EnumeratorCancellation] CancellationToken ct)
     {

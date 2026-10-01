@@ -58,6 +58,14 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
 
         if (string.IsNullOrWhiteSpace(request.Prompt))
             return Result.Failure<EvalPairResult>("Prompt is required.");
+        if (string.IsNullOrWhiteSpace(request.Model)
+            || request.Temperature is null
+            || string.IsNullOrWhiteSpace(request.ReasoningEffort)
+            || string.IsNullOrWhiteSpace(request.ToolPermissions)
+            || string.IsNullOrWhiteSpace(request.RepoRevision)
+            || string.IsNullOrWhiteSpace(request.CheckCommand)
+            || request.TimeoutSeconds is not int timeout || timeout is <= 0 or > 3600)
+            return Result.Failure<EvalPairResult>("Eval controls must pin model, temperature, reasoning, tools, revision, check, and timeout.");
 
         string? taskTitle;
         await using (var db = _dbFactory.CreateDbContext())
@@ -87,8 +95,10 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
             new CompileBriefCommand(new CompileBriefRequest(
                 request.ProjectId, null, request.Path, request.TaskId,
                 request.BudgetTokens, false, false, false)), ct);
+        if (!briefResult.Success)
+            return Result.Failure<EvalPairResult>(briefResult.Error ?? "Failed to compile brief.");
 
-        var briefText = briefResult.Success ? briefResult.Value!.BriefMarkdown : string.Empty;
+        var briefText = briefResult.Value!.BriefMarkdown;
         var trimmedPrompt = request.Prompt.Trim();
 
         var withBriefPrompt = string.IsNullOrWhiteSpace(briefText)
@@ -108,6 +118,23 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
             new RecordEvalRunRequest(request.ProjectId, request.TaskId, pairId, EvalCondition.WithoutBrief)), ct);
         if (!withoutBrief.Success)
             return Result.Failure<EvalPairResult>(withoutBrief.Error ?? "Failed to record eval run.");
+
+        await using (var pinDb = _dbFactory.CreateDbContext())
+        {
+            var runs = await pinDb.EvalRuns.IgnoreQueryFilters()
+                .Where(r => r.Id == withBrief.Value!.Id || r.Id == withoutBrief.Value!.Id)
+                .ToListAsync(ct);
+            foreach (var run in runs)
+                run.Pin(
+                    request.Model!.Trim(),
+                    request.Temperature!.Value,
+                    request.ReasoningEffort!.Trim(),
+                    request.ToolPermissions!.Trim(),
+                    request.TimeoutSeconds!.Value,
+                    request.RepoRevision!.Trim(),
+                    request.CheckCommand!.Trim());
+            await pinDb.SaveChangesAsync(ct);
+        }
 
         var withBriefCommand = await _enqueueCommand.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             request.DeviceId, request.ActorId, WorkstationCommandKind.RunEvalTurn,
@@ -142,19 +169,18 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
             payload["path"] = request.Path;
         if (!string.IsNullOrWhiteSpace(request.Model))
             payload["model"] = request.Model;
-        if (!string.IsNullOrWhiteSpace(request.CheckCommand))
-            payload["checkCommand"] = request.CheckCommand;
+        payload["model"] = request.Model;
+        payload["checkCommand"] = request.CheckCommand;
 
-        var timeout = request.TimeoutSeconds is > 0 and <= 3600 ? request.TimeoutSeconds.Value : 180;
         payload["controls"] = new JsonObject
         {
-            ["model"] = request.Model ?? "",
-            ["temperature"] = request.Temperature is double temperature ? JsonValue.Create(temperature) : null,
-            ["reasoningEffort"] = request.ReasoningEffort ?? "",
-            ["toolPermissions"] = request.ToolPermissions ?? "",
-            ["timeoutSeconds"] = timeout,
-            ["repoRevision"] = request.RepoRevision ?? "",
-            ["checkCommand"] = request.CheckCommand ?? ""
+            ["model"] = request.Model,
+            ["temperature"] = JsonValue.Create(request.Temperature),
+            ["reasoningEffort"] = request.ReasoningEffort,
+            ["toolPermissions"] = request.ToolPermissions,
+            ["timeoutSeconds"] = request.TimeoutSeconds,
+            ["repoRevision"] = request.RepoRevision,
+            ["checkCommand"] = request.CheckCommand
         };
 
         return payload.ToJsonString();

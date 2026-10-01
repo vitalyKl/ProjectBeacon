@@ -49,7 +49,7 @@ public sealed class EvalRunTests
     {
         var run = EvalRun.Create(Guid.NewGuid(), Guid.NewGuid(), "pair-1", EvalCondition.WithBrief);
 
-        run.Complete(100, 200, 5, true, "ref://log/1");
+        run.Complete(100, 200, 5, 0, "ref://log/1");
 
         Assert.Equal(100, run.PromptTokens);
         Assert.Equal(200, run.CompletionTokens);
@@ -64,7 +64,7 @@ public sealed class EvalRunTests
     {
         var run = EvalRun.Create(Guid.NewGuid(), Guid.NewGuid(), "pair-2", EvalCondition.WithoutBrief);
 
-        run.Complete(50, 10, 2, false);
+        run.Complete(50, 10, 2, 1);
 
         Assert.False(run.Passed);
         Assert.Null(run.TranscriptRef);
