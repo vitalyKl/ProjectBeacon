@@ -2,7 +2,7 @@
 
 .NET 9 project operating system for mixed human + agent development. Blazor Server + MudBlazor on `:5083`. Agents use stdio `beacon mcp`, not HTTP MCP. The workstation client (`beacon client`) talks outbound HTTPS to the control plane; the Web host does not read the user's disk.
 
-Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1.md` (execution entrypoint), `dotnet project docs/ProjectBeacon-code-review-roadmap-v3.md` (backend/security/architecture), and `dotnet project docs/ProjectBeacon-ui-ux-review-roadmap-v1.1.md` (UI/UX). Process contract: `AGENTS.md`. Historical plans are archived in `archive/docs/`.
+Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1.md` (execution entrypoint), `dotnet project docs/ProjectBeacon-design-doc-v3.md` (architecture), `dotnet project docs/ProjectBeacon-code-review-roadmap-v3.md` (backend/security), and `dotnet project docs/ProjectBeacon-ui-ux-review-roadmap-v1.1.md` plus `UI Design Migration Specification.md` (UI). Process contract: `AGENTS.md`. Historical plans are in `archive/docs/` and are not requirements.
 
 ## Self-host
 
@@ -13,11 +13,11 @@ Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1
 5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from the open project on the dashboard (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.
 6. Product version lives in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows the assembly version.
 
-Drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Reports, Chat, Settings. Agent models and the workstation proxy are in Settings. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers.
+Drawer groups: Work (Dashboard, Board, Backlog, Roadmap), Knowledge (Context, Decisions, Reports), Agents (Chat, user-level Agents and models, Workstations), Project settings, Account (Settings, OpenCode connections). `/agents` redirects to `/settings/agents`. `ChatDock` is a shell shortcut; `/chat` is the full page. Language is a cookie (`GET /culture`), not custom JS. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers. `ProjectBeacon.Worker` only expires sessions, API tokens, password-reset tokens, and invites.
 
 ## Workstation client
 
-The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (init repo, OpenCode config, llama-swap, install).
+The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (init repo, OpenCode config, model process, install). Agents and model backends belong to the user; a project only binds a device and a local root.
 
 1. In a terminal, run the first-run walkthrough (URL, sign-in, paths, probe/install, Windows autostart):
    ```
@@ -33,7 +33,7 @@ The Web UI never browses the developer machine. A local client enrolls, heartbea
 3. Create a project (`/projects/new`), pick the online device, browse its disk, optionally initialize `.gitignore` + `opencode.json`.
 4. Agents: Solo/Pipeline models and MCP catalog apply on the selected device. Settings: models/history paths and winget install (git/node/docker) after Confirm. Mark a backend **Load with others** so llama-swap keeps it resident (`groups.resident`). Agents and Dashboard show CPU/RAM/GPU from the client heartbeat.
 
-llama-swap is started by the client (`GET /v1/devices/me/llamaswap-config`), not by the Web process. Concurrent backends must use `${PORT}` in the launch command.
+The client starts the model process (`GET /v1/devices/me/llamaswap-config`), not the Web process. `UseOwnSwapper` uses the in-client swapper; otherwise the client launches external llama-swap. Concurrent backends must use `${PORT}` in the launch command.
 
 ## Agent MCP
 

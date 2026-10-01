@@ -1,3 +1,5 @@
+> Historical defect list. The bugs below were the original report. Do not re-implement from this file. Current boundaries: `ProjectBeacon-design-doc-v3.md`.
+
 # P0 / P1 Defect List
 
 Source of truth: `ProjectBeacon-code-review-roadmap-v3.md` sections 1.1-1.5.

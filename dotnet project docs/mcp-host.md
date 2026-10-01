@@ -50,6 +50,27 @@ A `beacon mcp` process that has neither `BEACON_API_URL` nor `BEACON_API_TOKEN` 
 
 With the URL and token set, those tools go through the control plane instead. File tools stay inside `--root` either way. Do not treat a local database session as equivalent to a remote `bcn_` token.
 
+## Actor and capabilities
+
+On the control-plane path the caller is the authenticated principal.
+
+- A user JWT acts as that user.
+- A project token (`bcn_`) is limited to its project. Capabilities are `TaskRead`, `TaskWrite`, `SessionDrive`, `ContextRead`, and `Admin` (`ApiTokenCapability`).
+- Handlers build `ActorContext` as `(UserId, IsAdmin, IsApiToken)` from that principal. A body user id is not the caller. `finish_work` and force-close take `ActorId` only as that dedicated field.
+- `BEACON_ACTOR_ID` is not enforced. On the local-database path it does not grant API capabilities.
+
+`pipeline_force_close` needs an Admin token when called through the API. `BEACON_WORKER_TOKEN` is only an actor id for finish-work and force-close. It is not a project-admin bearer.
+
+## What MCP is not
+
+`beacon mcp` is not `IAgentRuntime`. `OpenCodeAgentRuntime` on `beacon client` implements that interface for workstation chat. Pipeline role sessions are still created by `ManualSessionSpawner`. Do not treat an MCP tool call as spawning an OpenCode turn.
+
+Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). This host does not deny tools from those lists.
+
+## Workstation and chat boundary
+
+Device commands run only inside `beacon client` (section below). The Web host does not read the user tree and does not start the model process. Chat prompts execute on the enrolled device. File tools never leave `--root`. There is no shell tool and no HTTP MCP server.
+
 ## Control-plane tools
 
 These tools call the same `/v1` routes the Web host serves. They need `BEACON_API_URL` (for example `http://127.0.0.1:5083`) and `BEACON_API_TOKEN` (project token `bcn_…` or a user JWT). `BEACON_PROJECT_ID` is the default project. `BEACON_TASK_ID` is the default task for `claim_task`, `context_compile`, `finish_work`, and the `pipeline_*` tools. A missing URL or token returns MCP `isError`; file tools keep working. There is no HTTP MCP server.
@@ -106,7 +127,7 @@ Enum values on the wire match the API (`Todo`, `Planner`, `Must`, `Native`). Do 
 | `BEACON_API_TOKEN` | same as `BEACON_API_URL` | Bearer token: project `bcn_…` or a user JWT. Not printed |
 | `BEACON_PROJECT_ID` | pipeline, model, and project-scoped control-plane tools | GUID of the project this MCP session belongs to |
 | `BEACON_TASK_ID` | the four `task_*` / `subtask_*` tools, and the default task for `claim_task`, `context_compile`, `finish_work`, `pipeline_*` | GUID of the session task |
-| `BEACON_ACTOR_ID` | none (reserved) | actor identity; not enforced yet |
+| `BEACON_ACTOR_ID` | none | not enforced; do not use it as actor identity |
 
 Without `BEACON_PROJECT_ID` (or without the connection configuration) the tools return an MCP `isError` result; the server keeps running, and the file tools stay available. The database provider is created lazily on the first database tool call. The llama-swap proxy is only available while a workstation client reports it in heartbeat (`probeJson.llamaSwapStatus`); otherwise `model_status` reports the proxy as unavailable.
 

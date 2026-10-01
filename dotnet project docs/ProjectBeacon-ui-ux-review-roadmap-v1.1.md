@@ -15,11 +15,11 @@
 Ключевые наблюдения:
 
 1. **Settings перегружен**: account/security, TOTP, devices, workstation, model/chat settings и весь Agents UI находятся на одной странице. Фактический `Settings.razor` имеет около 21.6 KB, а `Agents.razor` — около 22.4 KB.
-2. **Agents намеренно является user-level настройкой, а не project-level доменом**: `/agents` редиректит в `/settings`, и это само по себе корректно при выбранной модели, где пользователь один раз настраивает свои модели/агенты для общего daemon/runtime и использует их в нескольких проектах. Проблема находится не в самом размещении, а в том, что глобальная конфигурация и project/runtime context сейчас недостаточно явно разделены внутри Settings.
+2. **Agents — user-level настройка.** `/agents` редиректит на `/settings/agents`. Workstations — `/settings/workstations`. Project settings — `/project/settings`. Это уже не одна страница Settings.
 3. **Dashboard смешивает monitoring/overview с project administration**: внутрь Dashboard встроен `ProjectManage`, который содержит folder attachment, members, invites и labels.
 4. **Chat имеет две конкурирующие модели**: полноценная страница `/chat` и глобальный `ChatDock`. Пользователь получает два разных места входа в одну систему.
 5. **UI design system внедрён частично**: базовые токены есть, но реальные размеры и spacing местами расходятся со спецификацией, а страницы активно используют MudBlazor utility classes (`pa-4`, `mt-4`, `mb-6` и т.п.) рядом с собственными `beacon-*` правилами.
-6. **Основной shell расходится с UI-спекой**: документ фиксирует sidebar 168px, а текущая тема/компонент фактически использует 240px.
+6. **Sidebar width.** `DrawerWidthLeft` = `168px`. Замечание про 240px относилось к ревью 2026-09-30 и больше не описывает тему.
 7. **Task Detail стал слишком большим рабочим экраном**: overview, review notes, phases, steps, pipeline, subtasks, sessions, verdicts, comments и compiled brief находятся в одном вертикальном потоке.
 8. **Board хорошо оформлен визуально, но его mobile UX слабее desktop-сценария**: на ширинах до 959px три колонки превращаются в вертикальный список, что ухудшает drag-and-drop Kanban-модель.
 9. **Агентный UX недостаточно отражает состояние процесса**: многие операции используют Snackbar после действия, но пользователю не всегда ясно, что именно выполняется, что queued, что applied, что failed и что требует ожидания.
@@ -242,46 +242,15 @@ Breadcrumbs не должны стать обязательными везде, 
 
 # 3. P1 — design system: привести спецификацию и код к одному состоянию
 
-## P1.1 Sidebar geometry сейчас не соответствует спецификации
+## P1.1 Sidebar geometry
 
-`UI Design Migration Specification.md` и `ProjectBeacon-ui-spec-corrected-geometry.md` фиксируют:
-
-```text
-Sidebar width = 168px
-```
-
-Текущий `BeaconTheme`:
-
-```text
-DrawerWidthLeft = 240px
-```
-
-Это не небольшое отклонение: 72px дают заметно другую композицию всего приложения.
-
-Решение должно быть одно из двух:
-
-1. вернуть 168px и реально следовать reference;
-2. осознанно выбрать новый размер и обновить спецификацию.
-
-Оставлять расхождение между code и authoritative spec нельзя.
+**Статус:** ✅ (2026-10-01). `BeaconTheme.LayoutProperties.DrawerWidthLeft` = `168px`. Замечание про 240px устарело. Geometry-файл архивирован.
 
 ---
 
-## P1.2 Board card geometry также расходится со спецификацией
+## P1.2 Board card geometry
 
-Спека задаёт board card padding около `10px`.
-
-Текущий CSS:
-
-```css
-.beacon-board-card {
-    padding: var(--space-3);
-}
-```
-
-`--space-3 = 12px`.
-
-Разница небольшая сама по себе, но это хороший пример того, что design system пока не является полностью authoritative: source of truth существует одновременно в документации и в runtime CSS.
+**Статус:** ✅ padding (2026-10-01). `.beacon-board-card` использует `var(--beacon-board-card-pad)`, значение `10px` в `DesignTokens.BoardCardPad`. Замечание про `--space-3` / 12px устарело.
 
 ---
 
@@ -1410,51 +1379,27 @@ success
 
 ### `dotnet project docs/UI Design Migration Specification.md`
 
-Статус: **главный UI документ, но сейчас частично устаревший**.
+**Статус:** ✅ единственный UI spec (2026-10-01).
 
-Нужно обновить:
-
-- sidebar geometry;
-- actual MudBlazor mapping;
-- реальную структуру pages/routes;
-- current shell;
-- Agent/Workstation information architecture;
-- ChatDock behavior;
-- responsive behavior;
-- accessibility requirements;
-- current token source.
-
-После обновления это должен быть единственный authoritative UI specification.
+Сверено с `MainLayout`, маршрутами и `DesignTokens.cs`. `ChatDock` описан как FAB, `/chat` — полная страница. Drawer collapse — `Breakpoint.Md`. Ширина 168px не выдаётся за текущую: код её не задаёт. Токены не дублируются второй таблицей.
 
 ---
 
 ### `AGENTS.md`
 
-Добавить/обновить:
-
-- authoritative UI spec;
-- правило не делать page-specific design decisions без design tokens;
-- shared component policy;
-- responsive/accessibility validation;
-- screenshot-based review flow.
+**Статус:** ✅ (2026-10-01). Секция Documentation указывает UI spec и `DesignTokens.cs`, запрещает page-specific tokens и второй geometry-документ, фиксирует drawer breakpoint и доступные имена icon-only контролов.
 
 ---
 
 ### `README.md`
 
-Обновить только то, что реально меняется после IA refactor:
-
-- navigation;
-- main UI sections;
-- Agents/Workstations;
-- Chat model;
-- current authoritative UI documentation.
+**Статус:** ✅ (2026-10-01). Навигация — пять групп drawer, Agents user-level, `ChatDock` vs `/chat`, ссылка на UI spec и design-doc-v3.
 
 ---
 
 ### `dotnet project docs/agent-prompt-template.md`
 
-Если агенты продолжают применять UI migration tasks, шаблон должен ссылаться на новый authoritative UI spec и этот roadmap, а не на старые fix-plan документы.
+**Статус:** ✅ (2026-10-01). Шаблон ссылается на master roadmap, backend roadmap, UI roadmap, design-doc-v3 и UI spec. Архив исключён.
 
 ---
 
@@ -1462,15 +1407,7 @@ success
 
 ### `dotnet project docs/ProjectBeacon-ui-spec-corrected-geometry.md`
 
-Этот документ содержит полезные исправленные geometry values, но по смыслу он уже является correction layer над основным UI spec.
-
-Рекомендуемое действие:
-
-1. перенести окончательные значения в `UI Design Migration Specification.md`;
-2. пометить correction file как historical;
-3. после проверки удалить/archive.
-
-Не держать два одновременно authoritative geometry documents.
+**Статус:** ✅ архивировано (2026-10-01). Совпавшие с кодом радиусы и hairline уже в UI spec и `DesignTokens.cs`. Второй geometry-документ не держать.
 
 ---
 
@@ -1478,15 +1415,15 @@ success
 
 ### `dotnet project docs/ProjectBeacon-design-doc-v2.md`
 
-Historical - archived to `archive/docs/`. UI shell и information architecture синхронизированы с `ProjectBeacon-master-roadmap-v1.md`.
+**Статус:** ✅ в `archive/docs/` (2026-10-01). Архитектура — `ProjectBeacon-design-doc-v3.md`.
 
 ### `dotnet project docs/features.md`
 
-Проверить UI feature descriptions и route assumptions после IA refactor.
+**Статус:** ✅ индекс, без старой модели «Web стартует llama-swap» (2026-10-01).
 
 ### `dotnet project docs/task-pipeline-local-agents.md`
 
-Синхронизировать UI flow task/pipeline/session/review с новой Task Detail моделью.
+**Статус:** ✅ текущий контракт (2026-10-01). UI flow task detail не переписывался в этом спринте; журнал шагов архивирован.
 
 ---
 
@@ -1622,4 +1559,4 @@ UI/UX overhaul считается завершённым, когда:
 - [ ] Localization audit завершён.
 - [ ] Screenshot regression matrix пройдена.
 - [ ] Старые/конфликтующие UI rules удалены.
-- [ ] UI documentation актуализирована.
+- [x] UI documentation актуализирована (2026-10-01, master Sprint 10).

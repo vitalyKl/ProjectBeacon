@@ -1,3 +1,5 @@
+> Historical Phase 0 token snapshot. Current values: `ProjectBeacon.Web/Theme/DesignTokens.cs`.
+
 # Phase 0 — Design Tokens and Decisions
 
 Frozen baseline. Date: 2026-09-30.

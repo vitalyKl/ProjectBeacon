@@ -964,6 +964,15 @@ UI:
 
 Архивировать старые execution plans, если они больше не являются источником актуальных решений.
 
+## Сделано (2026-10-01)
+
+- `ProjectBeacon-design-doc-v3.md` — архитектура.
+- `ProjectBeacon-roadmap-v3.md` не создан: этот master остаётся execution entrypoint (конфликт с backend §21 закрыт в пользу master).
+- README, `AGENTS.md`, UI spec, `features.md`, `mcp-host.md`, `task-pipeline-local-agents.md`, `cold-diff-review.md`, `agent-prompt-template.md` синхронизированы с кодом.
+- В архив: design-doc-v2, geometry correction, phase3 IA plan, baseline Phase 0, cleanup prompt, pipeline implementation log.
+
+Открытые gaps (не чинились в этом спринте): `AllowedMcpTools` / `AllowedPaths` только в prompt; pipeline spawn — `ManualSessionSpawner`.
+
 ## Gate
 
 Новый агент, получив только актуальные docs, должен понимать:
@@ -1245,11 +1254,11 @@ Master roadmap считается выполненным, когда однов�
 
 ## Documentation
 
-- [ ] Этот master roadmap остаётся актуальным execution entrypoint.
-- [ ] Backend roadmap актуален.
-- [ ] UI/UX roadmap актуален.
-- [ ] README/AGENTS не содержат старую архитектуру.
-- [ ] Historical plans архивированы.
+- [x] Этот master roadmap остаётся актуальным execution entrypoint.
+- [x] Backend roadmap актуален (doc-секции §20–§21; отдельный roadmap-v3 не заводит второй план).
+- [x] UI/UX roadmap актуален (§23).
+- [x] README/AGENTS не содержат старую архитектуру.
+- [x] Historical plans архивированы.
 
 ---
 

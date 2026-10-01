@@ -1,3 +1,5 @@
+> Historical execution plan. The drawer in `MainLayout` is the shipped navigation. Do not implement from this file.
+
 # Phase 3 — Information Architecture: План
 
 Дата: 2026-09-30

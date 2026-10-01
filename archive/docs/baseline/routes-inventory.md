@@ -1,3 +1,5 @@
+> Historical Phase 0 inventory. Current UI routes are in `UI Design Migration Specification.md`.
+
 # Phase 0 — Inventory of Routes and Their Purpose
 
 Frozen baseline. Date: 2026-09-30.

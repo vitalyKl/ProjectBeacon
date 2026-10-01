@@ -1,3 +1,5 @@
+> Historical Phase 0 snapshot. A project has no single `RootPath`. Current scope: `ProjectBeacon-design-doc-v3.md`.
+
 # Phase 0 — Scope Model
 
 Frozen baseline. Date: 2026-09-30.

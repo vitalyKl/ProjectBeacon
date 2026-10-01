@@ -42,7 +42,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 Four pieces (per architecture):
 - **API** — thin `/v1` endpoints; handlers live in Application. Mapped on the Web host (`:5083`) and on the API project for tests.
 - **Web** — human-facing UI. Invokes Application handlers in-process; Razor must not inject `BeaconDbContext`.
-- **Local workstation client** — `beacon client` on the developer's machine. Outbound HTTPS to the API (enroll, heartbeat, long-poll commands). Owns the working tree, OpenCode config, and llama-swap process. Not a WSS tunnel and not a hosted clone. Pipeline session spawn is still `ManualSessionSpawner` (no OpenCode harness yet).
+- **Local workstation client** — `beacon client` on the developer's machine. Outbound HTTPS to the API (enroll, heartbeat, long-poll commands). Owns the working tree, OpenCode config, and the model process (`UseOwnSwapper` or external llama-swap). Not a WSS tunnel and not a hosted clone. Pipeline session spawn is still `ManualSessionSpawner`. `OpenCodeAgentRuntime` on the client is the chat/workstation harness, not the pipeline spawner.
 - **Worker** — background jobs (`ProjectBeacon.Worker`, Generic Host). Today it only expires sessions, API tokens, password-reset tokens, and invites. It authenticates as the database role and runs unscoped across projects. It does not run workstation commands, llama-swap, or GitHub sync.
 
 ## Conventions
@@ -63,6 +63,12 @@ Four pieces (per architecture):
 - API error responses use RFC 7807 ProblemDetails (`application/problem+json`). Helpers in `ProjectBeacon.API/ProblemResults.cs`.
 - Web theme: `DesignTokens.cs` (Theme/) is the single source for CSS custom properties (colors, radii, spacing, geometry). `BeaconTheme.cs` reads from it. Do not hardcode theme values in Razor.
 - Status chips: use `StatusChip` (Shared/) with `ChipPalette` (Theme/) for consistent status coloring. Do not inline `<MudChip>` for status display.
+
+## Documentation
+
+Read order when the task is product work: master roadmap for phase order, then the specialized section it names, then `dotnet project docs/ProjectBeacon-design-doc-v3.md` for shape. UI visuals: `UI Design Migration Specification.md`, with values from `DesignTokens.cs`. MCP: `mcp-host.md`. Pipeline: `task-pipeline-local-agents.md`. `archive/docs/` is not a requirement source.
+
+Do not make page-specific colors, radii, or spacing. Do not add a second token or geometry document. Responsive check: the drawer collapses below `Breakpoint.Md`. Accessibility: icon-only controls need an accessible name; status is not color alone. A screenshot is not end-to-end verification.
 
 ## Style
 
@@ -99,11 +105,11 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - Do not inject `BeaconDbContext` into Razor. Call Application handlers.
 - EF migration: always regenerate with dotnet-ef to get ModelSnapshot. Never apply migrations without a snapshot.
 - Importing a file attaches as repo scope. A project-only compile still includes that lone repo brief. Export without a repo still writes `scope: project`.
-- Web drawer: Dashboard, Board, Backlog, Roadmap, Context, Decisions, Reports, Chat, Settings. Agent models, MCP, and the llama-swap proxy live in Settings. Learn and Files are not shipped in this rebuild.
+- Web drawer groups: Work (Dashboard, Board, Backlog, Roadmap), Knowledge (Context, Decisions, Reports), Agents (Chat, Agents at `/settings/agents`, Workstations), Project (`/project/settings`), Account (Settings, Connections). `/agents` redirects to `/settings/agents`. `ChatDock` is a shell FAB; `/chat` is the full page. Learn and Files are not shipped.
 - Anonymous `/` is the product landing (`Landing.razor`, `LandingLayout`). Do not restore a 301 to `/dashboard`. Logged-in `/` navigates to the dashboard in the page.
 - Local model backends and agent templates belong to the user account. Applying a template still writes that project's role bindings. Labels are project-scoped areas with optional path prefixes, not free-form chips. New projects start with an editable starter catalog (API, Web, CLI, Visual, UX). Agents may propose; only active labels expand compile and `get_changed_scope`.
 - Continue Beacon work from the living board and the compiled Context brief. Do not invent hosted clone, outbound WSS, `write_handoff`, or live HTTP MCP as available. `beacon client` is outbound HTTPS only.
-- llama-swap runs on the workstation client, not in the Web process. Agents proxy status comes from device heartbeat (`DeviceLlamaSwapProxy`). `LlamaSwapSupervisor` remains for unit tests only.
+- The model process runs on the workstation client (`ClientLlamaSwap`), not in the Web process. `UseOwnSwapper` selects the in-client swapper; otherwise the client starts external llama-swap. Proxy status comes from device heartbeat (`DeviceLlamaSwapProxy`). `LlamaSwapSupervisor` remains for unit tests only.
 - `DaemonDevice` is user-owned and not tenant-filtered. `ProjectRuntime` is `(ProjectId, DeviceId, LocalRoot)` — a project has no single `RootPath`.
 - Device commands (`list_dir`, `init_project`, `apply_opencode`, `save_workstation`, `install`, …) execute only on the selected online device. Web must not use `System.IO` on user trees.
 - `BEACON_WORKER_TOKEN` is only an `ActorId` for finish-work and force-close. The Worker process is the database role plus unscoped RLS, all projects, no workstation commands.

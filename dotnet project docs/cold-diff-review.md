@@ -15,6 +15,15 @@ Core principle: give the diff to a reader that knows nothing about what the
 change is for. Withholding intent is the whole technique — a reader told
 what the change is for will confirm it, the same way the author does.
 
+## Not the product pipeline review
+
+This skill is a single isolated reading of a git diff before push, PR, or
+hand-off. The product pipeline review is a different mechanism: a new
+reviewer session that sees only task artifacts and records approve or
+reopen-subtask (`task-pipeline-local-agents.md`). Running this skill does
+not record a pipeline verdict. A pipeline approve does not replace this
+skill when the diff touches the trigger list below.
+
 ## The isolation rule (read this first)
 
 You, the agent running this skill, already know the intent: it is in the

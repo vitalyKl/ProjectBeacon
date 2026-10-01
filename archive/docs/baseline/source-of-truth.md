@@ -1,3 +1,5 @@
+> Historical Phase 0 snapshot (2026-09-30). Current hierarchy: `dotnet project docs/ProjectBeacon-design-doc-v3.md` and master roadmap §1.4. This file's conflict order is not authoritative.
+
 # Source of Truth Designation
 
 Two specialized roadmaps are the authoritative documents for their respective domains.

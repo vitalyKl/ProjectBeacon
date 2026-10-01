@@ -1,8 +1,10 @@
 # UI Design Migration Specification
 
+Authoritative UI specification. Token values live in `ProjectBeacon.Web/Theme/DesignTokens.cs`. If this file and that class disagree, the class wins and this file should be corrected. Execution order stays in the master roadmap. The corrected-geometry note and the Phase 3 IA plan are archived; do not keep a second token table.
+
 ## 1. Purpose
 
-Apply the visual language and interaction principles of the provided reference UI to the existing application without changing its business logic, domain model, API contracts, routing semantics, or existing functionality unless explicitly required.
+The visual language below is the design system for the shipped Blazor Server + MudBlazor UI. Do not change business logic, domain model, API contracts, or routing to chase a visual change.
 
 The target result is not a pixel-perfect copy of the reference screenshot.
 
@@ -21,6 +23,32 @@ The target result is a coherent application-wide design system inspired by the r
 - consistent component behavior across all pages.
 
 The implementation must be adapted to the existing project's architecture and technology stack.
+
+## 1.1 Shipped shell
+
+`MainLayout` is the authenticated shell: `MudAppBar`, `MudDrawer` (`DrawerVariant.Responsive`, `Breakpoint.Md`, `Elevation="0"`), `ProjectSwitcher`, breadcrumbs, version footer, `LanguageSwitcher`, page body, and `ChatDock`.
+
+Drawer groups:
+
+```text
+Work        Dashboard /dashboard, Board /board, Backlog /backlog, Roadmap /roadmap
+Knowledge   Context /context, Decisions /decisions, Reports /reports
+Agents      Chat /chat, Agents /settings/agents, Workstations /settings/workstations
+Project     Project settings /project/settings
+Account     Settings /settings, Connections /settings/connections
+```
+
+`/agents` redirects to `/settings/agents`. Agents and model backends are user-level. Workstations are user-owned devices. Project settings are project-level. Learn and Files are not shipped.
+
+Anonymous `/` is `Landing.razor` (`LandingLayout`), not a redirect to the dashboard. Other auth routes: `/login`, `/register`, `/forgot`, `/reset`, `/recover`, `/bootstrap`, `/invite`. Task detail is `/task/{taskId}`. New project is `/projects/new`.
+
+Chat has two surfaces. `/chat` is the full page. `ChatDock` is a FAB in the shell that opens a small panel and links to `/chat`. The dock is quick access, not a second product.
+
+Shared primitives already in the tree: `PageHeader`, `StatusChip` with `ChipPalette`, `ProjectSwitcher`, `LanguageSwitcher`. Do not inline `MudChip` for status. Do not add page-local colors, radii, or spacing; change `DesignTokens.cs`.
+
+Chrome strings go through `IStringLocalizer<Web>`. Culture is the cookie set by `GET /culture`.
+
+Drawer width is `BeaconTheme.LayoutProperties.DrawerWidthLeft` = `168px`. Do not set a second width on `MudDrawer`.
 
 ---
 
@@ -191,15 +219,11 @@ Approximate proportions:
 └───────────────────────┘
 ```
 
-Desktop width:
+Desktop width is `168px`, set by `BeaconTheme.LayoutProperties.DrawerWidthLeft`. Do not also set `MudDrawer.Width`.
 
-```text
-168px
-```
+Sidebar padding in the mockup was `1rem 0.75rem`. The shipped header uses `--space-4` / `--space-3`; nav padding uses `--space-1` / `--space-3`.
 
-Sidebar padding: `1rem 0.75rem` (16px vertical / 12px horizontal).
-
-Do not force a fixed width if the current application has a responsive navigation system; 168px is the expanded desktop width.
+Below `Breakpoint.Md` the drawer collapses. Do not require a permanent 168px column on tablet or mobile.
 
 ---
 
@@ -272,23 +296,26 @@ Required semantic tokens:
 --color-border-accent  active board card border
 ```
 
-The mockup source defines the surface levels as tokens; the hex values below remain an approximate visual direction until validated against the reference:
+Shipped hex values (`DesignTokens.cs`):
 
 ```text
-Application background:
-#181818
-
-Sidebar / Surface 1:
-#141414
-
-Surface / panel:
-#171717 / #1A1A1A
-
-Border:
-#2A2A2A
+Application background   #181818
+Surface 1                #141414
+Surface 2                #1A1A1A
+Header                   same as application background
+Surface hover            #202020
+Accent background        #1a2740
+Border                   #2A2A2A
+Border subtle            #222222
+Border strong            #333333
+Text primary             #F5F5F5
+Text secondary           #B5B5B5
+Text muted               #8A8A8A
+Text disabled            #5C5C5C
+Accent                   #3B82F6
 ```
 
-Exact values must be validated against the reference and adjusted globally through design tokens.
+Surface tokens are not `#171717`. MudBlazor `Palette.Dark` is `#171717`; do not use that as a second surface token.
 
 Do not scatter literal color values throughout components.
 
@@ -296,9 +323,9 @@ Do not scatter literal color values throughout components.
 
 # 9. Design Tokens
 
-Create a centralized design-token layer.
+The token layer already exists: `ProjectBeacon.Web/Theme/DesignTokens.cs`, emitted as CSS custom properties. `BeaconTheme.cs` reads from it. Do not create a second table in Razor or CSS.
 
-At minimum define:
+The names below are the contract. Values are the constants in that class (spacing 4–64px, radii 12px / 8px / pill, hairline 0.5px, type scale 24 / 16 / 14 / 14 / 13 / 12).
 
 ## Colors
 
@@ -840,7 +867,7 @@ Every border is `0.5px solid` — a deliberate hairline weight, never the browse
 
 ## Sidebar
 
-- Width: `168px`; background: surface 1.
+- Width: `168px` (`BeaconTheme.DrawerWidthLeft`). Background: surface 1.
 - Padding: `1rem 0.75rem` (16px / 12px).
 - Nav items: `7px 8px` padding, `8px` icon-to-label gap, `16px` icon, `13px` label text, small radius tier.
 - Active nav item: accent background, bright text, accent icon.
@@ -865,6 +892,8 @@ Every border is `0.5px solid` — a deliberate hairline weight, never the browse
 - Row icon: `15px`.
 
 ## Chat
+
+Full page: `/chat` (`Features/Chat/Chat.razor`). Shell dock: `ChatDock` (FAB, panel, link to the full page). Both use `ChatPartView`. The dock is not a separate conversation model.
 
 - Header: `8px` gap between dot, name, and status; status dot `8px`.
 - Message list gap: `14px`.
@@ -964,7 +993,17 @@ Tables may become horizontally scrollable or transform into cards
 
 Do not simply shrink the desktop layout.
 
-Define explicit responsive behavior for each major component.
+The shipped drawer collapses under `Breakpoint.Md`. Critical flows still need a usable single column there; do not rely on hover-only actions.
+
+## Accessibility
+
+- Icon-only controls need an accessible name (`aria-label` or equivalent). `ChatDock` close and FAB already do.
+- Status is not color alone. Use `StatusChip` / `ChipPalette` and text.
+- Primary actions must be reachable without a pointer. Kanban drag needs a non-drag alternative where drag exists.
+- Dialogs and menus must move focus in a way MudBlazor already provides; do not roll a second focus trap.
+- User-facing chrome is localized. Do not hardcode English chrome in Razor. Leave user-authored titles and descriptions as written.
+
+A full keyboard audit is not claimed by this document.
 
 ---
 
@@ -1003,41 +1042,37 @@ Do not blindly create all components if some are not required.
 
 ---
 
-# 31. Existing Pages
+# 31. Routes
 
-Agents must classify every existing page into one of these categories:
+Do not rediscover the page list. Authenticated routes:
 
-```text
-Dashboard
-List
-Details
-Create/Edit
-Settings
-Authentication
-Reports
-Administration
-Monitoring
-Error/Status
-Other
-```
+| Route | Page |
+|---|---|
+| `/dashboard` | Dashboard |
+| `/board` | Board |
+| `/backlog` | Backlog |
+| `/roadmap` | Roadmap |
+| `/context` | Context |
+| `/decisions` | Decisions |
+| `/reports` | Reports |
+| `/chat` | Chat (full page) |
+| `/task/{taskId}` | Task detail |
+| `/settings/agents` | User-level agents and models (`/agents` redirects here) |
+| `/settings/workstations` | User-owned workstations |
+| `/project/settings` | Project settings |
+| `/projects/new` | Create project |
+| `/settings` | Account settings |
+| `/settings/connections` | OpenCode connections |
 
-For each page identify:
+Auth and landing use their own layouts: `/`, `/login`, `/register`, `/forgot`, `/reset`, `/recover`, `/bootstrap`, `/invite`.
 
-- page title;
-- primary action;
-- secondary actions;
-- main content;
-- supporting information;
-- interactive elements;
-- empty state;
-- loading state;
-- error state.
-
-Then apply the design system.
+Every new screen still needs an empty, loading, and error state. That is a requirement for new work, not a classification exercise.
 
 ---
 
 # 32. Migration Strategy
+
+Historical. Tokens, `MainLayout`, and the routes in §31 already exist. Do not re-run this sequence. New UI work extends `DesignTokens.cs` and the shared primitives instead.
 
 Do not migrate every page simultaneously.
 
@@ -1195,32 +1230,15 @@ The goal is consistency of the visual language, not pixel-level reproduction.
 
 ---
 
-# 36. Definition of Done
+# 36. Rules for later UI changes
 
-The migration is complete only when:
-
-- [ ] Existing project architecture has been inspected.
-- [ ] UI migration plan was created.
-- [ ] Global design tokens exist.
-- [ ] Application shell has been migrated.
-- [ ] Sidebar has been migrated.
-- [ ] Header has been migrated.
-- [ ] Core reusable components have been migrated.
-- [ ] At least one representative page has been completely migrated and reviewed.
-- [ ] Remaining pages have been migrated.
-- [ ] Responsive behavior has been checked.
-- [ ] Loading states have been checked.
-- [ ] Empty states have been checked.
-- [ ] Error states have been checked.
-- [ ] Focus states have been checked.
-- [ ] Accessibility has been checked.
-- [ ] Legacy conflicting styles have been removed or isolated.
-- [ ] Build succeeds.
-- [ ] Existing tests pass.
-- [ ] No business logic was unintentionally changed.
-- [ ] No duplicated design tokens remain.
-- [ ] No page contains unnecessary hard-coded colors or spacing.
-- [ ] Final UI has been visually reviewed against the reference.
+- Change tokens in `DesignTokens.cs` only.
+- Status uses `StatusChip` and `ChipPalette`.
+- Chrome uses `IStringLocalizer<Web>`.
+- Razor calls Application handlers, not `BeaconDbContext`.
+- New screens ship empty, loading, and error states.
+- The drawer collapse below `Breakpoint.Md` stays intact.
+- Do not add a second geometry document.
 
 ---
 

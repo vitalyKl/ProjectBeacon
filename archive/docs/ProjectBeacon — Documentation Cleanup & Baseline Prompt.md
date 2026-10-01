@@ -1,3 +1,5 @@
+> Historical prompt. Sprint 10 applied this cleanup. Do not run it again as an active plan.
+
 # ProjectBeacon — Documentation Cleanup & Baseline
 
 ## Цель

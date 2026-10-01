@@ -1,3 +1,5 @@
+> Historical. Geometry that still applies lives in `dotnet project docs/UI Design Migration Specification.md` and `ProjectBeacon.Web/Theme/DesignTokens.cs`. Do not keep a second token table.
+
 # ProjectBeacon UI Spec — Corrected Geometry, Transcribed From Source
 
 This corrects the geometry/spacing sections of the earlier spec, which was

@@ -12,7 +12,9 @@
 3. Прочитай указанные секции:
    - Backend roadmap: `dotnet project docs/ProjectBeacon-code-review-roadmap-v3.md`
    - UI/UX roadmap: `dotnet project docs/ProjectBeacon-ui-ux-review-roadmap-v1.1.md`
-4. Прочитай все файлы из секции «Контекст» задачи.
+   - Архитектура: `dotnet project docs/ProjectBeacon-design-doc-v3.md`
+   - UI spec: `dotnet project docs/UI Design Migration Specification.md` (значения токенов — `DesignTokens.cs`)
+4. Не читай `archive/docs/` как требования. Прочитай файлы из секции «Контекст» задачи.
 5. Выполни подшаги задачи. Меняй только то, что требуется задачей; не рефактори соседний код.
 6. Правила:
    - английский UI-текст — только через `IStringLocalizer<Web>` (resx);

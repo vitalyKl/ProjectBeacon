@@ -1,3 +1,5 @@
+> Historical. Superseded by `dotnet project docs/ProjectBeacon-design-doc-v3.md`. Do not implement from this file.
+
 # ProjectBeacon — Design Document v2 (.NET rebuild)
 
 Supersedes the original `docs/design.md`. This is a from-scratch rebuild —

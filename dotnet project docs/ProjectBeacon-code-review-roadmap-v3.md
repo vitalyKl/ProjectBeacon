@@ -801,26 +801,17 @@ Roadmap должен зафиксировать:
 
 ### `features.md`
 
-Обновить или сократить до стабильного feature specification.
+**Статус:** ✅ сокращено до индекса (2026-10-01).
 
-Устаревшее место: описание того, что Beacon управляет внешним llama-swap процессом. В текущей архитектуре model process принадлежит workstation client, а control plane хранит desired state и orchestrates configuration.
-
-Также обновить model backend terminology (`OpenAiCompatible` и фактические backend types).
+Процесс модели описан как клиентский (`UseOwnSwapper` или внешний llama-swap). Типы бэкендов: `FreeToken`, `LlamaCpp`, `OpenAiCompatible`. Детали — в `ProjectBeacon-design-doc-v3.md`.
 
 ---
 
 ### `task-pipeline-local-agents.md`
 
-**Оставить и обновить.**
+**Статус:** ✅ контракт обновлён (2026-10-01). Журнал шагов — `archive/docs/task-pipeline-local-agents-log.md`.
 
-Нужно синхронизировать:
-
-- workstation boundary;
-- runtime abstraction;
-- actor/capability model;
-- реальный статус Worker;
-- enforcement `AllowedMcpTools` / `AllowedPaths`;
-- текущий pipeline implementation.
+Зафиксировано по коду: `ManualSessionSpawner` остаётся pipeline spawn; `IAgentRuntime` — клиентский chat harness; Worker пайплайн не исполняет; `AllowedMcpTools` / `AllowedPaths` попадают в prompt и не являются harness deny. Enforcement — открытый gap, не описание текущего поведения.
 
 ---
 
@@ -850,23 +841,17 @@ Roadmap должен зафиксировать:
 
 ### `mcp-host.md`
 
-**Оставить и обновить.**
+**Статус:** ✅ обновлено (2026-10-01).
 
-Добавить:
-
-- ActorContext/capabilities;
-- local MCP trust model;
-- project/task scoping;
-- workstation/chat sandbox boundary;
-- relationship with future `IAgentRuntime`.
+Добавлены `ActorContext` и capabilities, разделение local database vs control plane, граница workstation/chat, и то, что `IAgentRuntime` не является MCP.
 
 ---
 
 ### `cold-diff-review.md`
 
-**Оставить.**
+**Статус:** ✅ обновлено (2026-10-01).
 
-Но явно описать, как single-agent cold-diff review сочетается с multi-agent pipeline review.
+Skill явно отделён от pipeline review session. Один не заменяет другой.
 
 ---
 
@@ -874,43 +859,23 @@ Roadmap должен зафиксировать:
 
 ### `ProjectBeacon-ui-spec-corrected-geometry.md`
 
-Нужна проверка текущего UI против документа. После этого принять решение, актуален ли spec.
+**Статус:** ✅ архивировано (2026-10-01). Значения, которые совпали с `DesignTokens.cs`, живут в UI spec. Отдельной geometry-таблицы нет.
 
 ### `UI Design Migration Specification.md`
 
-Тоже требует сверки с фактическим UI/Web implementation. Backend review сам по себе не позволяет объявить этот документ stale.
+**Статус:** ✅ сверено с `MainLayout`, `BeaconTheme` и `DesignTokens.cs` (2026-10-01). Это единственный UI spec. Ширина drawer — `DrawerWidthLeft` `168px`.
 
 ---
 
-# 21. Создать новые authoritative документы
+# 21. Authoritative документы
 
-Минимальный набор:
+**Статус:** ✅ (2026-10-01), с зафиксированным конфликтом.
 
-```text
-docs/
-  architecture.md
-  security.md
-  workstation.md
-  agent-runtime.md
-  context.md
-  pipeline.md
-  evaluation.md
-  deployment.md
-  mcp.md
+`ProjectBeacon-design-doc-v3.md` — архитектура.
 
-dotnet project docs/
-  ProjectBeacon-roadmap-v3.md
-  ProjectBeacon-design-doc-v3.md
-```
+Отдельный `ProjectBeacon-roadmap-v3.md` не создаётся. Master roadmap §20 и cleanup-критерий запрещают второй активный execution plan. Точка входа — `ProjectBeacon-master-roadmap-v1.md`. Backend-детали — этот файл. UI — `ProjectBeacon-ui-ux-review-roadmap-v1.1.md`.
 
-Не следует превращать repository в десятки мелких документов. Отдельный документ нужен только там, где домен будет независимо поддерживаться.
-
-Минимально обязательны два authoritative файла:
-
-1. `ProjectBeacon-design-doc-v3.md`
-2. `ProjectBeacon-roadmap-v3.md`
-
-Остальные документы можно создавать постепенно по мере стабилизации соответствующих подсистем.
+Мелкие `architecture.md` / `security.md` / `workstation.md` / `agent-runtime.md` / `context.md` / `pipeline.md` / `evaluation.md` / `deployment.md` / `mcp.md` не заводились. Их содержание покрывают design-doc-v3, `mcp-host.md`, `task-pipeline-local-agents.md`, `deploy/README.md`. Новый файл — только если домен реально живёт отдельно.
 
 ---
 
@@ -986,9 +951,9 @@ dotnet project docs/
 - VRAM telemetry correction.
 - Worker documentation/contract.
 - production verification matrix.
-- design-doc-v3.
-- README/AGENTS/mcp/docs synchronization.
-- archive obsolete docs.
+- design-doc-v3. Сделано в master Sprint 10: `ProjectBeacon-design-doc-v3.md`. Отдельный `ProjectBeacon-roadmap-v3.md` не создаётся.
+- README/AGENTS/mcp/docs synchronization. Сделано в master Sprint 10.
+- archive obsolete docs. Сделано: `archive/docs/`.
 
 ---
 
@@ -1022,11 +987,11 @@ Roadmap можно считать завершённым, когда выпол�
 
 ### Documentation
 
-- `ProjectBeacon-design-doc-v3.md` — authoritative architecture;
-- `ProjectBeacon-roadmap-v3.md` — authoritative execution roadmap;
-- README и AGENTS ссылаются только на актуальные документы;
-- stale plans архивированы;
-- worker/mcp/workstation/security semantics описаны актуально.
+- [x] `ProjectBeacon-design-doc-v3.md` — authoritative architecture;
+- [x] execution roadmap — master roadmap v1, не отдельный `ProjectBeacon-roadmap-v3.md` (конфликт §21 закрыт в пользу master);
+- [x] README и AGENTS ссылаются только на актуальные документы;
+- [x] stale plans архивированы;
+- [x] worker/mcp/workstation/security semantics описаны актуально.
 
 ---
 
