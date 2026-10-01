@@ -216,7 +216,8 @@
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
         _devices = listed.Success ? listed.Value!.ToList() : [];
-        _wsDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
+        if (_wsDeviceId is not { } selectedId || _devices.All(d => d.Id != selectedId))
+            _wsDeviceId = _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
         if (_wsDeviceId is { } id)
         {
             LoadWorkstation(id);

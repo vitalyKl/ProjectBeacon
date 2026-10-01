@@ -81,7 +81,7 @@ public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<ILi
         await using var db = _dbFactory.CreateDbContext();
         var now = DateTime.UtcNow;
         var devices = await db.DaemonDevices
-            .Where(d => d.UserId == command.Request.UserId)
+            .Where(d => d.UserId == command.Request.UserId && d.RevokedAt == null)
             .OrderByDescending(d => d.LastHeartbeatAt)
             .ThenByDescending(d => d.CreatedAt)
             .ToListAsync(ct);

@@ -192,6 +192,20 @@ public sealed class DeviceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Revoke_HidesFromList()
+    {
+        var user = await SeedUserAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
+        await new RevokeDeviceHandler(Factory()).HandleAsync(
+            new RevokeDeviceCommand(new RevokeDeviceRequest(created.Value!.Id, user.Id)));
+        var listed = await new ListDevicesHandler(Factory()).HandleAsync(
+            new ListDevicesCommand(new ListDevicesRequest(user.Id)));
+        Assert.True(listed.Success);
+        Assert.Empty(listed.Value!);
+    }
+
+    [Fact]
     public async Task ForeignUser_CannotSeeCommand()
     {
         var owner = await SeedUserAsync("owner");
