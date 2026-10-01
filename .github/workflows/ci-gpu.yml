@@ -1,0 +1,16 @@
+name: GPU integration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  gpu:
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Test real llama-server
+        run: dotnet test --filter Lane=Gpu --verbosity normal

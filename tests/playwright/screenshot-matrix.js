@@ -2,23 +2,9 @@ const { chromium } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 
-const BASE = 'http://localhost:5083';
+const BASE = process.env.BEACON_SCREENSHOT_BASE || 'http://localhost:5083';
 const OUT = path.resolve(__dirname, 'out');
-const ENV_FILE = path.resolve(__dirname, '..', '..', '.env');
-const CRED_FILE = path.join(__dirname, '.dev-admin.json');
-
-// A task that lives in the admin's default (first-joined) project,
-// so /task/{id} resolves to the project pinned in the login cookie.
-const TASK_ID = '01a0ac2e-02ec-7393-8799-8a5a8769be7e';
-
-function readEnv(file) {
-  const env = {};
-  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
+const TASK_ID = process.env.BEACON_SCREENSHOT_TASK_ID || '';
 
 // Anonymous pages: shown without any auth, so capture in a fresh (cookie-less) context.
 const anonRoutes = [
@@ -56,21 +42,13 @@ const breakpoints = [
   { name: 'mobile-360', width: 360, height: 780 },
 ];
 
-// Reset the admin password via the bootstrap-token break-glass endpoint and
-// return the fresh credentials. Non-destructive: does not touch projects/tasks.
-async function recoverAdmin() {
-  const token = readEnv(ENV_FILE).BOOTSTRAP_ADMIN_TOKEN;
-  if (!token) throw new Error('BOOTSTRAP_ADMIN_TOKEN not found in ' + ENV_FILE);
-  const res = await fetch(BASE + '/v1/auth/recover-admin', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  const data = await res.json();
-  if (!res.ok || !data.password) {
-    throw new Error('recover-admin failed: HTTP ' + res.status + ' ' + JSON.stringify(data));
+function credentials() {
+  const login = process.env.BEACON_SCREENSHOT_LOGIN;
+  const password = process.env.BEACON_SCREENSHOT_PASSWORD;
+  if (!login || !password) {
+    throw new Error('Set BEACON_SCREENSHOT_LOGIN and BEACON_SCREENSHOT_PASSWORD. This script does not call recover-admin.');
   }
-  return { login: data.login, password: data.password };
+  return { login, password };
 }
 
 // Real UI login: fill the form and submit. Stores the BeaconAuth cookie in the
@@ -116,10 +94,7 @@ async function shot(page, bp, name, urlPath, results) {
 }
 
 (async () => {
-  console.log('Recovering admin password via /v1/auth/recover-admin ...');
-  const creds = await recoverAdmin();
-  fs.writeFileSync(CRED_FILE, JSON.stringify(creds, null, 2));
-  console.log('  login=' + creds.login + ' (password saved to ' + CRED_FILE + ')');
+  const creds = credentials();
 
   const browser = await chromium.launch();
   const results = [];

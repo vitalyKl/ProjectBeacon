@@ -22,9 +22,13 @@ Frozen baseline. Date: 2026-09-30.
 | `/decisions` | `Decisions.razor` | `MainLayout` | Authenticated | Decision register: list, accept, deprecate, supersede |
 | `/roadmap` | `Roadmap.razor` | `MainLayout` | Authenticated | Milestone roadmap: create, update, close, reopen milestones |
 | `/reports` | `Reports.razor` | `MainLayout` | Authenticated | Reports: generate, list, view board snapshot reports |
-| `/chat` | `Chat.razor` | `MainLayout` | Authenticated | Agent chat: sessions, prompts, streaming, tool calls |
-| `/settings` | `Settings.razor` | `MainLayout` | Authenticated | Settings: project config, agents/models, workstations, security |
-| `/agents` | `AgentsRedirect.razor` | `MainLayout` | Authenticated | Redirect to `/settings` (compatibility shortcut) |
+| `/chat` | `Chat.razor` | `MainLayout` | Authenticated | Agent chat: sessions and prompts |
+| `/settings` | `Settings.razor` | `MainLayout` | Authenticated | Account settings |
+| `/settings/agents` | `Agents.razor` | `MainLayout` | Authenticated | User-level agents, models, task kinds |
+| `/settings/workstations` | `Workstations.razor` | `MainLayout` | Authenticated | User-owned workstation runtime |
+| `/settings/connections` | `OpenCodeConnections.razor` | `MainLayout` | Authenticated | User-level provider connections |
+| `/project/settings` | `ProjectManage.razor` | `MainLayout` | Authenticated | Project members, API tokens, runtime binding |
+| `/agents` | `AgentsRedirect.razor` | `MainLayout` | Authenticated | Redirect to `/settings/agents` |
 | `/projects/new` | `New.razor` | `MainLayout` | Authenticated | Create new project |
 
 **Embedded components (no `@page` directive, rendered within other pages):**
@@ -57,11 +61,11 @@ Frozen baseline. Date: 2026-09-30.
 |---|---|---|---|
 | POST | `/v1/auth/login` | Anonymous | Login (email + password) → JWT session |
 | POST | `/v1/auth/register` | Anonymous | Register (invite-gated if configured) |
-| POST | `/v1/auth/logout` | **Anonymous (P0 §1.2)** | Destroy sessions (currently client-supplied `UserId`) |
+| POST | `/v1/auth/logout` | User | Destroy the caller's session. User id comes from the principal. |
 | POST | `/v1/auth/forgot-password` | Anonymous | Request password reset (always 200) |
 | POST | `/v1/auth/reset-password` | Anonymous | Reset password via `bcr_` token |
 | POST | `/v1/auth/invite/accept` | Anonymous | Accept invitation via `bci_` token |
-| POST | `/v1/auth/bootstrap` | **Anonymous (P0 §1.1)** | Bootstrap admin (fails open when `BOOTSTRAP_ADMIN_TOKEN` is empty) |
+| POST | `/v1/auth/bootstrap` | Bootstrap token | Create the first admin. Empty or wrong `BOOTSTRAP_ADMIN_TOKEN` is rejected. |
 | POST | `/v1/auth/recover` | Anonymous | Bootstrap-token admin break-glass |
 
 ### Org
@@ -236,6 +240,31 @@ Frozen baseline. Date: 2026-09-30.
 |---|---|---|---|
 | Anonymous | No auth required | None | Auth endpoints, `/v1/version`, `/` landing |
 | User (JWT session) | `Authorization: Bearer <jwt>` | `NameIdentifier`, `email`, `username` | All `/v1/*` except device-token routes |
-| API Token (`bcn_`) | `Authorization: Bearer bcn_…` | `token_id`, `project_id`, `capabilities` (**no `NameIdentifier`** — P0 §1.3) | Project-scoped routes |
+| API Token (`bcn_`) | `Authorization: Bearer bcn_…` | `ActorContext` (token id, bound project, capabilities). Secret is returned once on create; list/get return the prefix only. | That token's project only. Another project or a forged project header is 403. |
 | Device Token (`bcd_`) | `Authorization: Bearer bcd_…` | `device_id` | Device-specific routes only |
 | Bootstrap Token | `BOOTSTRAP_ADMIN_TOKEN` env | None (admin) | `/v1/auth/bootstrap`, `/v1/auth/recover` |
+
+## Screen scope (sprint 2)
+
+Actor is the signed-in user unless noted. Primary action is the job of the screen, not every button.
+
+| Route | Scope | Resource | Primary action |
+|---|---|---|---|
+| `/`, `/login`, `/register`, `/forgot`, `/reset`, `/invite` | Anonymous | Account | Enter or recover an account |
+| `/bootstrap`, `/recover` | Anonymous + bootstrap secret | Account | Create or reset the first admin |
+| `/dashboard` | Project | Project overview | See current project status |
+| `/board`, `/backlog`, `/task/{id}` | Project | Task | Move and inspect work |
+| `/roadmap` | Project | Milestone | Plan milestones |
+| `/context` | Project | Context | Compile the brief |
+| `/decisions` | Project | Decision | Record and accept decisions |
+| `/reports` | Project | Report | Generate a board snapshot |
+| `/chat` | Project + workstation runtime | Chat session | Prompt the agent inside the project root |
+| `/projects/new` | User | Project | Create a project and bind a folder |
+| `/project/settings` | Project | Members, tokens, runtime | Administer the project |
+| `/settings` | User | Account | Account and security |
+| `/settings/agents` | User | Agent template, model | Configure agents. Apply still targets one workstation. |
+| `/settings/workstations` | User-owned runtime | Device | See runtime health and queue lifecycle |
+| `/settings/connections` | User | Provider connection | Save connection credentials |
+| `/agents` | User | — | Shortcut to `/settings/agents` |
+
+Screenshot pixels are not stored in git. The capture matrix (1440, 1280, 1024, 768, 390, 360) lives in `tests/playwright/screenshot-matrix.js`. Comparing those shots is the visual-regression sprint, not this baseline.

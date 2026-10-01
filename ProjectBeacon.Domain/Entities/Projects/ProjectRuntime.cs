@@ -9,6 +9,8 @@ public class ProjectRuntime : Entity, IProjectScoped
     public Guid ProjectId { get; private set; }
     public Guid DeviceId { get; private set; }
     public string LocalRoot { get; private set; } = string.Empty;
+    public long ConfigRevision { get; private set; }
+    public long AppliedConfigRevision { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
@@ -33,5 +35,17 @@ public class ProjectRuntime : Entity, IProjectScoped
         ArgumentException.ThrowIfNullOrWhiteSpace(localRoot);
         LocalRoot = localRoot.Trim();
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void BumpConfig() => ConfigRevision++;
+
+    public void MarkConfigApplied(long revision)
+    {
+        if (revision < 0)
+            return;
+        if (revision > ConfigRevision)
+            revision = ConfigRevision;
+        if (revision > AppliedConfigRevision)
+            AppliedConfigRevision = revision;
     }
 }

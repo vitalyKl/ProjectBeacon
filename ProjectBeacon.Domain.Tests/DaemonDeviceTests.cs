@@ -54,6 +54,19 @@ public sealed class DaemonDeviceTests
         Assert.Equal("h2", device.TokenHash);
         Assert.Equal("bcd_bb", device.TokenPrefix);
     }
+
+    [Fact]
+    public void MarkApplied_DoesNotPassDesired()
+    {
+        var device = DaemonDevice.Create("laptop", Guid.NewGuid(), "fp", "h", "bcd_xx");
+        device.BumpDesired();
+        device.BumpDesired();
+        device.MarkApplied(5);
+        Assert.Equal(2, device.AppliedRevision);
+        device.BumpDesired();
+        Assert.Equal(2, device.AppliedRevision);
+        Assert.Equal(3, device.DesiredRevision);
+    }
 }
 
 public sealed class WorkstationCommandTests

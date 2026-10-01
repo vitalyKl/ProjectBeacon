@@ -3,6 +3,8 @@
 Source of truth: `ProjectBeacon-code-review-roadmap-v3.md` sections 1.1-1.5.
 Scope: all 5 trust-boundary vulnerabilities. Full audit + fixes.
 
+Status (sprint 1): P0-1..P0-5 and P1-2 are fixed in code. Covered by `AuthIntegrationTests.Bootstrap_*`, `P0SecurityHttpTests.Logout_WithoutAuth_Returns401`, `P2AuthorizationHttpTests` (token cannot cross projects), and `ActorContext`. P1-1 global UI error boundary remains open. The descriptions below are the original defects, not the current behavior.
+
 ## P0 (blocking, must fix before any other work)
 
 ### P0-1: Bootstrap fail-open (roadmap 1.1)

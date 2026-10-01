@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ProjectBeacon.Infrastructure.Data;
@@ -11,9 +12,11 @@ using ProjectBeacon.Infrastructure.Data;
 namespace ProjectBeacon.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(BeaconDbContext))]
-    partial class BeaconDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001100651_AddDesiredRevision")]
+    partial class AddDesiredRevision
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1240,12 +1243,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<long>("AppliedConfigRevision")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("ConfigRevision")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

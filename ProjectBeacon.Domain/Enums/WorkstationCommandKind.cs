@@ -16,5 +16,6 @@ public enum WorkstationCommandKind
     ChatPrompt,
     ChatAbort,
     ConfigureOpenCode,
-    RunEvalTurn
+    RunEvalTurn,
+    ReconcileDesired
 }

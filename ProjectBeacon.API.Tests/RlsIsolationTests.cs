@@ -10,8 +10,9 @@ using Npgsql;
 [Collection("postgres-serial")]
 public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLifetime
 {
-    private const string RlsRole = "rls_test_role";
+    private readonly string _rlsRole = "rls_" + Guid.NewGuid().ToString("N");
     private readonly PostgresFixture _postgres;
+    private bool _roleCreated;
     private bool _rlsApplied;
 
     private static readonly string[] ProjectScopedTables =
@@ -32,11 +33,11 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         await using var conn = new NpgsqlConnection(_postgres.ConnectionString);
         await conn.OpenAsync();
 
-        try { await Exec(conn, $"CREATE ROLE {RlsRole} LOGIN PASSWORD 'rls_test'"); }
-        catch (PostgresException) { }
-        await Exec(conn, $"GRANT {RlsRole} TO CURRENT_USER");
-        await Exec(conn, $"GRANT USAGE ON SCHEMA public TO {RlsRole}");
-        await Exec(conn, $"GRANT SELECT ON ALL TABLES IN SCHEMA public TO {RlsRole}");
+        await Exec(conn, $"CREATE ROLE {_rlsRole} LOGIN PASSWORD 'rls_test'");
+        _roleCreated = true;
+        await Exec(conn, $"GRANT {_rlsRole} TO CURRENT_USER");
+        await Exec(conn, $"GRANT USAGE ON SCHEMA public TO {_rlsRole}");
+        await Exec(conn, $"GRANT SELECT ON ALL TABLES IN SCHEMA public TO {_rlsRole}");
 
         foreach (var table in ProjectScopedTables)
         {
@@ -65,27 +66,33 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
     public async Task DisposeAsync()
     {
-        if (!_rlsApplied) return;
+        if (!_roleCreated) return;
 
         await using var conn = new NpgsqlConnection(_postgres.ConnectionString);
         await conn.OpenAsync();
 
-        foreach (var table in ProjectScopedTables)
+        if (_rlsApplied)
         {
-            await Exec(conn, $"DROP POLICY IF EXISTS tenant_project_isolation ON \"{table}\"");
-            await Exec(conn, $"ALTER TABLE \"{table}\" NO FORCE ROW LEVEL SECURITY");
-            await Exec(conn, $"ALTER TABLE \"{table}\" DISABLE ROW LEVEL SECURITY");
+            foreach (var table in ProjectScopedTables)
+            {
+                await Exec(conn, $"DROP POLICY IF EXISTS tenant_project_isolation ON \"{table}\"");
+                await Exec(conn, $"ALTER TABLE \"{table}\" NO FORCE ROW LEVEL SECURITY");
+                await Exec(conn, $"ALTER TABLE \"{table}\" DISABLE ROW LEVEL SECURITY");
+            }
+
+            foreach (var table in OrgScopedTables)
+            {
+                await Exec(conn, $"DROP POLICY IF EXISTS tenant_org_isolation ON \"{table}\"");
+                await Exec(conn, $"ALTER TABLE \"{table}\" NO FORCE ROW LEVEL SECURITY");
+                await Exec(conn, $"ALTER TABLE \"{table}\" DISABLE ROW LEVEL SECURITY");
+            }
         }
 
-        foreach (var table in OrgScopedTables)
-        {
-            await Exec(conn, $"DROP POLICY IF EXISTS tenant_org_isolation ON \"{table}\"");
-            await Exec(conn, $"ALTER TABLE \"{table}\" NO FORCE ROW LEVEL SECURITY");
-            await Exec(conn, $"ALTER TABLE \"{table}\" DISABLE ROW LEVEL SECURITY");
-        }
-
-        try { await Exec(conn, $"REVOKE {RlsRole} FROM CURRENT_USER"); } catch { }
-        try { await Exec(conn, $"DROP ROLE {RlsRole}"); } catch { }
+        await Exec(conn, $"REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM {_rlsRole}");
+        await Exec(conn, $"REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM {_rlsRole}");
+        await Exec(conn, $"REVOKE USAGE ON SCHEMA public FROM {_rlsRole}");
+        await Exec(conn, $"REVOKE {_rlsRole} FROM CURRENT_USER");
+        await Exec(conn, $"DROP ROLE IF EXISTS {_rlsRole}");
     }
 
     private static async Task Exec(NpgsqlConnection conn, string sql)
@@ -119,7 +126,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     {
         var conn = new NpgsqlConnection(_postgres.ConnectionString);
         await conn.OpenAsync();
-        await Exec(conn, $"SET ROLE {RlsRole}");
+        await Exec(conn, $"SET ROLE {_rlsRole}");
         return conn;
     }
 

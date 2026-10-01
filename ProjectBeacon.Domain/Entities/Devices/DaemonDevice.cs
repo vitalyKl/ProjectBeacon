@@ -16,6 +16,9 @@ public class DaemonDevice : Entity
     public DateTime? LastHeartbeatAt { get; private set; }
     public string ProbeJson { get; private set; } = "{}";
     public string WorkstationJson { get; private set; } = "{}";
+    public string DesiredWorkstationJson { get; private set; } = "{}";
+    public long DesiredRevision { get; private set; }
+    public long AppliedRevision { get; private set; }
     public DateTime? RevokedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
@@ -75,5 +78,23 @@ public class DaemonDevice : Entity
     public void Revoke()
     {
         RevokedAt ??= DateTime.UtcNow;
+    }
+
+    public void BumpDesired() => DesiredRevision++;
+
+    public void SetDesiredWorkstation(string json)
+    {
+        DesiredWorkstationJson = string.IsNullOrWhiteSpace(json) ? "{}" : json;
+        BumpDesired();
+    }
+
+    public void MarkApplied(long revision)
+    {
+        if (revision < 0)
+            return;
+        if (revision > DesiredRevision)
+            revision = DesiredRevision;
+        if (revision > AppliedRevision)
+            AppliedRevision = revision;
     }
 }
