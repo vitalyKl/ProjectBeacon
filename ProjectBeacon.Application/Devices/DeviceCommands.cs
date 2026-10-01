@@ -29,7 +29,8 @@ public record WorkstationCommandDto(
     string? Error,
     DateTime CreatedAt,
     DateTime? StartedAt,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    string? LocalRoot = null);
 
 public record ProjectRuntimeDto(
     Guid Id,

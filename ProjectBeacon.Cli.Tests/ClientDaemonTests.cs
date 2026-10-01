@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Application.Devices;
 using Domain.Enums;
 using ProjectBeacon.Cli.Client;
 
@@ -335,7 +336,8 @@ public sealed class ClientDaemonTests : IDisposable
             {
                 Id = Guid.NewGuid(),
                 Kind = WorkstationCommandKind.ChatPrompt,
-                PayloadJson = JsonSerializer.Serialize(new { path = _dir, chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+                LocalRoot = _dir,
+                PayloadJson = JsonSerializer.Serialize(new { path = ".", chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
             },
             CancellationToken.None);
         Assert.True(ok, error);
@@ -366,12 +368,86 @@ public sealed class ClientDaemonTests : IDisposable
             {
                 Id = Guid.NewGuid(),
                 Kind = WorkstationCommandKind.ChatPrompt,
-                PayloadJson = JsonSerializer.Serialize(new { path = _dir, chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+                LocalRoot = _dir,
+                PayloadJson = JsonSerializer.Serialize(new { chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
             },
             CancellationToken.None);
         Assert.True(ok, error);
         Assert.Contains("interrupted", string.Join("\n", logs));
         Assert.Contains("\"interrupted\":true", result);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_RejectsAbsolutePathAndEscape()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings());
+        var absolute = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Kind = WorkstationCommandKind.ChatPrompt,
+            LocalRoot = _dir,
+            PayloadJson = JsonSerializer.Serialize(new { path = _dir, chatSessionId = Guid.NewGuid(), externalSessionId = "oc-1", text = "hello" })
+        }, CancellationToken.None);
+        Assert.False(absolute.Ok);
+        Assert.Contains("relative", absolute.Error);
+
+        var escape = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Kind = WorkstationCommandKind.ChatEnsureSession,
+            LocalRoot = _dir,
+            PayloadJson = JsonSerializer.Serialize(new { path = "../secret", title = "Chat" })
+        }, CancellationToken.None);
+        Assert.False(escape.Ok);
+        Assert.Contains("escapes", escape.Error);
+
+        var missing = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Kind = WorkstationCommandKind.RunEvalTurn,
+            PayloadJson = """{"evalRunId":"00000000-0000-0000-0000-000000000001","prompt":"hi"}"""
+        }, CancellationToken.None);
+        Assert.False(missing.Ok);
+        Assert.Equal(CommandSandbox.RuntimeRequired, missing.Error);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ListDir_UsesLocalProjectsRoot_NotPayloadRoot()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        var settings = new WorkstationSettings { ProjectsRoot = _dir, ModelsRoot = _dir };
+        await using var daemon = new WorkstationDaemon(http, llama, () => settings);
+        var outside = Path.Combine(Path.GetTempPath(), "beacon-payload-root-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var listed = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+            {
+                Kind = WorkstationCommandKind.ListDir,
+                PayloadJson = JsonSerializer.Serialize(new { path = _dir, root = outside })
+            }, CancellationToken.None);
+            Assert.True(listed.Ok, listed.Error);
+
+            var rejected = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+            {
+                Kind = WorkstationCommandKind.ListDir,
+                PayloadJson = JsonSerializer.Serialize(new { path = outside, root = _dir })
+            }, CancellationToken.None);
+            Assert.False(rejected.Ok);
+            Assert.Contains("escapes", rejected.Error);
+        }
+        finally
+        {
+            try { Directory.Delete(outside, true); } catch { }
+        }
     }
 
     private static HttpResponseMessage Json(object body) =>

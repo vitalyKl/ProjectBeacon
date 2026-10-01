@@ -85,7 +85,6 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
         }
 
         var payload = OpencodePayload.BuildApply(
-            runtime.LocalRoot,
             request.Mode,
             backends,
             request.Mode == AgentRunMode.Solo ? request.SoloBackendId ?? backends.FirstOrDefault()?.Id : null,

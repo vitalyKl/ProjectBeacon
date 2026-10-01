@@ -43,7 +43,7 @@ public static class ChipPalette
     public static Color ForRuntime(string? state) => state switch
     {
         "Ready" or "Online" or "Succeeded" => Color.Success,
-        "Busy" or "Running" or "Starting" or "Queued" => Color.Info,
+        "Busy" or "Running" or "Starting" or "Stopping" or "Queued" => Color.Info,
         "Degraded" => Color.Warning,
         "Failed" => Color.Error,
         _ => Color.Default

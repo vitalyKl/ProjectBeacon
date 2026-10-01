@@ -2,6 +2,38 @@ namespace ProjectBeacon.Application.Common;
 
 public static class WorkspacePath
 {
+    public const string RelativePathRequired = "path must be relative to the project folder.";
+
+    public static Result<string> ResolveInRoot(string root, string? path, bool relativeOnly)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+            return Result.Failure<string>("missing root");
+
+        if (path is not null && path.Contains('\0', StringComparison.Ordinal))
+            return Result.Failure<string>("malformed path");
+
+        if (string.IsNullOrWhiteSpace(path) || path == ".")
+        {
+            try
+            {
+                return Result.Ok(Path.GetFullPath(root));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return Result.Failure<string>("malformed path");
+            }
+        }
+
+        if (Path.IsPathRooted(path))
+        {
+            if (relativeOnly)
+                return Result.Failure<string>(RelativePathRequired);
+            return ValidateAbsoluteInsideRoot(root, path);
+        }
+
+        return ResolveInsideRoot(root, path);
+    }
+
     public static Result<string> ResolveInsideRoot(string root, string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))

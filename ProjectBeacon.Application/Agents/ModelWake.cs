@@ -44,7 +44,7 @@ public sealed class NudgeModelsHandler : ICommandHandler<NudgeModelsCommand, Res
         foreach (var runtime in runtimes)
         {
             var payload = OpencodePayload.BuildApply(
-                runtime.LocalRoot, AgentRunMode.Solo, dtos, preferred, null, null, null);
+                AgentRunMode.Solo, dtos, preferred, null, null, null);
             await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
                 runtime.DeviceId, command.UserId, WorkstationCommandKind.ApplyOpencode, payload, runtime.ProjectId)), ct);
         }

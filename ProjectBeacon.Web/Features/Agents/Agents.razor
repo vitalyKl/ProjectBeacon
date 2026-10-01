@@ -36,6 +36,7 @@
 else
 {
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeAccountHint"]</MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
             <MudText Typo="Typo.subtitle1">@L["ModelRegistry"]</MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddModel">@L["ModelsAdd"]</MudButton>
@@ -89,6 +90,7 @@ else
     <TaskKindEditor UserId="_userId" Backends="_backends" />
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeProjectHint"]</MudText>
         <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ApplyOnDevice"]</MudText>
         <MudSelect T="Guid?" @bind-Value="_runtimeDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
             @foreach (var runtime in _runtimes)
@@ -134,27 +136,42 @@ else
     </MudPaper>
 
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeWorkstationHint"]</MudText>
         <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
             <MudText Typo="Typo.subtitle1">@L["ProxyStatus"]</MudText>
             <MudStack Row="true" Spacing="2">
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="RefreshStatus">@L["Refresh"]</MudButton>
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="Reload">@L["Reload"]</MudButton>
-                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload">@L["Unload"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="RefreshStatus" Disabled="_busy || !CanRefresh">@L["Refresh"]</MudButton>
+                @if (CanReload)
+                {
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="Reload" Disabled="_busy">@(RuntimeState == "Failed" ? L["Retry"].Value : L["Reload"].Value)</MudButton>
+                }
+                @if (CanUnload)
+                {
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Error" OnClick="Unload" Disabled="_busy">@L["Unload"]</MudButton>
+                }
             </MudStack>
         </MudStack>
-        @if (_status is null)
+        @if (_status is null && _runtimePhase is null)
         {
             <MudText Typo="Typo.body2">@L["Loading"]</MudText>
         }
         else
         {
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@StatusColor">@StatusText</MudChip>
-            <HostLoadView Status="_status" />
-            <MudText Typo="Typo.body2" Class="mt-2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
-            <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
-            @if (_status.Error is not null)
+            <StatusChip Color="@ChipPalette.ForRuntime(RuntimeState)" Label="@RuntimeLabel" />
+            <MudText Typo="Typo.body2" Class="mt-2">@RuntimeExplanation</MudText>
+            @if (!string.IsNullOrWhiteSpace(_status?.DeviceName))
             {
-                <MudAlert Severity="Severity.Warning" Class="mt-2">@_status.Error</MudAlert>
+                <MudText Typo="Typo.body2">@L["RuntimeDevice"]: @_status.DeviceName</MudText>
+            }
+            @if (!string.IsNullOrWhiteSpace(_status?.LoadedModel))
+            {
+                <MudText Typo="Typo.body2">@L["CurrentModel"]: @_status.LoadedModel</MudText>
+            }
+            @if (_status is not null)
+            {
+                <HostLoadView Status="_status" />
+                <MudText Typo="Typo.body2" Class="mt-2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
+                <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
             }
         }
     </MudPaper>
@@ -176,6 +193,7 @@ else
     private Guid? _solo;
     private Guid? _runtimeDeviceId;
     private List<ProjectRuntimeDto> _runtimes = [];
+    private string? _runtimePhase;
     private bool _mcpContext7;
     private bool _mcpSerena;
     private string _customName = string.Empty;
@@ -429,21 +447,62 @@ else
         await ReloadAsync();
     }
 
-    private Color StatusColor => _status is null
-        ? Color.Default
-        : !_status.Available
-            ? Color.Default
-            : !_status.Healthy
-                ? Color.Warning
-                : Color.Success;
+    private string RuntimeState
+    {
+        get
+        {
+            if (_runtimePhase is not null)
+                return _runtimePhase;
+            if (_status is null || !_status.Available)
+                return "Offline";
+            var models = _status.LoadedModels;
+            if (models is not null)
+            {
+                if (models.Any(m => IsModelState(m.State, "starting")))
+                    return "Starting";
+                if (models.Any(m => IsModelState(m.State, "stopping")))
+                    return "Stopping";
+                if (models.Any(m => IsModelState(m.State, "busy", "running")))
+                    return "Busy";
+                if (models.Any(m => IsModelState(m.State, "faulted", "failed", "error")))
+                    return models.Any(m => IsModelState(m.State, "ready")) ? "Degraded" : "Failed";
+            }
+            if (!_status.Healthy)
+                return "Failed";
+            if (!string.IsNullOrWhiteSpace(_status.Error))
+                return "Degraded";
+            return "Ready";
+        }
+    }
 
-    private string StatusText => _status is null
-        ? L["Loading"].Value
-        : !_status.Available
-            ? L["Unavailable"].Value
-            : !_status.Healthy
-                ? L["Unhealthy"].Value
-                : L["Healthy"].Value;
+    private string RuntimeLabel => RuntimeState switch
+    {
+        "Starting" => L["RuntimeStarting"].Value,
+        "Ready" => L["RuntimeReady"].Value,
+        "Busy" => L["RuntimeBusy"].Value,
+        "Degraded" => L["RuntimeDegraded"].Value,
+        "Stopping" => L["RuntimeStopping"].Value,
+        "Failed" => L["RuntimeFailed"].Value,
+        _ => L["RuntimeOffline"].Value
+    };
+
+    private string RuntimeExplanation => RuntimeState switch
+    {
+        "Ready" => L["RuntimeReadyHint"].Value,
+        "Failed" => _status?.Error ?? L["RuntimeFailedHint"].Value,
+        "Degraded" => _status?.Error ?? L["RuntimeDegradedHint"].Value,
+        "Busy" => L["RuntimeBusyHint"].Value,
+        "Starting" => L["RuntimeStartingHint"].Value,
+        "Stopping" => L["RuntimeStoppingHint"].Value,
+        _ => L["RuntimeOfflineHint"].Value
+    };
+
+    private bool CanRefresh => RuntimeState is not "Starting" and not "Stopping" and not "Busy";
+    private bool CanReload => RuntimeState is "Ready" or "Failed" or "Degraded";
+    private bool CanUnload => RuntimeState == "Ready" && !string.IsNullOrWhiteSpace(_status?.LoadedModel);
+
+    private static bool IsModelState(string? state, params string[] names) =>
+        names.Any(name => string.Equals(state, name, StringComparison.OrdinalIgnoreCase));
 
     private async Task RefreshStatus()
     {
@@ -454,26 +513,50 @@ else
 
     private async Task Reload()
     {
-        var result = await ReloadProxy.HandleAsync(new ReloadProxyCommand());
-        if (!result.Success)
+        _runtimePhase = "Starting";
+        _busy = true;
+        try
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-            return;
+            var result = await ReloadProxy.HandleAsync(new ReloadProxyCommand());
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                if (result.Value is not null)
+                    _status = result.Value;
+                return;
+            }
+            _status = result.Value;
+            Snackbar.Add(L["ProxyReloaded"].Value, Severity.Success);
         }
-        _status = result.Value;
-        Snackbar.Add(L["ProxyReloaded"].Value, Severity.Success);
+        finally
+        {
+            _runtimePhase = null;
+            _busy = false;
+        }
     }
 
     private async Task Unload()
     {
-        var result = await UnloadProxy.HandleAsync(new UnloadProxyCommand());
-        if (!result.Success)
+        _runtimePhase = "Stopping";
+        _busy = true;
+        try
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-            return;
+            var result = await UnloadProxy.HandleAsync(new UnloadProxyCommand());
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                if (result.Value is not null)
+                    _status = result.Value;
+                return;
+            }
+            _status = result.Value;
+            Snackbar.Add(L["ProxyUnloaded"].Value, Severity.Success);
         }
-        _status = result.Value;
-        Snackbar.Add(L["ProxyUnloaded"].Value, Severity.Success);
+        finally
+        {
+            _runtimePhase = null;
+            _busy = false;
+        }
     }
 
     private void AddCustomMcp()
@@ -499,7 +582,7 @@ else
             var mcp = McpCatalog.Build(runtime.LocalRoot, _mcpContext7, _mcpSerena, _customMcps);
             var payload = new JsonObject
             {
-                ["path"] = runtime.LocalRoot,
+                ["path"] = ".",
                 ["mcpReplace"] = true,
                 ["mcp"] = mcp
             };

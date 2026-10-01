@@ -5,10 +5,22 @@
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
 
-<MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
-    <MudTextField T="string" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="Disabled" />
-    <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="Disabled || _busy || DeviceId is not { }">@L["Browse"]</MudButton>
-</MudStack>
+@if (AdvancedPath)
+{
+    <MudStack Spacing="1">
+        <MudText Typo="Typo.body2">@(string.IsNullOrWhiteSpace(Path) ? L["NoFolderSelected"].Value : Path)</MudText>
+        <div>
+            <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="Disabled || _busy || DeviceId is not { }">@L["Browse"]</MudButton>
+        </div>
+    </MudStack>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
+        <MudTextField T="string" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="Disabled" />
+        <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="Disabled || _busy || DeviceId is not { }">@L["Browse"]</MudButton>
+    </MudStack>
+}
 @if (_listing is not null)
 {
     <MudPaper Outlined="true" Class="mt-3 pa-3">
@@ -29,6 +41,18 @@
         </MudList>
     </MudPaper>
 }
+@if (AdvancedPath)
+{
+    <MudExpansionPanels Elevation="0" Class="mt-2">
+        <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
+            <MudTextField T="string" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="Disabled" />
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
+@if (!string.IsNullOrEmpty(_phase))
+{
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@_phase</MudText>
+}
 @if (!string.IsNullOrEmpty(_error))
 {
     <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
@@ -41,9 +65,12 @@
     [Parameter] public EventCallback<string> PathChanged { get; set; }
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public string? Label { get; set; }
+    [Parameter] public bool AdvancedPath { get; set; }
+    [Parameter] public string RootKind { get; set; } = "projects";
 
     private bool _busy;
     private string? _error;
+    private string? _phase;
     private DirListing? _listing;
 
     private Task OnPathChanged(string value) => PathChanged.InvokeAsync(value ?? "");
@@ -62,15 +89,17 @@
     private async Task BrowseTo(string? path)
     {
         _error = null;
+        _phase = null;
         if (DeviceId is not { } deviceId || UserId == Guid.Empty)
         {
             _error = L["DeviceRequiredForBrowse"].Value;
             return;
         }
         _busy = true;
+        _phase = L["CommandQueued"].Value;
         try
         {
-            var payload = JsonSerializer.Serialize(new { path = path ?? "" });
+            var payload = JsonSerializer.Serialize(new { path = path ?? "", rootKind = RootKind });
             var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
                 new EnqueueCommandRequest(deviceId, UserId, WorkstationCommandKind.ListDir, payload, null)));
             if (!queued.Success)
@@ -79,9 +108,14 @@
                 return;
             }
             var finished = await WaitAsync(queued.Value!.Id);
-            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
+            if (finished is null)
             {
-                _error = finished?.Error ?? L["Error"].Value;
+                _error = L["CommandTimedOut"].Value;
+                return;
+            }
+            if (finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
+            {
+                _error = finished.Error ?? L["CommandFailed"].Value;
                 return;
             }
             _listing = JsonSerializer.Deserialize<DirListing>(finished.ResultJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -89,6 +123,7 @@
         finally
         {
             _busy = false;
+            _phase = null;
         }
     }
 
@@ -99,10 +134,14 @@
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, UserId)));
             if (!got.Success)
                 return null;
-            if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
+            _phase = got.Value!.Status == WorkstationCommandStatus.Pending
+                ? L["CommandQueued"].Value
+                : L["CommandRunning"].Value;
+            if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
             await Task.Delay(500);
         }
+        _phase = L["CommandTimedOut"].Value;
         return null;
     }
 

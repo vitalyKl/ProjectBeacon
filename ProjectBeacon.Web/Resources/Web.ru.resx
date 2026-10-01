@@ -1732,4 +1732,97 @@
   <data name="ChatNeedsClient" xml:space="preserve">
     <value>Запустите beacon client на этой машине и откройте чат снова.</value>
   </data>
+  <data name="ModelsLocation" xml:space="preserve">
+    <value>Каталог моделей</value>
+  </data>
+  <data name="ProjectsLocation" xml:space="preserve">
+    <value>Каталог проектов</value>
+  </data>
+  <data name="AgentDataLocation" xml:space="preserve">
+    <value>Данные агента</value>
+  </data>
+  <data name="RuntimeExecutable" xml:space="preserve">
+    <value>Исполняемый файл runtime</value>
+  </data>
+  <data name="AdvancedDiagnostics" xml:space="preserve">
+    <value>Дополнительно</value>
+  </data>
+  <data name="NoFolderSelected" xml:space="preserve">
+    <value>Папка не выбрана</value>
+  </data>
+  <data name="ScopeAccountHint" xml:space="preserve">
+    <value>Ваша настройка агентов. Хранится в аккаунте и общая для проектов.</value>
+  </data>
+  <data name="ScopeProjectHint" xml:space="preserve">
+    <value>Этот проект на выбранной рабочей станции.</value>
+  </data>
+  <data name="ScopeWorkstationHint" xml:space="preserve">
+    <value>Эта рабочая станция. Не копируется в проект.</value>
+  </data>
+  <data name="CommandQueued" xml:space="preserve">
+    <value>В очереди</value>
+  </data>
+  <data name="CommandRunning" xml:space="preserve">
+    <value>Выполняется</value>
+  </data>
+  <data name="CommandSucceeded" xml:space="preserve">
+    <value>Готово</value>
+  </data>
+  <data name="CommandFailed" xml:space="preserve">
+    <value>Ошибка</value>
+  </data>
+  <data name="CommandCancelled" xml:space="preserve">
+    <value>Отменено</value>
+  </data>
+  <data name="CommandTimedOut" xml:space="preserve">
+    <value>Время вышло</value>
+  </data>
+  <data name="RuntimeOffline" xml:space="preserve">
+    <value>Не в сети</value>
+  </data>
+  <data name="RuntimeStarting" xml:space="preserve">
+    <value>Запуск</value>
+  </data>
+  <data name="RuntimeReady" xml:space="preserve">
+    <value>Готов</value>
+  </data>
+  <data name="RuntimeBusy" xml:space="preserve">
+    <value>Занят</value>
+  </data>
+  <data name="RuntimeDegraded" xml:space="preserve">
+    <value>С ограничениями</value>
+  </data>
+  <data name="RuntimeStopping" xml:space="preserve">
+    <value>Остановка</value>
+  </data>
+  <data name="RuntimeFailed" xml:space="preserve">
+    <value>Сбой</value>
+  </data>
+  <data name="RuntimeReadyHint" xml:space="preserve">
+    <value>Среда моделей готова.</value>
+  </data>
+  <data name="RuntimeOfflineHint" xml:space="preserve">
+    <value>Эта рабочая станция не подключена.</value>
+  </data>
+  <data name="RuntimeFailedHint" xml:space="preserve">
+    <value>Среда моделей завершилась с ошибкой.</value>
+  </data>
+  <data name="RuntimeDegradedHint" xml:space="preserve">
+    <value>Среда запущена, но есть проблема.</value>
+  </data>
+  <data name="RuntimeBusyHint" xml:space="preserve">
+    <value>Модель занята. Подождите, прежде чем выгружать.</value>
+  </data>
+  <data name="RuntimeStartingHint" xml:space="preserve">
+    <value>Среда запускается.</value>
+  </data>
+  <data name="RuntimeStoppingHint" xml:space="preserve">
+    <value>Среда останавливается.</value>
+  </data>
+  <data name="CurrentModel" xml:space="preserve">
+    <value>Текущая модель</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Повторить</value>
+  </data>
 </root>

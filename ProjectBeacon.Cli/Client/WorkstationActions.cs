@@ -37,15 +37,9 @@ public static class WorkstationActions
 
     public static Result<string> ListDir(string root, string? path)
     {
-        if (string.IsNullOrWhiteSpace(root))
-            return Result.Failure<string>("missing root");
-
-        if (string.IsNullOrWhiteSpace(path))
-            path = root;
-
-        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        var resolved = WorkspacePath.ResolveInRoot(root, path, relativeOnly: false);
         if (!resolved.Success)
-            return resolved;
+            return Result.Failure<string>(resolved.Error ?? "missing root");
 
         var full = resolved.Value!;
         if (!Directory.Exists(full))
@@ -105,8 +99,7 @@ public static class WorkstationActions
             return Result.Failure<string>("prompt is required.");
 
         var relativePath = payload.TryGetProperty("path", out var pathElement) ? pathElement.GetString() : null;
-        var path = string.IsNullOrWhiteSpace(relativePath) ? root : relativePath;
-        var validatedPath = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        var validatedPath = WorkspacePath.ResolveInRoot(root, relativePath, relativeOnly: true);
         if (!validatedPath.Success)
             return Result.Failure<string>(validatedPath.Error ?? "path is not inside root.");
 
@@ -164,15 +157,9 @@ public static class WorkstationActions
 
     public static Result<string> ScanGguf(string root, string? path)
     {
-        if (string.IsNullOrWhiteSpace(root))
-            return Result.Failure<string>("missing root");
-
-        if (string.IsNullOrWhiteSpace(path))
-            path = root;
-
-        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        var resolved = WorkspacePath.ResolveInRoot(root, path, relativeOnly: false);
         if (!resolved.Success)
-            return resolved;
+            return Result.Failure<string>(resolved.Error ?? "missing root");
 
         var full = resolved.Value!;
         if (!Directory.Exists(full))
@@ -193,12 +180,9 @@ public static class WorkstationActions
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
         var payloadRoot = doc.RootElement;
         var path = payloadRoot.TryGetProperty("path", out var p) ? p.GetString() : null;
-        if (string.IsNullOrWhiteSpace(path))
-            return Result.Failure<string>("path is required.");
-
-        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        var resolved = WorkspacePath.ResolveInRoot(root, path, relativeOnly: true);
         if (!resolved.Success)
-            return resolved;
+            return Result.Failure<string>(resolved.Error ?? "path is not inside root.");
 
         var full = resolved.Value!;
         Directory.CreateDirectory(full);
@@ -299,12 +283,9 @@ public static class WorkstationActions
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
         var payloadRoot = doc.RootElement;
         var path = payloadRoot.TryGetProperty("path", out var p) ? p.GetString() : null;
-        if (string.IsNullOrWhiteSpace(path))
-            return Result.Failure<string>("path is required.");
-
-        var resolved = WorkspacePath.ValidateAbsoluteInsideRoot(root, path);
+        var resolved = WorkspacePath.ResolveInRoot(root, path, relativeOnly: true);
         if (!resolved.Success)
-            return resolved;
+            return Result.Failure<string>(resolved.Error ?? "path is not inside root.");
 
         var full = resolved.Value!;
         var opencodePath = Path.Combine(full, "opencode.json");

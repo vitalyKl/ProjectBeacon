@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Application.Common;
+using Application.Devices;
 using Domain.Enums;
 using Infrastructure.LlamaSwap;
 
@@ -202,22 +204,37 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         {
             var kind = command.Kind;
             var payload = command.PayloadJson ?? "{}";
-            if (kind == WorkstationCommandKind.ChatEnsureSession)
-                return await ChatEnsureAsync(payload, ct);
-            if (kind == WorkstationCommandKind.ChatPrompt)
-                return await ChatPromptAsync(payload, ct);
+            if (CommandSandbox.IsProjectKind(kind))
+            {
+                if (string.IsNullOrWhiteSpace(command.LocalRoot))
+                    return (false, null, CommandSandbox.RuntimeRequired);
+                if (kind == WorkstationCommandKind.ChatEnsureSession || kind == WorkstationCommandKind.ChatPrompt)
+                {
+                    var resolved = WorkspacePath.ResolveInRoot(command.LocalRoot, ReadPath(payload), relativeOnly: true);
+                    if (!resolved.Success)
+                        return (false, null, resolved.Error);
+                    return kind == WorkstationCommandKind.ChatEnsureSession
+                        ? await ChatEnsureAsync(resolved.Value!, payload, ct)
+                        : await ChatPromptAsync(resolved.Value!, payload, ct);
+                }
+                if (kind == WorkstationCommandKind.RunEvalTurn)
+                {
+                    var evalAction = await WorkstationActions.RunEvalTurnAsync(command.LocalRoot, payload, _openCode, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
+                    if (!evalAction.Success)
+                        return (false, null, evalAction.Error);
+                    return (true, evalAction.Value, null);
+                }
+                var projectAction = kind switch
+                {
+                    WorkstationCommandKind.InitProject => WorkstationActions.InitProject(command.LocalRoot, payload),
+                    WorkstationCommandKind.ApplyOpencode => WorkstationActions.ApplyOpencode(command.LocalRoot, payload),
+                    _ => null
+                };
+                if (projectAction is not null)
+                    return projectAction.Success ? (true, projectAction.Value, null) : (false, null, projectAction.Error);
+            }
             if (kind == WorkstationCommandKind.ChatAbort)
                 return await ChatAbortAsync(payload, ct);
-            if (kind == WorkstationCommandKind.RunEvalTurn)
-            {
-                var evalRoot = ReadRoot(payload);
-                if (string.IsNullOrWhiteSpace(evalRoot))
-                    return (false, null, "root is required.");
-                var evalAction = await WorkstationActions.RunEvalTurnAsync(evalRoot, payload, _openCode, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
-                if (!evalAction.Success)
-                    return (false, null, evalAction.Error);
-                return (true, evalAction.Value, null);
-            }
             if (kind == WorkstationCommandKind.ReloadProxy)
             {
                 await WithLlamaAsync(() => _llama.ReloadAsync(ct), ct);
@@ -236,13 +253,11 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             }
             if (kind == WorkstationCommandKind.ConfigureOpenCode)
                 return await ConfigureOpenCodeAsync(ct);
-            var root = ReadRoot(payload);
+            var settings = _loadSettings();
             var sandboxed = kind switch
             {
-                WorkstationCommandKind.ListDir => WorkstationActions.ListDir(root, ReadPath(payload)),
-                WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(root, ReadPath(payload)),
-                WorkstationCommandKind.InitProject => WorkstationActions.InitProject(root, payload),
-                WorkstationCommandKind.ApplyOpencode => WorkstationActions.ApplyOpencode(root, payload),
+                WorkstationCommandKind.ListDir => WorkstationActions.ListDir(BrowseRoot(settings, payload), ReadPath(payload)),
+                WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(settings.ModelsRoot ?? "", ReadPath(payload)),
                 _ => null
             };
             if (sandboxed is not null)
@@ -279,29 +294,27 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         return (true, JsonSerializer.Serialize(new { config = applied.ConfigPath, restarted = true, providers = applied.Environment.Count }), null);
     }
 
-    private async Task<(bool Ok, string? Result, string? Error)> ChatEnsureAsync(string payload, CancellationToken ct)
+    private async Task<(bool Ok, string? Result, string? Error)> ChatEnsureAsync(string cwd, string payload, CancellationToken ct)
     {
         using var doc = JsonDocument.Parse(payload);
-        var path = doc.RootElement.TryGetProperty("path", out var p) ? p.GetString() : _loadSettings().ProjectsRoot;
         var title = doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() ?? "Chat" : "Chat";
-        await _openCode.TickAsync(path, ct);
+        await _openCode.TickAsync(cwd, ct);
         if (!_openCode.Status.Healthy)
             return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
         var id = await _openCode.CreateSessionAsync(title, ct);
         return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = _openCode.Cwd }), null);
     }
 
-    private async Task<(bool Ok, string? Result, string? Error)> ChatPromptAsync(string payload, CancellationToken ct)
+    private async Task<(bool Ok, string? Result, string? Error)> ChatPromptAsync(string cwd, string payload, CancellationToken ct)
     {
         using var doc = JsonDocument.Parse(payload);
-        var path = doc.RootElement.TryGetProperty("path", out var p) ? p.GetString() : _openCode.Cwd;
         var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
         var chatId = doc.RootElement.TryGetProperty("chatSessionId", out var c) ? c.GetGuid() : Guid.Empty;
         var text = doc.RootElement.TryGetProperty("text", out var tx) ? tx.GetString() : null;
         var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
-        await _openCode.TickAsync(path, ct);
+        await _openCode.TickAsync(cwd, ct);
         if (!_openCode.Status.Healthy)
             return (false, null, _openCode.Status.Error ?? "OpenCode is not running.");
         if (_llama.UseOwnSwapper && model is not null)
@@ -398,12 +411,19 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         }
     }
 
-    private static string? ReadRoot(string payload)
+    private static string BrowseRoot(WorkstationSettings settings, string payload)
+    {
+        var kind = ReadString(payload, "rootKind");
+        var useModels = string.Equals(kind, "models", StringComparison.OrdinalIgnoreCase);
+        return (useModels ? settings.ModelsRoot : settings.ProjectsRoot) ?? "";
+    }
+
+    private static string? ReadString(string payload, string name)
     {
         try
         {
             using var doc = JsonDocument.Parse(payload);
-            return doc.RootElement.TryGetProperty("root", out var r) ? r.GetString() : null;
+            return doc.RootElement.TryGetProperty(name, out var value) ? value.GetString() : null;
         }
         catch (JsonException)
         {
@@ -444,6 +464,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         public Guid Id { get; set; }
         public WorkstationCommandKind Kind { get; set; }
         public string? PayloadJson { get; set; }
+        public string? LocalRoot { get; set; }
     }
 
     public sealed class LlamaSwapConfigWire

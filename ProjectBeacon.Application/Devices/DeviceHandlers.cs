@@ -9,7 +9,6 @@ using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<DaemonDeviceDto>>
 {
@@ -175,7 +174,22 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 return Result.Failure<WorkstationCommandDto>("Project not found.");
         }
 
-        var payloadJson = await InjectRootAsync(db, command.Request, device, ct);
+        string? payloadJson = command.Request.PayloadJson;
+        string? localRoot = null;
+        if (CommandSandbox.IsProjectKind(command.Request.Kind))
+        {
+            if (command.Request.ProjectId is not { } rootedProjectId)
+                return Result.Failure<WorkstationCommandDto>(CommandSandbox.RuntimeRequired);
+            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.ProjectId == rootedProjectId && r.DeviceId == device.Id, ct);
+            if (runtime is null)
+                return Result.Failure<WorkstationCommandDto>(CommandSandbox.RuntimeRequired);
+            var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson);
+            if (!sanitized.Success)
+                return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
+            payloadJson = sanitized.Value;
+            localRoot = runtime.LocalRoot;
+        }
 
         var queued = WorkstationCommand.Create(
             device.Id,
@@ -185,62 +199,22 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
             command.Request.UserId);
         db.WorkstationCommands.Add(queued);
         await db.SaveChangesAsync(ct);
-        return Result.Ok(MapCommand(queued));
+        return Result.Ok(MapCommand(queued, localRoot));
     }
 
-    private static readonly HashSet<WorkstationCommandKind> RootedKinds =
-        [WorkstationCommandKind.ListDir, WorkstationCommandKind.ScanGguf, WorkstationCommandKind.InitProject, WorkstationCommandKind.ApplyOpencode, WorkstationCommandKind.RunEvalTurn];
-
-    private static async Task<string?> InjectRootAsync(BeaconDbContext db, EnqueueCommandRequest request, DaemonDevice device, CancellationToken ct)
+    internal static async Task<string?> FindLocalRootAsync(BeaconDbContext db, WorkstationCommand command, CancellationToken ct)
     {
-        if (!RootedKinds.Contains(request.Kind))
-            return request.PayloadJson;
-
-        string? root = null;
-
-        if (request.ProjectId is { } projectId)
-        {
-            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.DeviceId == device.Id, ct);
-            if (runtime is not null)
-                root = runtime.LocalRoot;
-        }
-
-        if (root is null && !string.IsNullOrWhiteSpace(device.WorkstationJson))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(device.WorkstationJson);
-                var propName = request.Kind == WorkstationCommandKind.ScanGguf ? "modelsRoot" : "projectsRoot";
-                if (doc.RootElement.TryGetProperty(propName, out var prop) && prop.ValueKind == JsonValueKind.String)
-                    root = prop.GetString();
-            }
-            catch (JsonException) { }
-        }
-
-        if (root is null)
-            return request.PayloadJson;
-
-        if (string.IsNullOrWhiteSpace(request.PayloadJson))
-            return JsonSerializer.Serialize(new { root });
-
-        try
-        {
-            var node = JsonNode.Parse(request.PayloadJson);
-            if (node is JsonObject obj)
-            {
-                obj["root"] = root;
-                return obj.ToJsonString();
-            }
-        }
-        catch (JsonException) { }
-
-        return request.PayloadJson;
+        if (!CommandSandbox.IsProjectKind(command.Kind) || command.ProjectId is not { } projectId)
+            return null;
+        return await db.ProjectRuntimes.IgnoreQueryFilters()
+            .Where(r => r.ProjectId == projectId && r.DeviceId == command.DeviceId)
+            .Select(r => r.LocalRoot)
+            .FirstOrDefaultAsync(ct);
     }
 
-    internal static WorkstationCommandDto MapCommand(WorkstationCommand command) =>
+    internal static WorkstationCommandDto MapCommand(WorkstationCommand command, string? localRoot = null) =>
         new(command.Id, command.DeviceId, command.ProjectId, command.RequestedByUserId, command.Kind, command.Status,
-            command.PayloadJson, command.ResultJson, command.Error, command.CreatedAt, command.StartedAt, command.CompletedAt);
+            command.PayloadJson, command.ResultJson, command.Error, command.CreatedAt, command.StartedAt, command.CompletedAt, localRoot);
 }
 
 public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, Result<WorkstationCommandDto?>>
@@ -262,9 +236,21 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                 .FirstOrDefaultAsync(ct);
             if (next is not null)
             {
+                string? localRoot = null;
+                if (CommandSandbox.IsProjectKind(next.Kind))
+                {
+                    localRoot = await EnqueueCommandHandler.FindLocalRootAsync(db, next, ct);
+                    if (string.IsNullOrWhiteSpace(localRoot))
+                    {
+                        next.Fail(CommandSandbox.RuntimeRequired);
+                        await db.SaveChangesAsync(ct);
+                        continue;
+                    }
+                }
+
                 next.Claim();
                 await db.SaveChangesAsync(ct);
-                return Result.Ok<WorkstationCommandDto?>(EnqueueCommandHandler.MapCommand(next));
+                return Result.Ok<WorkstationCommandDto?>(EnqueueCommandHandler.MapCommand(next, localRoot));
             }
 
             if (DateTime.UtcNow >= deadline)
@@ -313,7 +299,8 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             return Result.Failure<WorkstationCommandDto>(ex.Message);
         }
         await db.SaveChangesAsync(ct);
-        return Result.Ok(EnqueueCommandHandler.MapCommand(row));
+        var localRoot = await EnqueueCommandHandler.FindLocalRootAsync(db, row, ct);
+        return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }
 
     private static async Task CompleteEvalRunAsync(BeaconDbContext db, WorkstationCommand row, string? resultJson, CancellationToken ct)
@@ -386,7 +373,8 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == row.DeviceId, ct);
         if (device is null || device.UserId != command.Request.UserId)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
-        return Result.Ok(EnqueueCommandHandler.MapCommand(row));
+        var localRoot = await EnqueueCommandHandler.FindLocalRootAsync(db, row, ct);
+        return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }
 }
 
@@ -408,7 +396,24 @@ public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<I
             .OrderByDescending(c => c.CreatedAt)
             .Take(limit)
             .ToListAsync(ct);
-        return Result.Ok((IList<WorkstationCommandDto>)rows.Select(EnqueueCommandHandler.MapCommand).ToList());
+        var projectIds = rows
+            .Where(r => r.ProjectId is not null && CommandSandbox.IsProjectKind(r.Kind))
+            .Select(r => r.ProjectId!.Value)
+            .Distinct()
+            .ToList();
+        var roots = projectIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(r => r.DeviceId == command.Request.DeviceId && projectIds.Contains(r.ProjectId))
+                .ToDictionaryAsync(r => r.ProjectId, r => r.LocalRoot, ct);
+        var mapped = rows.Select(row =>
+        {
+            string? root = null;
+            if (row.ProjectId is { } projectId && CommandSandbox.IsProjectKind(row.Kind))
+                roots.TryGetValue(projectId, out root);
+            return EnqueueCommandHandler.MapCommand(row, root);
+        }).ToList();
+        return Result.Ok((IList<WorkstationCommandDto>)mapped);
     }
 }
 

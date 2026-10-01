@@ -36,7 +36,8 @@
 }
 else
 {
-    <MudText Typo="Typo.subtitle1" Class="mb-3">@L["ProjectFolder"]</MudText>
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProjectFolder"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ScopeProjectHint"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["BrowseOnDeviceHint"]</MudText>
         @if (_runtimes.Count > 0)
@@ -52,7 +53,7 @@ else
             </MudSelect>
             <div class="mt-2">
                 <FolderPicker DeviceId="_folderDeviceId" UserId="_userId" Path="@_folderPath" PathChanged="OnFolderPathChanged"
-                              Disabled="_busy || FolderDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+                              AdvancedPath="true" Disabled="_busy || FolderDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
             </div>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveProjectFolder"
                        Disabled="_busy || _folderDeviceId is null || string.IsNullOrWhiteSpace(_folderPath)">

@@ -1784,4 +1784,97 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatNeedsClient" xml:space="preserve">
     <value>Start beacon client on this workstation, then open chat again.</value>
   </data>
+  <data name="ModelsLocation" xml:space="preserve">
+    <value>Models location</value>
+  </data>
+  <data name="ProjectsLocation" xml:space="preserve">
+    <value>Projects location</value>
+  </data>
+  <data name="AgentDataLocation" xml:space="preserve">
+    <value>Agent data location</value>
+  </data>
+  <data name="RuntimeExecutable" xml:space="preserve">
+    <value>Runtime executable</value>
+  </data>
+  <data name="AdvancedDiagnostics" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="NoFolderSelected" xml:space="preserve">
+    <value>No folder selected</value>
+  </data>
+  <data name="ScopeAccountHint" xml:space="preserve">
+    <value>Your agent setup. Saved on your account and shared by your projects.</value>
+  </data>
+  <data name="ScopeProjectHint" xml:space="preserve">
+    <value>This project on the workstation you select.</value>
+  </data>
+  <data name="ScopeWorkstationHint" xml:space="preserve">
+    <value>This workstation. Not copied onto a project.</value>
+  </data>
+  <data name="CommandQueued" xml:space="preserve">
+    <value>Queued</value>
+  </data>
+  <data name="CommandRunning" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="CommandSucceeded" xml:space="preserve">
+    <value>Completed</value>
+  </data>
+  <data name="CommandFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="CommandCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
+  <data name="CommandTimedOut" xml:space="preserve">
+    <value>Timed out</value>
+  </data>
+  <data name="RuntimeOffline" xml:space="preserve">
+    <value>Offline</value>
+  </data>
+  <data name="RuntimeStarting" xml:space="preserve">
+    <value>Starting</value>
+  </data>
+  <data name="RuntimeReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="RuntimeBusy" xml:space="preserve">
+    <value>Busy</value>
+  </data>
+  <data name="RuntimeDegraded" xml:space="preserve">
+    <value>Degraded</value>
+  </data>
+  <data name="RuntimeStopping" xml:space="preserve">
+    <value>Stopping</value>
+  </data>
+  <data name="RuntimeFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="RuntimeReadyHint" xml:space="preserve">
+    <value>The model runtime is ready.</value>
+  </data>
+  <data name="RuntimeOfflineHint" xml:space="preserve">
+    <value>This workstation is not connected.</value>
+  </data>
+  <data name="RuntimeFailedHint" xml:space="preserve">
+    <value>The model runtime failed.</value>
+  </data>
+  <data name="RuntimeDegradedHint" xml:space="preserve">
+    <value>The runtime is up, but something needs attention.</value>
+  </data>
+  <data name="RuntimeBusyHint" xml:space="preserve">
+    <value>A model is busy. Wait before unloading.</value>
+  </data>
+  <data name="RuntimeStartingHint" xml:space="preserve">
+    <value>The runtime is starting.</value>
+  </data>
+  <data name="RuntimeStoppingHint" xml:space="preserve">
+    <value>The runtime is stopping.</value>
+  </data>
+  <data name="CurrentModel" xml:space="preserve">
+    <value>Current model</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
 </root>

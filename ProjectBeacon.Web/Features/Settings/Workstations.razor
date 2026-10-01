@@ -73,6 +73,7 @@
 {
     <MudText Typo="Typo.h6" Class="mb-3">@L["Workstation"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ScopeWorkstationHint"]</MudText>
         <div class="beacon-form">
             <MudSelect T="Guid?" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
                 @foreach (var device in _devices)
@@ -80,12 +81,34 @@
                     <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
                 }
             </MudSelect>
-            <MudTextField @bind-Value="_modelsRoot" Label="@L["ModelsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            <MudTextField @bind-Value="_historyDir" Label="@L["HistoryDir"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            <MudTextField @bind-Value="_projectsRoot" Label="@L["ProjectsRoot"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            <MudTextField @bind-Value="_llamaSwapBin" Label="@L["LlamaSwapBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-            <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ModelsLocation"]</MudText>
+            <FolderPicker DeviceId="_wsDeviceId" UserId="_userId" RootKind="models" AdvancedPath="true"
+                          Path="@_modelsRoot" PathChanged="OnModelsRootChanged" Label="@L["ModelsLocation"]"
+                          Disabled="_busy || !WorkstationOnline" />
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ProjectsLocation"]</MudText>
+            <FolderPicker DeviceId="_wsDeviceId" UserId="_userId" RootKind="projects" AdvancedPath="true"
+                          Path="@_projectsRoot" PathChanged="OnProjectsRootChanged" Label="@L["ProjectsLocation"]"
+                          Disabled="_busy || !WorkstationOnline" />
+            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_historyDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
+            <MudExpansionPanels Elevation="0" Class="mt-2">
+                <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
+                    <MudTextField @bind-Value="_historyDir" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField @bind-Value="_llamaSwapBin" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                    <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>
+            @if (!string.IsNullOrEmpty(_lifecycle))
+            {
+                <MudAlert Severity="@LifecycleSeverity" Class="mt-3" Dense="true">
+                    <StatusChip Color="@ChipPalette.ForRuntime(_lifecycleState)" Label="@_lifecycle" />
+                    @if (!string.IsNullOrEmpty(_lifecycleDetail))
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1">@_lifecycleDetail</MudText>
+                    }
+                </MudAlert>
+            }
         </div>
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Probe"]</MudText>
         <MudText Typo="Typo.body2">@L["ProbeGit"]: @_probeGit</MudText>
@@ -124,7 +147,7 @@
             <RowTemplate>
                 <MudTd>@context.Kind</MudTd>
                 <MudTd>
-                    <StatusChip Color="@ChipPalette.ForCommandStatus(context.Status)" Label="@context.Status.ToString()" />
+                    <StatusChip Color="@ChipPalette.ForCommandStatus(context.Status)" Label="@StatusLabel(context.Status)" />
                 </MudTd>
                 <MudTd>@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
                 <MudTd>@(context.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
@@ -154,6 +177,41 @@
     private string _probeDocker = "-";
     private string _probeLlamaSwap = "-";
     private List<WorkstationCommandDto> _commands = [];
+    private string? _lifecycle;
+    private string? _lifecycleDetail;
+    private string? _lifecycleState;
+
+    private bool WorkstationOnline => _devices.FirstOrDefault(d => d.Id == _wsDeviceId)?.Online == true;
+
+    private Severity LifecycleSeverity => _lifecycleState switch
+    {
+        "Failed" or "TimedOut" => Severity.Error,
+        "Succeeded" => Severity.Success,
+        "Cancelled" => Severity.Warning,
+        _ => Severity.Info
+    };
+
+    private Task OnModelsRootChanged(string value)
+    {
+        _modelsRoot = value ?? "";
+        return Task.CompletedTask;
+    }
+
+    private Task OnProjectsRootChanged(string value)
+    {
+        _projectsRoot = value ?? "";
+        return Task.CompletedTask;
+    }
+
+    private string StatusLabel(WorkstationCommandStatus status) => status switch
+    {
+        WorkstationCommandStatus.Pending => L["CommandQueued"].Value,
+        WorkstationCommandStatus.Running => L["CommandRunning"].Value,
+        WorkstationCommandStatus.Succeeded => L["CommandSucceeded"].Value,
+        WorkstationCommandStatus.Failed => L["CommandFailed"].Value,
+        WorkstationCommandStatus.Cancelled => L["CommandCancelled"].Value,
+        _ => status.ToString()
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -311,7 +369,7 @@
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
                 return;
             }
             Snackbar.Add(L["WorkstationSaved"].Value, Severity.Success);
@@ -347,10 +405,10 @@
             var finished = await WaitAsync(queued.Value!.Id);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
-                Snackbar.Add(finished?.Error ?? L["Error"].Value, Severity.Error);
+                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["InstallQueued"].Value, Severity.Success);
+            Snackbar.Add(L["CommandSucceeded"].Value, Severity.Success);
         }
         finally
         {
@@ -360,14 +418,38 @@
 
     private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
     {
+        SetLifecycle(WorkstationCommandStatus.Pending, null);
         for (var i = 0; i < 80; i++)
         {
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
-            if (!got.Success) return null;
-            if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
+            if (!got.Success)
+            {
+                SetLifecycle(WorkstationCommandStatus.Failed, got.Error);
+                return null;
+            }
+            SetLifecycle(got.Value!.Status, got.Value.Error);
+            if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
             await Task.Delay(500);
         }
+        _lifecycleState = "TimedOut";
+        _lifecycle = L["CommandTimedOut"].Value;
+        _lifecycleDetail = null;
         return null;
+    }
+
+    private void SetLifecycle(WorkstationCommandStatus status, string? detail)
+    {
+        _lifecycleState = status switch
+        {
+            WorkstationCommandStatus.Pending => "Queued",
+            WorkstationCommandStatus.Running => "Running",
+            WorkstationCommandStatus.Succeeded => "Succeeded",
+            WorkstationCommandStatus.Failed => "Failed",
+            WorkstationCommandStatus.Cancelled => "Cancelled",
+            _ => status.ToString()
+        };
+        _lifecycle = StatusLabel(status);
+        _lifecycleDetail = detail;
     }
 }

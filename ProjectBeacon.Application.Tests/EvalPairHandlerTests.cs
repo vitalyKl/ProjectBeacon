@@ -108,7 +108,8 @@ public sealed class EvalPairHandlerTests : IDisposable
 
         var withPayload = JsonNode.Parse(withCmd.Value!.PayloadJson)!.AsObject();
         Assert.Equal(value.WithBriefRunId.ToString("D"), withPayload["evalRunId"]!.GetValue<string>());
-        Assert.Equal(@"A:\work\eval", withPayload["root"]!.GetValue<string>());
+        Assert.False(withPayload.ContainsKey("root"));
+        Assert.Equal(@"A:\work\eval", withCmd.Value.LocalRoot);
         var withPrompt = withPayload["prompt"]!.GetValue<string>();
         Assert.Contains("BriefProject", withPrompt);
         Assert.Contains("Do the work", withPrompt);

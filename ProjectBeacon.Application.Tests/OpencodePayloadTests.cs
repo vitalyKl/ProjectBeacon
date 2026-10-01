@@ -13,9 +13,9 @@ public sealed class OpencodePayloadTests
     public void Solo_SetsSingleModelAndProvider()
     {
         var qwen = Backend("qwen");
-        var json = OpencodePayload.BuildApply(@"A:\work\app", AgentRunMode.Solo, [qwen], qwen.Id, null, null, null);
+        var json = OpencodePayload.BuildApply(AgentRunMode.Solo, [qwen], qwen.Id, null, null, null);
         using var doc = JsonDocument.Parse(json);
-        Assert.Equal(@"A:\work\app", doc.RootElement.GetProperty("path").GetString());
+        Assert.Equal(".", doc.RootElement.GetProperty("path").GetString());
         Assert.Equal("beacon-local/qwen", doc.RootElement.GetProperty("model").GetString());
         Assert.Equal("http://127.0.0.1:8080/v1",
             doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("options").GetProperty("baseURL").GetString());
@@ -28,7 +28,7 @@ public sealed class OpencodePayloadTests
         var grok = new LocalModelBackendDto(
             Guid.NewGuid(), "Grok", ModelBackendType.OpenAiCompatible, "", 0, 0, [], Guid.NewGuid(), null,
             false, "", "xai/grok-3");
-        var json = OpencodePayload.BuildApply(@"A:\work\app", AgentRunMode.Solo, [grok], grok.Id, null, null, null);
+        var json = OpencodePayload.BuildApply(AgentRunMode.Solo, [grok], grok.Id, null, null, null);
         using var doc = JsonDocument.Parse(json);
         Assert.Equal("xai/grok-3", doc.RootElement.GetProperty("model").GetString());
         Assert.False(doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("models").EnumerateObject().Any());
@@ -40,7 +40,7 @@ public sealed class OpencodePayloadTests
         var planner = Backend("plan-model");
         var actor = Backend("act-model");
         var review = Backend("rev-model");
-        var json = OpencodePayload.BuildApply("/repo", AgentRunMode.Pipeline, [planner, actor, review],
+        var json = OpencodePayload.BuildApply(AgentRunMode.Pipeline, [planner, actor, review],
             null, planner.Id, actor.Id, review.Id);
         using var doc = JsonDocument.Parse(json);
         Assert.Equal("beacon-local/act-model", doc.RootElement.GetProperty("model").GetString());

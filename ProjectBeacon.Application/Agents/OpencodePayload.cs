@@ -9,7 +9,6 @@ public static class OpencodePayload
     public const string ProviderId = "beacon-local";
 
     public static string BuildApply(
-        string localRoot,
         AgentRunMode mode,
         IReadOnlyList<LocalModelBackendDto> backends,
         Guid? soloBackendId,
@@ -18,7 +17,6 @@ public static class OpencodePayload
         Guid? reviewId,
         int llamaSwapPort = 8080)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(localRoot);
         var byId = backends.ToDictionary(b => b.Id);
         var models = new JsonObject();
         foreach (var backend in backends.Where(b => b.BackendType == ModelBackendType.LlamaCpp).OrderBy(b => b.Name, StringComparer.Ordinal))
@@ -72,7 +70,7 @@ public static class OpencodePayload
 
         var root = new JsonObject
         {
-            ["path"] = localRoot,
+            ["path"] = ".",
             ["provider"] = provider
         };
         if (model is not null)

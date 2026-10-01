@@ -55,7 +55,7 @@
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["FolderOptionalHint"]</MudText>
     <div class="mt-2">
         <FolderPicker DeviceId="_deviceId" UserId="_userId" Path="@_localRoot" PathChanged="OnPathChanged"
-                      Disabled="_saving || SelectedDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
+                      AdvancedPath="true" Disabled="_saving || SelectedDevice is not { Online: true }" Label="@L["ProjectDirectory"]" />
     </div>
     <MudCheckBox @bind-Value="_initOnDevice" Label="@L["InitializeOnDevice"]" Class="mt-2" />
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["InitializeOnDeviceHint"]</MudText>

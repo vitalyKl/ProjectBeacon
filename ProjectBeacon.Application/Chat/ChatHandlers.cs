@@ -56,7 +56,7 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
 
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             device.Id, command.Request.UserId, WorkstationCommandKind.ChatEnsureSession,
-            JsonSerializer.Serialize(new { path = runtime.LocalRoot, title = session.Title }), projectId)), ct);
+            JsonSerializer.Serialize(new { title = session.Title }), projectId)), ct);
         if (!queued.Success)
             return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
 
@@ -188,7 +188,6 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
 
         var payload = JsonSerializer.Serialize(new
         {
-            path = session.LocalRoot,
             chatSessionId = session.Id,
             externalSessionId = session.ExternalSessionId,
             text,

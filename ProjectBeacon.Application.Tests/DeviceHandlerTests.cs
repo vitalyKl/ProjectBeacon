@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
+using System.Text.Json;
+using Application.Common;
 using Application.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -203,5 +205,84 @@ public sealed class DeviceHandlerTests : IDisposable
         var got = await new GetCommandHandler(Factory()).HandleAsync(
             new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, other.Id)));
         Assert.False(got.Success);
+    }
+
+    [Fact]
+    public async Task ProjectCommand_WithoutRuntime_Fails()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, user.Id, WorkstationCommandKind.ChatEnsureSession, "{}", project.Id)));
+        Assert.False(queued.Success);
+        Assert.Equal(CommandSandbox.RuntimeRequired, queued.Error);
+    }
+
+    [Fact]
+    public async Task ProjectCommand_DoesNotFallBackToProjectsRoot()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync("""{"projectsRoot":"D:\\\\projects"}""");
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, user.Id, WorkstationCommandKind.ApplyOpencode, """{"path":"."}""", project.Id)));
+        Assert.False(queued.Success);
+        Assert.Equal(CommandSandbox.RuntimeRequired, queued.Error);
+    }
+
+    [Fact]
+    public async Task ProjectCommand_RejectsAbsolutePath_AndClaimCarriesRuntimeRoot()
+    {
+        var (user, project, deviceId) = await OnlineProjectDeviceAsync();
+        await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work\app")));
+
+        var absolute = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
+                """{"path":"C:\\\\secret","root":"C:\\\\secret","text":"hi"}""", project.Id)));
+        Assert.False(absolute.Success);
+        Assert.Equal(WorkspacePath.RelativePathRequired, absolute.Error);
+
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
+                """{"path":"src","root":"C:\\\\secret","text":"hi"}""", project.Id)));
+        Assert.True(queued.Success, queued.Error);
+        Assert.Equal(@"A:\work\app", queued.Value!.LocalRoot);
+        using var doc = JsonDocument.Parse(queued.Value.PayloadJson);
+        Assert.Equal("src", doc.RootElement.GetProperty("path").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("root", out _));
+
+        var claimed = await new ClaimNextCommandHandler(Factory()).HandleAsync(
+            new ClaimNextCommandCommand(new ClaimNextCommandRequest(deviceId, TimeSpan.Zero)));
+        Assert.Equal(@"A:\work\app", claimed.Value!.LocalRoot);
+    }
+
+    [Fact]
+    public async Task ListDir_DoesNotInjectWorkstationRoot()
+    {
+        var user = await SeedUserAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-list", user.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", """{"projectsRoot":"D:\\\\projects"}""")));
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(deviceId, user.Id, WorkstationCommandKind.ListDir, """{"path":""}""", null)));
+        Assert.True(queued.Success, queued.Error);
+        using var doc = JsonDocument.Parse(queued.Value!.PayloadJson);
+        Assert.False(doc.RootElement.TryGetProperty("root", out _));
+        Assert.Null(queued.Value.LocalRoot);
+    }
+
+    private async Task<(User User, Project Project, Guid DeviceId)> OnlineProjectDeviceAsync(string workstationJson = "{}")
+    {
+        var (user, project) = await SeedMemberAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), user.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", workstationJson)));
+        return (user, project, deviceId);
     }
 }
