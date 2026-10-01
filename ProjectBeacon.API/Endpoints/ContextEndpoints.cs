@@ -129,7 +129,9 @@ public static class ContextEndpoints
             request.BudgetTokens,
             request.IncludeHandoff,
             request.IncludeChangedScope,
-            request.IncludeTreeCapsule));
+            request.IncludeTreeCapsule,
+            request.TreeCapsule,
+            request.ChangedScope));
 
         var result = await handler.HandleAsync(command);
 
@@ -189,5 +191,7 @@ public static class ContextEndpoints
         int? BudgetTokens,
         bool IncludeHandoff,
         bool IncludeChangedScope,
-        bool IncludeTreeCapsule);
+        bool IncludeTreeCapsule,
+        string? TreeCapsule = null,
+        string? ChangedScope = null);
 }

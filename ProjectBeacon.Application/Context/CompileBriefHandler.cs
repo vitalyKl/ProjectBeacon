@@ -14,7 +14,9 @@ public record CompileBriefRequest(
     int? BudgetTokens,
     bool IncludeHandoff,
     bool IncludeChangedScope,
-    bool IncludeTreeCapsule);
+    bool IncludeTreeCapsule,
+    string? TreeCapsule = null,
+    string? ChangedScope = null);
 
 public record CompileBriefCommand(CompileBriefRequest Request) : ICommand<Result<CompileBriefResult>>;
 
@@ -117,16 +119,18 @@ public class CompileBriefHandler
         var includeChanged = command.Request.IncludeChangedScope || command.Request.RepoId != null;
         if (includeTree)
         {
-            briefParts.Add(("tree_capsule",
-                "## Tree\n\nRepo is linked but the code index is not in this process yet (Phase 7). Prefer Beacon file tools over guessing paths.",
-                false));
+            var tree = string.IsNullOrWhiteSpace(command.Request.TreeCapsule)
+                ? "Repo is linked but the code index is not in this process yet (Phase 7). Prefer Beacon file tools over guessing paths."
+                : TrimCapsule(command.Request.TreeCapsule);
+            briefParts.Add(("tree_capsule", "## Tree\n\n" + tree, false));
         }
 
         if (includeChanged)
         {
-            briefParts.Add(("changed_scope",
-                "## Changed scope\n\nNo local index is attached. Re-query after the daemon indexes the working tree.",
-                false));
+            var scope = string.IsNullOrWhiteSpace(command.Request.ChangedScope)
+                ? "No local index is attached. Re-query after the daemon indexes the working tree."
+                : TrimCapsule(command.Request.ChangedScope);
+            briefParts.Add(("changed_scope", "## Changed scope\n\n" + scope, false));
         }
 
         foreach (var section in ordered.Where(s => !NeverDropSections.Contains(s.SectionId)))
@@ -183,6 +187,12 @@ public class CompileBriefHandler
             TokenEstimate: totalTokens,
             BudgetOverflow: overflow,
             DroppedSections: dropped));
+    }
+
+    private static string TrimCapsule(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length <= 8000 ? trimmed : trimmed[..8000];
     }
 
     private static string? FindContradiction(IReadOnlyList<Constraint> constraints)

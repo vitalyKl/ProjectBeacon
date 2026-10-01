@@ -19,6 +19,18 @@ internal static class BriefPatcher
                 ["includeChangedScope"] = false,
                 ["includeTreeCapsule"] = false
             };
+            var tree = index.GetTree();
+            if (tree.Success && tree.Value is not null)
+            {
+                body["includeTreeCapsule"] = true;
+                body["treeCapsule"] = FormatTree(tree.Value);
+            }
+            var changed = index.GetChangedScope();
+            if (changed.Success && changed.Value is not null)
+            {
+                body["includeChangedScope"] = true;
+                body["changedScope"] = FormatFileList(changed.Value);
+            }
             if (taskId is not null)
                 body["taskId"] = taskId;
 
@@ -30,8 +42,7 @@ internal static class BriefPatcher
             if (briefMarkdown is null)
                 return new McpToolText(true, "Could not extract brief markdown from API response.");
 
-            var patched = PatchBriefMarkdown(briefMarkdown, index);
-            return new McpToolText(false, patched);
+            return new McpToolText(false, briefMarkdown);
         }
         catch (Exception ex)
         {

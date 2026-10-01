@@ -355,6 +355,26 @@ public sealed class CompileBriefTests : IDisposable
         Assert.True(result.Success);
         Assert.Contains("## Tree", result.Value.BriefMarkdown);
         Assert.Contains("## Changed scope", result.Value.BriefMarkdown);
+        Assert.Contains("code index is not in this process", result.Value.BriefMarkdown);
+    }
+
+    [Fact]
+    public async Task CompileBrief_UsesClientCapsulesInOneRevision()
+    {
+        var handler = new CompileBriefHandler(HandlerSqlite.Factory(_connection));
+        var result = await handler.HandleAsync(new CompileBriefCommand(
+            new CompileBriefRequest(
+                _projectId, null, null, null, 8000, false, true, true,
+                TreeCapsule: "src/\n  App.cs",
+                ChangedScope: "src/App.cs")));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains("src/\n  App.cs", result.Value.BriefMarkdown);
+        Assert.Contains("src/App.cs", result.Value.BriefMarkdown);
+        Assert.DoesNotContain("code index is not in this process", result.Value.BriefMarkdown);
+        var stored = await _db.ContextRevisions.SingleAsync(r => r.ProjectId == _projectId);
+        Assert.Equal(result.Value.BriefMarkdown, stored.BriefMarkdown);
+        Assert.Equal(result.Value.TokenEstimate, stored.TokenEstimate);
     }
 
     [Fact]
