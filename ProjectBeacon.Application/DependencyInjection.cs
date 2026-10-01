@@ -140,6 +140,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ClaimNextCommandHandler>();
         services.AddTransient<CompleteCommandHandler>();
         services.AddTransient<GetCommandHandler>();
+        services.AddTransient<ListCommandsHandler>();
         services.AddTransient<AttachRuntimeHandler>();
         services.AddTransient<ListRuntimesHandler>();
         services.AddTransient<DetachRuntimeHandler>();

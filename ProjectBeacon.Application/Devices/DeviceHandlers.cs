@@ -390,6 +390,28 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
     }
 }
 
+public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<IList<WorkstationCommandDto>>>
+{
+    private readonly IDbContextFactory<BeaconDbContext> _dbFactory;
+
+    public ListCommandsHandler(IDbContextFactory<BeaconDbContext> dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<IList<WorkstationCommandDto>>> HandleAsync(ListCommandsCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == command.Request.DeviceId, ct);
+        if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
+            return Result.Failure<IList<WorkstationCommandDto>>("Device not found.");
+        var limit = Math.Clamp(command.Request.Limit, 1, 100);
+        var rows = await db.WorkstationCommands
+            .Where(c => c.DeviceId == command.Request.DeviceId)
+            .OrderByDescending(c => c.CreatedAt)
+            .Take(limit)
+            .ToListAsync(ct);
+        return Result.Ok((IList<WorkstationCommandDto>)rows.Select(EnqueueCommandHandler.MapCommand).ToList());
+    }
+}
+
 public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result<ProjectRuntimeDto>>
 {
     private readonly IDbContextFactory<BeaconDbContext> _dbFactory;

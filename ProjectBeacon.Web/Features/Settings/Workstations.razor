@@ -16,6 +16,7 @@
 @inject RevokeDeviceHandler RevokeDevice
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
+@inject ListCommandsHandler ListCommands
 @inject GetTotpStatusHandler GetTotp
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
@@ -109,6 +110,30 @@
     </MudPaper>
 }
 
+@if (_wsDeviceId is { } cmdDeviceId)
+{
+    <MudText Typo="Typo.h6" Class="mb-3">@L["Commands"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudTable Items="_commands" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>@L["Kind"]</MudTh>
+                <MudTh>@L["Status"]</MudTh>
+                <MudTh>@L["Created"]</MudTh>
+                <MudTh>@L["Completed"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Kind</MudTd>
+                <MudTd>
+                    <StatusChip Color="@ChipPalette.ForCommandStatus(context.Status)" Label="@context.Status.ToString()" />
+                </MudTd>
+                <MudTd>@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
+                <MudTd>@(context.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
 @code {
     private List<DaemonDeviceDto> _devices = [];
     private string _deviceName = string.Empty;
@@ -128,6 +153,7 @@
     private string _probeNode = "-";
     private string _probeDocker = "-";
     private string _probeLlamaSwap = "-";
+    private List<WorkstationCommandDto> _commands = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -149,15 +175,27 @@
         _devices = listed.Success ? listed.Value!.ToList() : [];
         _wsDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
         if (_wsDeviceId is { } id)
+        {
             LoadWorkstation(id);
+            LoadCommands(id);
+        }
     }
 
     private Task OnWorkstationDeviceChanged(Guid? id)
     {
         _wsDeviceId = id;
         if (id is { } deviceId)
+        {
             LoadWorkstation(deviceId);
+            LoadCommands(deviceId);
+        }
         return Task.CompletedTask;
+    }
+
+    private async void LoadCommands(Guid deviceId)
+    {
+        var res = await ListCommands.HandleAsync(new ListCommandsCommand(new ListCommandsRequest(deviceId, _userId)), CancellationToken.None);
+        _commands = res.Success ? res.Value!.ToList() : [];
     }
 
     private void LoadWorkstation(Guid deviceId)

@@ -70,6 +70,9 @@ public record CompleteCommandCommand(CompleteCommandRequest Request) : ICommand<
 public record GetCommandRequest(Guid CommandId, Guid UserId);
 public record GetCommandCommand(GetCommandRequest Request) : ICommand<Result<WorkstationCommandDto>>;
 
+public record ListCommandsRequest(Guid DeviceId, Guid UserId, int Limit = 20);
+public record ListCommandsCommand(ListCommandsRequest Request) : ICommand<Result<IList<WorkstationCommandDto>>>;
+
 public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, string LocalRoot);
 public record AttachRuntimeCommand(AttachRuntimeRequest Request) : ICommand<Result<ProjectRuntimeDto>>;
 

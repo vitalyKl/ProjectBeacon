@@ -48,4 +48,14 @@ public static class ChipPalette
         "Failed" => Color.Error,
         _ => Color.Default
     };
+
+    public static Color ForCommandStatus(WorkstationCommandStatus status) => status switch
+    {
+        WorkstationCommandStatus.Succeeded => Color.Success,
+        WorkstationCommandStatus.Running => Color.Info,
+        WorkstationCommandStatus.Pending => Color.Default,
+        WorkstationCommandStatus.Failed => Color.Error,
+        WorkstationCommandStatus.Cancelled => Color.Warning,
+        _ => Color.Default
+    };
 }

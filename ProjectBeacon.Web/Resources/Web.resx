@@ -994,6 +994,9 @@
   <data name="Completed" xml:space="preserve">
     <value>Completed</value>
   </data>
+  <data name="Created" xml:space="preserve">
+    <value>Created</value>
+  </data>
   <data name="KindMust" xml:space="preserve">
     <value>Must</value>
   </data>
@@ -1248,6 +1251,12 @@
   </data>
   <data name="NoDevicesYet" xml:space="preserve">
     <value>No devices yet. Add one and run beacon client with the token.</value>
+  </data>
+  <data name="Commands" xml:space="preserve">
+    <value>Commands</value>
+  </data>
+  <data name="NoCommands" xml:space="preserve">
+    <value>No commands yet.</value>
   </data>
   <data name="DeviceOffline" xml:space="preserve">
     <value>Not connected</value>
