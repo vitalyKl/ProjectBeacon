@@ -1,8 +1,8 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
-using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -23,15 +23,15 @@ public static class WorkEndpoints
         HttpContext ctx,
         CancellationToken ct)
     {
-        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(actorId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var command = new FinishWorkCommand(new Application.Tasks.FinishWorkRequest(
             request.TaskId,
             request.Result,
             request.Output,
-            actorId,
+            actor.UserId.Value.ToString(),
             request.Review is null
                 ? null
                 : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed),

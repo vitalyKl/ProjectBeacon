@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Application.Projects;
 
-using System.Security.Claims;
+using Application.Authorization;
 using Application.Common;
 using Application.Identity;
 using Domain.Entities.Projects;
@@ -19,22 +19,8 @@ public class GetCurrentProjectHandler
     public Task<Result<ProjectDto?>> HandleAsync(CancellationToken ct = default)
         => HandleAsync(userId: null, isAdmin: false, preferredProjectId: null, ct);
 
-    public Task<Result<ProjectDto?>> HandleAsync(ClaimsPrincipal? user, CancellationToken ct = default)
-    {
-        Guid? userId = null;
-        var isAdmin = false;
-        Guid? preferred = null;
-        if (user?.Identity?.IsAuthenticated == true)
-        {
-            if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
-                userId = id;
-            isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
-            if (Guid.TryParse(user.FindFirst("project_id")?.Value, out var claimed))
-                preferred = claimed;
-        }
-
-        return HandleAsync(userId, isAdmin, preferred, ct);
-    }
+    public Task<Result<ProjectDto?>> HandleAsync(ActorContext actor, CancellationToken ct = default)
+        => HandleAsync(actor.UserId, actor.IsAdmin, actor.ProjectId, ct);
 
     public async Task<Result<ProjectDto?>> HandleAsync(
         Guid? userId, bool isAdmin, Guid? preferredProjectId = null, CancellationToken ct = default)

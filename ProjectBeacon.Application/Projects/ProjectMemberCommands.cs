@@ -1,15 +1,16 @@
 namespace ProjectBeacon.Application.Projects;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Enums;
 
 public record AddProjectMemberRequest(Guid ProjectId, Guid UserId, MemberRole Role);
 
-public record AddProjectMemberCommand(AddProjectMemberRequest Request, Guid ActorUserId, bool ActorIsAdmin, bool ActorIsApiToken) : ICommand<Result<ProjectMemberDto>>;
+public record AddProjectMemberCommand(AddProjectMemberRequest Request, ActorContext Actor) : ICommand<Result<ProjectMemberDto>>;
 
 public record RemoveProjectMemberRequest(Guid ProjectId, Guid UserId);
 
-public record RemoveProjectMemberCommand(RemoveProjectMemberRequest Request, Guid ActorUserId, bool ActorIsAdmin, bool ActorIsApiToken) : ICommand<Result>;
+public record RemoveProjectMemberCommand(RemoveProjectMemberRequest Request, ActorContext Actor) : ICommand<Result>;
 
 public record GetProjectMembersRequest(Guid ProjectId);
 

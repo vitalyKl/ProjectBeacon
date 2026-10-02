@@ -1,8 +1,8 @@
 namespace ProjectBeacon.Application.Identity;
 
-using System.Security.Claims;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using ProjectBeacon.Application.Authorization;
 
 public sealed class TenantContextBinder
 {
@@ -15,22 +15,15 @@ public sealed class TenantContextBinder
         _tenant = tenant;
     }
 
-    public async Task BindUserAsync(ClaimsPrincipal user, CancellationToken ct = default)
+    public async Task BindUserAsync(ActorContext actor, CancellationToken ct = default)
     {
         if (_tenant.ProjectId is not null || _tenant.Unscoped)
             return;
-        if (user.Identity?.IsAuthenticated != true)
-            return;
-        if (!Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+        if (actor.UserId is null)
             return;
 
-        var isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var flag) && flag;
-        var preferred = ParseClaim(user, "project_id");
         await using var db = _dbFactory.CreateDbContext();
-        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, userId, isAdmin, preferred, ct);
+        var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, actor.UserId.Value, actor.IsAdmin, actor.ProjectId, ct);
         _tenant.Assign(projectId, orgId, unscoped: false);
     }
-
-    private static Guid? ParseClaim(ClaimsPrincipal user, string claimType)
-        => Guid.TryParse(user.FindFirst(claimType)?.Value, out var value) ? value : null;
 }

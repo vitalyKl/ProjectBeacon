@@ -7,6 +7,7 @@
 @using ProjectBeacon.Web.Resources
 @using ProjectBeacon.Web.Shared
 @using ProjectBeacon.Web.Features.Chat
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.API.Endpoints
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
@@ -145,7 +146,7 @@
         if (AuthState is null)
             return;
         var state = await AuthState;
-        await TenantBinder.BindUserAsync(state.User);
+        await TenantBinder.BindUserAsync(ActorContextFactory.FromPrincipal(state.User));
     }
 
     private async Task LoadProfile()

@@ -51,6 +51,7 @@ Four pieces (per architecture):
 - Web UI is feature-first: `ProjectBeacon.Web/Features/{Feature}/`. Application handlers live in matching feature folders (`Tasks/`, `Context/`, `Decisions/`, `Milestones/`, `Projects/`, `Auth/`, `Identity/`, `Agents/`, `Devices/`).
 - `ProjectBeacon.Web` and its subprojects are the only domain writers. Business writes go through Application handlers.
 - CQRS: `ICommand<TResult>`, `IQuery<TResult>`, `Result<T>` in Application.
+- Identity: `ActorContext` (readonly record struct, `Application/Authorization/`) is the unified caller identity carried into every handler. It is resolved **once** at the HTTP boundary by `ActorContextFactory.FromPrincipal` (Application) / `HttpContext.GetActor()` (API extension). Application handlers and Web Razor components must NOT read `ClaimsPrincipal` directly or accept client-supplied identity fields. `TenantContextBinder.BindUserAsync(ActorContext, …)` binds the tenant from the context.
 - Domain entities use `Entity.New<T>()` factory pattern. Each entity has a parameterless constructor (EF Core requirement) + static factory.
 - Status enums live in `ProjectBeacon.Domain.Enums` to avoid BCL name collisions.
 - Password hashing uses `PasswordHasher` in Infrastructure (BCrypt).

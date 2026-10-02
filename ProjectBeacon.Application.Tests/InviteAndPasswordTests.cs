@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Auth;
+using Application.Authorization;
 using Application.Identity;
 using Application.Projects;
 using Domain.Entities.Identity;
@@ -53,6 +54,9 @@ public sealed class InviteAndPasswordTests : IDisposable
         return user;
     }
 
+    private static ActorContext Human(Guid userId, bool isAdmin) =>
+        new(ActorType.Human, userId, isAdmin, null, null, null, null, ApiTokenCapability.None);
+
     [Fact]
     public async Task Register_InviteOnly_WithoutToken_Fails()
     {
@@ -75,7 +79,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         await _db.SaveChangesAsync();
 
         var invited = await new CreateProjectInviteHandler(Factory(), _mail, _open).HandleAsync(
-            new CreateProjectInviteRequest(project.Id, "bob@test.com", MemberRole.Member, admin.Id, true));
+            new CreateProjectInviteRequest(project.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.True(invited.Success, invited.Error);
         Assert.Contains("invite?token=", invited.Value!.Url);
         Assert.Single(_mail.Sent);
@@ -100,7 +104,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         await _db.SaveChangesAsync();
 
         var invited = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, admin.Id, true));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.True(invited.Success, invited.Error);
 
         var registered = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _open).HandleAsync(
@@ -163,11 +167,11 @@ public sealed class InviteAndPasswordTests : IDisposable
         await _db.SaveChangesAsync();
 
         var invited = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, admin.Id, true));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, Human(admin.Id, true)));
         Assert.True(invited.Success, invited.Error);
 
         var accepted = await new AcceptInviteHandler(Factory()).HandleAsync(
-            new AcceptInviteRequest(invited.Value!.Token, bob.Id));
+            new AcceptInviteRequest(invited.Value!.Token, Human(bob.Id, false)));
         Assert.True(accepted.Success, accepted.Error);
         var member = await _db.OrgMembers.IgnoreQueryFilters()
             .SingleAsync(m => m.OrgId == org.Id && m.UserId == bob.Id);
@@ -184,10 +188,10 @@ public sealed class InviteAndPasswordTests : IDisposable
         await _db.SaveChangesAsync();
 
         var first = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, admin.Id, true));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.True(first.Success, first.Error);
         var second = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, admin.Id, true));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.False(second.Success);
         Assert.Equal("Invite already pending.", second.Error);
     }

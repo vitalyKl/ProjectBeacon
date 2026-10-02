@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
 using Application.Auth;
 using Application.Common;
@@ -122,10 +123,10 @@ public static class AuthEndpoints
 
     private static async Task<IResult> ChangePassword([FromBody] ChangePasswordBody body, ChangePasswordHandler handler, HttpContext ctx)
     {
-        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
-        if (!Guid.TryParse(userIdStr, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new ChangePasswordRequest(userId, body.CurrentPassword, body.NewPassword));
+        var result = await handler.HandleAsync(new ChangePasswordRequest(actor.UserId.Value, body.CurrentPassword, body.NewPassword));
         return result.Success
             ? Results.Ok()
             : result.FromResult(400);
@@ -144,10 +145,10 @@ public static class AuthEndpoints
 
     private static async Task<IResult> AcceptInvite(string token, AcceptInviteHandler handler, HttpContext ctx)
     {
-        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
-        if (!Guid.TryParse(userIdStr, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new AcceptInviteRequest(token, userId));
+        var result = await handler.HandleAsync(new AcceptInviteRequest(token, actor));
         if (result.Success)
             return Results.Ok();
         var status = result.Error == "Email does not match invite." ? 403 : 400;
@@ -158,12 +159,12 @@ public static class AuthEndpoints
 
     private static async Task<IResult> Logout(BeaconDbContext db, HttpContext ctx)
     {
-        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
-        if (!Guid.TryParse(userIdStr, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         await db.Sessions
-            .Where(s => s.UserId == userId && s.IsActive)
+            .Where(s => s.UserId == actor.UserId.Value && s.IsActive)
             .ExecuteDeleteAsync();
 
         return Results.Ok();
@@ -171,11 +172,11 @@ public static class AuthEndpoints
 
     private static async Task<IResult> GetMe(BeaconDbContext db, HttpContext ctx)
     {
-        var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
-        if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var user = await db.Users.FindAsync([userId]);
+        var user = await db.Users.FindAsync([actor.UserId.Value]);
         if (user is null)
             return ProblemResults.Unauthorized();
 

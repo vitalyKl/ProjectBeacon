@@ -1,6 +1,6 @@
 namespace ProjectBeacon.API.Endpoints;
 
-using System.Security.Claims;
+using ProjectBeacon.API.Auth;
 using Application.Evals;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,15 +19,15 @@ public static class EvalEndpoints
         HttpContext ctx,
         CancellationToken ct)
     {
-        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(actorId, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
             projectId,
             body.TaskId,
             body.DeviceId,
-            userId,
+            actor.UserId.Value,
             body.Prompt,
             body.Path,
             body.Model,

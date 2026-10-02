@@ -2,7 +2,6 @@ namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
 
-using System.Security.Claims;
 using Application.Agents;
 using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
@@ -25,9 +24,10 @@ public static class ModelEndpoints
 
     private static async Task<IResult> GetModelRegistry(HttpContext ctx, GetModelRegistryHandler handler, CancellationToken ct)
     {
-        if (!TryUser(ctx, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new GetModelRegistryCommand(userId), ct);
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(actor.UserId.Value), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -35,9 +35,10 @@ public static class ModelEndpoints
 
     private static async Task<IResult> UpsertModelBackend(HttpContext ctx, [FromBody] UpsertLocalModelBackendRequest request, UpsertLocalModelBackendHandler handler, CancellationToken ct)
     {
-        if (!TryUser(ctx, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = userId }), ct);
+        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = actor.UserId.Value }), ct);
         if (!result.Success)
             return result.FromResult();
 
@@ -48,9 +49,10 @@ public static class ModelEndpoints
 
     private static async Task<IResult> DeleteModelBackend(HttpContext ctx, Guid id, DeleteLocalModelBackendHandler handler, CancellationToken ct)
     {
-        if (!TryUser(ctx, out var userId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, userId)), ct);
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, actor.UserId.Value)), ct);
         if (!result.Success)
             return result.Error!.StartsWith("Model backend not found")
                 ? result.FromResult(404)
@@ -102,6 +104,4 @@ public static class ModelEndpoints
             : result.FromResult(503);
     }
 
-    private static bool TryUser(HttpContext ctx, out Guid userId) =>
-        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out userId) && userId != Guid.Empty;
 }

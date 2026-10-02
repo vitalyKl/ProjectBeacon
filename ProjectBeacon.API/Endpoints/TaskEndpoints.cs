@@ -2,7 +2,6 @@ namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
 
-using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
 using Application.Projects; // ClaimTaskHandler
@@ -51,7 +50,7 @@ public static class TaskEndpoints
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
 
-        var actor = ActorUserId(ctx);
+        var actor = ctx.GetActor().UserId;
         var result = await handler.HandleAsync(new CreateTaskCommand(request with { ActorUserId = actor }));
 
         return result.Success
@@ -156,7 +155,7 @@ public static class TaskEndpoints
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var actor = ActorUserId(ctx);
+        var actor = ctx.GetActor().UserId;
         var result = await handler.HandleAsync(new AddCommentCommand(request with { UserId = actor ?? Guid.Empty }));
 
         return result.Success
@@ -192,9 +191,6 @@ public static class TaskEndpoints
 
     private static TaskCommentDto MapCommentResponse(TaskCommentDto dto) =>
         new(dto.Id, dto.Content, dto.UserId, dto.CreatedAt, dto.UpdatedAt);
-
-    private static Guid? ActorUserId(HttpContext ctx) =>
-        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
     private static async Task<IResult> ListSteps(Guid taskId, ListTaskStepsHandler handler)
     {

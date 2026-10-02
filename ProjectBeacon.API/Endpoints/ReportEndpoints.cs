@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
 using Application.Reports;
 using Microsoft.AspNetCore.Mvc;
@@ -18,11 +19,9 @@ public static class ReportEndpoints
 
     private static async Task<IResult> Generate(Guid projectId, [FromBody] GenerateReportBody? body, HttpContext ctx, GenerateReportHandler handler)
     {
+        var actor = ctx.GetActor();
         var createdByType = string.IsNullOrWhiteSpace(body?.CreatedByType) ? "user" : body.CreatedByType;
-        var createdById = body?.CreatedById
-                          ?? ctx.User.FindFirst("sub")?.Value
-                          ?? ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                          ?? string.Empty;
+        var createdById = body?.CreatedById ?? actor.UserId?.ToString() ?? string.Empty;
         var result = await handler.HandleAsync(new GenerateReportCommand(
             new GenerateReportRequest(projectId, createdByType, createdById)));
         return result.Success

@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
@@ -173,6 +174,7 @@ else
     private Guid? _projectId;
     private Guid _userId;
     private bool _isAdmin;
+    private ActorContext _actor = ActorContext.Anonymous;
     private bool _busy;
     private string _labelName = string.Empty;
     private string _labelPrefix = string.Empty;
@@ -188,6 +190,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         var user = (await Auth.GetAuthenticationStateAsync()).User;
+        _actor = ActorContextFactory.FromPrincipal(user);
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
         _isAdmin = bool.TryParse(user.FindFirst("isAdmin")?.Value, out var adminFlag) && adminFlag;
@@ -196,7 +199,7 @@ else
             var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
             _devices = listed.Success ? listed.Value!.ToList() : [];
         }
-        var current = await CurrentProject.HandleAsync(user);
+        var current = await CurrentProject.HandleAsync(_actor);
         if (current.Value is null)
             return;
         _projectId = current.Value.Id;
@@ -259,7 +262,7 @@ else
             return;
         var listed = await ListMembers.HandleAsync(new GetProjectMembersCommand(new GetProjectMembersRequest(projectId)));
         _members = listed.Success ? listed.Value!.ToList() : [];
-        var invites = await ListInvites.HandleAsync(new ListInvitesRequest(projectId, _userId, _isAdmin));
+        var invites = await ListInvites.HandleAsync(new ListInvitesRequest(projectId, _actor));
         _invites = invites.Success ? invites.Value!.ToList() : [];
     }
 
@@ -271,7 +274,7 @@ else
         try
         {
             var created = await CreateInvite.HandleAsync(new CreateProjectInviteRequest(
-                projectId, _inviteEmail.Trim(), _inviteRole, _userId, _isAdmin));
+                projectId, _inviteEmail.Trim(), _inviteRole, _actor));
             if (!created.Success)
             {
                 Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
@@ -294,7 +297,7 @@ else
             L["Confirm"].Value, L["RevokeInvite"].Value,
             yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true) return;
-        var result = await RevokeInvite.HandleAsync(new RevokeInviteRequest(invite.Id, _userId, _isAdmin));
+        var result = await RevokeInvite.HandleAsync(new RevokeInviteRequest(invite.Id, _actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

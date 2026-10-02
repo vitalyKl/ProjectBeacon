@@ -1,10 +1,11 @@
 namespace ProjectBeacon.Application.Identity;
 
+using Application.Authorization;
 using Domain.Enums;
 
-public record CreateOrgInviteRequest(Guid OrgId, string Email, MemberRole Role, Guid ActorUserId, bool ActorIsAdmin);
+public record CreateOrgInviteRequest(Guid OrgId, string Email, MemberRole Role, ActorContext Actor);
 
-public record CreateProjectInviteRequest(Guid ProjectId, string Email, MemberRole Role, Guid ActorUserId, bool ActorIsAdmin);
+public record CreateProjectInviteRequest(Guid ProjectId, string Email, MemberRole Role, ActorContext Actor);
 
 public record InviteCreatedDto(
     Guid Id,
@@ -22,9 +23,9 @@ public record InvitePreviewDto(
     MemberRole Role,
     DateTime ExpiredAt);
 
-public record AcceptInviteRequest(string Token, Guid ActorUserId);
+public record AcceptInviteRequest(string Token, ActorContext Actor);
 
-public record ListInvitesRequest(Guid TargetId, Guid ActorUserId, bool ActorIsAdmin);
+public record ListInvitesRequest(Guid TargetId, ActorContext Actor);
 
 public record InviteListDto(
     Guid Id,
@@ -34,4 +35,4 @@ public record InviteListDto(
     DateTime ExpiredAt,
     DateTime CreatedAt);
 
-public record RevokeInviteRequest(Guid InviteId, Guid ActorUserId, bool ActorIsAdmin);
+public record RevokeInviteRequest(Guid InviteId, ActorContext Actor);

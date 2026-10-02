@@ -1,12 +1,12 @@
 namespace ProjectBeacon.Application.Tests;
 
-using System.Security.Claims;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 
 public sealed class TenantContextBinderTests : IDisposable
@@ -50,7 +50,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: false));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false));
 
         Assert.Equal(first.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -75,7 +75,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: true));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: true));
 
         Assert.Equal(project.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -92,7 +92,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: false));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false));
 
         Assert.Null(tenant.ProjectId);
         Assert.Null(tenant.OrgId);
@@ -122,7 +122,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: false, projectClaim: second.Id));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false, projectClaim: second.Id));
 
         Assert.Equal(second.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -149,7 +149,7 @@ public sealed class TenantContextBinderTests : IDisposable
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: false, projectClaim: Guid.NewGuid()));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false, projectClaim: Guid.NewGuid()));
 
         Assert.Equal(first.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -168,7 +168,7 @@ public sealed class TenantContextBinderTests : IDisposable
 
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: true));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: true));
 
         Assert.Equal(existing, tenant.ProjectId);
         Assert.Equal(existing, tenant.OrgId);
@@ -186,24 +186,13 @@ public sealed class TenantContextBinderTests : IDisposable
 
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Principal(user.Id, isAdmin: true));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: true));
 
         Assert.Null(tenant.ProjectId);
         Assert.Null(tenant.OrgId);
         Assert.True(tenant.Unscoped);
     }
 
-    private static ClaimsPrincipal Principal(Guid userId, bool isAdmin, Guid? projectClaim = null)
-    {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, userId.ToString())
-        };
-        if (isAdmin)
-            claims.Add(new Claim("isAdmin", "true"));
-        if (projectClaim is { } pc)
-            claims.Add(new Claim("project_id", pc.ToString()));
-
-        return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
-    }
+    private static ActorContext Actor(Guid userId, bool isAdmin, Guid? projectClaim = null) =>
+        new(ActorType.Human, userId, isAdmin, null, null, projectClaim, null, ApiTokenCapability.None);
 }

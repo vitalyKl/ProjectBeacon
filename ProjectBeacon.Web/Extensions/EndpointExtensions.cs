@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Localization;
 using ProjectBeacon.API.Endpoints;
 using ProjectBeacon.Application.Auth;
+using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Infrastructure.Data;
 
@@ -60,12 +61,13 @@ public static class EndpointExtensions
 
         app.MapGet("/project/switch", async (HttpContext ctx, BeaconDbContext db) =>
         {
+            var actor = ActorContextFactory.FromPrincipal(ctx.User);
             if (ctx.User.Identity?.IsAuthenticated != true
-                || !Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid)
+                || actor.UserId is not { } uid
                 || !Guid.TryParse(ctx.Request.Query["projectId"].ToString(), out var target))
                 return Results.Redirect("/dashboard");
 
-            var isAdmin = bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var adminFlag) && adminFlag;
+            var isAdmin = actor.IsAdmin;
             var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(db, uid, isAdmin, target);
             if (projectId != target)
                 return Results.Redirect("/dashboard");

@@ -23,9 +23,8 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
     {
         await using var db = _dbFactory.CreateDbContext();
 
-        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
         var auth = await ProjectAuthorization.CreateToken(
-            db, command.Request.ProjectId, actor,
+            db, command.Request.ProjectId, command.Actor,
             command.Request.Capabilities, ct);
         if (!auth.Success)
             return Result.Failure<ApiTokenDto>(auth);
@@ -98,9 +97,8 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
             projectId = existing;
         }
 
-        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
         var auth = await ProjectAuthorization.RevokeToken(
-            db, projectId, actor,
+            db, projectId, command.Actor,
             command.Request.TokenId, ct);
         if (!auth.Success)
             return Result.Failure(auth);
@@ -140,8 +138,7 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
             projectId = owner;
         }
 
-        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, projectId, actor, ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, projectId, command.Actor, ct))
             return Result.Forbidden<ApiTokenDto>();
 
         var token = await db.ApiTokens
@@ -171,8 +168,7 @@ public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result
     {
         await using var db = _dbFactory.CreateDbContext();
 
-        var actor = new ActorContext(command.ActorUserId, command.ActorIsAdmin, command.ActorIsApiToken);
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, actor, ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, command.Actor, ct))
             return Result.Forbidden<IList<ApiTokenDto>>();
 
         var tokens = await db.ApiTokens

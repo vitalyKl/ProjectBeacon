@@ -2,6 +2,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
@@ -103,7 +104,7 @@ else if (_error)
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
         _project = current.Value;
         await ReloadTasks();
         _loading = false;

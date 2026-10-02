@@ -1,6 +1,7 @@
 @implements IDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Chat
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
@@ -85,7 +86,7 @@
         var user = (await Auth.GetAuthenticationStateAsync()).User;
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
-        var current = await CurrentProject.HandleAsync(user);
+        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal(user));
         if (current.Value is null || _userId == Guid.Empty)
             return;
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));

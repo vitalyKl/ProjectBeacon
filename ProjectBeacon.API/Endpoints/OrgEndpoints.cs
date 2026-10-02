@@ -1,8 +1,8 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
-using System.Security.Claims;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
@@ -30,8 +30,8 @@ public static class OrgEndpoints
 
     private static async Task<IResult> CreateOrg([FromBody] CreateOrgRequest request, HttpContext ctx, CreateOrgHandler handler)
     {
-        var createdBy = ActorUserId(ctx);
-        var result = await handler.HandleAsync(command: new CreateOrgCommand(request with { CreatedByUserId = createdBy }));
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(command: new CreateOrgCommand(request with { CreatedByUserId = actor.UserId }));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value))
@@ -72,11 +72,11 @@ public static class OrgEndpoints
     private static async Task<IResult> CreateInvite(
         Guid orgId, [FromBody] CreateInviteBody body, CreateOrgInviteHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateOrgInviteRequest(
-            orgId, body.Email, body.Role, actor.Value, ActorIsAdmin(ctx)));
+            orgId, body.Email, body.Role, actor));
         if (result.Success)
             return Results.Ok(result.Value);
         return result.FromResult();
@@ -84,10 +84,10 @@ public static class OrgEndpoints
 
     private static async Task<IResult> ListInvites(Guid orgId, ListOrgInvitesHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new ListInvitesRequest(orgId, actor.Value, ActorIsAdmin(ctx)));
+        var result = await handler.HandleAsync(new ListInvitesRequest(orgId, actor));
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -95,20 +95,14 @@ public static class OrgEndpoints
 
     private static async Task<IResult> RevokeInvite(Guid orgId, Guid inviteId, RevokeOrgInviteHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor.Value, ActorIsAdmin(ctx)));
+        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor));
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
     }
 
     public record CreateInviteBody(string Email, MemberRole Role);
-
-    private static Guid? ActorUserId(HttpContext ctx) =>
-        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
-
-    private static bool ActorIsAdmin(HttpContext ctx) =>
-        bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var flag) && flag;
 }

@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Web
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
@@ -169,7 +170,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
         _project = current.Value;
         if (_project is not null)
             await Reload();

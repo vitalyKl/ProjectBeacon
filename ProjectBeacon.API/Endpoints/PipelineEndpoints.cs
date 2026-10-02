@@ -2,7 +2,6 @@ namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
 
-using System.Security.Claims;
 using Application.Common;
 using Application.Tasks;
 using Domain.Enums;
@@ -134,12 +133,12 @@ public static class PipelineEndpoints
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(actorId, out var actor))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(
-            body.TaskId, body.DeviceId, actor, body.CheckCommand, body.Path)), ct);
+            body.TaskId, body.DeviceId, actor.UserId.Value, body.CheckCommand, body.Path)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -161,11 +160,11 @@ public static class PipelineEndpoints
         if (taskId != body.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var actorId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(actorId))
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actorId, body.Reason)), ct);
+        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actor.UserId.Value.ToString(), body.Reason)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();

@@ -34,7 +34,7 @@ public class CreateOrgInviteHandler
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.OrgId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
+        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.OrgId, request.Actor, ct))
             return Result.Forbidden<InviteCreatedDto>();
 
         var org = await db.Orgs.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
@@ -53,7 +53,7 @@ public class CreateOrgInviteHandler
         }
 
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
-        var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.ActorUserId, OpaqueToken.Hash(raw));
+        var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw));
         db.OrgInvites.Add(invite);
         await db.SaveChangesAsync(ct);
 
@@ -86,7 +86,7 @@ public class CreateProjectInviteHandler
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.ProjectId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.ProjectId, request.Actor, ct))
             return Result.Forbidden<InviteCreatedDto>();
 
         var project = await db.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
@@ -105,7 +105,7 @@ public class CreateProjectInviteHandler
         }
 
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
-        var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, request.ActorUserId, OpaqueToken.Hash(raw));
+        var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw));
         db.ProjectInvites.Add(invite);
         await db.SaveChangesAsync(ct);
 
@@ -140,7 +140,7 @@ public class AcceptInviteHandler
     public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.ActorUserId, ct);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.Actor.UserId!.Value, ct);
         if (user is null)
             return Result.Failure("User not found.");
 
@@ -193,7 +193,7 @@ public class ListOrgInvitesHandler
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.TargetId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
+        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.TargetId, request.Actor, ct))
             return Result.Forbidden<IList<InviteListDto>>();
 
         var items = await db.OrgInvites.IgnoreQueryFilters()
@@ -214,7 +214,7 @@ public class ListProjectInvitesHandler
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.TargetId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.TargetId, request.Actor, ct))
             return Result.Forbidden<IList<InviteListDto>>();
 
         var items = await db.ProjectInvites.IgnoreQueryFilters()
@@ -238,7 +238,7 @@ public class RevokeOrgInviteHandler
         var invite = await db.OrgInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        if (!await ProjectAuthorization.CanManageOrgAsync(db, invite.OrgId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
+        if (!await ProjectAuthorization.CanManageOrgAsync(db, invite.OrgId, request.Actor, ct))
             return Result.Forbidden();
         invite.Revoke();
         await db.SaveChangesAsync(ct);
@@ -258,7 +258,7 @@ public class RevokeProjectInviteHandler
         var invite = await db.ProjectInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, invite.ProjectId, new ActorContext(request.ActorUserId, request.ActorIsAdmin, IsApiToken: false), ct))
+        if (!await ProjectAuthorization.CanManageProjectAsync(db, invite.ProjectId, request.Actor, ct))
             return Result.Forbidden();
         invite.Revoke();
         await db.SaveChangesAsync(ct);

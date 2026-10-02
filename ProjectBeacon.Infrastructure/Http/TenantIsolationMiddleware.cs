@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Http;
 
 using System.Security.Claims;
+using Application.Authorization;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
@@ -161,10 +162,13 @@ public sealed class TenantIsolationMiddleware
     }
 
     internal static bool IsAdmin(HttpContext ctx)
-        => bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var adminFlag) && adminFlag;
+        => ActorContextFactory.FromPrincipal(ctx.User).IsAdmin;
 
     internal static bool TryGetUserId(HttpContext ctx, out Guid userId)
-        => Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out userId);
+    {
+        userId = ActorContextFactory.FromPrincipal(ctx.User).UserId ?? Guid.Empty;
+        return !userId.Equals(Guid.Empty);
+    }
 
     internal static Task<List<ProjectMember>> LoadMembershipsAsync(BeaconDbContext db, Guid userId)
         => db.ProjectMembers.IgnoreQueryFilters()

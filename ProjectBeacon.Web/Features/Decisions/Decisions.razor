@@ -2,6 +2,7 @@
 @layout MainLayout
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Decisions
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Domain.Enums
@@ -159,7 +160,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var current = await CurrentProject.HandleAsync((await Auth.GetAuthenticationStateAsync()).User);
+        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
         _project = current.Value;
         await Reload();
         _loading = false;

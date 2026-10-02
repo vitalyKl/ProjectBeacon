@@ -1,8 +1,8 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
-using System.Security.Claims;
 using Application.Authorization;
 using Application.Common;
 using Application.Identity;
@@ -44,8 +44,8 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> CreateProject([FromBody] CreateProjectRequest request, HttpContext ctx, CreateProjectHandler handler, BeaconDbContext db)
     {
-        var createdBy = ActorUserId(ctx);
-        var result = await handler.HandleAsync(new CreateProjectCommand(request with { CreatedByUserId = createdBy }));
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(new CreateProjectCommand(request with { CreatedByUserId = actor.UserId }));
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value))
@@ -57,12 +57,11 @@ public static class ProjectEndpoints
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
 
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var ac = new ActorContext(actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx));
-        var result = await handler.HandleAsync(new UpdateProjectCommand(request, ac));
+        var result = await handler.HandleAsync(new UpdateProjectCommand(request, actor));
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value))
@@ -99,11 +98,11 @@ public static class ProjectEndpoints
     {
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var result = await handler.HandleAsync(new AddProjectMemberCommand(request, actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+        var result = await handler.HandleAsync(new AddProjectMemberCommand(request, actor));
 
         return result.Success
             ? Results.Ok(MapMemberResponse(result.Value))
@@ -112,11 +111,11 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> RemoveMember(Guid projectId, Guid userId, RemoveProjectMemberHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var result = await handler.HandleAsync(new RemoveProjectMemberCommand(new RemoveProjectMemberRequest(projectId, userId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+        var result = await handler.HandleAsync(new RemoveProjectMemberCommand(new RemoveProjectMemberRequest(projectId, userId), actor));
 
         return result.Success
             ? Results.NoContent()
@@ -135,12 +134,12 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> CreateToken(Guid projectId, [FromBody] CreateApiTokenRequest request, HttpContext ctx, CreateApiTokenHandler handler)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateApiTokenCommand(
-            new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.Value),
-            actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+            new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.UserId.Value),
+            actor));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))
@@ -149,12 +148,12 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> RevokeToken(Guid projectId, Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
         var resolvedProject = projectId == Guid.Empty ? Guid.Empty : projectId;
         var result = await handler.HandleAsync(new RevokeApiTokenCommand(
-            new RevokeApiTokenRequest(resolvedProject, tokenId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+            new RevokeApiTokenRequest(resolvedProject, tokenId), actor));
 
         return result.Success
             ? Results.NoContent()
@@ -163,12 +162,12 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> GetToken(Guid projectId, Guid tokenId, GetApiTokenHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new GetApiTokenCommand(
-            new GetApiTokenRequest(projectId, tokenId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+            new GetApiTokenRequest(projectId, tokenId), actor));
 
         return result.Success
             ? Results.Ok(MapTokenResponse(result.Value))
@@ -177,12 +176,12 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> ListTokens(Guid projectId, ListApiTokensHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new ListApiTokensCommand(
-            new ListApiTokensRequest(projectId), actor.Value, ActorIsAdmin(ctx), ActorIsApiToken(ctx)));
+            new ListApiTokensRequest(projectId), actor));
         if (!result.Success)
             return result.FromResult(404);
 
@@ -195,11 +194,11 @@ public static class ProjectEndpoints
     private static async Task<IResult> CreateInvite(
         Guid projectId, [FromBody] CreateInviteBody body, CreateProjectInviteHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateProjectInviteRequest(
-            projectId, body.Email, body.Role, actor.Value, ActorIsAdmin(ctx)));
+            projectId, body.Email, body.Role, actor));
         if (result.Success)
             return Results.Ok(result.Value);
         return result.FromResult();
@@ -207,10 +206,10 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> ListInvites(Guid projectId, ListProjectInvitesHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new ListInvitesRequest(projectId, actor.Value, ActorIsAdmin(ctx)));
+        var result = await handler.HandleAsync(new ListInvitesRequest(projectId, actor));
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -219,23 +218,14 @@ public static class ProjectEndpoints
     private static async Task<IResult> RevokeInvite(
         Guid projectId, Guid inviteId, RevokeProjectInviteHandler handler, HttpContext ctx)
     {
-        var actor = ActorUserId(ctx);
-        if (actor is null)
+        var actor = ctx.GetActor();
+        if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor.Value, ActorIsAdmin(ctx)));
+        var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor));
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
     }
 
     public record CreateInviteBody(string Email, MemberRole Role);
-
-    private static Guid? ActorUserId(HttpContext ctx) =>
-        Guid.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
-
-    private static bool ActorIsAdmin(HttpContext ctx) =>
-        bool.TryParse(ctx.User.FindFirstValue("isAdmin"), out var flag) && flag;
-
-    private static bool ActorIsApiToken(HttpContext ctx) =>
-        ctx.User.Identity?.AuthenticationType == "ApiToken";
 }
