@@ -90,6 +90,7 @@ app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<ApiTokenAuthMiddleware>();
+app.UseMiddleware<DeviceActorBoundaryMiddleware>();
 app.UseMiddleware<TenantIsolationMiddleware>();
 app.UseAuthorization();
 

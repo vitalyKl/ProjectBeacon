@@ -53,6 +53,7 @@ public static class MiddlewareExtensions
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseMiddleware<ProjectBeacon.API.Auth.ApiTokenAuthMiddleware>();
+        app.UseMiddleware<ProjectBeacon.API.Auth.DeviceActorBoundaryMiddleware>();
         app.UseMiddleware<ProjectBeacon.Infrastructure.Http.TenantIsolationMiddleware>();
         app.UseAuthorization();
         app.UseAntiforgery();

@@ -14,6 +14,7 @@ public static class ActorContextFactory
     private const string OrgIdClaim = "org_id";
     private const string CapabilitiesClaim = "capabilities";
     private const string IsAdminClaim = "isAdmin";
+    private const string DeviceOwnerClaim = "device_owner_id";
 
     public static ActorContext FromPrincipal(ClaimsPrincipal? principal)
     {
@@ -28,7 +29,11 @@ public static class ActorContextFactory
             _ => ActorType.Human,
         };
 
-        var userId = ToGuid(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+        // Device actors carry the owner only as metadata (device_owner_id); the human
+        // NameIdentifier claim must never be trusted as the device's acting identity.
+        var userId = type == ActorType.Device
+            ? ToGuid(principal.FindFirst(DeviceOwnerClaim)?.Value)
+            : ToGuid(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
 
         if (type == ActorType.Human && userId is null)
             return ActorContext.Anonymous;

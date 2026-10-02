@@ -122,6 +122,45 @@ public sealed class ActorContextFactoryTests
     }
 
     [Fact]
+    public void FromPrincipal_DeviceToken_WithOwner_ReturnsOwnerAsUserId()
+    {
+        var deviceGuidId = Guid.NewGuid();
+        var ownerGuid = Guid.NewGuid();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("device_id", deviceGuidId.ToString()),
+            new Claim("device_owner_id", ownerGuid.ToString())
+        ], "DeviceToken"));
+
+        var ctx = ActorContextFactory.FromPrincipal(principal);
+
+        Assert.Equal(ActorType.Device, ctx.Type);
+        Assert.True(ctx.IsDevice);
+        Assert.Equal(ownerGuid, ctx.UserId);
+        Assert.Equal(deviceGuidId, ctx.DeviceId);
+    }
+
+    [Fact]
+    public void FromPrincipal_DeviceToken_IgnoresNameIdentifier()
+    {
+        var deviceGuidId = Guid.NewGuid();
+        var ownerGuid = Guid.NewGuid();
+        var attackerGuid = Guid.NewGuid();
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("device_id", deviceGuidId.ToString()),
+            new Claim("device_owner_id", ownerGuid.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, attackerGuid.ToString())
+        ], "DeviceToken"));
+
+        var ctx = ActorContextFactory.FromPrincipal(principal);
+
+        Assert.Equal(ActorType.Device, ctx.Type);
+        Assert.Equal(ownerGuid, ctx.UserId);
+        Assert.NotEqual(attackerGuid, ctx.UserId);
+    }
+
+    [Fact]
     public void FromPrincipal_ApiTokenWithInvalidCapabilities_ReturnsNone()
     {
         var tokenGuidId = Guid.NewGuid();

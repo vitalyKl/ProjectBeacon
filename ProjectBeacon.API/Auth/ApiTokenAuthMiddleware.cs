@@ -47,7 +47,7 @@ public sealed class ApiTokenAuthMiddleware
             {
                 var identity = new ClaimsIdentity("DeviceToken", ClaimTypes.Name, ClaimTypes.Role);
                 identity.AddClaim(new Claim("device_id", device.Id.ToString()));
-                identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, device.UserId.ToString()));
+                identity.AddClaim(new Claim("device_owner_id", device.UserId.ToString()));
                 ctx.User = new ClaimsPrincipal(identity);
             }
         }
