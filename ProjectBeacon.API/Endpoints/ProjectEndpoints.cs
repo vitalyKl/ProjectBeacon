@@ -19,25 +19,25 @@ public static class ProjectEndpoints
 {
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery();
-        app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
 
-        app.MapPost("/v1/projects/{projectId:guid}/members", AddMember).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/projects/{projectId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/members", ListMembers).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/projects/{projectId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/members", AddMember).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapDelete("/v1/projects/{projectId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/members", ListMembers).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapDelete("/v1/projects/{projectId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
 
-        app.MapPost("/v1/projects/{projectId:guid}/tokens", CreateToken).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/tokens/{tokenId:guid}", async (Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx) => await RevokeToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/tokens/{tokenId:guid}", async (Guid tokenId, GetApiTokenHandler handler, HttpContext ctx) => await GetToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/tokens", CreateToken).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapDelete("/v1/tokens/{tokenId:guid}", async (Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx) => await RevokeToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/tokens/{tokenId:guid}", async (Guid tokenId, GetApiTokenHandler handler, HttpContext ctx) => await GetToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
 
         return app;
     }

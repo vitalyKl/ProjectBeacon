@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
 using Application.Common;
 using Application.Milestones;
@@ -13,16 +14,16 @@ public static class MilestoneEndpoints
 {
     public static IEndpointRouteBuilder MapMilestoneEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects/{projectId:guid}/milestones", CreateMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapPut("/v1/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapDelete("/v1/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/milestones", ListMilestones).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close", CloseMilestone).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen", ReopenMilestone).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/milestones", CreateMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPut("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPut("/v1/milestones/{milestoneId:guid}", UpdateMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapDelete("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapDelete("/v1/milestones/{milestoneId:guid}", DeleteMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/milestones", ListMilestones).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/milestones/{milestoneId:guid}", GetMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close", CloseMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen", ReopenMilestone).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
 
         return app;
     }

@@ -5,6 +5,7 @@ using ProjectBeacon.API.Auth;
 
 using Application.Common;
 using Application.Tasks;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using FinishWorkReview = ProjectBeacon.Application.Tasks.FinishWorkReview;
 
@@ -12,7 +13,7 @@ public static class WorkEndpoints
 {
     public static IEndpointRouteBuilder MapWorkEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/work/finish_work", FinishWork).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/work/finish_work", FinishWork).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
 
         return app;
     }

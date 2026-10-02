@@ -185,35 +185,35 @@ public sealed class AuthorizationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Token_WithSessionDrive_PipelineRead_ReturnsOk()
+    public async Task Token_WithTaskRead_PipelineRead_ReturnsOk()
     {
-        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.SessionDrive), ResourceType.Pipeline, AuthAction.Read);
+        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.TaskRead), ResourceType.Pipeline, AuthAction.Read);
         Assert.True(r.Success);
     }
 
     [Fact]
-    public async Task Token_WithSessionDrive_PipelineExecute_ReturnsOk()
+    public async Task Token_WithTaskWrite_PipelineExecute_ReturnsOk()
     {
-        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.SessionDrive), ResourceType.Pipeline, AuthAction.Execute);
+        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.TaskWrite), ResourceType.Pipeline, AuthAction.Execute);
         Assert.True(r.Success);
     }
 
     [Fact]
-    public async Task Token_WithSessionDrive_ChatSessionRead_ReturnsOk()
+    public async Task Token_Admin_ChatSessionRead_ReturnsForbidden()
     {
-        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.SessionDrive), ResourceType.ChatSession, AuthAction.Read);
-        Assert.True(r.Success);
+        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.Admin), ResourceType.ChatSession, AuthAction.Read);
+        Assert.False(r.Success);
     }
 
     [Fact]
-    public async Task Token_WithSessionDrive_ChatSessionExecute_ReturnsOk()
+    public async Task Token_Admin_ChatSessionExecute_ReturnsForbidden()
     {
-        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.SessionDrive), ResourceType.ChatSession, AuthAction.Execute);
-        Assert.True(r.Success);
+        var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.Admin), ResourceType.ChatSession, AuthAction.Execute);
+        Assert.False(r.Success);
     }
 
     [Fact]
-    public async Task Token_WithoutSessionDrive_PipelineRead_ReturnsForbidden()
+    public async Task Token_WithoutTaskRead_PipelineRead_ReturnsForbidden()
     {
         var r = await _auth.CanAsync(_db, Token(), ResourceType.Pipeline, AuthAction.Read);
         Assert.False(r.Success);
@@ -234,10 +234,10 @@ public sealed class AuthorizationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Token_AdminCapability_DoesNotImplyTaskRead()
+    public async Task Token_AdminCapability_BypassesTaskRead()
     {
         var r = await _auth.CanAsync(_db, Token(ApiTokenCapability.Admin), ResourceType.Task, AuthAction.Read);
-        Assert.False(r.Success);
+        Assert.True(r.Success);
     }
 
     // ── Human non-administer (no DB queries) ──────────────────────────────

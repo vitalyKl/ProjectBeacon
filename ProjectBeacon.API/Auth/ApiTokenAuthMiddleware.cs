@@ -81,4 +81,16 @@ public static class CapabilityExtensions
             return ProblemResults.Forbidden();
         });
     }
+
+    /// <summary>Blocks every API token, including Admin-flag tokens. Device actors are rejected by <see cref="DeviceActorBoundaryMiddleware"/>.</summary>
+    public static RouteHandlerBuilder RequireHumanActor(this RouteHandlerBuilder builder)
+    {
+        return builder.AddEndpointFilter(async (ctx, next) =>
+        {
+            if (ctx.HttpContext.User.Identity?.AuthenticationType == "ApiToken")
+                return ProblemResults.Forbidden();
+
+            return await next(ctx);
+        });
+    }
 }

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
 using Application.Decisions;
 using Microsoft.AspNetCore.Mvc;
@@ -9,11 +10,11 @@ public static class DecisionEndpoints
 {
     public static IEndpointRouteBuilder MapDecisionEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/decisions", List).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/accept", Accept).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/deprecate", Deprecate).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede", Supersede).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/decisions", List).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/accept", Accept).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/deprecate", Deprecate).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede", Supersede).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
         return app;
     }
 

@@ -8,7 +8,7 @@ public static class EvalEndpoints
 {
     public static IEndpointRouteBuilder MapEvalEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects/{projectId:guid}/evals/pair", StartPair).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/projects/{projectId:guid}/evals/pair", StartPair).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
         return app;
     }
 

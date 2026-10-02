@@ -161,24 +161,23 @@ public sealed class AuthorizationService : IAuthorizationService
     {
         return resource switch
         {
-            ResourceType.Task or ResourceType.TaskStep
+            ResourceType.Task or ResourceType.TaskStep or ResourceType.Pipeline
                 when action is AuthAction.Read
                     => TokenCan(actor, ApiTokenCapability.TaskRead),
-            ResourceType.Task or ResourceType.TaskStep
-                when action is AuthAction.Create or AuthAction.Update or AuthAction.Delete
+            ResourceType.Task or ResourceType.TaskStep or ResourceType.Pipeline
+                when action is AuthAction.Create or AuthAction.Update or AuthAction.Delete or AuthAction.Execute
                     => TokenCan(actor, ApiTokenCapability.TaskWrite),
             ResourceType.Context
                 when action is AuthAction.Read
                     => TokenCan(actor, ApiTokenCapability.ContextRead),
-            ResourceType.Pipeline or ResourceType.ChatSession
-                when action is AuthAction.Read or AuthAction.Execute
-                    => TokenCan(actor, ApiTokenCapability.SessionDrive),
             _ => Result.Forbidden(),
         };
     }
 
     private static Result TokenCan(ActorContext actor, ApiTokenCapability required)
-        => actor.Capabilities.HasFlag(required) ? Result.Ok() : Result.Forbidden();
+        => actor.Capabilities.HasFlag(ApiTokenCapability.Admin) || actor.Capabilities.HasFlag(required)
+            ? Result.Ok()
+            : Result.Forbidden();
 
     private static async Task<MemberRole?> GetActorRoleAsync(
         IBeaconDb db, Guid projectId, ActorContext actor, CancellationToken ct)

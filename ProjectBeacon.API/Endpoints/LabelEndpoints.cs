@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
+using ProjectBeacon.API.Auth;
 
 using Application.Projects;
 using Microsoft.AspNetCore.Mvc;
@@ -9,9 +10,9 @@ public static class LabelEndpoints
 {
     public static IEndpointRouteBuilder MapLabelEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/projects/{projectId:guid}/labels/match", MatchLabel).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/projects/{projectId:guid}/labels/{labelId:guid}/paths", AddPath).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/labels/match", MatchLabel).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/labels/{labelId:guid}/paths", AddPath).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
         return app;
     }
 

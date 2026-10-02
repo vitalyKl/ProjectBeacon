@@ -10,14 +10,14 @@ public static class ChatEndpoints
 {
     public static IEndpointRouteBuilder MapChatEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/chat/sessions", ListSessions).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/chat/sessions", CreateSession).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/chat/sessions/{id:guid}", GetSession).RequireAuthorization().DisableAntiforgery();
-        app.MapGet("/v1/chat/sessions/{id:guid}/parts", ListParts).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/chat/sessions/{id:guid}/prompt", SendPrompt).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/chat/sessions/{id:guid}/abort", Abort).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/chat/sessions/{id:guid}/parts", AppendPart).RequireAuthorization().DisableAntiforgery();
-        app.MapPost("/v1/chat/sessions/{id:guid}/idle", MarkIdle).RequireAuthorization().DisableAntiforgery();
+        app.MapGet("/v1/chat/sessions", ListSessions).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/chat/sessions", CreateSession).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/chat/sessions/{id:guid}", GetSession).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/chat/sessions/{id:guid}/parts", ListParts).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/chat/sessions/{id:guid}/prompt", SendPrompt).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/chat/sessions/{id:guid}/abort", Abort).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/chat/sessions/{id:guid}/parts", AppendPart).RequireAuthorization().DisableAntiforgery().RequireDeviceActor();
+        app.MapPost("/v1/chat/sessions/{id:guid}/idle", MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDeviceActor();
         return app;
     }
 

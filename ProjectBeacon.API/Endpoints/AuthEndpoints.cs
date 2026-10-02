@@ -23,12 +23,12 @@ public static class AuthEndpoints
         app.MapPost("/v1/auth/register", Register).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/forgot-password", ForgotPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/reset-password", ResetPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
-        app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth");
-        app.MapPost("/v1/auth/logout", Logout).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth");
-        app.MapGet("/v1/auth/me", GetMe).RequireAuthorization();
+        app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHumanActor();
+        app.MapPost("/v1/auth/logout", Logout).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHumanActor();
+        app.MapGet("/v1/auth/me", GetMe).RequireAuthorization().RequireHumanActor();
         app.MapGet("/v1/auth/options", AuthOptions).AllowAnonymous();
         app.MapGet("/v1/invites/{token}", GetInvite).AllowAnonymous().RequireRateLimiting("auth");
-        app.MapPost("/v1/invites/{token}/accept", AcceptInvite).RequireAuthorization().DisableAntiforgery();
+        app.MapPost("/v1/invites/{token}/accept", AcceptInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
 
         return app;
     }
