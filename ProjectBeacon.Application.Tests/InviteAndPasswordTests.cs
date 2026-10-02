@@ -21,6 +21,7 @@ public sealed class InviteAndPasswordTests : IDisposable
     private readonly CapturingEmailSender _mail = new();
     private readonly IConfiguration _open;
     private readonly IConfiguration _inviteOnly;
+    private readonly IAuthorizationService _auth = new AuthorizationService();
 
     public InviteAndPasswordTests()
     {
@@ -78,7 +79,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         _db.ProjectMembers.Add(ProjectMember.Create(project.Id, admin.Id, MemberRole.Owner));
         await _db.SaveChangesAsync();
 
-        var invited = await new CreateProjectInviteHandler(Factory(), _mail, _open).HandleAsync(
+        var invited = await new CreateProjectInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
             new CreateProjectInviteRequest(project.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.True(invited.Success, invited.Error);
         Assert.Contains("invite?token=", invited.Value!.Url);
@@ -103,7 +104,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
         await _db.SaveChangesAsync();
 
-        var invited = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
+        var invited = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
             new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.True(invited.Success, invited.Error);
 
@@ -166,7 +167,7 @@ public sealed class InviteAndPasswordTests : IDisposable
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
         await _db.SaveChangesAsync();
 
-        var invited = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
+        var invited = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
             new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, Human(admin.Id, true)));
         Assert.True(invited.Success, invited.Error);
 
@@ -187,10 +188,10 @@ public sealed class InviteAndPasswordTests : IDisposable
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
         await _db.SaveChangesAsync();
 
-        var first = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
+        var first = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
             new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.True(first.Success, first.Error);
-        var second = await new CreateOrgInviteHandler(Factory(), _mail, _open).HandleAsync(
+        var second = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
             new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
         Assert.False(second.Success);
         Assert.Equal("Invite already pending.", second.Error);

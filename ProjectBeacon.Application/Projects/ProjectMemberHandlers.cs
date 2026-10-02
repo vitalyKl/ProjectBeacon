@@ -9,14 +9,19 @@ using Microsoft.EntityFrameworkCore;
 public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, Result<ProjectMemberDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public AddProjectMemberHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AddProjectMemberHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result<ProjectMemberDto>> HandleAsync(AddProjectMemberCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var auth = await ProjectAuthorization.AddMember(
-            db, command.Request.ProjectId, command.Actor,
+        var auth = await _auth.CanAddMemberAsync(
+            db, command.Actor, command.Request.ProjectId,
             command.Request.UserId, command.Request.Role, ct);
         if (!auth.Success)
             return Result.Failure<ProjectMemberDto>(auth);
@@ -41,14 +46,19 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
 public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public RemoveProjectMemberHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RemoveProjectMemberHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result> HandleAsync(RemoveProjectMemberCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var auth = await ProjectAuthorization.RemoveMember(
-            db, command.Request.ProjectId, command.Actor,
+        var auth = await _auth.CanRemoveMemberAsync(
+            db, command.Actor, command.Request.ProjectId,
             command.Request.UserId, ct);
         if (!auth.Success)
             return Result.Failure(auth);

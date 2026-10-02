@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application;
 
 using Application.Agents;
 using Application.Auth;
+using Application.Authorization;
 using Application.Chat;
 using Application.Devices;
 using Application.Evals;
@@ -19,6 +20,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationHandlers(this IServiceCollection services)
     {
+        services.AddSingleton<IAuthorizationService, AuthorizationService>();
+
         services.AddTransient<BootstrapHandler>();
         services.AddTransient<RecoverAdminHandler>();
         services.AddTransient<LoginHandler>();

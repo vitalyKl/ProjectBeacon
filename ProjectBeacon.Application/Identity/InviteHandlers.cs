@@ -15,15 +15,18 @@ public class CreateOrgInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
+    private readonly IAuthorizationService _auth;
     private readonly IConfiguration? _configuration;
 
     public CreateOrgInviteHandler(
         IBeaconDbFactory dbFactory,
         IEmailSender email,
+        IAuthorizationService auth,
         IConfiguration? configuration = null)
     {
         _dbFactory = dbFactory;
         _email = email;
+        _auth = auth;
         _configuration = configuration;
     }
 
@@ -34,7 +37,8 @@ public class CreateOrgInviteHandler
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.OrgId, request.Actor, ct))
+        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: request.OrgId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<InviteCreatedDto>();
 
         var org = await db.Orgs.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.Id == request.OrgId, ct);
@@ -67,15 +71,18 @@ public class CreateProjectInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IEmailSender _email;
+    private readonly IAuthorizationService _auth;
     private readonly IConfiguration? _configuration;
 
     public CreateProjectInviteHandler(
         IBeaconDbFactory dbFactory,
         IEmailSender email,
+        IAuthorizationService auth,
         IConfiguration? configuration = null)
     {
         _dbFactory = dbFactory;
         _email = email;
+        _auth = auth;
         _configuration = configuration;
     }
 
@@ -86,7 +93,8 @@ public class CreateProjectInviteHandler
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.ProjectId, request.Actor, ct))
+        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.ProjectId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<InviteCreatedDto>();
 
         var project = await db.Projects.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == request.ProjectId, ct);
@@ -187,13 +195,19 @@ public class AcceptInviteHandler
 public class ListOrgInvitesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public ListOrgInvitesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListOrgInvitesHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageOrgAsync(db, request.TargetId, request.Actor, ct))
+        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: request.TargetId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<IList<InviteListDto>>();
 
         var items = await db.OrgInvites.IgnoreQueryFilters()
@@ -208,13 +222,19 @@ public class ListOrgInvitesHandler
 public class ListProjectInvitesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public ListProjectInvitesHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListProjectInvitesHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result<IList<InviteListDto>>> HandleAsync(ListInvitesRequest request, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, request.TargetId, request.Actor, ct))
+        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.TargetId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<IList<InviteListDto>>();
 
         var items = await db.ProjectInvites.IgnoreQueryFilters()
@@ -229,8 +249,13 @@ public class ListProjectInvitesHandler
 public class RevokeOrgInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public RevokeOrgInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RevokeOrgInviteHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
@@ -238,7 +263,8 @@ public class RevokeOrgInviteHandler
         var invite = await db.OrgInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        if (!await ProjectAuthorization.CanManageOrgAsync(db, invite.OrgId, request.Actor, ct))
+        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: invite.OrgId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden();
         invite.Revoke();
         await db.SaveChangesAsync(ct);
@@ -249,8 +275,13 @@ public class RevokeOrgInviteHandler
 public class RevokeProjectInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public RevokeProjectInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RevokeProjectInviteHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result> HandleAsync(RevokeInviteRequest request, CancellationToken ct = default)
     {
@@ -258,7 +289,8 @@ public class RevokeProjectInviteHandler
         var invite = await db.ProjectInvites.IgnoreQueryFilters().FirstOrDefaultAsync(i => i.Id == request.InviteId, ct);
         if (invite is null)
             return Result.Failure("Invite not found.");
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, invite.ProjectId, request.Actor, ct))
+        var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: invite.ProjectId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden();
         invite.Revoke();
         await db.SaveChangesAsync(ct);

@@ -57,13 +57,19 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
 public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public UpdateProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public UpdateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, command.Actor, ct))
+        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: command.Request.ProjectId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<ProjectDto>();
 
         var project = await db.Projects.IgnoreQueryFilters()

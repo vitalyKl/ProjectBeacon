@@ -12,19 +12,21 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
 {
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IConfiguration _config;
+    private readonly IAuthorizationService _auth;
 
-    public CreateApiTokenHandler(IBeaconDbFactory dbFactory, IConfiguration config)
+    public CreateApiTokenHandler(IBeaconDbFactory dbFactory, IConfiguration config, IAuthorizationService auth)
     {
         _dbFactory = dbFactory;
         _config = config;
+        _auth = auth;
     }
 
     public async Task<Result<ApiTokenDto>> HandleAsync(CreateApiTokenCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
 
-        var auth = await ProjectAuthorization.CreateToken(
-            db, command.Request.ProjectId, command.Actor,
+        var auth = await _auth.CanCreateTokenAsync(
+            db, command.Actor, command.Request.ProjectId,
             command.Request.Capabilities, ct);
         if (!auth.Success)
             return Result.Failure<ApiTokenDto>(auth);
@@ -78,8 +80,13 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
 public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public RevokeApiTokenHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RevokeApiTokenHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result> HandleAsync(RevokeApiTokenCommand command, CancellationToken ct = default)
     {
@@ -97,9 +104,7 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
             projectId = existing;
         }
 
-        var auth = await ProjectAuthorization.RevokeToken(
-            db, projectId, command.Actor,
-            command.Request.TokenId, ct);
+        var auth = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
         if (!auth.Success)
             return Result.Failure(auth);
 
@@ -118,8 +123,13 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
 public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<ApiTokenDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public GetApiTokenHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetApiTokenHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result<ApiTokenDto>> HandleAsync(GetApiTokenCommand command, CancellationToken ct = default)
     {
@@ -138,7 +148,8 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
             projectId = owner;
         }
 
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, projectId, command.Actor, ct))
+        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<ApiTokenDto>();
 
         var token = await db.ApiTokens
@@ -161,14 +172,20 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
 public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result<IList<ApiTokenDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
 
-    public ListApiTokensHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public ListApiTokensHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
 
     public async Task<Result<IList<ApiTokenDto>>> HandleAsync(ListApiTokensCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
 
-        if (!await ProjectAuthorization.CanManageProjectAsync(db, command.Request.ProjectId, command.Actor, ct))
+        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: command.Request.ProjectId, ct: ct);
+        if (!check.Success)
             return Result.Forbidden<IList<ApiTokenDto>>();
 
         var tokens = await db.ApiTokens
