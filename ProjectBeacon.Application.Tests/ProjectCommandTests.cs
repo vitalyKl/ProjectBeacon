@@ -10,7 +10,7 @@ public sealed class ProjectCommandTests
     public void CreateProjectCommand_CreatesFromRequest()
     {
         var request = new CreateProjectRequest("Test", "Desc", Guid.NewGuid());
-        var command = new CreateProjectCommand(request);
+        var command = new CreateProjectCommand(request, ActorContext.Anonymous);
 
         Assert.Equal(request.Name, command.Request.Name);
         Assert.Equal(request.Description, command.Request.Description);

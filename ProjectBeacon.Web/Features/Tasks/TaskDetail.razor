@@ -1,6 +1,7 @@
 @page "/task/{taskId:guid}"
 @layout MainLayout
 @attribute [Authorize]
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
@@ -665,9 +666,8 @@ else
     {
         if (_task is null || string.IsNullOrWhiteSpace(_commentDraft))
             return;
-        var auth = await Auth.GetAuthenticationStateAsync();
-        Guid.TryParse(auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var userId);
-        var result = await AddComment.HandleAsync(new AddCommentCommand(new AddCommentRequest(_task.Id, _commentDraft.Trim(), userId)));
+        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        var result = await AddComment.HandleAsync(new AddCommentCommand(new AddCommentRequest(_task.Id, _commentDraft.Trim()), actor));
         if (!result.Success)
         {
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);

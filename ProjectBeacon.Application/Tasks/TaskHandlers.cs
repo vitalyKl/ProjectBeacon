@@ -48,7 +48,7 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
         task.SetMilestone(command.Request.MilestoneId);
 
         db.Tasks.Add(task);
-        if (command.Request.ActorUserId is { } actorId && actorId != Guid.Empty)
+        if (command.Actor.UserId is { } actorId && actorId != Guid.Empty)
             await TaskKindCopy.CopyOntoTaskAsync(db, task, actorId, command.Request.KindId, ct);
         await db.SaveChangesAsync(ct);
 
@@ -211,7 +211,7 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
         if (task is null)
             return Result.Failure<TaskCommentDto>("Task not found.");
 
-        var userId = command.Request.UserId == Guid.Empty ? Guid.Empty : command.Request.UserId;
+        var userId = command.Actor.UserId ?? Guid.Empty;
         var comment = Domain.Entities.Projects.TaskComment.Create(command.Request.Content, command.Request.TaskId, userId);
         db.TaskComments.Add(comment);
         await db.SaveChangesAsync(ct);

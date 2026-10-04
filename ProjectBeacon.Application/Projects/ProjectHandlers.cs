@@ -20,14 +20,14 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         if (!orgExists)
             return Result.Failure<ProjectDto>("Org not found.");
 
-        if (command.Request.CreatedByUserId is { } userId
+        if (command.Actor.UserId is { } userId
             && !await db.Users.AnyAsync(u => u.Id == userId, ct))
             return Result.Failure<ProjectDto>("User not found.");
 
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, command.Request.OrgId);
 
         db.Projects.Add(project);
-        if (command.Request.CreatedByUserId is { } ownerId)
+        if (command.Actor.UserId is { } ownerId)
             db.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
         SeedStarterLabels(db, project.Id);
         await db.SaveChangesAsync(ct);

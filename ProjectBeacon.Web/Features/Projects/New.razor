@@ -4,6 +4,7 @@
 @using System.Security.Claims
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
@@ -138,8 +139,9 @@
         _saving = true;
         try
         {
+            var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
             var orgName = string.IsNullOrWhiteSpace(_orgName) ? _projectName : _orgName;
-            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null, _userId)));
+            var org = await CreateOrg.HandleAsync(new CreateOrgCommand(new CreateOrgRequest(orgName, null), actor));
             if (!org.Success)
             {
                 _error = org.Error;
@@ -147,7 +149,7 @@
             }
 
             var project = await CreateProject.HandleAsync(new CreateProjectCommand(new CreateProjectRequest(
-                _projectName, _description, org.Value.Id, _userId)));
+                _projectName, _description, org.Value.Id), actor));
             if (!project.Success)
             {
                 _error = project.Error;

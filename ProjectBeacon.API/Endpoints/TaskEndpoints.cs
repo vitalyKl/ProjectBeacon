@@ -50,8 +50,7 @@ public static class TaskEndpoints
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
 
-        var actor = ctx.GetActor().UserId;
-        var result = await handler.HandleAsync(new CreateTaskCommand(request with { ActorUserId = actor }));
+        var result = await handler.HandleAsync(new CreateTaskCommand(request, ctx.GetActor()));
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value.Id}", MapTaskResponse(result.Value))
@@ -155,8 +154,7 @@ public static class TaskEndpoints
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var actor = ctx.GetActor().UserId;
-        var result = await handler.HandleAsync(new AddCommentCommand(request with { UserId = actor ?? Guid.Empty }));
+        var result = await handler.HandleAsync(new AddCommentCommand(request, ctx.GetActor()));
 
         return result.Success
             ? Results.Created($"/v1/tasks/{taskId}/comments/{result.Value.Id}", MapCommentResponse(result.Value))

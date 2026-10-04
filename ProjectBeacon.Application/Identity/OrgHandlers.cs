@@ -15,14 +15,14 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        if (command.Request.CreatedByUserId is { } userId
+        if (command.Actor.UserId is { } userId
             && !await db.Users.AnyAsync(u => u.Id == userId, ct))
             return Result.Failure<OrgDto>("User not found.");
 
         var org = Org.Create(command.Request.Name, command.Request.Description);
 
         db.Orgs.Add(org);
-        if (command.Request.CreatedByUserId is { } ownerId)
+        if (command.Actor.UserId is { } ownerId)
             db.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
         await db.SaveChangesAsync(ct);
 

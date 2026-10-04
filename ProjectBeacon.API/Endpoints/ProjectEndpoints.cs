@@ -45,7 +45,7 @@ public static class ProjectEndpoints
     private static async Task<IResult> CreateProject([FromBody] CreateProjectRequest request, HttpContext ctx, CreateProjectHandler handler, BeaconDbContext db)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new CreateProjectCommand(request with { CreatedByUserId = actor.UserId }));
+        var result = await handler.HandleAsync(new CreateProjectCommand(request, actor));
 
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value))
@@ -138,7 +138,7 @@ public static class ProjectEndpoints
         if (actor.UserId is null)
             return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateApiTokenCommand(
-            new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt, actor.UserId.Value),
+            new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt),
             actor));
 
         return result.Success

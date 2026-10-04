@@ -31,7 +31,7 @@ public static class OrgEndpoints
     private static async Task<IResult> CreateOrg([FromBody] CreateOrgRequest request, HttpContext ctx, CreateOrgHandler handler)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(command: new CreateOrgCommand(request with { CreatedByUserId = actor.UserId }));
+        var result = await handler.HandleAsync(command: new CreateOrgCommand(request, actor));
 
         return result.Success
             ? Results.Ok(MapOrgResponse(result.Value))

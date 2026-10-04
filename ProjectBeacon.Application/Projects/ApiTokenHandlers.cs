@@ -46,7 +46,7 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
             command.Request.ProjectId,
             command.Request.Capabilities,
             command.Request.ExpiresAt,
-            command.Request.CreatedByUserId);
+            command.Actor.UserId);
 
         db.ApiTokens.Add(token);
         await db.SaveChangesAsync(ct);

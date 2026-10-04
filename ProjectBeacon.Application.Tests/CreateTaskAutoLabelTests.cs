@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -47,7 +48,7 @@ public sealed class CreateTaskAutoLabelTests : IDisposable
             TaskType.Task,
             null,
             null,
-            "ProjectBeacon.API/Program.cs")));
+            "ProjectBeacon.API/Program.cs"), ActorContext.Anonymous));
         Assert.True(result.Success, result.Error);
         var label = Assert.Single(_db.Labels);
         Assert.Equal(label.Id, result.Value.LabelId);

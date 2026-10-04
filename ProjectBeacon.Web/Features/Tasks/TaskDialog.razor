@@ -1,3 +1,4 @@
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
@@ -108,9 +109,10 @@
         _saving = true;
         try
         {
+            var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
             var result = Task is null
                 ? await CreateTask.HandleAsync(new CreateTaskCommand(new CreateTaskRequest(
-                    _title.Trim(), _description, ProjectId, _priority, _type, _labelId, _milestoneId, null, _kindId, _userId)))
+                    _title.Trim(), _description, ProjectId, _priority, _type, _labelId, _milestoneId, null, _kindId), actor))
                 : await UpdateTask.HandleAsync(new UpdateTaskCommand(new UpdateTaskRequest(
                     Task.Id, _title.Trim(), _description, _priority, _type, _labelId, _milestoneId)));
 

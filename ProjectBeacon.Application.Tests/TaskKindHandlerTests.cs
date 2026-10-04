@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Agents;
+using Application.Authorization;
 using Application.Tasks;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -60,8 +61,9 @@ public sealed class TaskKindHandlerTests : IDisposable
         }
 
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId, orgId));
+        var actor = new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
         var created = await new CreateTaskHandler(factory).HandleAsync(new CreateTaskCommand(
-            new CreateTaskRequest("Look at screens", null, projectId, TaskPriority.Medium, TaskType.Task, null, null, null, null, userId)));
+            new CreateTaskRequest("Look at screens", null, projectId, TaskPriority.Medium, TaskType.Task, null, null, null, null), actor));
         Assert.True(created.Success, created.Error);
 
         var phases = await new ListTaskPhasesHandler(factory).HandleAsync(new ListTaskPhasesCommand(created.Value!.Id));

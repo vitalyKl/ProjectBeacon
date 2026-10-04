@@ -5,7 +5,7 @@ using Application.Authorization;
 using Application.Common;
 using Domain.Enums;
 
-public record CreateApiTokenRequest(Guid ProjectId, string Name, ApiTokenCapability Capabilities, DateTime? ExpiresAt, Guid? CreatedByUserId);
+public record CreateApiTokenRequest(Guid ProjectId, string Name, ApiTokenCapability Capabilities, DateTime? ExpiresAt);
 
 public record CreateApiTokenCommand(CreateApiTokenRequest Request, ActorContext Actor) : ICommand<Result<ApiTokenDto>>;
 

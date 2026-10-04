@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Enums;
 
@@ -12,10 +13,9 @@ public record CreateTaskRequest(
     Guid? LabelId,
     Guid? MilestoneId,
     string? Path = null,
-    Guid? KindId = null,
-    Guid? ActorUserId = null);
+    Guid? KindId = null);
 
-public record CreateTaskCommand(CreateTaskRequest Request) : ICommand<Result<TaskItemDto>>;
+public record CreateTaskCommand(CreateTaskRequest Request, ActorContext Actor) : ICommand<Result<TaskItemDto>>;
 
 public record UpdateTaskRequest(
     Guid TaskId,
@@ -36,9 +36,9 @@ public record ChangeSubStageRequest(Guid TaskId, TaskSubStage SubStage);
 
 public record ChangeSubStageCommand(ChangeSubStageRequest Request) : ICommand<Result<TaskItemDto>>;
 
-public record AddCommentRequest(Guid TaskId, string Content, Guid UserId = default);
+public record AddCommentRequest(Guid TaskId, string Content);
 
-public record AddCommentCommand(AddCommentRequest Request) : ICommand<Result<TaskCommentDto>>;
+public record AddCommentCommand(AddCommentRequest Request, ActorContext Actor) : ICommand<Result<TaskCommentDto>>;
 
 public record SetDependenciesRequest(Guid TaskId, IList<Guid> DependentTaskIds);
 

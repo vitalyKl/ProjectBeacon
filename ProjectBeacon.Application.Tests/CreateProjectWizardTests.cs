@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
 using Application.Identity;
 using Application.Projects;
 using Domain.Entities.Identity;
@@ -29,11 +30,11 @@ public sealed class CreateProjectWizardTests : IDisposable
     [Fact]
     public async Task Wizard_CreatesOrgProjectAndStarterLabels()
     {
-        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null)));
+        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null), ActorContext.Anonymous));
         Assert.True(org.Success, org.Error);
 
         var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateProjectCommand(
-            new CreateProjectRequest("Beacon", "desc", org.Value!.Id)));
+            new CreateProjectRequest("Beacon", "desc", org.Value!.Id), ActorContext.Anonymous));
         Assert.True(project.Success, project.Error);
         Assert.Equal(org.Value.Id, project.Value!.OrgId);
 
@@ -52,12 +53,13 @@ public sealed class CreateProjectWizardTests : IDisposable
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
+        var actor = new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
         var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-            new CreateOrgCommand(new CreateOrgRequest("Acme", null, user.Id)));
+            new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor));
         Assert.True(org.Success, org.Error);
 
         var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateProjectCommand(
-            new CreateProjectRequest("Beacon", "desc", org.Value!.Id, user.Id)));
+            new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor));
         Assert.True(project.Success, project.Error);
 
         var orgMember = await _db.OrgMembers.SingleAsync(m => m.OrgId == org.Value.Id);

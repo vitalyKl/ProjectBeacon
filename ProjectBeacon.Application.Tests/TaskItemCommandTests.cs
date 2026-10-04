@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using ProjectBeacon.Application.Authorization;
 using ProjectBeacon.Application.Milestones;
 using ProjectBeacon.Application.Tasks;
 using ProjectBeacon.Domain.Enums;
@@ -15,7 +16,7 @@ public sealed class TaskItemCommandTests
         var request = new CreateTaskRequest(
             "Test Task", "Description", projectId,
             TaskPriority.High, TaskType.Bug, labelId, milestoneId);
-        var command = new CreateTaskCommand(request);
+        var command = new CreateTaskCommand(request, ActorContext.Anonymous);
 
         Assert.Equal("Test Task", command.Request.Title);
         Assert.Equal(projectId, command.Request.ProjectId);
@@ -60,7 +61,7 @@ public sealed class TaskItemCommandTests
     public void AddCommentCommand_CreatesFromRequest()
     {
         var taskId = Guid.NewGuid();
-        var command = new AddCommentCommand(new AddCommentRequest(taskId, "Great work!"));
+        var command = new AddCommentCommand(new AddCommentRequest(taskId, "Great work!"), ActorContext.Anonymous);
 
         Assert.Equal(taskId, command.Request.TaskId);
         Assert.Equal("Great work!", command.Request.Content);

@@ -1,10 +1,11 @@
 namespace ProjectBeacon.Application.Identity;
 
+using Application.Authorization;
 using Application.Common;
 
-public record CreateOrgRequest(string Name, string? Description, Guid? CreatedByUserId = null);
+public record CreateOrgRequest(string Name, string? Description);
 
-public record CreateOrgCommand(CreateOrgRequest Request) : ICommand<Result<OrgDto>>;
+public record CreateOrgCommand(CreateOrgRequest Request, ActorContext Actor) : ICommand<Result<OrgDto>>;
 
 public record UpdateOrgRequest(Guid OrgId, string? Name, string? Description);
 
