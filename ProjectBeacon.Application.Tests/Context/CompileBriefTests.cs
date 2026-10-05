@@ -52,10 +52,10 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.Contains("## Goals", result.Value.BriefMarkdown);
-        Assert.Contains("Build a great product", result.Value.BriefMarkdown);
-        Assert.True(result.Value.TokenEstimate > 0);
-        Assert.False(result.Value.BudgetOverflow);
+        Assert.Contains("## Goals", result.Value!.BriefMarkdown);
+        Assert.Contains("Build a great product", result.Value!.BriefMarkdown);
+        Assert.True(result.Value!.TokenEstimate > 0);
+        Assert.False(result.Value!.BudgetOverflow);
     }
 
     [Fact]
@@ -70,12 +70,12 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.Contains("## Security", result.Value.BriefMarkdown);
-        Assert.Contains("## Tools for this task", result.Value.BriefMarkdown);
-        Assert.Contains("`claim_task`", result.Value.BriefMarkdown);
-        Assert.DoesNotContain("## Goals", result.Value.BriefMarkdown);
-        Assert.Contains("goals", result.Value.DroppedSections);
-        Assert.True(result.Value.BudgetOverflow);
+        Assert.Contains("## Security", result.Value!.BriefMarkdown);
+        Assert.Contains("## Tools for this task", result.Value!.BriefMarkdown);
+        Assert.Contains("`claim_task`", result.Value!.BriefMarkdown);
+        Assert.DoesNotContain("## Goals", result.Value!.BriefMarkdown);
+        Assert.Contains("goals", result.Value!.DroppedSections);
+        Assert.True(result.Value!.BudgetOverflow);
     }
 
     [Fact]
@@ -93,11 +93,11 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.Contains("## Non-Goals", result.Value.BriefMarkdown);
-        Assert.Contains("## Security", result.Value.BriefMarkdown);
-        Assert.Contains("## Definition Of Done", result.Value.BriefMarkdown);
-        Assert.True(result.Value.BudgetOverflow);
-        Assert.Contains("goals", result.Value.DroppedSections.Select(s => s.ToLower()));
+        Assert.Contains("## Non-Goals", result.Value!.BriefMarkdown);
+        Assert.Contains("## Security", result.Value!.BriefMarkdown);
+        Assert.Contains("## Definition Of Done", result.Value!.BriefMarkdown);
+        Assert.True(result.Value!.BudgetOverflow);
+        Assert.Contains("goals", result.Value!.DroppedSections.Select(s => s.ToLower()));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.Contains("Updated goals from repo node", result.Value.BriefMarkdown);
+        Assert.Contains("Updated goals from repo node", result.Value!.BriefMarkdown);
     }
 
     [Fact]
@@ -129,12 +129,12 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.NotEmpty(result.Value.RevisionId);
-        Assert.NotEmpty(result.Value.CompiledHash);
+        Assert.NotEmpty(result.Value!.RevisionId);
+        Assert.NotEmpty(result.Value!.CompiledHash);
 
         var revision = await _db.ContextRevisions.FirstOrDefaultAsync(r => r.ProjectId == _projectId);
         Assert.NotNull(revision);
-        Assert.Equal(result.Value.CompiledHash, revision.CompiledHash);
+        Assert.Equal(result.Value!.CompiledHash, revision.CompiledHash);
         Assert.Contains("Goals", revision.BriefMarkdown);
     }
 
@@ -150,7 +150,7 @@ public sealed class CompileBriefTests : IDisposable
         var command2 = new CompileBriefCommand(new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false));
         var result2 = await handler.HandleAsync(command2);
 
-        Assert.Equal(result1.Value.CompiledHash, result2.Value.CompiledHash);
+        Assert.Equal(result1.Value!.CompiledHash, result2.Value!.CompiledHash);
     }
 
     [Fact]
@@ -173,10 +173,10 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.Equal("Goals", result.Value.Title);
-        Assert.Equal("Build something great", result.Value.BodyMarkdown);
+        Assert.Equal("Goals", result.Value!.Title);
+        Assert.Equal("Build something great", result.Value!.BodyMarkdown);
 
-        var section = await _db.ContextSections.FirstOrDefaultAsync(s => s.Id == result.Value.Id);
+        var section = await _db.ContextSections.FirstOrDefaultAsync(s => s.Id == result.Value!.Id);
         Assert.NotNull(section);
         Assert.Equal("goals", section.SectionId);
     }
@@ -215,7 +215,7 @@ public sealed class CompileBriefTests : IDisposable
         var updateResult = await upsertHandler.HandleAsync(updateCommand);
 
         Assert.True(updateResult.Success);
-        Assert.Equal("Updated text", updateResult.Value.BodyMarkdown);
+        Assert.Equal("Updated text", updateResult.Value!.BodyMarkdown);
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class CompileBriefTests : IDisposable
         var result = await listHandler.HandleAsync(command);
 
         Assert.True(result.Success);
-        Assert.Equal(2, result.Value.Count);
+        Assert.Equal(2, result.Value!.Count);
     }
 
     [Fact]
@@ -247,7 +247,7 @@ public sealed class CompileBriefTests : IDisposable
             _projectId, "Goals", "Text", "goals", ContextScopeType.Project, null, null, null, null, ContextSource.Native, null)));
 
         var deleteHandler = new DeleteContextNodeHandler(HandlerSqlite.Factory(_connection));
-        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(_projectId, createResult.Value.Id));
+        var command = new DeleteContextNodeCommand(new DeleteContextNodeRequest(_projectId, createResult.Value!.Id));
 
         var result = await deleteHandler.HandleAsync(command);
 
@@ -301,7 +301,7 @@ public sealed class CompileBriefTests : IDisposable
             new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)));
 
         Assert.True(result.Success);
-        Assert.Contains("SQLite tests are not proof", result.Value.BriefMarkdown);
+        Assert.Contains("SQLite tests are not proof", result.Value!.BriefMarkdown);
     }
 
     [Fact]
@@ -319,7 +319,7 @@ public sealed class CompileBriefTests : IDisposable
             new CompileBriefRequest(_projectId, null, null, null, 8000, false, false, false)));
 
         Assert.True(result.Success);
-        Assert.Contains("conflicting constraints", result.Value.BriefMarkdown);
+        Assert.Contains("conflicting constraints", result.Value!.BriefMarkdown);
     }
 
     [Fact]
@@ -339,10 +339,10 @@ public sealed class CompileBriefTests : IDisposable
             new CompileBriefRequest(_projectId, null, null, task.Id, 50, false, false, false)));
 
         Assert.True(result.Success);
-        Assert.Contains("Keep never-drop sections", result.Value.BriefMarkdown);
-        Assert.Contains("Definition of Done: tests pass", result.Value.BriefMarkdown);
-        Assert.Contains("## Tools for this task", result.Value.BriefMarkdown);
-        Assert.True(result.Value.BudgetOverflow);
+        Assert.Contains("Keep never-drop sections", result.Value!.BriefMarkdown);
+        Assert.Contains("Definition of Done: tests pass", result.Value!.BriefMarkdown);
+        Assert.Contains("## Tools for this task", result.Value!.BriefMarkdown);
+        Assert.True(result.Value!.BudgetOverflow);
     }
 
     [Fact]
@@ -353,9 +353,9 @@ public sealed class CompileBriefTests : IDisposable
             new CompileBriefRequest(_projectId, Guid.NewGuid(), null, null, 8000, false, false, false)));
 
         Assert.True(result.Success);
-        Assert.DoesNotContain("## Tree", result.Value.BriefMarkdown);
-        Assert.DoesNotContain("## Changed scope", result.Value.BriefMarkdown);
-        Assert.DoesNotContain("code index is not in this process", result.Value.BriefMarkdown);
+        Assert.DoesNotContain("## Tree", result.Value!.BriefMarkdown);
+        Assert.DoesNotContain("## Changed scope", result.Value!.BriefMarkdown);
+        Assert.DoesNotContain("code index is not in this process", result.Value!.BriefMarkdown);
     }
 
     [Fact]
@@ -369,12 +369,12 @@ public sealed class CompileBriefTests : IDisposable
                 ChangedScope: "src/App.cs")));
 
         Assert.True(result.Success, result.Error);
-        Assert.Contains("src/\n  App.cs", result.Value.BriefMarkdown);
-        Assert.Contains("src/App.cs", result.Value.BriefMarkdown);
-        Assert.DoesNotContain("code index is not in this process", result.Value.BriefMarkdown);
+        Assert.Contains("src/\n  App.cs", result.Value!.BriefMarkdown);
+        Assert.Contains("src/App.cs", result.Value!.BriefMarkdown);
+        Assert.DoesNotContain("code index is not in this process", result.Value!.BriefMarkdown);
         var stored = await _db.ContextRevisions.SingleAsync(r => r.ProjectId == _projectId);
-        Assert.Equal(result.Value.BriefMarkdown, stored.BriefMarkdown);
-        Assert.Equal(result.Value.TokenEstimate, stored.TokenEstimate);
+        Assert.Equal(result.Value!.BriefMarkdown, stored.BriefMarkdown);
+        Assert.Equal(result.Value!.TokenEstimate, stored.TokenEstimate);
     }
 
     [Fact]
@@ -387,7 +387,7 @@ public sealed class CompileBriefTests : IDisposable
 
         Assert.True(result.Success);
         var stored = await _db.ContextRevisions.FirstAsync(r => r.ProjectId == _projectId);
-        Assert.Equal(stored.Id.ToString(), result.Value.RevisionId);
+        Assert.Equal(stored.Id.ToString(), result.Value!.RevisionId);
     }
 
     [Fact]
@@ -449,7 +449,7 @@ public sealed class CompileBriefTests : IDisposable
         var result = await handler.HandleAsync(command);
 
         Assert.True(result.Success);
-        var toolsSection = result.Value.BriefMarkdown
+        var toolsSection = result.Value!.BriefMarkdown
             .Split("## Tools for this task", 2)[1]
             .Split("\n## ", 2)[0];
         Assert.Contains("`get_tree`", toolsSection);

@@ -8,7 +8,7 @@ public sealed class RateLimitingConfigTests
     [Fact]
     public void RateLimitDefaults_ReadCorrectly()
     {
-        var config = new Dictionary<string, string>
+        var config = new Dictionary<string, string?>
         {
             ["POSTGRES_PASSWORD"] = "test",
             ["JWT:Secret"] = "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long"

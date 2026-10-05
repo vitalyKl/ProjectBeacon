@@ -149,7 +149,7 @@
             }
 
             var project = await CreateProject.HandleAsync(new CreateProjectCommand(new CreateProjectRequest(
-                _projectName, _description, org.Value.Id), actor));
+                _projectName, _description, org.Value!.Id), actor));
             if (!project.Success)
             {
                 _error = project.Error;
@@ -159,7 +159,7 @@
             if (_deviceId is { } deviceId && !string.IsNullOrWhiteSpace(_localRoot))
             {
                 var attached = await AttachRuntime.HandleAsync(new AttachRuntimeCommand(
-                    new AttachRuntimeRequest(project.Value.Id, deviceId, _userId, _localRoot)));
+                    new AttachRuntimeRequest(project.Value!.Id, deviceId, _userId, _localRoot)));
                 if (!attached.Success)
                 {
                     _error = attached.Error;
@@ -199,7 +199,7 @@
             }
 
             Snackbar.Add(L["ProjectCreated"].Value, Severity.Success);
-            Navigation.NavigateTo($"/project/switch?projectId={project.Value.Id}&returnUrl={Uri.EscapeDataString("/board")}", forceLoad: true);
+            Navigation.NavigateTo($"/project/switch?projectId={project.Value!.Id}&returnUrl={Uri.EscapeDataString("/board")}", forceLoad: true);
         }
         finally
         {

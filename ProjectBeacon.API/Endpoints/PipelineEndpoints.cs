@@ -138,7 +138,7 @@ public static class PipelineEndpoints
             return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(
-            body.TaskId, body.DeviceId, actor.UserId.Value, body.CheckCommand, body.Path)), ct);
+            body.TaskId, body.DeviceId, actor.UserId!.Value, body.CheckCommand, body.Path)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -164,7 +164,7 @@ public static class PipelineEndpoints
         if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actor.UserId.Value.ToString(), body.Reason)), ct);
+        var result = await handler.HandleAsync(new ForceClosePipelineCommand(new ForceClosePipelineRequest(body.TaskId, actor.UserId!.Value.ToString(), body.Reason)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();

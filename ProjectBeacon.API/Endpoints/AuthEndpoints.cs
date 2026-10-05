@@ -45,7 +45,7 @@ public static class AuthEndpoints
         if (result.Success)
             return Results.Ok(new
             {
-                result.Value.UserId,
+                result.Value!.UserId,
                 result.Value.Login,
                 result.Value.Email,
                 result.Value.IsAdmin,
@@ -67,7 +67,7 @@ public static class AuthEndpoints
         if (result.Success)
             return Results.Ok(new
             {
-                result.Value.UserId,
+                result.Value!.UserId,
                 result.Value.Login,
                 result.Value.Email,
                 result.Value.IsAdmin,
@@ -84,7 +84,7 @@ public static class AuthEndpoints
         return result.Success
             ? Results.Ok(new
             {
-                result.Value.UserId,
+                result.Value!.UserId,
                 result.Value.Login,
                 result.Value.Email,
                 result.Value.IsAdmin,
@@ -100,7 +100,7 @@ public static class AuthEndpoints
         return result.Success
             ? Results.Ok(new
             {
-                result.Value.UserId,
+                result.Value!.UserId,
                 result.Value.Login,
                 result.Value.Email
             })
@@ -124,7 +124,7 @@ public static class AuthEndpoints
     private static async Task<IResult> ChangePassword([FromBody] ChangePasswordBody body, ChangePasswordHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new ChangePasswordRequest(actor.UserId.Value, body.CurrentPassword, body.NewPassword));
+        var result = await handler.HandleAsync(new ChangePasswordRequest(actor.UserId!.Value, body.CurrentPassword, body.NewPassword));
         return result.Success
             ? Results.Ok()
             : result.FromResult(400);
@@ -158,7 +158,7 @@ public static class AuthEndpoints
         var actor = ctx.GetActor();
 
         await db.Sessions
-            .Where(s => s.UserId == actor.UserId.Value && s.IsActive)
+            .Where(s => s.UserId == actor.UserId!.Value && s.IsActive)
             .ExecuteDeleteAsync();
 
         return Results.Ok();
@@ -168,7 +168,7 @@ public static class AuthEndpoints
     {
         var actor = ctx.GetActor();
 
-        var user = await db.Users.FindAsync([actor.UserId.Value]);
+        var user = await db.Users.FindAsync([actor.UserId!.Value]);
         if (user is null)
             return ProblemResults.Unauthorized();
 

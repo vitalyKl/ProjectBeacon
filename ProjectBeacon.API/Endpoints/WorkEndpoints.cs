@@ -32,7 +32,7 @@ public static class WorkEndpoints
             request.TaskId,
             request.Result,
             request.Output,
-            actor.UserId.Value.ToString(),
+            actor.UserId!.Value.ToString(),
             request.Review is null
                 ? null
                 : new FinishWorkReview(request.Review.ReviewerRun, request.Review.RegressionsFound, request.Review.RegressionsFixed),

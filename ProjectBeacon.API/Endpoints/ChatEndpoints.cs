@@ -28,42 +28,42 @@ public static class ChatEndpoints
     private static async Task<IResult> ListSessions(ListChatSessionsHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(actor.UserId.Value)), ct);
+        var result = await handler.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(actor.UserId!.Value)), ct);
         return Results.Ok(result.Value);
     }
 
     private static async Task<IResult> CreateSession([FromBody] CreateBody? body, CreateChatSessionHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(actor.UserId.Value, body?.Title)), ct);
+        var result = await handler.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(actor.UserId!.Value, body?.Title)), ct);
         return result.Success ? Results.Created($"/v1/chat/sessions/{result.Value!.Id}", result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> GetSession(Guid id, GetChatSessionHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(id, actor.UserId.Value)), ct);
+        var result = await handler.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(id, actor.UserId!.Value)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> ListParts(Guid id, ListChatPartsHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(id, actor.UserId.Value)), ct);
+        var result = await handler.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(id, actor.UserId!.Value)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> SendPrompt(Guid id, [FromBody] PromptBody body, SendChatPromptHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(id, actor.UserId.Value, body.Text, body.Model)), ct);
+        var result = await handler.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(id, actor.UserId!.Value, body.Text, body.Model)), ct);
         return result.Success ? Results.Accepted($"/v1/chat/sessions/{id}", result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> Abort(Guid id, AbortChatHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new AbortChatCommand(new AbortChatRequest(id, actor.UserId.Value)), ct);
+        var result = await handler.HandleAsync(new AbortChatCommand(new AbortChatRequest(id, actor.UserId!.Value)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
@@ -71,14 +71,14 @@ public static class ChatEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(
-            id, actor.DeviceId.Value, body.Role, body.Kind, body.Body, body.ExternalId)), ct);
+            id, actor.DeviceId!.Value, body.Role, body.Kind, body.Body, body.ExternalId)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
     private static async Task<IResult> MarkIdle(Guid id, MarkChatIdleHandler handler, HttpContext ctx, CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        var result = await handler.HandleAsync(new MarkChatIdleCommand(new MarkChatIdleRequest(id, actor.DeviceId.Value)), ct);
+        var result = await handler.HandleAsync(new MarkChatIdleCommand(new MarkChatIdleRequest(id, actor.DeviceId!.Value)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 }

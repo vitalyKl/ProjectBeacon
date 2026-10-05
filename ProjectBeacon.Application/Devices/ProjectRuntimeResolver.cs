@@ -23,7 +23,7 @@ public static class ProjectRuntimeResolver
         if (!CommandSandbox.IsProjectKind(command.Kind) || command.ProjectId is not { } projectId)
             return null;
         var resolved = await ResolveAsync(db, projectId, command.DeviceId, ct);
-        return resolved.Success ? resolved.Value.LocalRoot : null;
+        return resolved.Success ? resolved.Value!.LocalRoot : null;
     }
 
     public static async Task<Dictionary<Guid, string>> ResolveRootsAsync(IBeaconDb db, Guid deviceId, IEnumerable<Guid> projectIds, CancellationToken ct = default)

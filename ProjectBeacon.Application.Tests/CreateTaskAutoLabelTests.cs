@@ -51,6 +51,6 @@ public sealed class CreateTaskAutoLabelTests : IDisposable
             "ProjectBeacon.API/Program.cs"), ActorContext.Anonymous));
         Assert.True(result.Success, result.Error);
         var label = Assert.Single(_db.Labels);
-        Assert.Equal(label.Id, result.Value.LabelId);
+        Assert.Equal(label.Id, result.Value!.LabelId);
     }
 }

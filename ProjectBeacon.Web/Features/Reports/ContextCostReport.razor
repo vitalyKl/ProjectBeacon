@@ -13,7 +13,7 @@
 }
 else
 {
-    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask" Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" MaxWidth="420">
+    <MudSelect T="Guid?" Value="_selectedTaskId" ValueChanged="OnSelectedTask" Label="@L["Task"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" Style="max-width: 420px">
         @foreach (var task in _tasks)
         {
             <MudSelectItem Value="@((Guid?)task.Id)">@task.Title</MudSelectItem>

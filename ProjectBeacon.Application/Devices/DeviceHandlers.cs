@@ -253,7 +253,7 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
             var resolved = await ProjectRuntimeResolver.ResolveAsync(db, rootedProjectId, device.Id, ct);
             if (!resolved.Success)
                 return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
-            var runtime = resolved.Value;
+            var runtime = resolved.Value!;
             var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson);
             if (!sanitized.Success)
                 return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");

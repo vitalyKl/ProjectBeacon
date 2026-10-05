@@ -234,7 +234,7 @@ else
             Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
             return;
         }
-        _preview = result.Value.BriefMarkdown;
+        _preview = result.Value!.BriefMarkdown;
         _tokens = result.Value.TokenEstimate;
         _revisionId = result.Value.RevisionId;
         _compiledHash = result.Value.CompiledHash.Length > 12

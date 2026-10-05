@@ -40,7 +40,7 @@ public static class EndpointExtensions
                 returnUrl = "/dashboard";
 
             var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
-                db, result.Value.UserId, result.Value.IsAdmin);
+                db, result.Value!.UserId, result.Value!.IsAdmin);
 
             var claims = new List<Claim>
             {

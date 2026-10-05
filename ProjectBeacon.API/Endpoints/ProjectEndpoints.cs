@@ -48,7 +48,7 @@ public static class ProjectEndpoints
         var result = await handler.HandleAsync(new CreateProjectCommand(request, actor));
 
         return result.Success
-            ? Results.Ok(MapProjectResponse(result.Value))
+            ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -62,7 +62,7 @@ public static class ProjectEndpoints
         var result = await handler.HandleAsync(new UpdateProjectCommand(request, actor));
 
         return result.Success
-            ? Results.Ok(MapProjectResponse(result.Value))
+            ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -71,7 +71,7 @@ public static class ProjectEndpoints
         var result = await handler.HandleAsync(new GetProjectCommand(new GetProjectRequest(projectId)));
 
         return result.Success
-            ? Results.Ok(MapProjectResponse(result.Value))
+            ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -101,7 +101,7 @@ public static class ProjectEndpoints
         var result = await handler.HandleAsync(new AddProjectMemberCommand(request, actor));
 
         return result.Success
-            ? Results.Ok(MapMemberResponse(result.Value))
+            ? Results.Ok(MapMemberResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -134,7 +134,7 @@ public static class ProjectEndpoints
             actor));
 
         return result.Success
-            ? Results.Ok(MapTokenResponse(result.Value))
+            ? Results.Ok(MapTokenResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -158,7 +158,7 @@ public static class ProjectEndpoints
             new GetApiTokenRequest(projectId, tokenId), actor));
 
         return result.Success
-            ? Results.Ok(MapTokenResponse(result.Value))
+            ? Results.Ok(MapTokenResponse(result.Value!))
             : result.FromResult(404);
     }
 

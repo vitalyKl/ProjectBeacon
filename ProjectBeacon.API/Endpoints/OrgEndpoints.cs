@@ -34,7 +34,7 @@ public static class OrgEndpoints
         var result = await handler.HandleAsync(command: new CreateOrgCommand(request, actor));
 
         return result.Success
-            ? Results.Ok(MapOrgResponse(result.Value))
+            ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -46,7 +46,7 @@ public static class OrgEndpoints
         var result = await handler.HandleAsync(new UpdateOrgCommand(request));
 
         return result.Success
-            ? Results.Ok(MapOrgResponse(result.Value))
+            ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -55,7 +55,7 @@ public static class OrgEndpoints
         var result = await handler.HandleAsync(new GetOrgCommand(new GetOrgRequest(orgId)));
 
         return result.Success
-            ? Results.Ok(MapOrgResponse(result.Value))
+            ? Results.Ok(MapOrgResponse(result.Value!))
             : result.FromResult(404);
     }
 

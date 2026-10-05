@@ -55,7 +55,7 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
         if (!resolved.Success)
             return Result.Failure<ChatSessionDto>(resolved.Error ?? ProjectFolderRequired);
 
-        var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", resolved.Value.LocalRoot);
+        var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", resolved.Value!.LocalRoot);
         db.ChatSessions.Add(session);
         await db.SaveChangesAsync(ct);
 

@@ -25,7 +25,7 @@ public static class ReportEndpoints
         var result = await handler.HandleAsync(new GenerateReportCommand(
             new GenerateReportRequest(projectId, createdByType, createdById)));
         return result.Success
-            ? Results.Created($"/v1/projects/{projectId}/reports/{result.Value.Id}", result.Value)
+            ? Results.Created($"/v1/projects/{projectId}/reports/{result.Value!.Id}", result.Value)
             : result.FromResult();
     }
 

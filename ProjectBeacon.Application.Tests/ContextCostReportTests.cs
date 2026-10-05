@@ -69,7 +69,7 @@ public sealed class ContextCostReportTests : IDisposable
         return rec.Value.Id;
     }
 
-    private async Task<Guid> RecordAsync(Guid projectId, Guid taskId, string pairId, EvalCondition condition)
+    private async Task<Guid> RecordAsync(Guid projectId, Guid taskId, string? pairId, EvalCondition condition)
     {
         var record = new RecordEvalRunHandler(Factory());
         var rec = await record.HandleAsync(new RecordEvalRunCommand(

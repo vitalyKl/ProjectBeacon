@@ -234,7 +234,7 @@ public class GetProjectOverviewHandler
             return at > acc ? at : acc;
         });
 
-        return Result.Ok(new ProjectOverviewDto(
+        return Result.Ok<ProjectOverviewDto?>(new ProjectOverviewDto(
             project.Id,
             project.Name,
             project.Description,

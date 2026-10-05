@@ -53,7 +53,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new CreateTaskCommand(request, ctx.GetActor()));
 
         return result.Success
-            ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value.Id}", MapTaskResponse(result.Value))
+            ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value!.Id}", MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -65,7 +65,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new UpdateTaskCommand(request));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -85,7 +85,7 @@ public static class TaskEndpoints
         if (!result.Success)
             return result.FromResult();
 
-        var tasks = result.Value;
+        var tasks = result.Value!;
         if (status is not null)
         {
             tasks = tasks.Where(t => t.Status.Equals(status, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -99,7 +99,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -108,7 +108,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId, projectId)));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -116,7 +116,7 @@ public static class TaskEndpoints
     {
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status)));
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -124,7 +124,7 @@ public static class TaskEndpoints
     {
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(new ChangeTaskStatusRequest(taskId, body.Status, projectId)));
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -135,7 +135,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new ChangeSubStageCommand(new ChangeSubStageRequest(taskId, subStage)));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -145,7 +145,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new ClaimTaskCommand(new ClaimTaskRequest(taskId, Guid.Empty, targetProject)));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -157,7 +157,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new AddCommentCommand(request, ctx.GetActor()));
 
         return result.Success
-            ? Results.Created($"/v1/tasks/{taskId}/comments/{result.Value.Id}", MapCommentResponse(result.Value))
+            ? Results.Created($"/v1/tasks/{taskId}/comments/{result.Value!.Id}", MapCommentResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -169,7 +169,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new SetDependenciesCommand(request));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -178,7 +178,7 @@ public static class TaskEndpoints
         var result = await handler.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(taskId, reviewNotes)));
 
         return result.Success
-            ? Results.Ok(MapTaskResponse(result.Value))
+            ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 

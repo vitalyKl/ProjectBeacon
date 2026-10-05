@@ -79,7 +79,7 @@ public sealed class CreateProjectWizardTests : IDisposable
             var current = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(user.Id, isAdmin: false);
             Assert.True(current.Success);
             Assert.NotNull(current.Value);
-            Assert.Equal(project.Value.Id, current.Value.Id);
+            Assert.Equal(project.Value!.Id, current.Value!.Id);
         }
     }
 }

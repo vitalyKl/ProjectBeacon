@@ -357,7 +357,7 @@ else
         var reference = await Dialogs.ShowAsync(
             typeof(BackendDialog), L["ModelsAdd"].Value, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
-        var result = await reference.Result;
+        var result = (await reference.Result)!;
         if (result.Data is LocalModelBackendDto)
         {
             Snackbar.Add(L["ModelSaved"].Value, Severity.Success);
@@ -376,7 +376,7 @@ else
         var reference = await Dialogs.ShowAsync(
             typeof(BackendDialog), L["ModelsEdit"].Value, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
-        var result = await reference.Result;
+        var result = (await reference.Result)!;
         if (result.Data is LocalModelBackendDto)
         {
             Snackbar.Add(L["ModelSaved"].Value, Severity.Success);

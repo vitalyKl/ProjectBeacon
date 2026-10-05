@@ -168,7 +168,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
         await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\" WHERE \"Id\" = @tid", conn);
         cmd.Parameters.AddWithValue("@tid", taskA);
-        var count = (long)(await cmd.ExecuteScalarAsync()!);
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync()!);
         Assert.Equal(0, count);
     }
 
@@ -185,7 +185,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
         await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\" WHERE \"Id\" = @tid", conn);
         cmd.Parameters.AddWithValue("@tid", taskA);
-        var count = (long)(await cmd.ExecuteScalarAsync()!);
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync()!);
         Assert.Equal(1, count);
     }
 }

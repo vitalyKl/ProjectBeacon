@@ -36,7 +36,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new CreateMilestoneCommand(request));
 
         return result.Success
-            ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value.Id}", MapMilestoneResponse(result.Value))
+            ? Results.Created($"/v1/projects/{projectId}/milestones/{result.Value!.Id}", MapMilestoneResponse(result.Value!))
             : result.FromResult();
     }
 
@@ -48,7 +48,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new UpdateMilestoneCommand(request));
 
         return result.Success
-            ? Results.Ok(MapMilestoneResponse(result.Value))
+            ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -66,7 +66,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(projectId)), ct);
 
         return result.Success
-            ? Results.Ok(result.Value.Select(MapMilestoneResponse))
+            ? Results.Ok(result.Value!.Select(MapMilestoneResponse))
             : result.FromResult();
     }
 
@@ -75,7 +75,7 @@ public static class MilestoneEndpoints
         var result = await handler.HandleAsync(new GetMilestoneCommand(new GetMilestoneRequest(milestoneId)));
 
         return result.Success
-            ? Results.Ok(MapMilestoneResponse(result.Value))
+            ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -83,7 +83,7 @@ public static class MilestoneEndpoints
     {
         var result = await handler.HandleAsync(new CloseMilestoneCommand(new CloseMilestoneRequest(milestoneId)));
         return result.Success
-            ? Results.Ok(MapMilestoneResponse(result.Value))
+            ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 
@@ -91,7 +91,7 @@ public static class MilestoneEndpoints
     {
         var result = await handler.HandleAsync(new ReopenMilestoneCommand(new ReopenMilestoneRequest(milestoneId)));
         return result.Success
-            ? Results.Ok(MapMilestoneResponse(result.Value))
+            ? Results.Ok(MapMilestoneResponse(result.Value!))
             : result.FromResult(404);
     }
 

@@ -18,7 +18,10 @@ public static class ActorContextFactory
 
     public static ActorContext FromPrincipal(ClaimsPrincipal? principal)
     {
-        var identity = principal?.Identity;
+        if (principal is null)
+            return ActorContext.Anonymous;
+
+        var identity = principal.Identity;
         if (identity is null)
             return ActorContext.Anonymous;
 

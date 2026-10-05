@@ -706,7 +706,7 @@ else
                 _briefError = result.Error;
                 return;
             }
-            _briefMarkdown = result.Value.BriefMarkdown;
+            _briefMarkdown = result.Value!.BriefMarkdown;
             _briefTokens = result.Value.TokenEstimate;
             _briefOverflow = result.Value.BudgetOverflow;
         }

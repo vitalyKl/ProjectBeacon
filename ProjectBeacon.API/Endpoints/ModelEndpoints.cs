@@ -27,7 +27,7 @@ public static class ModelEndpoints
         var actor = ctx.GetActor();
         if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new GetModelRegistryCommand(actor.UserId.Value), ct);
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(actor.UserId!.Value), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -38,12 +38,12 @@ public static class ModelEndpoints
         var actor = ctx.GetActor();
         if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = actor.UserId.Value }), ct);
+        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request with { UserId = actor.UserId!.Value }), ct);
         if (!result.Success)
             return result.FromResult();
 
         return request.Id is null
-            ? Results.Created($"/v1/models/{result.Value.Id}", result.Value)
+            ? Results.Created($"/v1/models/{result.Value!.Id}", result.Value)
             : Results.Ok(result.Value);
     }
 
@@ -52,7 +52,7 @@ public static class ModelEndpoints
         var actor = ctx.GetActor();
         if (actor.UserId is null)
             return ProblemResults.Unauthorized();
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, actor.UserId.Value)), ct);
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(id, actor.UserId!.Value)), ct);
         if (!result.Success)
             return result.Error!.StartsWith("Model backend not found")
                 ? result.FromResult(404)

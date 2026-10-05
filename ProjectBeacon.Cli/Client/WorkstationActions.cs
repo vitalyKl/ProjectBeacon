@@ -777,7 +777,7 @@ public static class OpencodeConfig
         if (instructions is { Length: > 0 })
         {
             var existing = root["instructions"] as JsonArray ?? new JsonArray();
-            var existingSet = existing.Select(j => j.GetValue<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingSet = existing.Select(j => j!.GetValue<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var instr in instructions)
                 if (existingSet.Add(instr))
                     existing.Add(instr);

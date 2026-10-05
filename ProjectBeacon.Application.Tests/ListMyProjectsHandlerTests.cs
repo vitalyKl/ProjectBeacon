@@ -55,7 +55,7 @@ public sealed class ListMyProjectsHandlerTests : IDisposable
         var result = await handler.HandleAsync(alice.Id, isAdmin: false);
 
         Assert.True(result.Success);
-        var dto = result.Value;
+        var dto = result.Value!;
         Assert.Equal(1, dto.TotalProjects);
         Assert.Equal(2, dto.TotalTasks);
         Assert.Equal(1, dto.InProgress);
@@ -92,7 +92,7 @@ public sealed class ListMyProjectsHandlerTests : IDisposable
         var result = await handler.HandleAsync(root.Id, isAdmin: true);
 
         Assert.True(result.Success);
-        Assert.Equal(2, result.Value.TotalProjects);
+        Assert.Equal(2, result.Value!.TotalProjects);
         var names = result.Value.Projects.Select(p => p.Name).ToList();
         Assert.Contains("A", names);
         Assert.Contains("B", names);
@@ -117,7 +117,7 @@ public sealed class ListMyProjectsHandlerTests : IDisposable
         var result = await handler.HandleAsync(bob.Id, isAdmin: false);
 
         Assert.True(result.Success);
-        Assert.Equal(0, result.Value.TotalProjects);
+        Assert.Equal(0, result.Value!.TotalProjects);
         Assert.Empty(result.Value.Projects);
         Assert.Empty(result.Value.RecentTasks);
     }
@@ -150,7 +150,7 @@ public sealed class ListMyProjectsHandlerTests : IDisposable
         var result = await handler.HandleAsync(alice.Id, isAdmin: false);
 
         Assert.True(result.Success);
-        var summary = result.Value.Projects[0];
+        var summary = result.Value!.Projects[0];
         Assert.True(summary.LastActivity >= done.CompletedAt!.Value);
         Assert.Single(result.Value.RecentTasks);
         Assert.Equal(done.CompletedAt, result.Value.RecentTasks[0].ActivityAt);

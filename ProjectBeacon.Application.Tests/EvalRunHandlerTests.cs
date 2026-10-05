@@ -65,7 +65,7 @@ public sealed class EvalRunHandlerTests : IDisposable
             new CompleteEvalRunRequest(recordResult.Value!.Id, 100, 200, 5, 0, "ref://1")));
 
         Assert.True(completeResult.Success);
-        Assert.Equal(100, completeResult.Value.PromptTokens);
+        Assert.Equal(100, completeResult.Value!.PromptTokens);
         Assert.Equal(200, completeResult.Value.CompletionTokens);
         Assert.Equal(5, completeResult.Value.TurnCount);
         Assert.True(completeResult.Value.Passed);
@@ -98,7 +98,7 @@ public sealed class EvalRunHandlerTests : IDisposable
         var result = await list.HandleAsync(new ListEvalRunsRequest(_projectId));
 
         Assert.True(result.Success);
-        Assert.Equal(2, result.Value.Count);
+        Assert.Equal(2, result.Value!.Count);
     }
 
     [Fact]
@@ -116,8 +116,8 @@ public sealed class EvalRunHandlerTests : IDisposable
         var result = await list.HandleAsync(new ListEvalRunsRequest(_projectId, _taskId));
 
         Assert.True(result.Success);
-        Assert.Single(result.Value);
-        Assert.Equal(_taskId, result.Value[0].TaskId);
+        Assert.Single(result.Value!);
+        Assert.Equal(_taskId, result.Value![0].TaskId);
     }
 
     [Fact]

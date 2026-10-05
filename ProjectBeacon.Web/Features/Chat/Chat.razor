@@ -248,7 +248,7 @@ else
                 var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(_selected.Id, _userId)));
                 if (session.Success)
                     _selected = session.Value;
-                var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(_selected.Id, _userId)));
+                var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(_selected!.Id, _userId)));
                 if (parts.Success)
                     _parts = parts.Value!.ToList();
                 await InvokeAsync(StateHasChanged);

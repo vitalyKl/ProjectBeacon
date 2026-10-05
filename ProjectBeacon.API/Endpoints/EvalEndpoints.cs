@@ -25,7 +25,7 @@ public static class EvalEndpoints
             projectId,
             body.TaskId,
             body.DeviceId,
-            actor.UserId.Value,
+            actor.UserId!.Value,
             body.Prompt,
             body.Path,
             body.Model,
