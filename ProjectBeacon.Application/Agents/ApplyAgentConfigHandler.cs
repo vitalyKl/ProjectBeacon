@@ -43,10 +43,9 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
         if (!member)
             return Result.Failure<WorkstationCommandDto>("Project not found.");
 
-        var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.ProjectId == request.ProjectId && r.DeviceId == request.DeviceId, ct);
-        if (runtime is null)
-            return Result.Failure<WorkstationCommandDto>("Project runtime is not attached to this device.");
+        var resolved = await ProjectRuntimeResolver.ResolveAsync(db, request.ProjectId, request.DeviceId, ct);
+        if (!resolved.Success)
+            return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
 
         var backends = await db.LocalModelBackends
             .Where(b => b.UserId == request.UserId)

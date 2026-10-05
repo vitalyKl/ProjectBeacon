@@ -66,7 +66,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
             project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)));
 
         Assert.False(result.Success);
-        Assert.Equal("Project runtime is not attached to this device.", result.Error);
+        Assert.Equal(CommandSandbox.RuntimeRequired, result.Error);
     }
 
     private async Task<(User User, Project Project, Guid DeviceId, Guid BackendId)> SeedAsync(bool attachRuntime = true)

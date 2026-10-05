@@ -783,6 +783,10 @@ ProjectId
 
 Единый cross-platform validator.
 
+### Intentional hardening (implemented with H3.1)
+
+`CommandSandbox.SanitizeProjectPayload` rejects any `path` value containing a `..` segment (both `/` and `\` separators) at the control-plane boundary. This is intentional security hardening, not strictly behavior-preserving: a client that previously could send `a/../b` (which would normalize back inside the workspace) now receives `WorkspacePath.RelativePathRequired`. Existing valid relative paths are unaffected. Filenames with embedded dots (e.g. `file..name.cs`) are not rejected.
+
 ## H3.3 Unified sandbox
 
 Один contract для:

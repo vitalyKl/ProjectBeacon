@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Chat;
 using Application.Auth;
 using Application.Common;
 using Application.Devices;
+using Application.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -50,7 +51,11 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
         if (device is null || !device.IsOnline(DateTime.UtcNow))
             return Result.Failure<ChatSessionDto>(ClientRequired);
 
-        var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", runtime.LocalRoot);
+        var resolved = await ProjectRuntimeResolver.ResolveAsync(db, projectId, device.Id, ct);
+        if (!resolved.Success)
+            return Result.Failure<ChatSessionDto>(resolved.Error ?? ProjectFolderRequired);
+
+        var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", resolved.Value.LocalRoot);
         db.ChatSessions.Add(session);
         await db.SaveChangesAsync(ct);
 

@@ -250,10 +250,10 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         {
             if (command.Request.ProjectId is not { } rootedProjectId)
                 return Result.Failure<WorkstationCommandDto>(CommandSandbox.RuntimeRequired);
-            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(r => r.ProjectId == rootedProjectId && r.DeviceId == device.Id, ct);
-            if (runtime is null)
-                return Result.Failure<WorkstationCommandDto>(CommandSandbox.RuntimeRequired);
+            var resolved = await ProjectRuntimeResolver.ResolveAsync(db, rootedProjectId, device.Id, ct);
+            if (!resolved.Success)
+                return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+            var runtime = resolved.Value;
             var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson);
             if (!sanitized.Success)
                 return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
@@ -272,16 +272,6 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         db.WorkstationCommands.Add(queued);
         await db.SaveChangesAsync(ct);
         return Result.Ok(MapCommand(queued, localRoot));
-    }
-
-    internal static async Task<string?> FindLocalRootAsync(IBeaconDb db, WorkstationCommand command, CancellationToken ct)
-    {
-        if (!CommandSandbox.IsProjectKind(command.Kind) || command.ProjectId is not { } projectId)
-            return null;
-        return await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.ProjectId == projectId && r.DeviceId == command.DeviceId)
-            .Select(r => r.LocalRoot)
-            .FirstOrDefaultAsync(ct);
     }
 
     internal static WorkstationCommandDto MapCommand(WorkstationCommand command, string? localRoot = null) =>
@@ -311,7 +301,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                 string? localRoot = null;
                 if (CommandSandbox.IsProjectKind(next.Kind))
                 {
-                    localRoot = await EnqueueCommandHandler.FindLocalRootAsync(db, next, ct);
+                    localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, next, ct);
                     if (string.IsNullOrWhiteSpace(localRoot))
                     {
                         next.Fail(CommandSandbox.RuntimeRequired);
@@ -376,7 +366,7 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             return Result.Failure<WorkstationCommandDto>(ex.Message);
         }
         await db.SaveChangesAsync(ct);
-        var localRoot = await EnqueueCommandHandler.FindLocalRootAsync(db, row, ct);
+        var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, row, ct);
         return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }
 
@@ -557,7 +547,7 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
         var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == row.DeviceId, ct);
         if (device is null || device.UserId != command.Request.UserId)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
-        var localRoot = await EnqueueCommandHandler.FindLocalRootAsync(db, row, ct);
+        var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, row, ct);
         return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }
 }
@@ -585,11 +575,7 @@ public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<I
             .Select(r => r.ProjectId!.Value)
             .Distinct()
             .ToList();
-        var roots = projectIds.Count == 0
-            ? new Dictionary<Guid, string>()
-            : await db.ProjectRuntimes.IgnoreQueryFilters()
-                .Where(r => r.DeviceId == command.Request.DeviceId && projectIds.Contains(r.ProjectId))
-                .ToDictionaryAsync(r => r.ProjectId, r => r.LocalRoot, ct);
+        var roots = await ProjectRuntimeResolver.ResolveRootsAsync(db, command.Request.DeviceId, projectIds, ct);
         var mapped = rows.Select(row =>
         {
             string? root = null;
