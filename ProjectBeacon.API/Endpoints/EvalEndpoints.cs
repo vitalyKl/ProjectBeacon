@@ -8,7 +8,7 @@ public static class EvalEndpoints
 {
     public static IEndpointRouteBuilder MapEvalEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects/{projectId:guid}/evals/pair", StartPair).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/evals/pair", StartPair).RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }
 
@@ -20,8 +20,6 @@ public static class EvalEndpoints
         CancellationToken ct)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new EvalPairCommand(new EvalPairRequest(
             projectId,

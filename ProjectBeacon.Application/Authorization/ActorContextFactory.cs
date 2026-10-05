@@ -5,8 +5,8 @@ using Domain.Enums;
 
 public static class ActorContextFactory
 {
-    private const string ApiTokenAuthType = "ApiToken";
-    private const string DeviceTokenAuthType = "DeviceToken";
+    public const string ApiTokenAuthType = "ApiToken";
+    public const string DeviceTokenAuthType = "DeviceToken";
 
     private const string TokenIdClaim = "token_id";
     private const string DeviceIdClaim = "device_id";

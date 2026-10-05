@@ -58,7 +58,7 @@ public sealed class TenantIsolationMiddleware
         // API tokens are bound to a single project: the token's project claim
         // is the scope. Ignore any route/header project override and fail
         // closed if it disagrees with the binding.
-        if (ctx.User.Identity?.AuthenticationType == "ApiToken")
+        if (ctx.User.Identity?.AuthenticationType == ActorContextFactory.ApiTokenAuthType)
         {
             var bound = FromClaim(ctx, "project_id") ?? Guid.Empty;
             var overridden = fromRoute ?? fromHeader;

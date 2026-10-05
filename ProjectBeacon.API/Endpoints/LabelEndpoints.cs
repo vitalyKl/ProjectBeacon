@@ -10,9 +10,9 @@ public static class LabelEndpoints
 {
     public static IEndpointRouteBuilder MapLabelEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/labels/match", MatchLabel).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapPost("/v1/projects/{projectId:guid}/labels/{labelId:guid}/paths", AddPath).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/labels/match", MatchLabel).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId:guid}/labels/{labelId:guid}/paths", AddPath).RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }
 

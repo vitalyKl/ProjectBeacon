@@ -11,14 +11,14 @@ public static class ModelEndpoints
 {
     public static IEndpointRouteBuilder MapModelEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/models", GetModelRegistry).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskRead);
-        app.MapPost("/v1/models", UpsertModelBackend).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/models/{id:guid}", DeleteModelBackend).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/models/bind", BindRole).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
-        app.MapDelete("/v1/models/bind/{role}", UnbindRole).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
-        app.MapGet("/v1/models/proxy/status", GetProxyStatus).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskRead);
-        app.MapPost("/v1/models/proxy/reload", ReloadProxy).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
-        app.MapPost("/v1/models/proxy/unload", UnloadProxy).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
+        app.MapGet("/v1/models", GetModelRegistry).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPost("/v1/models", UpsertModelBackend).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapDelete("/v1/models/{id:guid}", DeleteModelBackend).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/models/bind", BindRole).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapDelete("/v1/models/bind/{role}", UnbindRole).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapGet("/v1/models/proxy/status", GetProxyStatus).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPost("/v1/models/proxy/reload", ReloadProxy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/models/proxy/unload", UnloadProxy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         return app;
     }
 

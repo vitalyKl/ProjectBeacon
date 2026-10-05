@@ -91,24 +91,22 @@ Notes on the table:
 
 `ApiTokenCapability` (`ProjectBeacon.Domain/Enums/ApiTokenCapability.cs`) is a `[Flags] long`: `TaskRead`, `TaskWrite`, `SessionDrive`, `ContextRead`, `Admin`.
 
-Capability gates work as follows (`ApiTokenAuthMiddleware.HasApiCapability`):
+Capability gates work as follows (`ActorRequirementExtensions.HasCapability`):
 
 - If the actor is **not** an `ApiToken` (i.e. Human or Device) → the check **always returns `true`**.
 - If the actor **is** an `ApiToken` → it passes only if its granted set includes the required capability, **or** includes `Admin`.
 
-**Consequence:** `RequireCapability(X)` does **not** restrict humans or devices at all — it only restricts api tokens. A human always passes any capability gate. The capability system is a token-scoping mechanism, not a human-authorization mechanism.
+**Consequence:** `RequireHumanOrApiToken(X)` does **not** restrict humans or devices at all — it only restricts api tokens. A human always passes any capability gate. The capability system is a token-scoping mechanism, not a human-authorization mechanism.
 
 ### 2.4 The three HTTP enforcement layers
 
-1. **Route gate** — endpoint metadata: `RequireAuthorization` (must be authenticated), `RequireCapability(X)` (token-scoping, see 2.3), `RequireDeviceActor()` (device-only surface), `AllowAnonymous`.
-2. **Device-actor boundary** — `DeviceActorBoundaryMiddleware` runs on every request: if the actor is a `Device` and the endpoint **lacks** the `AllowDeviceActorAttribute` (added by `RequireDeviceActor()`), the request is rejected with **403**. A device can therefore **only** reach the `RequireDeviceActor()` routes.
-3. **Handler-level checks** — inline guards in the endpoint lambdas / Application handlers:
-   - `actor.UserId is null → 401`: blocks **Devices** and **ApiTokens without a creator**. Effectively "human (or creator-bearing token)" only.
-   - `actor.IsDevice → 401/403`: explicit device exclusion (used where a `DeviceId` is also acceptable via another path).
-   - `actor.DeviceId is null → 401`: device-only surface (device-boundary + this guard).
+1. **Route gate** — endpoint filters (`ActorRequirementExtensions`): `RequireAuthorization` (401 for anon), `RequireHuman()` (403 for non-humans), `RequireHumanOrApiToken(cap)` (403 for tokens lacking cap; Admin bypasses), `RequireDevice()` (401 for non-devices + adds `AllowDeviceActorAttribute`), `AllowAnonymous`.
+2. **Device-actor boundary** — `DeviceActorBoundaryMiddleware` runs on every request: if the actor is a `Device` and the endpoint **lacks** the `AllowDeviceActorAttribute` (added by `RequireDevice()`), the request is rejected with **403**. A device can therefore **only** reach the `RequireDevice()` routes.
+3. **Handler-level checks** — Application handler role checks:
    - `ProjectAuthorization.*` role checks (see 2.2).
+   - `actor.UserId is null → 401`: still present on `RequireHumanOrApiToken` routes where a concrete creator identity is needed (e.g. `finish_work`, model registry).
 
-Because of layer 2, **a Device can only ever reach the 5 `RequireDeviceActor()` routes** (device heartbeat / claim / complete, llamaswap-config, opencode-connections) plus — where the handler accepts `DeviceId` — the chat `AppendPart` / `MarkIdle` routes (these are *not* `RequireDeviceActor`, so the boundary would normally block a device; see §5 for this inconsistency).
+Because of layer 2, **a Device can only ever reach the 5 `RequireDevice()` routes** (device heartbeat / claim / complete, llamaswap-config, opencode-connections) plus — where the handler accepts `DeviceId` — the chat `AppendPart` / `MarkIdle` routes (these are *not* `RequireDevice`, so the boundary would normally block a device; see §5 for this inconsistency).
 
 ---
 
@@ -141,9 +139,9 @@ Legend for the actor columns:
 | **Milestones** | list/get = A | create = A | update/close/reopen = A | delete = A | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
 | **Labels** | list/match = A | — | add-path = A | — | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
 | **Reports** | list/get/context-cost = A | generate = A | — | — | — | — | `REVIEW REQUIRED`: **no capability, no role gate** |
-| **Chat** | sessions/parts = H | session = H | prompt/abort = H | — | append-part/idle = **D** (device by `DeviceId`) | — | Human for drive; `REVIEW REQUIRED`: append/idle keyed on `DeviceId` but not `RequireDeviceActor` (see §5) |
+| **Chat** | sessions/parts = H | session = H | prompt/abort = H | — | append-part/idle = **D** (device by `DeviceId`) | — | Human for drive; `REVIEW REQUIRED`: append/idle keyed on `DeviceId` but not `RequireDevice` (see §5) |
 | **Device (registration)** | list = H | create = H | — | revoke = H | — | — | Human-only |
-| **Device (commands/runtimes)** | commands = H; runtimes = H | enqueue = H | — | detach = H | heartbeat/claim/complete/config = **D** | — | Device surface is `RequireDeviceActor`; enqueue/attach exclude devices |
+| **Device (commands/runtimes)** | commands = H; runtimes = H | enqueue = H | — | detach = H | heartbeat/claim/complete/config = **D** | — | Device surface is `RequireDevice`; enqueue/attach exclude devices |
 | **Model backends** | registry/proxy = H (registry) | upsert = H | bind/unbind/reload = A (no cap) | delete = H | proxy drive | — | `REVIEW REQUIRED`: bind/unbind/reload/proxy have **no capability and no role gate** |
 | **Eval** | — | run = H | — | — | — | — | Human-only (`UserId is null → 401`) |
 | **Work (finish_work)** | — | — | — | — | finish = H | — | `REVIEW REQUIRED`: `finish_work` needs only a human id — no task/project role check |
@@ -155,12 +153,14 @@ Legend for the actor columns:
 
 Columns: **Method** · **Route** · **Source** (file:line) · **Actor-type requirement** · **Required capability** · **Application / handler check** · **Scope** · **Notes / status**.
 
+> Note: The "Application / handler check" column includes inline guards that predate the endpoint-filter consolidation. For `RequireHuman` routes the filter returns 403 before the handler runs, making any `UserId is null → 401` guard unreachable by non-humans. For `RequireHumanOrApiToken` routes the guard remains as a creator-identity check.
+
 Actor-type requirement shorthand (effective, after all three layers):
-- **Any-auth** = Human or ApiToken (any caps); **Device blocked** by the device boundary.
-- **Human-only** = additionally gated by `actor.UserId is null → 401` (blocks Devices and creator-less tokens).
+- **Any-auth** = `RequireHumanOrApiToken(cap)` — Human or ApiToken with the required cap (or `Admin`); **Device blocked** by the device boundary.
+- **Human-only** = `RequireHuman()` → 403 (blocks tokens and devices).
 - **Human-manager** = Human-only + `ProjectAuthorization` manager check.
 - **Token-gated** = tokens further limited by the required capability; humans unaffected.
-- **Device** = `RequireDeviceActor()` + `actor.DeviceId is null → 401`.
+- **Device** = `RequireDevice()` → 401 + `AllowDeviceActorAttribute` (device boundary pass).
 - **Anon** = `AllowAnonymous`.
 
 ### 4.1 Auth (`AuthEndpoints.cs`)
@@ -326,7 +326,7 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 
 ### 4.11 Chat (`ChatEndpoints.cs`)
 
-Human surface gated by `actor.UserId is null → 401`; device surface gated by `actor.DeviceId is null → 401`. **None** of these routes use `RequireDeviceActor()`.
+Human surface gated by `actor.UserId is null → 401`; device surface gated by `actor.DeviceId is null → 401`. **None** of these routes use `RequireDevice()`.
 
 | Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
@@ -336,7 +336,7 @@ Human surface gated by `actor.UserId is null → 401`; device surface gated by `
 | GET | `/v1/chat/sessions/{id}/parts` | ChatEndpoints.cs:16 | Human-only | — | `UserId is null → 401` (:58) | user | |
 | POST | `/v1/chat/sessions/{id}/prompt` | ChatEndpoints.cs:17 | Human-only | — | `UserId is null → 401` (:67) | user | |
 | POST | `/v1/chat/sessions/{id}/abort` | ChatEndpoints.cs:18 | Human-only | — | `UserId is null → 401` (:76) | user | |
-| POST | `/v1/chat/sessions/{id}/parts` | ChatEndpoints.cs:19 | Device (by `DeviceId`) | — | `DeviceId is null → 401` (:85) | user | `REVIEW REQUIRED`: device-only by handler, but **not** marked `RequireDeviceActor` → device boundary would reject a device here (see §5) |
+| POST | `/v1/chat/sessions/{id}/parts` | ChatEndpoints.cs:19 | Device (by `DeviceId`) | — | `DeviceId is null → 401` (:85) | user | `REVIEW REQUIRED`: device-only by handler, but **not** marked `RequireDevice` → device boundary would reject a device here (see §5) |
 | POST | `/v1/chat/sessions/{id}/idle` | ChatEndpoints.cs:20 | Device (by `DeviceId`) | — | `DeviceId is null → 401` (:95) | user | `REVIEW REQUIRED`: same as above |
 
 ### 4.12 Devices (`DeviceEndpoints.cs`)
@@ -346,16 +346,16 @@ Human surface gated by `actor.UserId is null → 401`; device surface gated by `
 | POST | `/v1/devices` | DeviceEndpoints.cs:15 | Human-only | — | `UserId is null → 401` (:41) | user | |
 | GET | `/v1/devices` | DeviceEndpoints.cs:16 | Human-only | — | `UserId is null → 401` (:52) | user | |
 | DELETE | `/v1/devices/{id}` | DeviceEndpoints.cs:17 | Human-only | — | `UserId is null → 401` (:62) | user | |
-| POST | `/v1/devices/me/heartbeat` | DeviceEndpoints.cs:18 | Device | — | `RequireDeviceActor`; `DeviceId is null → 401` (:72) | device | |
-| GET | `/v1/devices/me/commands` | DeviceEndpoints.cs:19 | Device | — | `RequireDeviceActor`; `DeviceId is null → 401` (:83) | device | |
-| POST | `/v1/commands/{id}/complete` | DeviceEndpoints.cs:20 | Device | — | `RequireDeviceActor`; `DeviceId is null → 401` (:95) | command | |
+| POST | `/v1/devices/me/heartbeat` | DeviceEndpoints.cs:18 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:72) | device | |
+| GET | `/v1/devices/me/commands` | DeviceEndpoints.cs:19 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:83) | device | |
+| POST | `/v1/commands/{id}/complete` | DeviceEndpoints.cs:20 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:95) | command | |
 | POST | `/v1/devices/{id}/commands` | DeviceEndpoints.cs:21 | Human-only | — | `UserId is null → 401` **and `IsDevice → 401`** (:106) | command | |
 | GET | `/v1/commands/{id}` | DeviceEndpoints.cs:22 | Human-only | — | `UserId is null → 401` (:121) | command | |
 | GET | `/v1/projects/{projectId}/runtimes` | DeviceEndpoints.cs:23 | Human-only | — | `UserId is null → 401` **and `IsDevice → 401`** (:131) | project | |
 | POST | `/v1/projects/{projectId}/runtimes` | DeviceEndpoints.cs:24 | Human-only | — | `UserId is null → 401` **and `IsDevice → 401`** (:141) | project | |
 | DELETE | `/v1/projects/{projectId}/runtimes/{id}` | DeviceEndpoints.cs:25 | Human-only | — | `UserId is null → 401` **and `IsDevice → 401`** (:154) | project | |
-| GET | `/v1/devices/me/llamaswap-config` | DeviceEndpoints.cs:26 | Device | — | `RequireDeviceActor`; `DeviceId is null → 401` (:174) | device | |
-| GET | `/v1/devices/me/opencode-connections` | DeviceEndpoints.cs:27 | Device | — | `RequireDeviceActor`; `DeviceId is null → 401` (:164) | device | |
+| GET | `/v1/devices/me/llamaswap-config` | DeviceEndpoints.cs:26 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:174) | device | |
+| GET | `/v1/devices/me/opencode-connections` | DeviceEndpoints.cs:27 | Device | — | `RequireDevice`; `DeviceId is null → 401` (:164) | device | |
 
 ### 4.13 Model backends (`ModelEndpoints.cs`)
 
@@ -404,7 +404,7 @@ Capability gate `TaskWrite`/`TaskRead` on the route. Registry/proxy reads are hu
 
 These are places where the three enforcement layers disagree or are applied unevenly. Each is `REVIEW REQUIRED`.
 
-1. **Chat device routes are not `RequireDeviceActor`.** `AppendPart` (`ChatEndpoints.cs:19`) and `MarkIdle` (`ChatEndpoints.cs:20`) authorize by `actor.DeviceId is null → 401`, but they are **not** marked with `RequireDeviceActor()`. Because `DeviceActorBoundaryMiddleware` rejects any `Device` actor on a route lacking `AllowDeviceActorAttribute`, a real device token would be blocked at the boundary **before** reaching the `DeviceId` guard — i.e. the handler's device path appears unreachable by an actual device. *Status: REVIEW REQUIRED.*
+1. **Chat device routes are not `RequireDevice`.** `AppendPart` (`ChatEndpoints.cs:19`) and `MarkIdle` (`ChatEndpoints.cs:20`) authorize by `actor.DeviceId is null → 401`, but they are **not** marked with `RequireDevice()`. Because `DeviceActorBoundaryMiddleware` rejects any `Device` actor on a route lacking `AllowDeviceActorAttribute`, a real device token would be blocked at the boundary **before** reaching the `DeviceId` guard — i.e. the handler's device path appears unreachable by an actual device. *Status: REVIEW REQUIRED.*
 
 2. **`GET /v1/tasks/{tid}` has no capability gate** while its in-project sibling `GET /v1/projects/{pid}/tasks/{tid}` requires `TaskRead` (`TaskEndpoints.cs:26` vs `:27`). *Status: REVIEW REQUIRED.*
 
@@ -457,7 +457,7 @@ None found beyond the six inconsistencies already flagged in §5 (which are inte
 ### 6.d Verification note
 
 - Route **line numbers** were taken from a full read of each endpoint file.
-- **Capability gates** (`RequireCapability`), **device gates** (`RequireDeviceActor`), and **`AllowAnonymous`** were read directly from the `app.Map*` chains.
+- **Capability gates** (`RequireHumanOrApiToken`), **device gates** (`RequireDevice`), and **`AllowAnonymous`** were read directly from the `app.Map*` chains.
 - **Handler guards** (`UserId is null`, `IsDevice`, `DeviceId is null`) were read from the endpoint lambdas; line numbers in §4 refer to those guard lines.
 - **`ProjectAuthorization` call sites** in Application handlers were confirmed by grep: `ProjectHandlers.cs:66`, `ProjectMemberHandlers.cs:18/:50`, `ApiTokenHandlers.cs:26/:100/:141/:171`, `InviteHandlers.cs:37/:89/:196/:217/:241/:261`, `TenantContextBinder.cs:22`.
 

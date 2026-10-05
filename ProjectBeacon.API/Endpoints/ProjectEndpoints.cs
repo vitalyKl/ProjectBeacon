@@ -19,25 +19,25 @@ public static class ProjectEndpoints
 {
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
-        app.MapPost("/v1/projects/{projectId:guid}/members", AddMember).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapDelete("/v1/projects/{projectId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/members", ListMembers).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapPost("/v1/projects/{projectId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapDelete("/v1/projects/{projectId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/members", AddMember).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/projects/{projectId:guid}/members/{userId:guid}", RemoveMember).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/members", ListMembers).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/projects/{projectId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/projects/{projectId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
-        app.MapPost("/v1/projects/{projectId:guid}/tokens", CreateToken).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapDelete("/v1/tokens/{tokenId:guid}", async (Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx) => await RevokeToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/tokens/{tokenId:guid}", async (Guid tokenId, GetApiTokenHandler handler, HttpContext ctx) => await GetToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/tokens", CreateToken).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/tokens", ListTokens).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", GetToken).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/projects/{projectId:guid}/tokens/{tokenId:guid}", RevokeToken).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/tokens/{tokenId:guid}", async (Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx) => await RevokeToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/tokens/{tokenId:guid}", async (Guid tokenId, GetApiTokenHandler handler, HttpContext ctx) => await GetToken(Guid.Empty, tokenId, handler, ctx)).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
         return app;
     }
@@ -58,8 +58,6 @@ public static class ProjectEndpoints
             return ProblemResults.Bad("ProjectId mismatch.");
 
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new UpdateProjectCommand(request, actor));
 
@@ -99,8 +97,6 @@ public static class ProjectEndpoints
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new AddProjectMemberCommand(request, actor));
 
@@ -112,8 +108,6 @@ public static class ProjectEndpoints
     private static async Task<IResult> RemoveMember(Guid projectId, Guid userId, RemoveProjectMemberHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new RemoveProjectMemberCommand(new RemoveProjectMemberRequest(projectId, userId), actor));
 
@@ -135,8 +129,6 @@ public static class ProjectEndpoints
     private static async Task<IResult> CreateToken(Guid projectId, [FromBody] CreateApiTokenRequest request, HttpContext ctx, CreateApiTokenHandler handler)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateApiTokenCommand(
             new CreateApiTokenRequest(projectId, request.Name, request.Capabilities, request.ExpiresAt),
             actor));
@@ -149,8 +141,6 @@ public static class ProjectEndpoints
     private static async Task<IResult> RevokeToken(Guid projectId, Guid tokenId, RevokeApiTokenHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var resolvedProject = projectId == Guid.Empty ? Guid.Empty : projectId;
         var result = await handler.HandleAsync(new RevokeApiTokenCommand(
             new RevokeApiTokenRequest(resolvedProject, tokenId), actor));
@@ -163,8 +153,6 @@ public static class ProjectEndpoints
     private static async Task<IResult> GetToken(Guid projectId, Guid tokenId, GetApiTokenHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new GetApiTokenCommand(
             new GetApiTokenRequest(projectId, tokenId), actor));
@@ -177,8 +165,6 @@ public static class ProjectEndpoints
     private static async Task<IResult> ListTokens(Guid projectId, ListApiTokensHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var result = await handler.HandleAsync(new ListApiTokensCommand(
             new ListApiTokensRequest(projectId), actor));
@@ -195,8 +181,6 @@ public static class ProjectEndpoints
         Guid projectId, [FromBody] CreateInviteBody body, CreateProjectInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateProjectInviteRequest(
             projectId, body.Email, body.Role, actor));
         if (result.Success)
@@ -207,8 +191,6 @@ public static class ProjectEndpoints
     private static async Task<IResult> ListInvites(Guid projectId, ListProjectInvitesHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ListInvitesRequest(projectId, actor));
         return result.Success
             ? Results.Ok(result.Value)
@@ -219,8 +201,6 @@ public static class ProjectEndpoints
         Guid projectId, Guid inviteId, RevokeProjectInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor));
         return result.Success
             ? Results.NoContent()

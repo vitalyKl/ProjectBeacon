@@ -4,8 +4,8 @@ using ProjectBeacon.API;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Application.Authorization;
 using Application.Devices;
-using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +29,7 @@ public sealed class ApiTokenAuthMiddleware
             {
                 token.RecordUsage();
                 await db.SaveChangesAsync();
-                var identity = new ClaimsIdentity("ApiToken");
+                var identity = new ClaimsIdentity(ActorContextFactory.ApiTokenAuthType);
                 identity.AddClaim(new Claim("token_id", token.Id.ToString()));
                 identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
                 identity.AddClaim(new Claim("capabilities", ((long)token.Capabilities).ToString()));
@@ -45,7 +45,7 @@ public sealed class ApiTokenAuthMiddleware
             var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.TokenHash == hash && d.RevokedAt == null);
             if (device is not null)
             {
-                var identity = new ClaimsIdentity("DeviceToken", ClaimTypes.Name, ClaimTypes.Role);
+                var identity = new ClaimsIdentity(ActorContextFactory.DeviceTokenAuthType, ClaimTypes.Name, ClaimTypes.Role);
                 identity.AddClaim(new Claim("device_id", device.Id.ToString()));
                 identity.AddClaim(new Claim("device_owner_id", device.UserId.ToString()));
                 ctx.User = new ClaimsPrincipal(identity);
@@ -56,41 +56,3 @@ public sealed class ApiTokenAuthMiddleware
     }
 }
 
-public static class CapabilityExtensions
-{
-    public static bool HasApiCapability(this ClaimsPrincipal user, ApiTokenCapability required)
-    {
-        if (user.Identity?.AuthenticationType != "ApiToken")
-            return true;
-
-        var raw = user.FindFirst("capabilities")?.Value;
-        if (!long.TryParse(raw, out var bits))
-            return false;
-
-        var caps = (ApiTokenCapability)bits;
-        return caps.HasFlag(ApiTokenCapability.Admin) || caps.HasFlag(required);
-    }
-
-    public static RouteHandlerBuilder RequireCapability(this RouteHandlerBuilder builder, ApiTokenCapability capability)
-    {
-        return builder.AddEndpointFilter(async (ctx, next) =>
-        {
-            if (ctx.HttpContext.User.HasApiCapability(capability))
-                return await next(ctx);
-
-            return ProblemResults.Forbidden();
-        });
-    }
-
-    /// <summary>Blocks every API token, including Admin-flag tokens. Device actors are rejected by <see cref="DeviceActorBoundaryMiddleware"/>.</summary>
-    public static RouteHandlerBuilder RequireHumanActor(this RouteHandlerBuilder builder)
-    {
-        return builder.AddEndpointFilter(async (ctx, next) =>
-        {
-            if (ctx.HttpContext.User.Identity?.AuthenticationType == "ApiToken")
-                return ProblemResults.Forbidden();
-
-            return await next(ctx);
-        });
-    }
-}

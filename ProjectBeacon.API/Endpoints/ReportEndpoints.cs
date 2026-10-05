@@ -10,10 +10,10 @@ public static class ReportEndpoints
 {
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/projects/{projectId:guid}/reports", Generate).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/reports", List).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/projects/{projectId:guid}/reports/{reportId:guid}", Get).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/reports/context-cost/{taskId:guid}", ContextCost).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/projects/{projectId:guid}/reports", Generate).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/reports", List).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/reports/{reportId:guid}", Get).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/reports/context-cost/{taskId:guid}", ContextCost).RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }
 

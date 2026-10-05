@@ -6,11 +6,6 @@ public sealed class AllowDeviceActorAttribute : Attribute
 {
 }
 
-public static class ActorTypeEndpointExtensions
-{
-    public static IEndpointConventionBuilder RequireDeviceActor(this IEndpointConventionBuilder builder)
-        => builder.WithMetadata(new AllowDeviceActorAttribute());
-}
 
 public sealed class DeviceActorBoundaryMiddleware
 {

@@ -17,13 +17,13 @@ public static class OrgEndpoints
 {
     public static IEndpointRouteBuilder MapOrgEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/orgs", CreateOrg).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapPut("/v1/orgs/{orgId:guid}", UpdateOrg).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/orgs/{orgId:guid}", GetOrg).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/orgs", ListOrgs).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapPost("/v1/orgs/{orgId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapGet("/v1/orgs/{orgId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
-        app.MapDelete("/v1/orgs/{orgId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/orgs", CreateOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPut("/v1/orgs/{orgId:guid}", UpdateOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/orgs/{orgId:guid}", GetOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/orgs", ListOrgs).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/orgs/{orgId:guid}/invites", CreateInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/orgs/{orgId:guid}/invites", ListInvites).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/orgs/{orgId:guid}/invites/{inviteId:guid}", RevokeInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
         return app;
     }
@@ -73,8 +73,6 @@ public static class OrgEndpoints
         Guid orgId, [FromBody] CreateInviteBody body, CreateOrgInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new CreateOrgInviteRequest(
             orgId, body.Email, body.Role, actor));
         if (result.Success)
@@ -85,8 +83,6 @@ public static class OrgEndpoints
     private static async Task<IResult> ListInvites(Guid orgId, ListOrgInvitesHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ListInvitesRequest(orgId, actor));
         return result.Success
             ? Results.Ok(result.Value)
@@ -96,8 +92,6 @@ public static class OrgEndpoints
     private static async Task<IResult> RevokeInvite(Guid orgId, Guid inviteId, RevokeOrgInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new RevokeInviteRequest(inviteId, actor));
         return result.Success
             ? Results.NoContent()

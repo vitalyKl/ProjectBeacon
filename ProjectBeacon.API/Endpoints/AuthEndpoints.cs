@@ -23,12 +23,12 @@ public static class AuthEndpoints
         app.MapPost("/v1/auth/register", Register).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/forgot-password", ForgotPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/reset-password", ResetPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
-        app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHumanActor();
-        app.MapPost("/v1/auth/logout", Logout).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHumanActor();
-        app.MapGet("/v1/auth/me", GetMe).RequireAuthorization().RequireHumanActor();
+        app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHuman();
+        app.MapPost("/v1/auth/logout", Logout).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHuman();
+        app.MapGet("/v1/auth/me", GetMe).RequireAuthorization().RequireHuman();
         app.MapGet("/v1/auth/options", AuthOptions).AllowAnonymous();
         app.MapGet("/v1/invites/{token}", GetInvite).AllowAnonymous().RequireRateLimiting("auth");
-        app.MapPost("/v1/invites/{token}/accept", AcceptInvite).RequireAuthorization().DisableAntiforgery().RequireHumanActor();
+        app.MapPost("/v1/invites/{token}/accept", AcceptInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
         return app;
     }
@@ -124,8 +124,6 @@ public static class AuthEndpoints
     private static async Task<IResult> ChangePassword([FromBody] ChangePasswordBody body, ChangePasswordHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new ChangePasswordRequest(actor.UserId.Value, body.CurrentPassword, body.NewPassword));
         return result.Success
             ? Results.Ok()
@@ -146,8 +144,6 @@ public static class AuthEndpoints
     private static async Task<IResult> AcceptInvite(string token, AcceptInviteHandler handler, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
         var result = await handler.HandleAsync(new AcceptInviteRequest(token, actor));
         if (result.Success)
             return Results.Ok();
@@ -160,8 +156,6 @@ public static class AuthEndpoints
     private static async Task<IResult> Logout(BeaconDbContext db, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         await db.Sessions
             .Where(s => s.UserId == actor.UserId.Value && s.IsActive)
@@ -173,8 +167,6 @@ public static class AuthEndpoints
     private static async Task<IResult> GetMe(BeaconDbContext db, HttpContext ctx)
     {
         var actor = ctx.GetActor();
-        if (actor.UserId is null)
-            return ProblemResults.Unauthorized();
 
         var user = await db.Users.FindAsync([actor.UserId.Value]);
         if (user is null)

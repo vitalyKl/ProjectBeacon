@@ -13,7 +13,7 @@ public static class WorkEndpoints
 {
     public static IEndpointRouteBuilder MapWorkEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/work/finish_work", FinishWork).RequireAuthorization().DisableAntiforgery().RequireCapability(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/work/finish_work", FinishWork).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
 
         return app;
     }
