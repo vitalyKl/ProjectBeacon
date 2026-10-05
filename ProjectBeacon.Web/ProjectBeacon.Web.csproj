@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <OutputType>Exe</OutputType>
     <RootNamespace>ProjectBeacon.Web</RootNamespace>
+    <NoWarn>$(NoWarn);CS0436;CS8669</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

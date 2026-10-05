@@ -12,6 +12,12 @@ public sealed record SearchMatch(string Path, int Line, string Text);
 
 public sealed record SearchResult(string Query, IReadOnlyList<SearchMatch> Matches, bool Truncated);
 
+public sealed record SymbolSignature(string Name, string Kind, string Signature, int Line, string? DocComment);
+
+public sealed record FileSignatures(string Path, IReadOnlyList<SymbolSignature> Symbols, string Backend, string? Error);
+
+public sealed record SignatureResult(IReadOnlyList<FileSignatures> Files, string Backend);
+
 /// <summary>
 /// Single implementation of the local code index. It caches nothing: every
 /// query re-scans the working tree, so the index can never be silently stale.
@@ -44,9 +50,18 @@ public sealed class CodeIndex
 
     public string Root { get; }
 
-    public CodeIndex(string root)
+    private readonly ILanguageRegistry _registry;
+    private readonly ISignatureBackend _roslyn;
+    private readonly ISignatureBackend _treeSitter;
+
+    public CodeIndex(string root) : this(root, LanguageRegistry.CreateDefault()) { }
+
+    public CodeIndex(string root, ILanguageRegistry registry)
     {
         Root = Path.GetFullPath(root);
+        _registry = registry;
+        _roslyn = new RoslynSignatureBackend();
+        _treeSitter = new TreeSitterSignatureBackend();
     }
 
     public Result<TreeResult> GetTree(string? subPath = null, int maxEntries = DefaultMaxEntries)
@@ -97,6 +112,97 @@ public sealed class CodeIndex
         var limited = maxFiles > 0 ? filtered.Take(maxFiles).ToList() : filtered;
         return Result.Ok<IReadOnlyList<string>>(limited);
     }
+
+    public Result<SignatureResult> GetSignatures(IReadOnlyCollection<string>? paths = null, int maxFiles = DefaultMaxFiles)
+    {
+        if (paths is not null && paths.Count == 0)
+            return Result.Ok(new SignatureResult([], ""));
+
+        IReadOnlyCollection<string> targetFiles;
+
+        if (paths is null)
+        {
+            var changed = GetChangedFiles();
+            if (!changed.Success)
+                return Result.Failure<SignatureResult>(changed.Error ?? "git failed");
+            targetFiles = changed.Value!;
+        }
+        else
+        {
+            targetFiles = paths;
+        }
+
+        if (maxFiles > 0)
+            targetFiles = targetFiles.Take(maxFiles).ToList();
+
+        var results = new List<FileSignatures>();
+
+        foreach (var file in targetFiles)
+        {
+            var language = _registry.Resolve(file);
+            if (language is null)
+            {
+                results.Add(new FileSignatures(file, [], "unsupported", null));
+                continue;
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(Path.Combine(Root, file.Replace('/', Path.DirectorySeparatorChar)));
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (!File.Exists(fullPath))
+                continue;
+
+            long size;
+            try
+            {
+                size = new FileInfo(fullPath).Length;
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+
+            if (size == 0 || size > MaxFileSize)
+                continue;
+
+            string content;
+            try
+            {
+                content = File.ReadAllText(fullPath);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            var backend = BackendFor(language.Backend);
+            results.Add(backend.Extract(language, file, content));
+        }
+
+        var backends = results
+            .Select(r => r.Backend)
+            .Where(b => b != "unsupported")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var backendId = backends.Count == 0 ? "" : backends.Count == 1 ? backends[0] : "mixed";
+
+        return Result.Ok(new SignatureResult(results, backendId));
+    }
+
+    private ISignatureBackend BackendFor(SignatureBackend kind) => kind switch
+    {
+        SignatureBackend.Roslyn => _roslyn,
+        SignatureBackend.TreeSitter => _treeSitter,
+        _ => throw new ArgumentException($"Unknown backend: {kind}", nameof(kind))
+    };
 
     public Result<SearchResult> Search(string query, IReadOnlyCollection<string>? paths = null, int maxMatches = DefaultMaxMatches)
     {
