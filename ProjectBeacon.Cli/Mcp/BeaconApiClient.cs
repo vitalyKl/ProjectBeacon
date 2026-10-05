@@ -7,17 +7,23 @@ using System.Text.Json.Nodes;
 internal sealed class BeaconApiClient
 {
     private readonly HttpClient _http;
+    private readonly McpEnvironment _env;
 
-    public BeaconApiClient(HttpClient http) => _http = http;
+    public BeaconApiClient(HttpClient http, McpEnvironment? env = null)
+    {
+        _http = http;
+        _env = env ?? McpEnvironment.Process;
+    }
 
     internal readonly record struct Resolution(BeaconApiClient? Client, bool Misconfigured);
 
     public static BeaconApiClient? FromEnvironment() => Resolve().Client;
 
-    internal static Resolution Resolve()
+    internal static Resolution Resolve(McpEnvironment? env = null)
     {
-        var url = Environment.GetEnvironmentVariable("BEACON_API_URL");
-        var token = Environment.GetEnvironmentVariable("BEACON_API_TOKEN");
+        var lookup = env ?? McpEnvironment.Process;
+        var url = lookup.Get("BEACON_API_URL");
+        var token = lookup.Get("BEACON_API_TOKEN");
         var hasUrl = !string.IsNullOrWhiteSpace(url);
         var hasToken = !string.IsNullOrWhiteSpace(token);
         if (hasUrl != hasToken)
@@ -29,7 +35,7 @@ internal sealed class BeaconApiClient
 
         var http = new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(60) };
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token!.Trim());
-        return new Resolution(new BeaconApiClient(http), false);
+        return new Resolution(new BeaconApiClient(http, lookup), false);
     }
 
     public async Task<(bool Ok, int Status, string Body)> SendAsync(
@@ -39,7 +45,7 @@ internal sealed class BeaconApiClient
         CancellationToken ct = default)
     {
         using var request = new HttpRequestMessage(method, relativePath);
-        var project = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
+        var project = _env.Get("BEACON_PROJECT_ID");
         if (!string.IsNullOrWhiteSpace(project))
             request.Headers.TryAddWithoutValidation("X-Project-Id", project.Trim());
         if (body is not null)

@@ -163,11 +163,11 @@ internal static class McpApiTools
         yield return Tool("proxy_unload", "Ask the workstation to unload llama-swap.", Props());
     }
 
-    public static Task<McpToolText> CallAsync(string name, JsonObject? args, BeaconApiClient? api, CancellationToken ct = default)
+    public static Task<McpToolText> CallAsync(string name, JsonObject? args, BeaconApiClient? api, McpEnvironment env, CancellationToken ct = default)
     {
         if (api is null)
             return Task.FromResult(new McpToolText(true, MissingApi));
-        return InvokeAsync(name, args, api, ct);
+        return InvokeAsync(name, args, api, env, ct);
     }
 
     public static Task<McpToolText> BindRoleAsync(PipelineRole role, Guid modelBackendId, BeaconApiClient api, CancellationToken ct = default)
@@ -264,66 +264,66 @@ internal static class McpApiTools
     public static Task<McpToolText> PipelineStatusAsync(Guid taskId, BeaconApiClient api, CancellationToken ct = default)
         => SendAsync(api, HttpMethod.Get, $"v1/tasks/{taskId:D}/pipeline", null, ct);
 
-    private static async Task<McpToolText> InvokeAsync(string name, JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> InvokeAsync(string name, JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         try
         {
             return name switch
             {
-                "get_project" => await ProjectGet(args, api, ct),
-                "list_tasks" => await TasksList(args, api, ct),
-                "get_task" => await TaskGet(args, api, ct),
-                "create_task" => await TaskCreate(args, api, ct),
-                "update_task" => await TaskUpdate(args, api, ct),
-                "set_task_status" => await TaskStatus(args, api, ct),
-                "set_task_substage" => await TaskSubStage(args, api, ct),
-                "claim_task" => await TaskClaim(args, api, ct),
-                "add_task_comment" => await TaskComment(args, api, ct),
-                "set_task_dependencies" => await TaskDependencies(args, api, ct),
-                "add_review_notes" => await TaskReviewNotes(args, api, ct),
-                "list_task_steps" => await StepsList(args, api, ct),
-                "add_task_step" => await StepAdd(args, api, ct),
-                "toggle_task_step" => await StepToggle(args, api, ct),
-                "delete_task_step" => await StepDelete(args, api, ct),
-                "finish_work" => await Finish(args, api, ct),
-                "context_compile" => await Compile(args, api, ct),
-                "list_context_nodes" => await NodesList(args, api, ct),
-                "get_context_node" => await NodeGet(args, api, ct),
-                "upsert_context_node" => await NodeUpsert(args, api, ct),
-                "delete_context_node" => await NodeDelete(args, api, ct),
-                "export_agents_md" => await ExportAgents(args, api, ct),
-                "list_constraints" => await ConstraintsList(args, api, ct),
-                "create_constraint" => await ConstraintCreate(args, api, ct),
-                "activate_constraint" => await ConstraintPost(args, "activate", api, ct),
-                "reject_constraint" => await ConstraintPost(args, "reject", api, ct),
-                "list_decisions" => await DecisionsList(args, api, ct),
-                "record_decision" => await DecisionCreate(args, api, ct),
-                "accept_decision" => await DecisionPost(args, "accept", api, ct),
-                "deprecate_decision" => await DecisionPost(args, "deprecate", api, ct),
-                "supersede_decision" => await DecisionSupersede(args, api, ct),
-                "list_milestones" => await MilestonesList(args, api, ct),
-                "get_milestone" => await MilestoneGet(args, api, ct),
-                "create_milestone" => await MilestoneCreate(args, api, ct),
-                "update_milestone" => await MilestoneUpdate(args, api, ct),
-                "delete_milestone" => await MilestoneDelete(args, api, ct),
-                "close_milestone" => await MilestoneAction(args, "close", api, ct),
-                "reopen_milestone" => await MilestoneAction(args, "reopen", api, ct),
-                "list_labels" => await LabelsList(args, api, ct),
-                "match_label" => await LabelMatch(args, api, ct),
-                "add_label_path" => await LabelPath(args, api, ct),
-                "list_reports" => await ReportsList(args, api, ct),
-                "get_report" => await ReportGet(args, api, ct),
-                "generate_report" => await ReportGenerate(args, api, ct),
-                "pipeline_start" => await PipelineStart(args, api, ct),
-                "pipeline_start_actor" => await PipelineActor(args, api, ct),
-                "pipeline_launch_session" => await PipelineLaunch(args, api, ct),
-                "pipeline_fail_subtask" => await PipelineFail(args, api, ct),
-                "pipeline_start_review" => await PipelineReview(args, api, ct),
-                "pipeline_approve" => await PipelineApprove(args, api, ct),
-                "pipeline_force_close" => await PipelineForceClose(args, api, ct),
-                "model_upsert" => await ModelUpsert(args, api, ct),
-                "model_delete" => await ModelDelete(args, api, ct),
-                "model_unbind" => await ModelUnbind(args, api, ct),
+                "get_project" => await ProjectGet(args, api, env, ct),
+                "list_tasks" => await TasksList(args, api, env, ct),
+                "get_task" => await TaskGet(args, api, env, ct),
+                "create_task" => await TaskCreate(args, api, env, ct),
+                "update_task" => await TaskUpdate(args, api, env, ct),
+                "set_task_status" => await TaskStatus(args, api, env, ct),
+                "set_task_substage" => await TaskSubStage(args, api, env, ct),
+                "claim_task" => await TaskClaim(args, api, env, ct),
+                "add_task_comment" => await TaskComment(args, api, env, ct),
+                "set_task_dependencies" => await TaskDependencies(args, api, env, ct),
+                "add_review_notes" => await TaskReviewNotes(args, api, env, ct),
+                "list_task_steps" => await StepsList(args, api, env, ct),
+                "add_task_step" => await StepAdd(args, api, env, ct),
+                "toggle_task_step" => await StepToggle(args, api, env, ct),
+                "delete_task_step" => await StepDelete(args, api, env, ct),
+                "finish_work" => await Finish(args, api, env, ct),
+                "context_compile" => await Compile(args, api, env, ct),
+                "list_context_nodes" => await NodesList(args, api, env, ct),
+                "get_context_node" => await NodeGet(args, api, env, ct),
+                "upsert_context_node" => await NodeUpsert(args, api, env, ct),
+                "delete_context_node" => await NodeDelete(args, api, env, ct),
+                "export_agents_md" => await ExportAgents(args, api, env, ct),
+                "list_constraints" => await ConstraintsList(args, api, env, ct),
+                "create_constraint" => await ConstraintCreate(args, api, env, ct),
+                "activate_constraint" => await ConstraintPost(args, "activate", api, env, ct),
+                "reject_constraint" => await ConstraintPost(args, "reject", api, env, ct),
+                "list_decisions" => await DecisionsList(args, api, env, ct),
+                "record_decision" => await DecisionCreate(args, api, env, ct),
+                "accept_decision" => await DecisionPost(args, "accept", api, env, ct),
+                "deprecate_decision" => await DecisionPost(args, "deprecate", api, env, ct),
+                "supersede_decision" => await DecisionSupersede(args, api, env, ct),
+                "list_milestones" => await MilestonesList(args, api, env, ct),
+                "get_milestone" => await MilestoneGet(args, api, env, ct),
+                "create_milestone" => await MilestoneCreate(args, api, env, ct),
+                "update_milestone" => await MilestoneUpdate(args, api, env, ct),
+                "delete_milestone" => await MilestoneDelete(args, api, env, ct),
+                "close_milestone" => await MilestoneAction(args, "close", api, env, ct),
+                "reopen_milestone" => await MilestoneAction(args, "reopen", api, env, ct),
+                "list_labels" => await LabelsList(args, api, env, ct),
+                "match_label" => await LabelMatch(args, api, env, ct),
+                "add_label_path" => await LabelPath(args, api, env, ct),
+                "list_reports" => await ReportsList(args, api, env, ct),
+                "get_report" => await ReportGet(args, api, env, ct),
+                "generate_report" => await ReportGenerate(args, api, env, ct),
+                "pipeline_start" => await PipelineStart(args, api, env, ct),
+                "pipeline_start_actor" => await PipelineActor(args, api, env, ct),
+                "pipeline_launch_session" => await PipelineLaunch(args, api, env, ct),
+                "pipeline_fail_subtask" => await PipelineFail(args, api, env, ct),
+                "pipeline_start_review" => await PipelineReview(args, api, env, ct),
+                "pipeline_approve" => await PipelineApprove(args, api, env, ct),
+                "pipeline_force_close" => await PipelineForceClose(args, api, env, ct),
+                "model_upsert" => await ModelUpsert(args, api, env, ct),
+                "model_delete" => await ModelDelete(args, api, env, ct),
+                "model_unbind" => await ModelUnbind(args, api, env, ct),
                 "proxy_reload" => await SendAsync(api, HttpMethod.Post, "v1/models/proxy/reload", new JsonObject(), ct),
                 "proxy_unload" => await SendAsync(api, HttpMethod.Post, "v1/models/proxy/unload", new JsonObject(), ct),
                 _ => new McpToolText(true, $"Unknown tool: {name}")
@@ -335,37 +335,37 @@ internal static class McpApiTools
         }
     }
 
-    private static async Task<McpToolText> ProjectGet(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ProjectGet(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> TasksList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TasksList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var status = Text(args, "status");
         var query = string.IsNullOrWhiteSpace(status) ? "" : "?status=" + Uri.EscapeDataString(status);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/tasks{query}", null, ct);
     }
 
-    private static async Task<McpToolText> TaskGet(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskGet(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
-        if (TryProject(args, out var projectId, out _))
+        if (TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/tasks/{taskId:D}", null, ct);
         return await SendAsync(api, HttpMethod.Get, $"v1/tasks/{taskId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> TaskCreate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskCreate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         var title = Text(args, "title");
         if (string.IsNullOrWhiteSpace(title))
             return new McpToolText(true, "missing 'title'");
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject
         {
@@ -381,7 +381,7 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/tasks", body, ct);
     }
 
-    private static async Task<McpToolText> TaskUpdate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskUpdate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
@@ -392,12 +392,12 @@ internal static class McpApiTools
         Put(body, "type", Text(args, "type"));
         Put(body, "labelId", Text(args, "labelId"));
         Put(body, "milestoneId", Text(args, "milestoneId"));
-        if (!TryProject(args, out var projectId, out _))
+        if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Put, $"v1/tasks/{taskId:D}", body, ct);
         return await SendAsync(api, HttpMethod.Put, $"v1/projects/{projectId:D}/tasks/{taskId:D}", body, ct);
     }
 
-    private static async Task<McpToolText> TaskStatus(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskStatus(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
@@ -405,12 +405,12 @@ internal static class McpApiTools
         if (string.IsNullOrWhiteSpace(status))
             return new McpToolText(true, "missing 'status'");
         var body = new JsonObject { ["status"] = status };
-        if (!TryProject(args, out var projectId, out _))
+        if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Patch, $"v1/tasks/{taskId:D}/status", body, ct);
         return await SendAsync(api, HttpMethod.Patch, $"v1/projects/{projectId:D}/tasks/{taskId:D}/status", body, ct);
     }
 
-    private static async Task<McpToolText> TaskSubStage(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskSubStage(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
@@ -420,16 +420,16 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Patch, $"v1/tasks/{taskId:D}/substage", JsonValue.Create(subStage), ct);
     }
 
-    private static async Task<McpToolText> TaskClaim(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskClaim(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
-        if (!TryProject(args, out var projectId, out var projectError))
+        if (!TryProject(env, args, out var projectId, out var projectError))
             return new McpToolText(true, projectError);
         return await SendAsync(api, HttpMethod.Patch, $"v1/projects/{projectId:D}/tasks/{taskId:D}/claim", null, ct);
     }
 
-    private static async Task<McpToolText> TaskComment(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskComment(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
@@ -441,12 +441,12 @@ internal static class McpApiTools
             ["taskId"] = taskId.ToString("D"),
             ["content"] = content
         };
-        if (!TryProject(args, out var projectId, out _))
+        if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/comments", body, ct);
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/tasks/{taskId:D}/comments", body, ct);
     }
 
-    private static async Task<McpToolText> TaskDependencies(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskDependencies(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
@@ -457,31 +457,31 @@ internal static class McpApiTools
             ["taskId"] = taskId.ToString("D"),
             ["dependentTaskIds"] = new JsonArray(ids.Select(id => (JsonNode)JsonValue.Create(id.ToString("D"))!).ToArray())
         };
-        if (!TryProject(args, out var projectId, out _))
+        if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Put, $"v1/tasks/{taskId:D}/dependencies", body, ct);
         return await SendAsync(api, HttpMethod.Put, $"v1/projects/{projectId:D}/tasks/{taskId:D}/dependencies", body, ct);
     }
 
-    private static async Task<McpToolText> TaskReviewNotes(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> TaskReviewNotes(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
         var notes = Text(args, "reviewNotes");
         if (string.IsNullOrWhiteSpace(notes))
             return new McpToolText(true, "missing 'reviewNotes'");
-        if (!TryProject(args, out var projectId, out _))
+        if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Patch, $"v1/tasks/{taskId:D}/review-notes", JsonValue.Create(notes), ct);
         return await SendAsync(api, HttpMethod.Patch, $"v1/projects/{projectId:D}/tasks/{taskId:D}/review-notes", JsonValue.Create(notes), ct);
     }
 
-    private static async Task<McpToolText> StepsList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> StepsList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
         return await SendAsync(api, HttpMethod.Get, $"v1/tasks/{taskId:D}/steps", null, ct);
     }
 
-    private static async Task<McpToolText> StepAdd(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> StepAdd(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "taskId", out var taskId))
             return new McpToolText(true, "missing or invalid 'taskId'");
@@ -491,7 +491,7 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/steps", new JsonObject { ["title"] = title }, ct);
     }
 
-    private static async Task<McpToolText> StepToggle(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> StepToggle(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "stepId", out var stepId))
             return new McpToolText(true, "missing or invalid 'stepId'");
@@ -501,18 +501,18 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Patch, $"v1/steps/{stepId:D}", new JsonObject { ["done"] = done.Value }, ct);
     }
 
-    private static async Task<McpToolText> StepDelete(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> StepDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "stepId", out var stepId))
             return new McpToolText(true, "missing or invalid 'stepId'");
         return await SendAsync(api, HttpMethod.Delete, $"v1/steps/{stepId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> Finish(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> Finish(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         var taskId = Text(args, "taskId");
         if (string.IsNullOrWhiteSpace(taskId))
-            taskId = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+            taskId = env.Get("BEACON_TASK_ID");
         if (string.IsNullOrWhiteSpace(taskId))
             return new McpToolText(true, "missing 'taskId' (or set BEACON_TASK_ID)");
         var result = Text(args, "result");
@@ -531,9 +531,9 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, "v1/work/finish_work", body, ct);
     }
 
-    private static async Task<McpToolText> Compile(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> Compile(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject
         {
@@ -543,7 +543,7 @@ internal static class McpApiTools
         };
         Put(body, "path", Text(args, "path"));
         Put(body, "repoId", Text(args, "repoId"));
-        var taskId = Text(args, "taskId") ?? Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+        var taskId = Text(args, "taskId") ?? env.Get("BEACON_TASK_ID");
         Put(body, "taskId", string.IsNullOrWhiteSpace(taskId) ? null : taskId);
         var budget = IntArg(args, "budgetTokens");
         if (budget is not null)
@@ -551,25 +551,25 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/context/compile", body, ct);
     }
 
-    private static async Task<McpToolText> NodesList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> NodesList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/context/nodes", null, ct);
     }
 
-    private static async Task<McpToolText> NodeGet(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> NodeGet(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "nodeId", out var nodeId))
             return new McpToolText(true, "missing or invalid 'nodeId'");
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/context/nodes/{nodeId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> NodeUpsert(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> NodeUpsert(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var title = Text(args, "title");
         var bodyMarkdown = Text(args, "bodyMarkdown");
@@ -592,18 +592,18 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/context/nodes", body, ct);
     }
 
-    private static async Task<McpToolText> NodeDelete(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> NodeDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "nodeId", out var nodeId))
             return new McpToolText(true, "missing or invalid 'nodeId'");
         return await SendAsync(api, HttpMethod.Delete, $"v1/projects/{projectId:D}/context/nodes/{nodeId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> ExportAgents(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ExportAgents(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var query = new List<string>();
         var repoId = Text(args, "repoId");
@@ -616,16 +616,16 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/context/export/agents-md{suffix}", null, ct);
     }
 
-    private static async Task<McpToolText> ConstraintsList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ConstraintsList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/constraints", null, ct);
     }
 
-    private static async Task<McpToolText> ConstraintCreate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ConstraintCreate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var bodyText = Text(args, "body");
         var kind = Text(args, "kind");
@@ -635,25 +635,25 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/constraints", body, ct);
     }
 
-    private static async Task<McpToolText> ConstraintPost(JsonObject? args, string action, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ConstraintPost(JsonObject? args, string action, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "constraintId", out var constraintId))
             return new McpToolText(true, "missing or invalid 'constraintId'");
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/constraints/{constraintId:D}/{action}", new JsonObject(), ct);
     }
 
-    private static async Task<McpToolText> DecisionsList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> DecisionsList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/decisions", null, ct);
     }
 
-    private static async Task<McpToolText> DecisionCreate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> DecisionCreate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var title = Text(args, "title");
         var decisionBody = Text(args, "body");
@@ -665,18 +665,18 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/decisions", body, ct);
     }
 
-    private static async Task<McpToolText> DecisionPost(JsonObject? args, string action, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> DecisionPost(JsonObject? args, string action, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "decisionId", out var decisionId))
             return new McpToolText(true, "missing or invalid 'decisionId'");
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/decisions/{decisionId:D}/{action}", new JsonObject(), ct);
     }
 
-    private static async Task<McpToolText> DecisionSupersede(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> DecisionSupersede(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "decisionId", out var decisionId))
             return new McpToolText(true, "missing or invalid 'decisionId'");
@@ -686,23 +686,23 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/decisions/{decisionId:D}/supersede", body, ct);
     }
 
-    private static async Task<McpToolText> MilestonesList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> MilestonesList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/milestones", null, ct);
     }
 
-    private static async Task<McpToolText> MilestoneGet(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> MilestoneGet(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "milestoneId", out var milestoneId))
             return new McpToolText(true, "missing or invalid 'milestoneId'");
         return await SendAsync(api, HttpMethod.Get, $"v1/milestones/{milestoneId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> MilestoneCreate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> MilestoneCreate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var name = Text(args, "name");
         if (string.IsNullOrWhiteSpace(name))
@@ -717,7 +717,7 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/milestones", body, ct);
     }
 
-    private static async Task<McpToolText> MilestoneUpdate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> MilestoneUpdate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "milestoneId", out var milestoneId))
             return new McpToolText(true, "missing or invalid 'milestoneId'");
@@ -730,34 +730,34 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Put, $"v1/milestones/{milestoneId:D}", body, ct);
     }
 
-    private static async Task<McpToolText> MilestoneDelete(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> MilestoneDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "milestoneId", out var milestoneId))
             return new McpToolText(true, "missing or invalid 'milestoneId'");
-        if (!TryProject(args, out var projectId, out _))
+        if (!TryProject(env, args, out var projectId, out _))
             return await SendAsync(api, HttpMethod.Delete, $"v1/milestones/{milestoneId:D}", null, ct);
         return await SendAsync(api, HttpMethod.Delete, $"v1/projects/{projectId:D}/milestones/{milestoneId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> MilestoneAction(JsonObject? args, string action, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> MilestoneAction(JsonObject? args, string action, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "milestoneId", out var milestoneId))
             return new McpToolText(true, "missing or invalid 'milestoneId'");
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/milestones/{milestoneId:D}/{action}", new JsonObject(), ct);
     }
 
-    private static async Task<McpToolText> LabelsList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> LabelsList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/labels", null, ct);
     }
 
-    private static async Task<McpToolText> LabelMatch(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> LabelMatch(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var path = Text(args, "path");
         if (string.IsNullOrWhiteSpace(path))
@@ -768,9 +768,9 @@ internal static class McpApiTools
         return Format(response);
     }
 
-    private static async Task<McpToolText> LabelPath(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> LabelPath(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "labelId", out var labelId))
             return new McpToolText(true, "missing or invalid 'labelId'");
@@ -780,25 +780,25 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/labels/{labelId:D}/paths", new JsonObject { ["path"] = path }, ct);
     }
 
-    private static async Task<McpToolText> ReportsList(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ReportsList(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/reports", null, ct);
     }
 
-    private static async Task<McpToolText> ReportGet(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ReportGet(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "reportId", out var reportId))
             return new McpToolText(true, "missing or invalid 'reportId'");
         return await SendAsync(api, HttpMethod.Get, $"v1/projects/{projectId:D}/reports/{reportId:D}", null, ct);
     }
 
-    private static async Task<McpToolText> ReportGenerate(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ReportGenerate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryProject(args, out var projectId, out var error))
+        if (!TryProject(env, args, out var projectId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject();
         Put(body, "createdByType", Text(args, "createdByType") ?? "agent");
@@ -806,16 +806,16 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/reports", body, ct);
     }
 
-    private static async Task<McpToolText> PipelineStart(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineStart(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/start", new JsonObject { ["taskId"] = taskId.ToString("D") }, ct);
     }
 
-    private static async Task<McpToolText> PipelineActor(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineActor(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "subtaskId", out var subtaskId))
             return new McpToolText(true, "missing or invalid 'subtaskId'");
@@ -823,16 +823,16 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/subtasks/{subtaskId:D}/session", body, ct);
     }
 
-    private static async Task<McpToolText> PipelineLaunch(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineLaunch(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "sessionId", out var sessionId))
             return new McpToolText(true, "missing or invalid 'sessionId'");
         return await SendAsync(api, HttpMethod.Post, $"v1/sessions/{sessionId:D}/launch", new JsonObject { ["sessionId"] = sessionId.ToString("D") }, ct);
     }
 
-    private static async Task<McpToolText> PipelineFail(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineFail(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "subtaskId", out var subtaskId))
             return new McpToolText(true, "missing or invalid 'subtaskId'");
@@ -848,32 +848,32 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/subtasks/{subtaskId:D}/fail", body, ct);
     }
 
-    private static async Task<McpToolText> PipelineReview(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineReview(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/review/start", new JsonObject { ["taskId"] = taskId.ToString("D") }, ct);
     }
 
-    private static async Task<McpToolText> PipelineApprove(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineApprove(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "note", Text(args, "note"));
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/approve", body, ct);
     }
 
-    private static async Task<McpToolText> PipelineForceClose(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> PipelineForceClose(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(args, out var taskId, out var error))
+        if (!TryTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "reason", Text(args, "reason"));
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/force-close", body, ct);
     }
 
-    private static async Task<McpToolText> ModelUpsert(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ModelUpsert(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         var name = Text(args, "name");
         var backendType = Text(args, "backendType");
@@ -897,14 +897,14 @@ internal static class McpApiTools
         return await SendAsync(api, HttpMethod.Post, "v1/models", body, ct);
     }
 
-    private static async Task<McpToolText> ModelDelete(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ModelDelete(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         if (!TryGuid(args, "modelBackendId", out var id))
             return new McpToolText(true, "missing or invalid 'modelBackendId'");
         return await SendAsync(api, HttpMethod.Delete, $"v1/models/{id:D}", null, ct);
     }
 
-    private static async Task<McpToolText> ModelUnbind(JsonObject? args, BeaconApiClient api, CancellationToken ct)
+    private static async Task<McpToolText> ModelUnbind(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
         var role = RoleName(Text(args, "role"));
         if (role is null)
@@ -967,11 +967,11 @@ internal static class McpApiTools
         return new McpToolText(true, string.IsNullOrEmpty(trimmed) ? $"HTTP {status}" : $"HTTP {status}: {trimmed}");
     }
 
-    private static bool TryProject(JsonObject? args, out Guid projectId, out string error)
+    private static bool TryProject(McpEnvironment env, JsonObject? args, out Guid projectId, out string error)
     {
         var raw = Text(args, "projectId");
         if (string.IsNullOrWhiteSpace(raw))
-            raw = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
+            raw = env.Get("BEACON_PROJECT_ID");
         if (Guid.TryParse(raw, out projectId))
         {
             error = "";
@@ -983,11 +983,11 @@ internal static class McpApiTools
         return false;
     }
 
-    private static bool TryTask(JsonObject? args, out Guid taskId, out string error)
+    private static bool TryTask(McpEnvironment env, JsonObject? args, out Guid taskId, out string error)
     {
         var raw = Text(args, "taskId");
         if (string.IsNullOrWhiteSpace(raw))
-            raw = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+            raw = env.Get("BEACON_TASK_ID");
         if (Guid.TryParse(raw, out taskId))
         {
             error = "";

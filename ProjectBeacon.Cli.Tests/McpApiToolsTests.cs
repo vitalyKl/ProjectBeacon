@@ -65,13 +65,12 @@ public sealed class McpApiToolsTests
     {
         var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-        var savedProject = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
-        var savedTask = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
-        Environment.SetEnvironmentVariable("BEACON_PROJECT_ID", projectId.ToString("D"));
-        Environment.SetEnvironmentVariable("BEACON_TASK_ID", taskId.ToString("D"));
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")));
         var handler = new RecordingHandler();
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
-        var api = new BeaconApiClient(http);
+        var api = new BeaconApiClient(http, env);
         var root = TempRoot();
         try
         {
@@ -84,7 +83,7 @@ public sealed class McpApiToolsTests
             WriteFrame(input, """{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"task_pipeline_status","arguments":{}}}""");
             input.Position = 0;
             using var output = new MemoryStream();
-            await McpStdioServer.RunAsync(root, input, output, api);
+            await McpStdioServer.RunAsync(root, input, output, api, env);
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
             Assert.Equal(6, frames.Count);
@@ -109,8 +108,6 @@ public sealed class McpApiToolsTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("BEACON_PROJECT_ID", savedProject);
-            Environment.SetEnvironmentVariable("BEACON_TASK_ID", savedTask);
             Directory.Delete(root, true);
         }
     }
@@ -145,21 +142,12 @@ public sealed class McpApiToolsTests
     [Fact]
     public void Resolve_PartialApiConfig_DoesNotOpenDatabaseMode()
     {
-        var url = Environment.GetEnvironmentVariable("BEACON_API_URL");
-        var token = Environment.GetEnvironmentVariable("BEACON_API_TOKEN");
-        try
-        {
-            Environment.SetEnvironmentVariable("BEACON_API_URL", "http://127.0.0.1:5083");
-            Environment.SetEnvironmentVariable("BEACON_API_TOKEN", null);
-            var resolved = BeaconApiClient.Resolve();
-            Assert.True(resolved.Misconfigured);
-            Assert.Null(resolved.Client);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("BEACON_API_URL", url);
-            Environment.SetEnvironmentVariable("BEACON_API_TOKEN", token);
-        }
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "http://127.0.0.1:5083"),
+            ("BEACON_API_TOKEN", null));
+        var resolved = BeaconApiClient.Resolve(env);
+        Assert.True(resolved.Misconfigured);
+        Assert.Null(resolved.Client);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

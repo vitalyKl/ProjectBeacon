@@ -40,23 +40,24 @@ public static class McpStdioServer
 
     public static Task<int> RunAsync(string root)
     {
-        var resolved = BeaconApiClient.Resolve();
+        var env = McpEnvironment.Process;
+        var resolved = BeaconApiClient.Resolve(env);
         _apiMisconfigured = resolved.Misconfigured;
         Console.Error.WriteLine(resolved.Misconfigured
             ? "beacon mcp: BEACON_API_URL and BEACON_API_TOKEN must both be set, or both be unset."
             : resolved.Client is null
                 ? "beacon mcp: local database mode."
                 : "beacon mcp: API mode.");
-        return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client);
+        return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client, env);
     }
 
     public static Task<int> RunAsync(string root, Stream input, Stream output)
     {
         _apiMisconfigured = false;
-        return RunAsync(root, input, output, null);
+        return RunAsync(root, input, output, null, McpEnvironment.Empty);
     }
 
-    internal static async Task<int> RunAsync(string root, Stream input, Stream output, BeaconApiClient? api)
+    internal static async Task<int> RunAsync(string root, Stream input, Stream output, BeaconApiClient? api, McpEnvironment env)
     {
         var workspace = new FileWorkspace(root);
         var index = new CodeIndex(root);
@@ -67,13 +68,13 @@ public static class McpStdioServer
             if (message is null)
                 return 0;
 
-            var response = await HandleAsync(message, workspace, index, api);
+            var response = await HandleAsync(message, workspace, index, api, env);
             if (response is not null)
                 await WriteMessageAsync(output, response);
         }
     }
 
-    private static async Task<JsonNode?> HandleAsync(JsonNode message, FileWorkspace workspace, CodeIndex index, BeaconApiClient? api)
+    private static async Task<JsonNode?> HandleAsync(JsonNode message, FileWorkspace workspace, CodeIndex index, BeaconApiClient? api, McpEnvironment env)
     {
         var method = message["method"]?.GetValue<string>();
         var id = message["id"];
@@ -96,7 +97,7 @@ public static class McpStdioServer
                 ["serverInfo"] = new JsonObject { ["name"] = "beacon", ["version"] = AssemblyVersion() }
             }),
             "tools/list" => Result(id, new JsonObject { ["tools"] = Tools() }),
-            "tools/call" => await CallToolAsync(id, message["params"], workspace, index, api),
+            "tools/call" => await CallToolAsync(id, message["params"], workspace, index, api, env),
             "ping" => Result(id, new JsonObject()),
             _ => Error(id, -32601, $"Unknown method: {method}")
         };
@@ -124,6 +125,8 @@ public static class McpStdioServer
             Props(("query", "string", true), ("path", "string", false), ("maxMatches", "integer", false))),
         Tool("get_changed_scope", "List working-tree changed files from git status, optionally filtered by a path prefix.",
             Props(("path", "string", false), ("maxFiles", "integer", false))),
+        Tool("get_signatures", "Extract symbol signatures (classes, methods, functions) from changed or specified source files.",
+            Props(("path", "string", false), ("maxFiles", "integer", false))),
         Tool("model_bind", "Bind a pipeline role (planner, actor, review) to a local model backend. Requires BEACON_PROJECT_ID.",
             Props(("role", "string", true), ("modelBackendId", "string", true))),
         Tool("model_status", "Show local model backends, role bindings and llama-swap proxy status. Requires BEACON_PROJECT_ID.",
@@ -138,7 +141,7 @@ public static class McpStdioServer
             Props())
     ];
 
-    private static async Task<JsonObject> CallToolAsync(JsonNode id, JsonNode? args, FileWorkspace workspace, CodeIndex index, BeaconApiClient? api)
+    private static async Task<JsonObject> CallToolAsync(JsonNode id, JsonNode? args, FileWorkspace workspace, CodeIndex index, BeaconApiClient? api, McpEnvironment env)
     {
         var name = args?["name"]?.GetValue<string>();
         JsonObject? arguments = args?["arguments"] as JsonObject;
@@ -148,7 +151,7 @@ public static class McpStdioServer
         if (string.IsNullOrEmpty(name))
             return ToolError(id, "malformed path");
 
-        var denied = await EnforceSubtaskScopeAsync(name, arguments, api);
+        var denied = await EnforceSubtaskScopeAsync(name, arguments, api, env);
         if (denied is not null)
             return ToolError(id, denied);
 
@@ -172,14 +175,17 @@ public static class McpStdioServer
                 "get_changed_scope" => TextResult(id, index.GetChangedScope(
                     SplitPrefixes(OptArg(arguments, "path")),
                     OptInt(arguments, "maxFiles") ?? CodeIndex.DefaultMaxFiles), FormatFileList),
-                "model_bind" => await ModelBindAsync(id, arguments, api),
-                "model_status" => await ModelStatusAsync(id, api),
-                "task_create_subtask" => await TaskCreateSubtaskAsync(id, arguments, api),
-                "subtask_report_result" => await SubtaskReportResultAsync(id, arguments, api),
-                "task_review_verdict" => await TaskReviewVerdictAsync(id, arguments, api),
-                "task_pipeline_status" => await TaskPipelineStatusAsync(id, api),
-                "context_compile" => api is not null ? await ContextCompileAsync(id, workspace, index, api) : await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api)),
-                _ when McpApiTools.IsApiTool(name) => await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api)),
+                "get_signatures" => TextResult(id, index.GetSignatures(
+                    OptArg(arguments, "path") is { Length: > 0 } p ? SplitPrefixes(p) : null,
+                    OptInt(arguments, "maxFiles") ?? CodeIndex.DefaultMaxFiles), FormatSignatures),
+                "model_bind" => await ModelBindAsync(id, arguments, api, env),
+                "model_status" => await ModelStatusAsync(id, api, env),
+                "task_create_subtask" => await TaskCreateSubtaskAsync(id, arguments, api, env),
+                "subtask_report_result" => await SubtaskReportResultAsync(id, arguments, api, env),
+                "task_review_verdict" => await TaskReviewVerdictAsync(id, arguments, api, env),
+                "task_pipeline_status" => await TaskPipelineStatusAsync(id, api, env),
+                "context_compile" => api is not null ? await ContextCompileAsync(id, workspace, index, api, env) : await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api, env)),
+                _ when McpApiTools.IsApiTool(name) => await ApiTextAsync(id, await McpApiTools.CallAsync(name, arguments, api, env)),
                 _ => ToolError(id, $"Unknown tool: {name}")
             };
         }
@@ -189,9 +195,9 @@ public static class McpStdioServer
         }
     }
 
-    private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api)
+    private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
     {
-        if (api is null || !TryParseScope(out _, out var taskId, out _) || taskId is null)
+        if (api is null || !TryParseScope(env, out _, out var taskId, out _) || taskId is null)
             return null;
 
         var (ok, _, body) = await api.SendAsync(HttpMethod.Get, $"v1/tasks/{taskId.Value:D}/pipeline", null, CancellationToken.None);
@@ -199,7 +205,7 @@ public static class McpStdioServer
             return "pipeline scope could not be loaded.";
 
         Guid? explicitId = null;
-        var fromEnv = Environment.GetEnvironmentVariable("BEACON_SUBTASK_ID");
+        var fromEnv = env.Get("BEACON_SUBTASK_ID");
         if (Guid.TryParse(fromEnv, out var envId))
             explicitId = envId;
         else if (Guid.TryParse(OptArg(arguments, "subtaskId"), out var argId))
@@ -229,9 +235,9 @@ public static class McpStdioServer
         }
     }
 
-    private static async Task<JsonObject> WithDbAsync(JsonNode id, bool requiresTask, Func<McpScope, Task<JsonObject>> invoke)
+    private static async Task<JsonObject> WithDbAsync(JsonNode id, McpEnvironment env, bool requiresTask, Func<McpScope, Task<JsonObject>> invoke)
     {
-        if (!TryParseScope(out var projectId, out var taskId, out var error))
+        if (!TryParseScope(env, out var projectId, out var taskId, out var error))
             return ToolError(id, error!);
         if (requiresTask && taskId is null)
             return ToolError(id, "BEACON_TASK_ID is not set. Set it to the task GUID for this MCP session.");
@@ -273,18 +279,18 @@ public static class McpStdioServer
         }
     }
 
-    private static bool TryParseScope(out Guid projectId, out Guid? taskId, out string? error)
+    private static bool TryParseScope(McpEnvironment env, out Guid projectId, out Guid? taskId, out string? error)
     {
         projectId = Guid.Empty;
         taskId = null;
-        var projectRaw = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
+        var projectRaw = env.Get("BEACON_PROJECT_ID");
         if (string.IsNullOrWhiteSpace(projectRaw) || !Guid.TryParse(projectRaw, out projectId))
         {
             error = "BEACON_PROJECT_ID is not set (or is not a GUID). Set it to the project GUID for this MCP session.";
             return false;
         }
 
-        var taskRaw = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+        var taskRaw = env.Get("BEACON_TASK_ID");
         if (string.IsNullOrWhiteSpace(taskRaw))
         {
             taskId = null;
@@ -340,18 +346,18 @@ public static class McpStdioServer
     private static async Task<JsonObject> ApiTextAsync(JsonNode id, McpToolText text)
         => text.IsError ? ToolError(id, text.Text) : Result(id, Content(text.Text));
 
-    private static async Task<JsonObject> ContextCompileAsync(JsonNode id, FileWorkspace workspace, CodeIndex index, BeaconApiClient api)
+    private static async Task<JsonObject> ContextCompileAsync(JsonNode id, FileWorkspace workspace, CodeIndex index, BeaconApiClient api, McpEnvironment env)
     {
-        var projectId = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
+        var projectId = env.Get("BEACON_PROJECT_ID");
         if (string.IsNullOrWhiteSpace(projectId) || !Guid.TryParse(projectId, out var parsed))
             return ToolError(id, "BEACON_PROJECT_ID is not set.");
 
-        var taskId = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
+        var taskId = env.Get("BEACON_TASK_ID");
         var result = await BriefPatcher.PatchCompileAsync(parsed.ToString("D"), taskId, index, api, CancellationToken.None);
         return result.IsError ? ToolError(id, result.Text) : Result(id, Content(result.Text));
     }
 
-    private static async Task<JsonObject> ModelBindAsync(JsonNode id, JsonObject? args, BeaconApiClient? api)
+    private static async Task<JsonObject> ModelBindAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
     {
         var role = ParseRole(args);
         if (role is null)
@@ -364,12 +370,12 @@ public static class McpStdioServer
             return partialBind;
         if (api is not null)
         {
-            if (!TryParseScope(out _, out _, out var error))
+            if (!TryParseScope(env, out _, out _, out var error))
                 return ToolError(id, error!);
             return await ApiTextAsync(id, await McpApiTools.BindRoleAsync(role.Value, modelId.Value, api));
         }
 
-        return await WithDbAsync(id, requiresTask: false, async scope =>
+        return await WithDbAsync(id, env, requiresTask: false, async scope =>
         {
             var handler = scope.Services.GetRequiredService<SetRoleBindingHandler>();
             var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role.Value, modelId.Value)));
@@ -377,18 +383,18 @@ public static class McpStdioServer
         });
     }
 
-    private static async Task<JsonObject> ModelStatusAsync(JsonNode id, BeaconApiClient? api)
+    private static async Task<JsonObject> ModelStatusAsync(JsonNode id, BeaconApiClient? api, McpEnvironment env)
     {
         if (RejectPartialApi(id) is { } partialStatus)
             return partialStatus;
         if (api is not null)
         {
-            if (!TryParseScope(out _, out _, out var error))
+            if (!TryParseScope(env, out _, out _, out var error))
                 return ToolError(id, error!);
             return await ApiTextAsync(id, await McpApiTools.ModelStatusAsync(api));
         }
 
-        return await WithDbAsync(id, requiresTask: false, async scope =>
+        return await WithDbAsync(id, env, requiresTask: false, async scope =>
         {
             var ownerId = await OwnerUserIdAsync(scope);
             if (ownerId == Guid.Empty)
@@ -417,7 +423,7 @@ public static class McpStdioServer
         });
     }
 
-    private static async Task<JsonObject> TaskCreateSubtaskAsync(JsonNode id, JsonObject? args, BeaconApiClient? api)
+    private static async Task<JsonObject> TaskCreateSubtaskAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
     {
         var instructions = OptArg(args, "instructions");
         if (string.IsNullOrWhiteSpace(instructions))
@@ -427,13 +433,13 @@ public static class McpStdioServer
             return partialCreate;
         if (api is not null)
         {
-            if (!TrySessionTask(out var taskId, out var error))
+            if (!TrySessionTask(env, out var taskId, out var error))
                 return ToolError(id, error);
             return await ApiTextAsync(id, await McpApiTools.CreateSubtaskAsync(
                 taskId, instructions, SplitPrefixes(OptArg(args, "allowedMcpTools")), SplitPrefixes(OptArg(args, "allowedPaths")), api));
         }
 
-        return await WithDbAsync(id, requiresTask: true, async scope =>
+        return await WithDbAsync(id, env, requiresTask: true, async scope =>
         {
             var handler = scope.Services.GetRequiredService<CreateSubtaskHandler>();
             var result = await handler.HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(
@@ -445,7 +451,7 @@ public static class McpStdioServer
         });
     }
 
-    private static async Task<JsonObject> SubtaskReportResultAsync(JsonNode id, JsonObject? args, BeaconApiClient? api)
+    private static async Task<JsonObject> SubtaskReportResultAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
     {
         var subtaskId = ParseGuid(args, "subtaskId");
         if (subtaskId is null)
@@ -461,12 +467,12 @@ public static class McpStdioServer
             return partialReport;
         if (api is not null)
         {
-            if (!TrySessionTask(out var taskId, out var error))
+            if (!TrySessionTask(env, out var taskId, out var error))
                 return ToolError(id, error);
             return await ApiTextAsync(id, await McpApiTools.ReportResultAsync(taskId, subtaskId.Value, diffRef, summary, api));
         }
 
-        return await WithDbAsync(id, requiresTask: true, async scope =>
+        return await WithDbAsync(id, env, requiresTask: true, async scope =>
         {
             var handler = scope.Services.GetRequiredService<ReportSubtaskResultHandler>();
             var result = await handler.HandleAsync(new ReportSubtaskResultCommand(
@@ -475,7 +481,7 @@ public static class McpStdioServer
         });
     }
 
-    private static async Task<JsonObject> TaskReviewVerdictAsync(JsonNode id, JsonObject? args, BeaconApiClient? api)
+    private static async Task<JsonObject> TaskReviewVerdictAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
     {
         var kind = ParseVerdict(args);
         if (kind is null)
@@ -489,12 +495,12 @@ public static class McpStdioServer
             return partialVerdict;
         if (api is not null)
         {
-            if (!TrySessionTask(out var taskId, out var error))
+            if (!TrySessionTask(env, out var taskId, out var error))
                 return ToolError(id, error);
             return await ApiTextAsync(id, await McpApiTools.ReviewVerdictAsync(taskId, kind.Value, note, subtaskId, api));
         }
 
-        return await WithDbAsync(id, requiresTask: true, async scope =>
+        return await WithDbAsync(id, env, requiresTask: true, async scope =>
         {
             var handler = scope.Services.GetRequiredService<RecordReviewVerdictHandler>();
             var result = await handler.HandleAsync(new RecordReviewVerdictCommand(
@@ -503,9 +509,9 @@ public static class McpStdioServer
         });
     }
 
-    private static bool TrySessionTask(out Guid taskId, out string error)
+    private static bool TrySessionTask(McpEnvironment env, out Guid taskId, out string error)
     {
-        if (!TryParseScope(out _, out var parsed, out var scopeError))
+        if (!TryParseScope(env, out _, out var parsed, out var scopeError))
         {
             taskId = Guid.Empty;
             error = scopeError!;
@@ -527,18 +533,18 @@ public static class McpStdioServer
     private static JsonObject? RejectPartialApi(JsonNode id) =>
         _apiMisconfigured ? ToolError(id, "BEACON_API_URL and BEACON_API_TOKEN must both be set, or both be unset.") : null;
 
-    private static async Task<JsonObject> TaskPipelineStatusAsync(JsonNode id, BeaconApiClient? api)
+    private static async Task<JsonObject> TaskPipelineStatusAsync(JsonNode id, BeaconApiClient? api, McpEnvironment env)
     {
         if (RejectPartialApi(id) is { } partialPipeline)
             return partialPipeline;
         if (api is not null)
         {
-            if (!TrySessionTask(out var taskId, out var error))
+            if (!TrySessionTask(env, out var taskId, out var error))
                 return ToolError(id, error);
             return await ApiTextAsync(id, await McpApiTools.PipelineStatusAsync(taskId, api));
         }
 
-        return await WithDbAsync(id, requiresTask: true, async scope =>
+        return await WithDbAsync(id, env, requiresTask: true, async scope =>
         {
             var handler = scope.Services.GetRequiredService<GetPipelineHandler>();
             var result = await handler.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(scope.TaskId!.Value)));
@@ -583,6 +589,32 @@ public static class McpStdioServer
         if (files.Count == 0)
             return "No changed files.";
         return string.Join("\n", files);
+    }
+
+    private static string FormatSignatures(SignatureResult result)
+    {
+        if (result.Files.Count == 0)
+            return "No signatures found.";
+
+        var backendSuffix = string.IsNullOrEmpty(result.Backend) ? "" : $", backend: {result.Backend}";
+        var lines = new List<string> { $"# Signatures ({result.Files.Count} files{backendSuffix})" };
+
+        foreach (var file in result.Files)
+        {
+            if (file.Symbols.Count == 0 && file.Error is null)
+                continue;
+            lines.Add("");
+            lines.Add($"== {file.Path} [{file.Backend}] ==");
+            if (file.Error is not null)
+            {
+                lines.Add($"  error: {file.Error}");
+                continue;
+            }
+            foreach (var symbol in file.Symbols)
+                lines.Add($"  {symbol.Kind}: {symbol.Name} (line {symbol.Line}) — {symbol.Signature}");
+        }
+
+        return string.Join("\n", lines);
     }
 
     private static string Arg(JsonObject? arguments, string key)

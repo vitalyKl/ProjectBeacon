@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Tests;
 
 using System.Text;
 using System.Text.Json.Nodes;
+using ProjectBeacon.Cli.Mcp;
 
 public sealed class McpStdioServerTests
 {
@@ -150,85 +151,62 @@ public sealed class McpStdioServerTests
     [Fact]
     public async Task DbTools_WithoutBeaconProjectEnv_ReturnError()
     {
-        var savedProject = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
-        var savedTask = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
-        Environment.SetEnvironmentVariable("BEACON_PROJECT_ID", null);
-        Environment.SetEnvironmentVariable("BEACON_TASK_ID", null);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
         try
         {
-            var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
-            try
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"model_status","arguments":{}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"model_bind","arguments":{"role":"actor","modelBackendId":"11111111-1111-1111-1111-111111111111"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_pipeline_status","arguments":{}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(3, frames.Count);
+            foreach (var frame in frames)
             {
-                using var input = new MemoryStream();
-                WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"model_status","arguments":{}}}""");
-                WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"model_bind","arguments":{"role":"actor","modelBackendId":"11111111-1111-1111-1111-111111111111"}}}""");
-                WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_pipeline_status","arguments":{}}}""");
-                input.Position = 0;
-                using var output = new MemoryStream();
-                await McpStdioServer.RunAsync(root, input, output);
-                output.Position = 0;
-                var frames = await ReadAllFramesAsync(output);
-                Assert.Equal(3, frames.Count);
-                foreach (var frame in frames)
-                {
-                    var json = frame.ToJsonString();
-                    Assert.Contains("\"isError\":true", json, StringComparison.OrdinalIgnoreCase);
-                    Assert.Contains("BEACON_PROJECT_ID", json, StringComparison.Ordinal);
-                }
-            }
-            finally
-            {
-                Directory.Delete(root, true);
+                var json = frame.ToJsonString();
+                Assert.Contains("\"isError\":true", json, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("BEACON_PROJECT_ID", json, StringComparison.Ordinal);
             }
         }
         finally
         {
-            Environment.SetEnvironmentVariable("BEACON_PROJECT_ID", savedProject);
-            Environment.SetEnvironmentVariable("BEACON_TASK_ID", savedTask);
+            Directory.Delete(root, true);
         }
     }
 
     [Fact]
     public async Task PipelineTools_WithoutBeaconTaskEnv_ReturnError()
     {
-        var savedProject = Environment.GetEnvironmentVariable("BEACON_PROJECT_ID");
-        var savedTask = Environment.GetEnvironmentVariable("BEACON_TASK_ID");
-        Environment.SetEnvironmentVariable("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D"));
-        Environment.SetEnvironmentVariable("BEACON_TASK_ID", null);
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
         try
         {
-            var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
-            try
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"task_create_subtask","arguments":{"instructions":"do it"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"subtask_report_result","arguments":{"subtaskId":"11111111-1111-1111-1111-111111111111","diffRef":"refs/heads/x","summary":"done"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_review_verdict","arguments":{"verdict":"approve","note":"lgtm"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"task_pipeline_status","arguments":{}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, null, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(4, frames.Count);
+            foreach (var frame in frames)
             {
-                using var input = new MemoryStream();
-                WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"task_create_subtask","arguments":{"instructions":"do it"}}}""");
-                WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"subtask_report_result","arguments":{"subtaskId":"11111111-1111-1111-1111-111111111111","diffRef":"refs/heads/x","summary":"done"}}}""");
-                WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_review_verdict","arguments":{"verdict":"approve","note":"lgtm"}}}""");
-                WriteFrame(input, """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"task_pipeline_status","arguments":{}}}""");
-                input.Position = 0;
-                using var output = new MemoryStream();
-                await McpStdioServer.RunAsync(root, input, output);
-                output.Position = 0;
-                var frames = await ReadAllFramesAsync(output);
-                Assert.Equal(4, frames.Count);
-                foreach (var frame in frames)
-                {
-                    var json = frame.ToJsonString();
-                    Assert.Contains("\"isError\":true", json, StringComparison.OrdinalIgnoreCase);
-                    Assert.Contains("BEACON_TASK_ID", json, StringComparison.Ordinal);
-                }
-            }
-            finally
-            {
-                Directory.Delete(root, true);
+                var json = frame.ToJsonString();
+                Assert.Contains("\"isError\":true", json, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("BEACON_TASK_ID", json, StringComparison.Ordinal);
             }
         }
         finally
         {
-            Environment.SetEnvironmentVariable("BEACON_PROJECT_ID", savedProject);
-            Environment.SetEnvironmentVariable("BEACON_TASK_ID", savedTask);
+            Directory.Delete(root, true);
         }
     }
 
