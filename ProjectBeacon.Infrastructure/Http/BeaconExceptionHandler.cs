@@ -16,7 +16,7 @@ public static class BeaconExceptionHandler
     public static IApplicationBuilder UseBeaconExceptionHandler(this IApplicationBuilder app, string? pathPrefix = null)
     {
         var logger = app.ApplicationServices.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(BeaconExceptionHandler).FullName);
+            .CreateLogger(nameof(BeaconExceptionHandler));
         var isDevelopment = app.ApplicationServices.GetRequiredService<IHostEnvironment>().IsDevelopment();
 
         return app.UseExceptionHandler(errorApp =>

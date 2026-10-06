@@ -71,6 +71,8 @@ public sealed class RoslynCallerFinder : ICallerFinder
             return Result.Failure<CallerResult>("failed to get syntax root");
 
         var model = document.GetSemanticModelAsync().GetAwaiter().GetResult();
+        if (model is null)
+            return Result.Failure<CallerResult>("failed to get semantic model");
         var text = document.GetTextAsync().GetAwaiter().GetResult();
 
         if (scope.Line < 1 || scope.Line > text.Lines.Count)
