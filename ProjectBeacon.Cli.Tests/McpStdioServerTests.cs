@@ -117,6 +117,50 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
+    public async Task HashRange_IsListed_AndReturnsBareHex()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "src"));
+        File.WriteAllText(Path.Combine(root, "src", "app.cs"), "alpha\nbeta\ngamma\n");
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"hash_range","arguments":{"path":"src/app.cs","startLine":1,"endLine":3}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"hash_range","arguments":{"path":"src/app.cs","startLine":2,"endLine":2}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"hash_range","arguments":{"path":"src/app.cs","startLine":1,"endLine":99}}}""");
+            input.Position = 0;
+
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(4, frames.Count);
+
+            var toolsJson = frames[0].ToJsonString();
+            Assert.Contains("hash_range", toolsJson, StringComparison.Ordinal);
+
+            var full = frames[1].ToJsonString();
+            Assert.DoesNotContain("\"isError\":true", full, StringComparison.OrdinalIgnoreCase);
+            var hashText = frames[1]!["result"]!["content"]![0]!["text"]!.GetValue<string>()!;
+            Assert.Matches("^[0-9a-f]{64}$", hashText);
+
+            var single = frames[2].ToJsonString();
+            Assert.DoesNotContain("\"isError\":true", single, StringComparison.OrdinalIgnoreCase);
+            var singleHash = frames[2]!["result"]!["content"]![0]!["text"]!.GetValue<string>()!;
+            Assert.Matches("^[0-9a-f]{64}$", singleHash);
+            Assert.NotEqual(hashText, singleHash);
+
+            var overflow = frames[3].ToJsonString();
+            Assert.Contains("\"isError\":true", overflow, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task ToolsList_IncludesFileAndPipelineTools()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));

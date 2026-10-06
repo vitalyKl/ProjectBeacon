@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.CodeIndex;
 
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Application.Common;
 
@@ -596,6 +597,64 @@ public sealed class CodeIndex
         var candidates = CollectCandidateFiles(extensions);
         var scope = new CallerScope(Root, normalized, symbolName, line, candidates);
         return new HeuristicCallerFinder().Find(scope);
+    }
+
+    public Result<string> HashRange(string path, int startLine, int endLine)
+    {
+        if (startLine < 1)
+            return Result.Failure<string>("startLine must be >= 1");
+        if (endLine < startLine)
+            return Result.Failure<string>("endLine must be >= startLine");
+
+        var resolved = WorkspacePath.ResolveInsideRoot(Root, path);
+        if (!resolved.Success)
+            return Result.Failure<string>(resolved.Error ?? "invalid path");
+
+        var fullPath = resolved.Value;
+        if (!File.Exists(fullPath))
+            return Result.Failure<string>("file not found");
+
+        long size;
+        try
+        {
+            size = new FileInfo(fullPath).Length;
+        }
+        catch (IOException)
+        {
+            return Result.Failure<string>("file not found");
+        }
+
+        if (size > MaxFileSize)
+            return Result.Failure<string>("file too large");
+        if (BinaryExtensions.Contains(Path.GetExtension(fullPath)) || ContainsNulByte(fullPath))
+            return Result.Failure<string>("file is binary");
+
+        string content;
+        try
+        {
+            content = File.ReadAllText(fullPath);
+        }
+        catch (Exception)
+        {
+            return Result.Failure<string>("file not found");
+        }
+
+        var lines = SplitLines(content);
+        if (endLine > lines.Length)
+            return Result.Failure<string>($"endLine exceeds file length ({lines.Length} lines)");
+
+        var range = string.Join("\n", lines[(startLine - 1)..endLine]);
+        return Result.Ok(Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(range))).ToLowerInvariant());
+    }
+
+    private static string[] SplitLines(string content)
+    {
+        if (content.Length == 0)
+            return [];
+        var lines = content.Split('\n');
+        if (lines[^1].Length == 0)
+            lines = lines[..^1];
+        return lines;
     }
 
     private List<string> CollectCandidateFiles(string[] extensions)

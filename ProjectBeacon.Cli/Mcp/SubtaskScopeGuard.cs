@@ -8,7 +8,7 @@ public static class SubtaskScopeGuard
 
     private static readonly HashSet<string> PathTools = new(StringComparer.OrdinalIgnoreCase)
     {
-        "read_file", "write_file", "apply_patch", "get_tree", "search_code", "get_changed_scope", "get_signatures", "get_callers"
+        "read_file", "write_file", "apply_patch", "get_tree", "search_code", "get_changed_scope", "get_signatures", "get_callers", "hash_range"
     };
 
     public static bool UsesPath(string tool) => PathTools.Contains(tool);

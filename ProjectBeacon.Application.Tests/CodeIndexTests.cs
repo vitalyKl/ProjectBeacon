@@ -250,6 +250,199 @@ public sealed class CodeIndexTests
         }
     }
 
+    [Fact]
+    public void HashRange_SingleLine_ReturnsBareLowercaseHex()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var index = new CodeIndex(root);
+            var result = index.HashRange("src/app.cs", 1, 1);
+            Assert.True(result.Success, result.Error);
+            var hash = result.Value!;
+            Assert.Equal(64, hash.Length);
+            Assert.Matches("^[0-9a-f]{64}$", hash);
+            var expected = System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("line one"))).ToLowerInvariant();
+            Assert.Equal(expected, hash);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_MultiLine_JoinsWithNewline()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var index = new CodeIndex(root);
+            var result = index.HashRange("src/app.cs", 1, 3);
+            Assert.True(result.Success, result.Error);
+            var expected = System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("line one\nHello Beacon\nthird"))).ToLowerInvariant();
+            Assert.Equal(expected, result.Value);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_Deterministic_SameRangeSameHash()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var index = new CodeIndex(root);
+            var first = index.HashRange("src/app.cs", 1, 2);
+            var second = index.HashRange("src/app.cs", 1, 2);
+            Assert.True(first.Success);
+            Assert.True(second.Success);
+            Assert.Equal(first.Value, second.Value);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_DifferentRanges_DifferentHashes()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var index = new CodeIndex(root);
+            var a = index.HashRange("src/app.cs", 1, 2);
+            var b = index.HashRange("src/app.cs", 2, 3);
+            Assert.True(a.Success);
+            Assert.True(b.Success);
+            Assert.NotEqual(a.Value, b.Value);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_StartLineLessThanOne_Fails()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("src/app.cs", 0, 1);
+            Assert.False(result.Success);
+            Assert.Contains("startLine", result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_EndLineBeforeStartLine_Fails()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("src/app.cs", 3, 1);
+            Assert.False(result.Success);
+            Assert.Contains("endLine", result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_EndLineExceedsFileLength_Fails()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("src/app.cs", 1, 999);
+            Assert.False(result.Success);
+            Assert.Contains("exceeds", result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_PathEscape_Fails()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("../outside.txt", 1, 1);
+            Assert.False(result.Success);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_MissingFile_Fails()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("nope.txt", 1, 1);
+            Assert.False(result.Success);
+            Assert.Contains("file not found", result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_BinaryFile_Fails()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("nul.dat", 1, 1);
+            Assert.False(result.Success);
+            Assert.Contains("binary", result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_ContentChange_ChangesHash()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var index = new CodeIndex(root);
+            var before = index.HashRange("src/app.cs", 1, 3);
+            Assert.True(before.Success);
+
+            File.WriteAllText(Path.Combine(root, "src", "app.cs"), "line one\nHello Beacon\nMODIFIED\n");
+            var after = index.HashRange("src/app.cs", 1, 3);
+            Assert.True(after.Success);
+            Assert.NotEqual(before.Value, after.Value);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     static CodeIndexTests()
         => SweepStaleWorkspaces();
 
