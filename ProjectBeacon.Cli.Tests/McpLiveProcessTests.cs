@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Tests;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
+using Application.Common;
 
 public sealed class McpLiveProcessTests
 {
@@ -42,7 +43,7 @@ public sealed class McpLiveProcessTests
             Assert.Contains("apply_patch", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("shell", toolsJson, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("\"isError\":true", frames[2].ToJsonString(), StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("escapes", frames[3].ToJsonString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, ContentText(frames[3]));
             Assert.True(File.Exists(Path.Combine(root, "ok.txt")));
         }
         finally
@@ -83,4 +84,7 @@ public sealed class McpLiveProcessTests
 
         return frames;
     }
+
+    private static string? ContentText(JsonNode frame)
+        => frame?["result"]?["content"]?[0]?["text"]?.GetValue<string>();
 }

@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Common;
 public static class WorkspacePath
 {
     public const string RelativePathRequired = "path must be relative to the project folder.";
+    public const string ParentSegmentNotAllowed = "path must not contain '..' segments.";
 
     // OS-independent rootedness: the control plane (Linux) must reject Windows absolute
     // paths even when it itself runs on Linux, so this never uses System.IO.Path.
@@ -27,6 +28,19 @@ public static class WorkspacePath
     }
 
     private static bool IsDriveLetter(char c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+
+    // Both separators are significant for validation so traversal is rejected identically
+    // on Linux and Windows, even where the other separator is a legal filename character.
+    public static bool HasParentSegment(string path)
+    {
+        foreach (var segment in path.Split('/', '\\'))
+        {
+            if (segment == "..")
+                return true;
+        }
+
+        return false;
+    }
 
     public static Result<string> ResolveInRoot(string root, string? path, bool relativeOnly)
     {
@@ -65,6 +79,12 @@ public static class WorkspacePath
 
         if (relativePath.Contains('\0', StringComparison.Ordinal))
             return Result.Failure<string>("malformed path");
+
+        if (IsRootedPortable(relativePath))
+            return Result.Failure<string>(RelativePathRequired);
+
+        if (HasParentSegment(relativePath))
+            return Result.Failure<string>(ParentSegmentNotAllowed);
 
         var rootFull = Path.GetFullPath(root);
         var combined = Path.GetFullPath(Path.Combine(rootFull, relativePath));
@@ -120,8 +140,19 @@ public static class WorkspacePath
         {
             try
             {
-                if ((Directory.Exists(current) || File.Exists(current)) &&
-                    File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint))
+                if (Directory.Exists(current))
+                {
+                    // LinkTarget uses lstat on Unix, so it detects the link itself even
+                    // when GetAttributes reports the target's metadata.
+                    if (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint) ||
+                        new DirectoryInfo(current).LinkTarget is not null)
+                    {
+                        return true;
+                    }
+                }
+                else if (File.Exists(current) &&
+                    (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint) ||
+                     new FileInfo(current).LinkTarget is not null))
                 {
                     return true;
                 }

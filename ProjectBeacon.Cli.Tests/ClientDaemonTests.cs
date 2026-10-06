@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Application.Common;
 using Application.Devices;
 using Domain.Enums;
 using ProjectBeacon.Cli.Client;
@@ -405,7 +406,7 @@ public sealed class ClientDaemonTests : IDisposable
             PayloadJson = JsonSerializer.Serialize(new { path = "../secret", title = "Chat" })
         }, CancellationToken.None);
         Assert.False(escape.Ok);
-        Assert.Contains("escapes", escape.Error);
+        Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, escape.Error);
 
         var missing = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
         {

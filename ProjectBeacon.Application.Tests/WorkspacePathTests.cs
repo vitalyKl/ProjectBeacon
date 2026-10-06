@@ -3,6 +3,50 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Common;
 using Application.Mcp;
 
+// Symlink creation needs a privilege on Windows (developer mode / admin) and is
+// always available on Linux; probe once at discovery and skip with a reason when
+// the environment cannot create links, instead of failing or silently passing.
+public sealed class SymlinkRequiredFactAttribute : FactAttribute
+{
+    private static readonly bool Supported = ProbeSymbolicLinkSupport();
+
+    public SymlinkRequiredFactAttribute()
+    {
+        if (!Supported)
+            Skip = "symbolic links cannot be created by this user/machine";
+    }
+
+    private static bool ProbeSymbolicLinkSupport()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "beacon-linkprobe-" + Guid.NewGuid().ToString("N"));
+        var link = Path.Combine(dir, "probe");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            Directory.CreateSymbolicLink(link, dir);
+            return true;
+        }
+        catch (Exception ex) when (ex is PlatformNotSupportedException or UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(link))
+                    Directory.Delete(link);
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch
+            {
+                // probe cleanup only
+            }
+        }
+    }
+}
+
 public sealed class WorkspacePathTests
 {
     [Fact]
@@ -14,7 +58,7 @@ public sealed class WorkspacePathTests
         {
             var result = WorkspacePath.ResolveInsideRoot(root, "../secret.txt");
             Assert.False(result.Success);
-            Assert.Contains("escapes", result.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
         }
         finally
         {
@@ -55,7 +99,7 @@ public sealed class WorkspacePathTests
         }
     }
 
-    [Fact]
+    [SymlinkRequiredFact]
     public void ResolveInsideRoot_RejectsDirectoryJunction()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
@@ -65,14 +109,7 @@ public sealed class WorkspacePathTests
         var link = Path.Combine(root, "out");
         try
         {
-            try
-            {
-                Directory.CreateSymbolicLink(link, outside);
-            }
-            catch (Exception)
-            {
-                return;
-            }
+            Directory.CreateSymbolicLink(link, outside);
 
             var result = WorkspacePath.ResolveInsideRoot(root, "out/leak.txt");
             Assert.False(result.Success);
@@ -81,6 +118,45 @@ public sealed class WorkspacePathTests
         {
             if (Directory.Exists(link))
                 Directory.Delete(link);
+            Directory.Delete(root, true);
+            Directory.Delete(outside, true);
+        }
+    }
+
+    [SymlinkRequiredFact]
+    public void ResolveInsideRoot_RejectsSymlinkDirectory_Escape()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
+        var outside = Path.Combine(Path.GetTempPath(), "beacon-out-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(outside);
+        var leak = Path.Combine(outside, "leak.txt");
+        File.WriteAllText(leak, "sentinel");
+        var link = Path.Combine(root, "link");
+        try
+        {
+            Directory.CreateSymbolicLink(link, outside);
+
+            var resolved = WorkspacePath.ResolveInsideRoot(root, "link/leak.txt");
+            Assert.False(resolved.Success);
+            Assert.Contains("escapes", resolved.Error, StringComparison.OrdinalIgnoreCase);
+
+            var ws = new FileWorkspace(root);
+            var read = ws.ReadFile("link/leak.txt");
+            Assert.False(read.Success);
+
+            var write = ws.WriteFile("link/leak.txt", "pwned");
+            Assert.False(write.Success);
+
+            Assert.Equal("sentinel", File.ReadAllText(leak));
+            Assert.Single(Directory.GetFiles(outside));
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+                Directory.Delete(link);
+            else if (File.Exists(link))
+                File.Delete(link);
             Directory.Delete(root, true);
             Directory.Delete(outside, true);
         }
@@ -97,6 +173,69 @@ public sealed class WorkspacePathTests
             Assert.False(ws.ApplyPatch("a.txt", "missing", "x").Success);
             Assert.True(ws.ApplyPatch("a.txt", "beta", "gamma").Success);
             Assert.Equal("alpha gamma", ws.ReadFile("a.txt").Value);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    [InlineData(@"\\server\share\secret")]
+    [InlineData("//server/share/secret")]
+    public void ResolveInsideRoot_RootedPaths_Rejected_WithRelativeRequired(string path)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var result = WorkspacePath.ResolveInsideRoot(root, path);
+            Assert.False(result.Success);
+            Assert.Equal(WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("src/file.cs")]
+    [InlineData(@"src\file.cs")]
+    [InlineData("file..name.cs")]
+    public void ResolveInsideRoot_ValidRelativePaths_Accepted(string path)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var result = WorkspacePath.ResolveInsideRoot(root, path);
+            Assert.True(result.Success, result.Error);
+            Assert.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, result.Value!, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("../escape")]
+    [InlineData(@"..\escape")]
+    [InlineData("a/../b")]
+    [InlineData(@"a\..\b")]
+    public void ResolveInsideRoot_Traversal_Rejected(string path)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var result = WorkspacePath.ResolveInsideRoot(root, path);
+            Assert.False(result.Success);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
         }
         finally
         {

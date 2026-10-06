@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Tests;
 
 using System.Text;
 using System.Text.Json.Nodes;
+using Application.Common;
 using ProjectBeacon.Cli.Mcp;
 
 public sealed class McpStdioServerTests
@@ -55,7 +56,7 @@ public sealed class McpStdioServerTests
             var frames = await ReadAllFramesAsync(output);
             Assert.Equal(2, frames.Count);
             Assert.DoesNotContain("\"isError\":true", frames[0].ToJsonString(), StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("escapes", frames[1].ToJsonString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, ContentText(frames[1]));
             Assert.True(File.Exists(Path.Combine(root, "ok.txt")));
         }
         finally
@@ -259,6 +260,9 @@ public sealed class McpStdioServerTests
         var body = Encoding.UTF8.GetBytes(json + "\n");
         stream.Write(body);
     }
+
+    private static string? ContentText(JsonNode frame)
+        => frame?["result"]?["content"]?[0]?["text"]?.GetValue<string>();
 
     private static async Task<List<JsonNode>> ReadAllFramesAsync(Stream stream)
     {

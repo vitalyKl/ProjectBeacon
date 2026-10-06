@@ -38,21 +38,10 @@ public static class CommandSandbox
         obj.Remove("root");
         if (obj["path"] is JsonValue value && value.TryGetValue<string>(out var path) && !string.IsNullOrWhiteSpace(path))
         {
-            if (path.Contains('\0', StringComparison.Ordinal) || WorkspacePath.IsRootedPortable(path) || HasDotDotSegment(path))
+            if (path.Contains('\0', StringComparison.Ordinal) || WorkspacePath.IsRootedPortable(path) || WorkspacePath.HasParentSegment(path))
                 return Result.Failure<string>(WorkspacePath.RelativePathRequired);
         }
 
         return Result.Ok(obj.ToJsonString());
-    }
-
-    private static bool HasDotDotSegment(string path)
-    {
-        var segments = path.Split('/', '\\');
-        foreach (var segment in segments)
-        {
-            if (segment == "..")
-                return true;
-        }
-        return false;
     }
 }

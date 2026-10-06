@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using Application.Common;
 using ProjectBeacon.Cli.Client;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -204,7 +205,7 @@ public sealed class WorkstationActionsTests : IDisposable
     {
         var result = WorkstationActions.ListDir(_dir, "../secret");
         Assert.False(result.Success);
-        Assert.Contains("escapes", result.Error);
+        Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
     }
 
     [Fact]
@@ -269,7 +270,7 @@ public sealed class WorkstationActionsTests : IDisposable
             var payload = JsonSerializer.Serialize(new { path = "../" + Path.GetFileName(outside), createGit = false });
             var result = WorkstationActions.InitProject(_dir, payload);
             Assert.False(result.Success);
-            Assert.Contains("escapes", result.Error);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
         }
         finally
         {
@@ -315,7 +316,7 @@ public sealed class WorkstationActionsTests : IDisposable
             var payload = JsonSerializer.Serialize(new { path = "../" + Path.GetFileName(outside) });
             var result = WorkstationActions.ApplyOpencode(_dir, payload);
             Assert.False(result.Success);
-            Assert.Contains("escapes", result.Error);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
         }
         finally
         {

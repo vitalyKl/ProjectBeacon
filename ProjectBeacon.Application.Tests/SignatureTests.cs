@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.CodeIndex;
+using Application.Common;
 
 public sealed class SignatureTests
 {
@@ -260,7 +261,7 @@ public sealed class SignatureTests
             Assert.Equal("../outside.cs", file.Path);
             Assert.Equal("roslyn", file.Backend);
             Assert.Empty(file.Symbols);
-            Assert.Contains("escapes", file.Error!);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, file.Error!);
             Assert.DoesNotContain("OutsideDecoy", file.Symbols.Select(s => s.Name));
         }
         finally
@@ -290,7 +291,7 @@ public sealed class SignatureTests
             Assert.Equal("..\\outside.cs", file.Path);
             Assert.Equal("roslyn", file.Backend);
             Assert.Empty(file.Symbols);
-            Assert.Contains("escapes", file.Error!);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, file.Error!);
             Assert.DoesNotContain("OutsideDecoy", file.Symbols.Select(s => s.Name));
         }
         finally
@@ -325,7 +326,7 @@ public sealed class SignatureTests
                 Assert.Equal(requested, entry.Path);
                 Assert.Equal("roslyn", entry.Backend);
                 Assert.Empty(entry.Symbols);
-                Assert.Contains("escapes", entry.Error!);
+                Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, entry.Error!);
                 Assert.DoesNotContain("OutsideDecoy", entry.Symbols.Select(s => s.Name));
             }
         }
@@ -409,7 +410,7 @@ public sealed class SignatureTests
             var escaped = files.Single(f => f.Path == "../outside.cs");
             Assert.Equal("roslyn", escaped.Backend);
             Assert.Empty(escaped.Symbols);
-            Assert.Contains("escapes", escaped.Error!);
+            Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, escaped.Error!);
             Assert.DoesNotContain("OutsideDecoy", escaped.Symbols.Select(s => s.Name));
 
             var missing = files.Single(f => f.Path == "missing.cs");

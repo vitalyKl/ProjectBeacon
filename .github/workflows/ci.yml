@@ -6,27 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-bookworm
-        env:
-          POSTGRES_USER: beacon
-          POSTGRES_PASSWORD: beacon
-          POSTGRES_DB: beacon
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U beacon -d beacon"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     env:
-      BEACON_TEST_DATABASE_URL: postgres://beacon:beacon@localhost:5432/beacon
       POSTGRES_PASSWORD: beacon
-      JWT__Secret: ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
@@ -34,12 +25,34 @@ jobs:
         with:
           global-json-file: global.json
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore ProjectBeacon.sln
       - name: Build
-        run: dotnet build --no-restore
+        run: dotnet build ProjectBeacon.sln --no-restore
       - name: No pending model changes
         run: |
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
       - name: Test
-        run: dotnet test --no-build --verbosity normal --filter "Lane!=Gpu"
+        run: dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
+      - name: Verify formatting
+        run: dotnet format ProjectBeacon.sln --verify-no-changes
+      - name: Symlink security tests must run (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          out=$(dotnet test ProjectBeacon.Application.Tests --no-build --verbosity normal \
+                --filter "FullyQualifiedName~WorkspacePathTests.ResolveInsideRoot_RejectsSymlinkDirectory_Escape|FullyQualifiedName~WorkspacePathTests.ResolveInsideRoot_RejectsDirectoryJunction") \
+            || { echo "$out"; exit 1; }
+          echo "$out"
+          for t in ResolveInsideRoot_RejectsSymlinkDirectory_Escape ResolveInsideRoot_RejectsDirectoryJunction; do
+            if ! printf '%s\n' "$out" | grep -q "$t"; then
+              echo "::error::Symlink security test $t was not selected by the filter"
+              exit 1
+            fi
+          done
+          for t in ResolveInsideRoot_RejectsSymlinkDirectory_Escape ResolveInsideRoot_RejectsDirectoryJunction; do
+            if printf '%s\n' "$out" | grep -qF "$t [SKIP]"; then
+              echo "::error::Symlink security test $t was skipped on Linux; the control-plane path escape gate is inactive"
+              exit 1
+            fi
+          done
