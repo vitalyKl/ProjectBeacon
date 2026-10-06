@@ -151,18 +151,23 @@ public sealed class CodeIndex
                 continue;
             }
 
-            string fullPath;
-            try
+            var backend = BackendFor(language.Backend);
+            var id = backend.Id;
+
+            var resolved = WorkspacePath.ResolveInsideRoot(Root, file);
+            if (!resolved.Success)
             {
-                fullPath = Path.GetFullPath(Path.Combine(Root, file.Replace('/', Path.DirectorySeparatorChar)));
-            }
-            catch (Exception)
-            {
+                results.Add(new FileSignatures(file, [], id, resolved.Error ?? "invalid path"));
                 continue;
             }
 
+            var fullPath = resolved.Value;
+
             if (!File.Exists(fullPath))
+            {
+                results.Add(new FileSignatures(file, [], id, "file not found"));
                 continue;
+            }
 
             long size;
             try
@@ -171,11 +176,15 @@ public sealed class CodeIndex
             }
             catch (IOException)
             {
+                results.Add(new FileSignatures(file, [], id, "unreadable file"));
                 continue;
             }
 
-            if (size == 0 || size > MaxFileSize)
+            if (size > MaxFileSize)
+            {
+                results.Add(new FileSignatures(file, [], id, "file too large"));
                 continue;
+            }
 
             string content;
             try
@@ -184,11 +193,18 @@ public sealed class CodeIndex
             }
             catch (Exception)
             {
+                results.Add(new FileSignatures(file, [], id, "unreadable file"));
                 continue;
             }
 
-            var backend = BackendFor(language.Backend);
-            results.Add(backend.Extract(language, file, content));
+            try
+            {
+                results.Add(backend.Extract(language, file, content));
+            }
+            catch (Exception ex)
+            {
+                results.Add(new FileSignatures(file, [], id, $"extraction failed: {ex.Message}"));
+            }
         }
 
         var backends = results

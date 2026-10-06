@@ -176,7 +176,7 @@ public sealed class SignatureTests
     }
 
     [Fact]
-    public void GetSignatures_NonexistentFile_IsSkipped()
+    public void GetSignatures_MissingFile_ReturnsErrorEntry()
     {
         var root = MakeWorkspace();
         try
@@ -185,11 +185,196 @@ public sealed class SignatureTests
             var result = index.GetSignatures(["missing.cs"]);
 
             Assert.True(result.Success);
-            Assert.Empty(result.Value!.Files);
+            var file = result.Value!.Files.Single();
+            Assert.Equal("missing.cs", file.Path);
+            Assert.Equal("roslyn", file.Backend);
+            Assert.Empty(file.Symbols);
+            Assert.Contains("not found", file.Error!);
         }
         finally
         {
             Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void GetSignatures_SlashParentEscape_ReturnsErrorEntry_DoesNotReadOutside()
+    {
+        var root = MakeWorkspace();
+        var outside = Path.GetFullPath(Path.Combine(root, "..", "outside.cs"));
+        try
+        {
+            File.WriteAllText(outside, "public class OutsideDecoy { public int Leak() => 42; }\n");
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(["../outside.cs"]);
+
+            Assert.True(result.Success);
+            var file = result.Value!.Files.Single();
+            Assert.Equal("../outside.cs", file.Path);
+            Assert.Equal("roslyn", file.Backend);
+            Assert.Empty(file.Symbols);
+            Assert.Contains("escapes", file.Error!);
+            Assert.DoesNotContain("OutsideDecoy", file.Symbols.Select(s => s.Name));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+            DeleteFileIfPresent(outside);
+        }
+    }
+
+    [Fact]
+    public void GetSignatures_BackslashParentEscape_ReturnsErrorEntry_DoesNotReadOutside()
+    {
+        if (Path.DirectorySeparatorChar != '\\')
+            return;
+
+        var root = MakeWorkspace();
+        var outside = Path.GetFullPath(Path.Combine(root, "..", "outside.cs"));
+        try
+        {
+            File.WriteAllText(outside, "public class OutsideDecoy { public int Leak() => 42; }\n");
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(["..\\outside.cs"]);
+
+            Assert.True(result.Success);
+            var file = result.Value!.Files.Single();
+            Assert.Equal("..\\outside.cs", file.Path);
+            Assert.Equal("roslyn", file.Backend);
+            Assert.Empty(file.Symbols);
+            Assert.Contains("escapes", file.Error!);
+            Assert.DoesNotContain("OutsideDecoy", file.Symbols.Select(s => s.Name));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+            DeleteFileIfPresent(outside);
+        }
+    }
+
+    [Fact]
+    public void GetSignatures_NestedTraversal_ReturnsErrorEntry_DoesNotReadOutside()
+    {
+        var root = MakeWorkspace();
+        var outside = Path.GetFullPath(Path.Combine(root, "..", "outside.cs"));
+        try
+        {
+            File.WriteAllText(outside, "public class OutsideDecoy { public int Leak() => 42; }\n");
+            Directory.CreateDirectory(Path.Combine(root, "a"));
+
+            var paths = new List<string> { "a/../../outside.cs" };
+            if (Path.DirectorySeparatorChar == '\\')
+                paths.Add("a\\..\\..\\outside.cs");
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(paths);
+
+            Assert.True(result.Success);
+            var files = result.Value!.Files;
+            Assert.Equal(paths.Count, files.Count);
+            foreach (var (requested, entry) in paths.Zip(files))
+            {
+                Assert.Equal(requested, entry.Path);
+                Assert.Equal("roslyn", entry.Backend);
+                Assert.Empty(entry.Symbols);
+                Assert.Contains("escapes", entry.Error!);
+                Assert.DoesNotContain("OutsideDecoy", entry.Symbols.Select(s => s.Name));
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+            DeleteFileIfPresent(outside);
+        }
+    }
+
+    [Fact]
+    public void GetSignatures_TooLargeFile_ReturnsErrorEntry()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "big.cs"), new byte[1_000_001]);
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(["big.cs"]);
+
+            Assert.True(result.Success);
+            var file = result.Value!.Files.Single();
+            Assert.Equal("big.cs", file.Path);
+            Assert.Equal("roslyn", file.Backend);
+            Assert.Empty(file.Symbols);
+            Assert.Contains("too large", file.Error!);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void GetSignatures_EmptyFile_ReturnsNoSymbolsWithoutError()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "empty.cs"), "");
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(["empty.cs"]);
+
+            Assert.True(result.Success);
+            var file = result.Value!.Files.Single();
+            Assert.Equal("empty.cs", file.Path);
+            Assert.Equal("roslyn", file.Backend);
+            Assert.Empty(file.Symbols);
+            Assert.Null(file.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void GetSignatures_MixedBatch_GoodPlusEscapedPlusMissing()
+    {
+        var root = MakeWorkspace();
+        var outside = Path.GetFullPath(Path.Combine(root, "..", "outside.cs"));
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "good.cs"), "public class Good { public int Add(int a, int b) => a + b; }\n");
+            File.WriteAllText(outside, "public class OutsideDecoy { public int Leak() => 42; }\n");
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(["good.cs", "../outside.cs", "missing.cs"]);
+
+            Assert.True(result.Success);
+            var files = result.Value!.Files;
+            Assert.Equal(3, files.Count);
+
+            var good = files.Single(f => f.Path == "good.cs");
+            Assert.Null(good.Error);
+            Assert.NotEmpty(good.Symbols);
+            Assert.Contains("Good", good.Symbols.Select(s => s.Name));
+
+            var escaped = files.Single(f => f.Path == "../outside.cs");
+            Assert.Equal("roslyn", escaped.Backend);
+            Assert.Empty(escaped.Symbols);
+            Assert.Contains("escapes", escaped.Error!);
+            Assert.DoesNotContain("OutsideDecoy", escaped.Symbols.Select(s => s.Name));
+
+            var missing = files.Single(f => f.Path == "missing.cs");
+            Assert.Equal("roslyn", missing.Backend);
+            Assert.Empty(missing.Symbols);
+            Assert.Contains("not found", missing.Error!);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+            DeleteFileIfPresent(outside);
         }
     }
 
@@ -336,5 +521,18 @@ public sealed class SignatureTests
         var root = Path.Combine(Path.GetTempPath(), "beacon-sig-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         return root;
+    }
+
+    private static void DeleteFileIfPresent(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup of the shared temp decoy; a locked file must not fail the test.
+        }
     }
 }
