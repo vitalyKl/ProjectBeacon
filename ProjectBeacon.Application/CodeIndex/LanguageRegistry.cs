@@ -28,6 +28,16 @@ public sealed class LanguageRegistry : ILanguageRegistry
         return _byExtension.TryGetValue(Normalize(ext), out var def) ? def : null;
     }
 
+    private static readonly SignatureRules TypeScriptRules = new(
+        [
+            new NodeRule("class_declaration", "class"),
+            new NodeRule("interface_declaration", "interface"),
+            new NodeRule("type_alias_declaration", "type"),
+            new NodeRule("function_declaration", "function"),
+            new NodeRule("method_definition", "method"),
+        ],
+        NameField: "name");
+
     public static ILanguageRegistry CreateDefault() => new LanguageRegistry(new[]
     {
         new LanguageDefinition(
@@ -36,18 +46,15 @@ public sealed class LanguageRegistry : ILanguageRegistry
             Grammar: null,
             SignatureRules: null),
         new LanguageDefinition(
-            "typescript", "TypeScript", [".ts", ".tsx"],
+            "typescript", "TypeScript", [".ts"],
             SignatureBackend.TreeSitter,
             Grammar: "typescript",
-            SignatureRules: new SignatureRules(
-            [
-                new NodeRule("class_declaration", "class"),
-                new NodeRule("interface_declaration", "interface"),
-                new NodeRule("type_alias_declaration", "type"),
-                new NodeRule("function_declaration", "function"),
-                new NodeRule("method_definition", "method"),
-            ],
-            NameField: "name")),
+            SignatureRules: TypeScriptRules),
+        new LanguageDefinition(
+            "tsx", "TypeScript JSX", [".tsx"],
+            SignatureBackend.TreeSitter,
+            Grammar: "tsx",
+            SignatureRules: TypeScriptRules),
         new LanguageDefinition(
             "python", "Python", [".py"],
             SignatureBackend.TreeSitter,

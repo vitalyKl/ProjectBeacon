@@ -112,6 +112,37 @@ public sealed class SignatureTests
     }
 
     [Fact]
+    public void GetSignatures_Tsx_ResolvesTsxGrammar_ParsesAndExtractsDeclarations()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "App.tsx"),
+                "function App() {\n" +
+                "    return <div>Hello</div>;\n" +
+                "}\n");
+
+            var index = new CodeIndex(root);
+            var result = index.GetSignatures(["App.tsx"]);
+
+            Assert.True(result.Success);
+            var file = result.Value!.Files.Single();
+            Assert.Equal("tree-sitter", file.Backend);
+            Assert.Null(file.Error);
+            Assert.Equal("tree-sitter", result.Value.Backend);
+
+            var fn = file.Symbols.Single(s => s.Name == "App");
+            Assert.Equal("function", fn.Kind);
+            Assert.Equal(1, fn.Line);
+            Assert.Contains("function App()", fn.Signature);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void GetSignatures_MixedBatch_ReturnsMixedBackend()
     {
         var root = MakeWorkspace();
@@ -119,13 +150,28 @@ public sealed class SignatureTests
         {
             File.WriteAllText(Path.Combine(root, "A.cs"), "public class A {}\n");
             File.WriteAllText(Path.Combine(root, "b.ts"), "function f(): void {}\n");
+            File.WriteAllText(Path.Combine(root, "c.tsx"),
+                "function App() {\n    return <div>Hello</div>;\n}\n");
+            File.WriteAllText(Path.Combine(root, "d.py"), "def g():\n    return 1\n");
 
             var index = new CodeIndex(root);
-            var result = index.GetSignatures(["A.cs", "b.ts"]);
+            var result = index.GetSignatures(["A.cs", "b.ts", "c.tsx", "d.py"]);
 
             Assert.True(result.Success);
             Assert.Equal("mixed", result.Value!.Backend);
-            Assert.Equal(2, result.Value.Files.Count);
+            Assert.Equal(4, result.Value.Files.Count);
+
+            var ts = result.Value.Files.Single(f => f.Path == "b.ts");
+            Assert.Null(ts.Error);
+            Assert.Contains("f", ts.Symbols.Select(s => s.Name));
+
+            var tsx = result.Value.Files.Single(f => f.Path == "c.tsx");
+            Assert.Null(tsx.Error);
+            Assert.Contains("App", tsx.Symbols.Select(s => s.Name));
+
+            var py = result.Value.Files.Single(f => f.Path == "d.py");
+            Assert.Null(py.Error);
+            Assert.Contains("g", py.Symbols.Select(s => s.Name));
         }
         finally
         {
@@ -500,11 +546,15 @@ public sealed class SignatureTests
         var registry = LanguageRegistry.CreateDefault();
 
         Assert.Equal("csharp", registry.Resolve("src/Foo.cs")!.Id);
-        Assert.Equal("typescript", registry.Resolve("app.tsx")!.Id);
+        Assert.Equal("tsx", registry.Resolve("app.tsx")!.Id);
         Assert.Equal("typescript", registry.Resolve("bar.ts")!.Id);
         Assert.Equal("python", registry.Resolve("script.py")!.Id);
         Assert.Null(registry.Resolve("data.xyz"));
         Assert.Null(registry.Resolve("noext"));
+
+        Assert.Equal("typescript", registry.Resolve("bar.ts")!.Grammar);
+        Assert.Equal("tsx", registry.Resolve("app.tsx")!.Grammar);
+        Assert.Equal("python", registry.Resolve("script.py")!.Grammar);
     }
 
     [Fact]
