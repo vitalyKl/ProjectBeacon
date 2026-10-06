@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Application.CodeIndex;
 
-using System.Collections.Immutable;
 using Application.Common;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
@@ -14,169 +13,214 @@ public sealed class RoslynCallerFinder : ICallerFinder
     private static bool _msbuildRegistered;
     private static readonly object _lock = new();
 
+    internal static Func<Result>? MsBuildRegistrationOverride;
+    internal static Func<ISymbol, Solution, IEnumerable<ReferencedSymbol>>? ReferenceLookupOverride;
+
     private const int MaxSnippetLength = 200;
 
     public string Id => "roslyn";
 
     public Result<CallerResult> Find(CallerScope scope)
     {
-        EnsureMsBuild();
+        try
+        {
+            return FindInternal(scope);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<CallerResult>("roslyn backend failed: " + ex.Message);
+        }
+    }
+
+    private Result<CallerResult> FindInternal(CallerScope scope)
+    {
+        var msbuild = EnsureMsBuild();
+        if (!msbuild.Success)
+            return Result.Failure<CallerResult>(msbuild.Error ?? "msbuild is not available");
 
         var targetPath = Path.GetFullPath(
             Path.Combine(scope.Root, scope.RelativePath.Replace('/', Path.DirectorySeparatorChar)));
         if (!File.Exists(targetPath))
             return Result.Failure<CallerResult>("file not found");
 
-        var projectFile = FindProjectOrSolution(scope.Root, targetPath);
-        if (projectFile is null)
+        var candidates = CandidateProjects(scope.Root, targetPath);
+        if (candidates.Count == 0)
             return Result.Failure<CallerResult>("no .sln or .csproj found");
 
-        Solution solution;
-        try
+        string? lastOpenError = null;
+
+        foreach (var projectFile in candidates)
         {
             using var workspace = MSBuildWorkspace.Create(new Dictionary<string, string>());
-            if (projectFile.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            Solution solution;
+            try
             {
-                solution = workspace.OpenSolutionAsync(projectFile).GetAwaiter().GetResult();
+                if (projectFile.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+                {
+                    solution = workspace.OpenSolutionAsync(projectFile).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    var project = workspace.OpenProjectAsync(projectFile).GetAwaiter().GetResult();
+                    if (project is null)
+                    {
+                        lastOpenError = Path.GetFileName(projectFile) + ": failed to open project";
+                        continue;
+                    }
+                    solution = project.Solution;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                var project = workspace.OpenProjectAsync(projectFile).GetAwaiter().GetResult();
-                if (project is null)
-                    return Result.Failure<CallerResult>("failed to open project");
-                solution = project.Solution;
+                lastOpenError = Path.GetFileName(projectFile) + ": " + ex.Message;
+                continue;
             }
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure<CallerResult>("failed to open project: " + ex.Message);
+
+            var document = FindDocument(solution, targetPath);
+            if (document is null)
+                continue;
+
+            var solutionBuilds = !workspace.Diagnostics.Any(d => d.Kind == WorkspaceDiagnosticKind.Failure);
+
+            var root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+            if (root is null)
+                return Result.Failure<CallerResult>("failed to get syntax root");
+
+            var model = document.GetSemanticModelAsync().GetAwaiter().GetResult();
+            if (model is null)
+                return Result.Failure<CallerResult>("failed to get semantic model");
+            var text = document.GetTextAsync().GetAwaiter().GetResult();
+
+            if (scope.Line < 1 || scope.Line > text.Lines.Count)
+                return Result.Failure<CallerResult>("line out of range");
+
+            var lineSpan = text.Lines[scope.Line - 1].Span;
+            var node = root.FindNode(lineSpan);
+
+            ISymbol? symbol = null;
+            foreach (var ancestor in node.AncestorsAndSelf())
+            {
+                symbol = model.GetDeclaredSymbol(ancestor);
+                if (symbol is not null)
+                    break;
+            }
+
+            if (symbol is null)
+                symbol = model.GetSymbolInfo(node).Symbol;
+
+            if (symbol is null)
+                return Result.Failure<CallerResult>("no symbol found at line " + scope.Line);
+
+            if (!string.Equals(symbol.Name, scope.SymbolName, StringComparison.OrdinalIgnoreCase))
+                return Result.Failure<CallerResult>(
+                    "symbol at line " + scope.Line + " is '" + symbol.Name + "', not '" + scope.SymbolName + "'");
+
+            IEnumerable<ReferencedSymbol> referencedSymbols;
+            try
+            {
+                referencedSymbols = ReferenceLookupOverride is not null
+                    ? ReferenceLookupOverride(symbol, solution)
+                    : SymbolFinder.FindReferencesAsync(symbol, solution).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure<CallerResult>("reference lookup failed: " + ex.Message);
+            }
+
+            var callers = new List<CallerSite>();
+
+            foreach (var refSym in referencedSymbols)
+            {
+                foreach (var refLoc in refSym.Locations)
+                {
+                    if (refLoc.IsImplicit)
+                        continue;
+
+                    var location = refLoc.Location;
+                    var sourceFile = location.SourceTree?.FilePath;
+                    if (sourceFile is null)
+                        continue;
+
+                    var refLine = location.GetLineSpan().StartLinePosition.Line + 1;
+
+                    if (string.Equals(Path.GetFullPath(sourceFile), targetPath, StringComparison.OrdinalIgnoreCase)
+                        && refLine == scope.Line)
+                        continue;
+
+                    var refRoot = refLoc.Document.GetSyntaxRootAsync().GetAwaiter().GetResult();
+                    var snippet = ExtractSnippet(refRoot, location.SourceSpan);
+                    var enclosing = FindEnclosingSymbol(refRoot, location.SourceSpan);
+                    var relativePath = ToRelative(scope.Root, sourceFile);
+
+                    callers.Add(new CallerSite(relativePath, refLine, snippet, enclosing));
+                }
+            }
+
+            return Result.Ok(new CallerResult(scope.SymbolName, callers, Id, solutionBuilds));
         }
 
-        var document = solution.Projects
-            .SelectMany(p => p.Documents)
-            .FirstOrDefault(d =>
+        return Result.Failure<CallerResult>(
+            lastOpenError is not null
+                ? "failed to open project: " + lastOpenError
+                : "document not found in any candidate project or solution");
+    }
+
+    private static Result EnsureMsBuild()
+    {
+        if (MsBuildRegistrationOverride is not null)
+            return MsBuildRegistrationOverride();
+        lock (_lock)
+        {
+            if (_msbuildRegistered)
+                return Result.Ok();
+            try
             {
-                var dName = Path.GetFullPath(d.Name);
-                return string.Equals(dName, targetPath, StringComparison.OrdinalIgnoreCase);
-            })
+                MSBuildLocator.RegisterDefaults();
+                _msbuildRegistered = true;
+                return Result.Ok();
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure("msbuild is not available: " + ex.Message);
+            }
+        }
+    }
+
+    internal static IReadOnlyList<string> CandidateProjects(string root, string targetPath)
+    {
+        var fullRoot = Path.GetFullPath(root);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(targetPath));
+        var result = new List<string>();
+        while (dir is not null
+            && (dir == fullRoot
+                || dir.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+        {
+            result.AddRange(SafeFiles(dir, "*.csproj"));
+            result.AddRange(SafeFiles(dir, "*.sln"));
+            dir = Path.GetDirectoryName(dir);
+        }
+        return result;
+    }
+
+    private static Document? FindDocument(Solution solution, string targetPath)
+    {
+        return solution.Projects
+            .SelectMany(p => p.Documents)
+            .FirstOrDefault(d => string.Equals(
+                Path.GetFullPath(d.Name), targetPath, StringComparison.OrdinalIgnoreCase))
             ?? solution.Projects
                 .SelectMany(p => p.Documents)
                 .FirstOrDefault(d => string.Equals(
                     Path.GetFileName(d.Name), Path.GetFileName(targetPath), StringComparison.OrdinalIgnoreCase));
-        if (document is null)
-            return Result.Failure<CallerResult>("document not found in project");
-
-        var root = document.GetSyntaxRootAsync().GetAwaiter().GetResult();
-        if (root is null)
-            return Result.Failure<CallerResult>("failed to get syntax root");
-
-        var model = document.GetSemanticModelAsync().GetAwaiter().GetResult();
-        if (model is null)
-            return Result.Failure<CallerResult>("failed to get semantic model");
-        var text = document.GetTextAsync().GetAwaiter().GetResult();
-
-        if (scope.Line < 1 || scope.Line > text.Lines.Count)
-            return Result.Failure<CallerResult>("line out of range");
-
-        var lineSpan = text.Lines[scope.Line - 1].Span;
-        var node = root.FindNode(lineSpan);
-
-        ISymbol? symbol = null;
-        foreach (var ancestor in node.AncestorsAndSelf())
-        {
-            symbol = model.GetDeclaredSymbol(ancestor);
-            if (symbol is not null)
-                break;
-        }
-
-        if (symbol is null)
-            symbol = model.GetSymbolInfo(node).Symbol;
-
-        if (symbol is null)
-            return Result.Failure<CallerResult>("no symbol found at line " + scope.Line);
-
-        if (!string.Equals(symbol.Name, scope.SymbolName, StringComparison.OrdinalIgnoreCase))
-            return Result.Failure<CallerResult>(
-                "symbol at line " + scope.Line + " is '" + symbol.Name + "', not '" + scope.SymbolName + "'");
-
-        IEnumerable<ReferencedSymbol> referencedSymbols;
-        try
-        {
-            referencedSymbols = SymbolFinder.FindReferencesAsync(symbol, solution).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            return Result.Failure<CallerResult>("reference lookup failed: " + ex.Message);
-        }
-
-        var callers = new List<CallerSite>();
-
-        foreach (var refSym in referencedSymbols)
-        {
-            foreach (var refLoc in refSym.Locations)
-            {
-                if (refLoc.IsImplicit)
-                    continue;
-
-                var location = refLoc.Location;
-                var sourceFile = location.SourceTree?.FilePath;
-                if (sourceFile is null)
-                    continue;
-
-                var refLine = location.GetLineSpan().StartLinePosition.Line + 1;
-
-                if (string.Equals(Path.GetFullPath(sourceFile), targetPath, StringComparison.OrdinalIgnoreCase)
-                    && refLine == scope.Line)
-                    continue;
-
-                var refRoot = refLoc.Document.GetSyntaxRootAsync().GetAwaiter().GetResult();
-                var snippet = ExtractSnippet(refRoot, location.SourceSpan);
-                var enclosing = FindEnclosingSymbol(refRoot, location.SourceSpan);
-                var relativePath = ToRelative(scope.Root, sourceFile);
-
-                callers.Add(new CallerSite(relativePath, refLine, snippet, enclosing));
-            }
-        }
-
-        return Result.Ok(new CallerResult(scope.SymbolName, callers, Id, true));
-    }
-
-    private static void EnsureMsBuild()
-    {
-        lock (_lock)
-        {
-            if (!_msbuildRegistered)
-            {
-                MSBuildLocator.RegisterDefaults();
-                _msbuildRegistered = true;
-            }
-        }
-    }
-
-    private static string? FindProjectOrSolution(string root, string targetPath)
-    {
-        var sln = SafeFiles(root, "*.sln").FirstOrDefault();
-        if (sln is not null)
-            return sln;
-
-        var fullRoot = Path.GetFullPath(root);
-        var dir = Path.GetDirectoryName(Path.GetFullPath(targetPath));
-        while (dir is not null && (dir == fullRoot || dir.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
-        {
-            var found = SafeFiles(dir, "*.sln").FirstOrDefault() ?? SafeFiles(dir, "*.csproj").FirstOrDefault();
-            if (found is not null)
-                return found;
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return null;
     }
 
     private static IReadOnlyList<string> SafeFiles(string dir, string pattern)
     {
         try
         {
-            return Directory.EnumerateFiles(dir, pattern).OrderBy(f => f.Length).ToList();
+            return Directory.EnumerateFiles(dir, pattern)
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
         catch (Exception)
         {

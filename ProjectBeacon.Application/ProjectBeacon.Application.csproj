@@ -20,4 +20,8 @@
     <ProjectReference Include="..\ProjectBeacon.Domain\ProjectBeacon.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ProjectBeacon.Application.Tests" />
+  </ItemGroup>
+
 </Project>
