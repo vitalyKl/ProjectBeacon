@@ -38,7 +38,7 @@ public static class CommandSandbox
         obj.Remove("root");
         if (obj["path"] is JsonValue value && value.TryGetValue<string>(out var path) && !string.IsNullOrWhiteSpace(path))
         {
-            if (path.Contains('\0', StringComparison.Ordinal) || Path.IsPathRooted(path) || HasDotDotSegment(path))
+            if (path.Contains('\0', StringComparison.Ordinal) || WorkspacePath.IsRootedPortable(path) || HasDotDotSegment(path))
                 return Result.Failure<string>(WorkspacePath.RelativePathRequired);
         }
 

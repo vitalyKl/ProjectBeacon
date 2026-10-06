@@ -4,6 +4,30 @@ public static class WorkspacePath
 {
     public const string RelativePathRequired = "path must be relative to the project folder.";
 
+    // OS-independent rootedness: the control plane (Linux) must reject Windows absolute
+    // paths even when it itself runs on Linux, so this never uses System.IO.Path.
+    public static bool IsRootedPortable(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        if (path[0] == '/')
+            return true;
+
+        if (path.Length > 1 && path[0] == '\\' && path[1] == '\\')
+            return true;
+
+        if (path.Length > 1 && IsDriveLetter(path[0]) && path[1] == ':')
+        {
+            // "C:" is rooted; "C:\x"/"C:/x" are rooted; "C:x" (drive-relative) is not.
+            return path.Length == 2 || path[2] == '/' || path[2] == '\\';
+        }
+
+        return false;
+    }
+
+    private static bool IsDriveLetter(char c) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+
     public static Result<string> ResolveInRoot(string root, string? path, bool relativeOnly)
     {
         if (string.IsNullOrWhiteSpace(root))
@@ -24,7 +48,7 @@ public static class WorkspacePath
             }
         }
 
-        if (Path.IsPathRooted(path))
+        if (IsRootedPortable(path))
         {
             if (relativeOnly)
                 return Result.Failure<string>(RelativePathRequired);

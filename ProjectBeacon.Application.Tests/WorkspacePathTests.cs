@@ -103,4 +103,39 @@ public sealed class WorkspacePathTests
             Directory.Delete(root, true);
         }
     }
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData("C:\\secret")]
+    [InlineData("C:/secret")]
+    [InlineData("c:\\lower")]
+    [InlineData("C:")]
+    [InlineData("\\\\server\\share")]
+    [InlineData("//server/share")]
+    [InlineData("\\\\server\\share\\secret")]
+    [InlineData("//server/share/secret")]
+    public void IsRootedPortable_RootedForms_ReturnTrue(string path)
+    {
+        Assert.True(WorkspacePath.IsRootedPortable(path));
+    }
+
+    [Theory]
+    [InlineData("src/file.cs")]
+    [InlineData("src\\file.cs")]
+    [InlineData("foo/bar")]
+    [InlineData("foo\\bar")]
+    [InlineData("relative/path")]
+    [InlineData("relative\\path")]
+    [InlineData("file..name.cs")]
+    [InlineData("../escape")]
+    [InlineData("..\\escape")]
+    [InlineData("a/../b")]
+    [InlineData("a\\..\\b")]
+    [InlineData("C:foo")]
+    [InlineData(".")]
+    [InlineData("")]
+    public void IsRootedPortable_RelativeAndTraversal_ReturnFalse(string path)
+    {
+        Assert.False(WorkspacePath.IsRootedPortable(path));
+    }
 }
