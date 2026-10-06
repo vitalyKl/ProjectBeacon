@@ -18,6 +18,10 @@ public sealed record FileSignatures(string Path, IReadOnlyList<SymbolSignature> 
 
 public sealed record SignatureResult(IReadOnlyList<FileSignatures> Files, string Backend);
 
+public sealed record CallerSite(string Path, int Line, string Snippet, string? Symbol);
+
+public sealed record CallerResult(string Symbol, IReadOnlyList<CallerSite> Callers, string Backend, bool? SolutionBuilds);
+
 /// <summary>
 /// Single implementation of the local code index. It caches nothing: every
 /// query re-scans the working tree, so the index can never be silently stale.
@@ -549,6 +553,81 @@ public sealed class CodeIndex
         catch (Exception)
         {
             return Result.Failure<string>("git is not available");
+        }
+    }
+
+    public Result<CallerResult> GetCallers(string relativePath, string symbolName, int line)
+    {
+        if (!Directory.Exists(Root))
+            return Result.Failure<CallerResult>("directory not found");
+        if (string.IsNullOrWhiteSpace(symbolName))
+            return Result.Failure<CallerResult>("missing symbol name");
+        if (line < 1)
+            return Result.Failure<CallerResult>("line must be >= 1");
+
+        var resolved = WorkspacePath.ResolveInsideRoot(Root, relativePath);
+        if (!resolved.Success)
+            return Result.Failure<CallerResult>(resolved.Error ?? "invalid path");
+        if (!File.Exists(resolved.Value))
+            return Result.Failure<CallerResult>("file not found");
+
+        var normalized = relativePath.Replace('\\', '/');
+        var language = _registry.Resolve(normalized);
+
+        if (language?.Backend == SignatureBackend.Roslyn)
+        {
+            var roslynScope = new CallerScope(Root, normalized, symbolName, line, []);
+            var roslynResult = new RoslynCallerFinder().Find(roslynScope);
+            if (roslynResult.Success)
+                return roslynResult;
+
+            var roslynCandidates = CollectCandidateFiles(language.Extensions);
+            var heurScope = new CallerScope(Root, normalized, symbolName, line, roslynCandidates);
+            var heurResult = new HeuristicCallerFinder().Find(heurScope);
+            if (heurResult.Success)
+            {
+                var v = heurResult.Value!;
+                return Result.Ok(new CallerResult(v.Symbol, v.Callers, v.Backend, false));
+            }
+            return heurResult;
+        }
+
+        var extensions = language?.Extensions ?? [Path.GetExtension(normalized)];
+        var candidates = CollectCandidateFiles(extensions);
+        var scope = new CallerScope(Root, normalized, symbolName, line, candidates);
+        return new HeuristicCallerFinder().Find(scope);
+    }
+
+    private List<string> CollectCandidateFiles(string[] extensions)
+    {
+        var files = new List<string>();
+        CollectFilesForCallers(Root, extensions, files);
+        return files;
+    }
+
+    private void CollectFilesForCallers(string dir, string[] extensions, List<string> files)
+    {
+        foreach (var sub in SafeEnumerateDirectories(dir))
+        {
+            if (IgnoredDirectories.Contains(Path.GetFileName(sub)))
+                continue;
+            CollectFilesForCallers(sub, extensions, files);
+        }
+
+        foreach (var file in SafeEnumerateFiles(dir))
+        {
+            var ext = Path.GetExtension(file);
+            if (extensions.Any(e => string.Equals(ext, e, StringComparison.OrdinalIgnoreCase)))
+            {
+                try
+                {
+                    if (new FileInfo(file).Length <= MaxFileSize)
+                        files.Add(ToRelative(file));
+                }
+                catch (IOException)
+                {
+                }
+            }
         }
     }
 }

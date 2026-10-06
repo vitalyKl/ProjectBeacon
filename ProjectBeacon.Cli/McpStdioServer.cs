@@ -127,6 +127,8 @@ public static class McpStdioServer
             Props(("path", "string", false), ("maxFiles", "integer", false))),
         Tool("get_signatures", "Extract symbol signatures (classes, methods, functions) from changed or specified source files.",
             Props(("path", "string", false), ("maxFiles", "integer", false))),
+        Tool("get_callers", "Find single-hop incoming references (callers) for a symbol at a given file/line.",
+            Props(("path", "string", true), ("symbolName", "string", true), ("line", "integer", true))),
         Tool("model_bind", "Bind a pipeline role (planner, actor, review) to a local model backend. Requires BEACON_PROJECT_ID.",
             Props(("role", "string", true), ("modelBackendId", "string", true))),
         Tool("model_status", "Show local model backends, role bindings and llama-swap proxy status. Requires BEACON_PROJECT_ID.",
@@ -178,6 +180,10 @@ public static class McpStdioServer
                 "get_signatures" => TextResult(id, index.GetSignatures(
                     OptArg(arguments, "path") is { Length: > 0 } p ? SplitPrefixes(p) : null,
                     OptInt(arguments, "maxFiles") ?? CodeIndex.DefaultMaxFiles), FormatSignatures),
+                "get_callers" => TextResult(id, index.GetCallers(
+                    Arg(arguments, "path"),
+                    Arg(arguments, "symbolName"),
+                    OptInt(arguments, "line") ?? 1), FormatCallers),
                 "model_bind" => await ModelBindAsync(id, arguments, api, env),
                 "model_status" => await ModelStatusAsync(id, api, env),
                 "task_create_subtask" => await TaskCreateSubtaskAsync(id, arguments, api, env),
@@ -612,6 +618,24 @@ public static class McpStdioServer
             }
             foreach (var symbol in file.Symbols)
                 lines.Add($"  {symbol.Kind}: {symbol.Name} (line {symbol.Line}) — {symbol.Signature}");
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    private static string FormatCallers(CallerResult result)
+    {
+        if (result.Callers.Count == 0)
+            return $"No callers found for '{result.Symbol}'.";
+
+        var backendSuffix = string.IsNullOrEmpty(result.Backend) ? "" : $", backend: {result.Backend}";
+        var buildsSuffix = result.SolutionBuilds is bool b ? $", solutionBuilds: {b}" : "";
+        var lines = new List<string> { $"# Callers of {result.Symbol} ({result.Callers.Count}{backendSuffix}{buildsSuffix})" };
+
+        foreach (var caller in result.Callers)
+        {
+            var symbolSuffix = caller.Symbol is null ? "" : $" in {caller.Symbol}";
+            lines.Add($"  {caller.Path}:{caller.Line}{symbolSuffix} — {caller.Snippet}");
         }
 
         return string.Join("\n", lines);
