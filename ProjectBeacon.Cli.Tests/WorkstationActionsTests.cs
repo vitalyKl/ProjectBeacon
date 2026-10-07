@@ -459,11 +459,14 @@ public sealed class WorkstationActionsTests : IDisposable
     public void ReplaceBeaconCommand_UsesBeaconPathFromSettingsFile()
     {
         var settingsFile = Path.Combine(_dir, "workstation.json");
-        new WorkstationSettings { BeaconPath = "/opt/beacon/beacon" }.Save(settingsFile);
+        var beacon = Path.Combine(_dir, "bin", "beacon");
+        Directory.CreateDirectory(Path.GetDirectoryName(beacon)!);
+        File.WriteAllText(beacon, "");
+        new WorkstationSettings { BeaconPath = beacon }.Save(settingsFile);
         using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp"]}}""");
         var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, settingsPath: settingsFile);
         using var outDoc = JsonDocument.Parse(result.GetRawText());
-        Assert.Equal("/opt/beacon/beacon", outDoc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
+        Assert.Equal(beacon, outDoc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
     }
 
     [Fact]
@@ -471,6 +474,15 @@ public sealed class WorkstationActionsTests : IDisposable
     {
         var settingsFile = Path.Combine(_dir, "workstation-empty.json");
         new WorkstationSettings().Save(settingsFile);
+        var resolved = WorkstationActions.ResolveBeaconPath(settingsFile);
+        Assert.Equal(Environment.ProcessPath, resolved);
+    }
+
+    [Fact]
+    public void ResolveBeaconPath_IgnoresMissingOverride()
+    {
+        var settingsFile = Path.Combine(_dir, "workstation-missing.json");
+        new WorkstationSettings { BeaconPath = Path.Combine(_dir, "no-such", "beacon") }.Save(settingsFile);
         var resolved = WorkstationActions.ResolveBeaconPath(settingsFile);
         Assert.Equal(Environment.ProcessPath, resolved);
     }

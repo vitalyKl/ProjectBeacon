@@ -1613,7 +1613,7 @@
     <value>还没有工作站。请在设置中添加设备并启动 beacon.exe。</value>
   </data>
   <data name="DeviceOfflineHint" xml:space="preserve">
-    <value>此设备离线。启动 artifacts/daemon/beacon.exe（或 beacon client），等到显示已连接。</value>
+    <value>此设备离线。启动 artifacts/daemon-win-x64/beacon.exe（或 beacon client），等到显示已连接。</value>
   </data>
   <data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>浏览列出的是所选工作站上的文件夹，不是此浏览器中的文件夹。</value>

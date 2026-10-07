@@ -1613,7 +1613,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
     <value>Noch kein Arbeitsplatz. Fügen Sie in den Einstellungen ein Gerät hinzu und starten Sie beacon.exe.</value>
   </data>
   <data name="DeviceOfflineHint" xml:space="preserve">
-    <value>Dieses Gerät ist offline. Starten Sie artifacts/daemon/beacon.exe (oder beacon client) und warten Sie, bis Verbunden erscheint.</value>
+    <value>Dieses Gerät ist offline. Starten Sie artifacts/daemon-win-x64/beacon.exe (oder beacon client) und warten Sie, bis Verbunden erscheint.</value>
   </data>
   <data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>Die Liste zeigt Ordner auf dem gewählten Arbeitsplatz, nicht in diesem Browser.</value>

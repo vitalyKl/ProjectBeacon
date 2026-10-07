@@ -1656,7 +1656,7 @@ No Beacon-hosted coding agent.</value>
     <value>No workstation yet. Add a device in Settings and start beacon.exe.</value>
   </data>
   <data name="DeviceOfflineHint" xml:space="preserve">
-    <value>This device is offline. Start artifacts/daemon/beacon.exe (or beacon client) and wait until it shows Connected.</value>
+    <value>This device is offline. Start artifacts/daemon-win-x64/beacon.exe (or beacon client) and wait until it shows Connected.</value>
   </data>
   <data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>Browse lists folders on the selected workstation, not in this browser.</value>

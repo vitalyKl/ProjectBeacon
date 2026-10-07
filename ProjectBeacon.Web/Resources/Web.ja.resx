@@ -1613,7 +1613,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>ワークステーションはまだありません。設定でデバイスを追加し、beacon.exe を起動してください。</value>
   </data>
   <data name="DeviceOfflineHint" xml:space="preserve">
-    <value>このデバイスはオフラインです。artifacts/daemon/beacon.exe（または beacon client）を起動し、接続中になるまで待ってください。</value>
+    <value>このデバイスはオフラインです。artifacts/daemon-win-x64/beacon.exe（または beacon client）を起動し、接続中になるまで待ってください。</value>
   </data>
   <data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>一覧は選択したワークステーション上のフォルダであり、このブラウザ内ではありません。</value>

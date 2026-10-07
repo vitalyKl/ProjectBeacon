@@ -550,7 +550,11 @@ public static class WorkstationActions
     public static string? ResolveBeaconPath(string? settingsPath = null)
     {
         var (settings, _) = WorkstationSettings.TryRead(settingsPath);
-        return !string.IsNullOrWhiteSpace(settings.BeaconPath) ? settings.BeaconPath : Environment.ProcessPath;
+        // A saved override pointing at a build that no longer exists (stale dev path)
+        // must not shadow the running package binary.
+        return !string.IsNullOrWhiteSpace(settings.BeaconPath) && File.Exists(settings.BeaconPath)
+            ? settings.BeaconPath
+            : Environment.ProcessPath;
     }
 
     public static JsonElement ReplaceBeaconCommand(JsonElement mcp, string? beaconPath = null, string? settingsPath = null)
