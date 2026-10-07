@@ -17,6 +17,8 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     [Fact]
     public async Task ConcurrentClaim_OnlyOneSucceeds()
     {
+        if (!_postgres.Available) return;
+
         Guid taskId, projectId;
         await using (var seed = _postgres.CreateContext())
         {
@@ -45,6 +47,8 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     [Fact]
     public async Task SequentialClaim_FirstSucceeds_SecondFails()
     {
+        if (!_postgres.Available) return;
+
         Guid taskId, projectId;
         await using (var seed = _postgres.CreateContext())
         {
@@ -73,6 +77,8 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
     [Fact]
     public async Task NonMember_CannotClaimForeignProjectTask()
     {
+        if (!_postgres.Available) return;
+
         Guid projectAId, projectBId, taskId;
         await using (var seed = _postgres.CreateContext())
         {

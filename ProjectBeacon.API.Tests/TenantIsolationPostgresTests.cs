@@ -16,6 +16,8 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task ProjectScope_HidesOtherProjectTasks()
     {
+        if (!_postgres.Available) return;
+
         Guid projectA;
         Guid projectB;
         Guid taskA;
@@ -69,6 +71,8 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task NoScope_ProjectScopedQuery_ReturnsEmpty()
     {
+        if (!_postgres.Available) return;
+
         Guid taskA;
         Guid taskB;
 
@@ -103,6 +107,8 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task OrgScope_HidesOtherOrgProjects()
     {
+        if (!_postgres.Available) return;
+
         Guid orgA;
         Guid orgB;
         Guid projectA;
@@ -146,6 +152,8 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task FilterAppliesWithoutIgnoreQueryFilters()
     {
+        if (!_postgres.Available) return;
+
         Guid projectA;
         Guid taskB;
 

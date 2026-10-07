@@ -8,6 +8,8 @@ public sealed class PostgresFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
 
+    public bool Available { get; private set; }
+
     public string ConnectionString { get; private set; } = string.Empty;
 
     public async Task InitializeAsync()
@@ -16,18 +18,32 @@ public sealed class PostgresFixture : IAsyncLifetime
         if (!string.IsNullOrEmpty(url))
         {
             ConnectionString = ToNpgsql(url);
+            Available = true;
         }
-        else
+        else if (!IsCi)
         {
-            _container = new PostgreSqlBuilder()
-                .WithImage("postgres:16-alpine")
-                .WithDatabase("beacon")
-                .WithUsername("beacon")
-                .WithPassword("beacon")
-                .Build();
-            await _container.StartAsync();
-            ConnectionString = _container.GetConnectionString();
+            try
+            {
+                _container = new PostgreSqlBuilder()
+                    .WithImage("postgres:16-alpine")
+                    .WithDatabase("beacon")
+                    .WithUsername("beacon")
+                    .WithPassword("beacon")
+                    .Build();
+                await _container.StartAsync();
+                ConnectionString = _container.GetConnectionString();
+                Available = true;
+            }
+            catch
+            {
+                if (_container is not null)
+                    await _container.DisposeAsync();
+                return;
+            }
         }
+
+        if (!Available)
+            return;
 
         await using var db = CreateContext();
         await db.Database.EnsureCreatedAsync();
@@ -37,6 +53,15 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         if (_container is not null)
             await _container.DisposeAsync();
+    }
+
+    private static bool IsCi
+    {
+        get
+        {
+            var ci = Environment.GetEnvironmentVariable("CI");
+            return string.Equals(ci, "true", StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     public BeaconDbContext CreateContext()

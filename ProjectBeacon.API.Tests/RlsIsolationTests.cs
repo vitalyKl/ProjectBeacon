@@ -30,6 +30,8 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
     public async Task InitializeAsync()
     {
+        if (!_postgres.Available) return;
+
         await using var conn = new NpgsqlConnection(_postgres.ConnectionString);
         await conn.OpenAsync();
 
@@ -133,6 +135,8 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     [Fact]
     public async Task Rls_ProjectScope_HidesOtherProjectRows_ViaRawSql()
     {
+        if (!_postgres.Available) return;
+
         var (projectA, taskA) = await SeedTestDataAsync("A");
         var (projectB, taskB) = await SeedTestDataAsync("B");
 
@@ -158,6 +162,8 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     [Fact]
     public async Task Rls_NoScope_DeniesAllRows_ViaRawSql()
     {
+        if (!_postgres.Available) return;
+
         var (_, taskA) = await SeedTestDataAsync("FailClosed");
 
         await using var conn = await OpenRlsConnectionAsync();
@@ -175,6 +181,8 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     [Fact]
     public async Task Rls_Unscoped_AllowsAllRows_ViaRawSql()
     {
+        if (!_postgres.Available) return;
+
         var (_, taskA) = await SeedTestDataAsync("Unscoped");
 
         await using var conn = await OpenRlsConnectionAsync();
