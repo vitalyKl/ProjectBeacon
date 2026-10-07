@@ -116,8 +116,8 @@ public sealed class CodeIndex
         if (!changed.Success)
             return changed;
 
-        var filtered = FilterByScope(changed.Value!, paths);
-        var limited = maxFiles > 0 ? filtered.Take(maxFiles).ToList() : filtered;
+        var scoped = FilterByScope(changed.Value!, paths).Value!;
+        var limited = maxFiles > 0 ? scoped.Take(maxFiles).ToList() : scoped;
         return Result.Ok<IReadOnlyList<string>>(limited);
     }
 
@@ -255,15 +255,18 @@ public sealed class CodeIndex
         return Result.Ok(new SearchResult(query, matches, truncated));
     }
 
-    public static List<string> FilterByScope(IReadOnlyCollection<string> files, IReadOnlyCollection<string>? prefixes)
+    public static Result<List<string>> FilterByScope(IReadOnlyCollection<string> files, IReadOnlyCollection<string>? prefixes)
     {
+        if (FirstRootedPrefix(prefixes) is not null)
+            return Result.Failure<List<string>>(WorkspacePath.RelativePathRequired);
+
         var normalized = NormalizePrefixes(prefixes);
         if (normalized.Length == 0)
-            return files.ToList();
+            return Result.Ok(files.ToList());
 
-        return files
+        return Result.Ok(files
             .Where(f => normalized.Any(p => PathMatcher.MatchesPrefix(f, p)))
-            .ToList();
+            .ToList());
     }
 
     public static List<string> ParsePorcelain(string output)

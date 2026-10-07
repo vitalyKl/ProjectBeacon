@@ -203,9 +203,9 @@ public sealed class CodeIndexTests
     {
         var files = new[] { "src/app.cs", "src2/other.cs", "README.md" };
 
-        Assert.Equal(new[] { "src/app.cs" }, CodeIndex.FilterByScope(files, new[] { "src" }));
-        Assert.Equal(files, CodeIndex.FilterByScope(files, null));
-        Assert.Equal(new[] { "src/app.cs", "README.md" }, CodeIndex.FilterByScope(files, new[] { "src", "README.md" }));
+        Assert.Equal(new[] { "src/app.cs" }, CodeIndex.FilterByScope(files, new[] { "src" }).Value);
+        Assert.Equal(files, CodeIndex.FilterByScope(files, null).Value);
+        Assert.Equal(new[] { "src/app.cs", "README.md" }, CodeIndex.FilterByScope(files, new[] { "src", "README.md" }).Value);
     }
 
     [Fact]
@@ -563,13 +563,13 @@ public sealed class CodeIndexTests
     [InlineData("/absolute/prefix")]
     [InlineData(@"C:\secret")]
     [InlineData("C:/secret")]
-    public void FilterByScope_AbsolutePrefix_ReturnsEmpty_NotError(string prefix)
+    public void FilterByScope_AbsolutePrefix_Fails(string prefix)
     {
         var files = new[] { "src/app.cs", "src2/other.cs", "README.md" };
-        // Same behavior: PathMatcher.Normalize does not reject absolute paths,
-        // so the absolute prefix never matches any relative file path.
+        // A rooted prefix is rejected instead of silently matching nothing.
         var result = CodeIndex.FilterByScope(files, new[] { prefix });
-        Assert.Empty(result);
+        Assert.False(result.Success);
+        Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
     }
 
     // ── Path regression: traversal still blocked ──────────────────────────
