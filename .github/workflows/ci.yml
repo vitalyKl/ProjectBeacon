@@ -10,12 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  build-test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+  build-test-linux:
+    runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: beacon
     services:
@@ -39,7 +35,6 @@ jobs:
         with:
           global-json-file: global.json
       - name: Export test DB URL
-        if: runner.os == 'Linux'
         shell: bash
         run: echo "BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon" >> "$GITHUB_ENV"
       - name: Restore dependencies
@@ -54,8 +49,7 @@ jobs:
         run: dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes
-      - name: Symlink security tests must run (Linux)
-        if: runner.os == 'Linux'
+      - name: Symlink security tests must run
         run: |
           set -euo pipefail
           out=$(dotnet test ProjectBeacon.Application.Tests --no-build --verbosity normal \
@@ -73,3 +67,30 @@ jobs:
               exit 1
             fi
           done
+
+  build-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    env:
+      POSTGRES_PASSWORD: beacon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore dependencies
+        run: dotnet restore ProjectBeacon.sln
+      - name: Build
+        run: dotnet build ProjectBeacon.sln --no-restore
+      - name: No pending model changes
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+      - name: Test
+        run: dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
+      - name: Verify formatting
+        run: dotnet format ProjectBeacon.sln --verify-no-changes
