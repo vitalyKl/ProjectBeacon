@@ -18,12 +18,23 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     env:
       POSTGRES_PASSWORD: beacon
+      BEACON_TEST_DATABASE_URL: postgres://beacon:beacon@localhost:5432/beacon
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name pg -e POSTGRES_USER=beacon -e POSTGRES_PASSWORD=beacon -e POSTGRES_DB=beacon -p 5432:5432 postgres:16-alpine
+          for i in $(seq 1 30); do
+            if docker exec pg pg_isready -U beacon -q 2>/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+        shell: bash
       - name: Restore dependencies
         run: dotnet restore ProjectBeacon.sln
       - name: Build

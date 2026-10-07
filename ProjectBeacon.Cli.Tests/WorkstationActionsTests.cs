@@ -51,7 +51,8 @@ public sealed class WorkstationActionsTests : IDisposable
         Assert.Contains("beacon", opc);
         Assert.Contains("\"read\": \"deny\"", opc);
         Assert.Contains("beacon-local/qwen", opc);
-        Assert.Contains(full.Replace("\\", "\\\\"), result.Value!.Replace("/", "\\"));
+        using var valDoc = JsonDocument.Parse(result.Value!);
+        Assert.Equal(full, valDoc.RootElement.GetProperty("path").GetString());
     }
 
     [Fact]

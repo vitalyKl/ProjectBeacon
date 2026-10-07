@@ -9,13 +9,14 @@ internal static class EvalCheck
         var psi = new ProcessStartInfo
         {
             FileName = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh",
-            Arguments = OperatingSystem.IsWindows() ? "/c " + command : "-c " + command,
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        psi.ArgumentList.Add(OperatingSystem.IsWindows() ? "/c" : "-c");
+        psi.ArgumentList.Add(command);
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("check did not start");
         var stdout = process.StandardOutput.ReadToEndAsync();
