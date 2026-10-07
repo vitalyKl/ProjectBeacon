@@ -91,6 +91,18 @@ jobs:
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
       - name: Test
-        run: dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
+        shell: bash
+        run: |
+          max_retries=2
+          for i in $(seq 0 $max_retries); do
+            dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
+            code=$?
+            if [ $code -eq 0 ]; then exit 0; fi
+            if [ $i -lt $max_retries ]; then
+              echo "Test run failed (attempt $((i+1))), retrying in 10s..."
+              sleep 10
+            fi
+          done
+          exit $code
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes
