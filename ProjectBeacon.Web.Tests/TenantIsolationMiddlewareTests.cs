@@ -29,6 +29,9 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         _connection.Dispose();
     }
 
+    private static void SetCreatedAt(Project project, DateTime when)
+        => typeof(Project).GetProperty(nameof(Project.CreatedAt))!.SetValue(project, when);
+
     [Fact]
     public async Task StaleCookieProjectId_ReplacedByMembership()
     {
@@ -143,6 +146,8 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         await _db.SaveChangesAsync();
         var oldest = Project.Create("A", null, org.Id);
         var newer = Project.Create("B", null, org.Id);
+        SetCreatedAt(oldest, DateTime.UtcNow.AddDays(-1));
+        SetCreatedAt(newer, DateTime.UtcNow);
         _db.Projects.AddRange(oldest, newer);
         var user = User.Create("admin", "admin@example.com", "hash", true);
         _db.Users.Add(user);

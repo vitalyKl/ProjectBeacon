@@ -191,6 +191,7 @@ public sealed class ClientDaemonTests : IDisposable
     {
         var handler = new RouteHandler
         {
+            CommandsHold = TimeSpan.FromSeconds(2),
             Impl = req =>
             {
                 var path = req.RequestUri!.AbsolutePath;
@@ -203,15 +204,20 @@ public sealed class ClientDaemonTests : IDisposable
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
-        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
+        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), null, openCode)
         {
-            DelayAsync = (_, ct) => Task.Delay(1, ct),
-            HeartbeatInterval = TimeSpan.Zero,
-            CommandErrorDelay = TimeSpan.Zero
+            // A real (non-zero) interval keeps the daemon from spawning a fresh nvidia-smi
+            // process every loop turn, which would starve the polling below on loaded hosts.
+            HeartbeatInterval = TimeSpan.FromMilliseconds(150)
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        try { await daemon.RunAsync(cts.Token); }
-        catch (OperationCanceledException) { }
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var run = daemon.RunAsync(cts.Token);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (handler.Heartbeats < 1 && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        cts.Cancel();
+        try { await run; } catch (OperationCanceledException) { }
         Assert.True(handler.Heartbeats >= 1);
         Assert.True(daemon.Snapshot.Connected);
     }
@@ -461,17 +467,24 @@ public sealed class ClientDaemonTests : IDisposable
         public Func<HttpRequestMessage, HttpResponseMessage> Impl { get; set; } =
             _ => new HttpResponseMessage(HttpStatusCode.NoContent);
 
+        // When non-zero, the /commands path holds the request this long, mimicking the real
+        // server's long-poll (?wait=25). Without it the fake returns NoContent instantly and
+        // the daemon's command loop tight-re-polls, starving other continuations in-process.
+        public TimeSpan CommandsHold { get; set; } = TimeSpan.Zero;
+
         public int Heartbeats;
         public int Completes;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri?.AbsolutePath ?? "";
             if (path.Contains("heartbeat", StringComparison.Ordinal))
                 Interlocked.Increment(ref Heartbeats);
             if (path.Contains("/complete", StringComparison.Ordinal))
                 Interlocked.Increment(ref Completes);
-            return Task.FromResult(Impl(request));
+            if (CommandsHold > TimeSpan.Zero && path.Contains("/commands", StringComparison.Ordinal))
+                await Task.Delay(CommandsHold, cancellationToken);
+            return Impl(request);
         }
     }
 }
