@@ -57,6 +57,26 @@ public sealed class DeviceHandlerTests : IDisposable
         }
     }
 
+    private async Task<(User Owner, User Member, Project Project)> SeedOwnerAndMemberAsync()
+    {
+        using (TenantScope.EnterUnscoped())
+        {
+            var owner = User.Create("owner", "owner@beacon.local", "hash");
+            var member = User.Create("member", "member@beacon.local", "hash");
+            var org = Org.Create("Org");
+            _db.Users.Add(owner);
+            _db.Users.Add(member);
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync();
+            var project = Project.Create("P", null, org.Id);
+            _db.Projects.Add(project);
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, member.Id, MemberRole.Member));
+            await _db.SaveChangesAsync();
+            return (owner, member, project);
+        }
+    }
+
     [Fact]
     public async Task Create_ThenList_HidesRawTokenOnList()
     {
@@ -219,6 +239,43 @@ public sealed class DeviceHandlerTests : IDisposable
         var got = await new GetCommandHandler(Factory()).HandleAsync(
             new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, other.Id)));
         Assert.False(got.Success);
+    }
+
+    [Fact]
+    public async Task CommandQueue_DoesNotExposeLocalRoot_ToNonOwner()
+    {
+        var (owner, member, project) = await SeedOwnerAndMemberAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), owner.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")));
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")));
+        Assert.True(attached.Success, attached.Error);
+        Assert.Equal(@"A:\secret\repo", attached.Value!.LocalRoot);
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, owner.Id, WorkstationCommandKind.ChatPrompt,
+                """{"path":"src","text":"hi"}""", project.Id)));
+        Assert.True(queued.Success, queued.Error);
+        Assert.Equal(@"A:\secret\repo", queued.Value!.LocalRoot);
+        var ownerRead = await new GetCommandHandler(Factory()).HandleAsync(
+            new GetCommandCommand(new GetCommandRequest(queued.Value.Id, owner.Id)));
+        Assert.True(ownerRead.Success, ownerRead.Error);
+        Assert.Equal(@"A:\secret\repo", ownerRead.Value!.LocalRoot);
+        var memberRead = await new GetCommandHandler(Factory()).HandleAsync(
+            new GetCommandCommand(new GetCommandRequest(queued.Value.Id, member.Id)));
+        Assert.False(memberRead.Success);
+        Assert.Null(memberRead.Value);
+        var memberList = await new ListCommandsHandler(Factory()).HandleAsync(
+            new ListCommandsCommand(new ListCommandsRequest(deviceId, member.Id, 20)));
+        Assert.False(memberList.Success);
+        var ownerList = await new ListCommandsHandler(Factory()).HandleAsync(
+            new ListCommandsCommand(new ListCommandsRequest(deviceId, owner.Id, 20)));
+        Assert.True(ownerList.Success, ownerList.Error);
+        var listedCmd = Assert.Single(ownerList.Value!, c => c.Id == queued.Value.Id);
+        Assert.Equal(@"A:\secret\repo", listedCmd.LocalRoot);
     }
 
     [Fact]

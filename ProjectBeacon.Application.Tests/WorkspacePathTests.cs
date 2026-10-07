@@ -47,6 +47,59 @@ public sealed class SymlinkRequiredFactAttribute : FactAttribute
     }
 }
 
+// Directory junctions (mklink /J) are a Windows-only feature that requires no
+// special privileges. We probe by actually creating one; skip with an explicit
+// environment reason on non-Windows platforms or if the command is unavailable.
+public sealed class JunctionRequiredFactAttribute : FactAttribute
+{
+    private static readonly bool Supported = ProbeJunctionSupport();
+
+    public JunctionRequiredFactAttribute()
+    {
+        if (!Supported)
+            Skip = "directory junctions (mklink /J) are unavailable on this platform";
+    }
+
+    private static bool ProbeJunctionSupport()
+    {
+        if (OperatingSystem.IsWindows() is false)
+            return false;
+        var dir = Path.Combine(Path.GetTempPath(), "beacon-juncprobe-" + Guid.NewGuid().ToString("N"));
+        var link = Path.Combine(dir, "j");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c mklink /J \"{link}\" \"{dir}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi)!;
+            proc.WaitForExit(5000);
+            return proc.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(link))
+                    Directory.Delete(link);
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            catch { }
+        }
+    }
+}
+
 public sealed class WorkspacePathTests
 {
     [Fact]
@@ -157,6 +210,48 @@ public sealed class WorkspacePathTests
                 Directory.Delete(link);
             else if (File.Exists(link))
                 File.Delete(link);
+            Directory.Delete(root, true);
+            Directory.Delete(outside, true);
+        }
+    }
+
+    [JunctionRequiredFact]
+    public void ResolveInsideRoot_RejectsMklinkJunction()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-junc-" + Guid.NewGuid().ToString("N"));
+        var outside = Path.Combine(Path.GetTempPath(), "beacon-junc-out-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(outside);
+        var link = Path.Combine(root, "jlink");
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c mklink /J \"{link}\" \"{outside}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi)!;
+            proc.WaitForExit(5000);
+            Assert.True(proc.ExitCode == 0, "mklink /J failed to create junction");
+
+            var result = WorkspacePath.ResolveInsideRoot(root, "jlink/secret.txt");
+            Assert.False(result.Success);
+
+            var ws = new FileWorkspace(root);
+            var read = ws.ReadFile("jlink/secret.txt");
+            Assert.False(read.Success);
+
+            var write = ws.WriteFile("jlink/secret.txt", "data");
+            Assert.False(write.Success);
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+                Directory.Delete(link);
             Directory.Delete(root, true);
             Directory.Delete(outside, true);
         }

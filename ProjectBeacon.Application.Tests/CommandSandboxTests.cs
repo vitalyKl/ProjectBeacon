@@ -54,4 +54,35 @@ public sealed class CommandSandboxTests
         Assert.False(result.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, result.Error);
     }
+
+    [Fact]
+    public void SanitizeProjectPayload_StripsRoot_PreservesPath()
+    {
+        var payload = new JsonObject
+        {
+            ["root"] = @"C:\projects\demo",
+            ["path"] = "src/app.cs",
+            ["maxFiles"] = 50
+        }.ToJsonString();
+
+        var result = CommandSandbox.SanitizeProjectPayload(payload);
+
+        Assert.True(result.Success, result.Error);
+        using var doc = JsonDocument.Parse(result.Value!);
+        var root = doc.RootElement;
+        Assert.False(root.TryGetProperty("root", out _), "root field must be stripped");
+        Assert.Equal("src/app.cs", root.GetProperty("path").GetString());
+        Assert.Equal(50, root.GetProperty("maxFiles").GetInt32());
+    }
+
+    [Fact]
+    public void SanitizeProjectPayload_RootOnly_ReturnsEmptyObject()
+    {
+        var payload = new JsonObject { ["root"] = @"C:\projects\demo" }.ToJsonString();
+
+        var result = CommandSandbox.SanitizeProjectPayload(payload);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("{}", result.Value);
+    }
 }
