@@ -43,7 +43,7 @@ public sealed class CommandSandboxTests
     {
         var result = CommandSandbox.SanitizeProjectPayload(Payload(path));
         Assert.True(result.Success, result.Error);
-        using var doc = JsonDocument.Parse(result.Value);
+        using var doc = JsonDocument.Parse(result.Value!);
         Assert.Equal(path, doc.RootElement.GetProperty("path").GetString());
     }
 
