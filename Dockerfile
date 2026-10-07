@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
-FROM mcr.microsoft.com/dotnet/sdk:10.0-bookworm-slim AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY global.json ./
+COPY Directory.Build.props ./
+COPY Directory.Build.targets ./
+COPY Directory.Packages.props ./
 COPY ProjectBeacon.sln ./
 COPY ProjectBeacon.Domain/ProjectBeacon.Domain.csproj ProjectBeacon.Domain/
 COPY ProjectBeacon.Infrastructure/ProjectBeacon.Infrastructure.csproj ProjectBeacon.Infrastructure/
