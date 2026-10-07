@@ -443,6 +443,185 @@ public sealed class CodeIndexTests
         }
     }
 
+    // ── Path regression: absolute-path behavior per API ───────────────────
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    public void GetTree_AbsoluteSubPath_IsBlocked(string subPath)
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).GetTree(subPath);
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    public void HashRange_AbsolutePath_IsBlocked(string path)
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange(path, 1, 1);
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/path")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    public void GetCallers_AbsolutePath_IsBlocked(string path)
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).GetCallers(path, "Foo", 1);
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/path.cs")]
+    [InlineData(@"C:\secret\file.cs")]
+    [InlineData("C:/secret/file.cs")]
+    public void GetSignatures_AbsolutePath_ReturnsFailure(string path)
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).GetSignatures(new[] { path });
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/prefix")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    public void Search_AbsolutePrefix_ReturnsFailure(string prefix)
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).Search("hello beacon", new[] { prefix });
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/prefix")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    public void GetChangedScope_AbsolutePrefix_ReturnsFailure(string prefix)
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).GetChangedScope(new[] { prefix });
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.RelativePathRequired, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("/absolute/prefix")]
+    [InlineData(@"C:\secret")]
+    [InlineData("C:/secret")]
+    public void FilterByScope_AbsolutePrefix_ReturnsEmpty_NotError(string prefix)
+    {
+        var files = new[] { "src/app.cs", "src2/other.cs", "README.md" };
+        // Same behavior: PathMatcher.Normalize does not reject absolute paths,
+        // so the absolute prefix never matches any relative file path.
+        var result = CodeIndex.FilterByScope(files, new[] { prefix });
+        Assert.Empty(result);
+    }
+
+    // ── Path regression: traversal still blocked ──────────────────────────
+
+    [Fact]
+    public void GetTree_TraversalSubPath_IsBlocked()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).GetTree("../outside");
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.ParentSegmentNotAllowed, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void HashRange_TraversalPath_IsBlocked()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).HashRange("../outside.txt", 1, 1);
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.ParentSegmentNotAllowed, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void GetCallers_TraversalPath_IsBlocked()
+    {
+        var root = MakeWorkspace();
+        try
+        {
+            var result = new CodeIndex(root).GetCallers("../outside.cs", "Foo", 1);
+            Assert.False(result.Success);
+            Assert.Equal(Application.Common.WorkspacePath.ParentSegmentNotAllowed, result.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     static CodeIndexTests()
         => SweepStaleWorkspaces();
 

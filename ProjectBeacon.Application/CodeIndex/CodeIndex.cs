@@ -109,6 +109,9 @@ public sealed class CodeIndex
 
     public Result<IReadOnlyList<string>> GetChangedScope(IReadOnlyCollection<string>? paths = null, int maxFiles = DefaultMaxFiles)
     {
+        if (FirstRootedPrefix(paths) is not null)
+            return Result.Failure<IReadOnlyList<string>>(WorkspacePath.RelativePathRequired);
+
         var changed = GetChangedFiles();
         if (!changed.Success)
             return changed;
@@ -120,6 +123,9 @@ public sealed class CodeIndex
 
     public Result<SignatureResult> GetSignatures(IReadOnlyCollection<string>? paths = null, int maxFiles = DefaultMaxFiles)
     {
+        if (FirstRootedPrefix(paths) is not null)
+            return Result.Failure<SignatureResult>(WorkspacePath.RelativePathRequired);
+
         if (paths is not null && paths.Count == 0)
             return Result.Ok(new SignatureResult([], ""));
 
@@ -235,6 +241,9 @@ public sealed class CodeIndex
 
         if (maxMatches <= 0)
             maxMatches = DefaultMaxMatches;
+
+        if (FirstRootedPrefix(paths) is not null)
+            return Result.Failure<SearchResult>(WorkspacePath.RelativePathRequired);
 
         var prefixes = NormalizePrefixes(paths);
         var matches = new List<SearchMatch>();
@@ -461,6 +470,20 @@ public sealed class CodeIndex
             .Where(p => p.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    // Public entry points reject a rooted prefix up-front instead of letting
+    // PathMatcher.Normalize strip the root and silently match or non-match.
+    private static string? FirstRootedPrefix(IReadOnlyCollection<string>? prefixes)
+    {
+        if (prefixes is null)
+            return null;
+
+        foreach (var prefix in prefixes)
+            if (WorkspacePath.IsRootedPortable(prefix))
+                return prefix;
+
+        return null;
     }
 
     private TreeEntry MakeEntry(string fullPath, bool isDirectory)
