@@ -20,6 +20,7 @@
 @inject ListDevicesHandler Devices
 @inject ListTasksByStatusHandler TasksByStatus
 @inject ListMyProjectsHandler MyProjects
+@inject GetPipelineHandler Pipeline
 
 <PageTitle>@L["Dashboard"]</PageTitle>
 
@@ -65,7 +66,7 @@ else
     </div>
 
     <div class="beacon-ops-grid">
-        <PbPanel Class="span-2" Title="@L["CurrentlyRunning"]" Subtitle="@_pulse.Name">
+        <PbPanel Surface="operational" Class="span-2" Title="@L["CurrentlyRunning"]" Subtitle="@_pulse.Name">
             <Actions>
                 <MudButton Variant="Variant.Text" Size="Size.Small" Href="/board">@L["GoToBoard"]</MudButton>
             </Actions>
@@ -91,7 +92,7 @@ else
                 }
             </ChildContent>
         </PbPanel>
-        <PbPanel Title="@L["NeedsAttention"]">
+        <PbPanel Surface="attention" Title="@L["NeedsAttention"]">
             <ChildContent>
                 @if (_attention.Count == 0)
                 {
@@ -112,7 +113,20 @@ else
                 }
             </ChildContent>
         </PbPanel>
-        <PbPanel Class="span-2" Title="@L["FleetHealth"]">
+        @if (_lead?.Stage is { } leadStage && leadStage != TaskPipelineStage.None)
+        {
+            <PbPanel Surface="section" Class="span-3" Title="@L["Pipeline"]" Subtitle="@_lead.Title">
+                <Actions>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="@($"/task/{_lead.TaskId}")">@L["Open"]</MudButton>
+                </Actions>
+                <ChildContent>
+                    <div class="beacon-ops-pad">
+                        <PbPipelineRail Labels="@LeadStageLabels" CurrentIndex="@StageIndex(leadStage)" Warning="@(leadStage == TaskPipelineStage.ReopenedForRevision)" />
+                    </div>
+                </ChildContent>
+            </PbPanel>
+        }
+        <PbPanel Surface="section" Class="span-2" Title="@L["FleetHealth"]">
             <Actions>
                 <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings/workstations">@L["Workstations"]</MudButton>
             </Actions>
@@ -151,7 +165,7 @@ else
                 }
             </ChildContent>
         </PbPanel>
-        <PbPanel Title="@L["RecentActivity"]">
+        <PbPanel Surface="section" Title="@L["RecentActivity"]">
             <ChildContent>
                 @if (_recent.Count == 0)
                 {
@@ -170,38 +184,33 @@ else
                 }
             </ChildContent>
         </PbPanel>
-        <PbPanel Class="span-3" Title="@L["ProjectBrief"]">
-            <Actions>
-                <MudButton Variant="Variant.Text" Size="Size.Small" Href="/context">@L["EditInContext"]</MudButton>
-            </Actions>
-            <ChildContent>
-                @if (_pulse.BriefSections.Count == 0)
-                {
-                    <p class="beacon-ops-empty">@L["NoBrief"]</p>
-                }
-                else
-                {
-                    <div class="beacon-ops-pad">
-                        @foreach (var section in _pulse.BriefSections)
-                        {
-                            <MudText Typo="Typo.caption">@ChromeLabels.Section(L, section.SectionId)</MudText>
-                            <MudText Typo="Typo.body2" Class="mb-3 beacon-pre">@section.BodyMarkdown</MudText>
-                        }
-                    </div>
-                }
-                <div class="beacon-ops-pad">
-                    @if (_pulse.OpenMilestones == 0)
-                    {
-                        <MudText Typo="Typo.body2">@L["NoOpenMilestones"]</MudText>
-                    }
-                    else
-                    {
-                        <MudButton Variant="Variant.Text" Href="/roadmap">@L["OpenMilestones", _pulse.OpenMilestones]</MudButton>
-                    }
-                </div>
-            </ChildContent>
-        </PbPanel>
     </div>
+    <section class="beacon-quiet">
+        <div class="beacon-ops-head">
+            <div class="beacon-ops-title">@L["ProjectBrief"]</div>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/context">@L["EditInContext"]</MudButton>
+        </div>
+        @if (_pulse.BriefSections.Count == 0)
+        {
+            <p class="beacon-ops-empty">@L["NoBrief"]</p>
+        }
+        else
+        {
+            @foreach (var section in _pulse.BriefSections)
+            {
+                <MudText Typo="Typo.caption">@ChromeLabels.Section(L, section.SectionId)</MudText>
+                <MudText Typo="Typo.body2" Class="beacon-pre">@section.BodyMarkdown</MudText>
+            }
+        }
+        @if (_pulse.OpenMilestones == 0)
+        {
+            <MudText Typo="Typo.body2">@L["NoOpenMilestones"]</MudText>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Text" Href="/roadmap">@L["OpenMilestones", _pulse.OpenMilestones]</MudButton>
+        }
+    </section>
 }
 
 @code {
@@ -213,6 +222,8 @@ else
     private List<DaemonDeviceDto> _devices = [];
     private List<RecentTaskDto> _recent = [];
     private List<AttentionItem> _attention = [];
+    private PipelineStateDto? _lead;
+    private static readonly string[] StageKeys = ["StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed"];
     private bool _loading = true;
     private bool _error;
     private Guid _userId;
@@ -226,6 +237,11 @@ else
         YAxisRequireZeroPoint = true,
         MaxNumYAxisTicks = 3
     };
+
+    private string[] LeadStageLabels => StageKeys.Select((key, i) =>
+        _lead?.Stage == TaskPipelineStage.ReopenedForRevision && i == 1
+            ? L["StageReopenedForRevision"].Value
+            : L[key].Value).ToArray();
 
     private string ProxyState => RuntimeHealth.ForDashboard(_status);
 
@@ -295,6 +311,13 @@ else
         var running = await TasksByStatus.HandleAsync(
             new ListTasksByStatusCommand(new ListTasksByStatusRequest(_pulse.ProjectId, "InProgress")));
         _running = running.Success && running.Value is not null ? running.Value.Take(6).ToList() : [];
+        _lead = null;
+        if (_running.Count > 0)
+        {
+            var lead = await Pipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(_running[0].Id)));
+            if (lead.Success && lead.Value?.Stage is not null && lead.Value.Stage != TaskPipelineStage.None)
+                _lead = lead.Value;
+        }
 
         var devices = await Devices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
         _devices = devices.Success && devices.Value is not null ? devices.Value.ToList() : [];
@@ -341,6 +364,16 @@ else
         var trimmed = title.Trim();
         return trimmed.Length == 0 ? "?" : char.ToUpperInvariant(trimmed[0]).ToString();
     }
+
+    private static int StageIndex(TaskPipelineStage? stage) => stage switch
+    {
+        TaskPipelineStage.Planning => 0,
+        TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision => 1,
+        TaskPipelineStage.Reviewing => 2,
+        TaskPipelineStage.Approved => 3,
+        TaskPipelineStage.Closed => 4,
+        _ => -1
+    };
 
     private static int SubStageToPercent(TaskSubStage stage) => stage switch
     {

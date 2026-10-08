@@ -2135,4 +2135,10 @@ No Beacon-hosted coding agent.</value>
   <data name="ReviewSeparate" xml:space="preserve">
     <value>Verification is separate from execution. Approving finishes the review, not the work log.</value>
   </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>Current project</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>Goal</value>
+  </data>
 </root>

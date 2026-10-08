@@ -15,8 +15,8 @@
                 @onclick="context.ToggleAsync">
             <span class="beacon-project-glyph">@Glyph</span>
             <span class="beacon-project-copy">
+                <span class="beacon-project-kicker">@L["CurrentProject"]</span>
                 <strong>@CurrentName</strong>
-                <span>@L["Project"]</span>
             </span>
             <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
         </button>

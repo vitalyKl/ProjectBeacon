@@ -60,14 +60,47 @@ public static class DesignTokens
 
     public const string BorderHairline = "1px";
 
-    public const string TypePage = "18px";
-    public const string TypeSection = "13px";
-    public const string TypeCard = "13px";
+    public const string TypePage = "24px";
+    public const string TypeSection = "15px";
+    public const string TypeCard = "14px";
     public const string TypeBody = "13px";
     public const string TypeSecondary = "12px";
     public const string TypeCaption = "11px";
+    public const string TypeMetric = "23px";
 
     public const string BoardCardPad = "10px";
+
+    public static class Dark
+    {
+        public const string BgApp = "#0f1218";
+        public const string Surface1 = "#1c212b";
+        public const string Surface2 = "#171b23";
+        public const string Surface3 = "#242a35";
+        public const string BgHeader = "#171b23";
+        public const string BgSurfaceHover = "#242a35";
+        public const string BgAccent = "#29284c";
+        public const string Border = "#2b323e";
+        public const string BorderSubtle = "#232a36";
+        public const string BorderStrong = "#3a4351";
+        public const string TextPrimary = "#edf0f5";
+        public const string TextSecondary = "#a3adbb";
+        public const string TextMuted = "#707b8b";
+        public const string TextDisabled = "#5c6776";
+        public const string Accent = "#8883ff";
+        public const string AccentHover = "#aaa7ff";
+        public const string AccentActive = "#6e69d6";
+        public const string AccentSoft = "#29284c";
+        public const string Success = "#52c69f";
+        public const string SuccessBackground = "#16372f";
+        public const string Warning = "#e0a64c";
+        public const string WarningBackground = "#3b2d18";
+        public const string Danger = "#ef747b";
+        public const string DangerBackground = "#442329";
+        public const string Info = "#70abe6";
+        public const string InfoBackground = "#1d3248";
+        public const string Sidebar = "#0a0d12";
+        public const string SidebarRaised = "#11151c";
+    }
 
     private static readonly (string Name, string Value)[] Custom =
     [
@@ -132,13 +165,47 @@ public static class DesignTokens
         ("--type-body", TypeBody),
         ("--type-secondary", TypeSecondary),
         ("--type-caption", TypeCaption),
+        ("--type-metric", TypeMetric),
+    ];
+
+    private static readonly (string Name, string Value)[] DarkCustom =
+    [
+        ("--color-bg-app", Dark.BgApp),
+        ("--color-surface-1", Dark.Surface1),
+        ("--color-surface-2", Dark.Surface2),
+        ("--color-surface-3", Dark.Surface3),
+        ("--color-bg-sidebar", Dark.Sidebar),
+        ("--color-bg-sidebar-raised", Dark.SidebarRaised),
+        ("--color-bg-header", Dark.BgHeader),
+        ("--color-bg-surface-hover", Dark.BgSurfaceHover),
+        ("--color-bg-accent", Dark.BgAccent),
+        ("--color-border", Dark.Border),
+        ("--color-border-subtle", Dark.BorderSubtle),
+        ("--color-border-strong", Dark.BorderStrong),
+        ("--color-text-primary", Dark.TextPrimary),
+        ("--color-text-secondary", Dark.TextSecondary),
+        ("--color-text-muted", Dark.TextMuted),
+        ("--color-text-disabled", Dark.TextDisabled),
+        ("--color-accent", Dark.Accent),
+        ("--color-accent-hover", Dark.AccentHover),
+        ("--color-accent-active", Dark.AccentActive),
+        ("--color-accent-soft", Dark.AccentSoft),
+        ("--color-success", Dark.Success),
+        ("--color-success-background", Dark.SuccessBackground),
+        ("--color-warning", Dark.Warning),
+        ("--color-warning-background", Dark.WarningBackground),
+        ("--color-danger", Dark.Danger),
+        ("--color-danger-background", Dark.DangerBackground),
+        ("--color-info", Dark.Info),
+        ("--color-info-background", Dark.InfoBackground),
     ];
 
     public static readonly string RootCss = BuildRoot();
 
     private static string BuildRoot()
     {
-        var lines = Custom.Select(t => $"    {t.Name}: {t.Value};");
-        return ":root {\n" + string.Join('\n', lines) + "\n}";
+        var light = string.Join('\n', Custom.Select(t => $"    {t.Name}: {t.Value};"));
+        var dark = string.Join('\n', DarkCustom.Select(t => $"    {t.Name}: {t.Value};"));
+        return ":root {\n" + light + "\n}\n\nbody:has(.beacon-theme-dark) {\n" + dark + "\n    background: var(--color-bg-app);\n    color: var(--color-text-primary);\n}";
     }
 }

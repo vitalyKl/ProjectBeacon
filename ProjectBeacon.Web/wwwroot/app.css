@@ -3,8 +3,10 @@ html, body, .mud-typography, .mud-button-root, .mud-input, .mud-nav-link {
 }
 
 body {
-    font-size: 13px;
+    font-size: var(--type-body);
     line-height: 1.45;
+    color: var(--color-text-primary);
+    background: var(--color-bg-app);
     -webkit-font-smoothing: antialiased;
 }
 
@@ -170,7 +172,6 @@ body {
     min-height: 32px;
     padding: 0 11px;
     border-radius: var(--radius-control);
-    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.45;
@@ -231,7 +232,7 @@ body {
     border-radius: 6px;
     padding: 8px 10px;
     margin: 1px 0;
-    font-size: 12px;
+    font-size: var(--type-body);
     font-weight: 500;
     transition: color 160ms ease, background-color 160ms ease;
 }
@@ -263,7 +264,7 @@ body {
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled),
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled):hover:not(.mud-nav-link-disabled),
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled):focus-visible:not(.mud-nav-link-disabled) {
-    color: #ffffff;
+    color: var(--color-sidebar-text-strong);
     background-color: var(--color-sidebar-active);
     border-inline-end-width: 0;
 }
@@ -282,23 +283,7 @@ body {
 
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled) .mud-nav-link-icon,
 .beacon-nav.mud-navmenu .mud-nav-link.active:not(.mud-nav-link-disabled) .mud-icon-root {
-    color: var(--color-sidebar-rail);
-}
-
-.beacon-nav.mud-navmenu .mud-nav-link.beacon-nav-alias.active,
-.beacon-nav.mud-navmenu .mud-nav-link.beacon-nav-alias.active:hover,
-.beacon-nav.mud-navmenu .mud-nav-link.beacon-nav-alias.active:focus-visible {
-    color: var(--color-sidebar-text);
-    background-color: transparent;
-}
-
-.beacon-nav.mud-navmenu .mud-nav-link.beacon-nav-alias.active::before {
-    display: none;
-}
-
-.beacon-nav.mud-navmenu .mud-nav-link.beacon-nav-alias.active .mud-nav-link-icon,
-.beacon-nav.mud-navmenu .mud-nav-link.beacon-nav-alias.active .mud-icon-root {
-    color: var(--color-sidebar-muted);
+    color: var(--color-sidebar-text-strong);
 }
 
 .beacon-card-interactive {
@@ -337,12 +322,12 @@ body {
 }
 
 .beacon-board-card .beacon-card-title {
-    font-size: 10px;
+    font-size: var(--type-card);
     line-height: 1.45;
 }
 
 .beacon-board-card .mud-typography-body2 {
-    font-size: 10px;
+    font-size: var(--type-secondary);
 }
 
 .beacon-panel {
@@ -351,9 +336,36 @@ body {
     padding: 12px 14px;
 }
 
-.beacon-ops-panel.beacon-panel {
+.beacon-ops-panel.beacon-panel,
+.beacon-panel.beacon-surface-operational,
+.beacon-panel.beacon-surface-attention,
+.beacon-panel.beacon-surface-section,
+.beacon-panel.beacon-surface-inline {
     padding: 0;
     overflow: hidden;
+}
+
+.beacon-panel.beacon-surface-operational {
+    border: var(--border-hairline) solid var(--color-border);
+    background: var(--color-surface-2);
+}
+
+.beacon-panel.beacon-surface-section {
+    border: 0;
+    border-top: var(--border-hairline) solid var(--color-border);
+    border-radius: 0;
+    background: transparent;
+}
+
+.beacon-panel.beacon-surface-inline {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.beacon-panel.beacon-surface-attention {
+    border: var(--border-hairline) solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+    background: color-mix(in srgb, var(--color-warning-background) 55%, var(--color-surface-2));
 }
 
 .beacon-attention-banner {
@@ -374,10 +386,10 @@ body {
     flex-direction: column;
 }
 
-.beacon-attention-banner strong { font-size: 12px; font-weight: 650; }
+.beacon-attention-banner strong { font-size: var(--type-section); font-weight: 650; }
 .beacon-attention-banner span {
     color: var(--color-text-secondary);
-    font-size: 10px;
+    font-size: var(--type-secondary);
 }
 
 .beacon-metric-strip {
@@ -406,22 +418,22 @@ body {
 
 .beacon-metric-label {
     color: var(--color-text-muted);
-    font-size: 9px;
+    font-size: var(--type-caption);
     font-weight: 650;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
 .beacon-metric-value {
-    margin-top: 2px;
-    font: 500 23px/1.2 var(--font-mono);
+    margin-top: 4px;
+    font: 500 var(--type-metric)/1.2 var(--font-mono);
     letter-spacing: -0.04em;
 }
 
 .beacon-metric-note {
-    margin-top: 2px;
+    margin-top: 4px;
     color: var(--color-text-muted);
-    font-size: 9px;
+    font-size: var(--type-secondary);
 }
 
 .beacon-ops-grid {
@@ -443,8 +455,8 @@ body {
     border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
-.beacon-ops-title { font-size: 12px; font-weight: 650; letter-spacing: -0.01em; }
-.beacon-ops-sub, .beacon-ops-empty { color: var(--color-text-muted); font-size: 9px; }
+.beacon-ops-title { font-size: var(--type-section); font-weight: 650; letter-spacing: -0.01em; }
+.beacon-ops-sub, .beacon-ops-empty { color: var(--color-text-muted); font-size: var(--type-secondary); }
 .beacon-ops-empty, .beacon-ops-pad { padding: 10px 14px; }
 
 .beacon-run-row, .beacon-health-row, .beacon-attention-item, .beacon-activity-row {
@@ -461,6 +473,7 @@ body {
 .beacon-health-row { grid-template-columns: 8px 1fr 120px; }
 .beacon-attention-item { grid-template-columns: 5px 1fr; }
 .beacon-activity-row { grid-template-columns: auto 1fr auto; }
+.beacon-activity-row .beacon-state { font-size: var(--type-secondary); }
 
 .beacon-run-row > span, .beacon-health-row > span, .beacon-attention-item > span {
     display: flex;
@@ -469,7 +482,7 @@ body {
 }
 
 .beacon-run-row strong, .beacon-health-row strong, .beacon-attention-item strong {
-    font-size: 11px;
+    font-size: var(--type-card);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -478,7 +491,7 @@ body {
 .beacon-run-row span span, .beacon-health-row span span, .beacon-attention-item span span, .beacon-activity-row time,
 .beacon-activity-row span {
     color: var(--color-text-muted);
-    font-size: 9px;
+    font-size: var(--type-caption);
 }
 
 .beacon-avatar-mark {
@@ -555,8 +568,8 @@ body {
 }
 
 .beacon-relation > div + div { border-left: var(--border-hairline) solid var(--color-border); }
-.beacon-relation small { color: var(--color-text-muted); font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; }
-.beacon-relation strong { font-size: 11px; }
+.beacon-relation small { color: var(--color-text-muted); font-size: var(--type-caption); letter-spacing: 0.06em; text-transform: uppercase; }
+.beacon-relation strong { font-size: var(--type-card); }
 
 .beacon-empty { display: block; margin-top: var(--space-4); }
 
@@ -581,7 +594,7 @@ body {
     min-height: 36px;
     display: flex;
     align-items: center;
-    font-size: 11px;
+    font-size: var(--type-secondary);
 }
 
 .beacon-split-3 {
@@ -592,7 +605,7 @@ body {
 }
 
 .beacon-main .mud-typography-h6 {
-    font-size: 12px;
+    font-size: var(--type-section);
     font-weight: 650;
     letter-spacing: -0.01em;
 }
@@ -604,11 +617,11 @@ body {
 
 .beacon-main .mud-table-cell {
     padding: 8px 12px;
-    font-size: 11px;
+    font-size: var(--type-body);
 }
 
 .beacon-main .mud-table-head .mud-table-cell {
-    font-size: 9px;
+    font-size: var(--type-caption);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--color-text-muted);
@@ -746,13 +759,8 @@ body {
 }
 
 .mud-chip {
-    height: auto;
-    min-height: 0;
-    padding: 3px 7px;
     border-radius: 10px;
-    font-size: 9px;
     font-weight: 600;
-    line-height: 1.25;
 }
 
 .kanban-board.mud-drop-container,
@@ -778,9 +786,9 @@ body {
 
 .beacon-nav-label {
     padding: 8px 10px 5px;
-    font-size: 9px;
+    font-size: var(--type-caption);
     font-weight: 600;
-    letter-spacing: 0.13em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--color-sidebar-muted);
 }
@@ -803,34 +811,6 @@ body {
     font-weight: 650;
     letter-spacing: -0.035em;
     line-height: 1.15;
-}
-
-.mud-typography-h6 {
-    font-size: var(--type-section);
-    font-weight: 600;
-    line-height: 1.35;
-}
-
-.mud-typography-subtitle1,
-.mud-typography-subtitle2 {
-    font-size: var(--type-card);
-    font-weight: 600;
-    line-height: 1.4;
-}
-
-.mud-typography-body1,
-.mud-typography-body2 {
-    font-size: var(--type-body);
-    line-height: 1.5;
-}
-
-.mud-text-secondary {
-    font-size: var(--type-secondary);
-}
-
-.mud-typography-caption {
-    font-size: var(--type-caption);
-    line-height: 1.4;
 }
 
 .beacon-page-actions {
@@ -927,13 +907,13 @@ body {
 }
 
 .kanban-header .mud-typography {
-    font-size: 10px;
+    font-size: var(--type-secondary);
     font-weight: 650;
     color: var(--color-text-primary);
 }
 
 .kanban-header .kanban-header-count {
-    font-size: 9px;
+    font-size: var(--type-caption);
     color: var(--color-text-muted);
 }
 
@@ -1150,7 +1130,7 @@ body {
 
 .beacon-eyebrow {
     color: var(--color-text-muted);
-    font-size: 9px;
+    font-size: var(--type-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1167,7 +1147,7 @@ body {
 
 .beacon-page-subtitle {
     margin-top: 2px;
-    font-size: 10px;
+    font-size: var(--type-secondary);
     color: var(--color-text-muted);
 }
 
@@ -1192,7 +1172,7 @@ body {
     border-radius: var(--radius-control);
     background: var(--color-surface-1);
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: var(--type-body);
     text-align: left;
 }
 
@@ -1207,7 +1187,7 @@ body {
     border-radius: 4px;
     background: var(--color-surface-2);
     color: var(--color-text-muted);
-    font: 9px var(--font-mono);
+    font: var(--type-caption) var(--font-mono);
 }
 
 .beacon-avatar {
@@ -1260,9 +1240,17 @@ body {
     min-width: 0;
 }
 
+.beacon-project-kicker {
+    font-size: var(--type-caption);
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-sidebar-muted);
+}
+
 .beacon-project-copy strong {
     color: var(--color-sidebar-text-strong);
-    font-size: 12px;
+    font-size: var(--type-card);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1271,7 +1259,7 @@ body {
 .beacon-project-copy span,
 .beacon-fleet span,
 .beacon-version {
-    font-size: 10px;
+    font-size: var(--type-caption);
     color: var(--color-sidebar-muted);
 }
 
@@ -1286,7 +1274,7 @@ body {
 .beacon-fleet strong {
     display: block;
     color: var(--color-sidebar-text-strong);
-    font-size: 11px;
+    font-size: var(--type-secondary);
 }
 
 .beacon-fleet-orbit {
@@ -1318,7 +1306,7 @@ body {
     display: block;
     margin: 8px 0;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: var(--type-caption);
 }
 
 .beacon-drawer-footer .mud-icon-button {
@@ -1395,7 +1383,7 @@ body {
 
 .beacon-command-row span,
 .beacon-command-empty {
-    font-size: 11px;
+    font-size: var(--type-caption);
     color: var(--color-text-muted);
 }
 
@@ -1430,13 +1418,13 @@ body {
     }
 
     .beacon-mobile-nav a {
-        width: 20%;
+        flex: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 2px;
         color: var(--color-text-muted);
-        font-size: 10px;
+        font-size: var(--type-caption);
         text-decoration: none;
     }
 
@@ -1490,7 +1478,117 @@ body {
 .beacon-next-action.is-warning { border-left-color: var(--color-warning); }
 .beacon-next-action.is-success { border-left-color: var(--color-success); }
 .beacon-next-action.is-info { border-left-color: var(--color-info); }
-.beacon-next-action span { color: var(--color-text-secondary); font-size: 12px; }
+.beacon-next-action span { color: var(--color-text-secondary); font-size: var(--type-secondary); }
+
+.beacon-quiet {
+    margin-top: 28px;
+    padding-top: 4px;
+}
+
+.beacon-quiet .beacon-pre {
+    margin: 8px 0 16px;
+    white-space: pre-wrap;
+}
+
+.beacon-task-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 16px;
+}
+
+.beacon-task-kicker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.beacon-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--type-secondary);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.beacon-state::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.beacon-state.is-info { color: var(--color-info); }
+.beacon-state.is-success { color: var(--color-success); }
+.beacon-state.is-warning { color: var(--color-warning); }
+.beacon-state.is-danger { color: var(--color-danger); }
+
+.beacon-task-goal {
+    max-width: 68ch;
+    margin: 8px 0 0;
+    color: var(--color-text-secondary);
+    font-size: var(--type-body);
+}
+
+.beacon-task-goal strong {
+    margin-right: 6px;
+    color: var(--color-text-muted);
+    font-size: var(--type-caption);
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.beacon-task-strip {
+    margin-bottom: 16px;
+    padding: 14px 14px 0;
+    border: var(--border-hairline) solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-surface-2);
+}
+
+.beacon-task-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 20px;
+    align-items: start;
+}
+
+.beacon-task-main,
+.beacon-task-aside {
+    min-width: 0;
+}
+
+.beacon-task-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.beacon-task-aside .beacon-next-action {
+    margin-bottom: 0;
+}
+
+.beacon-subtask {
+    padding: 12px 14px;
+    border-bottom: var(--border-hairline) solid var(--color-border);
+}
+
+@media (max-width: 900px) {
+    .beacon-task-hero {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .beacon-task-grid {
+        grid-template-columns: 1fr;
+    }
+}
 
 .beacon-chat-session-head {
     display: flex;

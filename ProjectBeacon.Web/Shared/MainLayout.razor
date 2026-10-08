@@ -23,12 +23,12 @@
 @inject ListTasksByStatusHandler TasksByStatus
 @inject IJSRuntime JS
 
-<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false" />
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudPopoverProvider />
 
-<MudLayout>
+<MudLayout Class="beacon-theme-dark">
     <MudAppBar Elevation="0" Class="beacon-appbar">
         <MudIconButton
             Icon="@Icons.Material.Filled.Menu"
@@ -39,7 +39,6 @@
             aria-label="@L["Menu"].Value"
             OnClick="@(() => _drawerOpen = !_drawerOpen)" />
         <div class="beacon-heading">
-            <div class="beacon-eyebrow">@Eyebrow</div>
             <div class="beacon-page-title">@_pageTitle</div>
             <div class="beacon-page-subtitle">
                 @if (!string.IsNullOrEmpty(_parentHref))
@@ -87,15 +86,12 @@
                 <MudNavLink Href="/board" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CheckCircle">
                     @L["Tasks"]
                 </MudNavLink>
-                <MudNavLink Href="/backlog" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">
-                    @L["Backlog"]
-                </MudNavLink>
-                <MudNavLink Href="/roadmap" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.EventNote">
-                    @L["Roadmap"]
-                </MudNavLink>
-                <MudNavLink Href="@_pipelineHref" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.AccountTree" Class="@(_pipelineHref == "/board" ? "beacon-nav-alias" : null)">
-                    @L["Pipeline"]
-                </MudNavLink>
+                @if (HasLivePipeline)
+                {
+                    <MudNavLink Href="@_pipelineHref" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.AccountTree">
+                        @L["Pipeline"]
+                    </MudNavLink>
+                }
                 <div class="beacon-nav-label">@L["NavIntelligence"]</div>
                 <MudNavLink Href="/settings/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">
                     @L["Agents"]
@@ -110,23 +106,8 @@
                     @L["AgentChat"]
                 </MudNavLink>
                 <div class="beacon-nav-label">@L["NavGovern"]</div>
-                <MudNavLink Href="/board" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.FactCheck" Class="beacon-nav-alias">
-                    @L["Reviews"]
-                </MudNavLink>
-                <MudNavLink Href="/decisions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Gavel">
-                    @L["Decisions"]
-                </MudNavLink>
-                <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assessment">
-                    @L["Reports"]
-                </MudNavLink>
-                <MudNavLink Href="/project/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
-                    @L["ProjectSettings"]
-                </MudNavLink>
                 <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
-                </MudNavLink>
-                <MudNavLink Href="/settings/connections" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Link">
-                    @L["Connections"]
                 </MudNavLink>
             </MudNavMenu>
             <div class="beacon-drawer-footer">
@@ -156,7 +137,10 @@
 <nav class="beacon-mobile-nav" aria-label="@L["Menu"]">
     <a href="/dashboard" class="@MobileActive("dashboard")"><MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" /><span>@L["Overview"]</span></a>
     <a href="/board" class="@MobileActive("board")"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" /><span>@L["Tasks"]</span></a>
-    <a href="@_pipelineHref" class="@MobileActive("pipeline")"><MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" /><span>@L["Pipeline"]</span></a>
+    @if (HasLivePipeline)
+    {
+        <a href="@_pipelineHref" class="@MobileActive("pipeline")"><MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" /><span>@L["Pipeline"]</span></a>
+    }
     <a href="/chat" class="@MobileActive("chat")"><MudIcon Icon="@Icons.Material.Filled.Chat" Size="Size.Small" /><span>@L["Chat"]</span></a>
     <a href="/settings" class="@MobileActive("settings")"><MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" /><span>@L["Settings"]</span></a>
 </nav>
@@ -168,7 +152,6 @@
     private Task<AuthenticationState>? AuthState { get; set; }
 
     private string _displayName = string.Empty;
-    private string _projectName = string.Empty;
     private string _pageTitle = string.Empty;
     private string _pageSubtitle = string.Empty;
     private string? _parentLabel;
@@ -182,7 +165,7 @@
     private int _fleetOnline;
     private DotNetObjectReference<MainLayout>? _dotNet;
 
-    private string Eyebrow => string.IsNullOrWhiteSpace(_projectName) ? L["ProjectBeacon"].Value : _projectName;
+    private bool HasLivePipeline => _pipelineHref.StartsWith("/task/", StringComparison.OrdinalIgnoreCase);
 
     private string FleetTitle => _fleetTotal == 0
         ? L["FleetEmpty"].Value
@@ -196,25 +179,32 @@
         ? L["Workstations"].Value
         : string.Format(L["FleetCounts"].Value, _fleetTotal, _fleetOnline);
 
-    private IReadOnlyList<ShellCommand> Commands =>
-    [
-        Cmd(L["Overview"], L["NavOperate"], "/dashboard", Icons.Material.Filled.Dashboard),
-        Cmd(L["Tasks"], L["NavOperate"], "/board", Icons.Material.Filled.CheckCircle),
-        Cmd(L["Backlog"], L["NavOperate"], "/backlog", Icons.Material.Filled.List),
-        Cmd(L["Roadmap"], L["NavOperate"], "/roadmap", Icons.Material.Filled.EventNote),
-        Cmd(L["Pipeline"], L["NavOperate"], _pipelineHref, Icons.Material.Filled.AccountTree),
-        Cmd(L["Agents"], L["NavIntelligence"], "/settings/agents", Icons.Material.Filled.SmartToy),
-        Cmd(L["Workstations"], L["NavIntelligence"], "/settings/workstations", Icons.Material.Filled.Computer),
-        Cmd(L["Context"], L["NavIntelligence"], "/context", Icons.Material.Filled.MenuBook),
-        Cmd(L["AgentChat"], L["NavIntelligence"], "/chat", Icons.Material.Filled.Chat),
-        Cmd(L["Reviews"], L["NavGovern"], "/board", Icons.Material.Filled.FactCheck),
-        Cmd(L["Decisions"], L["NavGovern"], "/decisions", Icons.Material.Filled.Gavel),
-        Cmd(L["Reports"], L["NavGovern"], "/reports", Icons.Material.Filled.Assessment),
-        Cmd(L["ProjectSettings"], L["NavGovern"], "/project/settings", Icons.Material.Filled.Folder),
-        Cmd(L["Settings"], L["NavGovern"], "/settings", Icons.Material.Filled.Settings),
-        Cmd(L["Connections"], L["NavGovern"], "/settings/connections", Icons.Material.Filled.Link),
-        Cmd(L["CreateProject"], L["NavOperate"], "/projects/new", Icons.Material.Filled.CreateNewFolder),
-    ];
+    private IReadOnlyList<ShellCommand> Commands
+    {
+        get
+        {
+            var commands = new List<ShellCommand>
+            {
+                Cmd(L["Overview"], L["NavOperate"], "/dashboard", Icons.Material.Filled.Dashboard),
+                Cmd(L["Tasks"], L["NavOperate"], "/board", Icons.Material.Filled.CheckCircle),
+                Cmd(L["Backlog"], L["NavOperate"], "/backlog", Icons.Material.Filled.List),
+                Cmd(L["Roadmap"], L["NavOperate"], "/roadmap", Icons.Material.Filled.EventNote),
+            };
+            if (HasLivePipeline)
+                commands.Add(Cmd(L["Pipeline"], L["NavOperate"], _pipelineHref, Icons.Material.Filled.AccountTree));
+            commands.Add(Cmd(L["Agents"], L["NavIntelligence"], "/settings/agents", Icons.Material.Filled.SmartToy));
+            commands.Add(Cmd(L["Workstations"], L["NavIntelligence"], "/settings/workstations", Icons.Material.Filled.Computer));
+            commands.Add(Cmd(L["Context"], L["NavIntelligence"], "/context", Icons.Material.Filled.MenuBook));
+            commands.Add(Cmd(L["AgentChat"], L["NavIntelligence"], "/chat", Icons.Material.Filled.Chat));
+            commands.Add(Cmd(L["Decisions"], L["NavGovern"], "/decisions", Icons.Material.Filled.Gavel));
+            commands.Add(Cmd(L["Reports"], L["NavGovern"], "/reports", Icons.Material.Filled.Assessment));
+            commands.Add(Cmd(L["ProjectSettings"], L["NavGovern"], "/project/settings", Icons.Material.Filled.Folder));
+            commands.Add(Cmd(L["Settings"], L["NavGovern"], "/settings", Icons.Material.Filled.Settings));
+            commands.Add(Cmd(L["Connections"], L["NavGovern"], "/settings/connections", Icons.Material.Filled.Link));
+            commands.Add(Cmd(L["CreateProject"], L["NavOperate"], "/projects/new", Icons.Material.Filled.CreateNewFolder));
+            return commands;
+        }
+    }
 
     private static ShellCommand Cmd(LocalizedString label, LocalizedString group, string href, string icon) =>
         new(label.Value, group.Value, href, icon);
@@ -257,8 +247,6 @@
             return;
 
         var project = await CurrentProject.HandleAsync(actor);
-        if (project.Success)
-            _projectName = project.Value?.Name ?? string.Empty;
 
         var devices = await Devices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(userId)));
         if (devices.Success && devices.Value is not null)
