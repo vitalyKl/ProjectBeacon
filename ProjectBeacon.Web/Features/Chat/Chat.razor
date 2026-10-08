@@ -72,6 +72,13 @@ else
                 }
                 else
                 {
+                    <div class="beacon-chat-session-head">
+                        <strong>@_selected.Title</strong>
+                        @if (!string.IsNullOrEmpty(Phase))
+                        {
+                            <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
+                        }
+                    </div>
                     <div class="beacon-chat-log">
                         @foreach (var part in _parts)
                         {
@@ -264,6 +271,14 @@ else
     private string Phase => ChatPhase.Resolve(_selected?.Status, LastKind, _failed, _parts.Count);
 
     private string PhaseLabel => L[ChatPhase.LabelKey(Phase)].Value;
+
+    private Color PhaseColor => Phase switch
+    {
+        "Failed" or "Aborted" => Color.Error,
+        "Completed" => Color.Success,
+        "Generating" or "UsingTool" or "Waiting" => Color.Info,
+        _ => Color.Default
+    };
 
     private bool CanRetry => Phase is "Failed" or "Aborted"
         && _parts.Any(p => string.Equals(p.Role, "user", StringComparison.OrdinalIgnoreCase));

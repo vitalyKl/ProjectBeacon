@@ -1,0 +1,15 @@
+<div class="beacon-metric">
+    <div class="beacon-metric-label">@Label</div>
+    <div class="beacon-metric-value">@Value</div>
+    @if (!string.IsNullOrEmpty(Note))
+    {
+        <div class="beacon-metric-note @Tone">@Note</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public string? Note { get; set; }
+    [Parameter] public string? Tone { get; set; }
+}

@@ -2,19 +2,28 @@
 @implements IDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Localization
+@using Microsoft.JSInterop
 @using MudBlazor
 @using ProjectBeacon.Web.Theme
 @using ProjectBeacon.Web.Resources
 @using ProjectBeacon.Web.Shared
 @using ProjectBeacon.Web.Features.Chat
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Identity
+@using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.API.Endpoints
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
 @inject TenantContextBinder TenantBinder
+@inject GetCurrentProjectHandler CurrentProject
+@inject ListDevicesHandler Devices
+@inject ListTasksByStatusHandler TasksByStatus
+@inject IJSRuntime JS
 
-<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudPopoverProvider />
@@ -29,16 +38,29 @@
             title="@L["Menu"].Value"
             aria-label="@L["Menu"].Value"
             OnClick="@(() => _drawerOpen = !_drawerOpen)" />
-        <MudBreadcrumbs Items="_crumbs" Separator="›" Class="beacon-breadcrumbs" />
+        <div class="beacon-heading">
+            <div class="beacon-eyebrow">@Eyebrow</div>
+            <div class="beacon-page-title">@_pageTitle</div>
+            <div class="beacon-page-subtitle">
+                @if (!string.IsNullOrEmpty(_parentHref))
+                {
+                    <a href="@_parentHref">@_parentLabel</a>
+                    <span aria-hidden="true"> · </span>
+                }
+                @_pageSubtitle
+            </div>
+        </div>
         <MudSpacer />
+        <button type="button" class="beacon-command-trigger" @onclick="OpenCommand">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+            <span>@L["SearchOrCommand"]</span>
+            <kbd>Ctrl K</kbd>
+        </button>
         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
             <ActivatorContent>
-                <MudButton Variant="Variant.Text" Color="Color.Inherit"
-                           StartIcon="@Icons.Material.Filled.AccountCircle"
-                           OnClick="@(() => context.ToggleAsync())"
-                           Class="beacon-profile">
-                    @(_displayName)
-                </MudButton>
+                <button type="button" class="beacon-avatar" aria-label="@_displayName" @onclick="context.ToggleAsync">
+                    @Initials(_displayName)
+                </button>
             </ActivatorContent>
             <ChildContent>
                 <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="@Logout">@L["Logout"]</MudMenuItem>
@@ -56,14 +78,14 @@
             <MudDrawerHeader Class="beacon-drawer-header">
                 <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
             </MudDrawerHeader>
-            <ProjectSwitcher Class="mb-2 px-3" />
+            <ProjectSwitcher />
             <MudNavMenu Dense="true" Class="beacon-nav">
-                <div class="beacon-nav-label">@L["NavWork"]</div>
+                <div class="beacon-nav-label">@L["NavOperate"]</div>
                 <MudNavLink Href="/dashboard" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard">
-                    @L["Dashboard"]
+                    @L["Overview"]
                 </MudNavLink>
-                <MudNavLink Href="/board" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Apps">
-                    @L["Board"]
+                <MudNavLink Href="/board" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CheckCircle">
+                    @L["Tasks"]
                 </MudNavLink>
                 <MudNavLink Href="/backlog" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">
                     @L["Backlog"]
@@ -71,9 +93,25 @@
                 <MudNavLink Href="/roadmap" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.EventNote">
                     @L["Roadmap"]
                 </MudNavLink>
-                <div class="beacon-nav-label">@L["NavKnowledge"]</div>
-                <MudNavLink Href="/context" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Description">
+                <MudNavLink Href="@_pipelineHref" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.AccountTree" Class="@(_pipelineHref == "/board" ? "beacon-nav-alias" : null)">
+                    @L["Pipeline"]
+                </MudNavLink>
+                <div class="beacon-nav-label">@L["NavIntelligence"]</div>
+                <MudNavLink Href="/settings/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">
+                    @L["Agents"]
+                </MudNavLink>
+                <MudNavLink Href="/settings/workstations" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Computer">
+                    @L["Workstations"]
+                </MudNavLink>
+                <MudNavLink Href="/context" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MenuBook">
                     @L["Context"]
+                </MudNavLink>
+                <MudNavLink Href="/chat" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Chat">
+                    @L["AgentChat"]
+                </MudNavLink>
+                <div class="beacon-nav-label">@L["NavGovern"]</div>
+                <MudNavLink Href="/board" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.FactCheck" Class="beacon-nav-alias">
+                    @L["Reviews"]
                 </MudNavLink>
                 <MudNavLink Href="/decisions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Gavel">
                     @L["Decisions"]
@@ -81,21 +119,9 @@
                 <MudNavLink Href="/reports" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assessment">
                     @L["Reports"]
                 </MudNavLink>
-                <div class="beacon-nav-label">@L["NavAgents"]</div>
-                <MudNavLink Href="/chat" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Chat">
-                    @L["Chat"]
-                </MudNavLink>
-                <MudNavLink Href="/settings/agents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SmartToy">
-                    @L["Agents"]
-                </MudNavLink>
-                <MudNavLink Href="/settings/workstations" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Computer">
-                    @L["Workstations"]
-                </MudNavLink>
-                <div class="beacon-nav-label">@L["NavProject"]</div>
                 <MudNavLink Href="/project/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
                     @L["ProjectSettings"]
                 </MudNavLink>
-                <div class="beacon-nav-label">@L["NavAccount"]</div>
                 <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
                 </MudNavLink>
@@ -104,13 +130,20 @@
                 </MudNavLink>
             </MudNavMenu>
             <div class="beacon-drawer-footer">
-                <MudText Typo="Typo.caption" Class="px-3 mb-1">@AppVersion.Informational</MudText>
+                <a class="beacon-fleet" href="/settings/workstations">
+                    <span class="beacon-fleet-orbit @(_fleetOnline > 0 ? "is-up" : "is-down")"><i></i></span>
+                    <span>
+                        <strong>@FleetTitle</strong>
+                        <span>@FleetDetail</span>
+                    </span>
+                </a>
+                <MudText Typo="Typo.caption" Class="beacon-version">@AppVersion.Informational</MudText>
                 <LanguageSwitcher />
             </div>
         </div>
     </MudDrawer>
     <MudMainContent>
-        <div class="pa-8 beacon-main">
+        <div class="beacon-main">
             <div class="beacon-content-max">
                 @if (_bodyReady)
                 {
@@ -120,99 +153,256 @@
         </div>
     </MudMainContent>
 </MudLayout>
+<nav class="beacon-mobile-nav" aria-label="@L["Menu"]">
+    <a href="/dashboard" class="@MobileActive("dashboard")"><MudIcon Icon="@Icons.Material.Filled.Dashboard" Size="Size.Small" /><span>@L["Overview"]</span></a>
+    <a href="/board" class="@MobileActive("board")"><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" /><span>@L["Tasks"]</span></a>
+    <a href="@_pipelineHref" class="@MobileActive("pipeline")"><MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" /><span>@L["Pipeline"]</span></a>
+    <a href="/chat" class="@MobileActive("chat")"><MudIcon Icon="@Icons.Material.Filled.Chat" Size="Size.Small" /><span>@L["Chat"]</span></a>
+    <a href="/settings" class="@MobileActive("settings")"><MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" /><span>@L["Settings"]</span></a>
+</nav>
 <ChatDock />
+<CommandPalette Open="_commandOpen" Commands="Commands" OnClose="CloseCommand" />
 
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
-    private List<BreadcrumbItem> _crumbs = [];
     private string _displayName = string.Empty;
+    private string _projectName = string.Empty;
+    private string _pageTitle = string.Empty;
+    private string _pageSubtitle = string.Empty;
+    private string? _parentLabel;
+    private string? _parentHref;
+    private string _pipelineHref = "/board";
     private bool _drawerOpen = true;
     private bool _bodyReady;
+    private bool _commandOpen;
+    private bool _hooked;
+    private int _fleetTotal;
+    private int _fleetOnline;
+    private DotNetObjectReference<MainLayout>? _dotNet;
+
+    private string Eyebrow => string.IsNullOrWhiteSpace(_projectName) ? L["ProjectBeacon"].Value : _projectName;
+
+    private string FleetTitle => _fleetTotal == 0
+        ? L["FleetEmpty"].Value
+        : _fleetOnline == 0
+            ? L["FleetOffline"].Value
+            : _fleetOnline == _fleetTotal
+                ? L["FleetOperational"].Value
+                : L["FleetDegraded"].Value;
+
+    private string FleetDetail => _fleetTotal == 0
+        ? L["Workstations"].Value
+        : string.Format(L["FleetCounts"].Value, _fleetTotal, _fleetOnline);
+
+    private IReadOnlyList<ShellCommand> Commands =>
+    [
+        Cmd(L["Overview"], L["NavOperate"], "/dashboard", Icons.Material.Filled.Dashboard),
+        Cmd(L["Tasks"], L["NavOperate"], "/board", Icons.Material.Filled.CheckCircle),
+        Cmd(L["Backlog"], L["NavOperate"], "/backlog", Icons.Material.Filled.List),
+        Cmd(L["Roadmap"], L["NavOperate"], "/roadmap", Icons.Material.Filled.EventNote),
+        Cmd(L["Pipeline"], L["NavOperate"], _pipelineHref, Icons.Material.Filled.AccountTree),
+        Cmd(L["Agents"], L["NavIntelligence"], "/settings/agents", Icons.Material.Filled.SmartToy),
+        Cmd(L["Workstations"], L["NavIntelligence"], "/settings/workstations", Icons.Material.Filled.Computer),
+        Cmd(L["Context"], L["NavIntelligence"], "/context", Icons.Material.Filled.MenuBook),
+        Cmd(L["AgentChat"], L["NavIntelligence"], "/chat", Icons.Material.Filled.Chat),
+        Cmd(L["Reviews"], L["NavGovern"], "/board", Icons.Material.Filled.FactCheck),
+        Cmd(L["Decisions"], L["NavGovern"], "/decisions", Icons.Material.Filled.Gavel),
+        Cmd(L["Reports"], L["NavGovern"], "/reports", Icons.Material.Filled.Assessment),
+        Cmd(L["ProjectSettings"], L["NavGovern"], "/project/settings", Icons.Material.Filled.Folder),
+        Cmd(L["Settings"], L["NavGovern"], "/settings", Icons.Material.Filled.Settings),
+        Cmd(L["Connections"], L["NavGovern"], "/settings/connections", Icons.Material.Filled.Link),
+        Cmd(L["CreateProject"], L["NavOperate"], "/projects/new", Icons.Material.Filled.CreateNewFolder),
+    ];
+
+    private static ShellCommand Cmd(LocalizedString label, LocalizedString group, string href, string icon) =>
+        new(label.Value, group.Value, href, icon);
 
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
-        RebuildCrumbs();
-        await BindTenant();
-        await LoadProfile();
+        RebuildChrome();
+        await BindShell();
         _bodyReady = true;
-        StateHasChanged();
     }
 
-    private async Task BindTenant()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _hooked)
+            return;
+        _hooked = true;
+        _dotNet = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("beaconShell.listen", _dotNet);
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private async Task BindShell()
     {
         if (AuthState is null)
             return;
         var state = await AuthState;
-        await TenantBinder.BindUserAsync(ActorContextFactory.FromPrincipal(state.User));
-    }
-
-    private async Task LoadProfile()
-    {
-        if (AuthState is null)
+        var actor = ActorContextFactory.FromPrincipal(state.User);
+        await TenantBinder.BindUserAsync(actor);
+        await LoadProfile(state);
+        if (actor.UserId is not Guid userId)
             return;
 
-        var state = await AuthState;
+        var project = await CurrentProject.HandleAsync(actor);
+        if (project.Success)
+            _projectName = project.Value?.Name ?? string.Empty;
+
+        var devices = await Devices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(userId)));
+        if (devices.Success && devices.Value is not null)
+        {
+            _fleetTotal = devices.Value.Count;
+            _fleetOnline = devices.Value.Count(d => d.Online);
+        }
+
+        if (project.Value?.Id is Guid projectId)
+        {
+            var running = await TasksByStatus.HandleAsync(
+                new ListTasksByStatusCommand(new ListTasksByStatusRequest(projectId, "InProgress")));
+            if (running.Success && running.Value is { Count: > 0 })
+                _pipelineHref = $"/task/{running.Value[0].Id}";
+        }
+    }
+
+    private Task LoadProfile(AuthenticationState state)
+    {
         var name = state.User.Identity?.Name
             ?? state.User.FindFirst(ClaimTypes.Name)?.Value
             ?? string.Empty;
         _displayName = string.IsNullOrWhiteSpace(name) ? L["Account"].Value : name;
+        return Task.CompletedTask;
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        RebuildCrumbs();
+        RebuildChrome();
         _ = InvokeAsync(StateHasChanged);
     }
 
-    private void RebuildCrumbs()
+    private void RebuildChrome()
     {
         var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
-        var segment = path.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
-        var home = new BreadcrumbItem(L["ProjectBeacon"], "/dashboard");
+        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var segment = parts.FirstOrDefault() ?? string.Empty;
+        _parentLabel = null;
+        _parentHref = null;
 
-        _crumbs = segment switch
+        (_pageTitle, _pageSubtitle) = segment switch
         {
-            "" or "dashboard" => [home, Current(L["Dashboard"])],
-            "board" => [home, Current(L["Board"])],
-            "backlog" => [home, Current(L["Backlog"])],
-            "roadmap" => [home, Current(L["Roadmap"])],
-            "context" => [home, Current(L["Context"])],
-            "decisions" => [home, Current(L["Decisions"])],
-            "agents" => [home, Current(L["Agents"])],
-            "chat" => [home, Current(L["Chat"])],
-            "reports" => [home, Current(L["Reports"])],
-            "settings" => [home, Current(L["Settings"])],
-            "task" => [new BreadcrumbItem(L["Board"], "/board"), Current(L["TaskDetail"])],
-            "projects" => [home, Current(L["CreateProject"])],
-            _ => [home]
+            "" or "dashboard" => (L["Overview"].Value, L["ShellHintOverview"].Value),
+            "board" => (L["Tasks"].Value, L["ShellHintBoard"].Value),
+            "backlog" => (L["Backlog"].Value, L["ShellHintBacklog"].Value),
+            "roadmap" => (L["Roadmap"].Value, L["ShellHintRoadmap"].Value),
+            "context" => (L["Context"].Value, L["ShellHintContext"].Value),
+            "decisions" => (L["Decisions"].Value, L["ShellHintDecisions"].Value),
+            "chat" => (L["AgentChat"].Value, L["ShellHintChat"].Value),
+            "reports" => (L["Reports"].Value, L["ShellHintReports"].Value),
+            "settings" => (L["Settings"].Value, L["ShellHintSettings"].Value),
+            "task" => (L["TaskDetail"].Value, L["ShellHintTask"].Value),
+            "projects" => (L["CreateProject"].Value, L["ShellHintNewProject"].Value),
+            _ => (L["ProjectBeacon"].Value, string.Empty)
         };
 
-        if (path.StartsWith("settings/"))
+        if (segment == "task")
         {
-            var sub = path.Split('/', StringSplitOptions.RemoveEmptyEntries)[1];
-            _crumbs = sub switch
+            _parentLabel = L["Tasks"].Value;
+            _parentHref = "/board";
+        }
+
+        if (path.StartsWith("settings/") && parts.Length > 1)
+        {
+            _parentLabel = L["Settings"].Value;
+            _parentHref = "/settings";
+            (_pageTitle, _pageSubtitle) = parts[1] switch
             {
-                "agents" => [home, new BreadcrumbItem(L["Settings"], "/settings"), Current(L["Agents"])],
-                "workstations" => [home, new BreadcrumbItem(L["Settings"], "/settings"), Current(L["Workstations"])],
-                "connections" => [home, new BreadcrumbItem(L["Settings"], "/settings"), Current(L["Connections"])],
-                _ => [home, Current(L["Settings"])]
+                "agents" => (L["Agents"].Value, L["ShellHintAgents"].Value),
+                "workstations" => (L["Workstations"].Value, L["ShellHintWorkstations"].Value),
+                "connections" => (L["Connections"].Value, L["ShellHintConnections"].Value),
+                _ => (L["Settings"].Value, L["ShellHintSettings"].Value)
             };
         }
         else if (path.StartsWith("project/"))
         {
-            _crumbs = [home, new BreadcrumbItem(L["ProjectSettings"], "/project/settings"), Current(L["ProjectSettings"])];
+            _pageTitle = L["ProjectSettings"].Value;
+            _pageSubtitle = L["ShellHintProject"].Value;
         }
     }
 
-    private static BreadcrumbItem Current(string text) => new(text, href: string.Empty, disabled: true);
+    private string MobileActive(string key)
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        var segment = path.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "dashboard";
+        var on = key switch
+        {
+            "dashboard" => segment is "" or "dashboard",
+            "board" => segment is "board" or "task",
+            "pipeline" => segment == "task" && _pipelineHref.Contains(path, StringComparison.OrdinalIgnoreCase),
+            "chat" => segment == "chat",
+            "settings" => segment == "settings" && !path.StartsWith("settings/agents", StringComparison.OrdinalIgnoreCase)
+                && !path.StartsWith("settings/workstations", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+        return on ? "is-active" : "";
+    }
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2 && parts[0].Length > 0 && parts[1].Length > 0)
+            return $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[1][0])}";
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0)
+            return "?";
+        return trimmed.Length == 1
+            ? char.ToUpperInvariant(trimmed[0]).ToString()
+            : trimmed[..2].ToUpperInvariant();
+    }
+
+    private void OpenCommand() => _commandOpen = true;
+
+    [JSInvokable]
+    public Task ToggleCommand()
+    {
+        _commandOpen = !_commandOpen;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task CloseCommand()
+    {
+        if (!_commandOpen)
+            return Task.CompletedTask;
+        _commandOpen = false;
+        return InvokeAsync(StateHasChanged);
+    }
 
     private void Logout() => Navigation.NavigateTo("/logout", forceLoad: true);
 
     public void Dispose()
     {
         Navigation.LocationChanged -= OnLocationChanged;
+        try
+        {
+            _ = JS.InvokeVoidAsync("beaconShell.unlisten");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        _dotNet?.Dispose();
     }
 }

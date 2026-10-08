@@ -19,6 +19,7 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>@L["Settings"]</PageTitle>
+<div class="beacon-settings">
 <PageHeader Title="@L["Settings"]" />
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">@L["SettingsLead"]</MudText>
 
@@ -64,7 +65,8 @@
         <MudText Typo="Typo.body2" Class="mb-2">@L["AuthenticatorOff"]</MudText>
         <MudButton Variant="Variant.Outlined" OnClick="StartAuthenticator" Disabled="_busy">@L["TurnOnAuthenticator"]</MudButton>
     }
-</MudPaper>
+    </MudPaper>
+</div>
 
 @code {
     private bool _busy;

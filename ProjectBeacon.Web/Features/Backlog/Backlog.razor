@@ -58,19 +58,13 @@ else
                 <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => NavigateToTask(context.Id)">@context.Title</MudButton>
             </MudTd>
             <MudTd DataLabel="@L["Status"]">
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForStatus(context.Status)">
-                    @ChromeLabels.Status(L, context.Status)
-                </MudChip>
+                <StatusChip Color="@ChipPalette.ForStatus(context.Status)" Label="@ChromeLabels.Status(L, context.Status)" />
             </MudTd>
             <MudTd DataLabel="@L["Priority"]">
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForPriority(context.Priority)">
-                    @ChromeLabels.Priority(L, context.Priority)
-                </MudChip>
+                <StatusChip Color="@ChipPalette.ForPriority(context.Priority)" Label="@ChromeLabels.Priority(L, context.Priority)" />
             </MudTd>
             <MudTd DataLabel="@L["Type"]">
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForType(context.Type)">
-                    @ChromeLabels.Type(L, context.Type)
-                </MudChip>
+                <StatusChip Color="@ChipPalette.ForType(context.Type)" Label="@ChromeLabels.Type(L, context.Type)" />
             </MudTd>
             <MudTd DataLabel="@L["SubStage"]">
                 @(context.Status == "InProgress" ? ChromeLabels.SubStage(L, context.SubStage) : "-")

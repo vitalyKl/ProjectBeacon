@@ -2024,4 +2024,115 @@ No Beacon-hosted coding agent.</value>
   <data name="Revoked" xml:space="preserve">
     <value>Revoked</value>
   </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>Operate</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>Intelligence</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>Govern</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>Reviews</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>Agent chat</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>Search or run a command</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>Command palette</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>Search pages</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>No matching commands</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>Fleet operational</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>Fleet needs attention</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>Fleet offline</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>No workstations</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>{0} workstations · {1} online</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>Current project at a glance</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>Work on the board</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>Tasks not on the board</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>Milestones</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>Project knowledge</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>Recorded decisions</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>Board snapshots</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>Agent session</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>Agent setup</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>Devices that run agents</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>This project</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>Model connections</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>Task</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>Create a project</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>{0} items need attention</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>Currently running</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>Nothing is in progress.</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>Needs attention</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>Nothing needs attention.</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>Fleet health</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>Next step</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>Verification is separate from execution. Approving finishes the review, not the work log.</value>
+  </data>
 </root>

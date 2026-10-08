@@ -1,0 +1,117 @@
+@using ProjectBeacon.Web.Resources
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+@if (Open)
+{
+    <div class="beacon-command-backdrop" @onclick="Close">
+        <div class="beacon-command"
+             role="dialog"
+             aria-modal="true"
+             aria-label="@L["CommandPalette"]"
+             @onclick:stopPropagation="true"
+             @onkeydown="OnKey"
+             @onkeydown:stopPropagation="true">
+            <div class="beacon-command-input">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                <input @ref="_input"
+                       @bind="_query"
+                       @bind:event="oninput"
+                       @bind:after="ResetIndex"
+                       placeholder="@L["CommandPalettePlaceholder"]"
+                       aria-label="@L["CommandPalette"]" />
+                <kbd>Esc</kbd>
+            </div>
+            <div class="beacon-command-results">
+                @if (Filtered.Count == 0)
+                {
+                    <p class="beacon-command-empty">@L["CommandPaletteEmpty"]</p>
+                }
+                else
+                {
+                    var i = 0;
+                    foreach (var item in Filtered)
+                    {
+                        var index = i;
+                        <button type="button"
+                                class="beacon-command-row @(index == _index ? "is-active" : null)"
+                                @onclick="() => Go(item)">
+                            <MudIcon Icon="@item.Icon" Size="Size.Small" />
+                            <strong>@item.Label</strong>
+                            <span>@item.Group</span>
+                        </button>
+                        i++;
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public IReadOnlyList<ShellCommand> Commands { get; set; } = [];
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference _input;
+    private string _query = "";
+    private int _index;
+    private bool _focused;
+
+    private IReadOnlyList<ShellCommand> Filtered =>
+        string.IsNullOrWhiteSpace(_query)
+            ? Commands
+            : Commands.Where(c =>
+                c.Label.Contains(_query, StringComparison.OrdinalIgnoreCase)
+                || c.Group.Contains(_query, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_focused)
+        {
+            _focused = true;
+            try
+            {
+                await _input.FocusAsync();
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        if (!Open)
+        {
+            _focused = false;
+            _query = "";
+            _index = 0;
+        }
+    }
+
+    private void ResetIndex() => _index = 0;
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        var count = Filtered.Count;
+        if (e.Key == "ArrowDown" && count > 0)
+            _index = Math.Min(_index + 1, count - 1);
+        else if (e.Key == "ArrowUp" && count > 0)
+            _index = Math.Max(_index - 1, 0);
+        else if (e.Key == "Enter" && count > 0)
+            await Go(Filtered[Math.Clamp(_index, 0, count - 1)]);
+        else if (e.Key == "Escape")
+            await Close();
+    }
+
+    private async Task Go(ShellCommand item)
+    {
+        await Close();
+        Navigation.NavigateTo(item.Href);
+    }
+
+    private async Task Close()
+    {
+        _query = "";
+        _index = 0;
+        await OnClose.InvokeAsync();
+    }
+}

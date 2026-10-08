@@ -18,6 +18,13 @@ public static class MiddlewareExtensions
     {
         app.UseBeaconExceptionHandler("/v1");
 
+        // Chrome blocks unload unless the document opts in. Blazor registers that listener when the circuit starts.
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers.Append("Permissions-Policy", "unload=(self)");
+            await next();
+        });
+
         // The configuration binder cannot convert config strings to IPAddress/IPNetwork, so the
         // trusted lists are parsed manually. Bind covers the rest (flags, header names, limit).
         var forwardedHeaders = new ForwardedHeadersOptions

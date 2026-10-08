@@ -44,8 +44,8 @@ else
     }
     <ErrorState Message="@_error" />
 
-    <MudGrid>
-        <MudItem xs="12" md="4">
+    <div class="beacon-split-3">
+        <div>
             <MudText Typo="Typo.h6" Class="mb-3">@L["Sections"]</MudText>
             @if (_nodes.Count == 0)
             {
@@ -66,8 +66,8 @@ else
                     </MudList>
                 </MudPaper>
             }
-        </MudItem>
-        <MudItem xs="12" md="4">
+        </div>
+        <div>
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
                 <MudTextField @bind-Value="_title" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 <MudSelect T="string" @bind-Value="_sectionId" Label="@L["Section"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
@@ -81,8 +81,8 @@ else
                 <MudTextField @bind-Value="_body" Label="@L["Content"]" Lines="8" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy" OnClick="Save">@L["Save"]</MudButton>
             </MudPaper>
-        </MudItem>
-        <MudItem xs="12" md="4">
+        </div>
+        <div>
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
                 <MudText Typo="Typo.caption">@L["ServerCompileNoTree"]</MudText>
                 <div class="beacon-budget mt-2">
@@ -114,8 +114,8 @@ else
                     <MudText Typo="Typo.caption" Class="mt-1">@revision.CreatedAt.ToUniversalTime().ToString("u") · @revision.TokenEstimate · @ShortHash(revision.CompiledHash)</MudText>
                 }
             </MudPaper>
-        </MudItem>
-    </MudGrid>
+        </div>
+    </div>
 
     <MudText Typo="Typo.h6" Class="mt-6 mb-3">@L["Constraints"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
@@ -132,8 +132,8 @@ else
             {
                 <MudListItem T="string">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled">@L["Kind" + c.Kind]</MudChip>
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForConstraintStatus(c.Status)">@ChromeLabels.Constraint(L, c.Status)</MudChip>
+                        <StatusChip Color="Color.Default" Label="@L["Kind" + c.Kind]" />
+                        <StatusChip Color="@ChipPalette.ForConstraintStatus(c.Status)" Label="@ChromeLabels.Constraint(L, c.Status)" />
                         <MudText Typo="Typo.body2" Class="grow">@c.Body</MudText>
                         @if (c.Status == ConstraintStatus.Proposed)
                         {

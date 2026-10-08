@@ -57,27 +57,30 @@ else if (_error)
         <ChildContent>
             <MudPaper Class="kanban-column kanban-column-todo" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="Todo" T="TaskItemDto" Class="kanban-zone">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="kanban-header mb-2">
+                        <span class="beacon-column-dot"></span>
                         <MudText Typo="Typo.subtitle1">@L["Todo"]</MudText>
-                        <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_todoCount)</MudText>
+                        <b class="kanban-count">@_todoCount</b>
                     </MudStack>
                 </MudDropZone>
             </MudPaper>
 
             <MudPaper Class="kanban-column kanban-column-inprogress" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="InProgress" T="TaskItemDto" Class="kanban-zone">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="kanban-header mb-2">
+                        <span class="beacon-column-dot is-progress"></span>
                         <MudText Typo="Typo.subtitle1">@L["InProgress"]</MudText>
-                        <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_inProgressCount)</MudText>
+                        <b class="kanban-count">@_inProgressCount</b>
                     </MudStack>
                 </MudDropZone>
             </MudPaper>
 
             <MudPaper Class="kanban-column kanban-column-done" Elevation="0" Outlined="true">
                 <MudDropZone Identifier="Done" T="TaskItemDto" Class="kanban-zone">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0" Class="kanban-header mb-2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="kanban-header mb-2">
+                        <span class="beacon-column-dot is-done"></span>
                         <MudText Typo="Typo.subtitle1">@L["Done"]</MudText>
-                        <MudText Typo="Typo.subtitle1" Class="kanban-header-count">(@_doneCount)</MudText>
+                        <b class="kanban-count">@_doneCount</b>
                     </MudStack>
                 </MudDropZone>
             </MudPaper>

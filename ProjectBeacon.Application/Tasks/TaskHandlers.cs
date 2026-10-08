@@ -407,9 +407,12 @@ public class ListTasksByStatusHandler : ICommandHandler<ListTasksByStatusCommand
 
     public async Task<Result<IList<TaskItemDto>>> HandleAsync(ListTasksByStatusCommand command, CancellationToken ct = default)
     {
+        if (!Enum.TryParse<TaskItemStatus>(command.Request.Status, ignoreCase: true, out var status))
+            return Result.Ok((IList<TaskItemDto>)new List<TaskItemDto>());
+
         await using var db = _dbFactory.CreateDbContext();
         var tasks = await db.Tasks
-            .Where(t => t.ProjectId == command.Request.ProjectId && t.Status.ToString().Equals(command.Request.Status, StringComparison.OrdinalIgnoreCase))
+            .Where(t => t.ProjectId == command.Request.ProjectId && t.Status == status)
             .OrderByDescending(t => t.Priority)
             .ThenBy(t => t.CreatedAt)
             .ToListAsync(ct);

@@ -55,9 +55,7 @@ else
             <RowTemplate>
                 <MudTd DataLabel="@L["Title"]">@context.Title</MudTd>
                 <MudTd DataLabel="@L["Status"]">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(context.Status)">
-                        @ChromeLabels.Decision(L, context.Status)
-                    </MudChip>
+                    <StatusChip Color="@ChipPalette.ForDecisionStatus(context.Status)" Label="@ChromeLabels.Decision(L, context.Status)" />
                 </MudTd>
                 <MudTd DataLabel="@L["Context"]">
                     <MudText Typo="Typo.caption">@context.Context</MudText>
@@ -76,9 +74,7 @@ else
                     <MudText Typo="Typo.h6">@_selected?.Title</MudText>
                     @if (_selected is not null)
                     {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ChipPalette.ForDecisionStatus(_selected.Status)">
-                            @ChromeLabels.Decision(L, _selected.Status)
-                        </MudChip>
+                        <StatusChip Color="@ChipPalette.ForDecisionStatus(_selected.Status)" Label="@ChromeLabels.Decision(L, _selected.Status)" />
                     }
                 </MudStack>
             </TitleContent>

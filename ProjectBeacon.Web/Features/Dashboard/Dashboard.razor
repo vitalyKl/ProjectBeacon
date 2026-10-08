@@ -7,7 +7,9 @@
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Infrastructure.LlamaSwap
+@using ProjectBeacon.Domain.Enums
 @using ProjectBeacon.Web.Theme
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -15,6 +17,9 @@
 @inject GetProjectPulseHandler Pulse
 @inject GetProxyStatusHandler Proxy
 @inject ListHostSamplesHandler HostSamples
+@inject ListDevicesHandler Devices
+@inject ListTasksByStatusHandler TasksByStatus
+@inject ListMyProjectsHandler MyProjects
 
 <PageTitle>@L["Dashboard"]</PageTitle>
 
@@ -41,134 +46,173 @@ else if (_pulse is null)
 }
 else
 {
-    <MudStack Spacing="1" Class="mb-6">
-        <MudText Typo="Typo.h6">@_pulse.Name</MudText>
-        @if (!string.IsNullOrWhiteSpace(_pulse.Description))
-        {
-            <MudText Typo="Typo.body2">@_pulse.Description</MudText>
-        }
-    </MudStack>
-
-    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-        <MudText Typo="Typo.subtitle1">@L["ProjectBrief"]</MudText>
-        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/context">@L["EditInContext"]</MudButton>
-    </MudStack>
-    @if (_pulse.BriefSections.Count == 0)
+    @if (_attention.Count > 0)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-6">@L["NoBrief"]</MudAlert>
-    }
-    else
-    {
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 mb-6">
-            @foreach (var section in _pulse.BriefSections)
-            {
-                <MudText Typo="Typo.caption" Class="mb-1">@ChromeLabels.Section(L, section.SectionId)</MudText>
-                <MudText Typo="Typo.body2" Class="mb-3 beacon-pre">@section.BodyMarkdown</MudText>
-            }
-        </MudPaper>
+        <div class="beacon-attention-banner">
+            <div>
+                <strong>@string.Format(L["AttentionCount"].Value, _attention.Count)</strong>
+                <span>@_attention[0].Detail</span>
+            </div>
+            <MudButton Variant="Variant.Outlined" Href="@_attention[0].Href">@L["Open"]</MudButton>
+        </div>
     }
 
-    <MudGrid Spacing="3">
-        <MudItem xs="12" md="6">
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                    <MudText Typo="Typo.subtitle1">@L["Queue"]</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/board">@L["GoToBoard"]</MudButton>
-                </MudStack>
-                <MudStack Row="true" Wrap="Wrap.Wrap" Class="mb-3">
-                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Todo")" Variant="Variant.Filled">@L["Todo"]: @_pulse.Todo</MudChip>
-                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("InProgress")" Variant="Variant.Filled">@L["InProgress"]: @_pulse.InProgress</MudChip>
-                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForStatus("Done")" Variant="Variant.Filled">@L["Done"]: @_pulse.Done</MudChip>
-                </MudStack>
-                @if (_pulse.ReadyPeek.Count == 0)
+    <div class="beacon-metric-strip">
+        <PbMetric Label="@L["InProgress"]" Value="@_pulse.InProgress.ToString()" Note="@L["AgentsActive", _pulse.ActiveSessions]" />
+        <PbMetric Label="@L["Todo"]" Value="@_pulse.Todo.ToString()" Note="@L["Queue"]" />
+        <PbMetric Label="@L["Done"]" Value="@_pulse.Done.ToString()" />
+        <PbMetric Label="@L["Workstations"]" Value="@_devices.Count(d => d.Online).ToString()" Note="@string.Format(L["FleetCounts"].Value, _devices.Count, _devices.Count(d => d.Online))" />
+    </div>
+
+    <div class="beacon-ops-grid">
+        <PbPanel Class="span-2" Title="@L["CurrentlyRunning"]" Subtitle="@_pulse.Name">
+            <Actions>
+                <MudButton Variant="Variant.Text" Size="Size.Small" Href="/board">@L["GoToBoard"]</MudButton>
+            </Actions>
+            <ChildContent>
+                @if (_running.Count == 0)
                 {
-                    <MudText Typo="Typo.body2">@L["NoReadyTasks"]</MudText>
+                    <p class="beacon-ops-empty">@L["NoRunningWork"]</p>
                 }
                 else
                 {
-                    <MudList T="string" Dense="true">
-                        @foreach (var t in _pulse.ReadyPeek)
-                        {
-                            <MudListItem T="string" OnClick="@(() => Navigation.NavigateTo($"/task/{t.Id}"))">
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.NoWrap">
-                                    <MudText Typo="Typo.body2" Class="grow beacon-ellipsis">@t.Title</MudText>
-                                    <MudChip T="string" Size="Size.Small" Color="@ChipPalette.ForPriority(t.Priority)" Variant="Variant.Filled">@ChromeLabels.Priority(L, t.Priority)</MudChip>
-                                </MudStack>
-                            </MudListItem>
-                        }
-                    </MudList>
-                }
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12" md="6">
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                    <MudText Typo="Typo.subtitle1">@L["Milestone"]</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/roadmap">@L["Roadmap"]</MudButton>
-                </MudStack>
-                @if (_pulse.OpenMilestones == 0)
-                {
-                    <MudText Typo="Typo.body2">@L["NoOpenMilestones"]</MudText>
-                }
-                else
-                {
-                    <MudButton Variant="Variant.Text" Href="/roadmap">@L["OpenMilestones", _pulse.OpenMilestones]</MudButton>
-                }
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12" md="6">
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                    <MudText Typo="Typo.subtitle1">@L["Agents"]</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings/agents">@L["Agents"]</MudButton>
-                </MudStack>
-                  <MudText Typo="Typo.body2">@L["AgentsActive", _pulse.ActiveSessions]</MudText>
-                  @if (_pulse.ActiveSessions == 0)
-                  {
-                      <MudText Typo="Typo.caption" Class="mt-2">@L["NoAgentSessionsHint"]</MudText>
-                  }
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
-                    <MudText Typo="Typo.subtitle1">@L["WorkstationLoad"]</MudText>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings/workstations">@L["Workstations"]</MudButton>
-                </MudStack>
-                @if (_loadSeries.Count == 0 && (_status is null || (!_status.Available && _status.Host is null)))
-                {
-                    <MudAlert Severity="Severity.Info">@L["StartClientHint"]</MudAlert>
-                }
-                else
-                {
-                    @if (_status is not null)
+                    @foreach (var task in _running)
                     {
-                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-2">
-                            <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
-                            @if (!string.IsNullOrWhiteSpace(_status.DeviceName))
+                        <a class="beacon-run-row" href="@($"/task/{task.Id}")">
+                            <PbAvatar Text="@Initials(task.Title)" />
+                            <span>
+                                <strong>@task.Title</strong>
+                                <span>@ChromeLabels.Status(L, task.Status)</span>
+                            </span>
+                            <PbProgress Value="@(task.SubStage is { } stage ? SubStageToPercent(stage) : 0)" />
+                            <StatusChip Color="@ChipPalette.ForPriority(task.Priority)" Label="@ChromeLabels.Priority(L, task.Priority)" />
+                        </a>
+                    }
+                }
+            </ChildContent>
+        </PbPanel>
+        <PbPanel Title="@L["NeedsAttention"]">
+            <ChildContent>
+                @if (_attention.Count == 0)
+                {
+                    <p class="beacon-ops-empty">@L["NoAttention"]</p>
+                }
+                else
+                {
+                    @foreach (var item in _attention)
+                    {
+                        <a class="beacon-attention-item" href="@item.Href">
+                            <span class="beacon-severity @item.Tone"></span>
+                            <span>
+                                <strong>@item.Title</strong>
+                                <span>@item.Detail</span>
+                            </span>
+                        </a>
+                    }
+                }
+            </ChildContent>
+        </PbPanel>
+        <PbPanel Class="span-2" Title="@L["FleetHealth"]">
+            <Actions>
+                <MudButton Variant="Variant.Text" Size="Size.Small" Href="/settings/workstations">@L["Workstations"]</MudButton>
+            </Actions>
+            <ChildContent>
+                @if (_devices.Count == 0)
+                {
+                    <p class="beacon-ops-empty">@L["StartClientHint"]</p>
+                }
+                else
+                {
+                    @foreach (var device in _devices)
+                    {
+                        <div class="beacon-health-row">
+                            <span class="beacon-node-dot @(device.Online ? "" : "is-offline")"></span>
+                            <span>
+                                <strong>@device.Name</strong>
+                                <span>@(device.Online ? L["DeviceOnline"] : L["RuntimeOffline"])</span>
+                            </span>
+                            @if (device.Online && _status?.DeviceName == device.Name && _status.Host?.CpuPercent is { } cpu)
                             {
-                                <MudText Typo="Typo.caption">@_status.DeviceName</MudText>
+                                <PbProgress Value="cpu" />
                             }
-                            @if (!string.IsNullOrWhiteSpace(_status.LoadedModel))
-                            {
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@_status.LoadedModel</MudText>
-                            }
-                        </MudStack>
+                        </div>
+                    }
+                }
+                @if (_status is not null && (_status.Available || _status.Host is not null))
+                {
+                    <div class="beacon-ops-pad">
+                        <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
                         <HostLoadView Status="_status" />
-                    }
-                    @if (_loadSeries.Count > 0)
+                        @if (_loadSeries.Count > 0)
+                        {
+                            <MudChart ChartType="ChartType.Line" ChartSeries="_loadSeries" ChartLabels="_xLabels" ChartOptions="_loadChartOptions" Width="100%" Height="160px" Class="mt-3" />
+                        }
+                    </div>
+                }
+            </ChildContent>
+        </PbPanel>
+        <PbPanel Title="@L["RecentActivity"]">
+            <ChildContent>
+                @if (_recent.Count == 0)
+                {
+                    <p class="beacon-ops-empty">@L["NoRecentActivity"]</p>
+                }
+                else
+                {
+                    @foreach (var task in _recent)
                     {
-                        <MudChart ChartType="ChartType.Line" ChartSeries="_loadSeries" ChartLabels="_xLabels" ChartOptions="_loadChartOptions" Width="100%" Height="180px" Class="mt-3" />
+                        <a class="beacon-activity-row" href="@($"/task/{task.Id}")">
+                            <StatusChip Color="@ChipPalette.ForStatus(task.Status.ToString())" Label="@ChromeLabels.Status(L, task.Status)" />
+                            <span>@task.Title</span>
+                            <time>@task.ActivityAt.ToLocalTime().ToString("g")</time>
+                        </a>
                     }
                 }
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+            </ChildContent>
+        </PbPanel>
+        <PbPanel Class="span-3" Title="@L["ProjectBrief"]">
+            <Actions>
+                <MudButton Variant="Variant.Text" Size="Size.Small" Href="/context">@L["EditInContext"]</MudButton>
+            </Actions>
+            <ChildContent>
+                @if (_pulse.BriefSections.Count == 0)
+                {
+                    <p class="beacon-ops-empty">@L["NoBrief"]</p>
+                }
+                else
+                {
+                    <div class="beacon-ops-pad">
+                        @foreach (var section in _pulse.BriefSections)
+                        {
+                            <MudText Typo="Typo.caption">@ChromeLabels.Section(L, section.SectionId)</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-3 beacon-pre">@section.BodyMarkdown</MudText>
+                        }
+                    </div>
+                }
+                <div class="beacon-ops-pad">
+                    @if (_pulse.OpenMilestones == 0)
+                    {
+                        <MudText Typo="Typo.body2">@L["NoOpenMilestones"]</MudText>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Text" Href="/roadmap">@L["OpenMilestones", _pulse.OpenMilestones]</MudButton>
+                    }
+                </div>
+            </ChildContent>
+        </PbPanel>
+    </div>
 }
 
 @code {
+    private sealed record AttentionItem(string Title, string Detail, string Href, string Tone);
+
     private ProjectPulseDto? _pulse;
     private LlamaSwapStatusDto? _status;
+    private List<TaskItemDto> _running = [];
+    private List<DaemonDeviceDto> _devices = [];
+    private List<RecentTaskDto> _recent = [];
+    private List<AttentionItem> _attention = [];
     private bool _loading = true;
     private bool _error;
     private Guid _userId;
@@ -220,6 +264,7 @@ else
         }
 
         _pulse = result.Value;
+        await LoadOps(isAdmin);
         await RefreshHost();
         _loading = false;
         _ = PollAsync();
@@ -241,6 +286,73 @@ else
         {
         }
     }
+
+    private async Task LoadOps(bool isAdmin)
+    {
+        if (_pulse is null)
+            return;
+
+        var running = await TasksByStatus.HandleAsync(
+            new ListTasksByStatusCommand(new ListTasksByStatusRequest(_pulse.ProjectId, "InProgress")));
+        _running = running.Success && running.Value is not null ? running.Value.Take(6).ToList() : [];
+
+        var devices = await Devices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+        _devices = devices.Success && devices.Value is not null ? devices.Value.ToList() : [];
+
+        var mine = await MyProjects.HandleAsync(_userId, isAdmin);
+        _recent = mine.Success && mine.Value is not null
+            ? mine.Value.RecentTasks.Where(t => t.ProjectId == _pulse.ProjectId).Take(6).ToList()
+            : [];
+
+        var attention = new List<AttentionItem>();
+        var offline = _devices.Count(d => !d.Online);
+        if (offline > 0)
+        {
+            attention.Add(new AttentionItem(
+                L["RuntimeOffline"].Value,
+                string.Format(L["FleetCounts"].Value, _devices.Count, _devices.Count(d => d.Online)),
+                "/settings/workstations",
+                "is-danger"));
+        }
+
+        foreach (var task in _pulse.ReadyPeek.Where(t => t.Priority is TaskPriority.High or TaskPriority.Critical))
+        {
+            attention.Add(new AttentionItem(
+                task.Title,
+                ChromeLabels.Priority(L, task.Priority),
+                $"/task/{task.Id}",
+                task.Priority == TaskPriority.Critical ? "is-danger" : "is-warning"));
+        }
+
+        if (_pulse.InProgress > 0 && _pulse.ActiveSessions == 0)
+        {
+            attention.Add(new AttentionItem(
+                L["InProgress"].Value,
+                L["NoAgentSessionsHint"].Value,
+                "/board",
+                "is-warning"));
+        }
+
+        _attention = attention;
+    }
+
+    private static string Initials(string title)
+    {
+        var trimmed = title.Trim();
+        return trimmed.Length == 0 ? "?" : char.ToUpperInvariant(trimmed[0]).ToString();
+    }
+
+    private static int SubStageToPercent(TaskSubStage stage) => stage switch
+    {
+        TaskSubStage.RequirementGathering => 10,
+        TaskSubStage.Estimation => 20,
+        TaskSubStage.IntermediateResult => 40,
+        TaskSubStage.Review => 60,
+        TaskSubStage.Corrections => 75,
+        TaskSubStage.ReviewCorrections => 90,
+        TaskSubStage.Complete => 100,
+        _ => 0
+    };
 
     private async Task RefreshHost()
     {

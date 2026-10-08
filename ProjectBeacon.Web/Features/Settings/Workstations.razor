@@ -24,6 +24,14 @@
 
 <PageTitle>@L["Workstations"]</PageTitle>
 <PageHeader Title="@L["Workstations"]" />
+@if (_devices.Count > 0)
+{
+    <div class="beacon-metric-strip mb-4">
+        <PbMetric Label="@L["Workstations"]" Value="@_devices.Count.ToString()" />
+        <PbMetric Label="@L["DeviceOnline"]" Value="@_devices.Count(d => d.Online).ToString()" />
+        <PbMetric Label="@L["DeviceOffline"]" Value="@_devices.Count(d => !d.Online).ToString()" />
+    </div>
+}
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["Devices"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">

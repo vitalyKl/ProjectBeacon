@@ -6,20 +6,48 @@
 @inject AuthenticationStateProvider Auth
 @inject ListMyProjectsHandler MyProjects
 
-<MudSelect T="Guid?" Value="_selected" ValueChanged="OnSelected"
-           Label="@L["Project"]" Dense="true" Variant="Variant.Outlined"
-           Class="@Class" Disabled="@(_projects.Count == 0)">
-    @foreach (var p in _projects)
-    {
-        <MudSelectItem Value="@((Guid?)p.Id)">@p.Name</MudSelectItem>
-    }
-</MudSelect>
+<MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Dense="true" Disabled="@(_projects.Count == 0)">
+    <ActivatorContent>
+        <button type="button"
+                class="beacon-project-switcher @Class"
+                aria-label="@L["SwitchProject"]"
+                disabled="@(_projects.Count == 0)"
+                @onclick="context.ToggleAsync">
+            <span class="beacon-project-glyph">@Glyph</span>
+            <span class="beacon-project-copy">
+                <strong>@CurrentName</strong>
+                <span>@L["Project"]</span>
+            </span>
+            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+        </button>
+    </ActivatorContent>
+    <ChildContent>
+        @foreach (var project in _projects)
+        {
+            <MudMenuItem OnClick="@(() => OnSelected(project.Id))">@project.Name</MudMenuItem>
+        }
+    </ChildContent>
+</MudMenu>
 
 @code {
     [Parameter] public string? Class { get; set; }
 
     private Guid? _selected;
     private List<ProjectSummaryDto> _projects = [];
+
+    private string CurrentName =>
+        _projects.FirstOrDefault(p => p.Id == _selected)?.Name
+        ?? _projects.FirstOrDefault()?.Name
+        ?? L["Project"].Value;
+
+    private string Glyph
+    {
+        get
+        {
+            var name = CurrentName.Trim();
+            return name.Length == 0 ? "?" : char.ToUpperInvariant(name[0]).ToString();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -40,11 +68,8 @@
             _selected = activeId;
     }
 
-    private void OnSelected(Guid? projectId)
+    private void OnSelected(Guid projectId)
     {
-        if (projectId is null)
-            return;
-
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);
         if (string.IsNullOrWhiteSpace(path))
             path = "/dashboard";

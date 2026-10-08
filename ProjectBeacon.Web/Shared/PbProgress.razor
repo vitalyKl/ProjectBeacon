@@ -1,0 +1,16 @@
+<div class="beacon-progress @ToneClass" role="progressbar" aria-valuenow="@Clamped" aria-valuemin="0" aria-valuemax="100">
+    <span style="width:@(Clamped)%"></span>
+</div>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public string Tone { get; set; } = "accent";
+
+    private int Clamped => (int)Math.Clamp(Value, 0, 100);
+    private string ToneClass => Tone switch
+    {
+        "success" => "is-success",
+        "warning" => "is-warning",
+        _ => ""
+    };
+}

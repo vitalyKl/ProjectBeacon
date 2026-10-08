@@ -1,0 +1,16 @@
+<div class="beacon-stage-track">
+    @for (var i = 0; i < Labels.Count; i++)
+    {
+        var mark = i < CurrentIndex ? "done" : i == CurrentIndex ? (Warning ? "warning" : "active") : string.Empty;
+        <div class="beacon-stage @(i == CurrentIndex ? "is-current" : null)" aria-current="@(i == CurrentIndex ? "step" : null)">
+            <span class="beacon-phase-mark @mark" aria-hidden="true"></span>
+            <span class="mud-typography mud-typography-caption">@Labels[i]</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<string> Labels { get; set; } = [];
+    [Parameter] public int CurrentIndex { get; set; } = -1;
+    [Parameter] public bool Warning { get; set; }
+}

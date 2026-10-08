@@ -1,11 +1,18 @@
-<div class="beacon-page-header mb-4">
-    <MudText Typo="Typo.h4" Class="beacon-type-page">@Title</MudText>
-    <div class="beacon-page-actions">
-        @ChildContent
+@if (ShowTitle || ChildContent is not null)
+{
+    <div class="beacon-page-header @(ShowTitle ? "mb-4" : "is-actions")">
+        @if (ShowTitle)
+        {
+            <MudText Typo="Typo.h4" Class="beacon-task-title">@Title</MudText>
+        }
+        <div class="beacon-page-actions">
+            @ChildContent
+        </div>
     </div>
-</div>
+}
 
 @code {
     [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public bool ShowTitle { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

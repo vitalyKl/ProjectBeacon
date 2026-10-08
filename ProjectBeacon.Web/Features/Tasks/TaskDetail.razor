@@ -34,7 +34,7 @@
 
 <PageTitle>@L["TaskDetail"]</PageTitle>
 
-<PageHeader Title="@(_task?.Title ?? L["TaskDetail"].Value)">
+<PageHeader Title="@(_task?.Title ?? L["TaskDetail"].Value)" ShowTitle="true">
     @if (_task is not null)
     {
         <MudButton Variant="Variant.Outlined" OnClick="EditTask">@L["Edit"]</MudButton>
@@ -111,6 +111,54 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Error" Class="beacon-action-danger" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
         }
     </div>
+    @if (_pipeline?.Stage is { } railStage && railStage != TaskPipelineStage.None)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-task-rail mb-3">
+            <PbPipelineRail Labels="@StageLabels" CurrentIndex="@StageIndex(railStage)" Warning="@(railStage == TaskPipelineStage.ReopenedForRevision)" />
+            <div class="beacon-relation">
+                <div>
+                    <small>@L["Status"]</small>
+                    <strong>@ChromeLabels.Status(L, _task.Status)</strong>
+                </div>
+                <div>
+                    <small>@L["Pipeline"]</small>
+                    <strong>@PipelineStageLabel(railStage)</strong>
+                </div>
+                <div>
+                    <small>@L["Sessions"]</small>
+                    <strong>@_pipeline.Sessions.Count</strong>
+                </div>
+                <div>
+                    <small>@L["TaskSteps"]</small>
+                    <strong>@_steps.Count(s => s.IsDone)/@_steps.Count</strong>
+                </div>
+            </div>
+        </MudPaper>
+    }
+    <div class="beacon-next-action @NextTone">
+        <strong>@L["NextStep"]</strong>
+        <span>@NextStepText</span>
+        @if (_pipeline?.Stage == TaskPipelineStage.Reviewing)
+        {
+            <span>@L["ReviewSeparate"]</span>
+        }
+    </div>
+    @if (_pipeline is { Sessions.Count: > 0 } feed)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-ops-panel mb-3">
+            <header class="beacon-ops-head">
+                <div class="beacon-ops-title">@L["Sessions"]</div>
+            </header>
+            @foreach (var session in feed.Sessions.TakeLast(4))
+            {
+                <div class="beacon-activity-row">
+                    <StatusChip Color="@SessionStatusColor(session.Status)" Label="@SessionStatusLabel(session.Status)" />
+                    <span>@RoleLabel(session.Role)</span>
+                    <time>@(session.LaunchedAt?.ToLocalTime().ToString("g") ?? session.ClosedAt?.ToLocalTime().ToString("g"))</time>
+                </div>
+            }
+        </MudPaper>
+    }
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-2 beacon-task-tabs">
     <MudTabPanel Text="@L["Overview"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel">
@@ -136,7 +184,7 @@ else
                 <span class="mud-typography mud-typography-caption">@_task.CreatedAt.ToShortDateString()</span>
             </div>
         </div>
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">@NextStepText</MudAlert>
+
         @if (!string.IsNullOrEmpty(_task.ReviewNotes))
         {
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["ReviewNotes"]</MudText>
@@ -209,25 +257,7 @@ else
         <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
         @if (_pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
         {
-            <div class="beacon-stage-track mt-2">
-                @for (var i = 0; i < StageChips.Length; i++)
-                {
-                    var current = pipeline.Stage;
-                    var index = StageIndex(current);
-                    var label = current == TaskPipelineStage.ReopenedForRevision && i == 1
-                        ? L["StageReopenedForRevision"].Value
-                        : L[StageChips[i]].Value;
-                    var mark = i < index
-                        ? "done"
-                        : i == index
-                            ? (current == TaskPipelineStage.ReopenedForRevision ? "warning" : "active")
-                            : string.Empty;
-                    <div class="beacon-stage @(i == index ? "is-current" : null)" aria-current="@(i == index ? "step" : null)">
-                        <span class="beacon-phase-mark @mark" aria-hidden="true"></span>
-                        <span class="mud-typography mud-typography-caption">@label</span>
-                    </div>
-                }
-            </div>
+            <PbPipelineRail Labels="@StageLabels" CurrentIndex="@StageIndex(pipeline.Stage)" Warning="@(pipeline.Stage == TaskPipelineStage.ReopenedForRevision)" />
 
             @if (pipeline.Stage == TaskPipelineStage.Closed)
             {
@@ -246,7 +276,7 @@ else
                     <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-4 mb-2">
                         <MudText Typo="Typo.body2" Class="beacon-pre">@subtask.Instructions</MudText>
                         <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@SubtaskStatusColor(subtask.Status)">@SubtaskStatusLabel(subtask.Status)</MudChip>
+                            <StatusChip Color="@SubtaskStatusColor(subtask.Status)" Label="@SubtaskStatusLabel(subtask.Status)" />
                             @if (subtask.ReopenCount > 0)
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning">@L["Reopens"]: @subtask.ReopenCount</MudChip>
@@ -286,8 +316,8 @@ else
             @foreach (var session in pipeline.Sessions)
             {
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled">@RoleLabel(session.Role)</MudChip>
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@SessionStatusColor(session.Status)">@SessionStatusLabel(session.Status)</MudChip>
+                    <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
+                    <StatusChip Color="@SessionStatusColor(session.Status)" Label="@SessionStatusLabel(session.Status)" />
                     @if (session.LaunchedAt is not null)
                     {
                         <MudText Typo="Typo.caption">@L["Launched"]: @session.LaunchedAt.Value.ToShortDateString()</MudText>
@@ -316,9 +346,7 @@ else
             @foreach (var verdict in pipeline.Verdicts)
             {
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)">
-                        @(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)
-                    </MudChip>
+                    <StatusChip Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)" Label="@(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)" />
                     <MudText Typo="Typo.body2" Class="grow beacon-pre">@verdict.Note</MudText>
                     <MudText Typo="Typo.caption">@verdict.CreatedAt.ToShortDateString()</MudText>
                 </MudStack>
@@ -382,6 +410,10 @@ else
 
 @code {
     private static readonly string[] StageChips = { "StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed" };
+    private string[] StageLabels => StageChips.Select((key, i) =>
+        _pipeline?.Stage == TaskPipelineStage.ReopenedForRevision && i == 1
+            ? L["StageReopenedForRevision"].Value
+            : L[key].Value).ToArray();
     private static readonly TaskItemStatus[] StatusOptions = Enum.GetValues<TaskItemStatus>();
 
     [Parameter] public Guid TaskId { get; set; }
@@ -406,6 +438,14 @@ else
     private List<TaskPhaseDto> _phases = [];
     private Guid? _openPhaseId;
     private string _stepTitle = string.Empty;
+
+    private string NextTone => _pipeline?.Stage switch
+    {
+        TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
+        TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
+        TaskPipelineStage.Executing => "is-info",
+        _ => ""
+    };
 
     private string NextStepText
     {
