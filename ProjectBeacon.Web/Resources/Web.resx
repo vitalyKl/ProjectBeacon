@@ -136,6 +136,27 @@
   <data name="SettingsLead" xml:space="preserve">
     <value>Account, this machine, and agent models. The project folder, members, and labels stay with the project.</value>
   </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>Switch to light</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>Switch to dark</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
   <data name="ThisProject" xml:space="preserve">
     <value>This project</value>
   </data>
@@ -774,6 +795,27 @@
   </data>
   <data name="ProjectCreated" xml:space="preserve">
     <value>Project created.</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>Create a project, rename the open one, or remove a project you administer.</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>Delete project</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>Delete {0}? Its tasks, context, and members are removed.</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>Project saved.</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>Project deleted.</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>Project name is required.</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>Open</value>
   </data>
   <data name="Saved" xml:space="preserve">
     <value>Saved.</value>
@@ -2125,6 +2167,12 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="NoAttention" xml:space="preserve">
     <value>Nothing needs attention.</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>System load</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>No workstation has reported CPU, memory, or GPU load yet.</value>
   </data>
   <data name="FleetHealth" xml:space="preserve">
     <value>Fleet health</value>

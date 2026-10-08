@@ -3,30 +3,69 @@
 @using System.Resources
 @using System.Globalization
 
-<MudMenu Icon="@Icons.Material.Filled.Language"
-         Variant="Variant.Text"
-         Dense="true"
-         AriaLabel="@L["Language"]">
-    @foreach (var culture in SupportedCultures)
-    {
-        <MudMenuItem OnClick="@(() => OnSelect(culture.Culture))">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <span>@culture.Flag</span>
-                <span>@GetLanguageName(culture.Culture)</span>
-                @if (SelectedCulture == culture.Culture)
-                {
-                    <MudSpacer />
-                    <span>✓</span>
-                }
-            </MudStack>
-        </MudMenuItem>
-    }
-</MudMenu>
+@if (Presentation == LanguageSwitcherVariant.Row)
+{
+    <MudMenu Class="beacon-pref-menu"
+             Dense="true"
+             AnchorOrigin="Origin.TopLeft"
+             TransformOrigin="Origin.BottomLeft"
+             AriaLabel="@L["Language"]">
+        <ActivatorContent>
+            <button type="button" class="beacon-pref" aria-label="@L["Language"]" @onclick="context.ToggleAsync">
+                <span class="beacon-pref-label">@L["Language"]</span>
+                <span class="beacon-pref-value">
+                    @CurrentName
+                    <MudIcon Icon="@Icons.Material.Filled.ExpandMore" Size="Size.Small" />
+                </span>
+            </button>
+        </ActivatorContent>
+        <ChildContent>
+            @foreach (var culture in SupportedCultures)
+            {
+                <MudMenuItem OnClick="@(() => OnSelect(culture.Culture))">
+                    <span class="beacon-menu-choice">
+                        <span>@GetLanguageName(culture.Culture)</span>
+                        @if (SelectedCulture == culture.Culture)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        }
+                    </span>
+                </MudMenuItem>
+            }
+        </ChildContent>
+    </MudMenu>
+}
+else
+{
+    <MudMenu Icon="@Icons.Material.Filled.Language"
+             Variant="Variant.Text"
+             Dense="true"
+             AriaLabel="@L["Language"]">
+        @foreach (var culture in SupportedCultures)
+        {
+            <MudMenuItem OnClick="@(() => OnSelect(culture.Culture))">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <span>@culture.Flag</span>
+                    <span>@GetLanguageName(culture.Culture)</span>
+                    @if (SelectedCulture == culture.Culture)
+                    {
+                        <MudSpacer />
+                        <span>✓</span>
+                    }
+                </MudStack>
+            </MudMenuItem>
+        }
+    </MudMenu>
+}
 
 @code {
+    [Parameter] public LanguageSwitcherVariant Presentation { get; set; } = LanguageSwitcherVariant.Icon;
+
     private static readonly ResourceManager ResourceManager = new(
         "ProjectBeacon.Web.Resources.Web",
         typeof(Web).Assembly);
+
+    private string CurrentName => GetLanguageName(SelectedCulture);
 
     private string GetLanguageName(string cultureCode)
     {

@@ -23,21 +23,66 @@
 @inject ListDevicesHandler ListDevices
 @inject ListRuntimesHandler ListRuntimes
 @inject AttachRuntimeHandler AttachRuntime
+@inject ListMyProjectsHandler MyProjects
+@inject UpdateProjectHandler UpdateProject
+@inject DeleteProjectHandler DeleteProject
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
+@inject NavigationManager Navigation
 
 <PageTitle>@L["ProjectSettings"]</PageTitle>
 <PageHeader Title="@L["ProjectSettings"]" />
 
-<MudText Typo="Typo.h6" Class="mb-1">@L["ThisProject"]</MudText>
-<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["ThisProjectLead"]</MudText>
+<MudText Typo="Typo.h6" Class="mb-1">@L["Projects"]</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@L["ProjectManageLead"]</MudText>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mb-4" Href="/projects/new">@L["CreateProject"]</MudButton>
+
+@if (_projects.Count > 0)
+{
+    <MudTable Items="_projects" Dense="true" Hover="true" Class="mb-4">
+        <HeaderContent>
+            <MudTh>@L["ProjectName"]</MudTh>
+            <MudTh>@L["Description"]</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="@L["ProjectName"]">
+                @context.Name
+                @if (context.Id == _projectId)
+                {
+                    <span class="beacon-state is-info ml-2">@L["CurrentProject"]</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="@L["Description"]">@(string.IsNullOrWhiteSpace(context.Description) ? "—" : context.Description)</MudTd>
+            <MudTd>
+                @if (context.Id != _projectId)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => OpenProject(context.Id))">@L["OpenProject"]</MudButton>
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => RemoveProject(context.Id, context.Name))">@L["Delete"]</MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
 
 @if (_projectId is null)
 {
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/projects/new">@L["CreateProject"]</MudButton>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["NoProjectsYet"]</MudText>
 }
 else
 {
+    <MudText Typo="Typo.h6" Class="mb-3">@L["ThisProject"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <div class="beacon-form">
+            <MudTextField @bind-Value="_projectName" InputId="project-name" Label="@L["ProjectName"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
+            <MudTextField @bind-Value="_projectDescription" InputId="project-description" Label="@L["Description"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" />
+            <div class="beacon-field-row">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProject" Disabled="_busy">@L["Save"]</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => RemoveProject(_projectId.Value, _projectName))" Disabled="_busy">@L["DeleteProject"]</MudButton>
+            </div>
+        </div>
+    </MudPaper>
+
     <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProjectFolder"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ScopeProjectHint"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
@@ -179,6 +224,9 @@ else
     private string _labelName = string.Empty;
     private string _labelPrefix = string.Empty;
     private Guid? _editingLabelId;
+    private List<ProjectSummaryDto> _projects = [];
+    private string _projectName = string.Empty;
+    private string _projectDescription = string.Empty;
     private string _inviteEmail = string.Empty;
     private MemberRole _inviteRole = MemberRole.Member;
     private string? _inviteUrl;
@@ -199,13 +247,97 @@ else
             var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
             _devices = listed.Success ? listed.Value!.ToList() : [];
         }
+        await ReloadProjects();
         var current = await CurrentProject.HandleAsync(_actor);
         if (current.Value is null)
             return;
         _projectId = current.Value.Id;
+        _projectName = current.Value.Name;
+        _projectDescription = current.Value.Description ?? string.Empty;
         await ReloadLabels();
         await ReloadMembers();
         await ReloadRuntimes();
+    }
+
+    private async Task ReloadProjects()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var listed = await MyProjects.HandleAsync(_userId, _isAdmin);
+        _projects = listed.Success ? listed.Value!.Projects.ToList() : [];
+    }
+
+    private void OpenProject(Guid projectId)
+    {
+        Navigation.NavigateTo($"/project/switch?projectId={projectId}&returnUrl={Uri.EscapeDataString("/project/settings")}", forceLoad: true);
+    }
+
+    private async Task SaveProject()
+    {
+        if (_projectId is not { } projectId || _busy)
+            return;
+        if (string.IsNullOrWhiteSpace(_projectName))
+        {
+            Snackbar.Add(L["ProjectNameRequired"].Value, Severity.Error);
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var saved = await UpdateProject.HandleAsync(new UpdateProjectCommand(
+                new UpdateProjectRequest(projectId, _projectName.Trim(), _projectDescription), _actor));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _projectName = saved.Value!.Name;
+            _projectDescription = saved.Value.Description ?? string.Empty;
+            Snackbar.Add(L["ProjectRenamed"].Value, Severity.Success);
+            await ReloadProjects();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveProject(Guid projectId, string name)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value,
+            string.Format(L["DeleteProjectConfirm"].Value, name),
+            yesText: L["Delete"].Value,
+            cancelText: L["Cancel"].Value);
+        if (confirmed != true || _busy)
+            return;
+        _busy = true;
+        try
+        {
+            var deleted = await DeleteProject.HandleAsync(new DeleteProjectCommand(projectId, _actor));
+            if (!deleted.Success)
+            {
+                Snackbar.Add(deleted.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var next = _projects.FirstOrDefault(p => p.Id != projectId);
+            if (projectId == _projectId && next is not null)
+            {
+                OpenProject(next.Id);
+                return;
+            }
+            if (projectId == _projectId)
+            {
+                Navigation.NavigateTo("/projects/new", forceLoad: true);
+                return;
+            }
+            Snackbar.Add(L["ProjectDeleted"].Value, Severity.Success);
+            await ReloadProjects();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private Task OnFolderPathChanged(string path)

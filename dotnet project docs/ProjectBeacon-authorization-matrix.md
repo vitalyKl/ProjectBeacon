@@ -190,23 +190,24 @@ Actor-type requirement shorthand (effective, after all three layers):
 
 | Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
-| POST | `/v1/projects` | ProjectEndpoints.cs:22 | Any-auth | — | none (`CreatedByUserId = actor.UserId`, may be null) | tenant | `REVIEW REQUIRED`: **any** human or api token can create a project; no role, no capability |
-| PUT | `/v1/projects/{projectId}` | ProjectEndpoints.cs:23 | Human-manager | — | `UserId is null → 401` (:61); `CanManageProjectAsync` (ProjectHandlers.cs:66) | project | |
-| GET | `/v1/projects/{projectId}` | ProjectEndpoints.cs:24 | Any-auth | — | RLS only | project | `REVIEW REQUIRED`: single-project read has no explicit role/capability gate (RLS-filtered) |
-| GET | `/v1/orgs/{orgId}/projects` | ProjectEndpoints.cs:25 | Any-auth | — | RLS only | org | |
-| GET | `/v1/projects` | ProjectEndpoints.cs:26 | Any-auth | — | RLS only | tenant | `REVIEW REQUIRED`: list-all-projects, no role/capability gate |
-| POST | `/v1/projects/{projectId}/members` | ProjectEndpoints.cs:28 | Human-manager | — | `UserId is null → 401` (:102); `ProjectAuthorization.AddMember` (forbids ApiToken) | project | |
-| DELETE | `/v1/projects/{projectId}/members/{userId}` | ProjectEndpoints.cs:29 | Human-manager | — | `UserId is null → 401` (:115); `ProjectAuthorization.RemoveMember` | project | |
-| GET | `/v1/projects/{projectId}/members` | ProjectEndpoints.cs:30 | Any-auth | — | RLS only | project | |
-| POST | `/v1/projects/{projectId}/invites` | ProjectEndpoints.cs:31 | Human-manager | — | `UserId is null → 401` (:198); `CanManageProjectAsync` / `CanManageOrgAsync` (InviteHandlers.cs:89) | project | |
-| GET | `/v1/projects/{projectId}/invites` | ProjectEndpoints.cs:32 | Human-only | — | `UserId is null → 401` (:210); `CanManageProjectAsync` | project | |
-| DELETE | `/v1/projects/{projectId}/invites/{inviteId}` | ProjectEndpoints.cs:33 | Human-manager | — | `UserId is null → 401` (:222); `CanManageProjectAsync` (InviteHandlers.cs:261) | project | |
-| POST | `/v1/projects/{projectId}/tokens` | ProjectEndpoints.cs:35 | Human-manager | — | `UserId is null → 401` (:138); `ProjectAuthorization.CreateToken` (forbids ApiToken) | project | |
-| GET | `/v1/projects/{projectId}/tokens` | ProjectEndpoints.cs:36 | Human-manager | — | `UserId is null → 401` (:180); `CanManageProjectAsync` (ApiTokenHandlers.cs:141) | project | |
-| GET | `/v1/projects/{projectId}/tokens/{tokenId}` | ProjectEndpoints.cs:37 | Human-manager | — | `UserId is null → 401` (:166); `CanManageProjectAsync` (ApiTokenHandlers.cs:171) | project | |
-| DELETE | `/v1/projects/{projectId}/tokens/{tokenId}` | ProjectEndpoints.cs:38 | Human-manager | — | `UserId is null → 401` (:152); `ProjectAuthorization.RevokeToken` | project | |
-| DELETE | `/v1/tokens/{tokenId}` | ProjectEndpoints.cs:39 | Human-manager | — | `UserId is null → 401` (:152); `ProjectAuthorization.RevokeToken` (project = `Guid.Empty`) | project | |
-| GET | `/v1/tokens/{tokenId}` | ProjectEndpoints.cs:40 | Human-manager | — | `UserId is null → 401` (:166); `CanManageProjectAsync` (project = `Guid.Empty`) | project | |
+| POST | `/v1/projects` | ProjectEndpoints.cs:22 | Human-only | — | `RequireHuman`; creator becomes Owner | tenant | |
+| PUT | `/v1/projects/{projectId}` | ProjectEndpoints.cs:23 | Human-manager | — | `RequireHuman`; `CanAsync` Administer (`UpdateProjectHandler`) | project | rename and description |
+| DELETE | `/v1/projects/{projectId}` | ProjectEndpoints.cs:24 | Human-manager | — | `RequireHuman`; `CanAsync` Administer (`DeleteProjectHandler`) | project | removes the project and dependent rows |
+| GET | `/v1/projects/{projectId}` | ProjectEndpoints.cs:25 | Any-auth | — | RLS only | project | `REVIEW REQUIRED`: single-project read has no explicit role/capability gate (RLS-filtered) |
+| GET | `/v1/orgs/{orgId}/projects` | ProjectEndpoints.cs:26 | Any-auth | — | RLS only | org | |
+| GET | `/v1/projects` | ProjectEndpoints.cs:27 | Any-auth | — | RLS only | tenant | `REVIEW REQUIRED`: list-all-projects, no role/capability gate |
+| POST | `/v1/projects/{projectId}/members` | ProjectEndpoints.cs:29 | Human-manager | — | `RequireHuman`; `ProjectAuthorization.AddMember` (forbids ApiToken) | project | |
+| DELETE | `/v1/projects/{projectId}/members/{userId}` | ProjectEndpoints.cs:30 | Human-manager | — | `RequireHuman`; `ProjectAuthorization.RemoveMember` | project | |
+| GET | `/v1/projects/{projectId}/members` | ProjectEndpoints.cs:31 | Any-auth | — | RLS only | project | |
+| POST | `/v1/projects/{projectId}/invites` | ProjectEndpoints.cs:32 | Human-manager | — | `RequireHuman`; `CanManageProjectAsync` / `CanManageOrgAsync` | project | |
+| GET | `/v1/projects/{projectId}/invites` | ProjectEndpoints.cs:33 | Human-only | — | `RequireHuman`; `CanManageProjectAsync` | project | |
+| DELETE | `/v1/projects/{projectId}/invites/{inviteId}` | ProjectEndpoints.cs:34 | Human-manager | — | `RequireHuman`; `CanManageProjectAsync` | project | |
+| POST | `/v1/projects/{projectId}/tokens` | ProjectEndpoints.cs:36 | Human-manager | — | `RequireHuman`; `ProjectAuthorization.CreateToken` (forbids ApiToken) | project | |
+| GET | `/v1/projects/{projectId}/tokens` | ProjectEndpoints.cs:37 | Human-manager | — | `RequireHuman`; `CanManageProjectAsync` | project | |
+| GET | `/v1/projects/{projectId}/tokens/{tokenId}` | ProjectEndpoints.cs:38 | Human-manager | — | `RequireHuman`; `CanManageProjectAsync` | project | |
+| DELETE | `/v1/projects/{projectId}/tokens/{tokenId}` | ProjectEndpoints.cs:39 | Human-manager | — | `RequireHuman`; `ProjectAuthorization.RevokeToken` | project | |
+| DELETE | `/v1/tokens/{tokenId}` | ProjectEndpoints.cs:40 | Human-manager | — | `RequireHuman`; `ProjectAuthorization.RevokeToken` (project = `Guid.Empty`) | project | |
+| GET | `/v1/tokens/{tokenId}` | ProjectEndpoints.cs:41 | Human-manager | — | `RequireHuman`; `CanManageProjectAsync` (project = `Guid.Empty`) | project | |
 
 ### 4.4 Tasks (`TaskEndpoints.cs`)
 

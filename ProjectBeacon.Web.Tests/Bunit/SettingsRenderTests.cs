@@ -33,6 +33,10 @@ public sealed class SettingsRenderTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
 
         Assert.Contains("Account", cut.Markup);
+        Assert.Contains("Appearance", cut.Markup);
+        Assert.Contains("Dark", cut.Markup);
+        Assert.Contains("Light", cut.Markup);
+        Assert.Contains("System", cut.Markup);
         Assert.Contains("Current password", cut.Markup);
         Assert.Contains("Change password", cut.Markup);
         Assert.DoesNotContain("ProjectFolder", cut.Markup);

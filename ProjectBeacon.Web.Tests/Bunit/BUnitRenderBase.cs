@@ -58,6 +58,8 @@ public abstract class BUnitRenderBase : IDisposable
         _bunit.Services.AddApplicationHandlers();
         _bunit.Services.AddMudServices();
         _bunit.Services.AddLocalization();
+        _bunit.Services.AddHttpContextAccessor();
+        _bunit.Services.AddScoped<ProjectBeacon.Web.Theme.BeaconThemeState>();
         _bunit.Services.AddSingleton(tenant);
         _bunit.Services.AddScoped(_ => TenantScope.EnterUnscoped());
 

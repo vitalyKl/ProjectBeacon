@@ -17,7 +17,7 @@
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
-        <MudTextField T="string" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="Disabled" />
+        <MudTextField T="string" InputId="@FolderInputId" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="flex-grow-1" Disabled="Disabled" />
         <MudButton Variant="Variant.Outlined" OnClick="Browse" Disabled="Disabled || _busy || DeviceId is not { }">@L["Browse"]</MudButton>
     </MudStack>
 }
@@ -43,9 +43,9 @@ else
 }
 @if (AdvancedPath)
 {
-    <MudExpansionPanels Elevation="0" Class="mt-2">
+    <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
         <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
-            <MudTextField T="string" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="Disabled" />
+            <MudTextField T="string" InputId="@FolderInputId" Value="@Path" ValueChanged="OnPathChanged" Label="@Label" Placeholder="@L["FolderExample"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Disabled="Disabled" />
         </MudExpansionPanel>
     </MudExpansionPanels>
 }
@@ -72,6 +72,8 @@ else
     private string? _error;
     private string? _phase;
     private DirListing? _listing;
+
+    private string FolderInputId => "folder-" + RootKind;
 
     private Task OnPathChanged(string value) => PathChanged.InvokeAsync(value ?? "");
 

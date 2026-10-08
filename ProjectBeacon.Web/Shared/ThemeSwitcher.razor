@@ -1,0 +1,62 @@
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject BeaconThemeState Theme
+
+@if (Presentation == ThemeSwitcherVariant.Icon)
+{
+    <button type="button" class="beacon-tool" aria-label="@ToggleLabel" title="@ToggleLabel" @onclick="Toggle">
+        <MudIcon Icon="@(Theme.IsDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Size="Size.Small" />
+    </button>
+}
+else
+{
+    <MudMenu Class="beacon-pref-menu"
+             Dense="true"
+             AnchorOrigin="Origin.TopLeft"
+             TransformOrigin="Origin.BottomLeft"
+             AriaLabel="@L["Appearance"]">
+        <ActivatorContent>
+            <button type="button" class="beacon-pref" aria-label="@L["Appearance"]" @onclick="context.ToggleAsync">
+                <span class="beacon-pref-label">@L["Appearance"]</span>
+                <span class="beacon-pref-value">
+                    @CurrentLabel
+                    <MudIcon Icon="@Icons.Material.Filled.ExpandMore" Size="Size.Small" />
+                </span>
+            </button>
+        </ActivatorContent>
+        <ChildContent>
+            @foreach (var preference in Choices)
+            {
+                <MudMenuItem OnClick="@(() => Pick(preference))">
+                    <span class="beacon-menu-choice">
+                        <span>@Label(preference)</span>
+                        @if (Theme.Preference == preference)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        }
+                    </span>
+                </MudMenuItem>
+            }
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    [Parameter] public ThemeSwitcherVariant Presentation { get; set; } = ThemeSwitcherVariant.Icon;
+
+    private static readonly ThemePreference[] Choices = [ThemePreference.Dark, ThemePreference.Light, ThemePreference.System];
+
+    private string ToggleLabel => Theme.IsDark ? L["ThemeToLight"].Value : L["ThemeToDark"].Value;
+
+    private string CurrentLabel => Label(Theme.Preference);
+
+    private string Label(ThemePreference preference) => preference switch
+    {
+        ThemePreference.Light => L["ThemeLight"].Value,
+        ThemePreference.System => L["ThemeSystem"].Value,
+        _ => L["ThemeDark"].Value
+    };
+
+    private Task Toggle() => Theme.ToggleExplicitAsync();
+
+    private Task Pick(ThemePreference preference) => Theme.SetPreferenceAsync(preference);
+}

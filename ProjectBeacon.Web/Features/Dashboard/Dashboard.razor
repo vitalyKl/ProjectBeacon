@@ -145,21 +145,32 @@ else
                                 <strong>@device.Name</strong>
                                 <span>@(device.Online ? L["DeviceOnline"] : L["RuntimeOffline"])</span>
                             </span>
-                            @if (device.Online && _status?.DeviceName == device.Name && _status.Host?.CpuPercent is { } cpu)
+                            @if (LatestFor(device.Id)?.CpuPercent is { } cpu)
                             {
                                 <PbProgress Value="cpu" />
                             }
                         </div>
                     }
                 }
-                @if (_status is not null && (_status.Available || _status.Host is not null))
+            </ChildContent>
+        </PbPanel>
+        <PbPanel Surface="operational" Class="span-2" Title="@L["SystemLoad"]" Subtitle="@ShownLoad?.DeviceName">
+            <ChildContent>
+                @if (ShownLoad?.Host is null && _loadSeries.Count == 0)
+                {
+                    <p class="beacon-ops-empty">@L["NoHostLoad"]</p>
+                }
+                else
                 {
                     <div class="beacon-ops-pad">
-                        <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
-                        <HostLoadView Status="_status" />
+                        @if (_status is not null)
+                        {
+                            <StatusChip Color="@ChipPalette.ForRuntime(ProxyState)" Label="@ProxyText" />
+                        }
+                        <HostLoadView Status="ShownLoad" />
                         @if (_loadSeries.Count > 0)
                         {
-                            <MudChart ChartType="ChartType.Line" ChartSeries="_loadSeries" ChartLabels="_xLabels" ChartOptions="_loadChartOptions" Width="100%" Height="160px" Class="mt-3" />
+                            <MudChart ChartType="ChartType.Line" ChartSeries="_loadSeries" ChartLabels="_xLabels" ChartOptions="_loadChartOptions" Width="100%" Height="180px" Class="mt-3" />
                         }
                     </div>
                 }
@@ -228,6 +239,7 @@ else
     private bool _error;
     private Guid _userId;
     private CancellationTokenSource? _poll;
+    private List<DeviceHostSampleDto> _samples = [];
     private List<ChartSeries<double>> _loadSeries = [];
     private string[] _xLabels = [];
     private readonly LineChartOptions _loadChartOptions = new()
@@ -242,6 +254,28 @@ else
         _lead?.Stage == TaskPipelineStage.ReopenedForRevision && i == 1
             ? L["StageReopenedForRevision"].Value
             : L[key].Value).ToArray();
+
+    private LlamaSwapStatusDto? ShownLoad
+    {
+        get
+        {
+            if (_status?.Host is not null)
+                return _status;
+            var sample = _samples.OrderByDescending(s => s.SampledAt).FirstOrDefault();
+            if (sample is null)
+                return null;
+            var gpu = sample.GpuUtilizationPercent is not null || sample.GpuMemoryUsedBytes is not null
+                ? new GpuLoadDto(sample.GpuName, sample.GpuUtilizationPercent, sample.GpuMemoryUsedBytes, sample.GpuMemoryTotalBytes)
+                : null;
+            var name = _devices.FirstOrDefault(d => d.Id == sample.DeviceId)?.Name;
+            return new LlamaSwapStatusDto(false, false, _status?.LoadedModel, null, null, null, _status?.LoadedModels,
+                new HostLoadDto(sample.CpuPercent, sample.RamUsedBytes, sample.RamTotalBytes, gpu, sample.SampledAt),
+                name);
+        }
+    }
+
+    private DeviceHostSampleDto? LatestFor(Guid deviceId) =>
+        _samples.Where(s => s.DeviceId == deviceId).OrderByDescending(s => s.SampledAt).FirstOrDefault();
 
     private string ProxyState => RuntimeHealth.ForDashboard(_status);
 
@@ -396,8 +430,13 @@ else
             return;
         var samples = await HostSamples.HandleAsync(new ListHostSamplesCommand(new ListHostSamplesRequest(_userId)));
         if (!samples.Success || samples.Value is null || samples.Value.Count == 0)
+        {
+            _samples = [];
+            _loadSeries = [];
             return;
+        }
         var rows = samples.Value.ToList();
+        _samples = rows;
         _xLabels = SparseTimes(rows);
         var series = new List<ChartSeries<double>>
         {

@@ -21,6 +21,7 @@ public static class ProjectEndpoints
     {
         app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapDelete("/v1/projects/{projectId:guid}", DeleteProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -64,6 +65,12 @@ public static class ProjectEndpoints
         return result.Success
             ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
+    }
+
+    private static async Task<IResult> DeleteProject(Guid projectId, DeleteProjectHandler handler, HttpContext ctx)
+    {
+        var result = await handler.HandleAsync(new DeleteProjectCommand(projectId, ctx.GetActor()));
+        return result.Success ? Results.NoContent() : result.FromResult(404);
     }
 
     private static async Task<IResult> GetProject(Guid projectId, GetProjectHandler handler)

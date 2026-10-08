@@ -216,6 +216,7 @@ Status: `ENFORCED` — gate present and covered by `CapabilityWallHttpTests` / r
 |---|---|---|---|---|---|---|
 | POST | `/v1/projects` | Human only | — | RequireHuman | project | ENFORCED |
 | PUT | `/v1/projects/{p}` | Human only | — | RequireHuman | project | ENFORCED |
+| DELETE | `/v1/projects/{p}` | Human only | — | RequireHuman | project | ENFORCED |
 | GET | `/v1/projects/{p}` | Human only | — | RequireHuman | project | ENFORCED |
 | GET | `/v1/orgs/{orgId}/projects` | Human only | — | RequireHuman | org | ENFORCED |
 | GET | `/v1/projects` | Human only | — | RequireHuman | projects | ENFORCED |

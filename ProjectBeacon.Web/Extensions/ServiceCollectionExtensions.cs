@@ -135,6 +135,7 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<ILlamaSwapProxy, ProjectBeacon.Application.Devices.DeviceLlamaSwapProxy>();
         services.AddHttpContextAccessor();
+        services.AddScoped<ProjectBeacon.Web.Theme.BeaconThemeState>();
         services.AddScoped(sp =>
         {
             var nav = sp.GetRequiredService<NavigationManager>();

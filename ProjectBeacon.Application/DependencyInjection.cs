@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<CreateProjectHandler>();
         services.AddTransient<UpdateProjectHandler>();
+        services.AddTransient<DeleteProjectHandler>();
         services.AddTransient<GetProjectHandler>();
         services.AddTransient<ListProjectsHandler>();
 

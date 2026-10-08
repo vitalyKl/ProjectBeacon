@@ -26,17 +26,17 @@ The implementation must be adapted to the existing project's architecture and te
 
 ## 1.1 Shipped shell
 
-`MainLayout` is the authenticated shell: `MudAppBar`, `MudDrawer` (`DrawerVariant.Responsive`, `Breakpoint.Md`, `Elevation="0"`), `ProjectSwitcher`, breadcrumbs, version footer, `LanguageSwitcher`, page body, and `ChatDock`.
+`MainLayout` is the authenticated shell: `MudAppBar`, `MudDrawer` (`DrawerVariant.Responsive`, `Breakpoint.Md`, `Elevation="0"`, width `236px`), `ProjectSwitcher`, page title, command palette, theme toggle, version footer, `LanguageSwitcher`, page body, and `ChatDock`.
 
 Drawer groups:
 
 ```text
-Work        Dashboard /dashboard, Board /board, Backlog /backlog, Roadmap /roadmap
-Knowledge   Context /context, Decisions /decisions, Reports /reports
-Agents      Chat /chat, Agents /settings/agents, Workstations /settings/workstations
-Project     Project settings /project/settings
-Account     Settings /settings, Connections /settings/connections
+Operate       Overview /dashboard, Tasks /board, Pipeline /task/{id} when a task is running
+Intelligence  Agents /settings/agents, Workstations /settings/workstations, Context /context, Chat /chat
+Govern        Projects /project/settings, Settings /settings
 ```
+
+Backlog `/backlog`, Roadmap `/roadmap`, Decisions `/decisions`, Reports `/reports`, and Connections `/settings/connections` stay reachable by route and the command palette. `/project/settings` creates, renames, and deletes projects. Overview has a System load panel (CPU, memory, GPU, and the sample chart). Appearance is Dark (default), Light, or System.
 
 `/agents` redirects to `/settings/agents`. Agents and model backends are user-level. Workstations are user-owned devices. Project settings are project-level. Learn and Files are not shipped.
 

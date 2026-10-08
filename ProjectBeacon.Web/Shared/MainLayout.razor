@@ -22,13 +22,14 @@
 @inject ListDevicesHandler Devices
 @inject ListTasksByStatusHandler TasksByStatus
 @inject IJSRuntime JS
+@inject BeaconThemeState Theme
 
-<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="@Theme.IsDark" ObserveSystemDarkModeChange="false" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudPopoverProvider />
 
-<MudLayout Class="beacon-theme-dark">
+<MudLayout Class="@(Theme.IsDark ? "beacon-theme-dark" : null)">
     <MudAppBar Elevation="0" Class="beacon-appbar">
         <MudIconButton
             Icon="@Icons.Material.Filled.Menu"
@@ -55,6 +56,7 @@
             <span>@L["SearchOrCommand"]</span>
             <kbd>Ctrl K</kbd>
         </button>
+        <ThemeSwitcher Presentation="ThemeSwitcherVariant.Icon" />
         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
             <ActivatorContent>
                 <button type="button" class="beacon-avatar" aria-label="@_displayName" @onclick="context.ToggleAsync">
@@ -106,6 +108,9 @@
                     @L["AgentChat"]
                 </MudNavLink>
                 <div class="beacon-nav-label">@L["NavGovern"]</div>
+                <MudNavLink Href="/project/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
+                    @L["Projects"]
+                </MudNavLink>
                 <MudNavLink Href="/settings" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Settings">
                     @L["Settings"]
                 </MudNavLink>
@@ -118,8 +123,10 @@
                         <span>@FleetDetail</span>
                     </span>
                 </a>
-                <MudText Typo="Typo.caption" Class="beacon-version">@AppVersion.Informational</MudText>
-                <LanguageSwitcher />
+                <div class="beacon-prefs">
+                    <LanguageSwitcher Presentation="LanguageSwitcherVariant.Row" />
+                </div>
+                <div class="beacon-version">@string.Format(L["ProductVersion"].Value, ThemePreferenceResolver.VersionCore(AppVersion.Informational))</div>
             </div>
         </div>
     </MudDrawer>
@@ -161,6 +168,7 @@
     private bool _bodyReady;
     private bool _commandOpen;
     private bool _hooked;
+    private bool _watchingSystem;
     private int _fleetTotal;
     private int _fleetOnline;
     private DotNetObjectReference<MainLayout>? _dotNet;
@@ -211,6 +219,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Theme.Changed += OnThemeChanged;
         Navigation.LocationChanged += OnLocationChanged;
         RebuildChrome();
         await BindShell();
@@ -233,6 +242,93 @@
         catch (InvalidOperationException)
         {
         }
+
+        try
+        {
+            var raw = await JS.InvokeAsync<string>("beaconTheme.read");
+            await Theme.AdoptAsync(raw);
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        await SyncSystemWatchAsync();
+        await ApplyDocumentThemeAsync();
+    }
+
+    private void OnThemeChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await ApplyDocumentThemeAsync();
+            await SyncSystemWatchAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task ApplyDocumentThemeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("beaconTheme.apply", Theme.IsDark);
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task SyncSystemWatchAsync()
+    {
+        if (Theme.Preference != ThemePreference.System)
+        {
+            if (!_watchingSystem)
+                return;
+            _watchingSystem = false;
+            try
+            {
+                await JS.InvokeVoidAsync("beaconTheme.unwatchSystem");
+            }
+            catch (JSException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            return;
+        }
+
+        try
+        {
+            var dark = await JS.InvokeAsync<bool>("beaconTheme.systemDark");
+            Theme.ApplySystem(dark);
+            if (!_watchingSystem && _dotNet is not null)
+            {
+                await JS.InvokeVoidAsync("beaconTheme.watchSystem", _dotNet);
+                _watchingSystem = true;
+            }
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    [JSInvokable]
+    public Task SystemThemeChanged(bool isDark)
+    {
+        Theme.ApplySystem(isDark);
+        return InvokeAsync(StateHasChanged);
     }
 
     private async Task BindShell()
@@ -380,10 +476,12 @@
 
     public void Dispose()
     {
+        Theme.Changed -= OnThemeChanged;
         Navigation.LocationChanged -= OnLocationChanged;
         try
         {
             _ = JS.InvokeVoidAsync("beaconShell.unlisten");
+            _ = JS.InvokeVoidAsync("beaconTheme.unwatchSystem");
         }
         catch (JSDisconnectedException)
         {

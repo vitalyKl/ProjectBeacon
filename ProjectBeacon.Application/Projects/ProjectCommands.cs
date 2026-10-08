@@ -11,6 +11,8 @@ public record UpdateProjectRequest(Guid ProjectId, string? Name, string? Descrip
 
 public record UpdateProjectCommand(UpdateProjectRequest Request, ActorContext Actor) : ICommand<Result<ProjectDto>>;
 
+public record DeleteProjectCommand(Guid ProjectId, ActorContext Actor) : ICommand<Result<bool>>;
+
 public record GetProjectRequest(Guid ProjectId);
 
 public record GetProjectCommand(GetProjectRequest Request) : ICommand<Result<ProjectDto>>;

@@ -36,15 +36,15 @@
 <MudText Typo="Typo.h6" Class="mb-3">@L["Devices"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
     <div class="beacon-form">
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
-            <MudTextField @bind-Value="_deviceName" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <div class="beacon-field-row mb-3">
+            <MudTextField @bind-Value="_deviceName" InputId="device-name" Label="@L["DeviceName"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
             @if (_totpEnabled)
             {
-                <MudTextField @bind-Value="_deviceTotp" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_deviceTotp" InputId="device-totp" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
             }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddDevice" Disabled="_busy || !_totpEnabled">@L["AddDevice"]</MudButton>
             <MudButton Variant="Variant.Outlined" OnClick="ReloadDevices" Disabled="_busy">@L["Refresh"]</MudButton>
-        </MudStack>
+        </div>
     </div>
     @if (!string.IsNullOrEmpty(_deviceToken))
     {
@@ -83,7 +83,7 @@
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ScopeWorkstationHint"]</MudText>
         <div class="beacon-form">
-            <MudSelect T="Guid?" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+            <MudSelect T="Guid?" InputId="runtime-device" Value="_wsDeviceId" ValueChanged="OnWorkstationDeviceChanged" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true">
                 @foreach (var device in _devices)
                 {
                     <MudSelectItem Value="@((Guid?)device.Id)">@device.Name</MudSelectItem>
@@ -99,11 +99,11 @@
                           Disabled="_busy || !WorkstationOnline" />
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
             <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_historyDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
-            <MudExpansionPanels Elevation="0" Class="mt-2">
+            <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
                 <MudExpansionPanel Text="@L["AdvancedDiagnostics"]">
-                    <MudTextField @bind-Value="_historyDir" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    <MudTextField @bind-Value="_llamaSwapBin" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-                    <MudTextField @bind-Value="_llamaCppBin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                    <MudTextField @bind-Value="_historyDir" InputId="agent-data" Label="@L["AgentDataLocation"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" />
+                    <MudTextField @bind-Value="_llamaSwapBin" InputId="runtime-executable" Label="@L["RuntimeExecutable"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
+                    <MudTextField @bind-Value="_llamaCppBin" InputId="llamacpp-bin" Label="@L["LlamaCppBin"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mt-2" />
                 </MudExpansionPanel>
             </MudExpansionPanels>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveWorkstation" Disabled="_busy || _wsDeviceId is null">@L["SaveWorkstation"]</MudButton>

@@ -17,11 +17,21 @@
 @inject ConfirmTotpHandler ConfirmTotp
 @inject DisableTotpHandler DisableTotp
 @inject ISnackbar Snackbar
+@inject BeaconThemeState Theme
 
 <PageTitle>@L["Settings"]</PageTitle>
 <div class="beacon-settings">
 <PageHeader Title="@L["Settings"]" />
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">@L["SettingsLead"]</MudText>
+
+<MudText Typo="Typo.h6" Class="mb-3">@L["Appearance"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <div class="beacon-appearance" role="radiogroup" aria-label="@L["Appearance"]">
+        <button type="button" role="radio" aria-checked="@(Theme.Preference == ThemePreference.Dark)" class="beacon-appearance-option @(Theme.Preference == ThemePreference.Dark ? "is-selected" : null)" @onclick="() => SetTheme(ThemePreference.Dark)">@L["ThemeDark"]</button>
+        <button type="button" role="radio" aria-checked="@(Theme.Preference == ThemePreference.Light)" class="beacon-appearance-option @(Theme.Preference == ThemePreference.Light ? "is-selected" : null)" @onclick="() => SetTheme(ThemePreference.Light)">@L["ThemeLight"]</button>
+        <button type="button" role="radio" aria-checked="@(Theme.Preference == ThemePreference.System)" class="beacon-appearance-option @(Theme.Preference == ThemePreference.System ? "is-selected" : null)" @onclick="() => SetTheme(ThemePreference.System)">@L["ThemeSystem"]</button>
+    </div>
+</MudPaper>
 
 <MudText Typo="Typo.h6" Class="mb-3">@L["Account"]</MudText>
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
@@ -185,6 +195,8 @@
             _busy = false;
         }
     }
+
+    private Task SetTheme(ThemePreference preference) => Theme.SetPreferenceAsync(preference);
 
     private async Task SavePassword()
     {

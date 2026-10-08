@@ -77,7 +77,15 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
         if (project is null)
             return Result.Failure<ProjectDto>("Project not found.");
 
-        project.Update(command.Request.Name, command.Request.Description);
+        var name = command.Request.Name;
+        if (name is not null)
+        {
+            name = name.Trim();
+            if (name.Length == 0)
+                return Result.Failure<ProjectDto>("Project name is required.");
+        }
+
+        project.Update(name, command.Request.Description);
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
@@ -127,5 +135,64 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
             .ToListAsync(ct);
 
         return Result.Ok((IList<ProjectDto>)projects);
+    }
+}
+
+public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result<bool>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _auth;
+
+    public DeleteProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService auth)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+    }
+
+    public async Task<Result<bool>> HandleAsync(DeleteProjectCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: command.ProjectId, ct: ct);
+        if (!check.Success)
+            return Result.Forbidden<bool>();
+
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == command.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<bool>("Project not found.");
+
+        var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
+        await db.TaskDependencies.IgnoreQueryFilters()
+            .Where(d => taskIds.Contains(d.TaskId) || taskIds.Contains(d.DependentTaskId))
+            .ExecuteDeleteAsync(ct);
+
+        await db.Decisions.IgnoreQueryFilters()
+            .Where(d => d.ProjectId == command.ProjectId)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.SupersededById, (Guid?)null), ct);
+        await db.Decisions.IgnoreQueryFilters()
+            .Where(d => d.ProjectId == command.ProjectId)
+            .ExecuteDeleteAsync(ct);
+
+        await db.ContextSections.IgnoreQueryFilters()
+            .Where(s => s.RepoId == command.ProjectId && s.ProjectId != command.ProjectId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RepoId, (Guid?)null), ct);
+        await db.ContextSections.IgnoreQueryFilters()
+            .Where(s => s.ProjectId == command.ProjectId)
+            .ExecuteDeleteAsync(ct);
+        await db.Constraints.IgnoreQueryFilters()
+            .Where(c => c.ProjectId == command.ProjectId)
+            .ExecuteDeleteAsync(ct);
+
+        db.Projects.Remove(project);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return Result.Failure<bool>("Project could not be deleted.");
+        }
+
+        return Result.Ok(true);
     }
 }

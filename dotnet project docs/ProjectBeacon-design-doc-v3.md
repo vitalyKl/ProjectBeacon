@@ -116,9 +116,9 @@ Compile merges sections by scope, applies a token budget (default 8000), and nev
 
 ## 10. UI shell
 
-MudBlazor. Dark tokens from `DesignTokens.cs` (panel radius 12px, small radius 8px, hairline 0.5px). Status chips use `StatusChip` and `ChipPalette`. Chrome strings go through `IStringLocalizer<Web>`.
+MudBlazor. Light and dark tokens live in `DesignTokens.cs` (panel radius 12px, small radius 8px, control radius 5px, hairline 1px). Dark is the default. The header toggles Dark/Light; Settings adds System. The choice is the `beacon-theme` cookie and drives both MudBlazor `IsDarkMode` and the CSS tokens. Status chips use `StatusChip` and `ChipPalette`. Chrome strings go through `IStringLocalizer<Web>`.
 
-Drawer groups in `MainLayout`: Work, Knowledge, Agents, Project, Account. Width is `168px` (`BeaconTheme.DrawerWidthLeft`). Routes are listed in the UI specification. `ChatDock` is a shell FAB; `/chat` is the full page. The drawer collapses below `Breakpoint.Md`. Anonymous `/` is the landing page.
+Drawer groups in `MainLayout`: Operate, Intelligence, Govern. Width is `236px` (`BeaconTheme.LayoutProperties.DrawerWidthLeft`). `/project/settings` lists the user's projects and renames or deletes the open one. Overview shows workstation CPU, memory, and GPU. Routes are listed in the UI specification. `ChatDock` is a shell FAB; `/chat` is the full page. The drawer collapses below `Breakpoint.Md`. Anonymous `/` is the landing page.
 
 ## 11. Deploy
 
