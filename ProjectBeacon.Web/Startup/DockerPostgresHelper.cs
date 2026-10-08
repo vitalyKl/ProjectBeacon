@@ -7,7 +7,7 @@ public class DockerPostgresConfig
     public string? PostgresPassword { get; set; }
     public int Port { get; set; } = 5432;
     public string ContainerName { get; set; } = "beacon-postgres";
-    public string Image { get; set; } = "postgres:18-bookworm";
+    public string Image { get; set; } = "postgres:16-bookworm";
     public string Volume { get; set; } = "pgdata";
 }
 

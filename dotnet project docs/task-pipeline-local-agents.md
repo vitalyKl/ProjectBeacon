@@ -25,4 +25,4 @@ Each role is a new session. Prompt text is `SessionPrompts`.
 
 ## Not the same as cold diff review
 
-Pipeline review is the product's reviewer session and verdict. `cold-diff-review.md` is an isolated reading of a git diff before push. One does not substitute for the other.
+Pipeline review is the product's reviewer session and verdict. `Skills/cold-diff-review.md` is an isolated reading of a git diff before push. One does not substitute for the other.

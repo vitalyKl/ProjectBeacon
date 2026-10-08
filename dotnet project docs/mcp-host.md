@@ -28,6 +28,9 @@ dotnet run --project ProjectBeacon.Cli -- client enroll --url <api> --login <use
 - `get_tree` `{ path?, maxEntries? }` — re-scans the working tree; skips `node_modules`, `.git`, `bin`, `obj`, etc.
 - `search_code` `{ query, path?, maxMatches? }` — literal substring search over text files, case-insensitive
 - `get_changed_scope` `{ path?, maxFiles? }` — changed files from `git status`; the root must be a git repository
+- `get_signatures` `{ path?, maxFiles? }` — symbol signatures (classes, methods, functions) from changed files, or from the given path prefixes
+- `get_callers` `{ path, symbolName, line }` — single-hop incoming references for a symbol at that file and line
+- `hash_range` `{ path, startLine, endLine }` — SHA-256 of an inclusive 1-based line range, as a bare lowercase hex string
 
 ## Pipeline and model tools
 
@@ -56,7 +59,7 @@ On the control-plane path the caller is the authenticated principal.
 
 - A user JWT acts as that user.
 - A project token (`bcn_`) is limited to its project. Capabilities are `TaskRead`, `TaskWrite`, `SessionDrive`, `ContextRead`, and `Admin` (`ApiTokenCapability`).
-- Handlers build `ActorContext` as `(UserId, IsAdmin, IsApiToken)` from that principal. A body user id is not the caller. `finish_work` and force-close take `ActorId` only as that dedicated field.
+- Handlers build `ActorContext` as `(UserId, IsAdmin, IsApiToken)` from that principal. A body user id is not the caller. `finish_work` and force-close copy that principal's user id into the handler's `ActorId`. The HTTP body has no `actorId` field.
 - `BEACON_ACTOR_ID` is not enforced. On the local-database path it does not grant API capabilities.
 
 `pipeline_force_close` needs an Admin token when called through the API. `BEACON_WORKER_TOKEN` is only an actor id for finish-work and force-close. It is not a project-admin bearer.
@@ -84,11 +87,11 @@ Board, backlog, and task detail:
 - `set_task_status` `{ taskId, status, projectId? }`
 - `set_task_substage` `{ taskId, subStage }`
 - `claim_task` `{ taskId?, projectId? }`
-- `add_task_comment` `{ taskId, content, userId? }`
+- `add_task_comment` `{ taskId, content }`
 - `set_task_dependencies` `{ taskId, dependentTaskIds }`
 - `add_review_notes` `{ taskId, reviewNotes }`
 - `list_task_steps` `{ taskId }` / `add_task_step` `{ taskId, title }` / `toggle_task_step` `{ stepId, done }` / `delete_task_step` `{ stepId }`
-- `finish_work` `{ taskId?, result, output?, actorId, review? }` — `result` is `done`, `failed`, `skipped`, or `partial`. `done` sends `review.reviewerRun`, `review.regressionsFound`, `review.regressionsFixed`
+- `finish_work` `{ taskId?, result, output?, reviewTranscriptRef?, reviewRunId?, review? }` — `result` is `done`, `failed`, `skipped`, or `partial`. `done` requires `reviewRunId` of a completed check-proof review run, plus review notes or output. Optional `review` is `{ reviewerRun, regressionsFound, regressionsFixed }`. The actor is the authenticated principal.
 
 Context, decisions, roadmap, labels, reports:
 
@@ -108,7 +111,7 @@ Pipeline actions that the task page has and the six database tools do not:
 - `pipeline_fail_subtask` `{ subtaskId, reason, taskId? }`
 - `pipeline_start_review` `{ taskId? }`
 - `pipeline_approve` `{ note?, taskId? }`
-- `pipeline_force_close` `{ actorId, reason?, taskId? }` — API token needs Admin
+- `pipeline_force_close` `{ reason?, taskId? }` — API token needs Admin. The actor is the authenticated principal.
 
 Agents page writes that are not `model_bind` / `model_status`:
 
@@ -131,7 +134,7 @@ Enum values on the wire match the API (`Todo`, `Planner`, `Must`, `Native`). Do 
 
 Without `BEACON_PROJECT_ID` (or without the connection configuration) the tools return an MCP `isError` result; the server keeps running, and the file tools stay available. The database provider is created lazily on the first database tool call. The llama-swap proxy is only available while a workstation client reports it in heartbeat (`probeJson.llamaSwapStatus`); otherwise `model_status` reports the proxy as unavailable.
 
-For `search_code` and `get_changed_scope`, `path` is a comma-separated list of path prefixes; an empty or omitted value means the whole tree.
+For `search_code`, `get_changed_scope`, and `get_signatures`, `path` is a comma-separated list of path prefixes; an empty or omitted value means the whole tree.
 
 Paths are resolved inside the project root. `../` and other escapes are rejected. There is no shell tool.
 
@@ -139,16 +142,27 @@ Paths are resolved inside the project root. `../` and other escapes are rejected
 
 `beacon client` long-polls `GET /v1/devices/me/commands` (device token `bcd_`). Web never executes these on the server.
 
+Kind values are the `WorkstationCommandKind` names. JSON uses those names (`JsonStringEnumConverter` with no naming policy), not snake_case.
+
 | Kind | Role |
 |---|---|
-| `probe` | Detect git, opencode, node, docker, llama-swap, llama-server |
-| `list_dir` | One-level directory listing on the device |
-| `init_project` | `.gitignore`, merge `opencode.json`, `.opencode/data` |
-| `apply_opencode` | Merge or replace (`mcpReplace`) OpenCode config |
-| `scan_gguf` | List `*.gguf` under `modelsRoot` |
-| `install` | Allowlisted winget ids: git, node, docker |
-| `save_workstation` | Persist `workstation.json` (models root, bins, history dir) |
-| `reload_proxy` / `unload_proxy` | llama-swap config rewrite / HTTP unload |
+| `Probe` | Detect git, opencode, node, docker, llama-swap, llama-server |
+| `ListDir` | One-level directory listing on the device |
+| `InitProject` | `.gitignore`, merge `opencode.json`, `.opencode/data` |
+| `ApplyOpencode` | Merge or replace (`mcpReplace`) OpenCode config |
+| `ScanGguf` | List `*.gguf` under `modelsRoot` |
+| `Install` | Allowlisted winget ids: git, node, docker |
+| `SaveWorkstation` | Persist `workstation.json` (models root, bins, history dir) |
+| `ReloadProxy` | Rewrite llama-swap config and reload |
+| `UnloadProxy` | HTTP unload of llama-swap |
+| `SwapModel` | Keep the named model resident in the swap group |
+| `ChatEnsureSession` | Create an OpenCode chat session in the project root |
+| `ChatPrompt` | Send a chat prompt on the device |
+| `ChatAbort` | Abort the device chat turn |
+| `ConfigureOpenCode` | Apply `/v1/devices/me/opencode-connections` and restart OpenCode |
+| `RunEvalTurn` | Run an eval turn in the project root |
+| `RunReviewCheck` | Run `checkCommand` for a `reviewRunId` inside the project root |
+| `ReconcileDesired` | Sync llama-swap, apply OpenCode connections, and save workstation settings when the payload includes them |
 
 Do not add an inbound listen port on the device. Do not use the flagged-off WSS sidecar tunnel.
 

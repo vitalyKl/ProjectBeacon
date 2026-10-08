@@ -62,7 +62,7 @@ behaves as before (plain HTTP, no `Secure` flag).
 
 ## CI
 
-Tag `v*` runs `.github/workflows/release.yml`: build/push GHCR with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. Deploy job runs only if `KUBECONFIG` is set on the `production` environment.
+Tag `v*` runs `.github/workflows/release.yml`: build/push GHCR with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. The deploy job always runs. If the `KUBECONFIG` secret on the `production` environment is empty, the job prints a skip message and exits 0.
 
 ## Client
 

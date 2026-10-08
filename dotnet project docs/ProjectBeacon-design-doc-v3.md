@@ -66,7 +66,7 @@ Business writes go through Application handlers. Razor must not inject `BeaconDb
 - `AUTH_LOCAL_INVITE_ONLY=true` requires an invite on register.
 - Member roles are `Owner`, `Admin`, `Member`. Project and token mutations go through `ProjectAuthorization`.
 
-Workstation boundary: device commands (`list_dir`, `init_project`, `apply_opencode`, `save_workstation`, `install`, proxy reload/unload, …) run only on the selected online device. File MCP tools stay inside `--root`. There is no shell tool on MCP.
+Workstation boundary: device commands (`ListDir`, `InitProject`, `ApplyOpencode`, `SaveWorkstation`, `Install`, `ReloadProxy`, `UnloadProxy`, …) run only on the selected online device. Kind values are the `WorkstationCommandKind` names. File MCP tools stay inside `--root`. There is no shell tool on MCP.
 
 ## 6. Model runtime
 
@@ -93,9 +93,9 @@ Pipeline phases, each a new session:
 3. Review sees the task text plus each subtask's instructions, diff ref, and summary. It does not see the other transcripts.
 4. Verdict is approve or reopen-subtask. Force-close is a separate path.
 
-Prompt text is `SessionPrompts`. This product review is not the `cold-diff-review` skill. That skill is an isolated diff reading before push. See `cold-diff-review.md`.
+Prompt text is `SessionPrompts`. This product review is not the `cold-diff-review` skill. That skill is an isolated diff reading before push. See `Skills/cold-diff-review.md`.
 
-`finish_work` takes `done` / `failed` / `skipped` / `partial`. A `done` result carries structured review fields (`reviewerRun`, `regressionsFound`, `regressionsFixed`), not a prose claim.
+`finish_work` takes `done` / `failed` / `skipped` / `partial`. `done` requires `reviewRunId` for a completed check-proof review run, plus review notes or output. Optional `review` carries `reviewerRun`, `regressionsFound`, and `regressionsFixed`. The actor is the authenticated principal; the body has no `actorId`.
 
 ## 8. MCP trust
 
@@ -135,7 +135,7 @@ Self-host: Postgres via Compose, Web via `dotnet run --project ProjectBeacon.Web
 | MCP tools | `mcp-host.md` |
 | Pipeline contract | `task-pipeline-local-agents.md` |
 | Feature index | `features.md` |
-| Diff-review technique | `cold-diff-review.md` |
+| Diff-review technique | `Skills/cold-diff-review.md` |
 | Agent session prompt | `agent-prompt-template.md` |
 
 ## 13. Gaps (recorded, not fixed here)
