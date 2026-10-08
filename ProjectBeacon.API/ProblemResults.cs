@@ -4,32 +4,54 @@ using Application.Common;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+/// RFC 7807 problem responses (<c>application/problem+json</c>) for API errors.
+/// </summary>
 public static class ProblemResults
 {
+    /// <summary>
+    /// Problem response for <paramref name="result"/>. Known error kinds set the status; other kinds use <paramref name="status"/>.
+    /// </summary>
+    /// <param name="status">Status when the error kind is not mapped. Defaults to 400.</param>
+    /// <param name="title">Problem title. When null, a default title for the status is used.</param>
     public static IResult FromResult(this Result result, int status = StatusCodes.Status400BadRequest, string? title = null)
         => Problem(Resolve(result.Kind, status), title, result.Error);
 
+    /// <summary>
+    /// Problem response for <paramref name="result"/>. Known error kinds set the status; other kinds use <paramref name="status"/>.
+    /// </summary>
+    /// <param name="status">Status when the error kind is not mapped. Defaults to 400.</param>
+    /// <param name="title">Problem title. When null, a default title for the status is used.</param>
     public static IResult FromResult<T>(this Result<T> result, int status = StatusCodes.Status400BadRequest, string? title = null)
         => Problem(Resolve(result.Kind, status), title, result.Error);
 
+    /// <summary>401 problem response. Detail defaults to authentication required.</summary>
     public static IResult Unauthorized(string? detail = null) =>
         Problem(StatusCodes.Status401Unauthorized, null, detail ?? "Authentication is required.");
 
+    /// <summary>403 problem response. Detail defaults to missing capability.</summary>
     public static IResult Forbidden(string? detail = null) =>
         Problem(StatusCodes.Status403Forbidden, null, detail ?? "Missing capability.");
 
+    /// <summary>429 problem response.</summary>
     public static IResult TooManyRequests(string? detail = null) =>
         Problem(StatusCodes.Status429TooManyRequests, "Too Many Requests", detail ?? "Too many requests.");
 
+    /// <summary>404 problem response.</summary>
     public static IResult NotFound(string? detail = null) =>
         Problem(StatusCodes.Status404NotFound, null, detail ?? "The requested resource was not found.");
 
+    /// <summary>409 problem response.</summary>
     public static IResult Conflict(string? detail = null) =>
         Problem(StatusCodes.Status409Conflict, null, detail ?? "The request conflicts with the current state.");
 
+    /// <summary>400 problem response with the given detail.</summary>
     public static IResult Bad(string detail) =>
         Problem(StatusCodes.Status400BadRequest, null, detail);
 
+    /// <summary>
+    /// 400 problem response titled "Validation Failed". Multiple errors are also copied to the <c>errors</c> extension.
+    /// </summary>
     public static IResult Validation(IList<string> errors)
     {
         var details = Create(StatusCodes.Status400BadRequest, "Validation Failed",

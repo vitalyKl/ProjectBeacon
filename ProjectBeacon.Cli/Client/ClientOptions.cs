@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
-
+/// <summary>
+/// Parsed beacon client arguments: URL, token, login, password, device name, store path, enroll, and headless.
+/// </summary>
 public sealed class ClientOptions
 {
     public string? Url { get; init; }

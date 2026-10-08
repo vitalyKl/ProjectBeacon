@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for project invites. TokenHash is unique.
+/// </summary>
 public class ProjectInviteConfiguration : IEntityTypeConfiguration<ProjectInvite>
 {
     public void Configure(EntityTypeBuilder<ProjectInvite> entity)

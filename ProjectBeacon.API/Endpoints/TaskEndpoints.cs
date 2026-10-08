@@ -13,8 +13,15 @@ using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>
+/// Task board HTTP endpoints.
+/// </summary>
 public static class TaskEndpoints
 {
+    /// <summary>
+    /// Maps <c>GET /v1/projects/{projectId:guid}/tasks</c>, <c>GET /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>GET /v1/tasks/{taskId:guid}</c>, and <c>GET /v1/tasks/{taskId:guid}/steps</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskRead)</c>.
+    /// Maps <c>POST /v1/projects/{projectId:guid}/tasks</c>, <c>PUT /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>PUT /v1/tasks/{taskId:guid}</c>, <c>DELETE /v1/projects/{projectId:guid}/tasks/{taskId:guid}</c>, <c>DELETE /v1/tasks/{taskId:guid}</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/status</c>, <c>PATCH /v1/tasks/{taskId:guid}/status</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/substage</c>, <c>PATCH /v1/tasks/{taskId:guid}/substage</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/claim</c>, <c>PATCH /v1/tasks/{taskId:guid}/claim</c>, <c>POST /v1/projects/{projectId:guid}/tasks/{taskId:guid}/comments</c>, <c>POST /v1/tasks/{taskId:guid}/comments</c>, <c>PUT /v1/projects/{projectId:guid}/tasks/{taskId:guid}/dependencies</c>, <c>PUT /v1/tasks/{taskId:guid}/dependencies</c>, <c>PATCH /v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes</c>, <c>PATCH /v1/tasks/{taskId:guid}/review-notes</c>, <c>POST /v1/tasks/{taskId:guid}/steps</c>, <c>PATCH /v1/steps/{stepId:guid}</c>, and <c>DELETE /v1/steps/{stepId:guid}</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapTaskEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/tasks", CreateTask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -128,6 +135,7 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
+    /// <summary>JSON body for the task status PATCH routes.</summary>
     public record ChangeTaskStatusBody(TaskItemStatus Status);
 
     private static async Task<IResult> ChangeSubStage(Guid taskId, [FromBody] TaskSubStage subStage, ChangeSubStageHandler handler)
@@ -196,6 +204,7 @@ public static class TaskEndpoints
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/steps</c>.</summary>
     public record AddStepBody(string Title);
 
     private static async Task<IResult> AddStep(Guid taskId, [FromBody] AddStepBody body, AddTaskStepHandler handler)
@@ -206,6 +215,7 @@ public static class TaskEndpoints
             : result.FromResult();
     }
 
+    /// <summary>JSON body for <c>PATCH /v1/steps/{stepId:guid}</c>.</summary>
     public record ToggleStepBody(bool Done);
 
     private static async Task<IResult> ToggleStep(Guid stepId, [FromBody] ToggleStepBody body, ToggleTaskStepHandler handler)

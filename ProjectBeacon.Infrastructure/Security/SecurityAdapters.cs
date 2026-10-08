@@ -2,7 +2,9 @@ namespace ProjectBeacon.Infrastructure.Security;
 
 using Application.Security;
 using Domain.Entities.Identity;
-
+/// <summary>
+/// IPasswordHasher adapter over PasswordHasher.
+/// </summary>
 public sealed class BcryptPasswordHasher : IPasswordHasher
 {
     public string Hash(string password) => PasswordHasher.Hash(password);
@@ -11,13 +13,17 @@ public sealed class BcryptPasswordHasher : IPasswordHasher
 
     public string GenerateRandomPassword(int length = 32) => PasswordHasher.GenerateRandomPassword(length);
 }
-
+/// <summary>
+/// ITokenIssuer adapter over JwtTokenService.
+/// </summary>
 public sealed class JwtTokenIssuer : ITokenIssuer
 {
     public string GenerateToken(User user, string secretKey, TimeSpan expiration = default, Guid? projectId = null, Guid? orgId = null)
         => JwtTokenService.GenerateToken(user, secretKey, expiration, projectId, orgId);
 }
-
+/// <summary>
+/// ISecretProtector adapter over SecretBox.
+/// </summary>
 public sealed class AesSecretProtector : ISecretProtector
 {
     public string Seal(string plain, string keyMaterial) => SecretBox.Seal(plain, keyMaterial);
@@ -26,7 +32,9 @@ public sealed class AesSecretProtector : ISecretProtector
 
     public string KeyMaterial() => SecretBox.KeyMaterial();
 }
-
+/// <summary>
+/// ITOTP adapter over Totp.
+/// </summary>
 public sealed class RfcTotp : ITotp
 {
     public string GenerateSecret() => Totp.GenerateSecret();

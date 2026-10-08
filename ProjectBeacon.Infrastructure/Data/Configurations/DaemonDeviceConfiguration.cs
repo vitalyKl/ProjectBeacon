@@ -4,7 +4,9 @@ using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for workstation devices. TokenHash is unique. Also indexed by user and fingerprint.
+/// </summary>
 public class DaemonDeviceConfiguration : IEntityTypeConfiguration<DaemonDevice>
 {
     public void Configure(EntityTypeBuilder<DaemonDevice> entity)

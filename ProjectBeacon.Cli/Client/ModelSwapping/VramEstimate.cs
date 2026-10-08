@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Cli.Client.ModelSwapping;
 
 using ProjectBeacon.Infrastructure.LlamaSwap;
-
+/// <summary>
+/// Estimates model memory in MiB from the gguf file size, or from context size divided by 1024 when the file is missing.
+/// </summary>
 public static class VramEstimate
 {
     public static long FromSpec(LlamaSwapModelSpec spec)

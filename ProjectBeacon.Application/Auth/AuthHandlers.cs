@@ -9,7 +9,9 @@ using Infrastructure.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
-
+/// <summary>
+/// Creates the first admin when the bootstrap token matches and no admin exists yet. A second call conflicts.
+/// </summary>
 public class BootstrapHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -55,7 +57,9 @@ public class BootstrapHandler
         return CryptographicOperations.FixedTimeEquals(aBytes, bBytes);
     }
 }
-
+/// <summary>
+/// Resets the admin password when the bootstrap token matches. This is break-glass, not the user reset flow.
+/// </summary>
 public class RecoverAdminHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -98,7 +102,9 @@ public class RecoverAdminHandler
         return CryptographicOperations.FixedTimeEquals(aBytes, bBytes);
     }
 }
-
+/// <summary>
+/// Checks the password and lockout. Unknown user and bad password both return invalid credentials. Success issues a session token.
+/// </summary>
 public class LoginHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -150,7 +156,9 @@ public class LoginHandler
         return Result.Ok(new LoginResponse(user.Id, user.Login, user.Email, user.IsAdmin, token));
     }
 }
-
+/// <summary>
+/// Creates a user. Password must be at least 8 characters. When invite-only is on, the invite must match the email and still be pending.
+/// </summary>
 public class RegisterHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -244,7 +252,9 @@ public class RegisterHandler
         return Result.Ok(new RegisterResponse(user.Id, user.Login, user.Email));
     }
 }
-
+/// <summary>
+/// Always succeeds, whether or not the email is registered.
+/// </summary>
 public class ForgotPasswordHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -289,7 +299,9 @@ public class ForgotPasswordHandler
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Consumes a reset token and sets a password of at least 8 characters. A missing or used token fails the same way.
+/// </summary>
 public class ResetPasswordHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -329,7 +341,9 @@ public class ResetPasswordHandler
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Replaces the password after the current one matches. The new password must be at least 8 characters.
+/// </summary>
 public class ChangePasswordHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

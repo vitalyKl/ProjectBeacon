@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for milestones.
+/// </summary>
 public class MilestoneConfiguration : IEntityTypeConfiguration<Milestone>
 {
     public void Configure(EntityTypeBuilder<Milestone> entity)

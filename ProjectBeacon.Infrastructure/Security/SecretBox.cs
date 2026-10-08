@@ -2,7 +2,9 @@ namespace ProjectBeacon.Infrastructure.Security;
 
 using System.Security.Cryptography;
 using System.Text;
-
+/// <summary>
+/// Encrypts a string with AES-GCM. The key is SHA-256 of the key material. The blob is nonce, tag, then ciphertext, as Base64.
+/// </summary>
 public static class SecretBox
 {
     public static string Seal(string plain, string keyMaterial)

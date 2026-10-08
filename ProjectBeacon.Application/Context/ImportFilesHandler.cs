@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Imports markdown files as context sections and returns how many were created.
+/// </summary>
 public class ImportFilesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

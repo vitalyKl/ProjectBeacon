@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.CodeIndex;
-
+/// <summary>
+/// Extracts symbol signatures from one source file.
+/// </summary>
 public interface ISignatureBackend
 {
     SignatureBackend Kind { get; }

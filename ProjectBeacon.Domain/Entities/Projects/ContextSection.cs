@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// One section of the living brief. Scope is project, repo, path, or task.
+/// <see cref="Update"/> refreshes <see cref="SectionsText"/> from the title and body.
+/// </summary>
 public class ContextSection : Entity, IProjectScoped
 {
     public ContextSection() { }

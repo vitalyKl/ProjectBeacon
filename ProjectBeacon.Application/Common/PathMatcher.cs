@@ -1,7 +1,12 @@
 namespace ProjectBeacon.Application.Common;
 
+/// <summary>
+/// Case-insensitive prefix match after separators are normalized to <c>/</c>, a leading <c>./</c> is stripped, and surrounding slashes are trimmed.
+/// A path matches when it equals the prefix or continues with <c>/</c>. Blank inputs do not match.
+/// </summary>
 public static class PathMatcher
 {
+    /// <summary>True when <paramref name="filePath"/> equals <paramref name="prefix"/> or is nested under it.</summary>
     public static bool MatchesPrefix(string? filePath, string? prefix)
     {
         if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(prefix))
@@ -18,6 +23,7 @@ public static class PathMatcher
         return path.StartsWith(pre + "/", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Normalizes separators to <c>/</c>, strips a leading <c>./</c>, and trims surrounding slashes.</summary>
     public static string Normalize(string path)
     {
         var trimmed = path.Replace('\\', '/').Trim();

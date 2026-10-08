@@ -3,7 +3,9 @@ namespace ProjectBeacon.Cli.Client;
 using System.Diagnostics;
 using System.Text.Json;
 using ProjectBeacon.Application.Common;
-
+/// <summary>
+/// InitProject writes .gitignore, merges opencode.json, and creates .opencode/data. Install allows only git, node, and docker through winget.
+/// </summary>
 public static class WorkstationSetup
 {
     public static Result<string> InitProject(string root, string payloadJson)

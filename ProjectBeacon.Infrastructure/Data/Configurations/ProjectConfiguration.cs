@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for projects.
+/// </summary>
 public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 {
     public void Configure(EntityTypeBuilder<Project> entity)

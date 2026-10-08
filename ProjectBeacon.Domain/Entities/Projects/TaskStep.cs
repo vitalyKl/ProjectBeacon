@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>Checklist row on a task. <see cref="SetDone"/> sets or clears <c>DoneAt</c>.</summary>
 public class TaskStep : Entity, IProjectScoped
 {
     public TaskStep() { }

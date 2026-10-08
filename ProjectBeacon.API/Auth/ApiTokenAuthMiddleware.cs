@@ -9,12 +9,20 @@ using Application.Devices;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>
+/// Authenticates <c>Bearer bcn_</c> API tokens and <c>Bearer bcd_</c> device tokens by replacing <c>HttpContext.User</c> before later middleware.
+/// The principal is the caller; body user ids are not. Other authorization headers are left for JWT bearer authentication.
+/// </summary>
 public sealed class ApiTokenAuthMiddleware
 {
     private readonly RequestDelegate _next;
 
+    /// <summary>Creates the middleware with the next request delegate.</summary>
     public ApiTokenAuthMiddleware(RequestDelegate next) => _next = next;
 
+    /// <summary>
+    /// When the bearer token is <c>bcn_</c> or <c>bcd_</c> and still valid, sets <c>HttpContext.User</c> from that token. Identity is that principal, not a body user id.
+    /// </summary>
     public async Task InvokeAsync(HttpContext ctx, BeaconDbContext db)
     {
         var header = ctx.Request.Headers.Authorization.ToString();

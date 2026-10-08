@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Data;
-
+/// <summary>
+/// Loads the first .env found by walking up from the working directory or the app base. Does not replace variables that are already set. Skips blank lines and comments.
+/// </summary>
 public static class EnvFile
 {
     public static void Load()

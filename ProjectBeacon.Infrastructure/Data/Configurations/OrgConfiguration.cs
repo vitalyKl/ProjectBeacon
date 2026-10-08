@@ -4,7 +4,9 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for orgs.
+/// </summary>
 public class OrgConfiguration : IEntityTypeConfiguration<Org>
 {
     public void Configure(EntityTypeBuilder<Org> entity)

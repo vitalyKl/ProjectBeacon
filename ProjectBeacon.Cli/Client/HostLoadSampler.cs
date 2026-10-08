@@ -3,7 +3,9 @@ namespace ProjectBeacon.Cli.Client;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Infrastructure.LlamaSwap;
-
+/// <summary>
+/// Samples CPU, memory, and GPU for the heartbeat. GPU comes from nvidia-smi when that tool is present.
+/// </summary>
 public static class HostLoadSampler
 {
     private static ulong _prevIdle;

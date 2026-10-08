@@ -2,6 +2,10 @@ namespace ProjectBeacon.Domain.Entities.Identity;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>
+    /// A one-time password reset for a user. Stores <see cref="TokenHash"/> only, never the raw secret.
+    /// Expires one hour after <see cref="Create"/> unless a TTL is supplied. Not tenant-scoped.
+    /// </summary>
 public class PasswordResetToken : Entity
 {
     public PasswordResetToken() { }

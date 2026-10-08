@@ -6,9 +6,13 @@ using Domain.Entities.Devices;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// User whose online devices should reload llama-swap.
+/// </summary>
 public record NudgeModelsCommand(Guid UserId) : ICommand<Result>;
-
+/// <summary>
+/// Enqueues ReloadProxy on each online device for the user. An empty user id fails. No online device is still success.
+/// </summary>
 public sealed class NudgeModelsHandler : ICommandHandler<NudgeModelsCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;

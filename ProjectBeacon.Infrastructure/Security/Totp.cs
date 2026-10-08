@@ -2,7 +2,9 @@ namespace ProjectBeacon.Infrastructure.Security;
 
 using System.Security.Cryptography;
 using System.Text;
-
+/// <summary>
+/// RFC TOTP. The secret is 20 random bytes, Base32. Verify checks the current code.
+/// </summary>
 public static class Totp
 {
     private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";

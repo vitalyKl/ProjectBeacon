@@ -13,8 +13,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>
+/// Organization and org-invite HTTP endpoints.
+/// </summary>
 public static class OrgEndpoints
 {
+    /// <summary>
+    /// Maps every route in this method with <c>RequireHuman</c>: <c>POST /v1/orgs</c>, <c>PUT /v1/orgs/{orgId:guid}</c>, <c>GET /v1/orgs/{orgId:guid}</c>, <c>GET /v1/orgs</c>, <c>POST /v1/orgs/{orgId:guid}/invites</c>, <c>GET /v1/orgs/{orgId:guid}/invites</c>, and <c>DELETE /v1/orgs/{orgId:guid}/invites/{inviteId:guid}</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapOrgEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/orgs", CreateOrg).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -98,5 +104,6 @@ public static class OrgEndpoints
             : result.FromResult(404);
     }
 
+    /// <summary>JSON body for <c>POST /v1/orgs/{orgId:guid}/invites</c>.</summary>
     public record CreateInviteBody(string Email, MemberRole Role);
 }

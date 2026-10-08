@@ -8,7 +8,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Infrastructure.LlamaSwap;
 using ModelSwapping;
-
+/// <summary>
+/// Starts the model process on this machine. UseOwnSwapper runs llama-server in-process. Otherwise this launches external llama-swap and rewrites its config when the catalog changes.
+/// </summary>
 public sealed class ClientLlamaSwap : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };

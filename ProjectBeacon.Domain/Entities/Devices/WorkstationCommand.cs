@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+    /// A command queued for a <see cref="DaemonDevice"/>. Not project-scoped; <see cref="ProjectId"/> is optional context.
+    /// Created as <see cref="WorkstationCommandStatus.Pending"/>.
+    /// </summary>
 public class WorkstationCommand : Entity
 {
     public WorkstationCommand() { }
@@ -19,6 +23,10 @@ public class WorkstationCommand : Entity
     public DateTime? StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
 
+    /// <summary>
+    /// Queues a pending command for <paramref name="deviceId"/>. Blank payload is stored as <c>{}</c>.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="deviceId"/> is empty.</exception>
     public static WorkstationCommand Create(
         Guid deviceId,
         WorkstationCommandKind kind,
@@ -40,6 +48,10 @@ public class WorkstationCommand : Entity
         return command;
     }
 
+    /// <summary>
+    /// Moves a pending command to <see cref="WorkstationCommandStatus.Running"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The command is not pending.</exception>
     public void Claim()
     {
         if (Status != WorkstationCommandStatus.Pending)
@@ -48,6 +60,10 @@ public class WorkstationCommand : Entity
         StartedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// Marks the command succeeded and stores <paramref name="resultJson"/>. Allowed from pending or running.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The command is already succeeded, failed, or cancelled.</exception>
     public void Succeed(string? resultJson)
     {
         if (Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
@@ -59,6 +75,11 @@ public class WorkstationCommand : Entity
         StartedAt ??= CompletedAt;
     }
 
+    /// <summary>
+    /// Marks the command failed. Allowed from pending or running.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="error"/> is null or white space.</exception>
+    /// <exception cref="InvalidOperationException">The command is already succeeded, failed, or cancelled.</exception>
     public void Fail(string error)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(error);
@@ -70,6 +91,10 @@ public class WorkstationCommand : Entity
         StartedAt ??= CompletedAt;
     }
 
+    /// <summary>
+    /// Marks the command cancelled. Allowed from pending or running.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The command is already succeeded, failed, or cancelled.</exception>
     public void Cancel()
     {
         if (Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)

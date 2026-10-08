@@ -2,7 +2,9 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Runtime.CompilerServices;
 using Application.Runtime;
-
+/// <summary>
+/// IAgentRuntime for workstation chat. It creates sessions and sends prompts through the local OpenCode server. It is not the pipeline spawner.
+/// </summary>
 public sealed class OpenCodeAgentRuntime : IAgentRuntime
 {
     private readonly ClientOpenCodeServe _serve;

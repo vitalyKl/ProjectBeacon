@@ -7,7 +7,9 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Nodes;
-
+/// <summary>
+/// Pins a with-brief and without-brief eval on one device. Model, temperature, and the check command are optional here and validated by the handler.
+/// </summary>
 public record EvalPairRequest(
     Guid ProjectId,
     Guid TaskId,
@@ -23,16 +25,22 @@ public record EvalPairRequest(
     string? ToolPermissions = null,
     int? TimeoutSeconds = null,
     string? RepoRevision = null);
-
+/// <summary>
+/// Command for eval pair.
+/// </summary>
 public record EvalPairCommand(EvalPairRequest Request) : ICommand<Result<EvalPairResult>>;
-
+/// <summary>
+/// The pair id and the two run ids and command ids that were enqueued.
+/// </summary>
 public record EvalPairResult(
     string PairId,
     Guid WithBriefRunId,
     Guid WithoutBriefRunId,
     Guid WithBriefCommandId,
     Guid WithoutBriefCommandId);
-
+/// <summary>
+/// Enqueues a with-brief and a without-brief eval on an online device. Model, temperature, reasoning, tools, revision, check, and timeout must be pinned.
+/// </summary>
 public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairResult>>
 {
     private readonly IBeaconDbFactory _dbFactory;

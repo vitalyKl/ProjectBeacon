@@ -9,7 +9,9 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-
+/// <summary>
+/// Opens a chat on the current project's online device. Fails without a project folder, a client, or an OpenCode session id.
+/// </summary>
 public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand, Result<ChatSessionDto>>
 {
     public const string ProjectFolderRequired = "Attach a project folder on the dashboard first.";
@@ -109,7 +111,9 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
         new(session.Id, session.ProjectId, session.DeviceId, session.ExternalSessionId, session.Title,
             session.LocalRoot, session.Status, session.CreatedAt, session.UpdatedAt);
 }
-
+/// <summary>
+/// Lists the user's chat sessions in the current project.
+/// </summary>
 public class ListChatSessionsHandler : ICommandHandler<ListChatSessionsCommand, Result<IList<ChatSessionDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -123,7 +127,9 @@ public class ListChatSessionsHandler : ICommandHandler<ListChatSessionsCommand, 
         return Result.Ok((IList<ChatSessionDto>)sessions.Select(CreateChatSessionHandler.Map).ToList());
     }
 }
-
+/// <summary>
+/// Loads one chat session the user can see.
+/// </summary>
 public class GetChatSessionHandler : ICommandHandler<GetChatSessionCommand, Result<ChatSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -139,7 +145,9 @@ public class GetChatSessionHandler : ICommandHandler<GetChatSessionCommand, Resu
             : Result.Ok(CreateChatSessionHandler.Map(session));
     }
 }
-
+/// <summary>
+/// Lists parts of a chat session. Fails when the session is missing.
+/// </summary>
 public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result<IList<ChatPartDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -161,7 +169,9 @@ public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result
             new ChatPartDto(p.Id, p.SessionId, p.Role, p.Kind, p.Body, p.ExternalId, p.SortOrder, p.CreatedAt)).ToList());
     }
 }
-
+/// <summary>
+/// Queues a prompt on the device. The message is required and the OpenCode session must already exist.
+/// </summary>
 public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Result<ChatSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -205,7 +215,9 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
         return Result.Ok(CreateChatSessionHandler.Map(session));
     }
 }
-
+/// <summary>
+/// Marks the chat aborted and asks the device to stop the turn.
+/// </summary>
 public class AbortChatHandler : ICommandHandler<AbortChatCommand, Result<ChatSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -234,7 +246,9 @@ public class AbortChatHandler : ICommandHandler<AbortChatCommand, Result<ChatSes
         return Result.Ok(CreateChatSessionHandler.Map(session));
     }
 }
-
+/// <summary>
+/// Device path that appends a chat part and marks the session streaming. The session must belong to that device. A repeated external id returns the existing part.
+/// </summary>
 public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Result<ChatPartDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -266,7 +280,9 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
         return Result.Ok(new ChatPartDto(part.Id, part.SessionId, part.Role, part.Kind, part.Body, part.ExternalId, part.SortOrder, part.CreatedAt));
     }
 }
-
+/// <summary>
+/// Device path that sets the chat back to idle.
+/// </summary>
 public class MarkChatIdleHandler : ICommandHandler<MarkChatIdleCommand, Result<ChatSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

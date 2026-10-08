@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.LlamaSwap;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-
+/// <summary>
+/// One model row for the llama-swap config: name, launch command, context size, TTL, extra flags, and whether it may stay resident.
+/// </summary>
 public sealed record LlamaSwapModelSpec(
     string Name,
     string LaunchCommand,
@@ -11,7 +13,9 @@ public sealed record LlamaSwapModelSpec(
     int Ttl,
     IReadOnlyList<string> ExtraFlags,
     bool Concurrent = false);
-
+/// <summary>
+/// Writes llama-swap YAML. Concurrent backends go in groups.resident with swap false, exclusive false, and persistent true. Others stay in the swap group.
+/// </summary>
 public static class LlamaSwapConfigGenerator
 {
     private static readonly Regex PlainKey = new("^[A-Za-z0-9_.-]+$", RegexOptions.Compiled);

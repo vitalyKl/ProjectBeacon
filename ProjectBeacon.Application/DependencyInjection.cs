@@ -15,7 +15,9 @@ using Application.Decisions;
 using Application.Reports;
 using Infrastructure.LlamaSwap;
 using Microsoft.Extensions.DependencyInjection;
-
+/// <summary>
+/// Registers Application handlers and the authorization service for the host.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationHandlers(this IServiceCollection services)

@@ -8,8 +8,13 @@ using Domain.Enums;
 using ProjectBeacon.API.Auth;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>Context sections, brief compile, and constraints. Tokens may read context. Writes stay human.</summary>
 public static class ContextEndpoints
 {
+    /// <summary>
+    /// Reads (<c>nodes</c>, export, compile, list constraints) allow <see cref="ApiTokenCapability.ContextRead"/>.
+    /// Upsert, delete, import, and constraint create, activate, and reject are <c>RequireHuman</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapContextEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/projects/{projectId}/context/nodes", ListNodes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.ContextRead);
@@ -170,9 +175,13 @@ public static class ContextEndpoints
             ? Results.Ok(result.Value)
             : result.FromResult(404);
     }
-
+    /// <summary>
+    /// Body for proposing a constraint: text and kind.
+    /// </summary>
     public record CreateConstraintBody(string Body, ConstraintKind Kind);
-
+    /// <summary>
+    /// Body for creating or updating a context section. Title, body, and scope are required by the handler.
+    /// </summary>
     public record UpsertNodeRequest(
         string Title,
         string BodyMarkdown,
@@ -184,7 +193,9 @@ public static class ContextEndpoints
         string? Path,
         ContextSource Source,
         string? SourcePath);
-
+    /// <summary>
+    /// Body for compiling a brief: optional repo, path, task, token budget, and which capsules to include.
+    /// </summary>
     public record CompileBriefRequest(
         Guid? RepoId,
         string? Path,

@@ -2,7 +2,9 @@ namespace ProjectBeacon.Application.CodeIndex;
 
 using System.Text.RegularExpressions;
 using Application.Common;
-
+/// <summary>
+/// Finds callers by a word-boundary regex over candidate files. This is the fallback when Roslyn cannot build a solution.
+/// </summary>
 public sealed class HeuristicCallerFinder : ICallerFinder
 {
     private const int MaxSnippetLength = 200;

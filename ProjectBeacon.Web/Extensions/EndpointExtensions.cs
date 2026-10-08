@@ -10,7 +10,9 @@ using ProjectBeacon.Application.Identity;
 using ProjectBeacon.Infrastructure.Data;
 
 namespace ProjectBeacon.Web.Extensions;
-
+/// <summary>
+/// Maps /health, the culture cookie, the /v1 API, and cookie login. /health checks that the database accepts a connection.
+/// </summary>
 public static class EndpointExtensions
 {
     public static WebApplication MapEndpoints(this WebApplication app)

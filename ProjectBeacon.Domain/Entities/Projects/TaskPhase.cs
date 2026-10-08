@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>A <see cref="TaskKindPhase"/> copied onto one task. <see cref="CopyFrom"/> keeps the template's fan-out flag.</summary>
 public class TaskPhase : Entity, IProjectScoped
 {
     public TaskPhase() { }

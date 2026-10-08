@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Evals;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for review runs. Indexed by project and task.
+/// </summary>
 public class ReviewRunConfiguration : IEntityTypeConfiguration<ReviewRun>
 {
     public void Configure(EntityTypeBuilder<ReviewRun> entity)

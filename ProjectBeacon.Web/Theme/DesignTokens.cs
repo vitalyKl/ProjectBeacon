@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// Light-theme CSS values: colors, radii, and type sizes. Razor reads these instead of hardcoding them.
+/// </summary>
 public static class DesignTokens
 {
     public const string BgApp = "#f3f5f7";
@@ -69,7 +71,9 @@ public static class DesignTokens
     public const string TypeMetric = "23px";
 
     public const string BoardCardPad = "10px";
-
+    /// <summary>
+    /// Dark-theme counterparts of the same tokens.
+    /// </summary>
     public static class Dark
     {
         public const string BgApp = "#0f1218";

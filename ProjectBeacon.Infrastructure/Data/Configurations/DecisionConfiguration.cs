@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for decisions. Indexed by project and status.
+/// </summary>
 public class DecisionConfiguration : IEntityTypeConfiguration<Decision>
 {
     public void Configure(EntityTypeBuilder<Decision> entity)

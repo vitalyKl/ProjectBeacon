@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Web.Features.Chat;
 
 using ProjectBeacon.Domain.Enums;
-
+/// <summary>
+/// Maps a chat session to a phase key: Failed, Aborted, Waiting, UsingTool, Generating, or Completed.
+/// </summary>
 public static class ChatPhase
 {
     public static string Resolve(ChatSessionStatus? status, string? lastKind, bool failed, int partCount)

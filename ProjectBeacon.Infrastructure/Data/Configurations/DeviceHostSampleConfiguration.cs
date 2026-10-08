@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Devices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for host load samples. Indexed by device and sample time.
+/// </summary>
 public class DeviceHostSampleConfiguration : IEntityTypeConfiguration<DeviceHostSample>
 {
     public void Configure(EntityTypeBuilder<DeviceHostSample> entity)

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum ModelBackendType
+/// <summary>How a user-owned local model backend is launched.</summary>
+    public enum ModelBackendType
 {
     FreeToken,
     LlamaCpp,

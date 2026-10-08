@@ -8,8 +8,16 @@ using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 
+/// <summary>
+/// Task pipeline HTTP endpoints.
+/// </summary>
 public static class PipelineEndpoints
 {
+    /// <summary>
+    /// Maps <c>GET /v1/tasks/{taskId:guid}/pipeline</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskRead)</c>.
+    /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/start</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>, <c>POST /v1/sessions/{sessionId:guid}/launch</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>, and <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
+    /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/force-close</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.Admin)</c>. The body is task id plus an optional reason.
+    /// </summary>
     public static IEndpointRouteBuilder MapPipelineEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/tasks/{taskId:guid}/pipeline", GetPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
@@ -170,27 +178,40 @@ public static class PipelineEndpoints
             : result.FromResult();
     }
 
+    /// <summary>JSON body for pipeline start and review start. <c>TaskId</c> must match the route.</summary>
     public record PipelineStartBody(Guid TaskId);
 
+    /// <summary>JSON body for <c>POST /v1/sessions/{sessionId:guid}/launch</c>. <c>SessionId</c> must match the route.</summary>
     public record LaunchSessionBody(Guid SessionId);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks</c>.</summary>
     public record CreateSubtaskBody(
         Guid TaskId,
         string Instructions,
         IReadOnlyList<string>? AllowedMcpTools = null,
         IReadOnlyList<string>? AllowedPaths = null);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>.</summary>
     public record ActorSessionBody(Guid TaskId, Guid SubtaskId);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>.</summary>
     public record SubtaskResultBody(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>.</summary>
     public record SubtaskFailBody(Guid TaskId, Guid SubtaskId, string Reason);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>.</summary>
     public record VerdictBody(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>. The acting user is <c>HttpContext.GetActor().UserId</c>, not a field.</summary>
     public record ReviewCheckBody(Guid TaskId, Guid DeviceId, string CheckCommand, string? Path = null);
 
+    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c>.</summary>
     public record ApproveBody(Guid TaskId, string? Note = null);
 
+    /// <summary>
+    /// JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/force-close</c>: task id and an optional reason.
+    /// The route requires <c>RequireHumanOrApiToken(ApiTokenCapability.Admin)</c> for tokens.
+    /// </summary>
     public record ForceCloseBody(Guid TaskId, string? Reason = null);
 }

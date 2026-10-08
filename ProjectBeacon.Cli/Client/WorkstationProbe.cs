@@ -3,7 +3,9 @@ namespace ProjectBeacon.Cli.Client;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
-
+/// <summary>
+/// Builds heartbeat probeJson: tool paths, clientVersion from the assembly informational version, plus optional llama-swap, host load, and OpenCode status.
+/// </summary>
 public static class WorkstationProbe
 {
     public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? opencodeServe = null)

@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using Identity;
 
+/// <summary>Org-scoped project. It has no single working-tree root; that lives on <see cref="ProjectRuntime"/>.</summary>
 public class Project : Entity, IOrgScoped
 {
     public Project() { }

@@ -4,17 +4,29 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Project and file path to match against active label prefixes.
+/// </summary>
 public record MatchLabelRequest(Guid ProjectId, string Path);
-
+/// <summary>
+/// Label and the path prefix to add. A blank path fails.
+/// </summary>
 public record AddLabelPathRequest(Guid ProjectId, Guid LabelId, string Path);
-
+/// <summary>
+/// Project, name, optional color, and optional path prefix.
+/// </summary>
 public record CreateLabelRequest(Guid ProjectId, string Name, string? Color, string? PathPrefix);
-
+/// <summary>
+/// Fields for update label.
+/// </summary>
 public record UpdateLabelRequest(Guid ProjectId, Guid LabelId, string? Name, string? Color, string? PathPrefix);
-
+/// <summary>
+/// Fields for delete label.
+/// </summary>
 public record DeleteLabelRequest(Guid ProjectId, Guid LabelId);
-
+/// <summary>
+/// Returns the active label whose path prefix matches, or null.
+/// </summary>
 public class MatchLabelHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -34,7 +46,9 @@ public class MatchLabelHandler
         return Result.Ok<LabelDto?>(new LabelDto(match.Id, match.Name, match.Color, match.PathPrefix, match.ProjectId));
     }
 }
-
+/// <summary>
+/// Adds a path prefix to a label. A blank path fails.
+/// </summary>
 public class AddLabelPathHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -62,7 +76,9 @@ public class AddLabelPathHandler
         return Result.Ok(new LabelDto(label.Id, label.Name, label.Color, label.PathPrefix, label.ProjectId));
     }
 }
-
+/// <summary>
+/// Creates a project label. Name is required.
+/// </summary>
 public class CreateLabelHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -87,7 +103,9 @@ public class CreateLabelHandler
         return Result.Ok(new LabelDto(label.Id, label.Name, label.Color, label.PathPrefix, label.ProjectId));
     }
 }
-
+/// <summary>
+/// Renames a label or changes its color.
+/// </summary>
 public class UpdateLabelHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -113,7 +131,9 @@ public class UpdateLabelHandler
         return Result.Ok(new LabelDto(label.Id, label.Name, label.Color, label.PathPrefix, label.ProjectId));
     }
 }
-
+/// <summary>
+/// Deletes a label.
+/// </summary>
 public class DeleteLabelHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

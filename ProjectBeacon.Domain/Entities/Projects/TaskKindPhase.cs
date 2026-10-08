@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>One phase of a <see cref="TaskKind"/>. <c>FanOut</c> means the phase may spawn more than one subtask.</summary>
 public class TaskKindPhase : Entity
 {
     public TaskKindPhase() { }

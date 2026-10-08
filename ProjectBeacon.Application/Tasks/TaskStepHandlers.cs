@@ -4,7 +4,9 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Lists checklist steps on a task.
+/// </summary>
 public class ListTaskStepsHandler : ICommandHandler<ListTaskStepsCommand, Result<IList<TaskStepDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -28,7 +30,9 @@ public class ListTaskStepsHandler : ICommandHandler<ListTaskStepsCommand, Result
     internal static TaskStepDto Map(TaskStep step) =>
         new(step.Id, step.TaskId, step.Title, step.SortOrder, step.DoneAt, step.IsDone);
 }
-
+/// <summary>
+/// Adds a checklist step. Title is required and at most 200 characters.
+/// </summary>
 public class AddTaskStepHandler : ICommandHandler<AddTaskStepCommand, Result<TaskStepDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -53,7 +57,9 @@ public class AddTaskStepHandler : ICommandHandler<AddTaskStepCommand, Result<Tas
         return Result.Ok(ListTaskStepsHandler.Map(step));
     }
 }
-
+/// <summary>
+/// Marks a step done or not done.
+/// </summary>
 public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Result<TaskStepDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -71,7 +77,9 @@ public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Resu
         return Result.Ok(ListTaskStepsHandler.Map(step));
     }
 }
-
+/// <summary>
+/// Deletes a checklist step.
+/// </summary>
 public class DeleteTaskStepHandler : ICommandHandler<DeleteTaskStepCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;

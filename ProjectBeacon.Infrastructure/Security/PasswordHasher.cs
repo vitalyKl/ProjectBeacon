@@ -2,7 +2,9 @@ namespace ProjectBeacon.Infrastructure.Security;
 
 using System.Security.Cryptography;
 using System.Text;
-
+/// <summary>
+/// BCrypt hash and verify. GenerateRandomPassword defaults to 32 characters.
+/// </summary>
 public static class PasswordHasher
 {
     public static string Hash(string password) => BCrypt.Net.BCrypt.HashPassword(password);

@@ -3,9 +3,12 @@ namespace ProjectBeacon.Application.Authorization;
 using System.Security.Claims;
 using Domain.Enums;
 
+/// <summary>Builds an <see cref="ActorContext"/> from a claims principal.</summary>
 public static class ActorContextFactory
 {
+    /// <summary>Authentication type that selects an API-token actor.</summary>
     public const string ApiTokenAuthType = "ApiToken";
+    /// <summary>Authentication type that selects a device actor.</summary>
     public const string DeviceTokenAuthType = "DeviceToken";
 
     private const string TokenIdClaim = "token_id";
@@ -16,6 +19,10 @@ public static class ActorContextFactory
     private const string IsAdminClaim = "isAdmin";
     private const string DeviceOwnerClaim = "device_owner_id";
 
+    /// <summary>
+    /// Maps authentication type and claims onto an actor. <see cref="ApiTokenAuthType"/> and <see cref="DeviceTokenAuthType"/> select those kinds; any other identity is a human.
+    /// A null principal, a missing identity, or a human with no user id is <see cref="ActorContext.Anonymous"/>. A device user id comes only from <c>device_owner_id</c>.
+    /// </summary>
     public static ActorContext FromPrincipal(ClaimsPrincipal? principal)
     {
         if (principal is null)

@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for user-owned model backends. Indexed by user.
+/// </summary>
 public class LocalModelBackendConfiguration : IEntityTypeConfiguration<LocalModelBackend>
 {
     public void Configure(EntityTypeBuilder<LocalModelBackend> entity)

@@ -4,7 +4,9 @@ using Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 using System.Reflection;
-
+/// <summary>
+/// Async-local tenant for queries and RLS. EnterUnscoped is the only bypass. A null filter id matches nothing.
+/// </summary>
 public static class TenantScope
 {
     private static readonly AsyncLocal<Guid?> _currentOrgId = new();

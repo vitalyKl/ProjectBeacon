@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for checklist steps. Indexed by task and sort order.
+/// </summary>
 public class TaskStepConfiguration : IEntityTypeConfiguration<TaskStep>
 {
     public void Configure(EntityTypeBuilder<TaskStep> entity)

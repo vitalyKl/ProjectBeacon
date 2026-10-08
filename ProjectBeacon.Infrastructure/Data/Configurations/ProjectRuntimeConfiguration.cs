@@ -4,7 +4,9 @@ using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for project runtimes. Project and device together are unique.
+/// </summary>
 public class ProjectRuntimeConfiguration : IEntityTypeConfiguration<ProjectRuntime>
 {
     public void Configure(EntityTypeBuilder<ProjectRuntime> entity)

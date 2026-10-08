@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using Identity;
 using ProjectBeacon.Domain.Common;
 
+/// <summary>Comment on a task, authored by <see cref="UserId"/>. Not project-scoped on the type; the task carries the project.</summary>
 public class TaskComment : Entity
 {
     public TaskComment() { }

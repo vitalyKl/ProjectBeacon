@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum TaskPriority
+/// <summary>Board priority. Default on create is <see cref="Medium"/>.</summary>
+    public enum TaskPriority
 {
     Low,
     Medium,

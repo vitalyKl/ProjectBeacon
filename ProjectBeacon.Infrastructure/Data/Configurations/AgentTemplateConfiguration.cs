@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for agent templates. Indexed by user.
+/// </summary>
 public class AgentTemplateConfiguration : IEntityTypeConfiguration<AgentTemplate>
 {
     public void Configure(EntityTypeBuilder<AgentTemplate> entity)

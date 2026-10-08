@@ -8,12 +8,17 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
 
+/// <summary>Finishes a task as done, failed, skipped, or partial, including review-proof and actor-access checks.</summary>
 public class FinishWorkHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
 
     public FinishWorkHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// <c>done</c> requires a review run id for a run of this task that is not failed and is check proof, plus review notes or output. Unfixed regressions block done.
+    /// The actor id string must be a project member, a system admin, or match <c>BEACON_WORKER_TOKEN</c> in constant time (remark: the HTTP layer supplies the principal user id, not a body field).
+    /// </summary>
     public async Task<Result> HandleAsync(FinishWorkCommand command, CancellationToken ct = default)
     {
         if (!Guid.TryParse(command.Request.TaskId, out var taskId))

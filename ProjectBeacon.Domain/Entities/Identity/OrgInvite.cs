@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Identity;
 using Common;
 using Enums;
 
+/// <summary>
+    /// An org-scoped invitation. Stores <see cref="TokenHash"/> only, never a raw invite token.
+    /// Created pending and expires seven days after <see cref="Create"/>.
+    /// </summary>
 public class OrgInvite : Entity, IOrgScoped
 {
     public OrgInvite() { }

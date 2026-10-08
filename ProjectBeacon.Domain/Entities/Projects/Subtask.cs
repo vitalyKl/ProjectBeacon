@@ -4,6 +4,10 @@ using System.Text.Json;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// One actor unit of a task. <see cref="AllowedMcpTools"/> and <see cref="AllowedPaths"/> are copied into the actor prompt.
+/// They are not enforced as harness denies. Invalid JSON on those lists reads as empty.
+/// </summary>
 public class Subtask : Entity, IProjectScoped
 {
     public Subtask() { }
@@ -81,6 +85,7 @@ public class Subtask : Entity, IProjectScoped
 
     public void AssignPhase(Guid phaseId) => TaskPhaseId = phaseId;
 
+    /// <summary>Moves Pending to InProgress.</summary>
     public void Start()
     {
         if (Status != SubtaskStatus.Pending)
@@ -89,6 +94,7 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Records the diff and summary and marks Done. Only from InProgress.</summary>
     public void ReportResult(string diffRef, string summary)
     {
         if (Status != SubtaskStatus.InProgress)
@@ -99,6 +105,7 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Marks Failed. Throws when the subtask is already Done or Failed.</summary>
     public void Fail(string? reason = null)
     {
         if (Status is SubtaskStatus.Done or SubtaskStatus.Failed)
@@ -109,6 +116,7 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Marks Failed from any non-failed status. <paramref name="reason"/> is required.</summary>
     public void ForceFail(string reason)
     {
         if (string.IsNullOrWhiteSpace(reason))
@@ -120,6 +128,7 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Returns Done or Failed to Pending, appends <paramref name="note"/> to the instructions, and increments <see cref="ReopenCount"/>.</summary>
     public void Reopen(string note)
     {
         if (string.IsNullOrWhiteSpace(note))

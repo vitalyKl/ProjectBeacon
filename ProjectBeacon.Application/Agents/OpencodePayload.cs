@@ -5,7 +5,9 @@ using System.Text.Json.Nodes;
 using Application.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
-
+/// <summary>
+/// Builds the OpenCode apply payload, including the beacon-local provider and model ids.
+/// </summary>
 public static class OpencodePayload
 {
     public const string ProviderId = "beacon-local";

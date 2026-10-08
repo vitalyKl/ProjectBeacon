@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>Workstation chat for a project on one device. Created Idle. This is not a pipeline session.</summary>
 public class ChatSession : Entity, IProjectScoped
 {
     public ChatSession() { }

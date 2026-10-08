@@ -6,9 +6,13 @@ using Domain.Entities.Evals;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Task whose with-brief and without-brief eval pairs should be compared.
+/// </summary>
 public record GetContextCostReportRequest(Guid TaskId, Guid? ProjectId = null);
-
+/// <summary>
+/// One eval pair and the token and turn deltas between the with-brief and without-brief runs.
+/// </summary>
 public record ContextCostPairDto(
     string PairId,
     EvalRunDto? WithBrief,
@@ -19,14 +23,18 @@ public record ContextCostPairDto(
     int? TurnCountDelta,
     bool? WithBriefPassed,
     bool? WithoutBriefPassed);
-
+/// <summary>
+/// The pairs compared for one task.
+/// </summary>
 public record ContextCostReportDto(
     Guid TaskId,
     Guid ProjectId,
     string TaskTitle,
     int PairCount,
     IReadOnlyList<ContextCostPairDto> Pairs);
-
+/// <summary>
+/// Compares token cost of a task with and without the compiled brief.
+/// </summary>
 public class ContextCostReportHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

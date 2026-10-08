@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>Project rule. Created Proposed. Only Active constraints belong in a compiled brief.</summary>
 public class Constraint : Entity, IProjectScoped
 {
     public Constraint() { }

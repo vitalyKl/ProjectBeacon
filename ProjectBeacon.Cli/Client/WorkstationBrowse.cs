@@ -2,7 +2,9 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Text.Json;
 using ProjectBeacon.Application.Common;
-
+/// <summary>
+/// Lists one directory level or scans for gguf files. Both stay inside the given root and fail when the path escapes it.
+/// </summary>
 public static class WorkstationBrowse
 {
     public static Result<string> ListDir(string root, string? path)

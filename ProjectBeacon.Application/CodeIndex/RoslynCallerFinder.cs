@@ -7,7 +7,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
-
+/// <summary>
+/// Finds C# callers with Roslyn. Fails when MSBuild, the solution, the file, or a symbol at that line is missing.
+/// </summary>
 public sealed class RoslynCallerFinder : ICallerFinder
 {
     private static bool _msbuildRegistered;

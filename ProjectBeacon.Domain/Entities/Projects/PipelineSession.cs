@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// One planner, actor, or review turn. Created Ready. <see cref="Launch"/> requires Ready.
+/// <see cref="Close"/> and <see cref="Fail"/> require Ready or Active.
+/// </summary>
 public class PipelineSession : Entity, IProjectScoped
 {
     public PipelineSession() { }

@@ -10,7 +10,9 @@ using Infrastructure.Data;
 using Infrastructure.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-
+/// <summary>
+/// Creates a pending org invite and returns the raw token once. A second pending invite for the same email fails. The caller must be allowed to invite.
+/// </summary>
 public class CreateOrgInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -66,7 +68,9 @@ public class CreateOrgInviteHandler
         return Result.Ok(new InviteCreatedDto(invite.Id, invite.Email, invite.Role, invite.ExpiredAt, raw, url));
     }
 }
-
+/// <summary>
+/// Creates a pending project invite and returns the raw token once. A second pending invite for the same email fails.
+/// </summary>
 public class CreateProjectInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -122,7 +126,9 @@ public class CreateProjectInviteHandler
         return Result.Ok(new InviteCreatedDto(invite.Id, invite.Email, invite.Role, invite.ExpiredAt, raw, url));
     }
 }
-
+/// <summary>
+/// Previews an invite by its raw token. The lookup ignores tenant filters because the caller is not a member yet.
+/// </summary>
 public class GetInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -138,7 +144,9 @@ public class GetInviteHandler
         return Result.Ok(found);
     }
 }
-
+/// <summary>
+/// Accepts an invite when the signed-in user's email matches and the invite is still pending.
+/// </summary>
 public class AcceptInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -191,7 +199,9 @@ public class AcceptInviteHandler
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Lists org invites. Forbidden when the caller cannot administer the org.
+/// </summary>
 public class ListOrgInvitesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -218,7 +228,9 @@ public class ListOrgInvitesHandler
         return Result.Ok((IList<InviteListDto>)items);
     }
 }
-
+/// <summary>
+/// Lists project invites. Forbidden when the caller cannot administer the project.
+/// </summary>
 public class ListProjectInvitesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -245,7 +257,9 @@ public class ListProjectInvitesHandler
         return Result.Ok((IList<InviteListDto>)items);
     }
 }
-
+/// <summary>
+/// Revokes a pending org invite.
+/// </summary>
 public class RevokeOrgInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -271,7 +285,9 @@ public class RevokeOrgInviteHandler
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Revokes a pending project invite.
+/// </summary>
 public class RevokeProjectInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

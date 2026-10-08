@@ -4,7 +4,9 @@ using Application.Common;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Lists context sections for the project.
+/// </summary>
 public class ListContextNodesHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -22,7 +24,9 @@ public class ListContextNodesHandler
         return Result.Ok(sections.MapToDtos());
     }
 }
-
+/// <summary>
+/// Loads one context section. Fails when it is missing.
+/// </summary>
 public class GetContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -41,7 +45,9 @@ public class GetContextNodeHandler
         return Result.Ok(section.MapToDto());
     }
 }
-
+/// <summary>
+/// Deletes one context section.
+/// </summary>
 public class DeleteContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

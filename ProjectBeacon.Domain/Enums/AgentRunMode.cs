@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum AgentRunMode
+/// <summary>Solo chat versus the planner, actor, and review pipeline.</summary>
+    public enum AgentRunMode
 {
     Solo,
     Pipeline

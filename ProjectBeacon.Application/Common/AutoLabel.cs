@@ -2,8 +2,10 @@ namespace ProjectBeacon.Application.Common;
 
 using Domain.Entities.Projects;
 
+/// <summary>Selects the label whose matching path prefix is the longest.</summary>
 public static class AutoLabel
 {
+    /// <summary>The label with the longest matching prefix, or null when none match.</summary>
     public static Label? Match(IEnumerable<Label> labels, string path)
     {
         return labels

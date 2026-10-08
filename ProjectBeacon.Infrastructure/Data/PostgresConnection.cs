@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Infrastructure.Data;
 
 using Microsoft.Extensions.Configuration;
-
+/// <summary>
+/// Builds the Npgsql connection string. Appends POSTGRES_PASSWORD when the configured string has no password. Development falls back to the password beacon. Throws when neither a password nor a connection string is available.
+/// </summary>
 public static class PostgresConnection
 {
     public static string Resolve(IConfiguration configuration)

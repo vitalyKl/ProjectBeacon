@@ -2,6 +2,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>
+/// Project area. Path prefixes, not free-form chips, decide which files the label covers.
+/// <see cref="AddPath"/> ignores a blank or duplicate path.
+/// </summary>
 public class Label : Entity, IProjectScoped
 {
     public Label() { }

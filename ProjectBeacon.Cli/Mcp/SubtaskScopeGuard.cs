@@ -1,9 +1,14 @@
 namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
-
+/// <summary>
+/// Enforces a subtask allowlist on MCP tools. An empty tool list does not restrict tools. An empty path list does not restrict paths. Several limited in-progress subtasks require an explicit subtask id.
+/// </summary>
 public static class SubtaskScopeGuard
 {
+    /// <summary>
+    /// One subtask's id, status, allowed MCP tools, and allowed path prefixes.
+    /// </summary>
     public readonly record struct Allowlist(Guid Id, string Status, IReadOnlyList<string> Tools, IReadOnlyList<string> Paths);
 
     private static readonly HashSet<string> PathTools = new(StringComparer.OrdinalIgnoreCase)

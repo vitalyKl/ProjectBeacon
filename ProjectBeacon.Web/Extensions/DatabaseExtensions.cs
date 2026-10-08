@@ -2,7 +2,9 @@ namespace ProjectBeacon.Web.Extensions;
 
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Infrastructure.Data;
-
+/// <summary>
+/// Applies pending EF migrations on the Web host.
+/// </summary>
 public static class DatabaseExtensions
 {
     public static WebApplication MigrateDatabase(this WebApplication app)

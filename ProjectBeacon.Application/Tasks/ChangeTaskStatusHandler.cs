@@ -4,7 +4,9 @@ using Application.Common;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Moves a task to Todo, InProgress, or Done. Done fails unless a completed review run exists.
+/// </summary>
 public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

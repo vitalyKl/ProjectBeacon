@@ -5,7 +5,9 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Adds a project member. Fails when the user is already a member or the caller cannot administer.
+/// </summary>
 public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, Result<ProjectMemberDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -42,7 +44,9 @@ public class AddProjectMemberHandler : ICommandHandler<AddProjectMemberCommand, 
     private static ProjectMemberDto MapToDto(ProjectMember member) =>
         new(member.Id, member.UserId, member.Role, member.JoinedAt);
 }
-
+/// <summary>
+/// Removes a project member when the caller is allowed to. A missing member fails.
+/// </summary>
 public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -74,7 +78,9 @@ public class RemoveProjectMemberHandler : ICommandHandler<RemoveProjectMemberCom
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Lists members of a project.
+/// </summary>
 public class GetProjectMembersHandler : ICommandHandler<GetProjectMembersCommand, Result<IList<ProjectMemberDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;

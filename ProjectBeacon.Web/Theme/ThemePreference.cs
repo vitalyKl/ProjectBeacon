@@ -1,12 +1,16 @@
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// Stored appearance: Dark, Light, or System.
+/// </summary>
 public enum ThemePreference
 {
     Dark,
     Light,
     System
 }
-
+/// <summary>
+/// Parses the beacon-theme cookie. Unknown values are Dark. VersionCore strips a git suffix from the informational version.
+/// </summary>
 public static class ThemePreferenceResolver
 {
     public const string CookieName = "beacon-theme";

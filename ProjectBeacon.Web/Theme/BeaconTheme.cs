@@ -1,7 +1,9 @@
 using MudBlazor;
 
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// MudBlazor theme. Colors and geometry come from DesignTokens.
+/// </summary>
 public static class BeaconTheme
 {
     public static readonly MudTheme Theme = new()

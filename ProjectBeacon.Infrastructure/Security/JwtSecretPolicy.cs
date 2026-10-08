@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Infrastructure.Security;
-
+/// <summary>
+/// In Production the JWT secret must be at least 32 characters. Development accepts any non-null value, including empty. A null secret throws in every environment.
+/// </summary>
 public static class JwtSecretPolicy
 {
     public const int MinLength = 32;

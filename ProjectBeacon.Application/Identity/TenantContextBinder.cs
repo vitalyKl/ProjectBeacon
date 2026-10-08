@@ -3,7 +3,9 @@ namespace ProjectBeacon.Application.Identity;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
-
+/// <summary>
+/// Sets the request tenant from the actor's current project. Does nothing when a project is already bound or the scope is unscoped.
+/// </summary>
 public sealed class TenantContextBinder
 {
     private readonly IBeaconDbFactory _dbFactory;

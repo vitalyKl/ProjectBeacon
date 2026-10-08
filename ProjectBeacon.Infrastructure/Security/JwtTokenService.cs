@@ -6,7 +6,9 @@ using System.Text;
 using Domain.Entities.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-
+/// <summary>
+/// Issues a JWT for issuer ProjectBeacon and audience ProjectBeaconAPI.
+/// </summary>
 public static class JwtTokenService
 {
     private const string Issuer = "ProjectBeacon";

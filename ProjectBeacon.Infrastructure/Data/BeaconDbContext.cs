@@ -7,7 +7,9 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Evals;
 using Domain.Enums;
-
+/// <summary>
+/// EF context behind IBeaconDb. Tenant filters come from the bound tenant or TenantScope. A null project or org filter returns no rows unless the scope is unscoped.
+/// </summary>
 public class BeaconDbContext : DbContext, IBeaconDb
 {
     public DbSet<User> Users => Set<User>();

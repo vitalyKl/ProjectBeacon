@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum TaskSubStage
+/// <summary>In-progress checklist shown on the board. <see cref="Complete"/> marks the task Done.</summary>
+    public enum TaskSubStage
 {
     RequirementGathering,
     Estimation,

@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Mcp;
 
 using Application.Common;
-
+/// <summary>
+/// Reads and writes files inside a root. Rejects escape, a missing file, and a patch that does not match exactly once.
+/// </summary>
 public sealed class FileWorkspace
 {
     public string Root { get; }

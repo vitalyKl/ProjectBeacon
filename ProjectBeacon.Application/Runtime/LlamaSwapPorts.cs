@@ -1,13 +1,16 @@
 namespace ProjectBeacon.Infrastructure.LlamaSwap;
 
+/// <summary>Name and state of one model loaded in llama-swap.</summary>
 public record LoadedModelStatus(string Name, string State);
 
+/// <summary>One GPU sample attached to a host-load reading.</summary>
 public record GpuLoadDto(
     string? Name,
     double? UtilizationPercent,
     long? MemoryUsedBytes,
     long? MemoryTotalBytes);
 
+/// <summary>CPU, memory, and optional GPU sample from a host.</summary>
 public record HostLoadDto(
     double? CpuPercent,
     long? RamUsedBytes,
@@ -15,6 +18,7 @@ public record HostLoadDto(
     GpuLoadDto? Gpu,
     DateTimeOffset? SampledAt);
 
+/// <summary>llama-swap availability, loaded models, and an optional host sample.</summary>
 public record LlamaSwapStatusDto(
     bool Available,
     bool Healthy,
@@ -26,6 +30,7 @@ public record LlamaSwapStatusDto(
     HostLoadDto? Host = null,
     string? DeviceName = null);
 
+/// <summary>Reads llama-swap status and asks it to reload or unload.</summary>
 public interface ILlamaSwapProxy
 {
     Task<LlamaSwapStatusDto> GetStatusAsync(CancellationToken ct = default);
@@ -33,6 +38,7 @@ public interface ILlamaSwapProxy
     Task<bool> UnloadAsync(CancellationToken ct = default);
 }
 
+/// <summary>Proxy used when the supervisor is not running. Status is unavailable and reload and unload return false.</summary>
 public sealed class UnavailableLlamaSwapProxy : ILlamaSwapProxy
 {
     public Task<LlamaSwapStatusDto> GetStatusAsync(CancellationToken ct = default)
@@ -43,6 +49,7 @@ public sealed class UnavailableLlamaSwapProxy : ILlamaSwapProxy
     public Task<bool> UnloadAsync(CancellationToken ct = default) => Task.FromResult(false);
 }
 
+/// <summary>One model entry used to build a llama-swap catalog.</summary>
 public sealed record LlamaSwapModelBinding(
     string Name,
     string LaunchCommand,
@@ -51,6 +58,7 @@ public sealed record LlamaSwapModelBinding(
     IReadOnlyList<string> ExtraFlags,
     bool Concurrent = false);
 
+/// <summary>Listening port plus builders for a model launch spec and catalog YAML.</summary>
 public interface ILlamaSwapCatalog
 {
     int Port { get; }

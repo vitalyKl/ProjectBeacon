@@ -2,7 +2,9 @@ using Microsoft.Extensions.Localization;
 using ProjectBeacon.Domain.Enums;
 
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// Localized labels for status, priority, and pipeline stage. Unknown status falls back to Todo.
+/// </summary>
 public static class ChromeLabels
 {
     public static string Status(IStringLocalizer L, string? status) => status switch

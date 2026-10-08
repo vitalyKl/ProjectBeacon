@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Agents;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for OpenCode connections. User and provider together are unique.
+/// </summary>
 public class OpenCodeConnectionConfiguration : IEntityTypeConfiguration<OpenCodeConnection>
 {
     public void Configure(EntityTypeBuilder<OpenCodeConnection> entity)

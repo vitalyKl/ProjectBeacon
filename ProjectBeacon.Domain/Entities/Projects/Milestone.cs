@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>Roadmap milestone. <see cref="Close"/> sets <see cref="ClosedAt"/>; <see cref="Reopen"/> clears it.</summary>
 public class Milestone : Entity, IProjectScoped
 {
     public Milestone() { }

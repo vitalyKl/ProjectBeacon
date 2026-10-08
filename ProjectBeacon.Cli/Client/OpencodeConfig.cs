@@ -4,9 +4,13 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Context;
-
+/// <summary>
+/// Path of the written opencode.json and the environment variables the client should pass to OpenCode.
+/// </summary>
 public sealed record OpenCodeApplyResult(string ConfigPath, Dictionary<string, string> Environment);
-
+/// <summary>
+/// Merges OpenCode config inside a project root. ApplyOpencode rejects a path outside that root. ReplaceBeaconCommand points the beacon MCP server at the local beacon binary.
+/// </summary>
 public static class OpencodeConfig
 {
     public static void Upsert(

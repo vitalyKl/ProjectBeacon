@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary><see cref="TaskId"/> depends on <see cref="DependentTaskId"/>.</summary>
 public class TaskDependency : Entity
 {
     public TaskDependency() { }

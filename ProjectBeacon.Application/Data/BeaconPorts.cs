@@ -11,6 +11,7 @@ using Domain.Entities.Projects;
 
 // Owned by Application so handlers do not reference the Infrastructure assembly.
 // The EF context in Infrastructure implements this port.
+/// <summary>Application port over the EF context so handlers do not reference the Infrastructure assembly.</summary>
 public interface IBeaconDb : IAsyncDisposable
 {
     DbSet<User> Users { get; }
@@ -63,6 +64,7 @@ public interface IBeaconDb : IAsyncDisposable
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>Creates <see cref="IBeaconDb"/> instances.</summary>
 public interface IBeaconDbFactory
 {
     IBeaconDb CreateDbContext();
@@ -70,6 +72,7 @@ public interface IBeaconDbFactory
         => Task.FromResult(CreateDbContext());
 }
 
+/// <summary>Project and org ids, plus an unscoped flag, assigned onto a database session.</summary>
 public interface ITenantContext
 {
     Guid? ProjectId { get; }
@@ -78,6 +81,7 @@ public interface ITenantContext
     void Assign(Guid? projectId, Guid? orgId, bool unscoped);
 }
 
+/// <summary>Mutable <see cref="ITenantContext"/> whose <c>Assign</c> replaces the project, org, and unscoped flag.</summary>
 public sealed class TenantContext : ITenantContext
 {
     public Guid? ProjectId { get; private set; }

@@ -4,6 +4,7 @@ using Common;
 using Enums;
 using Identity;
 
+/// <summary>Membership of a user in a project. Owner and Admin may administer; Member may not.</summary>
 public class ProjectMember : Entity, IProjectScoped
 {
     public ProjectMember() { }

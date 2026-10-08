@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for task dependencies. The task pair is unique.
+/// </summary>
 public class TaskDependencyConfiguration : IEntityTypeConfiguration<TaskDependency>
 {
     public void Configure(EntityTypeBuilder<TaskDependency> entity)

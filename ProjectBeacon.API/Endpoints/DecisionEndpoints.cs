@@ -6,8 +6,14 @@ using ProjectBeacon.API.Auth;
 using Application.Decisions;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+/// Decision HTTP endpoints.
+/// </summary>
 public static class DecisionEndpoints
 {
+    /// <summary>
+    /// Maps <c>POST /v1/projects/{projectId:guid}/decisions</c>, <c>GET /v1/projects/{projectId:guid}/decisions</c>, <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/accept</c>, <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/deprecate</c>, and <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede</c> with <c>RequireHuman</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapDecisionEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/decisions", Create).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -61,7 +67,9 @@ public static class DecisionEndpoints
             : result.FromResult();
     }
 
+    /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/decisions</c>.</summary>
     public record CreateDecisionBody(string Title, string? Context, string Body, string? Consequences);
 
+    /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/decisions/{decisionId:guid}/supersede</c>.</summary>
     public record SupersedeBody(Guid ReplacementId);
 }

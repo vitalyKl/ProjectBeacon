@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using Common;
 using Enums;
 
+/// <summary>
+/// Project invite. Stores <see cref="TokenHash"/> only. Pending for seven days.
+/// <see cref="TryAccept"/> fails when the invite is not pending or <see cref="ExpiredAt"/> has passed.
+/// </summary>
 public class ProjectInvite : Entity, IProjectScoped
 {
     public ProjectInvite() { }

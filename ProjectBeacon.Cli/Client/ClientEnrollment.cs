@@ -3,9 +3,14 @@ namespace ProjectBeacon.Cli.Client;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-
+/// <summary>
+/// Enrolls a device with a user password, probes the control-plane URL, and checks a device token. The raw bcd_ token is returned once.
+/// </summary>
 public static class ClientEnrollment
 {
+    /// <summary>
+    /// Outcome of enroll: success, device id, raw token, or an error. The token is not printed by the host.
+    /// </summary>
     public readonly record struct EnrollResult(bool Ok, Guid Id, string Token, string? Error);
 
     public static async Task<(bool Ok, string Message)> ProbeUrlAsync(string url, CancellationToken ct, HttpMessageHandler? handler = null)

@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// One phase of a task-kind template, including fan-out and an optional model.
+/// </summary>
 public record TaskKindPhaseDto(
     Guid Id,
     int SortOrder,
@@ -14,7 +16,9 @@ public record TaskKindPhaseDto(
     string Instruction,
     bool FanOut,
     Guid? ModelBackendId);
-
+/// <summary>
+/// A user's task kind. IsBuiltIn marks the kind that cannot be deleted.
+/// </summary>
 public record TaskKindDto(
     Guid Id,
     string Name,
@@ -22,7 +26,9 @@ public record TaskKindDto(
     Guid? DecisionBackendId,
     Guid? WorkerBackendId,
     IReadOnlyList<TaskKindPhaseDto> Phases);
-
+/// <summary>
+/// A template phase copied onto one task, plus its status.
+/// </summary>
 public record TaskPhaseDto(
     Guid Id,
     Guid TaskId,
@@ -33,11 +39,17 @@ public record TaskPhaseDto(
     bool FanOut,
     Guid? ModelBackendId,
     TaskPhaseStatus Status);
-
+/// <summary>
+/// One phase to save: title is required. Key, instruction, fan-out, and model are optional.
+/// </summary>
 public record TaskKindPhaseInput(string? Key, string Title, string? Instruction, bool FanOut, Guid? ModelBackendId);
-
+/// <summary>
+/// Command for list task kinds.
+/// </summary>
 public record ListTaskKindsCommand(Guid UserId) : ICommand<Result<IList<TaskKindDto>>>;
-
+/// <summary>
+/// Create or update a task kind. Id is null on create. At least one phase is required.
+/// </summary>
 public record SaveTaskKindRequest(
     Guid? Id,
     Guid UserId,
@@ -45,21 +57,37 @@ public record SaveTaskKindRequest(
     Guid? DecisionBackendId,
     Guid? WorkerBackendId,
     IReadOnlyList<TaskKindPhaseInput> Phases);
-
+/// <summary>
+/// Command for save task kind.
+/// </summary>
 public record SaveTaskKindCommand(SaveTaskKindRequest Request) : ICommand<Result<TaskKindDto>>;
-
+/// <summary>
+/// Fields for delete task kind.
+/// </summary>
 public record DeleteTaskKindRequest(Guid Id, Guid UserId);
-
+/// <summary>
+/// Command for delete task kind.
+/// </summary>
 public record DeleteTaskKindCommand(DeleteTaskKindRequest Request) : ICommand<Result>;
-
+/// <summary>
+/// Restores the built-in Default kind and its understand, do, and check phases for the user.
+/// </summary>
 public record ResetBuiltInTaskKindCommand(Guid UserId) : ICommand<Result<TaskKindDto>>;
-
+/// <summary>
+/// Command for list task phases.
+/// </summary>
 public record ListTaskPhasesCommand(Guid TaskId) : ICommand<Result<IList<TaskPhaseDto>>>;
-
+/// <summary>
+/// Task phase and the model backend to use. Null clears the model.
+/// </summary>
 public record SetTaskPhaseModelRequest(Guid PhaseId, Guid? ModelBackendId);
-
+/// <summary>
+/// Command for set task phase model.
+/// </summary>
 public record SetTaskPhaseModelCommand(SetTaskPhaseModelRequest Request) : ICommand<Result<TaskPhaseDto>>;
-
+/// <summary>
+/// Ensures each user has the built-in Default kind with understand, do, and check phases.
+/// </summary>
 public static class BuiltInTaskKind
 {
     public const string Name = "Default";
@@ -88,7 +116,9 @@ public static class BuiltInTaskKind
         return kind;
     }
 }
-
+/// <summary>
+/// Lists the user's task kinds. An empty user id fails.
+/// </summary>
 public sealed class ListTaskKindsHandler : ICommandHandler<ListTaskKindsCommand, Result<IList<TaskKindDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -104,7 +134,9 @@ public sealed class ListTaskKindsHandler : ICommandHandler<ListTaskKindsCommand,
         return Result.Ok(await TaskKindReader.ListAsync(db, command.UserId, ct));
     }
 }
-
+/// <summary>
+/// Creates or updates a task kind. It needs a name and at least one titled phase. The built-in kind is updated in place, not replaced.
+/// </summary>
 public sealed class SaveTaskKindHandler : ICommandHandler<SaveTaskKindCommand, Result<TaskKindDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -172,7 +204,9 @@ public sealed class SaveTaskKindHandler : ICommandHandler<SaveTaskKindCommand, R
         return Result.Ok(list.First(k => k.Id == kind.Id));
     }
 }
-
+/// <summary>
+/// Deletes a task kind. The built-in kind cannot be deleted.
+/// </summary>
 public sealed class DeleteTaskKindHandler : ICommandHandler<DeleteTaskKindCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -194,7 +228,9 @@ public sealed class DeleteTaskKindHandler : ICommandHandler<DeleteTaskKindComman
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Restores the built-in kind's phases for the user.
+/// </summary>
 public sealed class ResetBuiltInTaskKindHandler : ICommandHandler<ResetBuiltInTaskKindCommand, Result<TaskKindDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -220,7 +256,9 @@ public sealed class ResetBuiltInTaskKindHandler : ICommandHandler<ResetBuiltInTa
         return Result.Ok(list.First(k => k.Id == kind.Id));
     }
 }
-
+/// <summary>
+/// Lists phases copied onto a task.
+/// </summary>
 public sealed class ListTaskPhasesHandler : ICommandHandler<ListTaskPhasesCommand, Result<IList<TaskPhaseDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -234,7 +272,9 @@ public sealed class ListTaskPhasesHandler : ICommandHandler<ListTaskPhasesComman
         return Result.Ok<IList<TaskPhaseDto>>(phases.Select(TaskKindReader.ToDto).ToList());
     }
 }
-
+/// <summary>
+/// Sets the model backend on one task phase.
+/// </summary>
 public sealed class SetTaskPhaseModelHandler : ICommandHandler<SetTaskPhaseModelCommand, Result<TaskPhaseDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -273,7 +313,9 @@ internal static class TaskKindReader
     public static TaskPhaseDto ToDto(TaskPhase phase) =>
         new(phase.Id, phase.TaskId, phase.SortOrder, phase.Key, phase.Title, phase.Instruction, phase.FanOut, phase.ModelBackendId, phase.Status);
 }
-
+/// <summary>
+/// Copies a task kind's phases onto a task.
+/// </summary>
 public static class TaskKindCopy
 {
     public static async Task CopyOntoTaskAsync(IBeaconDb db, TaskItem task, Guid userId, Guid? kindId, CancellationToken ct)

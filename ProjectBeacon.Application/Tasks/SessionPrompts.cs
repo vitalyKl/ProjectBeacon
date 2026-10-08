@@ -10,6 +10,7 @@ using Domain.Enums;
 /// </summary>
 public static class SessionPrompts
 {
+    /// <summary>Planner prompt for the task text. The planner splits work and does not implement it.</summary>
     public static string Planner(TaskItem task, string? projectName)
     {
         var sb = new StringBuilder();
@@ -28,6 +29,7 @@ public static class SessionPrompts
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>Actor prompt limited to this subtask's instructions, tools, and paths. The surrounding task is omitted.</summary>
     public static string Actor(Subtask subtask)
     {
         var sb = new StringBuilder();
@@ -48,6 +50,7 @@ public static class SessionPrompts
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>Review prompt with the task text and subtask artifacts only. Planning and actor transcripts are omitted.</summary>
     public static string Review(TaskItem task, IReadOnlyList<Subtask> subtasks)
     {
         var sb = new StringBuilder();

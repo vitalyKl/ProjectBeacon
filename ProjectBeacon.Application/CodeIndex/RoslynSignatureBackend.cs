@@ -3,7 +3,9 @@ namespace ProjectBeacon.Application.CodeIndex;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-
+/// <summary>
+/// Extracts C# signatures with Roslyn. Signature text is capped at 200 characters.
+/// </summary>
 public sealed class RoslynSignatureBackend : ISignatureBackend
 {
     private const int MaxSignatureLength = 200;

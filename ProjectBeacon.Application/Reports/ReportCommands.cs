@@ -6,16 +6,22 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Open and closed milestone counts stored in a report snapshot.
+/// </summary>
 public record ReportMilestoneCounts(int Open, int Closed);
-
+/// <summary>
+/// Board counts at the time a report was generated, including ready and in-flight task ids.
+/// </summary>
 public record ReportSnapshot(
     DateTime GeneratedAt,
     ReportMilestoneCounts Milestones,
     IReadOnlyDictionary<string, int> Tasks,
     IReadOnlyList<Guid> ReadyTaskIds,
     IReadOnlyList<Guid> InFlightTaskIds);
-
+/// <summary>
+/// A saved report: markdown, the snapshot JSON, who created it, and when.
+/// </summary>
 public record ReportDto(
     Guid Id,
     string Title,
@@ -25,15 +31,25 @@ public record ReportDto(
     string CreatedById,
     DateTime CreatedAt,
     Guid ProjectId);
-
+/// <summary>
+/// Project and the creator type and id to stamp on a new board snapshot.
+/// </summary>
 public record GenerateReportRequest(Guid ProjectId, string CreatedByType, string CreatedById);
-
+/// <summary>
+/// Command for generate report.
+/// </summary>
 public record GenerateReportCommand(GenerateReportRequest Request) : ICommand<Result<ReportDto>>;
-
+/// <summary>
+/// Fields for list reports.
+/// </summary>
 public record ListReportsRequest(Guid ProjectId);
-
+/// <summary>
+/// Fields for get report.
+/// </summary>
 public record GetReportRequest(Guid ProjectId, Guid ReportId);
-
+/// <summary>
+/// Stores a board snapshot report for a project.
+/// </summary>
 public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Result<ReportDto>>
 {
     private static readonly JsonSerializerOptions Json = new()
@@ -139,7 +155,9 @@ public class GenerateReportHandler : ICommandHandler<GenerateReportCommand, Resu
         new(report.Id, report.Title, report.BodyMarkdown, report.SnapshotJson,
             report.CreatedByType, report.CreatedById, report.CreatedAt, report.ProjectId);
 }
-
+/// <summary>
+/// Lists reports for a project.
+/// </summary>
 public class ListReportsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -159,7 +177,9 @@ public class ListReportsHandler
         return Result.Ok((IList<ReportDto>)items);
     }
 }
-
+/// <summary>
+/// Loads one report.
+/// </summary>
 public class GetReportHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

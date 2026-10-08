@@ -4,7 +4,9 @@ using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-
+/// <summary>
+/// Sends mail through SMTP. When host or from is unset, logs the message and does not send.
+/// </summary>
 public sealed class SmtpEmailSender : IEmailSender
 {
     private readonly ILogger<SmtpEmailSender> _log;

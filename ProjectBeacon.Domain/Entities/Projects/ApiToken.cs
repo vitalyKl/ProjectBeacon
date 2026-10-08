@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using Common;
 using Enums;
 
+/// <summary>
+/// Project API token. Only <see cref="TokenHash"/> and <see cref="TokenPrefix"/> are stored.
+/// The raw <c>bcn_</c> value is shown once and is not persisted.
+/// </summary>
 public class ApiToken : Entity, IProjectScoped
 {
     public ApiToken() { }
@@ -40,6 +44,7 @@ public class ApiToken : Entity, IProjectScoped
 
     public bool IsExpired => ExpiresAt.HasValue && ExpiresAt.Value < DateTime.UtcNow;
 
+    /// <summary>True when every flag in <paramref name="capability"/> is set.</summary>
     public bool HasCapability(ApiTokenCapability capability)
     {
         return (Capabilities & capability) == capability;

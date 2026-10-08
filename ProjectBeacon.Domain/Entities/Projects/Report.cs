@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>Saved board snapshot for a project. Markdown body plus the JSON it was rendered from.</summary>
 public class Report : Entity, IProjectScoped
 {
     public Report() { }

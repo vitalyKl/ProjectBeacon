@@ -43,5 +43,7 @@ static bool ShouldMigrateOnStart(IHostEnvironment env)
 static bool IsTruthy(string? value) =>
     string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
     || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
-
+/// <summary>
+/// Web host entry. In Development it starts beacon-postgres. It migrates unless the environment is Production or BEACON_MIGRATE_ON_START is false. BEACON_MIGRATE_THEN_EXIT migrates and returns.
+/// </summary>
 public partial class Program { }

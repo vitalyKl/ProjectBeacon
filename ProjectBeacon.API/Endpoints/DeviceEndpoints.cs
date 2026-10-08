@@ -8,8 +8,13 @@ using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 
+/// <summary>Workstation enroll, heartbeat, command queue, and per-device project roots.</summary>
 public static class DeviceEndpoints
 {
+    /// <summary>
+    /// <c>RequireDevice</c> covers heartbeat, claim, complete, llama-swap config, and OpenCode connections.
+    /// Create, list, revoke, enqueue, and runtime attach are <c>RequireHuman</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapDeviceEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/devices", CreateDevice).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -27,11 +32,25 @@ public static class DeviceEndpoints
         app.MapGet("/v1/devices/me/opencode-connections", GetOpenCodeConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
-
+    /// <summary>
+    /// Body for enrolling a device: name and fingerprint.
+    /// </summary>
     public record CreateDeviceBody(string Name, string Fingerprint);
+    /// <summary>
+    /// Body for a device heartbeat: optional probe JSON and workstation JSON.
+    /// </summary>
     public record HeartbeatBody(string? ProbeJson, string? WorkstationJson);
+    /// <summary>
+    /// Body for queueing a device command. Kind is a WorkstationCommandKind name.
+    /// </summary>
     public record EnqueueBody(WorkstationCommandKind Kind, string? PayloadJson, Guid? ProjectId);
+    /// <summary>
+    /// Body for finishing a device command: success, optional result JSON, and optional error.
+    /// </summary>
     public record CompleteBody(bool Success, string? ResultJson, string? Error);
+    /// <summary>
+    /// Body for binding a project to a device and a local root.
+    /// </summary>
     public record AttachRuntimeBody(Guid DeviceId, string LocalRoot);
 
     private static async Task<IResult> CreateDevice(

@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for pipeline role bindings. Project and role together are unique.
+/// </summary>
 public class RoleBindingConfiguration : IEntityTypeConfiguration<RoleBinding>
 {
     public void Configure(EntityTypeBuilder<RoleBinding> entity)

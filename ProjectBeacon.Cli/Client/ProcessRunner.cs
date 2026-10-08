@@ -1,7 +1,9 @@
 using System.Diagnostics;
 
 namespace ProjectBeacon.Cli.Client;
-
+/// <summary>
+/// Why a process was not started: not started, the start call threw, or draining output failed.
+/// </summary>
 public enum ProcessLaunchError
 {
     None,
@@ -9,9 +11,13 @@ public enum ProcessLaunchError
     StartThrew,
     Drain
 }
-
+/// <summary>
+/// A started process, or the launch error and exception message. Process is null when start failed.
+/// </summary>
 public readonly record struct LaunchedProcess(Process? Process, ProcessLaunchError Error, string? ExceptionMessage);
-
+/// <summary>
+/// Starts a process without letting a start failure escape. RunAsync captures stdout, stderr, and timeout.
+/// </summary>
 public static class ProcessRunner
 {
     public static LaunchedProcess TryStart(ProcessStartInfo info)

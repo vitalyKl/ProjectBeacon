@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Infrastructure.LlamaSwap;
-
+/// <summary>
+/// Bin path, port, config path, and project id for the in-process llama-swap supervisor. Port defaults to 8080.
+/// </summary>
 public sealed class LlamaSwapOptions
 {
     public string? BinPath { get; init; }

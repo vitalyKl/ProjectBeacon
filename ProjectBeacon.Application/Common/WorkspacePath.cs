@@ -1,12 +1,22 @@
 namespace ProjectBeacon.Application.Common;
 
+/// <summary>
+/// Validates paths against a project root without using the host OS as the authority for rootedness.
+/// A rooted path, a <c>..</c> segment, or a reparse point below the root is an escape.
+/// </summary>
 public static class WorkspacePath
 {
+    /// <summary>Failure text when a rooted path is not allowed.</summary>
     public const string RelativePathRequired = "path must be relative to the project folder.";
+    /// <summary>Failure text when a path contains a <c>..</c> segment.</summary>
     public const string ParentSegmentNotAllowed = "path must not contain '..' segments.";
 
     // OS-independent rootedness: the control plane (Linux) must reject Windows absolute
     // paths even when it itself runs on Linux, so this never uses System.IO.Path.
+    /// <summary>
+    /// True for a portable root: a leading slash, a UNC prefix, or a drive root such as <c>C:</c> or <c>C:\</c>.
+    /// A drive-relative path such as <c>C:x</c> is not rooted.
+    /// </summary>
     public static bool IsRootedPortable(string path)
     {
         if (string.IsNullOrEmpty(path))
@@ -31,6 +41,7 @@ public static class WorkspacePath
 
     // Both separators are significant for validation so traversal is rejected identically
     // on Linux and Windows, even where the other separator is a legal filename character.
+    /// <summary>True when any <c>/</c> or <c>\</c> segment is <c>..</c>.</summary>
     public static bool HasParentSegment(string path)
     {
         foreach (var segment in path.Split('/', '\\'))
@@ -42,6 +53,10 @@ public static class WorkspacePath
         return false;
     }
 
+    /// <summary>
+    /// Resolves <paramref name="path"/> under <paramref name="root"/>.
+    /// When <paramref name="relativeOnly"/> is set, a rooted path fails with <see cref="RelativePathRequired"/>; otherwise an absolute path must stay inside the root.
+    /// </summary>
     public static Result<string> ResolveInRoot(string root, string? path, bool relativeOnly)
     {
         if (string.IsNullOrWhiteSpace(root))
@@ -72,6 +87,10 @@ public static class WorkspacePath
         return ResolveInsideRoot(root, path);
     }
 
+    /// <summary>
+    /// Resolves a relative path under <paramref name="root"/>.
+    /// Fails when the path is rooted, contains <c>..</c>, leaves the root, or crosses a reparse point below the root.
+    /// </summary>
     public static Result<string> ResolveInsideRoot(string root, string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath))
@@ -104,6 +123,9 @@ public static class WorkspacePath
         return Result.Ok(combined);
     }
 
+    /// <summary>
+    /// Accepts an absolute path only when its full path stays inside <paramref name="root"/> and no reparse point sits below that root.
+    /// </summary>
     public static Result<string> ValidateAbsoluteInsideRoot(string root, string absolutePath)
     {
         if (string.IsNullOrWhiteSpace(absolutePath))

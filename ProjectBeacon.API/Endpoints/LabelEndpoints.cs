@@ -6,8 +6,14 @@ using ProjectBeacon.API.Auth;
 using Application.Projects;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+/// Label HTTP endpoints.
+/// </summary>
 public static class LabelEndpoints
 {
+    /// <summary>
+    /// Maps <c>GET /v1/projects/{projectId:guid}/labels</c>, <c>GET /v1/projects/{projectId:guid}/labels/match</c>, and <c>POST /v1/projects/{projectId:guid}/labels/{labelId:guid}/paths</c> with <c>RequireHuman</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapLabelEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -40,5 +46,6 @@ public static class LabelEndpoints
             : result.FromResult(404);
     }
 
+    /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/labels/{labelId:guid}/paths</c>.</summary>
     public record AddLabelPathBody(string Path);
 }

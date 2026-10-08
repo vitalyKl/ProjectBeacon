@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Creates or updates a context section and reads it back.
+/// </summary>
 public class UpsertContextNodeHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

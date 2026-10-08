@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum WorkstationCommandStatus
+/// <summary>Queue state of a command waiting on a device.</summary>
+    public enum WorkstationCommandStatus
 {
     Pending,
     Running,

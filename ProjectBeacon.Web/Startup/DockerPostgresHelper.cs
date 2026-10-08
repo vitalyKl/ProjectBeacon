@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Web.Startup;
 
 using Microsoft.Extensions.Logging;
-
+/// <summary>
+/// Local Postgres the Development host may start: postgres:16-bookworm, container beacon-postgres, volume pgdata, port 5432.
+/// </summary>
 public class DockerPostgresConfig
 {
     public string? PostgresPassword { get; set; }
@@ -10,7 +12,9 @@ public class DockerPostgresConfig
     public string Image { get; set; } = "postgres:16-bookworm";
     public string Volume { get; set; } = "pgdata";
 }
-
+/// <summary>
+/// Starts that container when it is not already running. Uses POSTGRES_PASSWORD, or beacon when the password is empty.
+/// </summary>
 public class DockerPostgresHelper
 {
     private readonly ILogger<DockerPostgresHelper> _logger;

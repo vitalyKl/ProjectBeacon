@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-
+/// <summary>
+/// First-run wizard and the live dashboard. Keys are S settings, P probe, R reload, U unload, A autostart, L log, O open the web UI, Q quit.
+/// </summary>
 public static class ClientTui
 {
     public static bool IsInteractive =>

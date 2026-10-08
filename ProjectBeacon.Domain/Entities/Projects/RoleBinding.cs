@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>Which user-owned model backend a project's planner, actor, or review role uses.</summary>
 public class RoleBinding : Entity, IProjectScoped
 {
     public RoleBinding() { }

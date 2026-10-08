@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for task kinds. Indexed by user.
+/// </summary>
 public class TaskKindConfiguration : IEntityTypeConfiguration<TaskKind>
 {
     public void Configure(EntityTypeBuilder<TaskKind> entity)

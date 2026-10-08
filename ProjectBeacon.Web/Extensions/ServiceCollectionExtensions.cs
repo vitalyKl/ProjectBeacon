@@ -22,7 +22,9 @@ using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;
 
 namespace ProjectBeacon.Web.Extensions;
-
+/// <summary>
+/// Registers the Web host: database, JWT, rate limits, MudBlazor, and the supported cultures en, ru, de, ja, and zh.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
     private static readonly string[] SupportedCultures = ["en", "ru", "de", "ja", "zh"];

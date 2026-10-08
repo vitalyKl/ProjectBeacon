@@ -4,13 +4,21 @@ using Application.Agents;
 using Application.Common;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// User whose selected chat backend should be returned.
+/// </summary>
 public record GetChatModelCommand(Guid UserId) : ICommand<Result<Guid?>>;
-
+/// <summary>
+/// User and the chat backend to select. BackendId null clears the selection.
+/// </summary>
 public record SetChatModelRequest(Guid UserId, Guid? BackendId);
-
+/// <summary>
+/// Command for set chat model.
+/// </summary>
 public record SetChatModelCommand(SetChatModelRequest Request) : ICommand<Result<Guid?>>;
-
+/// <summary>
+/// Returns the user's selected chat backend id. An unknown user is an unresolved account.
+/// </summary>
 public sealed class GetChatModelHandler : ICommandHandler<GetChatModelCommand, Result<Guid?>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -26,7 +34,9 @@ public sealed class GetChatModelHandler : ICommandHandler<GetChatModelCommand, R
             : Result.Ok(user.ChatModelBackendId);
     }
 }
-
+/// <summary>
+/// Sets or clears the user's chat backend. The backend must belong to that user.
+/// </summary>
 public sealed class SetChatModelHandler : ICommandHandler<SetChatModelCommand, Result<Guid?>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -50,7 +60,9 @@ public sealed class SetChatModelHandler : ICommandHandler<SetChatModelCommand, R
         return Result.Ok(user.ChatModelBackendId);
     }
 }
-
+/// <summary>
+/// Uses the requested model string when it is set. Otherwise maps the user's chat backend to an OpenCode model id.
+/// </summary>
 public static class ChatModelSelection
 {
     public static async Task<string?> ResolveAsync(IBeaconDb db, Guid userId, string? requested, CancellationToken ct)

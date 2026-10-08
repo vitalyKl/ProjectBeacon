@@ -5,7 +5,9 @@ using Application.Devices;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Project, device, user, run mode, and the backend ids to write into OpenCode and the role bindings.
+/// </summary>
 public record ApplyAgentConfigRequest(
     Guid ProjectId,
     Guid DeviceId,
@@ -15,9 +17,13 @@ public record ApplyAgentConfigRequest(
     Guid? PlannerBackendId,
     Guid? ActorBackendId,
     Guid? ReviewBackendId);
-
+/// <summary>
+/// Command for apply agent config.
+/// </summary>
 public record ApplyAgentConfigCommand(ApplyAgentConfigRequest Request) : ICommand<Result<WorkstationCommandDto>>;
-
+/// <summary>
+/// Binds the selected role models and enqueues an OpenCode apply command on the project device. Fails when the project, runtime, or a backend is missing.
+/// </summary>
 public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

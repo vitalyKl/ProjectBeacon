@@ -2,7 +2,9 @@ namespace ProjectBeacon.Application.Identity;
 
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Picks the user's current project and org. An admin may use a preferred project id that ignores membership.
+/// </summary>
 public static class CurrentProjectLookup
 {
     public static async Task<(Guid? ProjectId, Guid? OrgId)> ForUserAsync(

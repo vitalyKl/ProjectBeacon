@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Evals;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// A project-scoped evaluation of a task. <see cref="Passed"/> stays unset until <see cref="Complete"/>, which sets it only when the check exit code is 0.
+/// Check output longer than 4000 characters is truncated.
+/// </summary>
 public sealed class EvalRun : Entity, IProjectScoped
 {
     public EvalRun() { }
@@ -50,6 +54,9 @@ public sealed class EvalRun : Entity, IProjectScoped
         CheckCommand = checkCommand.Trim();
     }
 
+    /// <summary>
+    /// Finishes the run. <see cref="Passed"/> is true only when <paramref name="checkExitCode"/> is 0. Check output longer than 4000 characters is truncated.
+    /// </summary>
     public void Complete(int promptTokens, int completionTokens, int turnCount, int? checkExitCode, string? transcriptRef = null, string? checkOutput = null)
     {
         PromptTokens = promptTokens;

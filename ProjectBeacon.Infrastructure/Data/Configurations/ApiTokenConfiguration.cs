@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for API tokens. TokenHash is unique.
+/// </summary>
 public class ApiTokenConfiguration : IEntityTypeConfiguration<ApiToken>
 {
     public void Configure(EntityTypeBuilder<ApiToken> entity)

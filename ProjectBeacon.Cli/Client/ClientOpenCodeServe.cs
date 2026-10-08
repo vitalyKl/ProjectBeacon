@@ -3,9 +3,13 @@ namespace ProjectBeacon.Cli.Client;
 using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
-
+/// <summary>
+/// Token counts and cost reported by one OpenCode session.
+/// </summary>
 public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
-
+/// <summary>
+/// Local OpenCode server used by chat and eval. Creating a session fails when OpenCode does not return an id.
+/// </summary>
 public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
@@ -416,11 +420,15 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         _http.Dispose();
     }
 }
-
+/// <summary>
+/// Whether the local OpenCode process is running and healthy.
+/// </summary>
 public readonly record struct OpenCodeServeStatus(bool Available, bool Healthy, string? Version, string? Error)
 {
     public static OpenCodeServeStatus Ok(string? version) => new(true, true, version, null);
     public static OpenCodeServeStatus Missing(string error) => new(false, false, null, error);
 }
-
+/// <summary>
+/// One chat part read back from OpenCode: role, kind, body, and optional external id.
+/// </summary>
 public readonly record struct OpenCodeMessagePart(string Role, string Kind, string Body, string? ExternalId);

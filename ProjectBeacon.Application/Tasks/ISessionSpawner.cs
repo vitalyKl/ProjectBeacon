@@ -7,10 +7,13 @@ using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>Model and launch spec chosen for a pipeline session. Ids are null when no backend is bound.</summary>
 public sealed record SpawnedSession(Guid? ModelBackendId, string? ModelName, string? LaunchSpec);
 
+/// <summary>Selects a model backend and launch spec for a pipeline role on a task.</summary>
 public interface ISessionSpawner
 {
+    /// <summary>Resolves the backend and launch spec for <paramref name="role"/> on <paramref name="taskId"/>.</summary>
     Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct);
 }
 
@@ -21,6 +24,10 @@ public sealed class ManualSessionSpawner : ISessionSpawner
 
     public ManualSessionSpawner(ILlamaSwapCatalog catalog) => _catalog = catalog;
 
+    /// <summary>
+    /// When the task has phases, planner uses <c>understand</c>, review uses <c>check</c>, and other roles use <c>do</c>, falling back along the phase list.
+    /// Otherwise the project role binding is used. A missing phase model or binding returns null ids.
+    /// </summary>
     public async Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
     {
         var phases = await db.TaskPhases.Where(p => p.TaskId == taskId).OrderBy(p => p.SortOrder).ToListAsync(ct);

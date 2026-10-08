@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
+/// <summary>
+/// Every 30 minutes, unscoped, deactivates expired sessions and removes or expires API tokens, password-reset tokens, and pending invites.
+/// </summary>
 public sealed class ExpiredRecordsCleanupService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;

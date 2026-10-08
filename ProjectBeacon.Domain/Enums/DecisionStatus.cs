@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum DecisionStatus
+/// <summary>A decision is proposed, then accepted. Accepted decisions are superseded or deprecated.</summary>
+    public enum DecisionStatus
 {
     Proposed = 0,
     Accepted = 1,

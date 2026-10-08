@@ -9,8 +9,15 @@ using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using FinishWorkReview = ProjectBeacon.Application.Tasks.FinishWorkReview;
 
+/// <summary>
+/// Work-completion HTTP endpoints.
+/// </summary>
 public static class WorkEndpoints
 {
+    /// <summary>
+    /// Maps <c>POST /v1/work/finish_work</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
+    /// The actor passed to the handler is <c>HttpContext.GetActor().UserId</c>, not a body field. <c>done</c> still depends on the handler requiring <c>reviewRunId</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapWorkEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/work/finish_work", FinishWork).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -46,8 +53,12 @@ public static class WorkEndpoints
             : result.FromResult();
     }
 
+    /// <summary>Optional review counts on <c>POST /v1/work/finish_work</c>. Not proof that the work is done.</summary>
     public record FinishWorkReviewDto(bool ReviewerRun, int RegressionsFound, int RegressionsFixed);
 
+    /// <summary>
+    /// JSON body for <c>POST /v1/work/finish_work</c>. Has no caller id; the handler actor is <c>HttpContext.GetActor().UserId</c>.
+    /// </summary>
     public record FinishWorkRequest(
         string TaskId,
         string Result,

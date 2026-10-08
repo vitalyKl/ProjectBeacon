@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>One path prefix belonging to a <see cref="Label"/>.</summary>
 public class LabelPath : Entity, IProjectScoped
 {
     public LabelPath() { }

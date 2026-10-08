@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.CodeIndex;
-
+/// <summary>
+/// Indexes languages by extension. A duplicate extension throws.
+/// </summary>
 public sealed class LanguageRegistry : ILanguageRegistry
 {
     private readonly Dictionary<string, LanguageDefinition> _byExtension;

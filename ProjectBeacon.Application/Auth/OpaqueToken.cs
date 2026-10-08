@@ -2,7 +2,9 @@ namespace ProjectBeacon.Application.Auth;
 
 using System.Security.Cryptography;
 using System.Text;
-
+/// <summary>
+/// Mints bci_ and bcr_ tokens from 24 random bytes and stores SHA-256 as Base64.
+/// </summary>
 public static class OpaqueToken
 {
     public const string InvitePrefix = "bci_";

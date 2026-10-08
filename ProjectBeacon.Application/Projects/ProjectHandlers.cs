@@ -6,7 +6,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Creates a project in an org and seeds the starter labels. The caller becomes owner.
+/// </summary>
 public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -53,7 +55,9 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
             db.Labels.Add(Label.Create(name, color, projectId, prefix));
     }
 }
-
+/// <summary>
+/// Renames a project. Requires project administer. An empty name fails.
+/// </summary>
 public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -94,7 +98,9 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
         new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 }
-
+/// <summary>
+/// Loads one project in the current tenant.
+/// </summary>
 public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -114,7 +120,9 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
         new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 }
-
+/// <summary>
+/// Lists projects in the current tenant, optionally for one org.
+/// </summary>
 public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<IList<ProjectDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -137,7 +145,9 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
         return Result.Ok((IList<ProjectDto>)projects);
     }
 }
-
+/// <summary>
+/// Deletes a project and its dependent rows. Requires project administer. A database conflict returns a failure instead of throwing.
+/// </summary>
 public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result<bool>>
 {
     private readonly IBeaconDbFactory _dbFactory;

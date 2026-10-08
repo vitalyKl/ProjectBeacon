@@ -1,9 +1,13 @@
 namespace ProjectBeacon.Application.Agents;
 
 using System.Text.Json.Nodes;
-
+/// <summary>
+/// Extra MCP server merged into the OpenCode config: name, type, command or URL, and whether it is enabled.
+/// </summary>
 public record CustomMcpServer(string Name, string Type, string? Command, string? Url, bool Enabled = true);
-
+/// <summary>
+/// Builds the OpenCode mcp block: a local beacon server, plus optional Context7, Serena, and custom servers.
+/// </summary>
 public static class McpCatalog
 {
     public static JsonObject Build(

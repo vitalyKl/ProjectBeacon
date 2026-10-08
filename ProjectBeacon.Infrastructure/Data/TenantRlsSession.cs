@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Infrastructure.Data;
 
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Sets the same Postgres tenant settings with set_config. No-ops when the provider is not Npgsql.
+/// </summary>
 public static class TenantRlsSession
 {
     public static async Task ApplyAsync(BeaconDbContext db, Guid? projectId, Guid? orgId, bool unscoped)

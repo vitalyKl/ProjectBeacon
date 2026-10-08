@@ -2,6 +2,10 @@ namespace ProjectBeacon.Application.Common;
 
 using SharpToken;
 
+/// <summary>
+/// Token counts for brief budgeting. <see cref="CountTokens"/> and <see cref="EstimateTokens"/> use <c>cl100k_base</c> (<see cref="RealId"/>).
+/// <see cref="EstimateHeuristic"/> counts ASCII characters divided by four, plus one per other character (<see cref="HeuristicId"/>).
+/// </summary>
 public static class Tokenizer
 {
     public const string HeuristicId = "js_length_div_4";

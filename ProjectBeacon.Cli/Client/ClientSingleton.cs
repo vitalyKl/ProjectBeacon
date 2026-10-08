@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
-
+/// <summary>
+/// Named mutex Local\ProjectBeacon.Client. TryEnter fails when another client already holds it.
+/// </summary>
 public static class ClientSingleton
 {
     public const string MutexName = @"Local\ProjectBeacon.Client";

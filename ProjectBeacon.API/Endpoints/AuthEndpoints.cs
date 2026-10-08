@@ -13,8 +13,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
+/// <summary>
+/// Authentication, session, and invite HTTP endpoints.
+/// </summary>
 public static class AuthEndpoints
 {
+    /// <summary>
+    /// Maps <c>AllowAnonymous</c> routes <c>POST /v1/auth/bootstrap</c>, <c>POST /v1/auth/recover-admin</c>, <c>POST /v1/auth/login</c>, <c>POST /v1/auth/register</c>, <c>POST /v1/auth/forgot-password</c>, <c>POST /v1/auth/reset-password</c>, <c>GET /v1/auth/options</c>, and <c>GET /v1/invites/{token}</c>.
+    /// Maps <c>RequireHuman</c> routes <c>POST /v1/auth/change-password</c>, <c>POST /v1/auth/logout</c>, <c>GET /v1/auth/me</c>, and <c>POST /v1/invites/{token}/accept</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/auth/bootstrap", Bootstrap).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
@@ -151,6 +158,7 @@ public static class AuthEndpoints
         return result.FromResult(status);
     }
 
+    /// <summary>JSON body for <c>POST /v1/auth/change-password</c>. The user id is <c>HttpContext.GetActor().UserId</c>, not a field.</summary>
     public record ChangePasswordBody(string CurrentPassword, string NewPassword);
 
     private static async Task<IResult> Logout(BeaconDbContext db, HttpContext ctx)

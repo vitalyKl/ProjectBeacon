@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Creates a task. Label and milestone, when set, must belong to the project.
+/// </summary>
 public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -73,7 +75,9 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
             [],
             []);
 }
-
+/// <summary>
+/// Updates a task title, description, priority, type, label, or milestone.
+/// </summary>
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -131,7 +135,9 @@ public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskI
             [],
             []);
 }
-
+/// <summary>
+/// Deletes a task.
+/// </summary>
 public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -151,7 +157,9 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Sets the in-progress sub-stage. The domain rejects the change unless the task is InProgress.
+/// </summary>
 public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -197,7 +205,9 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
             [],
             []);
 }
-
+/// <summary>
+/// Adds a comment on a task as the authenticated user.
+/// </summary>
 public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskCommentDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -222,7 +232,9 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
     private static TaskCommentDto MapToDto(TaskComment comment) =>
         new(comment.Id, comment.Content, comment.UserId, comment.CreatedAt, comment.UpdatedAt);
 }
-
+/// <summary>
+/// Replaces the tasks this task depends on. A task cannot depend on itself.
+/// </summary>
 public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -286,7 +298,9 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
             [],
             task.Dependencies.Select(d => d.DependentTaskId).ToList());
 }
-
+/// <summary>
+/// Saves review notes. The domain rejects an empty note.
+/// </summary>
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -332,7 +346,9 @@ public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Resu
             [],
             []);
 }
-
+/// <summary>
+/// Loads one task with comments and dependencies.
+/// </summary>
 public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -372,7 +388,9 @@ public class GetTaskHandler : ICommandHandler<GetTaskCommand, Result<TaskItemDto
             task.Dependencies.Select(d => d.DependentTaskId).ToList()));
     }
 }
-
+/// <summary>
+/// Lists tasks on a project. An optional status filter uses Todo, InProgress, or Done.
+/// </summary>
 public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, Result<IList<TaskItemDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -398,7 +416,9 @@ public class ListProjectTasksHandler : ICommandHandler<ListProjectTasksCommand, 
         return Result.Ok((IList<TaskItemDto>)result.ToList());
     }
 }
-
+/// <summary>
+/// Lists a project's tasks in one status. An unknown status returns an empty list.
+/// </summary>
 public class ListTasksByStatusHandler : ICommandHandler<ListTasksByStatusCommand, Result<IList<TaskItemDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;

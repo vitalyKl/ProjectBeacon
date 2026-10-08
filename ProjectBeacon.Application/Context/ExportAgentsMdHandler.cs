@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Renders the compiled brief as AGENTS.md markdown.
+/// </summary>
 public class ExportAgentsMdHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

@@ -11,7 +11,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
+/// <summary>
+/// Background service that starts and reloads llama-swap and stops restarting after five crashes in sixty seconds. The hosts do not register it. Tests construct it. The workstation client runs models.
+/// </summary>
 public sealed class LlamaSwapSupervisor : BackgroundService, ILlamaSwapProxy
 {
     private static readonly TimeSpan TickPeriod = TimeSpan.FromSeconds(5);

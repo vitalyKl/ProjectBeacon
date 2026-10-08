@@ -1,7 +1,9 @@
 using Microsoft.JSInterop;
 
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// Circuit theme state. Reads the beacon-theme cookie. Dark is the default. System follows the browser.
+/// </summary>
 public sealed class BeaconThemeState
 {
     private readonly IJSRuntime _js;

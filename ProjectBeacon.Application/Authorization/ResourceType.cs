@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Authorization;
 
+/// <summary>Resource an <see cref="AuthAction"/> is checked against.</summary>
 public enum ResourceType
 {
     Project,

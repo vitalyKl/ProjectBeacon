@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Devices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for device commands. Indexed by device, status, and creation time.
+/// </summary>
 public class WorkstationCommandConfiguration : IEntityTypeConfiguration<WorkstationCommand>
 {
     public void Configure(EntityTypeBuilder<WorkstationCommand> entity)

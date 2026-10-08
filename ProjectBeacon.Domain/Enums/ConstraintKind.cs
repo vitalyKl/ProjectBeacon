@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum ConstraintKind
+/// <summary>Rule class stored on a project constraint. Wire values are these names.</summary>
+    public enum ConstraintKind
 {
     Must = 0,
     MustNot = 1,

@@ -15,8 +15,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
+/// <summary>
+/// Project, membership, invite, and API-token HTTP endpoints.
+/// </summary>
 public static class ProjectEndpoints
 {
+    /// <summary>Maps project, member, invite, and token routes. Every route requires a human caller.</summary>
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -214,5 +218,6 @@ public static class ProjectEndpoints
             : result.FromResult(404);
     }
 
+    /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/invites</c>.</summary>
     public record CreateInviteBody(string Email, MemberRole Role);
 }

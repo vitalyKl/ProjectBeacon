@@ -11,7 +11,9 @@ using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
-
+/// <summary>
+/// Enrolls a device and returns the raw token once. Name and fingerprint are required. Repeating a fingerprint rotates the token.
+/// </summary>
 public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<DaemonDeviceDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -69,7 +71,9 @@ public class CreateDeviceHandler : ICommandHandler<CreateDeviceCommand, Result<D
             device.LastHeartbeatAt, device.IsOnline(utcNow), device.ProbeJson, device.WorkstationJson,
             device.RevokedAt, device.CreatedAt, device.DesiredRevision, device.AppliedRevision);
 }
-
+/// <summary>
+/// Lists the user's devices and whether each is online.
+/// </summary>
 public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<IList<DaemonDeviceDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -88,7 +92,9 @@ public class ListDevicesHandler : ICommandHandler<ListDevicesCommand, Result<ILi
         return Result.Ok((IList<DaemonDeviceDto>)devices.Select(d => CreateDeviceHandler.MapDevice(d, null, now)).ToList());
     }
 }
-
+/// <summary>
+/// Revokes a device the user owns.
+/// </summary>
 public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -106,7 +112,9 @@ public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Records a device heartbeat. A revoked device fails.
+/// </summary>
 public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Result<DaemonDeviceDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -213,7 +221,9 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
             host.Gpu?.MemoryTotalBytes));
     }
 }
-
+/// <summary>
+/// Queues a command for an online device. Project commands need a runtime, and the payload is sandboxed.
+/// </summary>
 public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -278,7 +288,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         new(command.Id, command.DeviceId, command.ProjectId, command.RequestedByUserId, command.Kind, command.Status,
             command.PayloadJson, command.ResultJson, command.Error, command.CreatedAt, command.StartedAt, command.CompletedAt, localRoot);
 }
-
+/// <summary>
+/// Returns the next pending command for the device, or null when the queue is empty.
+/// </summary>
 public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, Result<WorkstationCommandDto?>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -331,7 +343,9 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
         return Result.Ok<WorkstationCommandDto?>(null);
     }
 }
-
+/// <summary>
+/// Marks a device command succeeded or failed.
+/// </summary>
 public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -476,7 +490,9 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
     }
 
 }
-
+/// <summary>
+/// Loads one command the user owns.
+/// </summary>
 public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -496,7 +512,9 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
         return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }
 }
-
+/// <summary>
+/// Lists recent commands for a device the user owns.
+/// </summary>
 public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<IList<WorkstationCommandDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -531,7 +549,9 @@ public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<I
         return Result.Ok((IList<WorkstationCommandDto>)mapped);
     }
 }
-
+/// <summary>
+/// Binds a project to a device and a local root. Root length is capped at 1000 characters.
+/// </summary>
 public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result<ProjectRuntimeDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -573,7 +593,9 @@ public class AttachRuntimeHandler : ICommandHandler<AttachRuntimeCommand, Result
         new(runtime.Id, runtime.ProjectId, runtime.DeviceId, device.Name, device.IsOnline(utcNow),
             runtime.LocalRoot, runtime.CreatedAt, runtime.UpdatedAt);
 }
-
+/// <summary>
+/// Lists project runtimes the user can see.
+/// </summary>
 public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<IList<ProjectRuntimeDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -606,7 +628,9 @@ public class ListRuntimesHandler : ICommandHandler<ListRuntimesCommand, Result<I
         return Result.Ok((IList<ProjectRuntimeDto>)dtos);
     }
 }
-
+/// <summary>
+/// Removes a project runtime.
+/// </summary>
 public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -629,7 +653,9 @@ public class DetachRuntimeHandler : ICommandHandler<DetachRuntimeCommand, Result
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Renders llama-swap YAML for the device from the user's backends.
+/// </summary>
 public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigCommand, Result<LlamaSwapConfigDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -658,7 +684,9 @@ public class GetLlamaSwapConfigHandler : ICommandHandler<GetLlamaSwapConfigComma
         return Result.Ok(new LlamaSwapConfigDto(_catalog.GenerateYaml(specs), _catalog.Port));
     }
 }
-
+/// <summary>
+/// Returns recent CPU, memory, and GPU samples reported by the user's devices.
+/// </summary>
 public class ListHostSamplesHandler : ICommandHandler<ListHostSamplesCommand, Result<IList<DeviceHostSampleDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;

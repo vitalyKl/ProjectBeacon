@@ -5,7 +5,9 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Serves llama-swap status, reload, and unload by reading device heartbeats and enqueueing device commands.
+/// </summary>
 public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
 {
     private readonly IBeaconDbFactory _dbFactory;

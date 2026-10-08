@@ -2,7 +2,9 @@ namespace ProjectBeacon.Application.Devices;
 
 using System.Security.Cryptography;
 using System.Text;
-
+/// <summary>
+/// Mints a bcd_ token, hashes it with SHA-256, and keeps an 8-character prefix for display.
+/// </summary>
 public static class DeviceToken
 {
     public const string Prefix = "bcd_";

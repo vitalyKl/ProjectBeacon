@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for review verdicts. Indexed by task and creation time.
+/// </summary>
 public class ReviewVerdictConfiguration : IEntityTypeConfiguration<ReviewVerdict>
 {
     public void Configure(EntityTypeBuilder<ReviewVerdict> entity)

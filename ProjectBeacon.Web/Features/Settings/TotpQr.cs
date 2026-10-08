@@ -1,7 +1,9 @@
 using QRCoder;
 
 namespace ProjectBeacon.Web.Features.Settings;
-
+/// <summary>
+/// Renders an otpauth payload as a PNG data URL for the authenticator setup screen.
+/// </summary>
 public static class TotpQr
 {
     public static string DataUrl(string payload)

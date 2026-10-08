@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for org members. Org and user together are unique.
+/// </summary>
 public class OrgMemberConfiguration : IEntityTypeConfiguration<OrgMember>
 {
     public void Configure(EntityTypeBuilder<OrgMember> entity)

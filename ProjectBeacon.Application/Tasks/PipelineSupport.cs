@@ -7,8 +7,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
-
+/// <summary>
+/// Maps pipeline entities to DTOs and loads pipeline state. Also compares actor ids in constant time for the privileged close path.
+/// </summary>
 public static class PipelineMappers
 {
     public static SubtaskDto ToDto(Subtask s) =>

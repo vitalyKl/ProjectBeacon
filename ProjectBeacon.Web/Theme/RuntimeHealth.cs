@@ -1,7 +1,9 @@
 using ProjectBeacon.Infrastructure.LlamaSwap;
 
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// Turns llama-swap status into Offline, Starting, Stopping, Busy, Degraded, Failed, or Ready.
+/// </summary>
 public static class RuntimeHealth
 {
     public static string From(LlamaSwapStatusDto? status)

@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.CodeIndex;
 
 using TreeSitter;
-
+/// <summary>
+/// Extracts signatures with Tree-sitter for languages other than the Roslyn path. Signature text is capped at 200 characters.
+/// </summary>
 public sealed class TreeSitterSignatureBackend : ISignatureBackend
 {
     private const int MaxSignatureLength = 200;

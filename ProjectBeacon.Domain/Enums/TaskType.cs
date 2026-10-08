@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum TaskType
+/// <summary>Kind of board task. Wire values are these names. Default on create is <see cref="Task"/>.</summary>
+    public enum TaskType
 {
     Feature,
     Bug,

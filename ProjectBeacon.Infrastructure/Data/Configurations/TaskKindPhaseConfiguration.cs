@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for task-kind phases. Indexed by kind and sort order.
+/// </summary>
 public class TaskKindPhaseConfiguration : IEntityTypeConfiguration<TaskKindPhase>
 {
     public void Configure(EntityTypeBuilder<TaskKindPhase> entity)

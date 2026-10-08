@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>One message or tool part in a <see cref="ChatSession"/>.</summary>
 public class ChatPart : Entity, IProjectScoped
 {
     public ChatPart() { }

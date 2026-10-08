@@ -9,7 +9,9 @@ using Application.Devices;
 using Application.Runtime;
 using Domain.Enums;
 using Infrastructure.LlamaSwap;
-
+/// <summary>
+/// Long-polls device commands and heartbeats the control plane. Dispatches only WorkstationCommandKind values. An unknown kind throws.
+/// </summary>
 public sealed class WorkstationDaemon : IAsyncDisposable
 {
     private readonly HttpClient _http;
@@ -545,7 +547,9 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         if (_ownsOpenCode)
             await _openCode.DisposeAsync();
     }
-
+    /// <summary>
+    /// JSON shape of one claimed device command: id, kind, payload, and the project local root.
+    /// </summary>
     public sealed class CommandWire
     {
         public Guid Id { get; set; }
@@ -553,7 +557,9 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         public string? PayloadJson { get; set; }
         public string? LocalRoot { get; set; }
     }
-
+    /// <summary>
+    /// YAML and port from GET /v1/devices/me/llamaswap-config.
+    /// </summary>
     public sealed class LlamaSwapConfigWire
     {
         public string? Yaml { get; set; }
@@ -571,7 +577,9 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 }
-
+/// <summary>
+/// Snapshot the TUI shows: connection, last heartbeat, last command, llama-swap, and host load.
+/// </summary>
 public sealed record DaemonStatus
 {
     public string Url { get; init; } = "";

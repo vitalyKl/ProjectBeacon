@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for label path prefixes. Label and path together are unique.
+/// </summary>
 public class LabelPathConfiguration : IEntityTypeConfiguration<LabelPath>
 {
     public void Configure(EntityTypeBuilder<LabelPath> entity)

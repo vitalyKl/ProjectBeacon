@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Context;
-
+/// <summary>
+/// Text written into the project so an agent prefers Beacon MCP tools and does not claim a tool is missing without calling it.
+/// </summary>
 public static class BeaconToolDiscipline
 {
     public const string RelativePath = ".opencode/instructions/beacon-tool-discipline.md";

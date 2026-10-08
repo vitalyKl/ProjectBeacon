@@ -2,6 +2,10 @@ namespace ProjectBeacon.Domain.Entities.Identity;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>
+/// Account. Stores a password hash, not the password. Five failed logins lock the account for 15 minutes.
+/// TOTP is stored as <see cref="TotpSecretCipher"/> and stays disabled until <see cref="ConfirmTotp"/>.
+/// </summary>
 public class User : Entity
 {
     public User() { }
@@ -36,6 +40,7 @@ public class User : Entity
         LockedUntil = null;
     }
 
+    /// <summary>Counts a failed login. At five failures, sets <see cref="LockedUntil"/> to 15 minutes from now.</summary>
     public void RecordFailedLogin()
     {
         FailedLoginAttempts++;

@@ -7,7 +7,9 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-
+/// <summary>
+/// Mints a project API token and returns the raw value once. The caller must be allowed to administer the project.
+/// </summary>
 public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Result<ApiTokenDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -76,7 +78,9 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
         return Convert.ToBase64String(bytes);
     }
 }
-
+/// <summary>
+/// Deletes a project API token. A token outside the caller's project is not found.
+/// </summary>
 public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -119,7 +123,9 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Loads one API token without the raw secret. Forbidden when the caller cannot administer the project.
+/// </summary>
 public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<ApiTokenDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -168,7 +174,9 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
             token.CreatedAt));
     }
 }
-
+/// <summary>
+/// Lists project API tokens. Forbidden when the caller cannot administer the project.
+/// </summary>
 public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result<IList<ApiTokenDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;

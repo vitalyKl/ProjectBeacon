@@ -4,6 +4,10 @@ using System.Text.Json;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// User-owned model launch spec. Not project-scoped.
+/// <see cref="Concurrent"/> places the backend in the llama-swap resident group. Invalid extra-flag JSON reads as empty.
+/// </summary>
 public class LocalModelBackend : Entity
 {
     public LocalModelBackend() { }

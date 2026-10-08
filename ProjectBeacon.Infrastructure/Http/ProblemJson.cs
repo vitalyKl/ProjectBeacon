@@ -3,7 +3,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 
 namespace ProjectBeacon.Infrastructure.Http;
-
+/// <summary>
+/// Writes an RFC 7807 problem+json body and a trace id.
+/// </summary>
 public static class ProblemJson
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

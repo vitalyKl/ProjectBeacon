@@ -8,7 +8,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-
+/// <summary>
+/// Resolves the caller's project and org, stores them on the tenant context, and applies both the EF filter and the Postgres RLS settings for the rest of the request.
+/// </summary>
 public sealed class TenantIsolationMiddleware
 {
     private readonly RequestDelegate _next;

@@ -7,8 +7,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
-
+/// <summary>
+/// Returns subtasks, sessions, and verdicts for a task.
+/// </summary>
 public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

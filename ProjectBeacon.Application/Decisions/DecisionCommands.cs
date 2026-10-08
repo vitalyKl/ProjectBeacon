@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// A decision, its status, and the decision that superseded it when one did.
+/// </summary>
 public record DecisionDto(
     Guid Id,
     string Title,
@@ -15,9 +17,13 @@ public record DecisionDto(
     DecisionStatus Status,
     Guid ProjectId,
     Guid? SupersededById = null);
-
+/// <summary>
+/// Project, title, context, body, and optional consequences for a proposed decision.
+/// </summary>
 public record CreateDecisionRequest(Guid ProjectId, string Title, string Context, string Body, string? Consequences);
-
+/// <summary>
+/// Records a proposed decision. Title and body are required.
+/// </summary>
 public class CreateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -44,7 +50,9 @@ public class CreateDecisionHandler
     private static DecisionDto Map(Decision d) =>
         new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
 }
-
+/// <summary>
+/// Lists decisions for the project.
+/// </summary>
 public class ListDecisionsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -62,7 +70,9 @@ public class ListDecisionsHandler
         return Result.Ok((IList<DecisionDto>)items);
     }
 }
-
+/// <summary>
+/// Accepts a proposed decision.
+/// </summary>
 public class AcceptDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -82,7 +92,9 @@ public class AcceptDecisionHandler
             decision.Consequences, decision.Status, decision.ProjectId, decision.SupersededById));
     }
 }
-
+/// <summary>
+/// Marks a decision deprecated.
+/// </summary>
 public class DeprecateDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -103,7 +115,9 @@ public class DeprecateDecisionHandler
     private static DecisionDto Map(Decision d) =>
         new(d.Id, d.Title, d.Context, d.DecisionBody, d.Consequences, d.Status, d.ProjectId, d.SupersededById);
 }
-
+/// <summary>
+/// Supersedes an accepted decision with a different one. The domain rejects a decision that is not accepted.
+/// </summary>
 public class SupersedeDecisionHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

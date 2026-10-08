@@ -7,8 +7,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
-
+/// <summary>
+/// Adds a subtask. Instructions are required, and the task pipeline must already be started.
+/// </summary>
 public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result<SubtaskDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -55,7 +56,9 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
         return Result.Ok(PipelineMappers.ToDto(subtask));
     }
 }
-
+/// <summary>
+/// Opens an actor session for a subtask that is not already finished, and only from an executing stage.
+/// </summary>
 public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -108,8 +111,9 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 }
-
-
+/// <summary>
+/// Records a subtask diff and summary. Both are required. A finished subtask fails.
+/// </summary>
 public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -167,7 +171,9 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
-
+/// <summary>
+/// Fails an in-progress subtask. Reason is required.
+/// </summary>
 public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

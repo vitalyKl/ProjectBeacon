@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for the decision-to-task link.
+/// </summary>
 public class DecisionTaskConfiguration : IEntityTypeConfiguration<DecisionTask>
 {
     public void Configure(EntityTypeBuilder<DecisionTask> entity)

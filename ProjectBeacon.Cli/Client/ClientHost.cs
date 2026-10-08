@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Headers;
-
+/// <summary>
+/// Entry point for beacon client. Enroll stores the token in client.json and does not print it. Without a token, an interactive terminal opens the wizard. Otherwise the daemon runs headless.
+/// </summary>
 public static class ClientHost
 {
     public static string Fingerprint() =>

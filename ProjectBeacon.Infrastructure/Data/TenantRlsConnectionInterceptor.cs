@@ -3,7 +3,9 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 
 namespace ProjectBeacon.Infrastructure.Data;
-
+/// <summary>
+/// On each opened Postgres connection, copies TenantScope into app.tenant_project_id, app.tenant_org_id, and app.tenant_unscoped.
+/// </summary>
 public sealed class TenantRlsConnectionInterceptor : DbConnectionInterceptor
 {
     public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)

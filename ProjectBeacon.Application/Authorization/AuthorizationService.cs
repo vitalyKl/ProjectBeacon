@@ -5,8 +5,13 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>Implements <see cref="IAuthorizationService"/> from actor kind, membership, and API-token capabilities.</summary>
 public sealed class AuthorizationService : IAuthorizationService
 {
+    /// <summary>
+    /// Workers are forbidden. Devices may only access <see cref="ResourceType.Device"/> and <see cref="ResourceType.WorkstationCommand"/>. Admins are allowed.
+    /// API tokens may read or write tasks, task steps, and pipeline, or read context, when the capability flag (or Admin) is set. Humans are checked only for project or org administer; other human actions are allowed here.
+    /// </summary>
     public async Task<Result> CanAsync(
         IBeaconDb db, ActorContext actor,
         ResourceType resource, AuthAction action,
@@ -30,6 +35,10 @@ public sealed class AuthorizationService : IAuthorizationService
         return await HumanCanAccessAsync(db, actor, resource, action, projectId, orgId, ct);
     }
 
+    /// <summary>
+    /// API tokens are forbidden. The actor must be allowed to administer the project.
+    /// Granting <see cref="Domain.Enums.MemberRole.Owner"/> requires a system admin or a project owner.
+    /// </summary>
     public async Task<Result> CanAddMemberAsync(
         IBeaconDb db, ActorContext actor, Guid projectId,
         Guid targetUserId, MemberRole targetRole,
@@ -52,6 +61,10 @@ public sealed class AuthorizationService : IAuthorizationService
         return Result.Ok();
     }
 
+    /// <summary>
+    /// API tokens are forbidden. An actor may remove themselves; otherwise project administer is required.
+    /// The last owner cannot be removed, and a non-admin must themselves be an owner to remove an owner.
+    /// </summary>
     public async Task<Result> CanRemoveMemberAsync(
         IBeaconDb db, ActorContext actor, Guid projectId,
         Guid targetUserId,
@@ -85,6 +98,10 @@ public sealed class AuthorizationService : IAuthorizationService
         return Result.Ok();
     }
 
+    /// <summary>
+    /// API tokens are forbidden. The actor must administer the project.
+    /// A token that includes <see cref="Domain.Enums.ApiTokenCapability.Admin"/> requires a system admin or a project owner.
+    /// </summary>
     public async Task<Result> CanCreateTokenAsync(
         IBeaconDb db, ActorContext actor, Guid projectId,
         ApiTokenCapability requestedCapabilities,
@@ -107,6 +124,7 @@ public sealed class AuthorizationService : IAuthorizationService
         return Result.Ok();
     }
 
+    /// <summary>Non-token actors pass. An API token must include <paramref name="required"/>.</summary>
     public bool HasCapability(ActorContext actor, ApiTokenCapability required)
     {
         if (!actor.IsApiToken)

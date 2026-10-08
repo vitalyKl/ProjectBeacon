@@ -10,8 +10,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+/// <summary>
+/// Milestone HTTP endpoints.
+/// </summary>
 public static class MilestoneEndpoints
 {
+    /// <summary>
+    /// Maps every route in this method with <c>RequireHuman</c>: <c>POST /v1/projects/{projectId:guid}/milestones</c>, <c>PUT /v1/projects/{projectId:guid}/milestones/{milestoneId:guid}</c>, <c>PUT /v1/milestones/{milestoneId:guid}</c>, <c>DELETE /v1/projects/{projectId:guid}/milestones/{milestoneId:guid}</c>, <c>DELETE /v1/milestones/{milestoneId:guid}</c>, <c>GET /v1/projects/{projectId:guid}/milestones</c>, <c>GET /v1/projects/{projectId:guid}/milestones/{milestoneId:guid}</c>, <c>GET /v1/milestones/{milestoneId:guid}</c>, <c>POST /v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/close</c>, and <c>POST /v1/projects/{projectId:guid}/milestones/{milestoneId:guid}/reopen</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapMilestoneEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/milestones", CreateMilestone).RequireAuthorization().DisableAntiforgery().RequireHuman();

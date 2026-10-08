@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// Pipeline review outcome. <see cref="Create"/> rejects an empty note.
+/// <see cref="SubtaskId"/> is set when the verdict reopens one subtask.
+/// </summary>
 public class ReviewVerdict : Entity, IProjectScoped
 {
     public ReviewVerdict() { }

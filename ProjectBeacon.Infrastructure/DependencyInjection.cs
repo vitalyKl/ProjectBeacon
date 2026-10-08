@@ -7,7 +7,9 @@ using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.LlamaSwap;
 using ProjectBeacon.Infrastructure.Mail;
 using ProjectBeacon.Infrastructure.Security;
-
+/// <summary>
+/// Registers the database, mail, password hashing, JWT, TOTP, and secret protection used by the hosts.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)

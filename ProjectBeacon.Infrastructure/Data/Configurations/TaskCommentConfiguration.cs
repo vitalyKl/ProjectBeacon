@@ -4,7 +4,9 @@ using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for task comments. Indexed by task and creation time.
+/// </summary>
 public class TaskCommentConfiguration : IEntityTypeConfiguration<TaskComment>
 {
     public void Configure(EntityTypeBuilder<TaskComment> entity)

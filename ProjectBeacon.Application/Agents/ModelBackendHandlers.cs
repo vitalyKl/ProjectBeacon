@@ -7,7 +7,9 @@ using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Reads the current project id from the database tenant filter. Null or empty is unresolved.
+/// </summary>
 public static class ModelProjectScope
 {
     public static bool TryGet(IBeaconDb db, out Guid projectId)
@@ -41,7 +43,9 @@ internal static class ModelBackendMappers
     public static RoleBindingDto ToDto(RoleBinding binding) =>
         new(binding.Id, binding.Role, binding.ModelBackendId, binding.ProjectId);
 }
-
+/// <summary>
+/// Creates or updates a user-owned model backend. Name is required and at most 200 characters. LlamaCpp requires a launch command. Context size and TTL must be non-negative.
+/// </summary>
 public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocalModelBackendCommand, Result<LocalModelBackendDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -95,7 +99,9 @@ public sealed class UpsertLocalModelBackendHandler : ICommandHandler<UpsertLocal
         return Result.Ok(ModelBackendMappers.ToDto(backend));
     }
 }
-
+/// <summary>
+/// Deletes a backend owned by the user. Fails when a role binding still points at it.
+/// </summary>
 public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocalModelBackendCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -127,7 +133,9 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Binds a pipeline role in the current project to a model backend the project owner can use. Fails when project scope or the backend is missing.
+/// </summary>
 public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingCommand, Result<RoleBindingDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -167,7 +175,9 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
         return Result.Ok(ModelBackendMappers.ToDto(binding));
     }
 }
-
+/// <summary>
+/// Removes the current project's binding for a pipeline role and bumps desired workstation state.
+/// </summary>
 public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBindingCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -190,7 +200,9 @@ public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBinding
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Lists the user's backends, templates, and the project's role bindings.
+/// </summary>
 public sealed class GetModelRegistryHandler : ICommandHandler<GetModelRegistryCommand, Result<ModelRegistryDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -222,7 +234,9 @@ public sealed class GetModelRegistryHandler : ICommandHandler<GetModelRegistryCo
             templates.Select(ModelBackendMappers.ToDto).ToList()));
     }
 }
-
+/// <summary>
+/// Creates or updates a user-owned agent template. Name is required and at most 200 characters. Referenced backends must exist.
+/// </summary>
 public sealed class SaveAgentTemplateHandler : ICommandHandler<SaveAgentTemplateCommand, Result<AgentTemplateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -267,7 +281,9 @@ public sealed class SaveAgentTemplateHandler : ICommandHandler<SaveAgentTemplate
         return Result.Ok(ModelBackendMappers.ToDto(created));
     }
 }
-
+/// <summary>
+/// Deletes a template owned by the user.
+/// </summary>
 public sealed class DeleteAgentTemplateHandler : ICommandHandler<DeleteAgentTemplateCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -289,7 +305,9 @@ public sealed class DeleteAgentTemplateHandler : ICommandHandler<DeleteAgentTemp
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Returns llama-swap status from the workstation proxy.
+/// </summary>
 public sealed class GetProxyStatusHandler : ICommandHandler<GetProxyStatusCommand, Result<LlamaSwapStatusDto>>
 {
     private readonly ILlamaSwapProxy _proxy;
@@ -302,7 +320,9 @@ public sealed class GetProxyStatusHandler : ICommandHandler<GetProxyStatusComman
         return Result.Ok(status);
     }
 }
-
+/// <summary>
+/// Asks the workstation proxy to reload llama-swap.
+/// </summary>
 public sealed class ReloadProxyHandler : ICommandHandler<ReloadProxyCommand, Result<LlamaSwapStatusDto>>
 {
     private readonly ILlamaSwapProxy _proxy;
@@ -318,7 +338,9 @@ public sealed class ReloadProxyHandler : ICommandHandler<ReloadProxyCommand, Res
         return Result.Ok(status);
     }
 }
-
+/// <summary>
+/// Asks the workstation proxy to unload llama-swap.
+/// </summary>
 public sealed class UnloadProxyHandler : ICommandHandler<UnloadProxyCommand, Result<LlamaSwapStatusDto>>
 {
     private readonly ILlamaSwapProxy _proxy;

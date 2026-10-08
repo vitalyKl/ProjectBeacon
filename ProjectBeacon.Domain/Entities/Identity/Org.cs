@@ -3,6 +3,9 @@ namespace ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Common;
 using Projects = ProjectBeacon.Domain.Entities.Projects;
 
+/// <summary>
+    /// An organization. Not itself org-scoped; members, invites, and projects hang off <see cref="Id"/>.
+    /// </summary>
 public class Org : Entity
 {
     public Org() { }
@@ -25,6 +28,9 @@ public class Org : Entity
         return org;
     }
 
+    /// <summary>
+    /// Applies each non-null argument and stamps <see cref="UpdatedAt"/>. Null arguments are left unchanged.
+    /// </summary>
     public void Update(string? name = null, string? description = null)
     {
         if (name is not null) Name = name;

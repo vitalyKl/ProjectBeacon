@@ -7,8 +7,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
-
+/// <summary>
+/// Starts the pipeline and creates the planner session.
+/// </summary>
 public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -48,8 +49,9 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 }
-
-
+/// <summary>
+/// Marks a Ready pipeline session launched.
+/// </summary>
 public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -92,8 +94,9 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 }
-
-
+/// <summary>
+/// Closes an approved pipeline. Requires review notes and a completed review check.
+/// </summary>
 public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -143,7 +146,9 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
-
+/// <summary>
+/// Closes a pipeline without that check. Fails unless the actor is privileged.
+/// </summary>
 public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

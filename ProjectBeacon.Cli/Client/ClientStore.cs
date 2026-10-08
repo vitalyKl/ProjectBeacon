@@ -4,7 +4,9 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-
+/// <summary>
+/// Persisted control-plane URL, device token, and device id. Default file is client.json beside the user profile data. NeedsWizard is true until both URL and token are set.
+/// </summary>
 public sealed class ClientStore
 {
     private const int ProtectedVersion = 2;
@@ -105,7 +107,9 @@ public sealed class ClientStore
         WriteIndented = true
     };
 }
-
+/// <summary>
+/// Local workstation.json: model root, llama binaries, port 8080, own-swapper flag, concurrent port base 9000, and history directory. TryRead returns an error for a corrupt file and does not overwrite it. Load throws when that error is set.
+/// </summary>
 public sealed class WorkstationSettings
 {
     public string? ModelsRoot { get; set; }

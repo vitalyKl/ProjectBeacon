@@ -2,9 +2,15 @@ namespace ProjectBeacon.API.Endpoints;
 
 using ProjectBeacon.API;
 
-public static class BeaconApi
-{
-    public static IEndpointRouteBuilder MapBeaconApi(this IEndpointRouteBuilder app)
+/// <summary>
+    /// Host registration for every <c>/v1</c> endpoint group.
+    /// </summary>
+    public static class BeaconApi
+    {
+        /// <summary>
+        /// Maps every <c>/v1</c> group onto the host: version, auth, orgs, projects, tasks, milestones, work, pipeline, context, labels, reports, evals, decisions, models, devices, and chat.
+        /// </summary>
+        public static IEndpointRouteBuilder MapBeaconApi(this IEndpointRouteBuilder app)
     {
         app.MapVersionEndpoints();
         app.MapAuthEndpoints();

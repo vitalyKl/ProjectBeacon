@@ -11,7 +11,9 @@ using ProjectBeacon.Web.Components;
 using ProjectBeacon.Web.Extensions;
 
 namespace ProjectBeacon.Web.Extensions;
-
+/// <summary>
+/// Orders forwarded headers, the culture cookie, authentication, and the tenant middleware. Known proxies and networks come from ForwardedHeaders configuration.
+/// </summary>
 public static class MiddlewareExtensions
 {
     public static WebApplication ConfigureMiddleware(this WebApplication app)

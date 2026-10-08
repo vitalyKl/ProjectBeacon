@@ -3,6 +3,11 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// Board task for one project. Status moves Todo, InProgress, Done.
+/// Done requires review notes, unless <see cref="MoveToSubStage"/> is called with <see cref="TaskSubStage.Complete"/>.
+/// The type is named <c>TaskItem</c> so it does not collide with <c>System.Threading.Tasks.Task</c>.
+/// </summary>
 public class TaskItem : Entity, IProjectScoped
 {
     public TaskItem() { }
@@ -58,6 +63,10 @@ public class TaskItem : Entity, IProjectScoped
         MilestoneId = milestoneId;
     }
 
+    /// <summary>
+    /// Advances one step. InProgress to Done throws when <see cref="ReviewNotes"/> is missing.
+    /// Done stays Done.
+    /// </summary>
     public void MoveToNextStatus()
     {
         Status = Status switch
@@ -83,6 +92,10 @@ public class TaskItem : Entity, IProjectScoped
         return TaskItemStatus.Done;
     }
 
+    /// <summary>
+    /// Sets the in-progress sub-stage. Throws unless status is InProgress.
+    /// <see cref="TaskSubStage.Complete"/> also marks the task Done and sets <see cref="CompletedAt"/>.
+    /// </summary>
     public void MoveToSubStage(TaskSubStage subStage)
     {
         if (Status != TaskItemStatus.InProgress)
@@ -97,6 +110,7 @@ public class TaskItem : Entity, IProjectScoped
         }
     }
 
+    /// <summary>Stores review notes. Throws when <paramref name="notes"/> is empty.</summary>
     public void SetReviewNotes(string notes)
     {
         if (string.IsNullOrWhiteSpace(notes))
@@ -105,12 +119,17 @@ public class TaskItem : Entity, IProjectScoped
         ReviewNotes = notes;
     }
 
+    /// <summary>Returns the task to Todo and clears <see cref="CompletedAt"/>.</summary>
     public void ResetToTodo()
     {
         Status = TaskItemStatus.Todo;
         CompletedAt = null;
     }
 
+    /// <summary>
+    /// Moves to <paramref name="target"/>, stepping through the legal predecessors.
+    /// Done throws when review notes are missing.
+    /// </summary>
     public void TransitionTo(TaskItemStatus target)
     {
         if (Status == target)
@@ -144,6 +163,7 @@ public class TaskItem : Entity, IProjectScoped
 
     private string StageName => PipelineStage?.ToString() ?? TaskPipelineStage.None.ToString();
 
+    /// <summary>Starts the pipeline at Planning and moves the task to InProgress. Throws if a stage is already set.</summary>
     public void StartPipeline()
     {
         if (PipelineStage is not null)
@@ -152,6 +172,7 @@ public class TaskItem : Entity, IProjectScoped
         TransitionTo(TaskItemStatus.InProgress);
     }
 
+    /// <summary>Enters Executing from Planning or ReopenedForRevision.</summary>
     public void EnterExecuting()
     {
         if (PipelineStage == TaskPipelineStage.Executing)
@@ -162,6 +183,7 @@ public class TaskItem : Entity, IProjectScoped
         TransitionTo(TaskItemStatus.InProgress);
     }
 
+    /// <summary>Enters Reviewing. Allowed only from Executing.</summary>
     public void EnterReview()
     {
         if (PipelineStage != TaskPipelineStage.Executing)
@@ -169,6 +191,7 @@ public class TaskItem : Entity, IProjectScoped
         PipelineStage = TaskPipelineStage.Reviewing;
     }
 
+    /// <summary>Marks the pipeline Approved. Allowed only from Reviewing.</summary>
     public void SetApproved()
     {
         if (PipelineStage != TaskPipelineStage.Reviewing)
@@ -176,6 +199,7 @@ public class TaskItem : Entity, IProjectScoped
         PipelineStage = TaskPipelineStage.Approved;
     }
 
+    /// <summary>Returns an Approved pipeline to ReopenedForRevision and the task to InProgress.</summary>
     public void ReopenForRevision()
     {
         if (PipelineStage != TaskPipelineStage.Approved)
@@ -184,6 +208,9 @@ public class TaskItem : Entity, IProjectScoped
         TransitionTo(TaskItemStatus.InProgress);
     }
 
+    /// <summary>
+    /// Closes from Approved or ReopenedForRevision, stores <paramref name="reviewNotes"/>, and moves the task to Done.
+    /// </summary>
     public void ClosePipeline(string reviewNotes)
     {
         if (string.IsNullOrWhiteSpace(reviewNotes))

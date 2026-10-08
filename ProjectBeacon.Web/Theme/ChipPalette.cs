@@ -2,7 +2,9 @@ using MudBlazor;
 using ProjectBeacon.Domain.Enums;
 
 namespace ProjectBeacon.Web.Theme;
-
+/// <summary>
+/// MudBlazor colors for status and priority chips. Status is not color alone. ChromeLabels supplies the text.
+/// </summary>
 public static class ChipPalette
 {
     public static Color ForStatus(string? status) => status switch

@@ -5,7 +5,9 @@ using Domain.Entities.Identity;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Creates an org and adds the caller as owner.
+/// </summary>
 public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -32,7 +34,9 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
     private static OrgDto MapToDto(Org org) =>
         new(org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt);
 }
-
+/// <summary>
+/// Renames an org or changes its description.
+/// </summary>
 public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -55,7 +59,9 @@ public class UpdateOrgHandler : ICommandHandler<UpdateOrgCommand, Result<OrgDto>
     private static OrgDto MapToDto(Org org) =>
         new(org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt);
 }
-
+/// <summary>
+/// Loads one org.
+/// </summary>
 public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -75,7 +81,9 @@ public class GetOrgHandler : ICommandHandler<GetOrgCommand, Result<OrgDto>>
     private static OrgDto MapToDto(Org org) =>
         new(org.Id, org.Name, org.Description, org.CreatedAt, org.UpdatedAt);
 }
-
+/// <summary>
+/// Lists orgs the caller can see.
+/// </summary>
 public class ListOrgsHandler : ICommandHandler<ListOrgsCommand, Result<IList<OrgDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;

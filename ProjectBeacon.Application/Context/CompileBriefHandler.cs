@@ -5,7 +5,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Project to compile, optional repo, path, and task scope, token budget, and which capsules to attach.
+/// </summary>
 public record CompileBriefRequest(
     Guid ProjectId,
     Guid? RepoId,
@@ -17,9 +19,13 @@ public record CompileBriefRequest(
     bool IncludeTreeCapsule,
     string? TreeCapsule = null,
     string? ChangedScope = null);
-
+/// <summary>
+/// Command for compile brief.
+/// </summary>
 public record CompileBriefCommand(CompileBriefRequest Request) : ICommand<Result<CompileBriefResult>>;
-
+/// <summary>
+/// Compiled brief markdown, hash, revision, and token estimate.
+/// </summary>
 public record CompileBriefResult(
     string SchemaVersion,
     string CompilerVersion,
@@ -32,7 +38,9 @@ public record CompileBriefResult(
     int TokenEstimate,
     bool BudgetOverflow,
     IList<string> DroppedSections);
-
+/// <summary>
+/// Compiles the project brief. Fails when the project is missing. The budget and never-drop sections are applied in this handler.
+/// </summary>
 public class CompileBriefHandler
 {
     private static readonly string[] NeverDropSections =

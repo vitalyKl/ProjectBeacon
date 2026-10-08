@@ -3,6 +3,10 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>
+/// Project decision. Created Proposed. <see cref="Supersede"/> requires Accepted.
+/// <see cref="Deprecate"/> does not check the current status.
+/// </summary>
 public class Decision : Entity, IProjectScoped
 {
     public Decision() { }

@@ -6,8 +6,14 @@ using ProjectBeacon.API.Auth;
 using Application.Reports;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+/// Report HTTP endpoints.
+/// </summary>
 public static class ReportEndpoints
 {
+    /// <summary>
+    /// Maps <c>POST /v1/projects/{projectId:guid}/reports</c>, <c>GET /v1/projects/{projectId:guid}/reports</c>, <c>GET /v1/projects/{projectId:guid}/reports/{reportId:guid}</c>, and <c>GET /v1/reports/context-cost/{taskId:guid}</c> with <c>RequireHuman</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/reports", Generate).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -51,5 +57,6 @@ public static class ReportEndpoints
             : result.FromResult(404);
     }
 
+    /// <summary>Optional JSON body for <c>POST /v1/projects/{projectId:guid}/reports</c>. Omitted ids fall back to the actor.</summary>
     public record GenerateReportBody(string? CreatedByType, string? CreatedById);
 }

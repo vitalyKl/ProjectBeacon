@@ -4,7 +4,9 @@ using System.Text.Json.Nodes;
 using Domain.Entities.Devices;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Bumps the desired revision on a user's devices or on the devices attached to a project so clients reconcile config.
+/// </summary>
 public static class DesiredState
 {
     public static async Task BumpUserAsync(IBeaconDb db, Guid userId, CancellationToken ct)

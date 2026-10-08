@@ -10,8 +10,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
-
+/// <summary>
+/// Opens review only from the executing stage, and only when every subtask is done or failed.
+/// </summary>
 public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -61,7 +62,9 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 }
-
+/// <summary>
+/// Records approve or reopen. Reopen requires a subtask id. A verdict is accepted only while the task is in review.
+/// </summary>
 public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -140,7 +143,9 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
-
+/// <summary>
+/// Enqueues the review check command for the open review run. The check command is required.
+/// </summary>
 public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand, Result<PipelineStateDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

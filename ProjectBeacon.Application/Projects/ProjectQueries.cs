@@ -7,9 +7,13 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Asks for the caller's current project. The result is null when none is selected.
+/// </summary>
 public record GetCurrentProjectQuery : IQuery<Result<ProjectDto?>>;
-
+/// <summary>
+/// Returns the caller's current project, or null when none is selected.
+/// </summary>
 public class GetCurrentProjectHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -50,9 +54,13 @@ public class GetCurrentProjectHandler
     private static ProjectDto MapToDto(Project project) =>
         new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
 }
-
+/// <summary>
+/// Counts for the dashboard: projects, tasks, in progress, and done.
+/// </summary>
 public record DashboardCountsDto(int Projects, int Tasks, int InProgress, int Done);
-
+/// <summary>
+/// Counts tasks on the current project for the dashboard.
+/// </summary>
 public class GetDashboardCountsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -71,7 +79,9 @@ public class GetDashboardCountsHandler
             tasks.Count(s => s == TaskItemStatus.Done)));
     }
 }
-
+/// <summary>
+/// One of the caller's projects with task counts and last activity.
+/// </summary>
 public record ProjectSummaryDto(
     Guid Id,
     string Name,
@@ -82,7 +92,9 @@ public record ProjectSummaryDto(
     int InProgress,
     int Done,
     DateTime LastActivity);
-
+/// <summary>
+/// A task row for the recent-activity list.
+/// </summary>
 public record RecentTaskDto(
     Guid Id,
     string Title,
@@ -90,7 +102,9 @@ public record RecentTaskDto(
     Guid ProjectId,
     string ProjectName,
     DateTime ActivityAt);
-
+/// <summary>
+/// The caller's projects, totals, and recent tasks.
+/// </summary>
 public record ListMyProjectsDto(
     int TotalProjects,
     int TotalTasks,
@@ -98,7 +112,9 @@ public record ListMyProjectsDto(
     int Done,
     IReadOnlyList<ProjectSummaryDto> Projects,
     IReadOnlyList<RecentTaskDto> RecentTasks);
-
+/// <summary>
+/// Lists projects the caller belongs to, with task counts.
+/// </summary>
 public class ListMyProjectsHandler
 {
     private const int RecentLimit = 10;
@@ -176,7 +192,9 @@ public class ListMyProjectsHandler
             recent));
     }
 }
-
+/// <summary>
+/// The open project's task counts, last activity, and recent tasks.
+/// </summary>
 public record ProjectOverviewDto(
     Guid Id,
     string Name,
@@ -187,7 +205,9 @@ public record ProjectOverviewDto(
     int Done,
     DateTime LastActivity,
     IReadOnlyList<RecentTaskDto> RecentTasks);
-
+/// <summary>
+/// Returns the open project's summary, or null when no project is current.
+/// </summary>
 public class GetProjectOverviewHandler
 {
     private const int RecentLimit = 10;
@@ -246,11 +266,17 @@ public class GetProjectOverviewHandler
             recent));
     }
 }
-
+/// <summary>
+/// A short section of the compiled brief shown on the overview.
+/// </summary>
 public record PulseBriefSectionDto(string SectionId, string Title, string BodyMarkdown);
-
+/// <summary>
+/// A task title, status, and priority on the overview.
+/// </summary>
 public record PulsePeekTaskDto(Guid Id, string Title, TaskItemStatus Status, TaskPriority Priority);
-
+/// <summary>
+/// Overview pulse: task counts, ready tasks, open milestones, active sessions, and brief sections.
+/// </summary>
 public record ProjectPulseDto(
     Guid ProjectId,
     string Name,
@@ -262,7 +288,9 @@ public record ProjectPulseDto(
     int OpenMilestones,
     int ActiveSessions,
     IReadOnlyList<PulseBriefSectionDto> BriefSections);
-
+/// <summary>
+/// Returns recent project activity, or null when no project is current.
+/// </summary>
 public class GetProjectPulseHandler
 {
     private const int PeekLimit = 3;
@@ -338,11 +366,17 @@ public class GetProjectPulseHandler
         return result;
     }
 }
-
+/// <summary>
+/// A project label: name, color, and path prefix.
+/// </summary>
 public record LabelDto(Guid Id, string Name, string Color, string PathPrefix, Guid ProjectId);
-
+/// <summary>
+/// Fields for list labels.
+/// </summary>
 public record ListLabelsRequest(Guid ProjectId);
-
+/// <summary>
+/// Lists labels on the current project.
+/// </summary>
 public class ListLabelsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;

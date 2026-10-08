@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for subtasks. Indexed by task.
+/// </summary>
 public class SubtaskConfiguration : IEntityTypeConfiguration<Subtask>
 {
     public void Configure(EntityTypeBuilder<Subtask> entity)

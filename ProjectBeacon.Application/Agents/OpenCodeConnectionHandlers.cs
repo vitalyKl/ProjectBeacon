@@ -8,23 +8,41 @@ using Domain.Entities.Agents;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// An OpenCode provider connection without the API key. HasApiKey is true when one is stored.
+/// </summary>
 public record OpenCodeConnectionDto(Guid Id, string ProviderId, string ModelId, string BaseUrl, bool HasApiKey);
-
+/// <summary>
+/// The same connection including the API key. Returned only to the enrolled device.
+/// </summary>
 public record OpenCodeConnectionSecretDto(string ProviderId, string ModelId, string BaseUrl, string? ApiKey);
-
+/// <summary>
+/// Provider, model, optional base URL, and optional API key for one user.
+/// </summary>
 public record SaveOpenCodeConnectionRequest(Guid UserId, string ProviderId, string ModelId, string? BaseUrl, string? ApiKey);
-
+/// <summary>
+/// Command for save open code connection.
+/// </summary>
 public record SaveOpenCodeConnectionCommand(SaveOpenCodeConnectionRequest Request) : ICommand<Result<OpenCodeConnectionDto>>;
-
+/// <summary>
+/// Fields for delete open code connection.
+/// </summary>
 public record DeleteOpenCodeConnectionRequest(Guid UserId, Guid Id);
-
+/// <summary>
+/// Command for delete open code connection.
+/// </summary>
 public record DeleteOpenCodeConnectionCommand(DeleteOpenCodeConnectionRequest Request) : ICommand<Result>;
-
+/// <summary>
+/// Command for list open code connections.
+/// </summary>
 public record ListOpenCodeConnectionsCommand(Guid UserId) : ICommand<Result<IList<OpenCodeConnectionDto>>>;
-
+/// <summary>
+/// Device asking for its owner's OpenCode connections, including secrets.
+/// </summary>
 public record DeviceOpenCodeConnectionsCommand(Guid DeviceId) : ICommand<Result<IList<OpenCodeConnectionSecretDto>>>;
-
+/// <summary>
+/// Lists the user's OpenCode provider connections without returning stored API keys.
+/// </summary>
 public sealed class ListOpenCodeConnectionsHandler : ICommandHandler<ListOpenCodeConnectionsCommand, Result<IList<OpenCodeConnectionDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -41,7 +59,9 @@ public sealed class ListOpenCodeConnectionsHandler : ICommandHandler<ListOpenCod
     internal static OpenCodeConnectionDto Map(OpenCodeConnection row) =>
         new(row.Id, row.ProviderId, row.ModelId, row.BaseUrl, !string.IsNullOrEmpty(row.ApiKeyCipher));
 }
-
+/// <summary>
+/// Saves a provider and model connection for the user. Provider id must be a single token.
+/// </summary>
 public sealed class SaveOpenCodeConnectionHandler : ICommandHandler<SaveOpenCodeConnectionCommand, Result<OpenCodeConnectionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -86,7 +106,9 @@ public sealed class SaveOpenCodeConnectionHandler : ICommandHandler<SaveOpenCode
         return Result.Ok(ListOpenCodeConnectionsHandler.Map(existing));
     }
 }
-
+/// <summary>
+/// Deletes one of the user's OpenCode connections.
+/// </summary>
 public sealed class DeleteOpenCodeConnectionHandler : ICommandHandler<DeleteOpenCodeConnectionCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -111,9 +133,13 @@ public sealed class DeleteOpenCodeConnectionHandler : ICommandHandler<DeleteOpen
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// User whose online devices should reapply OpenCode connections.
+/// </summary>
 public record NudgeOpenCodeCommand(Guid UserId) : ICommand<Result>;
-
+/// <summary>
+/// Enqueues ConfigureOpenCode on each of the user's online devices.
+/// </summary>
 public sealed class NudgeOpenCodeHandler : ICommandHandler<NudgeOpenCodeCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -138,7 +164,9 @@ public sealed class NudgeOpenCodeHandler : ICommandHandler<NudgeOpenCodeCommand,
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Returns the device owner's OpenCode connections, including secrets, for the enrolled device. Fails when the device is missing.
+/// </summary>
 public sealed class DeviceOpenCodeConnectionsHandler : ICommandHandler<DeviceOpenCodeConnectionsCommand, Result<IList<OpenCodeConnectionSecretDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;

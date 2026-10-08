@@ -108,4 +108,8 @@ if (app.Environment.IsEnvironment("Testing"))
 
 app.Run();
 
+/// <summary>
+/// API host entry point. Calls <c>MapBeaconApi</c> so every <c>/v1</c> group is mapped, and maps <c>GET /health</c> with no auth filter in this file.
+/// In the Testing environment also maps <c>GET /v1/__test/unhandled</c> with no auth filter in this file.
+/// </summary>
 public partial class Program { }

@@ -2,7 +2,9 @@ namespace ProjectBeacon.Application.Milestones;
 
 using Domain.Entities.Projects;
 using Domain.Enums;
-
+/// <summary>
+/// Finds tasks that are still open on a milestone that has been closed.
+/// </summary>
 public static class MilestoneOrphanLint
 {
     public static IReadOnlyList<TaskItem> OpenTasksOnClosed(

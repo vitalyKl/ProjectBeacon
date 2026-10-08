@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum ReviewRunStatus
+/// <summary>Lifecycle of a review check run. <see cref="Failed"/> cannot prove <c>finish_work</c> done.</summary>
+    public enum ReviewRunStatus
 {
     Started,
     Completed,

@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for password-reset tokens. TokenHash is unique.
+/// </summary>
 public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<PasswordResetToken>
 {
     public void Configure(EntityTypeBuilder<PasswordResetToken> entity)

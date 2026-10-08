@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ProjectBeacon.Infrastructure.Data.Migrations
 {
+    /// <summary>
+    /// Enables and forces Postgres row level security on project-scoped and org-scoped tables.
+    /// </summary>
     public partial class EnableRls : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

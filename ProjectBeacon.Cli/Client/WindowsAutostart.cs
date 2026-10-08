@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
-
+/// <summary>
+/// Writes or removes Beacon Client.cmd in the Windows Startup folder. No-op as a feature on other systems. The TUI only offers it on Windows.
+/// </summary>
 public static class WindowsAutostart
 {
     public const string ShortcutName = "Beacon Client.cmd";

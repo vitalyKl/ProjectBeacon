@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for org invites. TokenHash is unique.
+/// </summary>
 public class OrgInviteConfiguration : IEntityTypeConfiguration<OrgInvite>
 {
     public void Configure(EntityTypeBuilder<OrgInvite> entity)

@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Evals;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for eval runs. Indexed by project and task, and by pair id.
+/// </summary>
 public class EvalRunConfiguration : IEntityTypeConfiguration<EvalRun>
 {
     public void Configure(EntityTypeBuilder<EvalRun> entity)

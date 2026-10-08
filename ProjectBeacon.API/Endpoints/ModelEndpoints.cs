@@ -7,8 +7,13 @@ using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 
+/// <summary>User-owned model registry and llama-swap proxy commands.</summary>
 public static class ModelEndpoints
 {
+    /// <summary>
+    /// Registry and proxy reads allow <see cref="ApiTokenCapability.TaskRead"/>.
+    /// Upsert, delete, bind, unbind, reload, and unload allow <see cref="ApiTokenCapability.TaskWrite"/>.
+    /// </summary>
     public static IEndpointRouteBuilder MapModelEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/models", GetModelRegistry).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
@@ -60,7 +65,9 @@ public static class ModelEndpoints
 
         return Results.NoContent();
     }
-
+    /// <summary>
+    /// Body for binding a pipeline role to a model backend.
+    /// </summary>
     public record BindRoleBody(PipelineRole Role, Guid ModelBackendId);
 
     private static async Task<IResult> BindRole([FromBody] BindRoleBody body, SetRoleBindingHandler handler, CancellationToken ct)

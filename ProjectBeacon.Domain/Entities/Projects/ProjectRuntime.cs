@@ -2,6 +2,11 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>
+/// Working tree for one project on one device. A project has no single root.
+/// <see cref="ConfigRevision"/> advances when workstation config changes.
+/// <see cref="MarkConfigApplied"/> never moves the applied revision backwards or past <see cref="ConfigRevision"/>.
+/// </summary>
 public class ProjectRuntime : Entity, IProjectScoped
 {
     public ProjectRuntime() { }

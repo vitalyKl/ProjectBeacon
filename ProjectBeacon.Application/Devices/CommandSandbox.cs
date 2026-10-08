@@ -4,7 +4,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Common;
 using Domain.Enums;
-
+/// <summary>
+/// Strips a client-supplied root from a command payload and rejects paths that are not relative.
+/// </summary>
 public static class CommandSandbox
 {
     public const string RuntimeRequired = "Project runtime is required.";

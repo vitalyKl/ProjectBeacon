@@ -4,7 +4,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
-
+/// <summary>
+/// Adds the auth and auth-read rate-limit policies. Rejection is HTTP 429 as problem+json.
+/// </summary>
 public static class AuthRateLimiter
 {
     public static void Configure(RateLimiterOptions options, int permitLimit, int windowSeconds, int readPermitLimit = 60)

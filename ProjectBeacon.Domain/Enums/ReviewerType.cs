@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
-public enum ReviewerType
+/// <summary>Who recorded a review verdict.</summary>
+    public enum ReviewerType
 {
     Agent,
     Human

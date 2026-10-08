@@ -2,6 +2,10 @@ namespace ProjectBeacon.Domain.Entities.Identity;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>
+/// Login session. <see cref="Create"/> keeps it active for 24 hours unless a TTL is passed.
+/// The worker calls <see cref="Deactivate"/> after <see cref="ExpiresAt"/>.
+/// </summary>
 public class UserSession : Entity
 {
     public UserSession() { }

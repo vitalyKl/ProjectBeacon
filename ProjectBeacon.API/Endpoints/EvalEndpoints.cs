@@ -4,8 +4,14 @@ using ProjectBeacon.API.Auth;
 using Application.Evals;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>
+/// Eval HTTP endpoints.
+/// </summary>
 public static class EvalEndpoints
 {
+    /// <summary>
+    /// Maps <c>POST /v1/projects/{projectId:guid}/evals/pair</c> with <c>RequireHuman</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapEvalEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects/{projectId:guid}/evals/pair", StartPair).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -42,6 +48,7 @@ public static class EvalEndpoints
             : result.FromResult();
     }
 
+    /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/evals/pair</c>. The acting user is <c>HttpContext.GetActor().UserId</c>, not a field.</summary>
     public record EvalPairBody(
         Guid TaskId,
         Guid DeviceId,

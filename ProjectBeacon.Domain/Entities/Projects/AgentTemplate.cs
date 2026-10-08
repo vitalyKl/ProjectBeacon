@@ -3,6 +3,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
+/// <summary>User-owned binding of solo, planner, actor, and review backends. Applying it still writes the project's role bindings.</summary>
 public class AgentTemplate : Entity
 {
     public AgentTemplate() { }

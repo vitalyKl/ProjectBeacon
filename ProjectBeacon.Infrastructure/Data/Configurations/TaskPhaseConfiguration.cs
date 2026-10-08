@@ -3,7 +3,9 @@ namespace ProjectBeacon.Infrastructure.Data.Configurations;
 using Domain.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
+/// <summary>
+/// EF mapping for phases copied onto a task. Indexed by task and sort order.
+/// </summary>
 public class TaskPhaseConfiguration : IEntityTypeConfiguration<TaskPhase>
 {
     public void Configure(EntityTypeBuilder<TaskPhase> entity)

@@ -4,7 +4,9 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Creates a milestone on a project.
+/// </summary>
 public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -33,7 +35,9 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
     private static MilestoneDto MapToDto(Milestone milestone) =>
         new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
 }
-
+/// <summary>
+/// Updates a milestone name, description, or order.
+/// </summary>
 public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -56,7 +60,9 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
     private static MilestoneDto MapToDto(Milestone milestone) =>
         new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
 }
-
+/// <summary>
+/// Deletes a milestone.
+/// </summary>
 public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -76,7 +82,9 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
         return Result.Ok();
     }
 }
-
+/// <summary>
+/// Loads one milestone.
+/// </summary>
 public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -96,7 +104,9 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     private static MilestoneDto MapToDto(Milestone milestone) =>
         new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt);
 }
-
+/// <summary>
+/// Lists milestones for a project.
+/// </summary>
 public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestonesCommand, Result<IList<MilestoneDto>>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -116,7 +126,9 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
         return Result.Ok((IList<MilestoneDto>)milestones);
     }
 }
-
+/// <summary>
+/// Closes a milestone.
+/// </summary>
 public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -136,7 +148,9 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
             milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt));
     }
 }
-
+/// <summary>
+/// Clears a milestone's closed time.
+/// </summary>
 public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Result<MilestoneDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;

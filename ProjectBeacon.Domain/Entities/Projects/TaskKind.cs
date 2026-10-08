@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
 
+/// <summary>User-owned task template. <see cref="IsBuiltIn"/> marks a catalog kind the product shipped.</summary>
 public class TaskKind : Entity
 {
     public TaskKind() { }

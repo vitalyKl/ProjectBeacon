@@ -6,7 +6,9 @@ using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Finds the project runtime for a device. Missing runtime is a failure, not an empty root.
+/// </summary>
 public static class ProjectRuntimeResolver
 {
     public static async Task<Result<ProjectRuntime>> ResolveAsync(IBeaconDb db, Guid projectId, Guid deviceId, CancellationToken ct = default)

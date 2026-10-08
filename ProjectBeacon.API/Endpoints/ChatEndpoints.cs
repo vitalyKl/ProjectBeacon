@@ -6,8 +6,13 @@ using ProjectBeacon.API.Auth;
 using Application.Chat;
 using Microsoft.AspNetCore.Mvc;
 
+/// <summary>Workstation chat routes. Humans read and prompt. The device appends parts and marks idle.</summary>
 public static class ChatEndpoints
 {
+    /// <summary>
+    /// Human routes under <c>/v1/chat/sessions</c> use <c>RequireHuman</c>.
+    /// <c>POST .../parts</c> and <c>POST .../idle</c> use <c>RequireDevice</c>.
+    /// </summary>
     public static IEndpointRouteBuilder MapChatEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/chat/sessions", ListSessions).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -20,9 +25,17 @@ public static class ChatEndpoints
         app.MapPost("/v1/chat/sessions/{id:guid}/idle", MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
-
+    /// <summary>
+    /// Body for creating a chat session. Title is optional.
+    /// </summary>
     public record CreateBody(string? Title);
+    /// <summary>
+    /// Body for sending a chat prompt: text and an optional model id.
+    /// </summary>
     public record PromptBody(string Text, string? Model);
+    /// <summary>
+    /// Body a device posts for one chat part: role, kind, body, and an optional external id.
+    /// </summary>
     public record AppendBody(string Role, string Kind, string Body, string? ExternalId);
 
     private static async Task<IResult> ListSessions(ListChatSessionsHandler handler, HttpContext ctx, CancellationToken ct)

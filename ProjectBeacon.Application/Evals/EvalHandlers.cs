@@ -5,11 +5,17 @@ using Domain.Entities.Evals;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Starts an eval run for a task under WithBrief or WithoutBrief. PairId groups the two runs.
+/// </summary>
 public record RecordEvalRunRequest(Guid ProjectId, Guid TaskId, string? PairId, EvalCondition Condition);
-
+/// <summary>
+/// Command for record eval run.
+/// </summary>
 public record RecordEvalRunCommand(RecordEvalRunRequest Request) : ICommand<Result<EvalRunDto>>;
-
+/// <summary>
+/// Stores token counts, turns, check exit code, and transcript for an eval run.
+/// </summary>
 public record CompleteEvalRunRequest(
     Guid EvalRunId,
     int PromptTokens,
@@ -18,11 +24,17 @@ public record CompleteEvalRunRequest(
     int? CheckExitCode,
     string? TranscriptRef,
     string? CheckOutput = null);
-
+/// <summary>
+/// Command for complete eval run.
+/// </summary>
 public record CompleteEvalRunCommand(CompleteEvalRunRequest Request) : ICommand<Result<EvalRunDto>>;
-
+/// <summary>
+/// Fields for list eval runs.
+/// </summary>
 public record ListEvalRunsRequest(Guid ProjectId, Guid? TaskId = null);
-
+/// <summary>
+/// One eval run, including token counts and whether the check passed.
+/// </summary>
 public record EvalRunDto(
     Guid Id,
     Guid ProjectId,
@@ -36,7 +48,9 @@ public record EvalRunDto(
     DateTime StartedAt,
     DateTime? CompletedAt,
     string? TranscriptRef);
-
+/// <summary>
+/// Starts an eval run for a task under one condition.
+/// </summary>
 public class RecordEvalRunHandler : ICommandHandler<RecordEvalRunCommand, Result<EvalRunDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -52,7 +66,9 @@ public class RecordEvalRunHandler : ICommandHandler<RecordEvalRunCommand, Result
         return Result.Ok(EvalRunMapper.Map(run));
     }
 }
-
+/// <summary>
+/// Stores the outcome of an eval run.
+/// </summary>
 public class CompleteEvalRunHandler : ICommandHandler<CompleteEvalRunCommand, Result<EvalRunDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -77,7 +93,9 @@ public class CompleteEvalRunHandler : ICommandHandler<CompleteEvalRunCommand, Re
         return Result.Ok(EvalRunMapper.Map(run));
     }
 }
-
+/// <summary>
+/// Lists eval runs for a project, optionally for one task.
+/// </summary>
 public class ListEvalRunsHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
