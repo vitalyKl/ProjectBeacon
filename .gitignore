@@ -94,3 +94,4 @@ Thumbs.db
 *.temp
 /.serena
 /dotnet project docs/Qwen Review.md
+/dotnet project docs/UI new
