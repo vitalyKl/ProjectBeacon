@@ -4,8 +4,8 @@ using Common;
 using Enums;
 
 /// <summary>
-    /// A user's membership in an org, including <see cref="Role"/>. Org-scoped.
-    /// </summary>
+/// A user's membership in an org, including <see cref="Role"/>. Org-scoped.
+/// </summary>
 public class OrgMember : Entity, IOrgScoped
 {
     public OrgMember() { }

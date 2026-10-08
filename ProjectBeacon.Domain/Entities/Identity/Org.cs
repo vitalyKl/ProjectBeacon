@@ -4,8 +4,8 @@ using ProjectBeacon.Domain.Common;
 using Projects = ProjectBeacon.Domain.Entities.Projects;
 
 /// <summary>
-    /// An organization. Not itself org-scoped; members, invites, and projects hang off <see cref="Id"/>.
-    /// </summary>
+/// An organization. Not itself org-scoped; members, invites, and projects hang off <see cref="Id"/>.
+/// </summary>
 public class Org : Entity
 {
     public Org() { }

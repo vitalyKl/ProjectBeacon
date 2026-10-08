@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
 /// <summary>Org or project invite. Only <see cref="Pending"/> invites can be accepted. The worker expires them.</summary>
-    public enum InviteStatus
+public enum InviteStatus
 {
     Pending = 0,
     Accepted = 1,

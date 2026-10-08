@@ -4,9 +4,9 @@ using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 
 /// <summary>
-    /// A command queued for a <see cref="DaemonDevice"/>. Not project-scoped; <see cref="ProjectId"/> is optional context.
-    /// Created as <see cref="WorkstationCommandStatus.Pending"/>.
-    /// </summary>
+/// A command queued for a <see cref="DaemonDevice"/>. Not project-scoped; <see cref="ProjectId"/> is optional context.
+/// Created as <see cref="WorkstationCommandStatus.Pending"/>.
+/// </summary>
 public class WorkstationCommand : Entity
 {
     public WorkstationCommand() { }

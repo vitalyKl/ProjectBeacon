@@ -3,8 +3,8 @@ namespace ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Common;
 
 /// <summary>
-    /// One host-metric sample for a <see cref="DaemonDevice"/>. User-owned via <see cref="DeviceId"/> and not tenant-filtered.
-    /// </summary>
+/// One host-metric sample for a <see cref="DaemonDevice"/>. User-owned via <see cref="DeviceId"/> and not tenant-filtered.
+/// </summary>
 public class DeviceHostSample : Entity
 {
     public DeviceHostSample() { }

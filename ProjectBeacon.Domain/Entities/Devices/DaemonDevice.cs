@@ -3,9 +3,9 @@ namespace ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Common;
 
 /// <summary>
-    /// A user's workstation daemon. User-owned and not tenant-filtered.
-    /// Persists <see cref="TokenHash"/> and <see cref="TokenPrefix"/> only; the raw device token is never stored.
-    /// </summary>
+/// A user's workstation daemon. User-owned and not tenant-filtered.
+/// Persists <see cref="TokenHash"/> and <see cref="TokenPrefix"/> only; the raw device token is never stored.
+/// </summary>
 public class DaemonDevice : Entity
 {
     /// <summary>Heartbeat age, in seconds, after which a non-revoked device is offline.</summary>

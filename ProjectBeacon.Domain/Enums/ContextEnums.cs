@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Domain.Enums;
 
 /// <summary>Whose brief a context section belongs to. Compile merges by this scope.</summary>
-    public enum ContextScopeType
+public enum ContextScopeType
 {
     Project = 0,
     Repo = 1,
@@ -10,14 +10,14 @@ namespace ProjectBeacon.Domain.Enums;
 }
 
 /// <summary>Whether a human has accepted an imported or edited context section.</summary>
-    public enum ContextReviewState
+public enum ContextReviewState
 {
     NeedsReview = 0,
     Reviewed = 1
 }
 
 /// <summary>Where a context section was authored. <see cref="Native"/> is written in Beacon.</summary>
-    public enum ContextSource
+public enum ContextSource
 {
     Native = 0,
     ImportedAgentsMd = 1,
