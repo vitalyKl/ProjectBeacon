@@ -124,30 +124,25 @@ public sealed class LlamaServerBackend : IModelBackend
         foreach (var a in args)
             psi.ArgumentList.Add(a);
 
-        var process = new Process { StartInfo = psi };
-        try
+        var launched = ProcessRunner.TryStart(psi);
+        if (launched.Error == ProcessLaunchError.NotStarted)
         {
-            if (!process.Start())
-            {
-                process.Dispose();
-                _fsm.TryTransition(BackendState.Faulted, $"{Name}: failed to start.");
-                return;
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            process.Dispose();
-            _fsm.TryTransition(BackendState.Faulted, $"{Name}: failed to start: {ex.Message}");
-            Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — {ex.Message}");
+            _fsm.TryTransition(BackendState.Faulted, $"{Name}: failed to start.");
             return;
         }
-        if (!ProcessControl.TryBeginDrain(process))
+        if (launched.Error == ProcessLaunchError.StartThrew)
         {
-            process.Dispose();
+            _fsm.TryTransition(BackendState.Faulted, $"{Name}: failed to start: {launched.ExceptionMessage}");
+            Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — {launched.ExceptionMessage}");
+            return;
+        }
+        if (launched.Error == ProcessLaunchError.Drain)
+        {
             _fsm.TryTransition(BackendState.Faulted, $"{Name}: failed to drain output.");
             Log?.Invoke($"{Name}: start FAILED {sw.ElapsedMilliseconds}ms — output drain");
             return;
         }
+        var process = launched.Process!;
         await KillProcessAsync();
         _process = process;
         _readersOpen = true;

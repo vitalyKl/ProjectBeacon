@@ -48,8 +48,12 @@ public static class ServiceCollectionExtensions
             Environment.GetEnvironmentVariable("RATE_LIMIT_WINDOW_SECONDS"), out var windowSecs)
             ? windowSecs : 60;
 
+        var rateLimitReadPerWindow = int.TryParse(
+            Environment.GetEnvironmentVariable("RATE_LIMIT_READ_PER_WINDOW"), out var readPerWindow)
+            ? readPerWindow : 60;
+
         services.AddRateLimiter(options =>
-            ProjectBeacon.Infrastructure.Http.AuthRateLimiter.Configure(options, rateLimitPerWindow, rateLimitWindowSeconds));
+            ProjectBeacon.Infrastructure.Http.AuthRateLimiter.Configure(options, rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow));
 
         services.AddAuthentication(options =>
         {

@@ -48,7 +48,7 @@ Four pieces (per architecture):
 ## Conventions
 
 - Follow the surrounding code. Do not invent a new project or folder.
-- Web UI is feature-first: `ProjectBeacon.Web/Features/{Feature}/`. Application handlers live in matching feature folders (`Tasks/`, `Context/`, `Decisions/`, `Milestones/`, `Projects/`, `Auth/`, `Identity/`, `Agents/`, `Devices/`).
+- Web UI is feature-first: `ProjectBeacon.Web/Features/{Feature}/`. Application handlers live in matching feature folders (`Tasks/`, `Context/`, `Decisions/`, `Milestones/`, `Projects/`, `Auth/`, `Identity/`, `Agents/`, `Devices/`) plus cross-cutting concerns (`Chat/`, `CodeIndex/`, `Reports/`, `Evals/`, `Mcp/`, `Runtime/`, `Security/`, `Mail/`, `Common/`, `Data/`, `Authorization/`, `Interfaces/`, and others).
 - `ProjectBeacon.Web` and its subprojects are the only domain writers. Business writes go through Application handlers.
 - CQRS: `ICommand<TResult>`, `IQuery<TResult>`, `Result<T>` in Application.
 - Identity: `ActorContext` (readonly record struct, `Application/Authorization/`) is the unified caller identity carried into every handler. It is resolved **once** at the HTTP boundary by `ActorContextFactory.FromPrincipal` (Application) / `HttpContext.GetActor()` (API extension). Application handlers and Web Razor components must NOT read `ClaimsPrincipal` directly or accept client-supplied identity fields. `TenantContextBinder.BindUserAsync(ActorContext, …)` binds the tenant from the context.
@@ -116,7 +116,7 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - `BEACON_WORKER_TOKEN` is only an `ActorId` for finish-work and force-close. The Worker process is the database role plus unscoped RLS, all projects, no workstation commands.
 - Tenant query filters are fail-closed: a null `FilterProjectId`/`FilterOrgId` returns no rows. `Guid.Empty` matches no tenants. Use `TenantScope.EnterUnscoped()` for bootstrap, migrations, tests, and the Worker's expired-record cleanup. DI scopes also carry `ITenantContext` (Blazor circuit); tests without DI still use AsyncLocal. Opening a Postgres connection also applies `TenantRlsSession` from that scope.
 - Browser tools: exercise the flow end to end. A single screenshot is not enough. If no browser tools are available, use the closest substitute (tests, dotnet run + curl) and say what was not verified.
-- `POST /v1/work/finish_work` accepts TaskId, Result (done/failed/skipped/partial), Output, ActorId — used by MCP agents to complete tasks.
+- `POST /v1/work/finish_work` accepts TaskId, Result (done/failed/skipped/partial), Output, Review, ReviewTranscriptRef, ReviewRunId — used by MCP agents to complete tasks.
 - Context compilation (`POST /v1/projects/:id/context/compile`) merges sections by scope type, applies token budget (default 8000), never-drops non_goals/security/definition_of_done. Returns brief markdown with hash and revision ID.
 - Invite and password-reset lookup uses `IgnoreQueryFilters` (the actor is not in the tenant yet). Hash tokens with SHA256 like `bcn_`/`bcd_`; never persist the raw value.
 - `GET /v1/version` is `{ version, gitSha }`. Version comes from the assembly (`Directory.Build.props`); `gitSha` from `BEACON_GIT_SHA`. MCP `serverInfo.version` and heartbeat `clientVersion` use the same assembly version.

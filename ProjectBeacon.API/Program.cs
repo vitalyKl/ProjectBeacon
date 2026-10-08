@@ -80,8 +80,12 @@ var rateLimitWindowSeconds = int.TryParse(
     Environment.GetEnvironmentVariable("RATE_LIMIT_WINDOW_SECONDS"), out var windowSecs)
     ? windowSecs : 60;
 
+var rateLimitReadPerWindow = int.TryParse(
+    Environment.GetEnvironmentVariable("RATE_LIMIT_READ_PER_WINDOW"), out var readPerWindow)
+    ? readPerWindow : 60;
+
 builder.Services.AddRateLimiter(options =>
-    AuthRateLimiter.Configure(options, rateLimitPerWindow, rateLimitWindowSeconds));
+    AuthRateLimiter.Configure(options, rateLimitPerWindow, rateLimitWindowSeconds, rateLimitReadPerWindow));
 
 var app = builder.Build();
 

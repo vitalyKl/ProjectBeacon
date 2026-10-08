@@ -207,29 +207,23 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         psi.ArgumentList.Add(_port.ToString());
         foreach (var pair in _env)
             psi.Environment[pair.Key] = pair.Value;
-        var process = new Process { StartInfo = psi };
-        try
+        var launched = ProcessRunner.TryStart(psi);
+        if (launched.Error == ProcessLaunchError.NotStarted)
         {
-            if (!process.Start())
-            {
-                process.Dispose();
-                Status = OpenCodeServeStatus.Missing("opencode serve failed to start.");
-                return;
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            process.Dispose();
-            Status = OpenCodeServeStatus.Missing($"opencode serve failed to start: {ex.Message}");
+            Status = OpenCodeServeStatus.Missing("opencode serve failed to start.");
             return;
         }
-        if (!ProcessControl.TryBeginDrain(process))
+        if (launched.Error == ProcessLaunchError.StartThrew)
         {
-            process.Dispose();
+            Status = OpenCodeServeStatus.Missing($"opencode serve failed to start: {launched.ExceptionMessage}");
+            return;
+        }
+        if (launched.Error == ProcessLaunchError.Drain)
+        {
             Status = OpenCodeServeStatus.Missing("opencode serve failed to drain output.");
             return;
         }
-        _process = process;
+        _process = launched.Process;
     }
 
     private async Task KillProcessAsync()

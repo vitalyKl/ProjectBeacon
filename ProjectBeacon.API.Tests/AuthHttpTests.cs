@@ -42,6 +42,40 @@ public sealed class AuthHttpTests
     }
 
     [Fact]
+    public async Task AuthReadEndpoints_RateLimited_SeparateFromAuth()
+    {
+        Environment.SetEnvironmentVariable("RATE_LIMIT_PER_WINDOW", "20");
+        Environment.SetEnvironmentVariable("RATE_LIMIT_READ_PER_WINDOW", "3");
+        Environment.SetEnvironmentVariable("RATE_LIMIT_WINDOW_SECONDS", "60");
+        try
+        {
+            await using var factory = new AuthApiFactory();
+            var client = factory.CreateClient();
+
+            for (var i = 0; i < 3; i++)
+            {
+                var ok = await client.GetAsync("/v1/auth/options");
+                Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+            }
+
+            var limited = await client.GetAsync("/v1/auth/options");
+            Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+
+            var me = await client.GetAsync("/v1/auth/me");
+            Assert.Equal(HttpStatusCode.TooManyRequests, me.StatusCode);
+
+            var login = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "nobody", Password = "x" });
+            Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("RATE_LIMIT_PER_WINDOW", null);
+            Environment.SetEnvironmentVariable("RATE_LIMIT_READ_PER_WINDOW", null);
+            Environment.SetEnvironmentVariable("RATE_LIMIT_WINDOW_SECONDS", null);
+        }
+    }
+
+    [Fact]
     public async Task Version_Anonymous_Ok()
     {
         await using var factory = new AuthApiFactory();

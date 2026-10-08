@@ -199,29 +199,23 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
         psi.ArgumentList.Add(ConfigFile);
         psi.ArgumentList.Add("-listen");
         psi.ArgumentList.Add($"127.0.0.1:{_port}");
-        var process = new Process { StartInfo = psi };
-        try
+        var launched = ProcessRunner.TryStart(psi);
+        if (launched.Error == ProcessLaunchError.NotStarted)
         {
-            if (!process.Start())
-            {
-                process.Dispose();
-                Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to start.");
-                return;
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            process.Dispose();
-            Status = new LlamaSwapStatusDto(false, false, null, null, null, $"llama-swap failed to start: {ex.Message}");
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to start.");
             return;
         }
-        if (!ProcessControl.TryBeginDrain(process))
+        if (launched.Error == ProcessLaunchError.StartThrew)
         {
-            process.Dispose();
+            Status = new LlamaSwapStatusDto(false, false, null, null, null, $"llama-swap failed to start: {launched.ExceptionMessage}");
+            return;
+        }
+        if (launched.Error == ProcessLaunchError.Drain)
+        {
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to drain output.");
             return;
         }
-        _process = process;
+        _process = launched.Process;
     }
 
     private async Task KillProcessAsync()

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using ProjectBeacon.Cli.Client;
 
 namespace ProjectBeacon.Cli.Client.ModelSwapping;
 
@@ -63,90 +64,31 @@ internal static class NvidiaSmiRunner
 
     internal static async Task<Result> RunAsync(string fileName, string arguments, CancellationToken ct)
     {
-        Process? process = null;
-        Task<string>? stdoutTask = null;
-        Task<string>? stderrTask = null;
+        var psi = new ProcessStartInfo(fileName, arguments)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
         try
         {
-            var psi = new ProcessStartInfo(fileName, arguments)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            try
-            {
-                process = Process.Start(psi);
-            }
-            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
-            {
+            var (code, stdout, stderr, timedOut) = await ProcessRunner.RunAsync(
+                psi,
+                TimeSpan.FromSeconds(2),
+                ct,
+                TimeSpan.FromSeconds(1),
+                TimeSpan.Zero,
+                -1);
+            if (!timedOut && code == 1 && stdout.Length == 0 && stderr == "failed to start")
                 return new Result(false, false, -1, "");
-            }
-
-            if (process is null)
-                return new Result(false, false, -1, "");
-
-            stdoutTask = process.StandardOutput.ReadToEndAsync();
-            stderrTask = process.StandardError.ReadToEndAsync();
-
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-            try
-            {
-                await process.WaitForExitAsync(linked.Token);
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                Kill(process);
-                await Drain(stdoutTask, stderrTask);
+            if (timedOut)
                 return new Result(true, true, -1, "");
-            }
-
-            await Drain(stdoutTask, stderrTask);
-            var stdout = stdoutTask.IsCompletedSuccessfully ? stdoutTask.Result : "";
-            return new Result(true, false, process.HasExited ? process.ExitCode : -1, stdout);
+            return new Result(true, false, code, stdout);
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
         {
-            if (process is not null)
-                Kill(process);
-            if (stdoutTask is not null && stderrTask is not null)
-                await Drain(stdoutTask, stderrTask);
-            throw;
-        }
-        finally
-        {
-            if (process is { HasExited: false })
-                Kill(process);
-            process?.Dispose();
-        }
-    }
-
-    private static void Kill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-        }
-    }
-
-    private static async Task Drain(Task stdout, Task stderr)
-    {
-        var done = Task.WhenAll(stdout, stderr);
-        var winner = await Task.WhenAny(done, Task.Delay(1000)).ConfigureAwait(false);
-        if (winner != done)
-            return;
-        try
-        {
-            await done.ConfigureAwait(false);
-        }
-        catch
-        {
+            return new Result(false, false, -1, "");
         }
     }
 }

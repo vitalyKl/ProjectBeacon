@@ -25,8 +25,8 @@ public static class AuthEndpoints
         app.MapPost("/v1/auth/reset-password", ResetPassword).AllowAnonymous().DisableAntiforgery().RequireRateLimiting("auth");
         app.MapPost("/v1/auth/change-password", ChangePassword).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHuman();
         app.MapPost("/v1/auth/logout", Logout).RequireAuthorization().DisableAntiforgery().RequireRateLimiting("auth").RequireHuman();
-        app.MapGet("/v1/auth/me", GetMe).RequireAuthorization().RequireHuman();
-        app.MapGet("/v1/auth/options", AuthOptions).AllowAnonymous();
+        app.MapGet("/v1/auth/me", GetMe).RequireAuthorization().RequireRateLimiting("auth-read").RequireHuman();
+        app.MapGet("/v1/auth/options", AuthOptions).AllowAnonymous().RequireRateLimiting("auth-read");
         app.MapGet("/v1/invites/{token}", GetInvite).AllowAnonymous().RequireRateLimiting("auth");
         app.MapPost("/v1/invites/{token}/accept", AcceptInvite).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
