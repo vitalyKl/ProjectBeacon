@@ -67,7 +67,7 @@ Four pieces (per architecture):
 
 ## Documentation
 
-Read order when the task is product work: master roadmap for phase order, then the specialized section it names, then `dotnet project docs/ProjectBeacon-design-doc-v3.md` for shape. UI visuals: `UI Design Migration Specification.md`, with values from `DesignTokens.cs`. MCP: `mcp-host.md`. Pipeline: `task-pipeline-local-agents.md`. `archive/docs/` is not a requirement source.
+Read order when the task is product work: master roadmap for phase order, then the specialized section it names, then `dotnet project docs/ProjectBeacon-design-doc-v3.md` for shape. For security/hardening work, use `dotnet project docs/ProjectBeacon-Hardening-Roadmap.md` for H-block order and its referenced implementation documents. `ProjectBeacon-authorization-matrix.md` records current authorization behavior; `ProjectBeacon-endpoint-classification.md` records the enforced endpoint classification. UI visuals: `UI Design Migration Specification.md`, with values from `DesignTokens.cs`. MCP: `mcp-host.md`. Pipeline: `task-pipeline-local-agents.md`. `archive/docs/` is not a requirement source.
 
 Do not make page-specific colors, radii, or spacing. Do not add a second token or geometry document. Responsive check: the drawer collapses below `Breakpoint.Md`. Accessibility: icon-only controls need an accessible name; status is not color alone. A screenshot is not end-to-end verification.
 

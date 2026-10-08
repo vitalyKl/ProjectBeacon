@@ -1,12 +1,14 @@
 # ProjectBeacon — Hardening & Technical Debt Roadmap
 
-**Дата:** 2026-10-02  
-**База анализа:** текущий `main`, commit `fd346200b446ae7be6dca87b63390e3996e767b1`  
+**Дата обновления:** 2026-10-08  
+**База анализа:** current `main`, commit `da932a35e90023d76ad71b869d693d1f2d2cdf4a`  
 **Назначение:** единый документ, объединяющий результаты глубокого code/security/runtime/UI-аудита и исполняемый план исправлений.
 
 ---
 
 ## 0. Статус проекта на момент аудита
+
+> **Current execution state (2026-10-08): H0, H1 and H2 are implemented. H3.1 and H3.2 are implemented. H3.3 has been implemented across the workstation/file/CodeIndex/MCP boundaries and its dedicated regression coverage; H3.4 (LocalRoot privacy) remains the final H3 gate item. The structural refactor required before the H3 closeout is largely complete in 0.5.0; only WorkstationDaemon remains as an explicitly active R1 split. Do not treat the historical audit snapshot below as the current status table.**
 
 ProjectBeacon уже вышел за пределы простого CRUD-приложения. В текущей архитектуре присутствуют:
 
@@ -806,13 +808,17 @@ ProjectId
 
 ### Gate H3
 
+Current status:
+
 ```text
-[ ] All project commands require ProjectRuntime
-[ ] No arbitrary absolute local path crosses control plane boundary
-[ ] Linux and Windows path tests pass
-[ ] Reparse/symlink escape tests pass
+[x] All project commands require ProjectRuntime
+[x] No arbitrary absolute local path crosses control plane boundary
+[x] Linux and Windows path boundary tests are covered
+[x] Reparse/symlink escape tests are covered
 [ ] Raw LocalRoot hidden from unauthorized members
 ```
+
+The remaining item is H3.4: add/verify an HTTP-level regression proving that a project member who is allowed to see a project runtime cannot receive the raw workstation `LocalRoot` unless that disclosure is explicitly authorized.
 
 ---
 
@@ -1270,7 +1276,7 @@ Desired/Applied
 Только operational state:
 
 ```text
-Current hardening block
+Current hardening block: H3.4 — Runtime path privacy
 Done
 In progress
 Blocked
@@ -1414,7 +1420,7 @@ Documentation matches implementation
 Правильный workflow:
 
 ```text
-Current Hardening Block
+Current Hardening Block: H3.4 — Runtime path privacy
         ↓
 Read referenced implementation docs
         ↓

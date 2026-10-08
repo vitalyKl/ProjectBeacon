@@ -748,7 +748,7 @@ Roadmap должен зафиксировать:
 
 ---
 
-### `dotnet project docs/ProjectBeacon-fix-plan.md`
+### `archive/docs/ProjectBeacon-fix-plan.md`
 
 **Статус:** ✅ архивировано (2026-09-30).
 

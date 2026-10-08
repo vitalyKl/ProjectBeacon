@@ -3,6 +3,8 @@
 Этот документ содержит отдельный рабочий prompt pack для coding agents.
 Каждый prompt рассчитан на **один coherent slice** работ.
 
+**Current execution state (2026-10-08): H0-H2 are complete; H3.1-H3.3 are complete; the remaining H3 task is H3.4 LocalRoot privacy. The structural refactor is largely complete in 0.5.0. Do not start H4 until the H3 gate is closed.**
+
 ## Как использовать
 
 Перед запуском конкретного prompt:

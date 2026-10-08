@@ -68,7 +68,7 @@ On the control-plane path the caller is the authenticated principal.
 
 `beacon mcp` is not `IAgentRuntime`. `OpenCodeAgentRuntime` on `beacon client` implements that interface for workstation chat. Pipeline role sessions are still created by `ManualSessionSpawner`. Do not treat an MCP tool call as spawning an OpenCode turn.
 
-Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). This host does not deny tools from those lists.
+Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). In API-backed MCP mode, `SubtaskScopeGuard` also enforces these lists at the stdio tool boundary: restricted in-progress subtasks limit tool names and requested relative paths, and multiple restricted in-progress subtasks require an explicit `subtaskId`. Empty lists mean unrestricted for that dimension. Local database mode does not load a remote pipeline scope and therefore does not apply this API-mode guard.
 
 ## Workstation and chat boundary
 

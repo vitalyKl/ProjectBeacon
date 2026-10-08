@@ -17,6 +17,10 @@
 
 ---
 
+# 0.1 Current execution state (2026-10-08)
+
+The structural refactor required before the H3 closeout is largely complete in version 0.5.0. H0-H2 are implemented; H3.1-H3.3 are implemented; H3.4 (LocalRoot privacy) is the remaining H3 gate item. The next execution target is the H3 final audit, followed by H4. Use the Hardening Roadmap for the H-block status and gates; this master roadmap remains the product-level ordering document.
+
 # 1. Source of truth
 
 ## 1.1 Master roadmap
