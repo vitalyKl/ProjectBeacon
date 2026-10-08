@@ -1,0 +1,55 @@
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+@if (Phases.Count > 0)
+{
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+        <div class="beacon-phase-strip">
+            @foreach (var phase in Phases)
+            {
+                <button type="button" class="beacon-phase-tick @(OpenPhaseId == phase.Id ? "is-open" : "")" aria-label="@($"{phase.Title} {phase.Status}")" @onclick="() => OnToggle.InvokeAsync(phase.Id)">
+                    <span class="beacon-phase-mark @phase.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
+                    <span>@(string.IsNullOrEmpty(phase.Key) ? phase.Title : L["Phase_" + phase.Key].Value)</span>
+                </button>
+            }
+        </div>
+        @if (Phases.FirstOrDefault(p => p.Id == OpenPhaseId) is { } open)
+        {
+            <MudText Typo="Typo.body2" Class="mt-3">@open.Instruction</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @ModelName(open.ModelBackendId)</MudText>
+            @foreach (var sub in PhaseSubtasks(open.Id))
+            {
+                <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-3 mt-2">
+                    <MudText Typo="Typo.body2">@sub.Instructions</MudText>
+                    <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
+                    @if (!string.IsNullOrWhiteSpace(sub.Summary))
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1">@sub.Summary</MudText>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(sub.DiffRef))
+                    {
+                        <MudText Typo="Typo.caption" Class="beacon-ellipsis">@sub.DiffRef</MudText>
+                    }
+                </MudPaper>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<TaskPhaseDto> Phases { get; set; } = [];
+    [Parameter] public Guid? OpenPhaseId { get; set; }
+    [Parameter] public PipelineStateDto? Pipeline { get; set; }
+    [Parameter] public EventCallback<Guid> OnToggle { get; set; }
+
+    private IEnumerable<SubtaskDto> PhaseSubtasks(Guid phaseId) =>
+        Pipeline?.Subtasks.Where(s => s.TaskPhaseId == phaseId) ?? [];
+
+    private string ModelName(Guid? id) =>
+        id is null ? L["Unbound"].Value : L["PhaseModel"].Value;
+
+    private string SubtaskStatusLabel(SubtaskStatus status) => status == SubtaskStatus.Done
+        ? L["SubtaskReported"].Value
+        : L[status.ToString()].Value;
+}

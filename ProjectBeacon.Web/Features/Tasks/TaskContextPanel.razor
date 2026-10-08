@@ -1,0 +1,76 @@
+@using ProjectBeacon.Application.Context
+@using ProjectBeacon.Application.Tasks
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject CompileBriefHandler CompileBrief
+
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h6">@L["CompiledBrief"]</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Compile" Disabled="_compiling">
+            @L["CompileBrief"]
+        </MudButton>
+    </MudStack>
+    <div class="beacon-budget mt-2">
+        <div class="beacon-budget-label">
+            <span class="mud-typography mud-typography-caption">@L["TokenBudget"]</span>
+            <span class="mud-typography mud-typography-caption">@_tokens / @_budget</span>
+        </div>
+        <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, _budget)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
+        @if (_overflow)
+        {
+            <MudText Typo="Typo.caption" Class="mt-1">@L["BudgetOverflow"]</MudText>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-2">@_error</MudAlert>
+    }
+    @if (!string.IsNullOrEmpty(_markdown))
+    {
+        <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_markdown</MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public TaskItemDto? Task { get; set; }
+
+    private string? _markdown;
+    private string? _error;
+    private int _tokens;
+    private int _budget = 8000;
+    private bool _overflow;
+    private bool _compiling;
+    private Guid _compiledFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Task is null || Task.Id == _compiledFor)
+            return;
+        _compiledFor = Task.Id;
+        await Compile();
+    }
+
+    private async Task Compile()
+    {
+        if (Task is null) return;
+        _compiling = true;
+        _error = null;
+        try
+        {
+            var result = await CompileBrief.HandleAsync(new CompileBriefCommand(new CompileBriefRequest(
+                Task.ProjectId, null, null, Task.Id, _budget, false, false, false)));
+            if (!result.Success)
+            {
+                _error = result.Error;
+                return;
+            }
+            _markdown = result.Value!.BriefMarkdown;
+            _tokens = result.Value.TokenEstimate;
+            _overflow = result.Value.BudgetOverflow;
+        }
+        finally
+        {
+            _compiling = false;
+        }
+    }
+}

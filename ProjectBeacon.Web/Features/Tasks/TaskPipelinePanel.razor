@@ -1,0 +1,86 @@
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+    <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
+    @if (Pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
+    {
+        @if (pipeline.Stage == TaskPipelineStage.Closed)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">@L["PipelineClosed"]</MudText>
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-2">@L["Sessions"]</MudText>
+        @if (pipeline.Sessions.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
+        }
+        @foreach (var session in pipeline.Sessions)
+        {
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
+                <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
+                <StatusChip Color="@SessionStatusColor(session.Status)" Label="@SessionStatusLabel(session.Status)" />
+                @if (session.LaunchedAt is not null)
+                {
+                    <MudText Typo="Typo.caption">@L["Launched"]: @session.LaunchedAt.Value.ToShortDateString()</MudText>
+                }
+                @if (session.ClosedAt is not null)
+                {
+                    <MudText Typo="Typo.caption">@L["Closed"]: @session.ClosedAt.Value.ToShortDateString()</MudText>
+                }
+                @if (session.Status == SessionStatus.Ready)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy">@L["LaunchSession"]</MudButton>
+                    <MudText Typo="Typo.caption">@L["LaunchSessionHint"]</MudText>
+                }
+            </MudStack>
+            @if (!string.IsNullOrEmpty(session.LaunchSpec))
+            {
+                <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
+            }
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Verdicts"]</MudText>
+        @if (pipeline.Verdicts.Count == 0)
+        {
+            <MudText Typo="Typo.caption" Class="mt-1">@L["NoVerdictsYet"]</MudText>
+        }
+        @foreach (var verdict in pipeline.Verdicts)
+        {
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
+                <StatusChip Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)" Label="@(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)" />
+                <MudText Typo="Typo.body2" Class="grow beacon-pre">@verdict.Note</MudText>
+                <MudText Typo="Typo.caption">@verdict.CreatedAt.ToShortDateString()</MudText>
+            </MudStack>
+        }
+    }
+    else
+    {
+        <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineNotStarted"]</MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public PipelineStateDto? Pipeline { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
+
+    private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
+
+    private Color SessionStatusColor(SessionStatus status) => status switch
+    {
+        SessionStatus.Active => Color.Info,
+        SessionStatus.Closed => Color.Default,
+        SessionStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+
+    private string RoleLabel(PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => L["RoleBindingPlanner"].Value,
+        PipelineRole.Actor => L["RoleBindingActor"].Value,
+        PipelineRole.Review => L["Review"].Value,
+        _ => role.ToString()
+    };
+}

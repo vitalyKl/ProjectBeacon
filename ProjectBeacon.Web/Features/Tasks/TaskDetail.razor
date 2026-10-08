@@ -2,7 +2,6 @@
 @layout MainLayout
 @attribute [Authorize]
 @using ProjectBeacon.Application.Authorization
-@using ProjectBeacon.Application.Context
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
@@ -13,8 +12,6 @@
 @inject GetTaskHandler GetTask
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
-@inject CompileBriefHandler CompileBrief
-@inject AddCommentHandler AddComment
 @inject AddReviewNotesHandler AddReviewNotes
 @inject GetPipelineHandler GetPipeline
 @inject StartPipelineHandler StartPipeline
@@ -262,150 +259,16 @@ else
     </div>
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
     <MudTabPanel Text="@L["Work"]">
-
-    @if (_phases.Count > 0)
-    {
-        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-            <div class="beacon-phase-strip">
-                @foreach (var phase in _phases)
-                {
-                    <button type="button" class="beacon-phase-tick @(_openPhaseId == phase.Id ? "is-open" : "")" aria-label="@($"{phase.Title} {phase.Status}")" @onclick="() => TogglePhase(phase.Id)">
-                        <span class="beacon-phase-mark @phase.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
-                        <span>@(string.IsNullOrEmpty(phase.Key) ? phase.Title : L["Phase_" + phase.Key].Value)</span>
-                    </button>
-                }
-            </div>
-            @if (_phases.FirstOrDefault(p => p.Id == _openPhaseId) is { } open)
-            {
-                <MudText Typo="Typo.body2" Class="mt-3">@open.Instruction</MudText>
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @(ModelName(open.ModelBackendId))</MudText>
-                @foreach (var sub in PhaseSubtasks(open.Id))
-                {
-                    <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-3 mt-2">
-                        <MudText Typo="Typo.body2">@sub.Instructions</MudText>
-                        <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
-                        @if (!string.IsNullOrWhiteSpace(sub.Summary))
-                        {
-                            <MudText Typo="Typo.body2" Class="mt-1">@sub.Summary</MudText>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(sub.DiffRef))
-                        {
-                            <MudText Typo="Typo.caption" Class="beacon-ellipsis">@sub.DiffRef</MudText>
-                        }
-                    </MudPaper>
-                }
-            }
-        </MudPaper>
-    }
-
+        <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Pipeline"]">
-
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
-        @if (_pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
-        {
-            @if (pipeline.Stage == TaskPipelineStage.Closed)
-            {
-                <MudText Typo="Typo.body2" Class="mt-2">@L["PipelineClosed"]</MudText>
-            }
-
-            <MudText Typo="Typo.subtitle2" Class="mt-2">@L["Sessions"]</MudText>
-            @if (pipeline.Sessions.Count == 0)
-            {
-                <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
-            }
-            @foreach (var session in pipeline.Sessions)
-            {
-                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
-                    <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
-                    <StatusChip Color="@SessionStatusColor(session.Status)" Label="@SessionStatusLabel(session.Status)" />
-                    @if (session.LaunchedAt is not null)
-                    {
-                        <MudText Typo="Typo.caption">@L["Launched"]: @session.LaunchedAt.Value.ToShortDateString()</MudText>
-                    }
-                    @if (session.ClosedAt is not null)
-                    {
-                        <MudText Typo="Typo.caption">@L["Closed"]: @session.ClosedAt.Value.ToShortDateString()</MudText>
-                    }
-                      @if (session.Status == SessionStatus.Ready)
-                      {
-                          <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunchSession(session))" Disabled="_busy">@L["LaunchSession"]</MudButton>
-                          <MudText Typo="Typo.caption">@L["LaunchSessionHint"]</MudText>
-                      }
-                </MudStack>
-                @if (!string.IsNullOrEmpty(session.LaunchSpec))
-                {
-                    <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
-                }
-            }
-
-            <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Verdicts"]</MudText>
-            @if (pipeline.Verdicts.Count == 0)
-            {
-                <MudText Typo="Typo.caption" Class="mt-1">@L["NoVerdictsYet"]</MudText>
-            }
-            @foreach (var verdict in pipeline.Verdicts)
-            {
-                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
-                    <StatusChip Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)" Label="@(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)" />
-                    <MudText Typo="Typo.body2" Class="grow beacon-pre">@verdict.Note</MudText>
-                    <MudText Typo="Typo.caption">@verdict.CreatedAt.ToShortDateString()</MudText>
-                </MudStack>
-            }
-        }
-        else
-        {
-            <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineNotStarted"]</MudText>
-        }
-    </MudPaper>
+        <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Discussion"]">
-
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.h6">@L["Comments"]</MudText>
-        @if (_task.Comments.Count == 0)
-        {
-            <MudText Typo="Typo.caption" Class="mt-2">@L["NoCommentsYet"]</MudText>
-        }
-        @foreach (var comment in _task.Comments.OrderBy(c => c.CreatedAt))
-        {
-            <MudText Typo="Typo.body2" Class="mt-2">@comment.Content</MudText>
-            <MudText Typo="Typo.caption">@comment.CreatedAt.ToShortDateString()</MudText>
-        }
-        <MudTextField @bind-Value="_commentDraft" Label="@L["WriteAComment"]" Lines="2" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-        <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveComment">@L["AddComment"]</MudButton>
-    </MudPaper>
+        <TaskDiscussionPanel Task="_task" OnSaved="Reload" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Context"]">
-
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-            <MudText Typo="Typo.h6">@L["CompiledBrief"]</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Compile" Disabled="_compiling">
-                @L["CompileBrief"]
-            </MudButton>
-        </MudStack>
-        <div class="beacon-budget mt-2">
-            <div class="beacon-budget-label">
-                <span class="mud-typography mud-typography-caption">@L["TokenBudget"]</span>
-                <span class="mud-typography mud-typography-caption">@_briefTokens / @_briefBudget</span>
-            </div>
-            <MudProgressLinear Value="@TokenBudgetMeter.Percent(_briefTokens, _briefBudget)" Color="@(_briefOverflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />
-            @if (_briefOverflow)
-            {
-                <MudText Typo="Typo.caption" Class="mt-1">@L["BudgetOverflow"]</MudText>
-            }
-        </div>
-        @if (!string.IsNullOrEmpty(_briefError))
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-2">@_briefError</MudAlert>
-        }
-        @if (!string.IsNullOrEmpty(_briefMarkdown))
-        {
-            <MudText Typo="Typo.body2" Class="mt-4 beacon-pre">@_briefMarkdown</MudText>
-        }
-    </MudPaper>
+        <TaskContextPanel Task="_task" />
     </MudTabPanel>
     </MudTabs>
 }
@@ -426,13 +289,7 @@ else
     private bool _busy;
     private bool _isAdmin;
     private string? _userId;
-    private string? _briefMarkdown;
-    private string? _briefError;
-    private int _briefTokens;
-    private int _briefBudget = 8000;
-    private bool _briefOverflow;
-    private bool _compiling;
-    private string _commentDraft = string.Empty;
+
     private string _reviewDraft = string.Empty;
     private List<LabelDto> _labels = [];
     private List<MilestoneDto> _milestones = [];
@@ -511,7 +368,6 @@ else
         {
             await ReloadPipeline();
             await ReloadSteps();
-            await Compile();
         }
     }
 
@@ -591,12 +447,6 @@ else
     }
 
     private void TogglePhase(Guid id) => _openPhaseId = _openPhaseId == id ? null : id;
-
-    private IEnumerable<SubtaskDto> PhaseSubtasks(Guid phaseId) =>
-        _pipeline?.Subtasks.Where(s => s.TaskPhaseId == phaseId) ?? [];
-
-    private string ModelName(Guid? id) =>
-        id is null ? L["Unbound"].Value : L["PhaseModel"].Value;
 
     private async Task OnAddStep()
     {
@@ -738,22 +588,6 @@ else
         }
     }
 
-    private async Task SaveComment()
-    {
-        if (_task is null || string.IsNullOrWhiteSpace(_commentDraft))
-            return;
-        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
-        var result = await AddComment.HandleAsync(new AddCommentCommand(new AddCommentRequest(_task.Id, _commentDraft.Trim()), actor));
-        if (!result.Success)
-        {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-            return;
-        }
-        _commentDraft = string.Empty;
-        await Reload();
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
-    }
-
     private async Task SaveReview()
     {
         if (_task is null || string.IsNullOrWhiteSpace(_reviewDraft))
@@ -766,30 +600,6 @@ else
         }
         await Reload();
         Snackbar.Add(L["Saved"].Value, Severity.Success);
-    }
-
-    private async Task Compile()
-    {
-        if (_task is null) return;
-        _compiling = true;
-        _briefError = null;
-        try
-        {
-            var result = await CompileBrief.HandleAsync(new CompileBriefCommand(new CompileBriefRequest(
-                _task.ProjectId, null, null, _task.Id, _briefBudget, false, false, false)));
-            if (!result.Success)
-            {
-                _briefError = result.Error;
-                return;
-            }
-            _briefMarkdown = result.Value!.BriefMarkdown;
-            _briefTokens = result.Value.TokenEstimate;
-            _briefOverflow = result.Value.BudgetOverflow;
-        }
-        finally
-        {
-            _compiling = false;
-        }
     }
 
     private IReadOnlyList<SubtaskDto> ReopenableSubtasks =>
