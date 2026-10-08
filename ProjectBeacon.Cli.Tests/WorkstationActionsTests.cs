@@ -41,7 +41,7 @@ public sealed class WorkstationActionsTests : IDisposable
             model = "beacon-local/qwen"
         });
 
-        var result = WorkstationActions.InitProject(_dir, payload);
+        var result = WorkstationSetup.InitProject(_dir, payload);
         Assert.True(result.Success, result.Error);
         Assert.True(Directory.Exists(Path.Combine(full, ".opencode", "data")));
         var gitignore = File.ReadAllText(Path.Combine(full, ".gitignore"));
@@ -61,7 +61,7 @@ public sealed class WorkstationActionsTests : IDisposable
         var path = Path.Combine(_dir, "merge");
         Directory.CreateDirectory(path);
         File.WriteAllText(Path.Combine(path, "opencode.json"), """{"$schema":"https://opencode.ai/config.json","autoupdate":false}""");
-        var result = WorkstationActions.ApplyOpencode(_dir, JsonSerializer.Serialize(new
+        var result = OpencodeConfig.ApplyOpencode(_dir, JsonSerializer.Serialize(new
         {
             path = "merge",
             mcp = new { context7 = new { type = "remote", url = "https://mcp.context7.com/mcp", enabled = true } }
@@ -92,7 +92,7 @@ public sealed class WorkstationActionsTests : IDisposable
             },
             ["agent"] = new JsonObject { ["build"] = new JsonObject { ["model"] = "beacon-local/qwen" } }
         };
-        var result = WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
         Assert.True(result.Success);
         var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
         Assert.Contains("beacon-local", opc);
@@ -115,7 +115,7 @@ public sealed class WorkstationActionsTests : IDisposable
                 ["beacon"] = new JsonObject { ["type"] = "local", ["command"] = new JsonArray("beacon", "mcp") }
             }
         };
-        var result = WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
         Assert.True(result.Success);
         var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
         Assert.Contains("beacon", opc);
@@ -126,7 +126,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void SaveWorkstation_WritesSettingsFile()
     {
         var file = Path.Combine(_dir, "workstation.json");
-        WorkstationActions.SaveWorkstation("""{"modelsRoot":"D:\\models","llamaSwapPort":9090}""", file);
+        WorkstationSetup.SaveWorkstation("""{"modelsRoot":"D:\\models","llamaSwapPort":9090}""", file);
         var loaded = WorkstationSettings.Load(file);
         Assert.Equal(@"D:\models", loaded.ModelsRoot);
         Assert.Equal(9090, loaded.LlamaSwapPort);
@@ -138,7 +138,7 @@ public sealed class WorkstationActionsTests : IDisposable
         var file = Path.Combine(_dir, "workstation.json");
         File.WriteAllText(file, "<html></html>");
 
-        var json = WorkstationActions.SaveWorkstation("""{"llamaSwapPort":9091}""", file);
+        var json = WorkstationSetup.SaveWorkstation("""{"llamaSwapPort":9091}""", file);
 
         using var doc = JsonDocument.Parse(json);
         Assert.Equal(9091, doc.RootElement.GetProperty("llamaSwapPort").GetInt32());
@@ -151,8 +151,8 @@ public sealed class WorkstationActionsTests : IDisposable
     public void MergeGitignore_Idempotent()
     {
         var file = Path.Combine(_dir, ".gitignore");
-        WorkstationActions.MergeGitignore(file);
-        WorkstationActions.MergeGitignore(file);
+        WorkstationSetup.MergeGitignore(file);
+        WorkstationSetup.MergeGitignore(file);
         var lines = File.ReadAllLines(file).Where(l => l.StartsWith(".opencode/data")).Count();
         Assert.Equal(1, lines);
     }
@@ -160,7 +160,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ListDir_TempExists()
     {
-        var result = WorkstationActions.ListDir(_dir, _dir);
+        var result = WorkstationBrowse.ListDir(_dir, _dir);
         Assert.True(result.Success);
         using var doc = JsonDocument.Parse(result.Value!);
         Assert.Equal(Path.GetFullPath(_dir), doc.RootElement.GetProperty("path").GetString());
@@ -169,7 +169,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ListDir_PathEqualsRoot_Allowed()
     {
-        var result = WorkstationActions.ListDir(_dir, _dir);
+        var result = WorkstationBrowse.ListDir(_dir, _dir);
         Assert.True(result.Success);
     }
 
@@ -180,7 +180,7 @@ public sealed class WorkstationActionsTests : IDisposable
         try
         {
             Directory.CreateDirectory(outside);
-            var result = WorkstationActions.ListDir(_dir, outside);
+            var result = WorkstationBrowse.ListDir(_dir, outside);
             Assert.False(result.Success);
             Assert.Contains("escapes", result.Error);
         }
@@ -195,7 +195,7 @@ public sealed class WorkstationActionsTests : IDisposable
     {
         var child = Path.Combine(_dir, "nested");
         Directory.CreateDirectory(child);
-        var result = WorkstationActions.ListDir(_dir, "nested");
+        var result = WorkstationBrowse.ListDir(_dir, "nested");
         Assert.True(result.Success, result.Error);
         using var doc = JsonDocument.Parse(result.Value!);
         Assert.Equal(Path.GetFullPath(child), doc.RootElement.GetProperty("path").GetString());
@@ -204,7 +204,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ListDir_RelativeEscape_Rejected()
     {
-        var result = WorkstationActions.ListDir(_dir, "../secret");
+        var result = WorkstationBrowse.ListDir(_dir, "../secret");
         Assert.False(result.Success);
         Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
     }
@@ -212,7 +212,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ListDir_MissingRoot_Fails()
     {
-        var result = WorkstationActions.ListDir("", _dir);
+        var result = WorkstationBrowse.ListDir("", _dir);
         Assert.False(result.Success);
         Assert.Equal("missing root", result.Error);
     }
@@ -221,7 +221,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void ListDir_NonExistentDir_Fails()
     {
         var missing = Path.Combine(_dir, "does-not-exist");
-        var result = WorkstationActions.ListDir(_dir, missing);
+        var result = WorkstationBrowse.ListDir(_dir, missing);
         Assert.False(result.Success);
         Assert.Contains("directory not found", result.Error);
     }
@@ -229,7 +229,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ScanGguf_MissingRoot_Fails()
     {
-        var result = WorkstationActions.ScanGguf("", _dir);
+        var result = WorkstationBrowse.ScanGguf("", _dir);
         Assert.False(result.Success);
         Assert.Equal("missing root", result.Error);
     }
@@ -241,7 +241,7 @@ public sealed class WorkstationActionsTests : IDisposable
         try
         {
             Directory.CreateDirectory(outside);
-            var result = WorkstationActions.ScanGguf(_dir, outside);
+            var result = WorkstationBrowse.ScanGguf(_dir, outside);
             Assert.False(result.Success);
             Assert.Contains("escapes", result.Error);
         }
@@ -255,7 +255,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void ScanGguf_MissingDir_ReturnsEmpty()
     {
         var missing = Path.Combine(_dir, "no-gguf-here");
-        var result = WorkstationActions.ScanGguf(_dir, missing);
+        var result = WorkstationBrowse.ScanGguf(_dir, missing);
         Assert.True(result.Success);
         using var doc = JsonDocument.Parse(result.Value!);
         var files = doc.RootElement.GetProperty("files");
@@ -269,7 +269,7 @@ public sealed class WorkstationActionsTests : IDisposable
         try
         {
             var payload = JsonSerializer.Serialize(new { path = "../" + Path.GetFileName(outside), createGit = false });
-            var result = WorkstationActions.InitProject(_dir, payload);
+            var result = WorkstationSetup.InitProject(_dir, payload);
             Assert.False(result.Success);
             Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
         }
@@ -284,7 +284,7 @@ public sealed class WorkstationActionsTests : IDisposable
     {
         var path = Path.Combine(_dir, "app");
         var payload = JsonSerializer.Serialize(new { path, createGit = false });
-        var result = WorkstationActions.InitProject("", payload);
+        var result = WorkstationSetup.InitProject("", payload);
         Assert.False(result.Success);
         Assert.Equal("missing root", result.Error);
     }
@@ -293,7 +293,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void InitProject_MissingPath_UsesRoot()
     {
         var payload = JsonSerializer.Serialize(new { createGit = false });
-        var result = WorkstationActions.InitProject(_dir, payload);
+        var result = WorkstationSetup.InitProject(_dir, payload);
         Assert.True(result.Success, result.Error);
         Assert.True(File.Exists(Path.Combine(_dir, ".gitignore")));
     }
@@ -302,7 +302,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void InitProject_AbsolutePath_Rejected()
     {
         var payload = JsonSerializer.Serialize(new { path = _dir, createGit = false });
-        var result = WorkstationActions.InitProject(_dir, payload);
+        var result = WorkstationSetup.InitProject(_dir, payload);
         Assert.False(result.Success);
         Assert.Contains("relative", result.Error);
     }
@@ -315,7 +315,7 @@ public sealed class WorkstationActionsTests : IDisposable
         {
             Directory.CreateDirectory(outside);
             var payload = JsonSerializer.Serialize(new { path = "../" + Path.GetFileName(outside) });
-            var result = WorkstationActions.ApplyOpencode(_dir, payload);
+            var result = OpencodeConfig.ApplyOpencode(_dir, payload);
             Assert.False(result.Success);
             Assert.Equal(WorkspacePath.ParentSegmentNotAllowed, result.Error);
         }
@@ -331,7 +331,7 @@ public sealed class WorkstationActionsTests : IDisposable
         var path = Path.Combine(_dir, "merge");
         Directory.CreateDirectory(path);
         var payload = JsonSerializer.Serialize(new { path });
-        var result = WorkstationActions.ApplyOpencode("", payload);
+        var result = OpencodeConfig.ApplyOpencode("", payload);
         Assert.False(result.Success);
         Assert.Equal("missing root", result.Error);
     }
@@ -339,7 +339,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ApplyOpencode_MissingPath_UsesRoot()
     {
-        var result = WorkstationActions.ApplyOpencode(_dir, "{}");
+        var result = OpencodeConfig.ApplyOpencode(_dir, "{}");
         Assert.True(result.Success, result.Error);
         Assert.True(File.Exists(Path.Combine(_dir, "opencode.json")));
     }
@@ -347,7 +347,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void ProbeJson_HasOs()
     {
-        var json = WorkstationActions.ProbeJson();
+        var json = WorkstationProbe.ProbeJson();
         using var doc = JsonDocument.Parse(json);
         Assert.True(doc.RootElement.TryGetProperty("os", out _));
         Assert.True(doc.RootElement.TryGetProperty("git", out _));
@@ -356,7 +356,7 @@ public sealed class WorkstationActionsTests : IDisposable
     [Fact]
     public void Install_Unknown_Throws()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => WorkstationActions.Install("""{"id":"not-a-package"}"""));
+        var ex = Assert.Throws<InvalidOperationException>(() => WorkstationSetup.Install("""{"id":"not-a-package"}"""));
         Assert.Contains("allowlist", ex.Message);
     }
 
@@ -369,7 +369,7 @@ public sealed class WorkstationActionsTests : IDisposable
         Directory.CreateDirectory(bin);
         File.WriteAllText(Path.Combine(bin, "fakebin"), "#!/bin/sh\nexec true\n");
         File.WriteAllText(Path.Combine(bin, "fakebin.cmd"), "@echo off\r\n");
-        var found = WorkstationActions.Which("fakebin", bin);
+        var found = WorkstationProbe.Which("fakebin", bin);
         Assert.Equal(Path.Combine(bin, "fakebin.cmd"), found);
     }
 
@@ -383,7 +383,7 @@ public sealed class WorkstationActionsTests : IDisposable
         File.WriteAllText(Path.Combine(bin, "fakebin"), "#!/bin/sh\nexec true\n");
         File.WriteAllText(Path.Combine(bin, "fakebin.cmd"), "@echo off\r\n");
         File.WriteAllText(Path.Combine(bin, "fakebin.exe"), "MZ");
-        var found = WorkstationActions.Which("fakebin", bin);
+        var found = WorkstationProbe.Which("fakebin", bin);
         Assert.Equal(Path.Combine(bin, "fakebin.exe"), found);
     }
 
@@ -393,7 +393,7 @@ public sealed class WorkstationActionsTests : IDisposable
         var path = Path.Combine(_dir, "discipline");
         Directory.CreateDirectory(path);
         var payload = new JsonObject { ["path"] = "discipline" };
-        var result = WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
         Assert.True(result.Success);
         var instrFile = Path.Combine(path, ".opencode", "instructions", "beacon-tool-discipline.md");
         Assert.True(File.Exists(instrFile));
@@ -409,8 +409,8 @@ public sealed class WorkstationActionsTests : IDisposable
         var path = Path.Combine(_dir, "discipline2");
         Directory.CreateDirectory(path);
         var payload = new JsonObject { ["path"] = "discipline2" };
-        WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
-        WorkstationActions.ApplyOpencode(_dir, payload.ToJsonString());
+        OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
+        OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
         var opc = File.ReadAllText(Path.Combine(path, "opencode.json"));
         Assert.Equal(1, opc.Split("beacon-tool-discipline").Length - 1);
     }
@@ -423,7 +423,7 @@ public sealed class WorkstationActionsTests : IDisposable
         var bin = Path.Combine(_dir, "binrank-shim");
         Directory.CreateDirectory(bin);
         File.WriteAllText(Path.Combine(bin, "fakebin"), "#!/bin/sh\nexec true\n");
-        var found = WorkstationActions.Which("fakebin", bin);
+        var found = WorkstationProbe.Which("fakebin", bin);
         Assert.Equal(Path.Combine(bin, "fakebin"), found);
     }
 
@@ -431,7 +431,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void ReplaceBeaconCommand_ReplacesBareBeaconWithAbsolutePath()
     {
         using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp","--root","."],"enabled":true}}""");
-        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
+        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
         using var outDoc = JsonDocument.Parse(result.GetRawText());
         var command = outDoc.RootElement.GetProperty("beacon").GetProperty("command");
         Assert.Equal("/opt/beacon/beacon", command[0].GetString());
@@ -443,7 +443,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void ReplaceBeaconCommand_LeavesNonBeaconServersAlone()
     {
         using var doc = JsonDocument.Parse("""{"ctx7":{"type":"remote","url":"https://x"},"other":{"type":"local","command":["node","server.js"]}}""");
-        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
+        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/beacon");
         Assert.Equal(doc.RootElement.GetRawText(), result.GetRawText());
     }
 
@@ -451,7 +451,7 @@ public sealed class WorkstationActionsTests : IDisposable
     public void ReplaceBeaconCommand_LeavesExistingAbsolutePathAlone()
     {
         using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["/opt/beacon/beacon","mcp"]}}""");
-        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/other");
+        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, beaconPath: "/opt/beacon/other");
         Assert.Equal("/opt/beacon/beacon", doc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
         Assert.Equal(doc.RootElement.GetRawText(), result.GetRawText());
     }
@@ -465,7 +465,7 @@ public sealed class WorkstationActionsTests : IDisposable
         File.WriteAllText(beacon, "");
         new WorkstationSettings { BeaconPath = beacon }.Save(settingsFile);
         using var doc = JsonDocument.Parse("""{"beacon":{"type":"local","command":["beacon","mcp"]}}""");
-        var result = WorkstationActions.ReplaceBeaconCommand(doc.RootElement, settingsPath: settingsFile);
+        var result = OpencodeConfig.ReplaceBeaconCommand(doc.RootElement, settingsPath: settingsFile);
         using var outDoc = JsonDocument.Parse(result.GetRawText());
         Assert.Equal(beacon, outDoc.RootElement.GetProperty("beacon").GetProperty("command")[0].GetString());
     }
@@ -475,7 +475,7 @@ public sealed class WorkstationActionsTests : IDisposable
     {
         var settingsFile = Path.Combine(_dir, "workstation-empty.json");
         new WorkstationSettings().Save(settingsFile);
-        var resolved = WorkstationActions.ResolveBeaconPath(settingsFile);
+        var resolved = OpencodeConfig.ResolveBeaconPath(settingsFile);
         Assert.Equal(Environment.ProcessPath, resolved);
     }
 
@@ -484,7 +484,7 @@ public sealed class WorkstationActionsTests : IDisposable
     {
         var settingsFile = Path.Combine(_dir, "workstation-missing.json");
         new WorkstationSettings { BeaconPath = Path.Combine(_dir, "no-such", "beacon") }.Save(settingsFile);
-        var resolved = WorkstationActions.ResolveBeaconPath(settingsFile);
+        var resolved = OpencodeConfig.ResolveBeaconPath(settingsFile);
         Assert.Equal(Environment.ProcessPath, resolved);
     }
 }

@@ -182,7 +182,7 @@ public static class HostLoadSampler
 
     private static GpuLoadDto? SampleGpu()
     {
-        var bin = WorkstationActions.Which("nvidia-smi") ?? WorkstationActions.Which("nvidia-smi.exe");
+        var bin = WorkstationProbe.Which("nvidia-smi") ?? WorkstationProbe.Which("nvidia-smi.exe");
         if (bin is null)
             return null;
         try

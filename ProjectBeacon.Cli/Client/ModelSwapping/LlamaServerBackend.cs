@@ -408,7 +408,7 @@ public sealed class LlamaServerBackend : IModelBackend
     }
 
     private static string ResolveExe(string exe) =>
-        exe.Contains('/') || exe.Contains('\\') ? exe : WorkstationActions.Which(exe) ?? exe;
+        exe.Contains('/') || exe.Contains('\\') ? exe : WorkstationProbe.Which(exe) ?? exe;
 
     private static long ReadWorkingSetMb(Process p)
     {

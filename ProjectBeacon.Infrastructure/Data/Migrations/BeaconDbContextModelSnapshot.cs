@@ -1877,7 +1877,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Projects.ApiToken", b =>
                 {
                     b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
-                        .WithMany("ApiTokens")
+                        .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

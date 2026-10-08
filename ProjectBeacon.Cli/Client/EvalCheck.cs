@@ -18,25 +18,13 @@ internal static class EvalCheck
         psi.ArgumentList.Add(OperatingSystem.IsWindows() ? "/c" : "-c");
         psi.ArgumentList.Add(command);
 
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("check did not start");
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(120_000))
-        {
-            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+        var (code, stdout, stderr, timedOut) = ProcessRunner.RunAsync(psi, TimeSpan.FromSeconds(120)).GetAwaiter().GetResult();
+        if (timedOut)
             return (-1, "check timed out");
-        }
 
-        var text = (ReadReady(stdout) + ReadReady(stderr)).Trim();
+        var text = (stdout + stderr).Trim();
         if (text.Length > 4000)
             text = text[..4000];
-        return (process.ExitCode, text);
-    }
-
-    private static string ReadReady(Task<string> read)
-    {
-        if (!read.Wait(2000) || !read.IsCompletedSuccessfully)
-            return "";
-        return read.Result;
+        return (code, text);
     }
 }

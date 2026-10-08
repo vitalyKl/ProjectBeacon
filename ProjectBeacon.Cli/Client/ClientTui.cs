@@ -195,7 +195,7 @@ public static class ClientTui
     private static async Task ShowProbeAsync(CancellationToken ct)
     {
         await Task.Yield();
-        var json = WorkstationActions.ProbeJson();
+        var json = WorkstationProbe.ProbeJson();
         AnsiConsole.Write(ProbeTable(json));
         using var doc = JsonDocument.Parse(json);
         var missing = new List<string>();
@@ -215,7 +215,7 @@ public static class ClientTui
         {
             try
             {
-                AnsiConsole.Status().Start($"Installing {id}…", _ => WorkstationActions.Install($$"""{"id":"{{id}}"}"""));
+                AnsiConsole.Status().Start($"Installing {id}…", _ => WorkstationSetup.Install($$"""{"id":"{{id}}"}"""));
                 AnsiConsole.MarkupLine($"[green]Installed {Markup.Escape(id)}[/]");
             }
             catch (Exception ex)

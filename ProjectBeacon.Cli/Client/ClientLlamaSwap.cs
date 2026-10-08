@@ -73,7 +73,7 @@ public sealed class ClientLlamaSwap : IAsyncDisposable
 
         var bin = binPath;
         if (string.IsNullOrWhiteSpace(bin))
-            bin = WorkstationActions.Which("llama-swap") ?? WorkstationActions.Which("llama-swap.exe");
+            bin = WorkstationProbe.Which("llama-swap") ?? WorkstationProbe.Which("llama-swap.exe");
         if (string.IsNullOrWhiteSpace(bin))
         {
             await KillProcessAsync();

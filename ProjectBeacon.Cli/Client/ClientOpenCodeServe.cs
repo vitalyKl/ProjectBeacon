@@ -49,7 +49,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     public async Task TickAsync(string? cwd, CancellationToken ct)
     {
         var next = string.IsNullOrWhiteSpace(cwd) ? null : Path.GetFullPath(cwd);
-        var bin = WorkstationActions.Which("opencode") ?? WorkstationActions.Which("opencode.exe");
+        var bin = WorkstationProbe.Which("opencode") ?? WorkstationProbe.Which("opencode.exe");
         if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess)
         {
             await KillProcessAsync();

@@ -13,154 +13,152 @@ internal static class McpApiTools
 
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
-    private static readonly HashSet<string> Names = new(StringComparer.Ordinal)
+    private sealed record McpTool(
+        string Name,
+        string Description,
+        Func<JsonObject> Schema,
+        Func<JsonObject?, BeaconApiClient, McpEnvironment, CancellationToken, Task<McpToolText>> Handler);
+
+    private static readonly McpTool[] Tools =
     {
-        "get_project",
-        "list_tasks", "get_task", "create_task", "update_task", "set_task_status", "set_task_substage",
-        "claim_task", "add_task_comment", "set_task_dependencies", "add_review_notes",
-        "list_task_steps", "add_task_step", "toggle_task_step", "delete_task_step",
-        "finish_work",
-        "list_context_nodes", "get_context_node", "upsert_context_node", "delete_context_node",
-        "export_agents_md", "list_constraints", "create_constraint", "activate_constraint", "reject_constraint",
-        "list_decisions", "record_decision", "accept_decision", "deprecate_decision", "supersede_decision",
-        "list_milestones", "get_milestone", "create_milestone", "update_milestone", "delete_milestone",
-        "close_milestone", "reopen_milestone",
-        "list_labels", "match_label", "add_label_path",
-        "list_reports", "get_report", "generate_report",
-        "pipeline_start", "pipeline_start_actor", "pipeline_launch_session", "pipeline_fail_subtask",
-        "pipeline_start_review", "pipeline_approve", "pipeline_force_close",
-        "model_upsert", "model_delete", "model_unbind", "proxy_reload", "proxy_unload"
+        new("get_project", "Get the current project from the Beacon API.",
+            () => Props(("projectId", "string", false)), ProjectGet),
+        new("list_tasks", "List tasks on the board and backlog. Optional status: Todo, InProgress, Done.",
+            () => Props(("projectId", "string", false), ("status", "string", false)), TasksList),
+        new("get_task", "Get one task, including comments and dependencies.",
+            () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskGet),
+        new("create_task", "Create a task. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
+            () => Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
+                ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
+                ("path", "string", false), ("projectId", "string", false)), TaskCreate),
+        new("update_task", "Update a task title, description, priority, type, label, or milestone.",
+            () => Props(("taskId", "string", true), ("title", "string", false), ("description", "string", false),
+                ("priority", "string", false), ("type", "string", false), ("labelId", "string", false),
+                ("milestoneId", "string", false), ("projectId", "string", false)), TaskUpdate),
+        new("set_task_status", "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
+            () => Props(("taskId", "string", true), ("status", "string", true), ("projectId", "string", false)), TaskStatus),
+        new("set_task_substage", "Set the in-progress sub-stage shown on the board.",
+            () => Props(("taskId", "string", true), ("subStage", "string", true)), TaskSubStage),
+        new("claim_task", "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
+            () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskClaim),
+        new("add_task_comment", "Add a comment on a task.",
+            () => Props(("taskId", "string", true), ("content", "string", true)), TaskComment),
+        new("set_task_dependencies", "Replace the tasks this task depends on.",
+            () => Props(("taskId", "string", true), ("dependentTaskIds", "array", true)), TaskDependencies),
+        new("add_review_notes", "Save review notes required before a task can move to Done.",
+            () => Props(("taskId", "string", true), ("reviewNotes", "string", true)), TaskReviewNotes),
+        new("list_task_steps", "List checklist steps on a task.",
+            () => Props(("taskId", "string", true)), StepsList),
+        new("add_task_step", "Add a checklist step.",
+            () => Props(("taskId", "string", true), ("title", "string", true)), StepAdd),
+        new("toggle_task_step", "Mark a checklist step done or not done.",
+            () => Props(("stepId", "string", true), ("done", "boolean", true)), StepToggle),
+        new("delete_task_step", "Delete a checklist step.",
+            () => Props(("stepId", "string", true)), StepDelete),
+        new("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof.",
+            FinishSchema, Finish),
+        new("context_compile", "Compile the project brief the same way the Context page does.",
+            () => Props(("taskId", "string", false), ("path", "string", false), ("repoId", "string", false),
+                ("budgetTokens", "integer", false), ("includeChangedScope", "boolean", false),
+                ("includeTreeCapsule", "boolean", false), ("includeHandoff", "boolean", false),
+                ("projectId", "string", false)), Compile),
+        new("list_context_nodes", "List context sections for the project.",
+            () => Props(("projectId", "string", false)), NodesList),
+        new("get_context_node", "Get one context section.",
+            () => Props(("nodeId", "string", true), ("projectId", "string", false)), NodeGet),
+        new("upsert_context_node", "Create or update a context section. scopeType: Project, Repo, Path, Task. source defaults to Native.",
+            () => Props(("title", "string", true), ("bodyMarkdown", "string", true), ("scopeType", "string", true),
+                ("sectionId", "string", false), ("key", "string", false), ("path", "string", false),
+                ("source", "string", false), ("sourcePath", "string", false), ("repoId", "string", false),
+                ("taskId", "string", false), ("projectId", "string", false)), NodeUpsert),
+        new("delete_context_node", "Delete a context section.",
+            () => Props(("nodeId", "string", true), ("projectId", "string", false)), NodeDelete),
+        new("export_agents_md", "Export AGENTS.md markdown for the project.",
+            () => Props(("repoId", "string", false), ("path", "string", false), ("projectId", "string", false)), ExportAgents),
+        new("list_constraints", "List project constraints.",
+            () => Props(("projectId", "string", false)), ConstraintsList),
+        new("create_constraint", "Propose a constraint. kind: Must, MustNot, Security, Compliance.",
+            () => Props(("body", "string", true), ("kind", "string", true), ("projectId", "string", false)), ConstraintCreate),
+        new("activate_constraint", "Activate a proposed constraint.",
+            () => Props(("constraintId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => ConstraintPost(args, "activate", api, env, ct)),
+        new("reject_constraint", "Reject a proposed constraint.",
+            () => Props(("constraintId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => ConstraintPost(args, "reject", api, env, ct)),
+        new("list_decisions", "List project decisions.",
+            () => Props(("projectId", "string", false)), DecisionsList),
+        new("record_decision", "Record a proposed decision.",
+            () => Props(("title", "string", true), ("body", "string", true), ("context", "string", false),
+                ("consequences", "string", false), ("projectId", "string", false)), DecisionCreate),
+        new("accept_decision", "Accept a proposed decision.",
+            () => Props(("decisionId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => DecisionPost(args, "accept", api, env, ct)),
+        new("deprecate_decision", "Deprecate a decision.",
+            () => Props(("decisionId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => DecisionPost(args, "deprecate", api, env, ct)),
+        new("supersede_decision", "Supersede an accepted decision with another decision.",
+            () => Props(("decisionId", "string", true), ("replacementId", "string", true), ("projectId", "string", false)), DecisionSupersede),
+        new("list_milestones", "List roadmap milestones.",
+            () => Props(("projectId", "string", false)), MilestonesList),
+        new("get_milestone", "Get one milestone.",
+            () => Props(("milestoneId", "string", true)), MilestoneGet),
+        new("create_milestone", "Create a roadmap milestone.",
+            () => Props(("name", "string", true), ("description", "string", false), ("order", "integer", false),
+                ("projectId", "string", false)), MilestoneCreate),
+        new("update_milestone", "Update a milestone name, description, or order.",
+            () => Props(("milestoneId", "string", true), ("name", "string", false), ("description", "string", false),
+                ("order", "integer", false)), MilestoneUpdate),
+        new("delete_milestone", "Delete a milestone.",
+            () => Props(("milestoneId", "string", true), ("projectId", "string", false)), MilestoneDelete),
+        new("close_milestone", "Close a milestone.",
+            () => Props(("milestoneId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => MilestoneAction(args, "close", api, env, ct)),
+        new("reopen_milestone", "Reopen a milestone.",
+            () => Props(("milestoneId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => MilestoneAction(args, "reopen", api, env, ct)),
+        new("list_labels", "List project area labels.",
+            () => Props(("projectId", "string", false)), LabelsList),
+        new("match_label", "Match a file path to an active label.",
+            () => Props(("path", "string", true), ("projectId", "string", false)), LabelMatch),
+        new("add_label_path", "Add a path prefix to a label.",
+            () => Props(("labelId", "string", true), ("path", "string", true), ("projectId", "string", false)), LabelPath),
+        new("list_reports", "List generated reports.",
+            () => Props(("projectId", "string", false)), ReportsList),
+        new("get_report", "Get one report.",
+            () => Props(("reportId", "string", true), ("projectId", "string", false)), ReportGet),
+        new("generate_report", "Generate a board snapshot report.",
+            () => Props(("createdByType", "string", false), ("createdById", "string", false), ("projectId", "string", false)), ReportGenerate),
+        new("pipeline_start", "Start the task pipeline. Uses BEACON_TASK_ID when taskId is omitted.",
+            () => Props(("taskId", "string", false)), PipelineStart),
+        new("pipeline_start_actor", "Start an actor session for a subtask.",
+            () => Props(("subtaskId", "string", true), ("taskId", "string", false)), PipelineActor),
+        new("pipeline_launch_session", "Launch a pipeline session on the workstation.",
+            () => Props(("sessionId", "string", true)), PipelineLaunch),
+        new("pipeline_fail_subtask", "Fail an in-progress subtask.",
+            () => Props(("subtaskId", "string", true), ("reason", "string", true), ("taskId", "string", false)), PipelineFail),
+        new("pipeline_start_review", "Start the review stage of the pipeline.",
+            () => Props(("taskId", "string", false)), PipelineReview),
+        new("pipeline_approve", "Approve the pipeline and close the task.",
+            () => Props(("note", "string", false), ("taskId", "string", false)), PipelineApprove),
+        new("pipeline_force_close", "Force-close a pipeline. The API token needs the Admin capability.",
+            () => Props(("reason", "string", false), ("taskId", "string", false)), PipelineForceClose),
+        new("model_upsert", "Create or update a local model backend. backendType: FreeToken, LlamaCpp, OpenAiCompatible.",
+            () => Props(("name", "string", true), ("backendType", "string", true), ("launchCommand", "string", true),
+                ("contextSize", "integer", true), ("ttl", "integer", true), ("id", "string", false),
+                ("extraFlags", "array", false), ("concurrent", "boolean", false)), ModelUpsert),
+        new("model_delete", "Delete a local model backend.",
+            () => Props(("modelBackendId", "string", true)), ModelDelete),
+        new("model_unbind", "Remove a pipeline role binding. role: planner, actor, review.",
+            () => Props(("role", "string", true)), ModelUnbind),
+        new("proxy_reload", "Ask the workstation to reload llama-swap.",
+            () => Props(), (_, api, _, ct) => SendAsync(api, HttpMethod.Post, "v1/models/proxy/reload", new JsonObject(), ct)),
+        new("proxy_unload", "Ask the workstation to unload llama-swap.",
+            () => Props(), (_, api, _, ct) => SendAsync(api, HttpMethod.Post, "v1/models/proxy/unload", new JsonObject(), ct))
     };
+
+    private static readonly HashSet<string> Names =
+        Tools.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
 
     public static bool IsApiTool(string name) => Names.Contains(name);
 
     public static IEnumerable<JsonObject> Definitions()
     {
-        yield return Tool("get_project", "Get the current project from the Beacon API.",
-            Props(("projectId", "string", false)));
-        yield return Tool("list_tasks", "List tasks on the board and backlog. Optional status: Todo, InProgress, Done.",
-            Props(("projectId", "string", false), ("status", "string", false)));
-        yield return Tool("get_task", "Get one task, including comments and dependencies.",
-            Props(("taskId", "string", false), ("projectId", "string", false)));
-        yield return Tool("create_task", "Create a task. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
-            Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
-                ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
-                ("path", "string", false), ("projectId", "string", false)));
-        yield return Tool("update_task", "Update a task title, description, priority, type, label, or milestone.",
-            Props(("taskId", "string", true), ("title", "string", false), ("description", "string", false),
-                ("priority", "string", false), ("type", "string", false), ("labelId", "string", false),
-                ("milestoneId", "string", false), ("projectId", "string", false)));
-        yield return Tool("set_task_status", "Move a task. status: Todo, InProgress, Done. Done still requires review notes.",
-            Props(("taskId", "string", true), ("status", "string", true), ("projectId", "string", false)));
-        yield return Tool("set_task_substage", "Set the in-progress sub-stage shown on the board.",
-            Props(("taskId", "string", true), ("subStage", "string", true)));
-        yield return Tool("claim_task", "Atomically claim a Todo task (Todo to InProgress). Uses BEACON_TASK_ID when taskId is omitted.",
-            Props(("taskId", "string", false), ("projectId", "string", false)));
-        yield return Tool("add_task_comment", "Add a comment on a task.",
-            Props(("taskId", "string", true), ("content", "string", true)));
-        yield return Tool("set_task_dependencies", "Replace the tasks this task depends on.",
-            Props(("taskId", "string", true), ("dependentTaskIds", "array", true)));
-        yield return Tool("add_review_notes", "Save review notes required before a task can move to Done.",
-            Props(("taskId", "string", true), ("reviewNotes", "string", true)));
-        yield return Tool("list_task_steps", "List checklist steps on a task.",
-            Props(("taskId", "string", true)));
-        yield return Tool("add_task_step", "Add a checklist step.",
-            Props(("taskId", "string", true), ("title", "string", true)));
-        yield return Tool("toggle_task_step", "Mark a checklist step done or not done.",
-            Props(("stepId", "string", true), ("done", "boolean", true)));
-        yield return Tool("delete_task_step", "Delete a checklist step.",
-            Props(("stepId", "string", true)));
-        yield return Tool("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof.",
-            FinishSchema());
-        yield return Tool("context_compile", "Compile the project brief the same way the Context page does.",
-            Props(("taskId", "string", false), ("path", "string", false), ("repoId", "string", false),
-                ("budgetTokens", "integer", false), ("includeChangedScope", "boolean", false),
-                ("includeTreeCapsule", "boolean", false), ("includeHandoff", "boolean", false),
-                ("projectId", "string", false)));
-        yield return Tool("list_context_nodes", "List context sections for the project.",
-            Props(("projectId", "string", false)));
-        yield return Tool("get_context_node", "Get one context section.",
-            Props(("nodeId", "string", true), ("projectId", "string", false)));
-        yield return Tool("upsert_context_node", "Create or update a context section. scopeType: Project, Repo, Path, Task. source defaults to Native.",
-            Props(("title", "string", true), ("bodyMarkdown", "string", true), ("scopeType", "string", true),
-                ("sectionId", "string", false), ("key", "string", false), ("path", "string", false),
-                ("source", "string", false), ("sourcePath", "string", false), ("repoId", "string", false),
-                ("taskId", "string", false), ("projectId", "string", false)));
-        yield return Tool("delete_context_node", "Delete a context section.",
-            Props(("nodeId", "string", true), ("projectId", "string", false)));
-        yield return Tool("export_agents_md", "Export AGENTS.md markdown for the project.",
-            Props(("repoId", "string", false), ("path", "string", false), ("projectId", "string", false)));
-        yield return Tool("list_constraints", "List project constraints.",
-            Props(("projectId", "string", false)));
-        yield return Tool("create_constraint", "Propose a constraint. kind: Must, MustNot, Security, Compliance.",
-            Props(("body", "string", true), ("kind", "string", true), ("projectId", "string", false)));
-        yield return Tool("activate_constraint", "Activate a proposed constraint.",
-            Props(("constraintId", "string", true), ("projectId", "string", false)));
-        yield return Tool("reject_constraint", "Reject a proposed constraint.",
-            Props(("constraintId", "string", true), ("projectId", "string", false)));
-        yield return Tool("list_decisions", "List project decisions.",
-            Props(("projectId", "string", false)));
-        yield return Tool("record_decision", "Record a proposed decision.",
-            Props(("title", "string", true), ("body", "string", true), ("context", "string", false),
-                ("consequences", "string", false), ("projectId", "string", false)));
-        yield return Tool("accept_decision", "Accept a proposed decision.",
-            Props(("decisionId", "string", true), ("projectId", "string", false)));
-        yield return Tool("deprecate_decision", "Deprecate a decision.",
-            Props(("decisionId", "string", true), ("projectId", "string", false)));
-        yield return Tool("supersede_decision", "Supersede an accepted decision with another decision.",
-            Props(("decisionId", "string", true), ("replacementId", "string", true), ("projectId", "string", false)));
-        yield return Tool("list_milestones", "List roadmap milestones.",
-            Props(("projectId", "string", false)));
-        yield return Tool("get_milestone", "Get one milestone.",
-            Props(("milestoneId", "string", true)));
-        yield return Tool("create_milestone", "Create a roadmap milestone.",
-            Props(("name", "string", true), ("description", "string", false), ("order", "integer", false),
-                ("projectId", "string", false)));
-        yield return Tool("update_milestone", "Update a milestone name, description, or order.",
-            Props(("milestoneId", "string", true), ("name", "string", false), ("description", "string", false),
-                ("order", "integer", false)));
-        yield return Tool("delete_milestone", "Delete a milestone.",
-            Props(("milestoneId", "string", true), ("projectId", "string", false)));
-        yield return Tool("close_milestone", "Close a milestone.",
-            Props(("milestoneId", "string", true), ("projectId", "string", false)));
-        yield return Tool("reopen_milestone", "Reopen a milestone.",
-            Props(("milestoneId", "string", true), ("projectId", "string", false)));
-        yield return Tool("list_labels", "List project area labels.",
-            Props(("projectId", "string", false)));
-        yield return Tool("match_label", "Match a file path to an active label.",
-            Props(("path", "string", true), ("projectId", "string", false)));
-        yield return Tool("add_label_path", "Add a path prefix to a label.",
-            Props(("labelId", "string", true), ("path", "string", true), ("projectId", "string", false)));
-        yield return Tool("list_reports", "List generated reports.",
-            Props(("projectId", "string", false)));
-        yield return Tool("get_report", "Get one report.",
-            Props(("reportId", "string", true), ("projectId", "string", false)));
-        yield return Tool("generate_report", "Generate a board snapshot report.",
-            Props(("createdByType", "string", false), ("createdById", "string", false), ("projectId", "string", false)));
-        yield return Tool("pipeline_start", "Start the task pipeline. Uses BEACON_TASK_ID when taskId is omitted.",
-            Props(("taskId", "string", false)));
-        yield return Tool("pipeline_start_actor", "Start an actor session for a subtask.",
-            Props(("subtaskId", "string", true), ("taskId", "string", false)));
-        yield return Tool("pipeline_launch_session", "Launch a pipeline session on the workstation.",
-            Props(("sessionId", "string", true)));
-        yield return Tool("pipeline_fail_subtask", "Fail an in-progress subtask.",
-            Props(("subtaskId", "string", true), ("reason", "string", true), ("taskId", "string", false)));
-        yield return Tool("pipeline_start_review", "Start the review stage of the pipeline.",
-            Props(("taskId", "string", false)));
-        yield return Tool("pipeline_approve", "Approve the pipeline and close the task.",
-            Props(("note", "string", false), ("taskId", "string", false)));
-        yield return Tool("pipeline_force_close", "Force-close a pipeline. The API token needs the Admin capability.",
-            Props(("reason", "string", false), ("taskId", "string", false)));
-        yield return Tool("model_upsert", "Create or update a local model backend. backendType: FreeToken, LlamaCpp, OpenAiCompatible.",
-            Props(("name", "string", true), ("backendType", "string", true), ("launchCommand", "string", true),
-                ("contextSize", "integer", true), ("ttl", "integer", true), ("id", "string", false),
-                ("extraFlags", "array", false), ("concurrent", "boolean", false)));
-        yield return Tool("model_delete", "Delete a local model backend.",
-            Props(("modelBackendId", "string", true)));
-        yield return Tool("model_unbind", "Remove a pipeline role binding. role: planner, actor, review.",
-            Props(("role", "string", true)));
-        yield return Tool("proxy_reload", "Ask the workstation to reload llama-swap.", Props());
-        yield return Tool("proxy_unload", "Ask the workstation to unload llama-swap.", Props());
+        foreach (var tool in Tools)
+            yield return Tool(tool.Name, tool.Description, tool.Schema());
     }
 
     public static Task<McpToolText> CallAsync(string name, JsonObject? args, BeaconApiClient? api, McpEnvironment env, CancellationToken ct = default)
@@ -268,66 +266,10 @@ internal static class McpApiTools
     {
         try
         {
-            return name switch
-            {
-                "get_project" => await ProjectGet(args, api, env, ct),
-                "list_tasks" => await TasksList(args, api, env, ct),
-                "get_task" => await TaskGet(args, api, env, ct),
-                "create_task" => await TaskCreate(args, api, env, ct),
-                "update_task" => await TaskUpdate(args, api, env, ct),
-                "set_task_status" => await TaskStatus(args, api, env, ct),
-                "set_task_substage" => await TaskSubStage(args, api, env, ct),
-                "claim_task" => await TaskClaim(args, api, env, ct),
-                "add_task_comment" => await TaskComment(args, api, env, ct),
-                "set_task_dependencies" => await TaskDependencies(args, api, env, ct),
-                "add_review_notes" => await TaskReviewNotes(args, api, env, ct),
-                "list_task_steps" => await StepsList(args, api, env, ct),
-                "add_task_step" => await StepAdd(args, api, env, ct),
-                "toggle_task_step" => await StepToggle(args, api, env, ct),
-                "delete_task_step" => await StepDelete(args, api, env, ct),
-                "finish_work" => await Finish(args, api, env, ct),
-                "context_compile" => await Compile(args, api, env, ct),
-                "list_context_nodes" => await NodesList(args, api, env, ct),
-                "get_context_node" => await NodeGet(args, api, env, ct),
-                "upsert_context_node" => await NodeUpsert(args, api, env, ct),
-                "delete_context_node" => await NodeDelete(args, api, env, ct),
-                "export_agents_md" => await ExportAgents(args, api, env, ct),
-                "list_constraints" => await ConstraintsList(args, api, env, ct),
-                "create_constraint" => await ConstraintCreate(args, api, env, ct),
-                "activate_constraint" => await ConstraintPost(args, "activate", api, env, ct),
-                "reject_constraint" => await ConstraintPost(args, "reject", api, env, ct),
-                "list_decisions" => await DecisionsList(args, api, env, ct),
-                "record_decision" => await DecisionCreate(args, api, env, ct),
-                "accept_decision" => await DecisionPost(args, "accept", api, env, ct),
-                "deprecate_decision" => await DecisionPost(args, "deprecate", api, env, ct),
-                "supersede_decision" => await DecisionSupersede(args, api, env, ct),
-                "list_milestones" => await MilestonesList(args, api, env, ct),
-                "get_milestone" => await MilestoneGet(args, api, env, ct),
-                "create_milestone" => await MilestoneCreate(args, api, env, ct),
-                "update_milestone" => await MilestoneUpdate(args, api, env, ct),
-                "delete_milestone" => await MilestoneDelete(args, api, env, ct),
-                "close_milestone" => await MilestoneAction(args, "close", api, env, ct),
-                "reopen_milestone" => await MilestoneAction(args, "reopen", api, env, ct),
-                "list_labels" => await LabelsList(args, api, env, ct),
-                "match_label" => await LabelMatch(args, api, env, ct),
-                "add_label_path" => await LabelPath(args, api, env, ct),
-                "list_reports" => await ReportsList(args, api, env, ct),
-                "get_report" => await ReportGet(args, api, env, ct),
-                "generate_report" => await ReportGenerate(args, api, env, ct),
-                "pipeline_start" => await PipelineStart(args, api, env, ct),
-                "pipeline_start_actor" => await PipelineActor(args, api, env, ct),
-                "pipeline_launch_session" => await PipelineLaunch(args, api, env, ct),
-                "pipeline_fail_subtask" => await PipelineFail(args, api, env, ct),
-                "pipeline_start_review" => await PipelineReview(args, api, env, ct),
-                "pipeline_approve" => await PipelineApprove(args, api, env, ct),
-                "pipeline_force_close" => await PipelineForceClose(args, api, env, ct),
-                "model_upsert" => await ModelUpsert(args, api, env, ct),
-                "model_delete" => await ModelDelete(args, api, env, ct),
-                "model_unbind" => await ModelUnbind(args, api, env, ct),
-                "proxy_reload" => await SendAsync(api, HttpMethod.Post, "v1/models/proxy/reload", new JsonObject(), ct),
-                "proxy_unload" => await SendAsync(api, HttpMethod.Post, "v1/models/proxy/unload", new JsonObject(), ct),
-                _ => new McpToolText(true, $"Unknown tool: {name}")
-            };
+            var tool = Tools.FirstOrDefault(t => t.Name == name);
+            if (tool is null)
+                return new McpToolText(true, $"Unknown tool: {name}");
+            return await tool.Handler(args, api, env, ct);
         }
         catch (Exception ex)
         {

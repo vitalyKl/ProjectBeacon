@@ -167,45 +167,22 @@ public sealed class CodeIndex
                 continue;
             }
 
-            var fullPath = resolved.Value;
-
-            if (!File.Exists(fullPath))
+            var read = TryReadTextFile(resolved.Value, MaxFileSize);
+            if (read.Error is { } error)
             {
-                results.Add(new FileSignatures(file, [], id, "file not found"));
-                continue;
-            }
-
-            long size;
-            try
-            {
-                size = new FileInfo(fullPath).Length;
-            }
-            catch (IOException)
-            {
-                results.Add(new FileSignatures(file, [], id, "unreadable file"));
-                continue;
-            }
-
-            if (size > MaxFileSize)
-            {
-                results.Add(new FileSignatures(file, [], id, "file too large"));
-                continue;
-            }
-
-            string content;
-            try
-            {
-                content = File.ReadAllText(fullPath);
-            }
-            catch (Exception)
-            {
-                results.Add(new FileSignatures(file, [], id, "unreadable file"));
+                results.Add(new FileSignatures(file, [], id, error switch
+                {
+                    FileReadError.TooLarge => "file too large",
+                    FileReadError.Binary => "file is binary",
+                    FileReadError.Unreadable => "unreadable file",
+                    _ => "file not found"
+                }));
                 continue;
             }
 
             try
             {
-                results.Add(backend.Extract(language, file, content));
+                results.Add(backend.Extract(language, file, read.Text!));
             }
             catch (Exception ex)
             {
@@ -376,34 +353,11 @@ public sealed class CodeIndex
 
     private void SearchFile(string fullPath, string relative, string query, int cap, List<SearchMatch> matches)
     {
-        if (BinaryExtensions.Contains(Path.GetExtension(fullPath)))
+        var read = TryReadTextFile(fullPath, MaxFileSize);
+        if (read.Error is not null)
             return;
 
-        long size;
-        try
-        {
-            size = new FileInfo(fullPath).Length;
-        }
-        catch (IOException)
-        {
-            return;
-        }
-
-        if (size == 0 || size > MaxFileSize)
-            return;
-
-        if (ContainsNulByte(fullPath))
-            return;
-
-        string content;
-        try
-        {
-            content = File.ReadAllText(fullPath);
-        }
-        catch (Exception)
-        {
-            return;
-        }
+        var content = read.Text!;
 
         var lineStarts = new List<int> { 0 };
         for (var i = 0; i < content.Length; i++)
@@ -530,6 +484,54 @@ public sealed class CodeIndex
         return false;
     }
 
+    private enum FileReadError
+    {
+        NotFound,
+        TooLarge,
+        Binary,
+        Unreadable
+    }
+
+    private readonly record struct FileRead(string? Text, FileReadError? Error)
+    {
+        public static FileRead Ok(string text) => new(text, null);
+        public static FileRead Fail(FileReadError error) => new(null, error);
+    }
+
+    private static FileRead TryReadTextFile(string fullPath, long maxBytes)
+    {
+        if (!File.Exists(fullPath))
+            return FileRead.Fail(FileReadError.NotFound);
+
+        long size;
+        try
+        {
+            size = new FileInfo(fullPath).Length;
+        }
+        catch (IOException)
+        {
+            return FileRead.Fail(FileReadError.Unreadable);
+        }
+
+        if (size > maxBytes)
+            return FileRead.Fail(FileReadError.TooLarge);
+
+        if (BinaryExtensions.Contains(Path.GetExtension(fullPath)) || ContainsNulByte(fullPath))
+            return FileRead.Fail(FileReadError.Binary);
+
+        string content;
+        try
+        {
+            content = File.ReadAllText(fullPath);
+        }
+        catch (Exception)
+        {
+            return FileRead.Fail(FileReadError.Unreadable);
+        }
+
+        return FileRead.Ok(content);
+    }
+
     private static IReadOnlyList<string> SafeEnumerateDirectories(string dir)
     {
         try
@@ -652,36 +654,16 @@ public sealed class CodeIndex
         if (!resolved.Success)
             return Result.Failure<string>(resolved.Error ?? "invalid path");
 
-        var fullPath = resolved.Value;
-        if (!File.Exists(fullPath))
-            return Result.Failure<string>("file not found");
+        var read = TryReadTextFile(resolved.Value, MaxFileSize);
+        if (read.Error is { } error)
+            return Result.Failure<string>(error switch
+            {
+                FileReadError.TooLarge => "file too large",
+                FileReadError.Binary => "file is binary",
+                _ => "file not found"
+            });
 
-        long size;
-        try
-        {
-            size = new FileInfo(fullPath).Length;
-        }
-        catch (IOException)
-        {
-            return Result.Failure<string>("file not found");
-        }
-
-        if (size > MaxFileSize)
-            return Result.Failure<string>("file too large");
-        if (BinaryExtensions.Contains(Path.GetExtension(fullPath)) || ContainsNulByte(fullPath))
-            return Result.Failure<string>("file is binary");
-
-        string content;
-        try
-        {
-            content = File.ReadAllText(fullPath);
-        }
-        catch (Exception)
-        {
-            return Result.Failure<string>("file not found");
-        }
-
-        var lines = SplitLines(content);
+        var lines = SplitLines(read.Text!);
         if (endLine > lines.Length)
             return Result.Failure<string>($"endLine exceeds file length ({lines.Length} lines)");
 

@@ -87,7 +87,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
                 {
-                    probeJson = WorkstationActions.ProbeJson(
+                    probeJson = WorkstationProbe.ProbeJson(
                         _llama.StatusWire(), HostLoadSampler.ToWire(host), _openCode.StatusWire()),
                     workstationJson = JsonSerializer.Serialize(settings, Camel)
                 }, ct);
@@ -233,22 +233,22 @@ public sealed class WorkstationDaemon : IAsyncDisposable
                 }
                 if (kind == WorkstationCommandKind.RunEvalTurn)
                 {
-                    var evalAction = await WorkstationActions.RunEvalTurnAsync(command.LocalRoot, payload, _openCode, _runtime, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
+                    var evalAction = await WorkstationEval.RunEvalTurnAsync(command.LocalRoot, payload, _openCode, _runtime, ChatPollInterval, ChatIdleTimeout, ChatMaxDuration, ct);
                     if (!evalAction.Success)
                         return (false, null, evalAction.Error);
                     return (true, evalAction.Value, null);
                 }
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
-                    var reviewAction = WorkstationActions.RunReviewCheck(command.LocalRoot, payload);
+                    var reviewAction = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
                     if (!reviewAction.Success)
                         return (false, null, reviewAction.Error);
                     return (true, reviewAction.Value, null);
                 }
                 var projectAction = kind switch
                 {
-                    WorkstationCommandKind.InitProject => WorkstationActions.InitProject(command.LocalRoot, payload),
-                    WorkstationCommandKind.ApplyOpencode => WorkstationActions.ApplyOpencode(command.LocalRoot, payload),
+                    WorkstationCommandKind.InitProject => WorkstationSetup.InitProject(command.LocalRoot, payload),
+                    WorkstationCommandKind.ApplyOpencode => OpencodeConfig.ApplyOpencode(command.LocalRoot, payload),
                     _ => null
                 };
                 if (projectAction is not null)
@@ -279,8 +279,8 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             var settings = _loadSettings();
             var sandboxed = kind switch
             {
-                WorkstationCommandKind.ListDir => WorkstationActions.ListDir(BrowseRoot(settings, payload), ReadPath(payload)),
-                WorkstationCommandKind.ScanGguf => WorkstationActions.ScanGguf(settings.ModelsRoot ?? "", ReadPath(payload)),
+                WorkstationCommandKind.ListDir => WorkstationBrowse.ListDir(BrowseRoot(settings, payload), ReadPath(payload)),
+                WorkstationCommandKind.ScanGguf => WorkstationBrowse.ScanGguf(settings.ModelsRoot ?? "", ReadPath(payload)),
                 _ => null
             };
             if (sandboxed is not null)
@@ -292,9 +292,9 @@ public sealed class WorkstationDaemon : IAsyncDisposable
 
             string result = kind switch
             {
-                WorkstationCommandKind.Probe => WorkstationActions.ProbeJson(_llama.StatusWire()),
-                WorkstationCommandKind.SaveWorkstation => WorkstationActions.SaveWorkstation(payload),
-                WorkstationCommandKind.Install => WorkstationActions.Install(payload),
+                WorkstationCommandKind.Probe => WorkstationProbe.ProbeJson(_llama.StatusWire()),
+                WorkstationCommandKind.SaveWorkstation => WorkstationSetup.SaveWorkstation(payload),
+                WorkstationCommandKind.Install => WorkstationSetup.Install(payload),
                 _ => throw new InvalidOperationException($"Unknown command {kind}.")
             };
             return (true, result, null);
@@ -318,7 +318,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payload) ? "{}" : payload);
         if (doc.RootElement.TryGetProperty("workstation", out var workstation)
             && workstation.ValueKind == JsonValueKind.Object)
-            WorkstationActions.SaveWorkstation(workstation.GetRawText());
+            WorkstationSetup.SaveWorkstation(workstation.GetRawText());
         var revision = doc.RootElement.TryGetProperty("revision", out var rev) && rev.TryGetInt64(out var value)
             ? value
             : 0;
@@ -331,7 +331,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         if (!response.IsSuccessStatusCode)
             return (false, null, $"opencode connections {(int)response.StatusCode}");
         var body = await response.Content.ReadAsStringAsync(ct);
-        var applied = WorkstationActions.ApplyOpenCodeConnections(body);
+        var applied = OpencodeConfig.ApplyOpenCodeConnections(body);
         _openCode.SetEnvironment(applied.Environment);
         await _openCodeLock.WaitAsync(ct);
         try

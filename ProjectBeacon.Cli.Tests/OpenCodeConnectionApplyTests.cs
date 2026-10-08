@@ -13,7 +13,7 @@ public sealed class OpenCodeConnectionApplyTests
         var path = Path.Combine(dir, "opencode.json");
         try
         {
-            var applied = WorkstationActions.ApplyOpenCodeConnections(
+            var applied = OpencodeConfig.ApplyOpenCodeConnections(
                 """[{"providerId":"xai","modelId":"grok-3","baseUrl":"","apiKey":"secret-key"}]""",
                 path);
             var text = File.ReadAllText(path);

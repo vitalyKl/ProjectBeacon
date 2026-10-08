@@ -390,19 +390,19 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
 
     private static async Task CompleteEvalRunAsync(IBeaconDb db, WorkstationCommand row, string? resultJson, CancellationToken ct)
     {
-        var runId = ReadEvalRunId(row.PayloadJson) ?? ReadEvalRunId(resultJson);
+        var runId = DevicePayloadReader.ReadGuid(row.PayloadJson, "evalRunId") ?? DevicePayloadReader.ReadGuid(resultJson, "evalRunId");
         if (runId is null || string.IsNullOrWhiteSpace(resultJson))
             return;
         try
         {
             using var doc = JsonDocument.Parse(resultJson);
             var r = doc.RootElement;
-            var promptTokens = ReadInt(r, "promptTokens");
-            var completionTokens = ReadInt(r, "completionTokens");
-            var turnCount = ReadInt(r, "turnCount");
+            var promptTokens = DevicePayloadReader.ReadInt(r, "promptTokens");
+            var completionTokens = DevicePayloadReader.ReadInt(r, "completionTokens");
+            var turnCount = DevicePayloadReader.ReadInt(r, "turnCount");
             var interrupted = r.TryGetProperty("interrupted", out var interruptedElement)
                 && interruptedElement.ValueKind == JsonValueKind.True;
-            int? exitCode = interrupted ? null : ReadNullableInt(r, "exitCode");
+            int? exitCode = interrupted ? null : DevicePayloadReader.ReadNullableInt(r, "exitCode");
             string? checkOutput = r.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String
                 ? outputElement.GetString()
                 : null;
@@ -423,7 +423,7 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
     {
         if (row.Kind != WorkstationCommandKind.RunEvalTurn)
             return;
-        var runId = ReadEvalRunId(row.PayloadJson);
+        var runId = DevicePayloadReader.ReadGuid(row.PayloadJson, "evalRunId");
         if (runId is null)
             return;
         var run = await db.EvalRuns.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
@@ -437,7 +437,7 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
     {
         if (row.Kind != WorkstationCommandKind.RunReviewCheck)
             return;
-        var reviewRunId = ReadGuid(row.PayloadJson, "reviewRunId");
+        var reviewRunId = DevicePayloadReader.ReadGuid(row.PayloadJson, "reviewRunId");
         if (reviewRunId is null)
             return;
         var run = await db.ReviewRuns.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == reviewRunId.Value, ct);
@@ -459,7 +459,7 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             try
             {
                 using var doc = JsonDocument.Parse(resultJson);
-                exitCode = ReadNullableInt(doc.RootElement, "exitCode");
+                exitCode = DevicePayloadReader.ReadNullableInt(doc.RootElement, "exitCode");
                 if (doc.RootElement.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String)
                     output = outputElement.GetString();
             }
@@ -475,61 +475,6 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             run.Fail(string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
     }
 
-    private static Guid? ReadGuid(string? json, string name)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return null;
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-                && Guid.TryParse(value.GetString(), out var id))
-                return id;
-        }
-        catch (JsonException)
-        {
-        }
-        return null;
-    }
-
-    private static int? ReadNullableInt(JsonElement parent, string name)
-    {
-        if (!parent.TryGetProperty(name, out var value))
-            return null;
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed))
-            return parsed;
-        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var number))
-            return number;
-        return null;
-    }
-
-    private static Guid? ReadEvalRunId(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return null;
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("evalRunId", out var value) && value.ValueKind == JsonValueKind.String
-                && Guid.TryParse(value.GetString(), out var id))
-                return id;
-        }
-        catch (JsonException)
-        {
-        }
-        return null;
-    }
-
-    private static int ReadInt(JsonElement parent, string name)
-    {
-        if (!parent.TryGetProperty(name, out var value))
-            return 0;
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed))
-            return parsed;
-        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var number))
-            return number;
-        return 0;
-    }
 }
 
 public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<WorkstationCommandDto>>
