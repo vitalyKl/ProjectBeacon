@@ -1,0 +1,48 @@
+@using ProjectBeacon.Application.Tasks
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AddReviewNotesHandler AddReviewNotes
+@inject ISnackbar Snackbar
+
+<section class="beacon-panel beacon-surface-section">
+    <header class="beacon-ops-head">
+        <div class="beacon-ops-title">@L["ReviewNotes"]</div>
+    </header>
+    <div class="beacon-ops-pad">
+        @if (!string.IsNullOrEmpty(Task?.ReviewNotes))
+        {
+            <MudText Typo="Typo.body2" Class="beacon-pre">@Task.ReviewNotes</MudText>
+        }
+        <MudTextField @bind-Value="_draft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+        <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="Save">@L["Save"]</MudButton>
+    </div>
+</section>
+
+@code {
+    [Parameter] public TaskItemDto? Task { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private string _draft = string.Empty;
+    private TaskItemDto? _seen;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Task, _seen))
+            return;
+        _seen = Task;
+        _draft = Task?.ReviewNotes ?? string.Empty;
+    }
+
+    private async Task Save()
+    {
+        if (Task is null || string.IsNullOrWhiteSpace(_draft))
+            return;
+        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(Task.Id, _draft.Trim())));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        await OnSaved.InvokeAsync();
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+    }
+}

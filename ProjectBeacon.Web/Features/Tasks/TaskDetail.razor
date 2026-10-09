@@ -12,7 +12,6 @@
 @inject GetTaskHandler GetTask
 @inject ListLabelsHandler ListLabels
 @inject ListProjectMilestonesHandler ListMilestones
-@inject AddReviewNotesHandler AddReviewNotes
 @inject GetPipelineHandler GetPipeline
 @inject StartPipelineHandler StartPipeline
 @inject StartActorSessionHandler StartActorSession
@@ -242,19 +241,7 @@ else
                     }
                 </div>
             </section>
-            <section class="beacon-panel beacon-surface-section">
-                <header class="beacon-ops-head">
-                    <div class="beacon-ops-title">@L["ReviewNotes"]</div>
-                </header>
-                <div class="beacon-ops-pad">
-                    @if (!string.IsNullOrEmpty(_task.ReviewNotes))
-                    {
-                        <MudText Typo="Typo.body2" Class="beacon-pre">@_task.ReviewNotes</MudText>
-                    }
-                    <MudTextField @bind-Value="_reviewDraft" Label="@L["ReviewNotes"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
-                    <MudButton Variant="Variant.Outlined" Class="mt-2" OnClick="SaveReview">@L["Save"]</MudButton>
-                </div>
-            </section>
+            <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
         </aside>
     </div>
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
@@ -290,7 +277,6 @@ else
     private bool _isAdmin;
     private string? _userId;
 
-    private string _reviewDraft = string.Empty;
     private List<LabelDto> _labels = [];
     private List<MilestoneDto> _milestones = [];
     private List<TaskStepDto> _steps = [];
@@ -376,7 +362,6 @@ else
         var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
         _task = result.Success ? result.Value : null;
         _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus) ? parsedStatus : TaskItemStatus.Todo;
-        _reviewDraft = _task?.ReviewNotes ?? string.Empty;
         if (_task is not null)
         {
             var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
@@ -586,20 +571,6 @@ else
         {
             _busy = false;
         }
-    }
-
-    private async Task SaveReview()
-    {
-        if (_task is null || string.IsNullOrWhiteSpace(_reviewDraft))
-            return;
-        var result = await AddReviewNotes.HandleAsync(new AddReviewNotesCommand(new AddReviewNotesRequest(_task.Id, _reviewDraft.Trim())));
-        if (!result.Success)
-        {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-            return;
-        }
-        await Reload();
-        Snackbar.Add(L["Saved"].Value, Severity.Success);
     }
 
     private IReadOnlyList<SubtaskDto> ReopenableSubtasks =>

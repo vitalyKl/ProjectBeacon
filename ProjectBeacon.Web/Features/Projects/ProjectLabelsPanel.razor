@@ -1,0 +1,146 @@
+@using ProjectBeacon.Application.Projects
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject ListLabelsHandler ListLabels
+@inject CreateLabelHandler CreateLabel
+@inject UpdateLabelHandler UpdateLabel
+@inject DeleteLabelHandler DeleteLabel
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.subtitle1" Class="mb-3">@L["Labels"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <div class="beacon-form">
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+            <MudTextField @bind-Value="_labelName" Label="@L["Title"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_labelPrefix" Label="@L["PathPrefix"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveLabel" Disabled="Busy">
+                @(_editingLabelId is null ? L["Create"] : L["Save"])
+            </MudButton>
+            @if (_editingLabelId is not null)
+            {
+                <MudButton Variant="Variant.Text" OnClick="CancelLabelEdit">@L["Cancel"]</MudButton>
+            }
+        </MudStack>
+    </div>
+</MudPaper>
+@if (_labels.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">@L["NoLabelsYet"]</MudAlert>
+}
+else
+{
+    <MudTable Items="_labels" Dense="true" Hover="true">
+        <HeaderContent>
+            <MudTh>@L["Title"]</MudTh>
+            <MudTh>@L["PathPrefix"]</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="@L["Title"]">@context.Name</MudTd>
+            <MudTd DataLabel="@L["PathPrefix"]">@context.PathPrefix</MudTd>
+            <MudTd>
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => StartLabelEdit(context)">@L["Edit"]</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveLabel(context)">@L["Delete"]</MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter] public Guid? ProjectId { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<bool> BusyChanged { get; set; }
+
+    private List<LabelDto> _labels = [];
+    private string _labelName = string.Empty;
+    private string _labelPrefix = string.Empty;
+    private Guid? _editingLabelId;
+    private Guid? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ProjectId == _loadedFor)
+            return;
+        _loadedFor = ProjectId;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (ProjectId is not { } projectId)
+            return;
+        var listed = await ListLabels.HandleAsync(new ListLabelsRequest(projectId));
+        _labels = listed.Success ? listed.Value!.ToList() : [];
+    }
+
+    private void StartLabelEdit(LabelDto label)
+    {
+        _editingLabelId = label.Id;
+        _labelName = label.Name;
+        _labelPrefix = label.PathPrefix;
+    }
+
+    private void CancelLabelEdit()
+    {
+        _editingLabelId = null;
+        _labelName = string.Empty;
+        _labelPrefix = string.Empty;
+    }
+
+    private async Task SaveLabel()
+    {
+        if (ProjectId is not { } projectId || string.IsNullOrWhiteSpace(_labelName) || Busy)
+            return;
+        await BusyChanged.InvokeAsync(true);
+        try
+        {
+            if (_editingLabelId is { } id)
+            {
+                var updated = await UpdateLabel.HandleAsync(new UpdateLabelRequest(
+                    projectId, id, _labelName.Trim(), null, _labelPrefix));
+                if (!updated.Success)
+                {
+                    Snackbar.Add(updated.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+            }
+            else
+            {
+                var created = await CreateLabel.HandleAsync(new CreateLabelRequest(
+                    projectId, _labelName.Trim(), null, _labelPrefix));
+                if (!created.Success)
+                {
+                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+                    return;
+                }
+            }
+            CancelLabelEdit();
+            Snackbar.Add(L["Saved"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            await BusyChanged.InvokeAsync(false);
+        }
+    }
+
+    private async Task RemoveLabel(LabelDto label)
+    {
+        if (ProjectId is not { } projectId)
+            return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, L["DeleteLabelConfirm"].Value,
+            yesText: L["Delete"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        var result = await DeleteLabel.HandleAsync(new DeleteLabelRequest(projectId, label.Id));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        if (_editingLabelId == label.Id)
+            CancelLabelEdit();
+        Snackbar.Add(L["Saved"].Value, Severity.Success);
+        await Reload();
+    }
+}
