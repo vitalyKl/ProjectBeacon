@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Application.Common;
+using Domain;
 using Domain.Enums;
 /// <summary>
 /// A workstation device. Token is the raw bcd_ value only on enroll or rotate. Other reads leave it empty.
@@ -36,7 +37,8 @@ public record WorkstationCommandDto(
     DateTime CreatedAt,
     DateTime? StartedAt,
     DateTime? CompletedAt,
-    string? LocalRoot = null);
+    string? LocalRoot = null,
+    int Version = CommandProtocol.CurrentVersion);
 /// <summary>
 /// Runtime summary for any project member: the selected project device and status, without the local path.
 /// </summary>

@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Data.Configurations;
 
+using Domain;
 using Domain.Entities.Devices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -13,6 +14,7 @@ public class WorkstationCommandConfiguration : IEntityTypeConfiguration<Workstat
         entity.HasKey(e => e.Id);
         entity.Property(e => e.Kind).HasConversion<string>().IsRequired();
         entity.Property(e => e.Status).HasConversion<string>().IsRequired();
+        entity.Property(e => e.Version).HasDefaultValue(CommandProtocol.CurrentVersion).IsRequired();
         entity.Property(e => e.PayloadJson).IsRequired();
         entity.Property(e => e.Error).HasMaxLength(2000);
         entity.Property(e => e.CreatedAt).IsRequired();

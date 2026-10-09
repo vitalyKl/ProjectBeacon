@@ -40,8 +40,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
     {
         try
         {
+            var version = CommandEnvelope.NormalizeWireVersion(command.Version);
+            if (!version.IsOk)
+                return (false, null, version.Error);
+            if (!CommandEnvelope.HasValidPayload(command.PayloadJson))
+                return (false, null, CommandEnvelope.MalformedPayload);
             var kind = command.Kind;
-            var payload = command.PayloadJson ?? "{}";
+            var payload = CommandEnvelope.NormalizedPayload(command.PayloadJson);
             if (CommandSandbox.IsProjectKind(kind))
             {
                 if (string.IsNullOrWhiteSpace(command.LocalRoot))

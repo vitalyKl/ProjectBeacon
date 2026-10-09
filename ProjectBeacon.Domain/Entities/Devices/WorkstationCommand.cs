@@ -16,6 +16,7 @@ public class WorkstationCommand : Entity
     public Guid? RequestedByUserId { get; private set; }
     public WorkstationCommandKind Kind { get; private set; }
     public WorkstationCommandStatus Status { get; private set; }
+    public int Version { get; private set; } = CommandProtocol.CurrentVersion;
     public string PayloadJson { get; private set; } = "{}";
     public string? ResultJson { get; private set; }
     public string? Error { get; private set; }
@@ -41,6 +42,7 @@ public class WorkstationCommand : Entity
         command.DeviceId = deviceId;
         command.Kind = kind;
         command.Status = WorkstationCommandStatus.Pending;
+        command.Version = CommandProtocol.CurrentVersion;
         command.PayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson;
         command.ProjectId = projectId;
         command.RequestedByUserId = requestedByUserId;

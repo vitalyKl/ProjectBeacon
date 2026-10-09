@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Json;
+using System.Text.Json;
 
 internal interface IDaemonLoop
 {
@@ -63,6 +64,12 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             catch (OperationCanceledException)
             {
                 break;
+            }
+            catch (JsonException ex)
+            {
+                _state.Log($"malformed command wire: {ex.Message}");
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
+                catch (OperationCanceledException) { break; }
             }
             catch (Exception ex)
             {

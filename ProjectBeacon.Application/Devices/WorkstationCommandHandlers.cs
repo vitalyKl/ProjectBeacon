@@ -76,7 +76,8 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 
     internal static WorkstationCommandDto MapCommand(WorkstationCommand command, string? localRoot = null) =>
         new(command.Id, command.DeviceId, command.ProjectId, command.RequestedByUserId, command.Kind, command.Status,
-            command.PayloadJson, command.ResultJson, command.Error, command.CreatedAt, command.StartedAt, command.CompletedAt, localRoot);
+            command.PayloadJson, command.ResultJson, command.Error, command.CreatedAt, command.StartedAt, command.CompletedAt, localRoot,
+            command.Version);
 }
 /// <summary>
 /// Returns the next pending command for the device, or null when the queue is empty.
@@ -153,7 +154,7 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
             return Result.Ok<WorkstationCommandDto?>(new WorkstationCommandDto(
                 next.Id, next.DeviceId, next.ProjectId, next.RequestedByUserId, next.Kind,
                 WorkstationCommandStatus.Running, next.PayloadJson, next.ResultJson, null,
-                next.CreatedAt, startedAt, null, localRoot));
+                next.CreatedAt, startedAt, null, localRoot, next.Version));
         }
     }
 }
