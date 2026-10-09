@@ -109,7 +109,7 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
 
     internal static ChatSessionDto Map(ChatSession session) =>
         new(session.Id, session.ProjectId, session.DeviceId, session.ExternalSessionId, session.Title,
-            session.LocalRoot, session.Status, session.CreatedAt, session.UpdatedAt);
+            session.Status, session.CreatedAt, session.UpdatedAt);
 }
 /// <summary>
 /// Lists the user's chat sessions in the current project.

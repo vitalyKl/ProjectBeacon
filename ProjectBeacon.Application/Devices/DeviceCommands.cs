@@ -38,9 +38,20 @@ public record WorkstationCommandDto(
     DateTime? CompletedAt,
     string? LocalRoot = null);
 /// <summary>
-/// A project root on one device, and whether that device is online.
+/// Runtime summary for any project member: the selected project device and status, without the local path.
 /// </summary>
-public record ProjectRuntimeDto(
+public record RuntimeSummary(
+    Guid Id,
+    Guid ProjectId,
+    Guid DeviceId,
+    string DeviceName,
+    bool DeviceOnline,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt);
+/// <summary>
+/// Runtime diagnostics for privileged viewers (owner/admin, system admin, or device owner): adds the local root.
+/// </summary>
+public record RuntimeDiagnostics(
     Guid Id,
     Guid ProjectId,
     Guid DeviceId,
@@ -133,7 +144,7 @@ public record AttachRuntimeRequest(Guid ProjectId, Guid DeviceId, Guid UserId, s
 /// <summary>
 /// Command for attach runtime.
 /// </summary>
-public record AttachRuntimeCommand(AttachRuntimeRequest Request) : ICommand<Result<ProjectRuntimeDto>>;
+public record AttachRuntimeCommand(AttachRuntimeRequest Request) : ICommand<Result<RuntimeDiagnostics>>;
 /// <summary>
 /// Fields for list runtimes.
 /// </summary>
@@ -141,15 +152,23 @@ public record ListRuntimesRequest(Guid ProjectId, Guid UserId);
 /// <summary>
 /// Command for list runtimes.
 /// </summary>
-public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result<IList<ProjectRuntimeDto>>>;
+public record ListRuntimesCommand(ListRuntimesRequest Request) : ICommand<Result<IList<RuntimeSummary>>>;
 /// <summary>
-/// Fields for detach runtime.
+/// User and runtime id for detach runtime.
 /// </summary>
 public record DetachRuntimeRequest(Guid RuntimeId, Guid UserId);
 /// <summary>
 /// Command for detach runtime.
 /// </summary>
 public record DetachRuntimeCommand(DetachRuntimeRequest Request) : ICommand<Result>;
+/// <summary>
+/// Runtime id and requesting user for runtime diagnostics.
+/// </summary>
+public record GetRuntimeDiagnosticsRequest(Guid RuntimeId, Guid UserId);
+/// <summary>
+/// Command for get runtime diagnostics.
+/// </summary>
+public record GetRuntimeDiagnosticsCommand(GetRuntimeDiagnosticsRequest Request) : ICommand<Result<RuntimeDiagnostics>>;
 /// <summary>
 /// Generated llama-swap YAML and the port the client should use.
 /// </summary>

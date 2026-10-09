@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Chat;
 using Application.Common;
 using Domain.Enums;
 /// <summary>
-/// A workstation chat session, including device, local root, and status.
+/// A workstation chat session: device, external session id, and status. The local root is never exposed.
 /// </summary>
 public record ChatSessionDto(
     Guid Id,
@@ -11,7 +11,6 @@ public record ChatSessionDto(
     Guid DeviceId,
     string ExternalSessionId,
     string Title,
-    string LocalRoot,
     ChatSessionStatus Status,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

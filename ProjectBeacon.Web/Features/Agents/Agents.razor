@@ -22,6 +22,7 @@
 @inject ReloadProxyHandler ReloadProxy
 @inject UnloadProxyHandler UnloadProxy
 @inject ListRuntimesHandler ListRuntimes
+@inject GetRuntimeDiagnosticsHandler GetDiagnostics
 @inject ApplyAgentConfigHandler ApplyAgentConfig
 @inject EnqueueCommandHandler EnqueueCommand
 @inject GetCommandHandler GetCommand
@@ -133,7 +134,7 @@ else
         <MudSelect T="Guid?" @bind-Value="_runtimeDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
             @foreach (var runtime in _runtimes)
             {
-                <MudSelectItem Value="@((Guid?)runtime.DeviceId)">@runtime.DeviceName (@runtime.LocalRoot)</MudSelectItem>
+                <MudSelectItem Value="@((Guid?)runtime.DeviceId)">@runtime.DeviceName</MudSelectItem>
             }
         </MudSelect>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyOnDevice" Disabled="_busy || _runtimeDeviceId is null">
@@ -240,7 +241,7 @@ else
     private AgentRunMode _mode = AgentRunMode.Solo;
     private Guid? _solo;
     private Guid? _runtimeDeviceId;
-    private List<ProjectRuntimeDto> _runtimes = [];
+    private List<RuntimeSummary> _runtimes = [];
     private string? _runtimePhase;
     private bool _mcpContext7;
     private bool _mcpSerena;
@@ -602,7 +603,14 @@ else
         _busy = true;
         try
         {
-            var mcp = McpCatalog.Build(runtime.LocalRoot, _mcpContext7, _mcpSerena, _customMcps);
+            var diag = await GetDiagnostics.HandleAsync(new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(runtime.Id, _userId)));
+            if (!diag.Success)
+            {
+                SetLifecycle(WorkstationCommandStatus.Failed, diag.Error);
+                Snackbar.Add(diag.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var mcp = McpCatalog.Build(diag.Value!.LocalRoot, _mcpContext7, _mcpSerena, _customMcps);
             var payload = new JsonObject
             {
                 ["path"] = ".",
@@ -684,7 +692,7 @@ else
         return null;
     }
 
-    private ProjectRuntimeDto? SelectedRuntime => _runtimes.FirstOrDefault(r => r.DeviceId == _runtimeDeviceId);
+    private RuntimeSummary? SelectedRuntime => _runtimes.FirstOrDefault(r => r.DeviceId == _runtimeDeviceId);
 
     private string ModeLabel => _mode == AgentRunMode.Solo ? L["AgentModeSolo"].Value : L["AgentModePipeline"].Value;
 

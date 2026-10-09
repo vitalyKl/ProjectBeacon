@@ -11,6 +11,7 @@
 @inject GetCurrentProjectHandler CurrentProject
 @inject ListDevicesHandler ListDevices
 @inject ListRuntimesHandler ListRuntimes
+@inject GetRuntimeDiagnosticsHandler GetDiagnostics
 @inject AttachRuntimeHandler AttachRuntime
 @inject ListMyProjectsHandler MyProjects
 @inject UpdateProjectHandler UpdateProject
@@ -78,7 +79,14 @@ else
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["BrowseOnDeviceHint"]</MudText>
         @if (_runtimes.Count > 0)
         {
-            <MudText Typo="Typo.body2" Class="mb-2">@_runtimes[0].DeviceName: @_runtimes[0].LocalRoot</MudText>
+            @if (_primaryLocalRoot is not null)
+            {
+                <MudText Typo="Typo.body2" Class="mb-2">@_runtimes[0].DeviceName: @_primaryLocalRoot</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mb-2">@_runtimes[0].DeviceName</MudText>
+            }
         }
         <div class="beacon-form">
             <MudSelect T="Guid?" @bind-Value="_folderDeviceId" Label="@L["RuntimeDevice"]" Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -104,7 +112,8 @@ else
 
 @code {
     private List<DaemonDeviceDto> _devices = [];
-    private List<ProjectRuntimeDto> _runtimes = [];
+    private List<RuntimeSummary> _runtimes = [];
+    private string? _primaryLocalRoot;
     private Guid? _projectId;
     private Guid _userId;
     private bool _isAdmin;
@@ -237,11 +246,17 @@ else
             return;
         _runtimes = listed.Value!.ToList();
         var current = _runtimes.FirstOrDefault();
+        _primaryLocalRoot = null;
         if (current is not null)
         {
             _folderDeviceId ??= current.DeviceId;
-            if (string.IsNullOrWhiteSpace(_folderPath))
-                _folderPath = current.LocalRoot;
+            var diag = await GetDiagnostics.HandleAsync(new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(current.Id, _userId)));
+            if (diag.Success)
+            {
+                _primaryLocalRoot = diag.Value!.LocalRoot;
+                if (string.IsNullOrWhiteSpace(_folderPath))
+                    _folderPath = _primaryLocalRoot;
+            }
         }
         _folderDeviceId ??= _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
     }

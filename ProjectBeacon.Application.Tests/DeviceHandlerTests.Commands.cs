@@ -124,6 +124,79 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
+    public async Task RuntimeDiagnostics_MemberWithoutPrivilege_Forbidden()
+    {
+        var (owner, member, project) = await SeedOwnerAndMemberAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), owner.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")));
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")));
+        Assert.True(attached.Success, attached.Error);
+        var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, member.Id)));
+        Assert.False(got.Success);
+        Assert.Equal(ErrorKind.Forbidden, got.Kind);
+    }
+
+    [Fact]
+    public async Task RuntimeDiagnostics_ProjectOwner_Allowed()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), owner.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")));
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")));
+        Assert.True(attached.Success, attached.Error);
+        var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, owner.Id)));
+        Assert.True(got.Success, got.Error);
+        Assert.Equal(@"A:\secret\repo", got.Value!.LocalRoot);
+    }
+
+    [Fact]
+    public async Task RuntimeDiagnostics_DeviceOwnerMember_Allowed()
+    {
+        var (_, member, project) = await SeedOwnerAndMemberAsync();
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("member-laptop", "fp-" + Guid.NewGuid().ToString("N"), member.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")));
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, member.Id, @"B:\member\repo")));
+        Assert.True(attached.Success, attached.Error);
+        var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, member.Id)));
+        Assert.True(got.Success, got.Error);
+        Assert.Equal(@"B:\member\repo", got.Value!.LocalRoot);
+    }
+
+    [Fact]
+    public async Task RuntimeDiagnostics_NonMember_NotFound()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var outsider = await SeedUserAsync("outsider");
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), owner.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")));
+        var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
+            new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, owner.Id, @"A:\secret\repo")));
+        Assert.True(attached.Success, attached.Error);
+        var got = await new GetRuntimeDiagnosticsHandler(Factory()).HandleAsync(
+            new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(attached.Value!.Id, outsider.Id)));
+        Assert.False(got.Success);
+        Assert.Equal("Runtime not found.", got.Error);
+    }
+
+    [Fact]
     public async Task ListDir_DoesNotInjectWorkstationRoot()
     {
         var user = await SeedUserAsync();
