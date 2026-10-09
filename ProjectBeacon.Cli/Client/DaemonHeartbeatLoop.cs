@@ -36,7 +36,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
             try
             {
                 var settings = _loadSettings();
-                await _llamaSync.RunLockedAsync(() => _llamaSync.SyncAsync(settings, ct), ct);
+                await _llamaSync.SyncAsync(settings, ct);
                 await _gate.TryTickAsync(settings.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new

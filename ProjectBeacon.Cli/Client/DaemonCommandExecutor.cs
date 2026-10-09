@@ -143,7 +143,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
     private async Task<(bool Ok, string? Result, string? Error)> ReconcileDesiredAsync(string payload, CancellationToken ct)
     {
-        // Heartbeat and proxy commands take the llama lock. Reconcile does not.
         await _llamaSync.SyncAsync(_loadSettings(), ct);
         var configured = await ConfigureOpenCodeAsync(ct);
         if (!configured.Ok)

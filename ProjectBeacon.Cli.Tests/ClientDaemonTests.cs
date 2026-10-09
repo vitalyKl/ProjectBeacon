@@ -459,6 +459,69 @@ public sealed class ClientDaemonTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task LlamaSync_ConcurrentSyncs_Serialize()
+    {
+        var handler = new RouteHandler
+        {
+            Impl = req =>
+            {
+                var path = req.RequestUri!.AbsolutePath;
+                if (path.Contains("llamaswap-config", StringComparison.Ordinal))
+                    return Json(new { yaml = "models: {}\n", port = 8080 });
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+        };
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
+        var state = new DaemonRuntimeState("http://localhost", null);
+        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+        var deps = new DaemonDependencies(http, llama, openCode, new OpenCodeAgentRuntime(openCode), () => new WorkstationSettings());
+        var sync = new DaemonLlamaSync(deps, state);
+        try
+        {
+            var tasks = Enumerable.Range(0, 5).Select(_ => sync.SyncAsync(new WorkstationSettings(), CancellationToken.None)).ToArray();
+            await Task.WhenAll(tasks);
+        }
+        finally
+        {
+            sync.Release();
+        }
+        Assert.Equal(1, llama.StartCount);
+    }
+
+    [Fact]
+    public async Task LlamaSync_SyncNow_UsesSameLock()
+    {
+        var handler = new RouteHandler
+        {
+            Impl = req =>
+            {
+                var path = req.RequestUri!.AbsolutePath;
+                if (path.Contains("llamaswap-config", StringComparison.Ordinal))
+                    return Json(new { yaml = "models: {}\n", port = 8080 });
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+        };
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
+        var state = new DaemonRuntimeState("http://localhost", null);
+        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+        var deps = new DaemonDependencies(http, llama, openCode, new OpenCodeAgentRuntime(openCode), () => new WorkstationSettings());
+        var sync = new DaemonLlamaSync(deps, state);
+        try
+        {
+            await sync.SyncNowAsync(CancellationToken.None);
+            Assert.Equal(1, llama.StartCount);
+            await sync.SyncNowAsync(CancellationToken.None);
+            Assert.Equal(1, llama.StartCount);
+        }
+        finally
+        {
+            sync.Release();
+        }
+    }
+
     private static HttpResponseMessage Json(object body) =>
         new(HttpStatusCode.OK) { Content = JsonContent.Create(body) };
 

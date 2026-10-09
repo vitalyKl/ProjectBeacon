@@ -28,7 +28,10 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
         _state = state;
     }
 
-    public async Task SyncAsync(WorkstationSettings settings, CancellationToken ct)
+    public Task SyncAsync(WorkstationSettings settings, CancellationToken ct) =>
+        RunLockedAsync(() => SyncCoreAsync(settings, ct), ct);
+
+    private async Task SyncCoreAsync(WorkstationSettings settings, CancellationToken ct)
     {
         try
         {
@@ -69,8 +72,7 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
     public Task UnloadAsync(CancellationToken ct) =>
         RunLockedAsync(() => _llama.UnloadAsync(ct), ct);
 
-    public Task SyncNowAsync(CancellationToken ct) =>
-        RunLockedAsync(() => SyncAsync(_loadSettings(), ct), ct);
+    public Task SyncNowAsync(CancellationToken ct) => SyncAsync(_loadSettings(), ct);
 
     public void Release() => _lock.Dispose();
 }
