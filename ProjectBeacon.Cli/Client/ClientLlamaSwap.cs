@@ -47,7 +47,7 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
             "ProjectBeacon", "llama-swap", "config.yaml");
 
     internal static bool ShouldRestart(
-        string hash, string lastHash, int port, int lastPort, string bin, string? lastBin, bool running) =>
+        string hash, string lastHash, int port, int lastPort, string? bin, string? lastBin, bool running) =>
         !running
         || !string.Equals(hash, lastHash, StringComparison.Ordinal)
         || port != lastPort
@@ -74,9 +74,9 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         }
 
         var bin = binPath;
-        if (string.IsNullOrWhiteSpace(bin))
+        if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess)
             bin = WorkstationProbe.Which("llama-swap") ?? WorkstationProbe.Which("llama-swap.exe");
-        if (string.IsNullOrWhiteSpace(bin))
+        if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess)
         {
             await KillProcessAsync();
             _lastHash = hash;
@@ -178,7 +178,7 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
 
     private bool IsRunning => SkipRealProcess ? _runningFake : _process is { HasExited: false };
 
-    private void EnsureProcess(string bin)
+    private void EnsureProcess(string? bin)
     {
         if (IsRunning)
             return;
@@ -191,7 +191,7 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         }
         var psi = new ProcessStartInfo
         {
-            FileName = bin,
+            FileName = bin!,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
