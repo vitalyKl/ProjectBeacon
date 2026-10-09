@@ -80,6 +80,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
 }
 /// <summary>
 /// Returns the next pending command for the device, or null when the queue is empty.
+/// Claiming is a guarded <c>UPDATE ... WHERE Id = @id AND Status = 'Pending'</c>; a concurrent
+/// worker that claims the same row first makes the update affect zero rows, so the loser moves
+/// on to the next command instead of double-claiming.
 /// </summary>
 public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, Result<WorkstationCommandDto?>>
 {
@@ -91,46 +94,67 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
     {
         var wait = command.Request.Wait ?? TimeSpan.Zero;
         var deadline = DateTime.UtcNow + wait;
-        do
+        while (true)
         {
+            ct.ThrowIfCancellationRequested();
             await using var db = _dbFactory.CreateDbContext();
-            var next = await db.WorkstationCommands
+            var next = await db.WorkstationCommands.AsNoTracking()
                 .Where(c => c.DeviceId == command.Request.DeviceId && c.Status == WorkstationCommandStatus.Pending)
                 .OrderBy(c => c.CreatedAt)
                 .FirstOrDefaultAsync(ct);
-            if (next is not null)
+            if (next is null)
             {
-                string? localRoot = null;
-                if (CommandSandbox.IsProjectKind(next.Kind))
+                if (DateTime.UtcNow >= deadline)
+                    return Result.Ok<WorkstationCommandDto?>(null);
+
+                try
                 {
-                    localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, next, ct);
-                    if (string.IsNullOrWhiteSpace(localRoot))
-                    {
-                        next.Fail(CommandSandbox.RuntimeRequired);
-                        await db.SaveChangesAsync(ct);
-                        continue;
-                    }
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
                 }
-
-                next.Claim();
-                await db.SaveChangesAsync(ct);
-                return Result.Ok<WorkstationCommandDto?>(EnqueueCommandHandler.MapCommand(next, localRoot));
+                catch (OperationCanceledException)
+                {
+                    return Result.Ok<WorkstationCommandDto?>(null);
+                }
+                continue;
             }
 
-            if (DateTime.UtcNow >= deadline)
-                return Result.Ok<WorkstationCommandDto?>(null);
-
-            try
+            string? localRoot = null;
+            if (CommandSandbox.IsProjectKind(next.Kind))
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+                localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, next, ct);
+                if (string.IsNullOrWhiteSpace(localRoot))
+                {
+                    // Guarded fail: only take effect if the row is still pending.
+                    var now = DateTime.UtcNow;
+                    var updated = await db.WorkstationCommands
+                        .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(c => c.Status, WorkstationCommandStatus.Failed)
+                            .SetProperty(c => c.Error, CommandSandbox.RuntimeRequired)
+                            .SetProperty(c => c.CompletedAt, now)
+                            .SetProperty(c => c.StartedAt, now), ct);
+                    if (updated == 1)
+                        continue;
+                    // 0 rows: another worker already advanced this row; retry the queue.
+                    continue;
+                }
             }
-            catch (OperationCanceledException)
-            {
-                return Result.Ok<WorkstationCommandDto?>(null);
-            }
-        } while (!ct.IsCancellationRequested);
 
-        return Result.Ok<WorkstationCommandDto?>(null);
+            // Guarded claim: succeeds only if the row is still pending.
+            var startedAt = DateTime.UtcNow;
+            var claimed = await db.WorkstationCommands
+                .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(c => c.Status, WorkstationCommandStatus.Running)
+                    .SetProperty(c => c.StartedAt, startedAt), ct);
+            if (claimed != 1)
+                continue; // lost the race; the next pending command (if any) is picked up next iteration.
+
+            return Result.Ok<WorkstationCommandDto?>(new WorkstationCommandDto(
+                next.Id, next.DeviceId, next.ProjectId, next.RequestedByUserId, next.Kind,
+                WorkstationCommandStatus.Running, next.PayloadJson, next.ResultJson, null,
+                next.CreatedAt, startedAt, null, localRoot));
+        }
     }
 }
 /// <summary>
