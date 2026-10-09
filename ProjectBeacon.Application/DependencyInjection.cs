@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<AttachRuntimeHandler>();
         services.AddTransient<ListRuntimesHandler>();
         services.AddTransient<DetachRuntimeHandler>();
+        services.AddTransient<GetRuntimeDiagnosticsHandler>();
         services.AddTransient<GetLlamaSwapConfigHandler>();
         services.AddTransient<ListHostSamplesHandler>();
 
