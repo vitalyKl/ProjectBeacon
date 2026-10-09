@@ -164,6 +164,8 @@ Kind values are the `WorkstationCommandKind` names. JSON uses those names (`Json
 | `RunReviewCheck` | Run `checkCommand` for a `reviewRunId` inside the project root |
 | `ReconcileDesired` | Sync llama-swap, apply OpenCode connections, and save workstation settings when the payload includes them |
 
+Delivery semantics per kind (idempotent vs at-most-once vs reconcile-backed) are fixed in [command-delivery-semantics.md](command-delivery-semantics.md), with the code source of truth in `CommandDelivery` (`ProjectBeacon.Application/Devices`).
+
 Do not add an inbound listen port on the device. Do not use the flagged-off WSS sidecar tunnel.
 
 ## Deny native file tools on the host
