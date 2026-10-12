@@ -161,7 +161,7 @@ Kind values are the `WorkstationCommandKind` names. JSON uses those names (`Json
 | `ChatAbort` | Abort the device chat turn |
 | `ConfigureOpenCode` | Apply `/v1/devices/me/opencode-connections` and restart OpenCode |
 | `RunEvalTurn` | Run an eval turn in the project root |
-| `RunReviewCheck` | Run `checkCommand` for a `reviewRunId` inside the project root |
+| `RunReviewCheck` | Run `checkCommand` for a `reviewRunId` inside the project root. **Trusted source only:** human body command required; token body must be empty and resolves from `Project.ReviewCheckCommand`; `CommandSandbox` strips raw payload `checkCommand` — `EnqueueCommandHandler` injects `TrustedCheckCommand` only. |
 | `ReconcileDesired` | Sync llama-swap, apply OpenCode connections, and save workstation settings when the payload includes them |
 
 Delivery semantics per kind (idempotent vs at-most-once vs reconcile-backed) are fixed in [command-delivery-semantics.md](command-delivery-semantics.md), with the code source of truth in `CommandDelivery` (`ProjectBeacon.Application/Devices`).

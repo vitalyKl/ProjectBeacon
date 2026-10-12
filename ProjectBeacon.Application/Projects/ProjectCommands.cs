@@ -12,8 +12,9 @@ public record CreateProjectRequest(string Name, string? Description, Guid OrgId)
 public record CreateProjectCommand(CreateProjectRequest Request, ActorContext Actor) : ICommand<Result<ProjectDto>>;
 /// <summary>
 /// Project to rename. An empty name fails. Requires project administer.
+/// ReviewCheckCommand is the trusted shell command for token review checks: null keeps the current value, empty clears it.
 /// </summary>
-public record UpdateProjectRequest(Guid ProjectId, string? Name, string? Description);
+public record UpdateProjectRequest(Guid ProjectId, string? Name, string? Description, string? ReviewCheckCommand = null);
 /// <summary>
 /// Command for update project.
 /// </summary>
@@ -39,7 +40,7 @@ public record ListProjectsRequest(Guid? OrgId);
 /// </summary>
 public record ListProjectsCommand(ListProjectsRequest Request) : ICommand<Result<IList<ProjectDto>>>;
 /// <summary>
-/// A project's id, name, description, org, and timestamps.
+/// A project's id, name, description, org, timestamps, and the trusted review check command.
 /// </summary>
 public record ProjectDto(
     Guid Id,
@@ -47,4 +48,5 @@ public record ProjectDto(
     string? Description,
     Guid OrgId,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    string? ReviewCheckCommand = null);

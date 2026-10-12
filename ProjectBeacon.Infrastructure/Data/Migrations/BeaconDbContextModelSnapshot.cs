@@ -1210,6 +1210,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ReviewCheckCommand")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 

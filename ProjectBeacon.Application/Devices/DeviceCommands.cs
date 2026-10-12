@@ -96,13 +96,16 @@ public record HeartbeatDeviceRequest(Guid DeviceId, string? ProbeJson, string? W
 public record HeartbeatDeviceCommand(HeartbeatDeviceRequest Request) : ICommand<Result<DaemonDeviceDto>>;
 /// <summary>
 /// Device, caller, command kind, optional JSON payload, and optional project.
+/// TrustedCheckCommand is the server-verified review check command (RunReviewCheck only); it is
+/// injected into the payload after sandboxing and must never come from client JSON.
 /// </summary>
 public record EnqueueCommandRequest(
     Guid DeviceId,
     Guid UserId,
     WorkstationCommandKind Kind,
     string? PayloadJson,
-    Guid? ProjectId);
+    Guid? ProjectId,
+    string? TrustedCheckCommand = null);
 /// <summary>
 /// Command for enqueue command.
 /// </summary>

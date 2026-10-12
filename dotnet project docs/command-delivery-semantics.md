@@ -62,7 +62,7 @@ All 17 `WorkstationCommandKind` values, complete.
 | `ConfigureOpenCode` | Idempotent | yes | yes | Applies `/v1/devices/me/opencode-connections` and restarts OpenCode; deterministic from the connection rows. Re-applied by `ReconcileDesired`. |
 | `RunEvalTurn` | **AtMostOnce** | **no** | no | An LLM call. A duplicate run corrupts the eval scores by double-counting the turn. |
 | `ReconcileDesired` | Idempotent | yes | yes (self) | Applies the device's desired state. It is its own backstop; a lost reconcile is re-triggered by the next heartbeat. |
-| `RunReviewCheck` | **AtMostOnce** | **no** | no | Runs `checkCommand` for a `reviewRunId`. A duplicate run produces a second review run. |
+| `RunReviewCheck` | **AtMostOnce** | **no** | no | Runs `checkCommand` for a `reviewRunId`. A duplicate run produces a second review run. **Defense-in-depth:** `CommandSandbox.SanitizeProjectPayload` strips payload `checkCommand` for `RunReviewCheck`; `EnqueueCommandHandler` injects `TrustedCheckCommand` only (from `RecordReviewCheckHandler`, never from body). `Actor.IsHuman` gate: human body command required; token body must be empty and resolves from `Project.ReviewCheckCommand` (400/409). |
 
 Counts: **13 Idempotent**, **4 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`,
 `RunEvalTurn`, `RunReviewCheck`), **5 ReconcileBacked** (`ApplyOpencode`,

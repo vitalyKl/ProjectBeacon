@@ -19,7 +19,7 @@ public static class CommandSandbox
         or WorkstationCommandKind.ChatEnsureSession
         or WorkstationCommandKind.ChatPrompt;
 
-    public static Result<string> SanitizeProjectPayload(string? payloadJson)
+    public static Result<string> SanitizeProjectPayload(string? payloadJson, WorkstationCommandKind? kind = null)
     {
         if (string.IsNullOrWhiteSpace(payloadJson))
             return Result.Ok("{}");
@@ -38,6 +38,8 @@ public static class CommandSandbox
             return Result.Failure<string>("payload must be a JSON object.");
 
         obj.Remove("root");
+        if (kind == WorkstationCommandKind.RunReviewCheck)
+            obj.Remove("checkCommand");
         if (obj["path"] is JsonValue value && value.TryGetValue<string>(out var path) && !string.IsNullOrWhiteSpace(path))
         {
             if (path.Contains('\0', StringComparison.Ordinal) || WorkspacePath.IsRootedPortable(path) || WorkspacePath.HasParentSegment(path))

@@ -144,7 +144,9 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
     }
 }
 /// <summary>
-/// Enqueues the review check command for the open review run. The check command is required.
+/// Enqueues the review check command for the open review run. Human actors supply the command
+/// in the request; API tokens may not and fall back to the project's pinned ReviewCheckCommand.
+/// The final command travels in the structured TrustedCheckCommand field, never in the payload.
 /// </summary>
 public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand, Result<PipelineStateDto>>
 {
@@ -159,8 +161,21 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
 
     public async Task<Result<PipelineStateDto>> HandleAsync(RecordReviewCheckCommand command, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(command.Request.CheckCommand))
-            return Result.Failure<PipelineStateDto>("Check command is required.");
+        var bodyCommand = command.Request.CheckCommand?.Trim();
+
+        string checkCommand;
+        if (command.Actor.IsHuman)
+        {
+            if (string.IsNullOrEmpty(bodyCommand))
+                return Result.Failure<PipelineStateDto>("Check command is required.", ErrorKind.Validation);
+            checkCommand = bodyCommand;
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(bodyCommand))
+                return Result.Failure<PipelineStateDto>("API tokens may not supply a check command; set the project ReviewCheckCommand instead.", ErrorKind.Validation);
+            checkCommand = null!;
+        }
 
         await using var db = _dbFactory.CreateDbContext();
         var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
@@ -174,13 +189,20 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (reviewRun is null)
             return Result.Failure<PipelineStateDto>("No open review run to check.");
 
+        if (!command.Actor.IsHuman)
+        {
+            var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == task.ProjectId, ct);
+            if (project is null || string.IsNullOrWhiteSpace(project.ReviewCheckCommand))
+                return Result.Failure<PipelineStateDto>("No review check command is configured for this project.", ErrorKind.Conflict);
+            checkCommand = project.ReviewCheckCommand.Trim();
+        }
+
         reviewRun.BindReviewer(command.Request.ActorId.ToString());
         await db.SaveChangesAsync(ct);
 
         var payload = new JsonObject
         {
-            ["reviewRunId"] = reviewRun.Id.ToString("D"),
-            ["checkCommand"] = command.Request.CheckCommand.Trim()
+            ["reviewRunId"] = reviewRun.Id.ToString("D")
         };
         if (!string.IsNullOrWhiteSpace(command.Request.Path))
             payload["path"] = command.Request.Path;
@@ -190,7 +212,8 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
             command.Request.ActorId,
             WorkstationCommandKind.RunReviewCheck,
             payload.ToJsonString(),
-            task.ProjectId)), ct);
+            task.ProjectId,
+            checkCommand)), ct);
         if (!queued.Success)
             return Result.Failure<PipelineStateDto>(queued.Error ?? "Failed to enqueue review check.");
 

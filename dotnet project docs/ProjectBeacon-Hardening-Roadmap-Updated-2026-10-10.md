@@ -1,14 +1,93 @@
 # ProjectBeacon — Hardening & Technical Debt Roadmap
 
-**Дата обновления:** 2026-10-08  
-**База анализа:** current `main`, commit `da932a35e90023d76ad71b869d693d1f2d2cdf4a`  
-**Назначение:** единый документ, объединяющий результаты глубокого code/security/runtime/UI-аудита и исполняемый план исправлений.
+**Исходная дата:** 2026-10-02  
+**Актуализация:** 2026-10-10  
+**Актуальная база анализа:** `main`, commit `d426ef3` (по аудиту Claude от 2026-10-10)  
+**Назначение:** единый Hardening Roadmap; текущий статус и приоритеты обновлены по свежему аудиту. Старые разделы ниже сохраняются как описание целевого состояния, но их утверждения о текущих проблемах нужно читать с учётом раздела «Актуализация 2026-10-10».
 
 ---
 
-## 0. Статус проекта на момент аудита
+# Актуализация 2026-10-10 — обязательна к прочтению
 
-> **Current execution state (2026-10-08): H0, H1 and H2 are implemented. H3.1 and H3.2 are implemented. H3.3 has been implemented across the workstation/file/CodeIndex/MCP boundaries and its dedicated regression coverage; H3.4 (LocalRoot privacy) remains the final H3 gate item. The structural refactor required before the H3 closeout is largely complete in 0.5.0; only WorkstationDaemon remains as an explicitly active R1 split. Do not treat the historical audit snapshot below as the current status table.**
+Источник: `ProjectBeacon-analysis-2026-10-10.md`, проверка кода на `d426ef3`. Это статический аудит: сборка и тесты в этой сессии не запускались, а поведение RLS и Blazor circuit на живом Postgres не подтверждено. Статусы ниже означают «по коду подтверждено», а не «все CI-проверки прошли».
+
+## Текущий статус фаз
+
+| Блок roadmap | Статус на 2026-10-10 | Следующее действие |
+|---|---|---|
+| H0 — Actor & Trust Boundary | По свежему отчёту прежние H0–H2 закрыты; отдельно подтвердить Gate при итоговой верификации | Не переоткрывать без новых доказательств; проверить security matrix |
+| H1 — Authorization Matrix | Предыдущий блок отмечен закрытым, но матрица всё ещё содержит `REVIEW REQUIRED` для ряда endpoint-ов | Проверить классификацию всех маршрутов; учесть находку H2 ниже |
+| H2 — Identity Contract | По отчёту закрыт | Регрессионная проверка в H12.2 |
+| H3 — Workstation Trust Boundary | Почти закрыт: LocalRoot скрыт от непривилегированных; остальные пункты не следует считать автоматически закрытыми | Повторно проверить gate путей и команд; устранить произвольный shell через TaskWrite token |
+| H4 — Command Queue Correctness | H4.1 atomic claim, H4.2 delivery semantics и H4.3 versioned envelope реализованы | Добавить восстановление зависших `Running` и надёжную обработку completion |
+| H5–H7 | Статус по свежему аудиту не подтверждён целиком | Не считать закрытыми только на основании старой roadmap; сверить специализированные документы и тесты |
+| H8 — Desired/Applied Reconciliation | Есть новая подтверждённая проблема с вечными `Running` командами | Приоритетный ремонтный путь/реапер и тесты потери completion |
+| H9 — Application Architecture | Остался namespace leakage и `IBeaconDb` с `DbSet<T>` | Переносить application-owned ports постепенно, без массового переписывания EF |
+| H10 — Runtime / Device Permissions | Не подтверждено свежим аудитом как закрыто | Проверить ownership/permissions отдельным verification pass |
+| H11 — Authentication Hardening | Есть подтверждённые остатки: ключ шифрования, cookie Secure, forwarded headers/rate limit | Исправить security-конфигурацию после P0/P1 ниже |
+| H12 — CI / Security / Concurrency | Не закрыт: RLS-тест не применяет реальную миграцию; покрытие concurrency неполно; CI на `d426ef3` не проверен в аудиторской сессии | Интеграционные тесты и два последовательных green CI runs |
+| H13 — Visual Regression | Статус по свежему аудиту не подтверждён | Оставить после устранения P0/P1; проверить фактическое подключение к CI |
+| H14 — Documentation Reconciliation | Не завершён: нет `SECURITY.md`, а документы/roadmap должны отражать актуальные контракты | Обновить canonical docs после согласования реализации |
+
+> Важно: номера находок в отчёте Claude (например, `H1`, `H2`, `M1`) — это локальные severity IDs отчёта, а не номера фаз H1/H2 roadmap. Чтобы избежать путаницы, в задачах агентам указывай оба обозначения, например `Finding H1 (Postgres role) / Roadmap H12 security verification`.
+
+## Актуальный backlog по приоритету
+
+### P0 — исправить до продолжения feature work
+
+1. **Finding H1 — PostgreSQL superuser обходит RLS.** В self-host конфигурации приложение использует `beacon`, создаваемого образом Postgres как суперпользователя. Создать отдельную роль приложения `beacon_app` с `NOSUPERUSER NOBYPASSRLS`, оставить миграции владельцу схемы, выдать минимальные GRANT. Обновить Compose, Kubernetes secrets/deployment и README. В Production при старте проверять `rolsuper`/`rolbypassrls` и завершать запуск при небезопасной конфигурации либо применять явно утверждённую fail-closed политику.
+2. **Finding H2 — TaskWrite token может передать shell-команду на workstation.** ✅ **Resolved 2026-10-12.** `POST /v1/tasks/{taskId}/pipeline/review/check` разделён на два пути через `Actor.IsHuman` (never `UserId != null`). Human: body `CheckCommand` обязателен и исполняется. Token: body `CheckCommand` обязан быть пустым (400/Validation если нет); при пустом — разрешается из `Project.ReviewCheckCommand` (409/Conflict если null). `EnqueueCommandHandler` инъектирует `TrustedCheckCommand` строго после `CommandSandbox.SanitizeProjectPayload` strip; сырой payload `checkCommand` откидывается для `RunReviewCheck`. Device-ownership, project-membership и tenant isolation — без изменений.
+
+### P1 — следующий блок после P0
+
+3. **Finding M1 — зависшие `Running` блокируют reconciliation.** Ввести reaper для команд старше заданного lease/timeout: идемпотентные команды возвращать в `Pending` только если контракт допускает повтор; at-most-once — завершать `Failed`, не переисполнять автоматически. На daemon повторять POST completion с ограниченным retry/backoff и cancellation. Добавить тесты daemon crash, потерянного completion, повторного completion и восстановления desired state.
+4. **Finding M2 — ключ шифрования секретов имеет константный fallback.** Удалить `beacon-dev-data-key` для Production; выделить отдельный `DATA_PROTECTION_KEY`, получать его из единого механизма конфигурации, использовать HKDF с контекстом/назначением ключа и завершать Production startup без валидного ключа. Предусмотреть документированную ротацию/миграцию зашифрованных данных.
+5. **Finding M3/M4/M5 — RLS и tenant isolation.** Перестроить интеграционный тест так, чтобы он применял настоящие миграции; проверять cross-tenant SELECT/INSERT/UPDATE/DELETE под не-суперпользовательской ролью. Добавить автоматический тест покрытия: каждая таблица с `ProjectId`/`OrgId` обязана иметь RLS policy либо находиться в явном allowlist исключений с обоснованием. Проверить tenant scope в Blazor circuit при смене проекта и долгоживущем контексте.
+6. **Finding M6 — конкурентные переходы состояния.** В рамках H12.3 добавить concurrency guard/optimistic concurrency для задач, pipeline и review runs там, где возможны конкурирующие записи; отдельно проверить `CompleteCommandHandler` при двух одновременных completion POST. Не расширять concurrency-механику вслепую на все сущности — сначала описать инварианты и тестовые interleavings.
+7. **Finding M7 — cookie/proxy security.** Для Production выставлять cookie `SecurePolicy=Always`. Явно конфигурировать доверенные `KnownProxies`/`KnownNetworks` для ingress и проверять корректность forwarded headers. Пересмотреть rate limiting: IP key за прокси не должен приводить к общему лимиту для всех пользователей; добавить защиту по аккаунту/identity там, где это уместно.
+8. **Release gate:** проверить CI на `d426ef3` и выполнить два последовательных полных green CI-equivalent runs. В текущем аудите build/test не выполнялись, поэтому зелёный статус не предполагается.
+
+### P2 — после P0/P1
+
+9. **Finding M8 — модель угроз удалённого исполнения.** Добавить `SECURITY.md` с явным описанием control plane/workstation trust boundary; журналировать рискованные действия на клиенте и добавить подтверждение для опасных операций. Не подменять этим исправление P0 shell-command injection.
+10. **Finding M9 — Application/Infrastructure namespace leakage.** Перенести `BeaconPorts.cs`, `LlamaSwapPorts.cs`, `IEmailSender.cs` в Application-owned namespaces и обновлять consumers небольшими согласованными срезами. Отдельно зафиксировать, что `IBeaconDb` с `DbSet<T>` оставляет семантическую зависимость Application от EF; не превращать это в масштабный рефакторинг без конкретной выгоды.
+11. **L2/L3 — клиентский sync-over-async и polling.** Исправлять точечно с cancellation; оптимизацию polling через LISTEN/NOTIFY/in-memory signal планировать после измерения нагрузки, не раньше блокеров безопасности/корректности.
+12. **L4–L11 — UI, локализация, доступность, CI supply chain, контейнеры и документация.** Включить SHA pinning GitHub Actions, dependency/image scanning и SBOM; публиковать immutable version tags; связать release deployment с успешными тестами; добавить `securityContext`, `runAsNonRoot`, `readOnlyRootFilesystem` где совместимо; закрыть порт Postgres от публикации на все интерфейсы по умолчанию; проверить aria-label/Title и parity локализаций.
+
+## Обновлённый порядок выполнения
+
+```text
+A. P0: отдельная роль Postgres + блокировка shell-команды для TaskWrite token
+B. P1: repair зависших Running + completion retry
+C. P1: отдельный ключ шифрования без production fallback
+D. P1: реальные RLS/tenant integration tests + concurrency guards
+E. P1: Secure cookie / trusted proxy / rate limiting
+F. Gate: два последовательных полных green CI runs
+G. H5–H8: сверить runtime/chat/review/reconciliation с кодом и закрывать только по доказательствам
+H. H9–H12: архитектурные порты, permissions, auth и security matrix
+I. H13–H14: visual regression и документационная сверка
+J. Остальной P2/P3 technical debt и performance work
+```
+
+Порядок фаз H0–H14 остаётся логической структурой программы, но **не должен задерживать экстренное исправление P0**, найденное после прохождения более ранних фаз. Новые крупные features отложить до устранения P0 и подтверждённого CI.
+
+## Definition of Done для новых находок
+
+Для каждого пункта в roadmap обновлять статус только при наличии:
+
+- конкретного code path и commit;
+- теста, который воспроизводит исходную проблему;
+- regression test, который проходит после исправления;
+- результатов targeted tests и полного test suite/CI;
+- независимой post-implementation verification;
+- cold review для security, runtime и persistence изменений;
+- обновлённой документации, если изменился контракт.
+
+Использовать статусы `CONFIRMED FIXED`, `PARTIAL`, `REGRESSION`, `NOT VERIFIED`, `OUT OF SCOPE`. Отсутствие возможности запустить тесты означает `NOT VERIFIED`, а не `FIXED`.
+
+---
+
+## 0. Статус проекта на момент исходного аудита
 
 ProjectBeacon уже вышел за пределы простого CRUD-приложения. В текущей архитектуре присутствуют:
 
@@ -785,10 +864,6 @@ ProjectId
 
 Единый cross-platform validator.
 
-### Intentional hardening (implemented with H3.1)
-
-`CommandSandbox.SanitizeProjectPayload` rejects any `path` value containing a `..` segment (both `/` and `\` separators) at the control-plane boundary. This is intentional security hardening, not strictly behavior-preserving: a client that previously could send `a/../b` (which would normalize back inside the workspace) now receives `WorkspacePath.RelativePathRequired`. Existing valid relative paths are unaffected. Filenames with embedded dots (e.g. `file..name.cs`) are not rejected.
-
 ## H3.3 Unified sandbox
 
 Один contract для:
@@ -808,17 +883,13 @@ ProjectId
 
 ### Gate H3
 
-Current status:
-
 ```text
-[x] All project commands require ProjectRuntime
-[x] No arbitrary absolute local path crosses control plane boundary
-[x] Linux and Windows path boundary tests are covered
-[x] Reparse/symlink escape tests are covered
+[ ] All project commands require ProjectRuntime
+[ ] No arbitrary absolute local path crosses control plane boundary
+[ ] Linux and Windows path tests pass
+[ ] Reparse/symlink escape tests pass
 [ ] Raw LocalRoot hidden from unauthorized members
 ```
-
-The remaining item is H3.4: add/verify an HTTP-level regression proving that a project member who is allowed to see a project runtime cannot receive the raw workstation `LocalRoot` unless that disclosure is explicitly authorized.
 
 ---
 
@@ -1276,7 +1347,7 @@ Desired/Applied
 Только operational state:
 
 ```text
-Current hardening block: H3.4 — Runtime path privacy
+Current hardening block
 Done
 In progress
 Blocked
@@ -1420,7 +1491,7 @@ Documentation matches implementation
 Правильный workflow:
 
 ```text
-Current Hardening Block: H3.4 — Runtime path privacy
+Current Hardening Block
         ↓
 Read referenced implementation docs
         ↓

@@ -10,6 +10,7 @@ public class Project : Entity, IOrgScoped
 
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
+    public string? ReviewCheckCommand { get; private set; }
     public Guid OrgId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -32,10 +33,12 @@ public class Project : Entity, IOrgScoped
         return project;
     }
 
-    public void Update(string? name = null, string? description = null)
+    public void Update(string? name = null, string? description = null, string? reviewCheckCommand = null)
     {
         if (name is not null) Name = name;
         if (description is not null) Description = description;
+        if (reviewCheckCommand is not null)
+            ReviewCheckCommand = string.IsNullOrWhiteSpace(reviewCheckCommand) ? null : reviewCheckCommand.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
 }

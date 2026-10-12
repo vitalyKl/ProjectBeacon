@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Authorization;
 using Application.Devices;
 using Application.Tasks;
 using Domain.Entities.Devices;
@@ -70,7 +71,9 @@ public sealed partial class PipelineHandlerTests : IDisposable
         Assert.True(attach.Success, attach.Error);
 
         var check = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
-            .HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(taskId, device.Id, user.Id, "dotnet test")));
+            .HandleAsync(new RecordReviewCheckCommand(
+                new RecordReviewCheckRequest(taskId, device.Id, user.Id, "dotnet test"),
+                new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None)));
         Assert.True(check.Success, check.Error);
 
         var stillOpen = await new ApprovePipelineHandler(factory)

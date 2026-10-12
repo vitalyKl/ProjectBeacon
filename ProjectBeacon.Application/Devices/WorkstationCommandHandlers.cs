@@ -11,6 +11,7 @@ using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 /// <summary>
 /// Queues a command for an online device. Project commands need a runtime, and the payload is sandboxed.
 /// </summary>
@@ -54,11 +55,19 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
             if (!resolved.Success)
                 return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
             var runtime = resolved.Value!;
-            var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson);
+            var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson, command.Request.Kind);
             if (!sanitized.Success)
                 return Result.Failure<WorkstationCommandDto>(sanitized.Error ?? "Invalid payload.");
             payloadJson = sanitized.Value;
             localRoot = runtime.LocalRoot;
+            if (command.Request.Kind == WorkstationCommandKind.RunReviewCheck)
+            {
+                if (string.IsNullOrWhiteSpace(command.Request.TrustedCheckCommand))
+                    return Result.Failure<WorkstationCommandDto>("A trusted review check command is required.", ErrorKind.Conflict);
+                var json = JsonNode.Parse(payloadJson ?? "{}") as JsonObject ?? new JsonObject();
+                json["checkCommand"] = command.Request.TrustedCheckCommand.Trim();
+                payloadJson = json.ToJsonString();
+            }
             if (command.Request.Kind == WorkstationCommandKind.ApplyOpencode)
                 payloadJson = DesiredState.WithRevision(payloadJson ?? "{}", runtime.ConfigRevision);
         }

@@ -38,7 +38,7 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
 
     private static void SeedStarterLabels(IBeaconDb db, Guid projectId)
     {
@@ -89,14 +89,14 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
                 return Result.Failure<ProjectDto>("Project name is required.");
         }
 
-        project.Update(name, command.Request.Description);
+        project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
 }
 /// <summary>
 /// Loads one project in the current tenant.
@@ -118,7 +118,7 @@ public class GetProjectHandler : ICommandHandler<GetProjectCommand, Result<Proje
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
-        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt);
+        new(project.Id, project.Name, project.Description, project.OrgId, project.CreatedAt, project.UpdatedAt, project.ReviewCheckCommand);
 }
 /// <summary>
 /// Lists projects in the current tenant, optionally for one org.
@@ -139,7 +139,7 @@ public class ListProjectsHandler : ICommandHandler<ListProjectsCommand, Result<I
         var projects = await query
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProjectDto(
-                p.Id, p.Name, p.Description, p.OrgId, p.CreatedAt, p.UpdatedAt))
+                p.Id, p.Name, p.Description, p.OrgId, p.CreatedAt, p.UpdatedAt, p.ReviewCheckCommand))
             .ToListAsync(ct);
 
         return Result.Ok((IList<ProjectDto>)projects);

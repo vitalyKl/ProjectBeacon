@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tasks;
 
+using Application.Authorization;
 using Application.Common;
 using Domain.Enums;
 
@@ -102,11 +103,11 @@ public record RecordReviewVerdictRequest(Guid TaskId, ReviewVerdictKind Kind, st
 /// <summary>Records a review verdict and returns pipeline state.</summary>
 public record RecordReviewVerdictCommand(RecordReviewVerdictRequest Request) : ICommand<Result<PipelineStateDto>>;
 
-/// <summary>Device, actor, and check command used to record a review check.</summary>
-public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId, string CheckCommand, string? Path = null);
+/// <summary>Device, actor, and check command used to record a review check. CheckCommand is supplied only by human actors; token actors leave it empty and the project's pinned ReviewCheckCommand is used.</summary>
+public record RecordReviewCheckRequest(Guid TaskId, Guid DeviceId, Guid ActorId, string? CheckCommand, string? Path = null);
 
 /// <summary>Records a review check and returns pipeline state.</summary>
-public record RecordReviewCheckCommand(RecordReviewCheckRequest Request) : ICommand<Result<PipelineStateDto>>;
+public record RecordReviewCheckCommand(RecordReviewCheckRequest Request, ActorContext Actor) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Task to approve, with an optional note.</summary>
 public record ApprovePipelineRequest(Guid TaskId, string? Note = null);

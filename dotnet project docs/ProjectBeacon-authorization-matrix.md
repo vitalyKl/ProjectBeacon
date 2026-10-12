@@ -253,7 +253,7 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 | POST | `/v1/tasks/{tid}/subtasks/{sid}/fail` | PipelineEndpoints.cs:21 | Any-auth | TaskWrite | none | task | |
 | POST | `/v1/tasks/{tid}/pipeline/review/start` | PipelineEndpoints.cs:22 | Any-auth | TaskWrite | none | task | |
 | POST | `/v1/tasks/{tid}/pipeline/verdict` | PipelineEndpoints.cs:23 | Any-auth | TaskWrite | none | task | |
-| POST | `/v1/tasks/{tid}/pipeline/review/check` | PipelineEndpoints.cs:24 | Human-only | TaskWrite | `UserId is null → 401` (:137) | task | |
+| POST | `/v1/tasks/{tid}/pipeline/review/check` | PipelineEndpoints.cs:32 | Human + ApiToken | TaskWrite | `RequireHumanOrApiToken(TaskWrite)` + `actor.UserId is null → 401`; Human: body `CheckCommand` required (400/Validation if empty); Token: body must be empty (400/Validation if non-empty), resolves from `Project.ReviewCheckCommand` (409/Conflict if null); `CommandSandbox.SanitizeProjectPayload` strips payload `checkCommand`, `EnqueueCommandHandler` injects `TrustedCheckCommand` only | task | |
 | POST | `/v1/tasks/{tid}/pipeline/approve` | PipelineEndpoints.cs:25 | Any-auth | TaskWrite | none | task | `REVIEW REQUIRED`: pipeline **approval** requires only `TaskWrite` — no reviewer role |
 | POST | `/v1/tasks/{tid}/pipeline/force-close` | PipelineEndpoints.cs:26 | Human-only + token `Admin` | **Admin** | `UserId is null → 401` (:164) | task | `REVIEW REQUIRED`: `force-close` is the only pipeline op requiring the `Admin` cap **and** a human |
 

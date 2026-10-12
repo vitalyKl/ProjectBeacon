@@ -142,11 +142,13 @@ public static class PipelineEndpoints
             return ProblemResults.Bad("TaskId mismatch.");
 
         var actor = ctx.GetActor();
+        // Reviewer binding and device ownership both need a user id; tokens without a creator cannot be bound.
         if (actor.UserId is null)
             return ProblemResults.Unauthorized();
 
-        var result = await handler.HandleAsync(new RecordReviewCheckCommand(new RecordReviewCheckRequest(
-            body.TaskId, body.DeviceId, actor.UserId!.Value, body.CheckCommand, body.Path)), ct);
+        var result = await handler.HandleAsync(new RecordReviewCheckCommand(
+            new RecordReviewCheckRequest(body.TaskId, body.DeviceId, actor.UserId.Value, body.CheckCommand, body.Path),
+            actor), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -203,8 +205,12 @@ public static class PipelineEndpoints
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>.</summary>
     public record VerdictBody(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
 
-    /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>. The acting user is <c>HttpContext.GetActor().UserId</c>, not a field.</summary>
-    public record ReviewCheckBody(Guid TaskId, Guid DeviceId, string CheckCommand, string? Path = null);
+    /// <summary>
+    /// JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>. The acting user is
+    /// <c>HttpContext.GetActor().UserId</c>, not a field. CheckCommand is required for human actors;
+    /// API tokens must omit it and the project's pinned ReviewCheckCommand is used instead.
+    /// </summary>
+    public record ReviewCheckBody(Guid TaskId, Guid DeviceId, string? CheckCommand, string? Path = null);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c>.</summary>
     public record ApproveBody(Guid TaskId, string? Note = null);
