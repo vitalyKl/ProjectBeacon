@@ -35,6 +35,9 @@ public static class ServiceCollectionExtensions
 
         var jwtSecret = JwtSecretPolicy.EnsureConfigured(configuration["JWT:Secret"], environmentName);
 
+        // Fail-fast: validate the data key at startup (same source as the JWT secret).
+        DataKeyPolicy.EnsureConfigured(configuration[DataKeyPolicy.ConfigKey], environmentName);
+
         services.Configure<DockerPostgresConfig>(config =>
         {
             config.PostgresPassword = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD");

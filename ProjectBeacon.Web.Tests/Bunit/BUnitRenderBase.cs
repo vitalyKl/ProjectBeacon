@@ -13,6 +13,9 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using MudBlazor;
 using MudBlazor.Services;
 using System.Security.Claims;
@@ -69,6 +72,8 @@ public abstract class BUnitRenderBase : IDisposable
 
         _bunit.Services.AddSingleton<IEmailSender, FakeEmailSender>();
         _bunit.Services.AddLogging();
+        _bunit.Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        _bunit.Services.AddSingleton<IHostEnvironment>(new TestHostEnvironment("Testing"));
 
         authProvider.TriggerAuthenticationStateChanged(
           "tester",
@@ -120,6 +125,14 @@ public abstract class BUnitRenderBase : IDisposable
     {
         _sqliteConnection.Dispose();
         _bunit.Dispose();
+    }
+
+    private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "BeaconTests";
+        public string ContentRootPath { get; set; } = string.Empty;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public string EnvironmentName { get; set; } = environmentName;
     }
 }
 

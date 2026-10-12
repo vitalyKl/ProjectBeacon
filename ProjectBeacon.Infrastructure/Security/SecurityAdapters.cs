@@ -2,6 +2,8 @@ namespace ProjectBeacon.Infrastructure.Security;
 
 using Application.Security;
 using Domain.Entities.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 /// <summary>
 /// IPasswordHasher adapter over PasswordHasher.
 /// </summary>
@@ -26,11 +28,16 @@ public sealed class JwtTokenIssuer : ITokenIssuer
 /// </summary>
 public sealed class AesSecretProtector : ISecretProtector
 {
+    private readonly string _key;
+
+    public AesSecretProtector(IConfiguration configuration, IHostEnvironment environment)
+        => _key = DataKeyPolicy.EnsureConfigured(configuration[DataKeyPolicy.ConfigKey], environment.EnvironmentName);
+
     public string Seal(string plain, string keyMaterial) => SecretBox.Seal(plain, keyMaterial);
 
     public string Open(string packed, string keyMaterial) => SecretBox.Open(packed, keyMaterial);
 
-    public string KeyMaterial() => SecretBox.KeyMaterial();
+    public string KeyMaterial() => _key;
 }
 /// <summary>
 /// ITOTP adapter over Totp.

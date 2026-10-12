@@ -23,6 +23,11 @@ var jwtSecret = JwtSecretPolicy.EnsureConfigured(
     builder.Configuration["JWT:Secret"],
     builder.Environment.EnvironmentName);
 
+// Fail-fast: validate the data key at startup (same source as the JWT secret).
+DataKeyPolicy.EnsureConfigured(
+    builder.Configuration[DataKeyPolicy.ConfigKey],
+    builder.Environment.EnvironmentName);
+
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddApplicationHandlers();
 

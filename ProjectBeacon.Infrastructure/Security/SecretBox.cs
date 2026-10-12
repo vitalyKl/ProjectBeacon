@@ -33,9 +33,4 @@ public static class SecretBox
         aes.Decrypt(nonce, cipher, tag, plain);
         return Encoding.UTF8.GetString(plain);
     }
-
-    public static string KeyMaterial() =>
-        Environment.GetEnvironmentVariable("JWT__Secret")
-        ?? Environment.GetEnvironmentVariable("JWT_SECRET")
-        ?? "beacon-dev-data-key";
 }
