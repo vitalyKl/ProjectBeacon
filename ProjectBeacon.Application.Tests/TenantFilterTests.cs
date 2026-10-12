@@ -1,10 +1,12 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Domain.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 public sealed class TenantFilterTests : IDisposable
 {
@@ -42,5 +44,24 @@ public sealed class TenantFilterTests : IDisposable
             Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync());
         using (TenantScope.EnterUnscoped())
             Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync());
+    }
+
+    [Fact]
+    public void Model_QueryFilters_AreAppliedExactlyToScopedEntities()
+    {
+        var scoped = new List<string>();
+        foreach (var entityType in _db.Model.GetEntityTypes())
+        {
+            var clr = entityType.ClrType;
+            var isScoped = typeof(IProjectScoped).IsAssignableFrom(clr)
+                || typeof(IOrgScoped).IsAssignableFrom(clr);
+            var hasFilter = entityType.GetQueryFilter() is not null;
+            Assert.True(isScoped == hasFilter, $"{clr.FullName}: expected scoped={isScoped} but hasFilter={hasFilter}");
+            if (isScoped)
+                scoped.Add(clr.Name);
+        }
+
+        // Frozen baseline: 23 IProjectScoped + 3 IOrgScoped.
+        Assert.Equal(26, scoped.Count);
     }
 }
