@@ -1,6 +1,7 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Tasks;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Enums;
 
 /// <summary>

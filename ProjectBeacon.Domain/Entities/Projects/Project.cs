@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Tasks;
 using Identity;
 
 /// <summary>Org-scoped project. It has no single working-tree root; that lives on <see cref="ProjectRuntime"/>.</summary>

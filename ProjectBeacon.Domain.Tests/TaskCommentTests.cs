@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Domain.Tests;
 
-using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Entities.Tasks;
 
 public sealed class TaskCommentTests
 {

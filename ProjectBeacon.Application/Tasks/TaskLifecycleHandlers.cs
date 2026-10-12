@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -44,7 +45,7 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
                 return Result.Failure<TaskItemDto>("Milestone not found.");
         }
 
-        var task = Domain.Entities.Projects.TaskItem.Create(command.Request.Title, command.Request.ProjectId, command.Request.Priority, command.Request.Type);
+        var task = Domain.Entities.Tasks.TaskItem.Create(command.Request.Title, command.Request.ProjectId, command.Request.Priority, command.Request.Type);
         task.Update(description: command.Request.Description);
         task.AssignLabel(labelId);
         task.SetMilestone(command.Request.MilestoneId);

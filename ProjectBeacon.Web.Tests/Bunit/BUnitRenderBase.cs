@@ -2,6 +2,7 @@ using ProjectBeacon.Application;
 using ProjectBeacon.Domain.Entities.Devices;
 using ProjectBeacon.Domain.Entities.Identity;
 using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Entities.Tasks;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;

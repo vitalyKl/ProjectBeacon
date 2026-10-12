@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 using Application.Common;
 using Application.Devices;
 using Domain.Entities.Evals;
-using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

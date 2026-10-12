@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
-using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
@@ -21,7 +21,7 @@ public class AddCommentHandler : ICommandHandler<AddCommentCommand, Result<TaskC
             return Result.Failure<TaskCommentDto>("Task not found.");
 
         var userId = command.Actor.UserId ?? Guid.Empty;
-        var comment = Domain.Entities.Projects.TaskComment.Create(command.Request.Content, command.Request.TaskId, userId);
+        var comment = Domain.Entities.Tasks.TaskComment.Create(command.Request.Content, command.Request.TaskId, userId);
         db.TaskComments.Add(comment);
         await db.SaveChangesAsync(ct);
 

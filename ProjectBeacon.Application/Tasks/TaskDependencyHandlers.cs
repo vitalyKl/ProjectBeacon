@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
-using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -44,7 +44,7 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
             if (!depTaskExists)
                 return Result.Failure<TaskItemDto>($"Dependent task {id} not found.");
 
-            db.TaskDependencies.Add(Domain.Entities.Projects.TaskDependency.Create(task.Id, id));
+            db.TaskDependencies.Add(Domain.Entities.Tasks.TaskDependency.Create(task.Id, id));
         }
 
         await db.SaveChangesAsync(ct);

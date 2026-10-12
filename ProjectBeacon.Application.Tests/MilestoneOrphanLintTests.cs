@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Milestones;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 
 public sealed class MilestoneOrphanLintTests

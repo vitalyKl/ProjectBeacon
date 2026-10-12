@@ -5,6 +5,7 @@ using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Entities.Evals;
 using Domain.Enums;
 /// <summary>

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Tasks;
 
 /// <summary>
 /// Project area. Path prefixes, not free-form chips, decide which files the label covers.

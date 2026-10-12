@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Domain.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

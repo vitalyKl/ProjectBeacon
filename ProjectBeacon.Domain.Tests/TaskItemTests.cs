@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Domain.Tests;
 
-using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Entities.Tasks;
 using ProjectBeacon.Domain.Enums;
 
 public sealed class TaskItemTests

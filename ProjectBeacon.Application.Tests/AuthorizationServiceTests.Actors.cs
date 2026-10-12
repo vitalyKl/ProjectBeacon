@@ -4,6 +4,7 @@ using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;

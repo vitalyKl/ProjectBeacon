@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Projects;
 
 using Application.Common;
 using Application.Tasks;
-using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;

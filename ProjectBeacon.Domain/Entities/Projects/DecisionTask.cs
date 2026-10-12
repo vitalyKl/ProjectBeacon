@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Domain.Entities.Projects;
 
+using ProjectBeacon.Domain.Entities.Tasks;
+
 /// <summary>Link from a decision to a task. The pair of ids is the identity. This type is not an entity row with its own factory id.</summary>
 public class DecisionTask
 {

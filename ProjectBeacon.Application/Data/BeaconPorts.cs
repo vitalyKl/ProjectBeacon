@@ -8,6 +8,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 
 // Owned by Application so handlers do not reference the Infrastructure assembly.
 // The EF context in Infrastructure implements this port.
