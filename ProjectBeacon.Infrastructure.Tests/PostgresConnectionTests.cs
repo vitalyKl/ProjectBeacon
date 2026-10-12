@@ -18,7 +18,7 @@ public sealed class PostgresConnectionTests
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:Default"] = "Host=localhost;Port=5432;Database=beacon;Username=beacon;"
+                    ["ConnectionStrings:Default"] = "Host=localhost;Port=5432;Database=beacon;Username=beacon_app;"
                 })
                 .Build();
 
@@ -46,7 +46,7 @@ public sealed class PostgresConnectionTests
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:Default"] = "Host=localhost;Port=5432;Database=beacon;Username=beacon;"
+                    ["ConnectionStrings:Default"] = "Host=localhost;Port=5432;Database=beacon;Username=beacon_app;"
                 })
                 .Build();
 

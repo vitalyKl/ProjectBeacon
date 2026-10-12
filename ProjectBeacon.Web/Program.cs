@@ -23,7 +23,7 @@ if (!app.Environment.IsEnvironment("Testing"))
     }
 
     if (ShouldMigrateOnStart(app.Environment))
-        app.MigrateDatabase();
+        await app.MigrateDatabase();
 
     if (IsTruthy(Environment.GetEnvironmentVariable("BEACON_MIGRATE_THEN_EXIT")))
         return;

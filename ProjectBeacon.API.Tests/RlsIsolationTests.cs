@@ -105,7 +105,8 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
     private async Task<(Guid ProjectId, Guid TaskId)> SeedTestDataAsync(string suffix)
     {
-        await using var seed = _postgres.CreateContext();
+        // Seed as the superuser: beacon_app is RLS-bound and would be fail-closed here.
+        await using var seed = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
             var org = Org.Create($"Rls {suffix} Org");

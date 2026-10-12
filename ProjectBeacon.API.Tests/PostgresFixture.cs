@@ -10,7 +10,15 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public bool Available { get; private set; }
 
+    /// <summary>
+    /// Superuser (migration role) connection string. Bypasses RLS.
+    /// </summary>
     public string ConnectionString { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Runtime role (beacon_app) connection string. Non-superuser, RLS-bound.
+    /// </summary>
+    public string AppConnectionString { get; private set; } = string.Empty;
 
     public async Task InitializeAsync()
     {
@@ -45,8 +53,12 @@ public sealed class PostgresFixture : IAsyncLifetime
         if (!Available)
             return;
 
-        await using var db = CreateContext();
+        AppConnectionString = PostgresConnection.DeriveAppConnectionString(ConnectionString);
+
+        await using var db = CreateAdminContext();
         await db.Database.EnsureCreatedAsync();
+
+        await PostgresConnection.EnsureAppRoleAsync(AppConnectionString, ConnectionString);
     }
 
     public async Task DisposeAsync()
@@ -64,20 +76,31 @@ public sealed class PostgresFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Context connected as the runtime role (beacon_app), the same login the application uses.
+    /// </summary>
     public BeaconDbContext CreateContext()
     {
-        return new BeaconDbContext(CreateOptions());
+        return new BeaconDbContext(CreateOptions(AppConnectionString));
     }
 
     public BeaconDbFactory CreateFactory()
     {
-        return new BeaconDbFactory(CreateOptions(), null);
+        return new BeaconDbFactory(CreateOptions(AppConnectionString), null);
     }
 
-    private DbContextOptions<BeaconDbContext> CreateOptions()
+    /// <summary>
+    /// Context connected as the superuser migration role. Bypasses RLS; use for seeding.
+    /// </summary>
+    public BeaconDbContext CreateAdminContext()
+    {
+        return new BeaconDbContext(CreateOptions(ConnectionString));
+    }
+
+    private DbContextOptions<BeaconDbContext> CreateOptions(string connectionString)
     {
         return new DbContextOptionsBuilder<BeaconDbContext>()
-            .UseNpgsql(ConnectionString)
+            .UseNpgsql(connectionString)
             .Options;
     }
 

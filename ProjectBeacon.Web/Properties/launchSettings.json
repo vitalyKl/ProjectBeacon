@@ -17,7 +17,7 @@
         "applicationUrl": "http://localhost:5183",
         "environmentVariables": {
           "ASPNETCORE_ENVIRONMENT": "Development",
-          "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=beacon_test;Username=beacon;"
+          "ConnectionStrings__Default": "Host=localhost;Port=5432;Database=beacon_test;Username=beacon_app;"
         }
       },
       "https": {
