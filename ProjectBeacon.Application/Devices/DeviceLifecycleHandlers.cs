@@ -7,8 +7,7 @@ using Application.Security;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 /// <summary>

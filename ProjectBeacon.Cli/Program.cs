@@ -1,4 +1,5 @@
 using ProjectBeacon.Cli;
+using ProjectBeacon.Cli.Mcp;
 using ProjectBeacon.Cli.Client;
 
 var original = args;

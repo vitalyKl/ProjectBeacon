@@ -1,5 +1,5 @@
 namespace ProjectBeacon.Application.Tests;
-
+using Application.Persistence;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

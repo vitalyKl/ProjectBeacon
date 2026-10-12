@@ -5,7 +5,7 @@ using System.Text;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Returns subtasks, sessions, and verdicts for a task.

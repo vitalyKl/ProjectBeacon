@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Cli;
+namespace ProjectBeacon.Cli.Mcp;
 
 using System.Reflection;
 using System.Text;
@@ -13,11 +13,9 @@ using Application.Tasks;
 using Domain.Enums;
 using Infrastructure;
 using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using ProjectBeacon.Cli.Mcp;
 
 public static partial class McpStdioServer
 {

@@ -2,8 +2,8 @@ namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
 using Domain.Enums;
-using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
+using Application.Persistence;
+using Application.Runtime;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Serves llama-swap status, reload, and unload by reading device heartbeats and enqueueing device commands.

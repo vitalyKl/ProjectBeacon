@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Infrastructure.Mail;
+namespace ProjectBeacon.Application.Mail;
 
 /// <summary>Sends a plain-text message. <see cref="IsConfigured"/> reports whether a sender is set up.</summary>
 public interface IEmailSender

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Loads one task with comments and dependencies.

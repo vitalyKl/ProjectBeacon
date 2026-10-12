@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json.Nodes;
 using Domain.Entities.Devices;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Bumps the desired revision on a user's devices or on the devices attached to a project so clients reconcile config.

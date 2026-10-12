@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Application.Identity;
 
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ProjectBeacon.Application.Authorization;
 /// <summary>

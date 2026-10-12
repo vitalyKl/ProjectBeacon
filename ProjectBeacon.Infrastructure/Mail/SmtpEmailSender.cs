@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Mail;
 
+using Application.Mail;
 using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Configuration;

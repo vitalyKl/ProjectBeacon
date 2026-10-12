@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
 using Application.Common;
+using ProjectBeacon.Cli.Mcp;
 
 public sealed class McpLiveProcessTests
 {

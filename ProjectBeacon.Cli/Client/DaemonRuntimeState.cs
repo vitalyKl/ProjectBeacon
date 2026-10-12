@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Cli.Client;
 
-using Infrastructure.LlamaSwap;
+using Application.Runtime;
 
 internal interface IDaemonRuntimeState
 {

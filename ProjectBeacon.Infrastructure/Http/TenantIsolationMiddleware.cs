@@ -2,6 +2,7 @@ namespace ProjectBeacon.Infrastructure.Http;
 
 using System.Security.Claims;
 using Application.Authorization;
+using Application.Persistence;
 using Domain.Entities.Projects;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;

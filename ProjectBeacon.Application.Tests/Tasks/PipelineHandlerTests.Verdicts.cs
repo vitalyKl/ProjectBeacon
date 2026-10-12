@@ -8,7 +8,6 @@ using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
 using Microsoft.Data.Sqlite;
 
 public sealed partial class PipelineHandlerTests

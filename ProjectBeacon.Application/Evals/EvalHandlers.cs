@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Evals;
 using Common;
 using Domain.Entities.Evals;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Starts an eval run for a task under WithBrief or WithoutBrief. PairId groups the two runs.

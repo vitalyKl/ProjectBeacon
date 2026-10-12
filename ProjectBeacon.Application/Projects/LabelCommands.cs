@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Projects;
 
 using Application.Common;
 using Domain.Entities.Projects;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Project and file path to match against active label prefixes.

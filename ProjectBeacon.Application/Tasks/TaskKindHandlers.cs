@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// One phase of a task-kind template, including fan-out and an optional model.

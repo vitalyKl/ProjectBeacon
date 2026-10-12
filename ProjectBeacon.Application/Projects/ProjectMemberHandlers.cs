@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Projects;
 using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Adds a project member. Fails when the user is already a member or the caller cannot administer.

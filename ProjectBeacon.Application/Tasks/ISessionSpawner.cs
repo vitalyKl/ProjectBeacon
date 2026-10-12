@@ -3,8 +3,8 @@ namespace ProjectBeacon.Application.Tasks;
 using System.Globalization;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
+using Application.Persistence;
+using Application.Runtime;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>Model and launch spec chosen for a pipeline session. Ids are null when no backend is bound.</summary>

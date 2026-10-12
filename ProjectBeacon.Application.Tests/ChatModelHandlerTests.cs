@@ -1,7 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Agents;
-using Application.Auth;
 using Application.Chat;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;

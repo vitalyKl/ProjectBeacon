@@ -4,7 +4,7 @@ using Application.Common;
 using Application.Evals;
 using Domain.Entities.Evals;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Task whose with-brief and without-brief eval pairs should be compared.

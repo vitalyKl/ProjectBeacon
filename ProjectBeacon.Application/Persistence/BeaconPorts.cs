@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Infrastructure.Data;
+namespace ProjectBeacon.Application.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;

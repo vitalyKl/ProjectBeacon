@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Infrastructure.Data;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
+using Application.Persistence;
 
 public sealed class ShellChromeTests : BUnitRenderBase
 {

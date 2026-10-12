@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Lists context sections for the project.

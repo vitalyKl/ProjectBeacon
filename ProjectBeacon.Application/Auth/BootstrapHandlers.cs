@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Auth;
 using Application.Common;
 using Application.Security;
 using Domain.Entities.Identity;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;

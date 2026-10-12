@@ -1,5 +1,5 @@
 namespace ProjectBeacon.Application.Tests;
-
+using Application.Persistence;
 using Application.Authorization;
 using Application.Devices;
 using Application.Tasks;
@@ -10,7 +10,6 @@ using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
 using Microsoft.Data.Sqlite;
 
 public sealed partial class PipelineHandlerTests : IDisposable

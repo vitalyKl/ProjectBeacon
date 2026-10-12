@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Tasks;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Replaces the tasks this task depends on. A task cannot depend on itself.

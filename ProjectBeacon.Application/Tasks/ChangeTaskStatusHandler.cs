@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Moves a task to Todo, InProgress, or Done. Done fails unless a completed review run exists.

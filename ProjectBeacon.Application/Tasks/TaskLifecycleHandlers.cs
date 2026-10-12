@@ -4,7 +4,7 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Creates a task. Label and milestone, when set, must belong to the project.

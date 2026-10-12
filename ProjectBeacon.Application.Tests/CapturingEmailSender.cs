@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Application.Tests;
 
-using Infrastructure.Mail;
+using Application.Mail;
 
 internal sealed class CapturingEmailSender : IEmailSender
 {

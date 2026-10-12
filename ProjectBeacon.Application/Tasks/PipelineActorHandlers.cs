@@ -5,7 +5,7 @@ using System.Text;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Adds a subtask. Instructions are required, and the task pipeline must already be started.

@@ -16,7 +16,7 @@ using MudBlazor;
 using MudBlazor.Services;
 using ProjectBeacon.Application;
 using ProjectBeacon.Infrastructure;
-using ProjectBeacon.Infrastructure.LlamaSwap;
+using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Infrastructure.Http;
 using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Startup;

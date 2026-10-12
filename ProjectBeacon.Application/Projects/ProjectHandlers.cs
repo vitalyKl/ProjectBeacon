@@ -4,7 +4,7 @@ using Application.Authorization;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Creates a project in an org and seeds the starter labels. The caller becomes owner.

@@ -4,8 +4,8 @@ using Application.Common;
 using Application.Devices;
 using Domain.Enums;
 using Domain.Entities.Projects;
-using Infrastructure.Data;
-using Infrastructure.LlamaSwap;
+using Application.Persistence;
+using Application.Runtime;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Reads the current project id from the database tenant filter. Null or empty is unresolved.

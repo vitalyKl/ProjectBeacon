@@ -4,8 +4,8 @@ using Application.Common;
 using Application.Identity;
 using Application.Security;
 using Domain.Entities.Identity;
-using Infrastructure.Data;
-using Infrastructure.Mail;
+using Application.Persistence;
+using Application.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 /// <summary>

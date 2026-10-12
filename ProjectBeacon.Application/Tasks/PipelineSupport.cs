@@ -5,7 +5,7 @@ using System.Text;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Maps pipeline entities to DTOs and loads pipeline state. Also compares actor ids in constant time for the privileged close path.

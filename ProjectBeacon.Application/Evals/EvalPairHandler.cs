@@ -4,7 +4,7 @@ using Application.Common;
 using Application.Context;
 using Application.Devices;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Nodes;
 /// <summary>

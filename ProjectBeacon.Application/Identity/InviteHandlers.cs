@@ -6,8 +6,8 @@ using Application.Common;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
-using Infrastructure.Mail;
+using Application.Persistence;
+using Application.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 /// <summary>

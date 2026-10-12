@@ -4,7 +4,7 @@ using Application.Common;
 using Application.Tasks;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Moves a Todo task to InProgress. A missing or already claimed task fails.

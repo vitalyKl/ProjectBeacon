@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Context;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Imports markdown files as context sections and returns how many were created.

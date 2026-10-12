@@ -1,5 +1,5 @@
 namespace ProjectBeacon.Application.Tests;
-
+using Application.Persistence;
 using Application.Tasks;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;

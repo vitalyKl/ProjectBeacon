@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Data.Configurations;
 
-using Domain;
+using Domain.Common;
 using Domain.Entities.Devices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

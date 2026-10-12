@@ -6,7 +6,7 @@ using Application.Devices;
 using Application.Security;
 using Domain.Entities.Agents;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// An OpenCode provider connection without the API key. HasApiKey is true when one is stored.

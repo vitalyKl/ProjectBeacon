@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Domain;
+using Domain.Common;
 
 /// <summary>
 /// Wire-level version and payload rules for workstation commands. Version 0 is the legacy

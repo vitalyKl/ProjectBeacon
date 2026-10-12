@@ -5,7 +5,7 @@ using Application.Common;
 using Application.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Asks for the caller's current project. The result is null when none is selected.

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Context;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// One markdown file to import: file name, content, and the path it came from.

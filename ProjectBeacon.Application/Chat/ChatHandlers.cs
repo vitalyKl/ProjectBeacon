@@ -1,12 +1,12 @@
 namespace ProjectBeacon.Application.Chat;
 
-using Application.Auth;
+using Application.Agents;
 using Application.Common;
 using Application.Devices;
 using Application.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 /// <summary>

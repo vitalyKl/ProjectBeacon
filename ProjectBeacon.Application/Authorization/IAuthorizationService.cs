@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Authorization;
 
 using Application.Common;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 
 /// <summary>Authorizes an actor for a resource action, a membership change, token creation, or an API-token capability.</summary>
 public interface IAuthorizationService

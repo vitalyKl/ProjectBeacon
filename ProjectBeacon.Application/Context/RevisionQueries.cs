@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// A saved compile: time, token estimate, and hash. The markdown itself is not on this row.

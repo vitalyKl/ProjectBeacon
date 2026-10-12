@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
 using Domain.Enums;
-using Infrastructure.LlamaSwap;
+using Application.Runtime;
 /// <summary>
 /// One user-owned model backend, including whether it may stay resident with other models.
 /// </summary>

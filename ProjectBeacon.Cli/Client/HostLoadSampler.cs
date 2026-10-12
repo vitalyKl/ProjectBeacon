@@ -2,7 +2,7 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Globalization;
 using System.Runtime.InteropServices;
-using Infrastructure.LlamaSwap;
+using Application.Runtime;
 /// <summary>
 /// Samples CPU, memory, and GPU for the heartbeat. GPU comes from nvidia-smi when that tool is present.
 /// </summary>

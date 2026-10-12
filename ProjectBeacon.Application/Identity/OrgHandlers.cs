@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Identity;
 using Application.Common;
 using Domain.Entities.Identity;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Creates an org and adds the caller as owner.

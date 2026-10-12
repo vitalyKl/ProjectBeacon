@@ -4,7 +4,7 @@ using Application.Common;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Finds the project runtime for a device. Missing runtime is a failure, not an empty root.

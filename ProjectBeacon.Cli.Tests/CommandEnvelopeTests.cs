@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Cli.Tests;
 
 using Application.Devices;
-using Domain;
+using Domain.Common;
 using Domain.Enums;
 using ProjectBeacon.Cli.Client;
 

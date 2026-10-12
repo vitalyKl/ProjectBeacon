@@ -1,5 +1,8 @@
 namespace ProjectBeacon.Infrastructure;
 
+using Application.Mail;
+using Application.Persistence;
+using Application.Runtime;
 using Application.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

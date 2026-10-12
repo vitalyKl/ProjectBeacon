@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Application.Identity;
 
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Picks the user's current project and org. An admin may use a preferred project id that ignores membership.

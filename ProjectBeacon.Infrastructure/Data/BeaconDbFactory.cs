@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Data;
 
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 // A Blazor circuit's DI scope outlives any single operation, so a scoped BeaconDbContext

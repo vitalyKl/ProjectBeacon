@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Data;
 
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Domain.Entities.Agents;
 using Domain.Entities.Devices;

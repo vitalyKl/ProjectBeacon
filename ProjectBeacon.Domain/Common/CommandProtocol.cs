@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Domain;
+namespace ProjectBeacon.Domain.Common;
 
 /// <summary>
 /// Version of the workstation command wire protocol. Bump only when the envelope or payload

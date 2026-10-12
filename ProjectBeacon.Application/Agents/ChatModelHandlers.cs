@@ -1,8 +1,7 @@
-namespace ProjectBeacon.Application.Auth;
+namespace ProjectBeacon.Application.Agents;
 
-using Application.Agents;
 using Application.Common;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// User whose selected chat backend should be returned.

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Decisions;
 using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// A decision, its status, and the decision that superseded it when one did.

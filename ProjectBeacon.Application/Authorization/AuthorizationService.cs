@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Authorization;
 
 using Application.Common;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>Implements <see cref="IAuthorizationService"/> from actor kind, membership, and API-token capabilities.</summary>

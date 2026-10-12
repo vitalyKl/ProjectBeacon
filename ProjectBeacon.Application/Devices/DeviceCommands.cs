@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Application.Common;
-using Domain;
+using Domain.Common;
 using Domain.Enums;
 /// <summary>
 /// A workstation device. Token is the raw bcd_ value only on enroll or rotate. Other reads leave it empty.

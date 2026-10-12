@@ -4,7 +4,7 @@ using Application.Common;
 using Application.Devices;
 using Domain.Entities.Devices;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// User whose online devices should reload llama-swap.

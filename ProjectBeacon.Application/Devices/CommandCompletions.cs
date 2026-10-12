@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using System.Text.Json;
 using Domain.Entities.Devices;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 internal interface ICommandCompletion

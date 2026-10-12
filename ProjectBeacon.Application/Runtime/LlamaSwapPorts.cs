@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Infrastructure.LlamaSwap;
+namespace ProjectBeacon.Application.Runtime;
 
 /// <summary>Name and state of one model loaded in llama-swap.</summary>
 public record LoadedModelStatus(string Name, string State);

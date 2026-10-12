@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Auth;
 
 using Application.Common;
 using Application.Security;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Whether TOTP is enabled. OtpAuthUri and Secret are set only while setup is still pending.

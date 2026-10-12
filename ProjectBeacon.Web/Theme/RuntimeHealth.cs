@@ -1,4 +1,4 @@
-using ProjectBeacon.Infrastructure.LlamaSwap;
+using ProjectBeacon.Application.Runtime;
 
 namespace ProjectBeacon.Web.Theme;
 /// <summary>

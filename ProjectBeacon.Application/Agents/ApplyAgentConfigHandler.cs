@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Agents;
 using Application.Common;
 using Application.Devices;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Project, device, user, run mode, and the backend ids to write into OpenCode and the role bindings.

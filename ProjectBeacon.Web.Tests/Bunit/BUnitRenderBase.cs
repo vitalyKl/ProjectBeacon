@@ -6,7 +6,7 @@ using ProjectBeacon.Domain.Entities.Tasks;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;
-using ProjectBeacon.Infrastructure.Mail;
+using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Web;
 using Bunit;
 using Bunit.TestDoubles;
@@ -22,6 +22,7 @@ using MudBlazor.Services;
 using System.Security.Claims;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
+using Application.Persistence;
 
 public abstract class BUnitRenderBase : IDisposable
 {

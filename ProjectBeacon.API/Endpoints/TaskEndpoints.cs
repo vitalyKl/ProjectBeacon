@@ -5,7 +5,7 @@ using ProjectBeacon.API;
 using Application.Common;
 using Application.Tasks;
 using Application.Projects; // ClaimTaskHandler
-using Infrastructure.Data;
+using Application.Persistence;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;

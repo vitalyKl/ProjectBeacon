@@ -5,7 +5,7 @@ using Application.Common;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Open and closed milestone counts stored in a report snapshot.

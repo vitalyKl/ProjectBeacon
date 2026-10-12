@@ -2,7 +2,7 @@ namespace ProjectBeacon.Application.Milestones;
 
 using Application.Common;
 using Domain.Entities.Projects;
-using Infrastructure.Data;
+using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Creates a milestone on a project.
