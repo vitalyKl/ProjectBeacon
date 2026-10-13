@@ -38,7 +38,8 @@ public record WorkstationCommandDto(
     DateTime? StartedAt,
     DateTime? CompletedAt,
     string? LocalRoot = null,
-    int Version = CommandProtocol.CurrentVersion);
+    int Version = CommandProtocol.CurrentVersion,
+    int Generation = 0);
 /// <summary>
 /// Runtime summary for any project member: the selected project device and status, without the local path.
 /// </summary>
@@ -87,9 +88,9 @@ public record RevokeDeviceRequest(Guid DeviceId, Guid UserId);
 /// </summary>
 public record RevokeDeviceCommand(RevokeDeviceRequest Request) : ICommand<Result>;
 /// <summary>
-/// Fields for heartbeat device.
+/// Fields for heartbeat device. InstanceId identifies the daemon process instance.
 /// </summary>
-public record HeartbeatDeviceRequest(Guid DeviceId, string? ProbeJson, string? WorkstationJson);
+public record HeartbeatDeviceRequest(Guid DeviceId, string? ProbeJson, string? WorkstationJson, string? InstanceId = null);
 /// <summary>
 /// Command for heartbeat device.
 /// </summary>
@@ -120,8 +121,9 @@ public record ClaimNextCommandRequest(Guid DeviceId, TimeSpan? Wait);
 public record ClaimNextCommandCommand(ClaimNextCommandRequest Request) : ICommand<Result<WorkstationCommandDto?>>;
 /// <summary>
 /// Device finishing a command: success, optional result JSON, and optional error.
+/// Generation is the claim generation (Attempts + 1) the client received at claim.
 /// </summary>
-public record CompleteCommandRequest(Guid CommandId, Guid DeviceId, bool Success, string? ResultJson, string? Error);
+public record CompleteCommandRequest(Guid CommandId, Guid DeviceId, bool Success, string? ResultJson, string? Error, int? Generation = null);
 /// <summary>
 /// Command for complete command.
 /// </summary>

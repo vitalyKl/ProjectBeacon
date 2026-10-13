@@ -85,7 +85,7 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
     internal static WorkstationCommandDto MapCommand(WorkstationCommand command, string? localRoot = null) =>
         new(command.Id, command.DeviceId, command.ProjectId, command.RequestedByUserId, command.Kind, command.Status,
             command.PayloadJson, command.ResultJson, command.Error, command.CreatedAt, command.StartedAt, command.CompletedAt, localRoot,
-            command.Version);
+            command.Version, command.Attempts + 1);
 }
 /// <summary>
 /// Returns the next pending command for the device, or null when the queue is empty.
@@ -103,6 +103,14 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
     {
         var wait = command.Request.Wait ?? TimeSpan.Zero;
         var deadline = DateTime.UtcNow + wait;
+        string? instanceId = null;
+        {
+            await using var db = _dbFactory.CreateDbContext();
+            instanceId = await db.DaemonDevices.AsNoTracking()
+                .Where(d => d.Id == command.Request.DeviceId)
+                .Select(d => d.ActiveInstanceId)
+                .FirstOrDefaultAsync(ct);
+        }
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -149,20 +157,24 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
                 }
             }
 
-            // Guarded claim: succeeds only if the row is still pending.
+            // Guarded claim: succeeds only if the row is still pending. The claim grants the
+            // kind's execution lease and records the claiming process instance.
             var startedAt = DateTime.UtcNow;
+            var lease = CommandLease.For(next.Kind);
             var claimed = await db.WorkstationCommands
                 .Where(c => c.Id == next.Id && c.Status == WorkstationCommandStatus.Pending)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(c => c.Status, WorkstationCommandStatus.Running)
-                    .SetProperty(c => c.StartedAt, startedAt), ct);
+                    .SetProperty(c => c.StartedAt, startedAt)
+                    .SetProperty(c => c.LeaseExpiresAt, startedAt + lease)
+                    .SetProperty(c => c.ClaimInstanceId, instanceId), ct);
             if (claimed != 1)
                 continue; // lost the race; the next pending command (if any) is picked up next iteration.
 
             return Result.Ok<WorkstationCommandDto?>(new WorkstationCommandDto(
                 next.Id, next.DeviceId, next.ProjectId, next.RequestedByUserId, next.Kind,
                 WorkstationCommandStatus.Running, next.PayloadJson, next.ResultJson, null,
-                next.CreatedAt, startedAt, null, localRoot, next.Version));
+                next.CreatedAt, startedAt, null, localRoot, next.Version, next.Attempts + 1));
         }
     }
 }
@@ -181,6 +193,9 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
         var row = await db.WorkstationCommands.FirstOrDefaultAsync(c => c.Id == command.Request.CommandId, ct);
         if (row is null || row.DeviceId != command.Request.DeviceId)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
+        // A late completion from an older attempt must not finish the attempt the row is on now.
+        if (!CommandCompletions.AcceptsGeneration(row, command.Request.Generation))
+            return Result.Failure<WorkstationCommandDto>("Command generation mismatch.");
         try
         {
             if (command.Request.Success)

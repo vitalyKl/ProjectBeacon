@@ -27,6 +27,13 @@ public class DaemonDevice : Entity
     public DateTime? RevokedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
 
+    /// <summary>
+    /// Id of the daemon process instance currently heartbeating, reported by the client.
+    /// A restarted process reports a new id, letting the recovery rule distinguish a
+    /// restarted daemon from a still-running one even while the device stays online.
+    /// </summary>
+    public string? ActiveInstanceId { get; private set; }
+
     public bool IsRevoked => RevokedAt is not null;
 
     /// <summary>
@@ -77,9 +84,11 @@ public class DaemonDevice : Entity
 
     /// <summary>
     /// Records a heartbeat and, when supplied, replaces probe or workstation JSON.
+    /// A supplied <paramref name="instanceId"/> replaces <see cref="ActiveInstanceId"/>;
+    /// a blank one leaves it unchanged.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The device is revoked.</exception>
-    public void Heartbeat(string? probeJson = null, string? workstationJson = null)
+    /// <exception cref="InvalidOperationException">The device is revoked, or <paramref name="instanceId"/> exceeds 64 characters.</exception>
+    public void Heartbeat(string? probeJson = null, string? workstationJson = null, string? instanceId = null)
     {
         if (IsRevoked)
             throw new InvalidOperationException("Device is revoked.");
@@ -88,6 +97,13 @@ public class DaemonDevice : Entity
             ProbeJson = probeJson;
         if (workstationJson is not null)
             WorkstationJson = workstationJson;
+        if (!string.IsNullOrWhiteSpace(instanceId))
+        {
+            var trimmed = instanceId.Trim();
+            if (trimmed.Length > 64)
+                throw new InvalidOperationException("Instance id is too long (max 64 characters).");
+            ActiveInstanceId = trimmed;
+        }
     }
 
     /// <summary>

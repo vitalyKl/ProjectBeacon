@@ -9,6 +9,7 @@ var builder = Host.CreateApplicationBuilder(args);
 var connectionString = PostgresConnection.Resolve(builder.Configuration);
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddHostedService<ExpiredRecordsCleanupService>();
+builder.Services.AddHostedService<StaleCommandRecoveryService>();
 
 var host = builder.Build();
 host.Run();

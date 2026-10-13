@@ -75,11 +75,83 @@ public sealed class WorkstationCommandTests
     {
         var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.ListDir, "{\"path\":\"C:\\\\\"}");
         Assert.Equal(WorkstationCommandStatus.Pending, command.Status);
-        command.Claim();
+        command.Claim(TimeSpan.FromMinutes(15));
         Assert.Equal(WorkstationCommandStatus.Running, command.Status);
         command.Succeed("{\"entries\":[]}");
         Assert.Equal(WorkstationCommandStatus.Succeeded, command.Status);
+        Assert.Null(command.LeaseExpiresAt);
         Assert.Throws<InvalidOperationException>(() => command.Fail("nope"));
+    }
+
+    [Fact]
+    public void Claim_GrantsLeaseAndRecordsInstance()
+    {
+        var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.ListDir);
+        var lease = TimeSpan.FromMinutes(15);
+        command.Claim(lease, " inst-1 ");
+        Assert.NotNull(command.LeaseExpiresAt);
+        Assert.True(command.LeaseExpiresAt > DateTime.UtcNow);
+        Assert.Equal(command.StartedAt + lease, command.LeaseExpiresAt);
+        Assert.Equal("inst-1", command.ClaimInstanceId);
+    }
+
+    [Fact]
+    public void Claim_BlankInstanceIsUnknown()
+    {
+        var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.Probe);
+        command.Claim(TimeSpan.FromMinutes(15), "   ");
+        Assert.Null(command.ClaimInstanceId);
+    }
+
+    [Fact]
+    public void Claim_RequiresPositiveLease()
+    {
+        var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.Probe);
+        Assert.Throws<ArgumentOutOfRangeException>(() => command.Claim(TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Requeue_ReturnsPendingIncrementsAttemptsAndClearsLease()
+    {
+        var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.ListDir);
+        command.Claim(TimeSpan.FromMinutes(15), "inst-1");
+        command.Requeue();
+        Assert.Equal(WorkstationCommandStatus.Pending, command.Status);
+        Assert.Equal(1, command.Attempts);
+        Assert.Null(command.LeaseExpiresAt);
+        Assert.Null(command.StartedAt);
+        command.Claim(TimeSpan.FromMinutes(15), "inst-2");
+        command.Requeue();
+        Assert.Equal(WorkstationCommandStatus.Pending, command.Status);
+        Assert.Equal(2, command.Attempts);
+    }
+
+    [Fact]
+    public void Requeue_RequiresRunning()
+    {
+        var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.Probe);
+        Assert.Throws<InvalidOperationException>(() => command.Requeue());
+    }
+
+    [Fact]
+    public void Fail_ClearsLease()
+    {
+        var command = WorkstationCommand.Create(Guid.NewGuid(), WorkstationCommandKind.Probe);
+        command.Claim(TimeSpan.FromMinutes(15));
+        command.Fail("gone");
+        Assert.Null(command.LeaseExpiresAt);
+        Assert.Equal("gone", command.Error);
+    }
+
+    [Fact]
+    public void Heartbeat_SetsActiveInstance()
+    {
+        var device = DaemonDevice.Create("laptop", Guid.NewGuid(), "fp", "h", "bcd_xx");
+        device.Heartbeat(instanceId: "a".PadRight(64, 'b'));
+        Assert.Equal("a".PadRight(64, 'b'), device.ActiveInstanceId);
+        device.Heartbeat();
+        Assert.Equal("a".PadRight(64, 'b'), device.ActiveInstanceId);
+        Assert.Throws<InvalidOperationException>(() => device.Heartbeat(instanceId: new string('x', 65)));
     }
 
     [Fact]

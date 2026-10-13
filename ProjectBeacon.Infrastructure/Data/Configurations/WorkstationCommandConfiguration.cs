@@ -18,6 +18,8 @@ public class WorkstationCommandConfiguration : IEntityTypeConfiguration<Workstat
         entity.Property(e => e.PayloadJson).IsRequired();
         entity.Property(e => e.Error).HasMaxLength(2000);
         entity.Property(e => e.CreatedAt).IsRequired();
+        entity.Property(e => e.Attempts).HasDefaultValue(0).IsRequired();
+        entity.Property(e => e.ClaimInstanceId).HasMaxLength(64);
         entity.HasIndex(e => new { e.DeviceId, e.Status, e.CreatedAt });
         entity.HasOne<DaemonDevice>()
             .WithMany()

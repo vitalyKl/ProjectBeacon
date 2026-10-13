@@ -43,7 +43,8 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                 {
                     probeJson = WorkstationProbe.ProbeJson(
                         _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.OpenCode.StatusWire()),
-                    workstationJson = JsonSerializer.Serialize(settings, DaemonJson.Camel)
+                    workstationJson = JsonSerializer.Serialize(settings, DaemonJson.Camel),
+                    instanceId = DaemonInstance.Id
                 }, ct);
                 var code = (int)heartbeat.StatusCode;
                 _state.Publish(s => s with

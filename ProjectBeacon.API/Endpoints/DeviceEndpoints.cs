@@ -38,17 +38,18 @@ public static class DeviceEndpoints
     /// </summary>
     public record CreateDeviceBody(string Name, string Fingerprint);
     /// <summary>
-    /// Body for a device heartbeat: optional probe JSON and workstation JSON.
+    /// Body for a device heartbeat: optional probe JSON, workstation JSON, and process instance id.
     /// </summary>
-    public record HeartbeatBody(string? ProbeJson, string? WorkstationJson);
+    public record HeartbeatBody(string? ProbeJson, string? WorkstationJson, string? InstanceId = null);
     /// <summary>
     /// Body for queueing a device command. Kind is a WorkstationCommandKind name.
     /// </summary>
     public record EnqueueBody(WorkstationCommandKind Kind, string? PayloadJson, Guid? ProjectId);
     /// <summary>
-    /// Body for finishing a device command: success, optional result JSON, and optional error.
+    /// Body for finishing a device command: success, optional result JSON, optional error,
+    /// and the claim generation the client received.
     /// </summary>
-    public record CompleteBody(bool Success, string? ResultJson, string? Error);
+    public record CompleteBody(bool Success, string? ResultJson, string? Error, int? Generation = null);
     /// <summary>
     /// Body for binding a project to a device and a local root.
     /// </summary>
@@ -84,7 +85,7 @@ public static class DeviceEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(
-            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(actor.DeviceId!.Value, body?.ProbeJson, body?.WorkstationJson)), ct);
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(actor.DeviceId!.Value, body?.ProbeJson, body?.WorkstationJson, body?.InstanceId)), ct);
         return result.Success ? Results.Ok(result.Value) : ProblemResults.Unauthorized();
     }
 
@@ -103,7 +104,7 @@ public static class DeviceEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(id, actor.DeviceId!.Value, body.Success, body.ResultJson, body.Error)), ct);
+            new CompleteCommandCommand(new CompleteCommandRequest(id, actor.DeviceId!.Value, body.Success, body.ResultJson, body.Error, body.Generation)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 

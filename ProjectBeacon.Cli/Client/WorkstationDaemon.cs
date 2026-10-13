@@ -132,13 +132,15 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     }
 
     /// <summary>
-    /// JSON shape of one claimed device command: id, kind, payload, and the project local root.
+    /// JSON shape of one claimed device command: id, kind, payload, the project local root,
+    /// and the claim generation (attempts + 1) to echo back in the completion.
     /// </summary>
     public sealed class CommandWire
     {
         public Guid Id { get; set; }
         public WorkstationCommandKind Kind { get; set; }
         public int Version { get; set; }
+        public int Generation { get; set; }
         public string? PayloadJson { get; set; }
         public string? LocalRoot { get; set; }
     }

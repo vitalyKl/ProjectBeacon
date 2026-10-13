@@ -1,8 +1,10 @@
 # Command delivery semantics
 
 Workstation commands flow through the queue exactly once. This page fixes the
-delivery contract for every `WorkstationCommandKind` so that a future reaper or
-retry mechanism knows, per kind, whether re-execution is safe.
+delivery contract for every `WorkstationCommandKind` so that reapers and retry
+mechanisms know, per kind, whether re-execution is safe. The stale-command
+recovery rule that consumes this contract lives in `CommandRecovery`
+and is documented in `command-recovery.md`.
 
 The code-level source of truth is `CommandDelivery`
 (`ProjectBeacon.Application/Devices/CommandDelivery.cs`). If you change the
@@ -28,8 +30,10 @@ different mechanisms and must not be conflated:
   body already succeeded but the acknowledgement was lost (network drop, the
   daemon died after `Succeed()` was applied locally but before the HTTP 200).
   Idempotent only in the sense that a duplicate completion is a no-op on the
-  server (the completion handler is guarded by the command's terminal status).
-  The daemon does not retry the completion POST today.
+  server (the completion handler is guarded by the command's terminal status
+  and the generation check, see `command-recovery.md`). The daemon retries the
+  completion POST on transport failures and 5xx only, with bounded
+  exponential backoff, and never re-executes the command body.
 - **Reconciliation** — a separate loop (heartbeat / `ReconcileDesired`) re-applies
   a desired state that a lost command failed to bring about. This is how a lost
   `ReloadProxy` or `ApplyOpencode` eventually lands. It is not a retry of a
@@ -76,26 +80,35 @@ combination of the following. **All of these must be preserved.**
 1. **Atomic claim (H4.1).** The claim is a guarded
    `UPDATE … WHERE Status='Pending'`; exactly one daemon wins the row, so the
    body executes once per queued command.
-2. **No reaper.** A command left in `Running` (its daemon died before
-   completing) is never reset to `Pending`. There is no timeout reaper today,
-   so a stuck at-most-once command is lost, not re-delivered. That is the
-   intended at-most-once-with-loss behaviour.
+2. **Reaper that never re-delivers at-most-once (H4.4 / P1.4).** A command
+   left in `Running` (its daemon died before completing) is recovered by the
+   `CommandRecovery` rule (worker, every 60 s), but only through the stale
+   predicate (lease expired AND the claiming process is gone). At-most-once
+   kinds are **failed, never re-queued**; idempotent kinds are re-queued at
+   most once, then failed. A stuck at-most-once command is therefore lost,
+   not re-delivered — the intended at-most-once-with-loss behaviour — and no
+   recovery path ever writes `Succeeded`. See `command-recovery.md` for the
+   full rule, the lease contract, and the generation protocol.
 3. **Guarded completion.** `CompleteCommandHandler` applies the row's terminal
-   transition; a completion on an already-terminal row is rejected, so a
-   duplicate completion POST cannot double-apply effects.
+   transition; a completion on an already-terminal row is rejected, and a
+   completion carrying a stale generation is rejected, so neither a duplicate
+   nor a late completion POST can double-apply effects.
 
-### Invariant for future work
+### Invariant (binding for every future reaper, retry, or re-queue mechanism)
 
 > A reaper, retry, or re-queue mechanism **must not** reset a `Running`
 > at-most-once command to `Pending`. Before re-queueing any `Running` row,
 > consult `CommandDelivery.IsAtMostOnce(kind)` and skip (or fail) those rows.
 > Consult `IsIdempotent` / `IsReconcileBacked` only to decide *how* to recover
 > an idempotent lost command, never to re-execute an at-most-once one.
+> `CommandRecovery.Decide` is the executable form of this invariant.
 
 ## Cross-references
 
+- `command-recovery.md` — the stale-command recovery rule, lease contract,
+  and generation protocol that consume this classification.
 - `mcp-host.md` — the command kind table and the workstation client contract.
 - `ProjectBeacon-Hardening-Roadmap.md` — H4.1 (atomic claim), H4.2 (this
-  contract), H4.3 (versioned command envelope).
+  contract), H4.3 (versioned command envelope), H4.4 (recovery, P1.4).
 - `CommandDelivery` (Application/Devices) and `CommandDeliveryTests`
   (Application.Tests) — the executable form of this contract.

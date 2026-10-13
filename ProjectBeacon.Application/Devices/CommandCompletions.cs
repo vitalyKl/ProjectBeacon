@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Enums;
 using Application.Persistence;
@@ -17,7 +18,8 @@ internal static class CommandCompletions
     [
         new EvalRunCompletion(),
         new ReviewCheckCompletion(),
-        new DesiredStateCompletion()
+        new DesiredStateCompletion(),
+        new ChatSessionCompletion()
     ];
 
     public static async Task ApplyAsync(
@@ -25,6 +27,33 @@ internal static class CommandCompletions
     {
         foreach (var effect in Effects)
             await effect.ApplyAsync(db, row, success, resultJson, error, ct);
+    }
+
+    /// <summary>
+    /// A completion belongs to the attempt the row is currently on: the claim generation is
+    /// <c>Attempts + 1</c>. A missing generation (legacy client) is accepted only on a row that
+    /// was never re-queued, so a late completion from an older attempt can never finish a
+    /// newer attempt of the same command.
+    /// </summary>
+    public static bool AcceptsGeneration(WorkstationCommand row, int? generation) =>
+        generation is null ? row.Attempts == 0 : generation == row.Attempts + 1;
+}
+
+internal sealed class ChatSessionCompletion : ICommandCompletion
+{
+    public async Task ApplyAsync(IBeaconDb db, WorkstationCommand row, bool success, string? resultJson, string? error, CancellationToken ct)
+    {
+        // Resolves a streaming session only on a confirmed ChatPrompt failure; never claims success.
+        if (success || row.Kind != WorkstationCommandKind.ChatPrompt)
+            return;
+        var sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "chatSessionId");
+        if (sessionId is null)
+            return;
+        var session = await db.ChatSessions.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == sessionId.Value, ct);
+        if (session is null || session.Status != ChatSessionStatus.Streaming)
+            return;
+        session.SetIdle();
     }
 }
 

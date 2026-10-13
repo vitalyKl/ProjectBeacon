@@ -10,6 +10,8 @@ internal interface IDaemonLoop
 
 internal sealed class DaemonCommandLoop : IDaemonLoop
 {
+    private const int MaxCompletionRetries = 4;
+
     private readonly HttpClient _http;
     private readonly IDaemonCommandExecutor _executor;
     private readonly IDaemonRuntimeState _state;
@@ -46,12 +48,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 if (command is null)
                     continue;
                 var (ok, result, error) = await _executor.ExecuteAsync(command, ct);
-                await _http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new
-                {
-                    success = ok,
-                    resultJson = result,
-                    error
-                }, ct);
+                await CompleteAsync(command, ok, result, error, ct);
                 _state.Publish(s => s with
                 {
                     LastCommand = command.Kind.ToString(),
@@ -77,6 +74,57 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
                 catch (OperationCanceledException) { break; }
             }
+        }
+    }
+
+    /// <summary>
+    /// Posts the completion, retrying only transport failures and 5xx responses with bounded
+    /// exponential backoff. A 4xx is final (terminal state or generation mismatch), and the
+    /// command body is never re-executed. When retries are exhausted, the server-side
+    /// recovery rule reclaims the command.
+    /// </summary>
+    private async Task CompleteAsync(WorkstationDaemon.CommandWire command, bool ok, string? result, string? error, CancellationToken ct)
+    {
+        var delay = TimeSpan.FromSeconds(1);
+        for (var attempt = 0; ; attempt++)
+        {
+            HttpResponseMessage? response = null;
+            string? transportError = null;
+            try
+            {
+                response = await _http.PostAsJsonAsync($"/v1/commands/{command.Id}/complete", new
+                {
+                    success = ok,
+                    resultJson = result,
+                    error,
+                    generation = command.Generation
+                }, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                transportError = ex.Message;
+            }
+
+            if (response is { IsSuccessStatusCode: true })
+                return;
+            var status = response is null ? 0 : (int)response.StatusCode;
+            if (status is >= 400 and < 500)
+            {
+                _state.Log($"complete {command.Kind} {status}; not retrying");
+                return;
+            }
+            if (attempt >= MaxCompletionRetries)
+            {
+                _state.Log($"complete {command.Kind} failed after {attempt + 1} attempts ({(status > 0 ? status.ToString() : transportError)}); recovery will reclaim it");
+                return;
+            }
+            _state.Log($"complete {command.Kind} {(status > 0 ? status.ToString() : transportError)}; retrying");
+            await _timing.DelayAsync(delay, ct);
+            delay = delay * 2;
         }
     }
 }

@@ -16,6 +16,7 @@ public class DaemonDeviceConfiguration : IEntityTypeConfiguration<DaemonDevice>
         entity.Property(e => e.Fingerprint).IsRequired().HasMaxLength(200);
         entity.Property(e => e.TokenHash).IsRequired();
         entity.Property(e => e.TokenPrefix).IsRequired().HasMaxLength(20);
+        entity.Property(e => e.ActiveInstanceId).HasMaxLength(64);
         entity.Property(e => e.ProbeJson).IsRequired();
         entity.Property(e => e.WorkstationJson).IsRequired();
         entity.Property(e => e.DesiredWorkstationJson).IsRequired();

@@ -24,6 +24,13 @@ public class WorkstationCommand : Entity
     public DateTime? StartedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
 
+    /// <summary>Number of times the recovery rule has re-queued this command. The current attempt is <c>Attempts + 1</c>.</summary>
+    public int Attempts { get; private set; }
+    /// <summary>End of the execution lease granted at claim. Cleared on re-queue or terminal transition.</summary>
+    public DateTime? LeaseExpiresAt { get; private set; }
+    /// <summary>Daemon process instance id (from the device heartbeat) that claimed the command, when known.</summary>
+    public string? ClaimInstanceId { get; private set; }
+
     /// <summary>
     /// Queues a pending command for <paramref name="deviceId"/>. Blank payload is stored as <c>{}</c>.
     /// </summary>
@@ -51,15 +58,37 @@ public class WorkstationCommand : Entity
     }
 
     /// <summary>
-    /// Moves a pending command to <see cref="WorkstationCommandStatus.Running"/>.
+    /// Moves a pending command to <see cref="WorkstationCommandStatus.Running"/> and grants
+    /// <paramref name="lease"/> of execution time.
     /// </summary>
     /// <exception cref="InvalidOperationException">The command is not pending.</exception>
-    public void Claim()
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="lease"/> is not positive.</exception>
+    public void Claim(TimeSpan lease, string? instanceId = null)
     {
+        if (lease <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(lease), "Lease must be positive.");
         if (Status != WorkstationCommandStatus.Pending)
             throw new InvalidOperationException("Command is not pending.");
         Status = WorkstationCommandStatus.Running;
         StartedAt = DateTime.UtcNow;
+        LeaseExpiresAt = StartedAt + lease;
+        ClaimInstanceId = string.IsNullOrWhiteSpace(instanceId) ? null : instanceId.Trim();
+    }
+
+    /// <summary>
+    /// Returns an expired running command to the queue. The recovery rule must have
+    /// established the claiming process is gone before calling this.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The command is not running.</exception>
+    public void Requeue()
+    {
+        if (Status != WorkstationCommandStatus.Running)
+            throw new InvalidOperationException("Command is not running.");
+        Status = WorkstationCommandStatus.Pending;
+        Attempts++;
+        StartedAt = null;
+        Error = null;
+        LeaseExpiresAt = null;
     }
 
     /// <summary>
@@ -75,6 +104,7 @@ public class WorkstationCommand : Entity
         Error = null;
         CompletedAt = DateTime.UtcNow;
         StartedAt ??= CompletedAt;
+        LeaseExpiresAt = null;
     }
 
     /// <summary>
@@ -91,6 +121,7 @@ public class WorkstationCommand : Entity
         Error = error;
         CompletedAt = DateTime.UtcNow;
         StartedAt ??= CompletedAt;
+        LeaseExpiresAt = null;
     }
 
     /// <summary>

@@ -127,7 +127,7 @@ public class HeartbeatDeviceHandler : ICommandHandler<HeartbeatDeviceCommand, Re
             return Result.Failure<DaemonDeviceDto>("Device not found.");
         try
         {
-            device.Heartbeat(command.Request.ProbeJson, command.Request.WorkstationJson);
+            device.Heartbeat(command.Request.ProbeJson, command.Request.WorkstationJson, command.Request.InstanceId);
         }
         catch (InvalidOperationException ex)
         {
