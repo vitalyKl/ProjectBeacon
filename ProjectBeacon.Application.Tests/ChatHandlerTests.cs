@@ -1,4 +1,5 @@
 namespace ProjectBeacon.Application.Tests;
+
 using Application.Persistence;
 using Application.Chat;
 using Application.Devices;

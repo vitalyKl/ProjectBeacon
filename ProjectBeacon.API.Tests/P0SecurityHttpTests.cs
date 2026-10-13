@@ -1,4 +1,5 @@
 namespace ProjectBeacon.API.Tests;
+
 using Application.Persistence;
 using System.Net;
 using System.Net.Http.Headers;

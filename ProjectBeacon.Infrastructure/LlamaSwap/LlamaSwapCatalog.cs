@@ -1,4 +1,5 @@
 namespace ProjectBeacon.Infrastructure.LlamaSwap;
+
 using Application.Runtime;
 /// <summary>
 /// Turns model backends into a llama-swap launch command and config.yaml. Default port is 8080.

@@ -22,6 +22,7 @@ using MudBlazor.Services;
 using System.Security.Claims;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
+
 using Application.Persistence;
 
 public abstract class BUnitRenderBase : IDisposable

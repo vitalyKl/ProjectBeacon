@@ -1,4 +1,5 @@
 namespace ProjectBeacon.Cli.Client;
+
 using Application.Runtime;
 using System.Diagnostics;
 using System.Globalization;
