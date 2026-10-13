@@ -24,12 +24,12 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     private static bool _initialized;
     private static string s_adminConn = string.Empty;
     private static string s_appConn = string.Empty;
-    private static Guid s_projectA, s_taskA1, s_taskA2, s_taskB;
+    private static Guid s_projectA, s_projectB, s_taskA1, s_taskA2, s_taskB;
 
     private readonly PostgresFixture _postgres;
     private string _adminConn = string.Empty;
     private string _appConn = string.Empty;
-    private Guid _projectA, _taskA1, _taskA2, _taskB;
+    private Guid _projectA, _projectB, _taskA1, _taskA2, _taskB;
 
     public RlsRuntimeRoleTests(PostgresFixture postgres) => _postgres = postgres;
 
@@ -79,6 +79,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                     await seed.SaveChangesAsync();
 
                     s_projectA = projA.Id;
+                    s_projectB = projB.Id;
                     s_taskA1 = tA1.Id;
                     s_taskA2 = tA2.Id;
                     s_taskB = tB.Id;
@@ -93,6 +94,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _adminConn = s_adminConn;
         _appConn = s_appConn;
         _projectA = s_projectA;
+        _projectB = s_projectB;
         _taskA1 = s_taskA1;
         _taskA2 = s_taskA2;
         _taskB = s_taskB;
@@ -163,6 +165,264 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
         var tasks = await ctx.Tasks.ToListAsync();
         Assert.Empty(tasks);
+    }
+
+    // Cross-tenant DML on the real migrated schema as the real runtime role:
+    // RLS WITH CHECK rejects foreign inserts; foreign UPDATE/DELETE affect zero rows.
+    [Fact]
+    public async Task Rls_RuntimeRole_CrossTenantInsert_IsRejected_ViaRawSql()
+    {
+        if (!_postgres.Available) return;
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync();
+        await SetTenantScopeAsync(conn, _projectA.ToString(), "false");
+
+        var foreignId = Guid.NewGuid();
+        var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+            InsertTaskRawAsync(conn, foreignId, _projectB));
+        Assert.Equal("42501", ex.SqlState); // row_security_violation: WITH CHECK rejected the row
+
+        Assert.Equal(0, await CountTaskByIdRawAsync(conn, foreignId));
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_CrossTenantUpdateDelete_AffectZeroRows_ViaRawSql()
+    {
+        if (!_postgres.Available) return;
+
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync();
+        await SetTenantScopeAsync(conn, _projectA.ToString(), "false");
+
+        Assert.Equal(0, await UpdateTaskTitleRawAsync(conn, _taskB, "rls cross-tenant pwned"));
+        Assert.Equal(0, await DeleteTaskRawAsync(conn, _taskB));
+
+        await using var unscoped = new NpgsqlConnection(_appConn);
+        await unscoped.OpenAsync();
+        await SetTenantScopeAsync(unscoped, "", "true");
+        Assert.Equal(1, await CountTaskByIdRawAsync(unscoped, _taskB));
+        Assert.Equal("Runtime B Task 1", await TaskTitleRawAsync(unscoped, _taskB));
+    }
+
+    [Fact]
+    public async Task Rls_RuntimeRole_OwnTenantInsertUpdateDelete_Work_ViaRawSql()
+    {
+        if (!_postgres.Available) return;
+
+        var ownId = Guid.NewGuid();
+        await using var conn = new NpgsqlConnection(_appConn);
+        await conn.OpenAsync();
+        await SetTenantScopeAsync(conn, _projectA.ToString(), "false");
+
+        await InsertTaskRawAsync(conn, ownId, _projectA);
+        Assert.Equal(1, await CountTaskByIdRawAsync(conn, ownId));
+
+        Assert.Equal(1, await UpdateTaskTitleRawAsync(conn, ownId, "own-tenant update"));
+        Assert.Equal("own-tenant update", await TaskTitleRawAsync(conn, ownId));
+
+        Assert.Equal(1, await DeleteTaskRawAsync(conn, ownId));
+
+        await using var unscoped = new NpgsqlConnection(_appConn);
+        await unscoped.OpenAsync();
+        await SetTenantScopeAsync(unscoped, "", "true");
+        Assert.Equal(0, await CountTaskByIdRawAsync(unscoped, ownId));
+    }
+
+    // Pool-leak: sequential connections must reuse the same physical backend (asserted via
+    // pg_backend_pid), and the tenant GUCs set on one must not survive to the next scope.
+    [Fact]
+    public async Task Rls_PooledConnection_TenantScope_DoesNotLeak_AcrossSequentialScopes()
+    {
+        if (!_postgres.Available) return;
+
+        long backendPid;
+        await using (var connA = new NpgsqlConnection(_appConn))
+        {
+            await connA.OpenAsync();
+            backendPid = await BackendPidAsync(connA);
+            await SetTenantScopeAsync(connA, _projectA.ToString(), "false");
+            Assert.Equal(2, await CountTasksRawAsync(connA));
+        }
+
+        await using (var connB = new NpgsqlConnection(_appConn))
+        {
+            await connB.OpenAsync();
+            Assert.Equal(backendPid, await BackendPidAsync(connB));
+            await SetTenantScopeAsync(connB, _projectB.ToString(), "false");
+            Assert.Equal(1, await CountTasksRawAsync(connB));
+            Assert.Equal(0, await CountTaskByIdRawAsync(connB, _taskA1));
+            Assert.Equal(1, await CountTaskByIdRawAsync(connB, _taskB));
+        }
+
+        // No scope applied at all on the reused backend: fail closed, no stale A or B scope.
+        await using (var connC = new NpgsqlConnection(_appConn))
+        {
+            await connC.OpenAsync();
+            Assert.Equal(backendPid, await BackendPidAsync(connC));
+            Assert.Equal(0, await CountTasksRawAsync(connC));
+        }
+    }
+
+    // The production EF path (TenantRlsConnectionInterceptor on every connection open) must
+    // isolate sequential scopes even when the pool hands back the same physical connection.
+    [Fact]
+    public async Task Ef_SequentialScopes_OnPooledConnection_AreIsolated()
+    {
+        if (!_postgres.Available) return;
+
+        await using (var ctxA = new BeaconDbContext(NewAppOptions(_appConn)))
+        {
+            using (TenantScope.EnterProjectScope(_projectA))
+            {
+                var tasks = await ctxA.Tasks.ToListAsync();
+                Assert.Equal(2, tasks.Count);
+                Assert.DoesNotContain(tasks, t => t.Id == _taskB);
+            }
+        }
+
+        await using (var ctxB = new BeaconDbContext(NewAppOptions(_appConn)))
+        {
+            using (TenantScope.EnterProjectScope(_projectB))
+            {
+                var tasks = await ctxB.Tasks.ToListAsync();
+                Assert.Single(tasks);
+                Assert.Equal(_taskB, tasks[0].Id);
+            }
+        }
+
+        await using (var ctxC = new BeaconDbContext(NewAppOptions(_appConn)))
+        {
+            var tasks = await ctxC.Tasks.ToListAsync();
+            Assert.Empty(tasks);
+        }
+    }
+
+    // Drift guard: every table in public with a ProjectId/OrgId column must be FORCE-RLS
+    // protected by a tenant policy, so a future migration cannot silently add an unscoped table.
+    [Fact]
+    public async Task Migration_RlsPolicy_CoversEveryTableWithTenantColumn()
+    {
+        if (!_postgres.Available) return;
+
+        var exceptions = new HashSet<string>
+        {
+            // WorkstationCommand is device-scoped; its ProjectId is optional context, not a
+            // tenant scope (see the entity's doc comment).
+            "WorkstationCommands"
+        };
+
+        await using var conn = new NpgsqlConnection(_adminConn);
+        await conn.OpenAsync();
+
+        var tables = new List<string>();
+        await using (var cmd = new NpgsqlCommand(
+            "SELECT DISTINCT c.relname " +
+            "FROM pg_class c " +
+            "JOIN pg_namespace n ON n.oid = c.relnamespace " +
+            "JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND a.attname IN ('ProjectId','OrgId') " +
+            "WHERE n.nspname = 'public' AND c.relkind = 'r'", conn))
+        {
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                tables.Add(reader.GetString(0));
+        }
+
+        Assert.True(tables.Count > 0, "sanity: expected at least one table with a tenant column");
+
+        var violations = new List<string>();
+        foreach (var table in tables)
+        {
+            if (exceptions.Contains(table))
+                continue;
+
+            await using var check = new NpgsqlCommand(
+                "SELECT c.relrowsecurity, c.relforcerowsecurity, " +
+                "EXISTS (SELECT 1 FROM pg_policies p " +
+                "         WHERE p.schemaname = 'public' AND p.tablename = @t " +
+                "         AND p.qual LIKE '%app.tenant_%') " +
+                "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+                "WHERE n.nspname = 'public' AND c.relname = @t", conn);
+            check.Parameters.Add(new NpgsqlParameter("@t", table));
+            using var reader = await check.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                violations.Add($"{table}: missing from catalog");
+                continue;
+            }
+            if (!reader.GetBoolean(0))
+                violations.Add($"{table}: relrowsecurity=false");
+            if (!reader.GetBoolean(1))
+                violations.Add($"{table}: relforcerowsecurity=false");
+            if (!reader.GetBoolean(2))
+                violations.Add($"{table}: no tenant RLS policy (predicate must reference app.tenant_*)");
+        }
+
+        Assert.Empty(violations);
+    }
+
+    private static async Task SetTenantScopeAsync(NpgsqlConnection conn, string projectGuc, string unscoped)
+    {
+        await using var cmd = new NpgsqlCommand(
+            "SELECT set_config('app.tenant_project_id', @pid, false)," +
+            "       set_config('app.tenant_org_id', '', false)," +
+            "       set_config('app.tenant_unscoped', @uns, false)", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("@pid", projectGuc));
+        cmd.Parameters.Add(new NpgsqlParameter("@uns", unscoped));
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<long> BackendPidAsync(NpgsqlConnection conn)
+    {
+        await using var cmd = new NpgsqlCommand("SELECT pg_backend_pid()", conn);
+        return Convert.ToInt64(await cmd.ExecuteScalarAsync()!);
+    }
+
+    private static async Task<int> CountTasksRawAsync(NpgsqlConnection conn)
+    {
+        await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\"", conn);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()!);
+    }
+
+    private static async Task<int> CountTaskByIdRawAsync(NpgsqlConnection conn, Guid taskId)
+    {
+        await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\" WHERE \"Id\" = @tid", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("@tid", taskId));
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()!);
+    }
+
+    private static async Task<string?> TaskTitleRawAsync(NpgsqlConnection conn, Guid taskId)
+    {
+        await using var cmd = new NpgsqlCommand("SELECT \"Title\" FROM \"Tasks\" WHERE \"Id\" = @id", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("@id", taskId));
+        return (string?)await cmd.ExecuteScalarAsync();
+    }
+
+    private static async Task InsertTaskRawAsync(NpgsqlConnection conn, Guid taskId, Guid projectId)
+    {
+        await using var cmd = new NpgsqlCommand(
+            "INSERT INTO \"Tasks\" (\"Id\", \"ProjectId\", \"Title\", \"Status\", \"Priority\", \"Type\", \"SubStage\", \"CreatedAt\") " +
+            "VALUES (@id, @pid, @title, 'Todo', 'Medium', 'Task', 'RequirementGathering', @created)", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("@id", taskId));
+        cmd.Parameters.Add(new NpgsqlParameter("@pid", projectId));
+        cmd.Parameters.Add(new NpgsqlParameter("@title", "Rls dml probe"));
+        cmd.Parameters.Add(new NpgsqlParameter("@created", DateTime.UtcNow));
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int> UpdateTaskTitleRawAsync(NpgsqlConnection conn, Guid taskId, string title)
+    {
+        await using var cmd = new NpgsqlCommand("UPDATE \"Tasks\" SET \"Title\" = @title WHERE \"Id\" = @id", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("@title", title));
+        cmd.Parameters.Add(new NpgsqlParameter("@id", taskId));
+        return await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int> DeleteTaskRawAsync(NpgsqlConnection conn, Guid taskId)
+    {
+        await using var cmd = new NpgsqlCommand("DELETE FROM \"Tasks\" WHERE \"Id\" = @id", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("@id", taskId));
+        return await cmd.ExecuteNonQueryAsync();
     }
 
     private static DbContextOptions<BeaconDbContext> NewAppOptions(string appConn)
