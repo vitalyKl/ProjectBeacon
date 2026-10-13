@@ -1,6 +1,6 @@
 # ProjectBeacon — Structural Target Model
 
-Status: approved structural conventions — authoritative for placement and naming, and mirrored in `AGENTS.md` (Structure section). The migration plan in §8 is partially executed: Steps 1, 2, 3, and 4 done; Step 5 partial (task test files in `Application.Tests/Tasks/`); Steps 6 and 7 outstanding. The rules below are the target regardless of migration state.
+Status: approved structural conventions — authoritative for placement and naming, and mirrored in `AGENTS.md` (Structure section). The migration plan in §8 is partially executed: Steps 1–5 done; Steps 6 and 7 outstanding. The rules below are the target regardless of migration state.
 Scope: structure, placement, and naming rules only. No new base classes or interfaces are introduced by this model.
 
 This document fixes the final rules for where code lives. It is not an inventory of moved files; the migration plan in §8 is the only list of changes, and it references these rules.
