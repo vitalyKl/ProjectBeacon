@@ -1,6 +1,6 @@
 # ProjectBeacon — Structural Target Model
 
-Status: approved structural conventions — authoritative for placement and naming, and mirrored in `AGENTS.md` (Structure section). The migration plan in §8 is partially executed: Steps 1–6 done; Step 7 outstanding. The rules below are the target regardless of migration state.
+Status: approved structural conventions — authoritative for placement and naming, and mirrored in `AGENTS.md` (Structure section). The migration plan in §8 is fully executed. The rules below are the target regardless of migration state.
 Scope: structure, placement, and naming rules only. No new base classes or interfaces are introduced by this model.
 
 This document fixes the final rules for where code lives. It is not an inventory of moved files; the migration plan in §8 is the only list of changes, and it references these rules.
@@ -244,7 +244,7 @@ EF procedure — do **not** assume a new migration is needed:
 | 4 | Build + tests green; `ITenantScoped` unreferenced; `TenantFilterTests` passes with identical entity coverage. (Done.) |
 | 5 | `dotnet test` green; every `Application.Tests` file sits in a folder matching its handler's Application feature; no orphan root-level test files. |
 | 6 | Build + tests green; `ProjectBeacon.Application.csproj` lists the EF references explicitly; `Directory.Build.props` no longer grants EF to Application; all other project references unchanged. (Done.) |
-| 7 | Document at `dotnet project docs/architecture/ProjectBeacon-structural-target-model.md`; `AGENTS.md` states the final rules from §3–§6. |
+| 7 | Document at `dotnet project docs/architecture/ProjectBeacon-structural-target-model.md`; `AGENTS.md` states the final rules from §3–§6. (Done.) |
 | All | After Step 6, full CI (`ci.yml`) passes. |
 
 ## 10. Deferred (optional, not part of the target)

@@ -60,8 +60,6 @@ Placement, naming, and organization rules — the authoritative conventions for 
 - **Base classes & interfaces — criteria.** `Entity` is the only domain base (version-7 `Guid` Id, `New<T>()`); every single-row entity derives from it and keeps a parameterless constructor (EF Core) plus a static factory (`DecisionTask` is the one composite-key join row without an `Id`). There is no `IEntity` and none is planned. Introduce a base class only when it encodes a concrete shared invariant; introduce an interface only when there is a second consumer or a layer boundary it protects. Never require an interface per service, handler, or entity.
 - **Anti-abstraction.** Do not invent a new project, folder, wrapper class, or abstraction layer. No global `Interfaces/`, `Implementations/`, or `Services/` directories. Prefer the surrounding code and the explicit, greppable registration.
 
-The rules above are the target. Current pre-migration drift is documented in the structural target document and is pending its §8 migration plan (not a rule violation): 29 entities still in `Domain/Entities/Projects/`; `ProjectRuntime` in `Projects/`; `BeaconPorts.cs` in `Application/Data/` (target `Persistence/`); `ChatModelHandlers.cs` in `Auth/` (target `Agents/`); empty `Application/Interfaces/`.
-
 ## Conventions
 
 - `ProjectBeacon.Web` and its subprojects are the only domain writers. Business writes go through Application handlers.
