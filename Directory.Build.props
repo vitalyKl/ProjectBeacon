@@ -4,7 +4,7 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
-  <ItemGroup Condition="'$(MSBuildProjectName)' != 'ProjectBeacon.Domain' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Domain.Tests' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Infrastructure' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Cli' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Cli.Tests'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'ProjectBeacon.Domain' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Domain.Tests' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Infrastructure' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Cli' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Cli.Tests' AND '$(MSBuildProjectName)' != 'ProjectBeacon.Application'">
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>

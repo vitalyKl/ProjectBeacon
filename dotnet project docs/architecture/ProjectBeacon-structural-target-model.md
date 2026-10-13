@@ -1,6 +1,6 @@
 # ProjectBeacon — Structural Target Model
 
-Status: approved structural conventions — authoritative for placement and naming, and mirrored in `AGENTS.md` (Structure section). The migration plan in §8 is partially executed: Steps 1–5 done; Steps 6 and 7 outstanding. The rules below are the target regardless of migration state.
+Status: approved structural conventions — authoritative for placement and naming, and mirrored in `AGENTS.md` (Structure section). The migration plan in §8 is partially executed: Steps 1–6 done; Step 7 outstanding. The rules below are the target regardless of migration state.
 Scope: structure, placement, and naming rules only. No new base classes or interfaces are introduced by this model.
 
 This document fixes the final rules for where code lives. It is not an inventory of moved files; the migration plan in §8 is the only list of changes, and it references these rules.
@@ -37,13 +37,13 @@ The intended direction (Domain ← Application ← Infrastructure; hosts depend 
 
    The ownership is intentional (comment in `BeaconPorts.cs`: "Owned by Application so handlers do not reference the Infrastructure assembly"), but the namespaces misstate the assembly: consumers inside Application write `using Infrastructure.Data;`, and IDE/refactor tooling will mislocate these types.
 2. **`Domain/Entities/Projects` is a dumping ground.** 29 of 41 entities live in `Entities/Projects/` (tasks, chat, context, decisions, milestones, reports, `ApiToken`, agent/model entities…), while Identity, Devices, Evals, and Agents each have their own folders.
-3. **EF Core types leak into Application contracts, implicitly funded.** `IBeaconDb` exposes `DbSet<T>`, `DatabaseFacade`, `EntityEntry<T>`; handlers use EF LINQ (`AnyAsync`, `Include`). EF packages reach Application **implicitly** through the allow-by-exclusion in `Directory.Build.props` (Application is not in the exclusion list), so the coupling is invisible in `ProjectBeacon.Application.csproj`.
+3. **EF Core types leak into Application contracts, explicitly funded (since Step 6).** `IBeaconDb` exposes `DbSet<T>`, `DatabaseFacade`, `EntityEntry<T>`; handlers use EF LINQ (`AnyAsync`, `Include`). EF packages are now declared as explicit `PackageReference`s in `ProjectBeacon.Application.csproj` (versions from `Directory.Packages.props`); the coupling is visible and a documented compromise.
 4. **Namespace drift (minor).** `Web/Program.cs` → `ProjectBeacon.Web.Theme`; `Worker/Program.cs` → `ProjectBeacon.Worker.Services`; `Cli/Mcp/McpCodeTools.cs` and `Cli/Mcp/McpSessionTools.cs` → `ProjectBeacon.Cli` while sibling files use `ProjectBeacon.Cli.Mcp`; `Domain/CommandProtocol.cs` sits at the Domain root outside any subfolder.
 5. **Dead marker interface (removed in Step 4).** `ITenantScoped` (no members) was never referenced anywhere; only `IOrgScoped`/`IProjectScoped` are consumed, by `TenantScopedQueryFilterConvention` (`Infrastructure/Data/TenantScopedQueryFilterConvention.cs`). Removed; the two scope interfaces now stand alone in `Domain/Common/ScopedEntities.cs`.
 
 ### Accepted by design (documented, not violations)
 
-- `IBeaconDb` as an EF-shaped port: it is what lets ~100 handlers do real EF work without a project reference to Infrastructure. The fix for the coupling is an explicit package reference and a documented rule (§6, Step 6), not a new abstraction.
+- `IBeaconDb` as an EF-shaped port: it is what lets ~100 handlers do real EF work without a project reference to Infrastructure. The coupling is funded by an explicit package reference in `ProjectBeacon.Application.csproj` (Step 6) and recorded in this document and AGENTS.md — a deliberate compromise, not a new abstraction.
 - Feature-bundle files (`TaskItemCommands.cs`, `TaskLifecycleHandlers.cs`, …): multiple records/handlers per file, grouped by feature.
 - Manual DI registration in `Application/DependencyInjection.cs`: explicit and greppable.
 - Web → API host reference: required so the Web host maps `/v1` in-process.
@@ -223,7 +223,7 @@ EF procedure — do **not** assume a new migration is needed:
 
 - `Application.Tests`: move the flat test files into feature subfolders mirroring Application (file moves only; test namespaces stay `ProjectBeacon.Application.Tests`, so no rebuild churn beyond the moves).
 
-### Step 6 — Make the EF dependency explicit in Application
+### Step 6 — Make the EF dependency explicit in Application (done)
 
 - Add `Microsoft.EntityFrameworkCore` and `Microsoft.EntityFrameworkCore.Relational` `PackageReference`s directly to `ProjectBeacon.Application.csproj` (versions from `Directory.Packages.props`).
 - Remove **only** Application from the implicit grant in `Directory.Build.props` (or invert the file to an explicit allow-list); verify every other project's references are unchanged.
@@ -243,7 +243,7 @@ EF procedure — do **not** assume a new migration is needed:
 | 3 | Baseline captured before the move; `has-pending-model-changes` clean after (snapshot updated minimally only if it was not); fresh-DB migration applies the same 41 tables as baseline; migrate on a DB with applied history changes nothing; full test suite green; `Entities/Projects` contains exactly `Project`, `ProjectMember`, `ProjectInvite`, `Label`, `LabelPath`; no new migration in the commit. |
 | 4 | Build + tests green; `ITenantScoped` unreferenced; `TenantFilterTests` passes with identical entity coverage. (Done.) |
 | 5 | `dotnet test` green; every `Application.Tests` file sits in a folder matching its handler's Application feature; no orphan root-level test files. |
-| 6 | Build + tests green; `ProjectBeacon.Application.csproj` lists the EF references explicitly; `Directory.Build.props` no longer grants EF to Application; all other project references unchanged. |
+| 6 | Build + tests green; `ProjectBeacon.Application.csproj` lists the EF references explicitly; `Directory.Build.props` no longer grants EF to Application; all other project references unchanged. (Done.) |
 | 7 | Document at `dotnet project docs/architecture/ProjectBeacon-structural-target-model.md`; `AGENTS.md` states the final rules from §3–§6. |
 | All | After Step 6, full CI (`ci.yml`) passes. |
 
