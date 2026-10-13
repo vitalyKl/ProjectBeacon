@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Milestones;
 
 using Application.Common;
 using Domain.Entities.Projects;
+using Domain.Entities.Roadmap;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
@@ -20,7 +21,7 @@ public class CreateMilestoneHandler : ICommandHandler<CreateMilestoneCommand, Re
         if (!projectExists)
             return Result.Failure<MilestoneDto>("Project not found.");
 
-        var milestone = Domain.Entities.Projects.Milestone.Create(
+        var milestone = Domain.Entities.Roadmap.Milestone.Create(
             command.Request.Name,
             command.Request.Description,
             command.Request.ProjectId,

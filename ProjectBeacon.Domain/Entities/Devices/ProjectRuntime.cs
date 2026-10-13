@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Devices;
 
 using ProjectBeacon.Domain.Common;
 

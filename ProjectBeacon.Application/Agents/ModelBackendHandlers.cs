@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Agents;
 using Application.Common;
 using Application.Devices;
 using Domain.Enums;
+using Domain.Entities.Agents;
 using Domain.Entities.Projects;
 using Application.Persistence;
 using Application.Runtime;

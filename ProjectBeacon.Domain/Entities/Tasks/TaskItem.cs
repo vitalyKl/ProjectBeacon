@@ -2,6 +2,7 @@ namespace ProjectBeacon.Domain.Entities.Tasks;
 
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Entities.Projects;
+using ProjectBeacon.Domain.Entities.Roadmap;
 using ProjectBeacon.Domain.Enums;
 
 /// <summary>

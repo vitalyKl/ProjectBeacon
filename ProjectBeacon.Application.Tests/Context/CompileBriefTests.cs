@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests.Context;
 
 using Application.Common;
 using Application.Context;
+using Domain.Entities.Context;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;

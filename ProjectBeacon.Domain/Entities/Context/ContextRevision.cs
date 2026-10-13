@@ -1,6 +1,7 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Context;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Projects;
 
 /// <summary>Immutable snapshot of a compiled brief for one project.</summary>
 public class ContextRevision : Entity, IProjectScoped

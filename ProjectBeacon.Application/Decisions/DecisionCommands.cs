@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Decisions;
 
 using Application.Common;
+using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;

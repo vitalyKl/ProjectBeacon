@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Persistence;
 using Application.Agents;
 using Domain.Entities.Identity;
+using Domain.Entities.Agents;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;

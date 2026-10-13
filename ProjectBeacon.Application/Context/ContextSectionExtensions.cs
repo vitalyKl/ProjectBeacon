@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Application.Context;
 
-using Domain.Entities.Projects;
+using Domain.Entities.Context;
 using Domain.Enums;
 /// <summary>
 /// Maps a context section entity to its DTO.

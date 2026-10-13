@@ -4,10 +4,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Domain.Entities.Agents;
+using Domain.Entities.Chat;
+using Domain.Entities.Context;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Reports;
+using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
 
 // Owned by Application so handlers do not reference the Infrastructure assembly.

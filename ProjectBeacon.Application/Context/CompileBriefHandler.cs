@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
+using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;

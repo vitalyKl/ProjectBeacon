@@ -1,6 +1,6 @@
 namespace ProjectBeacon.Infrastructure.Data.Configurations;
 
-using Domain.Entities.Projects;
+using Domain.Entities.Chat;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 /// <summary>

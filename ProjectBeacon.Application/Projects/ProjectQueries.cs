@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Projects;
 using Application.Authorization;
 using Application.Common;
 using Application.Identity;
+using Domain.Entities.Context;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;

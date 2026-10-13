@@ -6,7 +6,6 @@ using Application.Common;
 using Application.Tasks;
 using Application.Projects; // ClaimTaskHandler
 using Application.Persistence;
-using Domain.Entities.Projects;
 using Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Agents;
 using Application.Chat;
 using Domain.Entities.Identity;
-using Domain.Entities.Projects;
+using Domain.Entities.Agents;
 using Domain.Enums;
 using Infrastructure.Data;
 

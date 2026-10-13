@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Domain.Entities.Identity;
+using Domain.Entities.Context;
 using Domain.Entities.Projects;
+using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;

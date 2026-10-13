@@ -4,6 +4,7 @@ using Application.Persistence;
 using Application.Agents;
 using Application.Devices;
 using Domain.Entities.Identity;
+using Domain.Entities.Agents;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;

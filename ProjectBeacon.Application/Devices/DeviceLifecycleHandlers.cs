@@ -5,7 +5,6 @@ using Application.Auth;
 using Application.Common;
 using Application.Security;
 using Domain.Entities.Devices;
-using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;

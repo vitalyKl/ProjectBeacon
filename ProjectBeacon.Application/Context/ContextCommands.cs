@@ -1,7 +1,6 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
-using Domain.Entities.Projects;
 using Domain.Enums;
 /// <summary>
 /// One context section, including scope, source, and body.

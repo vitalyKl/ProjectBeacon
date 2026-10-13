@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Projects;
 
 using Application.Authorization;
 using Application.Common;
+using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;

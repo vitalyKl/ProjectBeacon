@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Agents;
 
 using System.Text.Json;
 using ProjectBeacon.Domain.Common;

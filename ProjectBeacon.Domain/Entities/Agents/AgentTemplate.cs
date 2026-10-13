@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Agents;
 
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;

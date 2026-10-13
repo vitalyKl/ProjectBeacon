@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Domain.Entities.Projects;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Roadmap;
 using ProjectBeacon.Domain.Entities.Tasks;
 using Identity;
 

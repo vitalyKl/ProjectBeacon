@@ -1,6 +1,7 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Identity;
 
 using Common;
+using Entities.Projects;
 using Enums;
 
 /// <summary>

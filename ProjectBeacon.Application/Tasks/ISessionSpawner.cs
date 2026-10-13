@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using System.Globalization;
-using Domain.Entities.Projects;
+using Domain.Entities.Agents;
 using Domain.Enums;
 using Application.Persistence;
 using Application.Runtime;

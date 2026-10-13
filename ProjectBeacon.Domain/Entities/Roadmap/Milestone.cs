@@ -1,6 +1,7 @@
-namespace ProjectBeacon.Domain.Entities.Projects;
+namespace ProjectBeacon.Domain.Entities.Roadmap;
 
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Entities.Tasks;
 
 /// <summary>Roadmap milestone. <see cref="Close"/> sets <see cref="ClosedAt"/>; <see cref="Reopen"/> clears it.</summary>

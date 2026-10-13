@@ -1,7 +1,6 @@
 namespace ProjectBeacon.Domain.Tests;
 
 using ProjectBeacon.Domain.Entities.Devices;
-using ProjectBeacon.Domain.Entities.Projects;
 using ProjectBeacon.Domain.Enums;
 
 public sealed class DaemonDeviceTests

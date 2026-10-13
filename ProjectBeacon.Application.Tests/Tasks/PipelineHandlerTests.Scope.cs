@@ -6,7 +6,6 @@ using Application.Tasks;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
-using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;

@@ -4,6 +4,7 @@ using Application.Agents;
 using Application.Common;
 using Application.Devices;
 using Application.Identity;
+using Domain.Entities.Chat;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;

@@ -3,7 +3,7 @@ namespace ProjectBeacon.Application.Agents;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Devices;
-using Domain.Entities.Projects;
+using Domain.Entities.Agents;
 using Domain.Enums;
 /// <summary>
 /// Builds the OpenCode apply payload, including the beacon-local provider and model ids.

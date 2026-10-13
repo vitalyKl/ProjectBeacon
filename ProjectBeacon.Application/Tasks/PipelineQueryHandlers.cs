@@ -3,7 +3,6 @@ namespace ProjectBeacon.Application.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Common;
-using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;

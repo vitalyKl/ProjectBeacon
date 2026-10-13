@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Context;
 
 using Application.Common;
-using Domain.Entities.Projects;
+using Domain.Entities.Context;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
