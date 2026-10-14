@@ -34,7 +34,11 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          global-json-file: global.json
+          # GHA images preinstall 10.0.401, whose dotnet test does not recognize
+          # --results-directory-layout and forwards it to the MTP host, which
+          # rejects it: every module exits 5 with "Zero tests ran". 10.0.402
+          # recognizes the option (global.json rollForward then selects it).
+          sdk-version: 10.0.402
       - name: Export test DB URL
         shell: bash
         run: echo "BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon" >> "$GITHUB_ENV"
@@ -105,29 +109,13 @@ jobs:
     env:
       POSTGRES_PASSWORD: beacon
       TESTINGPLATFORM_TELEMETRY_OPTOUT: "1"
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: beacon
-          POSTGRES_PASSWORD: beacon
-          POSTGRES_DB: beacon
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U beacon"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          global-json-file: global.json
-      - name: Export test DB URL
-        shell: bash
-        run: echo "BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon" >> "$GITHUB_ENV"
+          # Same pin as the Linux job: one SDK version across all CI jobs.
+          sdk-version: 10.0.402
       - name: Restore dependencies
         run: dotnet restore ProjectBeacon.sln
       - name: Build
@@ -136,19 +124,10 @@ jobs:
         run: |
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+      # No postgres service container: services are Linux-runner-only. Without
+      # BEACON_TEST_DATABASE_URL the Postgres integration tests fall back to
+      # Testcontainers (Docker is available on the GHA windows/macos runners).
       - name: Test
-        shell: bash
-        run: |
-          max_retries=2
-          for i in $(seq 0 $max_retries); do
-            dotnet test --solution ProjectBeacon.sln --no-build
-            code=$?
-            if [ $code -eq 0 ]; then exit 0; fi
-            if [ $i -lt $max_retries ]; then
-              echo "Test run failed (attempt $((i+1))), retrying in 10s..."
-              sleep 10
-            fi
-          done
-          exit $code
+        run: dotnet test --solution ProjectBeacon.sln --no-build
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
