@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -134,6 +136,12 @@ public static class ServiceCollectionExtensions
             options.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomCenter;
         });
         services.AddRazorComponents().AddInteractiveServerComponents();
+        // Revalidate circuit identity/tenant on a 60s tick and on every reconnect.
+        // Registered after the framework's TryAddScoped so it wins base-type resolution.
+        services.AddScoped<CircuitRevalidatingAuthenticationStateProvider>();
+        services.AddScoped<AuthenticationStateProvider>(
+            sp => sp.GetRequiredService<CircuitRevalidatingAuthenticationStateProvider>());
+        services.AddScoped<CircuitHandler, CircuitTenantRebindHandler>();
         services.AddLocalization();
         services.AddInfrastructure(connectionString);
         services.AddApplicationHandlers();
