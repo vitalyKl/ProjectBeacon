@@ -116,6 +116,9 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - **Context7 is mandatory for external technology documentation.** Before relying on or changing framework/library APIs, configuration, or version-specific behavior, use Context7 to resolve the relevant library and query its current documentation. Prefer the documentation for the version used by this repository. Do not use Context7 as a substitute for inspecting ProjectBeacon's own code.
 - **Do not claim tool use that did not happen.** If ProjectBeacon MCP or Context7 is unavailable in the current environment, explicitly state which one could not be used and why; use the repository and available documentation as a fallback. Do not silently skip the requirement.
 - **Verify before concluding.** Cross-check proposed changes against the repository, the relevant roadmap acceptance criteria, and documentation retrieved through Context7 where applicable. Report tests and checks actually run; do not present planned or inferred checks as completed.
+**Mandatory Project Context Retrieval**
+- Regardless of how a task is received (e.g. through an integrated workflow or directly via a console), using `beacon mcp` tools is mandatory to retrieve the current project context, including its codebase structure, architectural information, and relevant task-specific requirements.
+- A task received directly through a console does not waive this requirement. Do not rely solely on the prompt, previously cached context, or assumptions about the repository when the relevant information can be retrieved through ProjectBeacon MCP.
 
 ## Pitfalls
 
