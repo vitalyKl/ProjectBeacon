@@ -16,7 +16,7 @@ public sealed class MigrationApplyTests : IClassFixture<PostgresFixture>
 
     public MigrationApplyTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [PostgresFact]
+    [Fact]
     public async Task Migrate_FreshDatabase_LeavesNoPendingMigrations()
     {
         _postgres.RequirePostgres();

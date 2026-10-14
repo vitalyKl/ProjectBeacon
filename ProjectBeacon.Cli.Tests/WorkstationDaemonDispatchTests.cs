@@ -250,7 +250,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         var run = daemon.RunAsync(cts.Token);
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (daemon.Snapshot.LastCommand is null && DateTime.UtcNow < deadline)
-            await Task.Delay(20);
+            await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
         Assert.Equal("InitProject", daemon.Snapshot.LastCommand);

@@ -49,7 +49,7 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
     public async Task NoExpiredRecords_ReturnsZero()
     {
         var service = CreateService(_connection);
-        var result = await service.RunCleanupAsync();
+        var result = await service.RunCleanupAsync(TestContext.Current.CancellationToken);
         Assert.Equal(0, result);
     }
 
@@ -63,11 +63,11 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
         _db.SaveChanges();
 
         var service = CreateService(_connection);
-        var result = await service.RunCleanupAsync();
+        var result = await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result >= 1);
         _db.ChangeTracker.Clear();
-        var reloaded = await _db.Sessions.AsNoTracking().FirstAsync(s => s.Id == session.Id);
+        var reloaded = await _db.Sessions.AsNoTracking().FirstAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
         Assert.False(reloaded.IsActive);
     }
 
@@ -81,10 +81,10 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
         _db.SaveChanges();
 
         var service = CreateService(_connection);
-        await service.RunCleanupAsync();
+        await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         _db.ChangeTracker.Clear();
-        var reloaded = await _db.Sessions.AsNoTracking().FirstAsync(s => s.Id == session.Id);
+        var reloaded = await _db.Sessions.AsNoTracking().FirstAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
         Assert.True(reloaded.IsActive);
     }
 
@@ -100,11 +100,11 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
         _db.SaveChanges();
 
         var service = CreateService(_connection);
-        var result = await service.RunCleanupAsync();
+        var result = await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result >= 1);
         _db.ChangeTracker.Clear();
-        var remaining = await _db.ApiTokens.AsNoTracking().AnyAsync(t => t.Id == token.Id);
+        var remaining = await _db.ApiTokens.AsNoTracking().AnyAsync(t => t.Id == token.Id, TestContext.Current.CancellationToken);
         Assert.False(remaining);
     }
 
@@ -118,11 +118,11 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
         _db.SaveChanges();
 
         var service = CreateService(_connection);
-        var result = await service.RunCleanupAsync();
+        var result = await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result >= 1);
         _db.ChangeTracker.Clear();
-        var remaining = await _db.PasswordResetTokens.AsNoTracking().AnyAsync(t => t.Id == token.Id);
+        var remaining = await _db.PasswordResetTokens.AsNoTracking().AnyAsync(t => t.Id == token.Id, TestContext.Current.CancellationToken);
         Assert.False(remaining);
     }
 
@@ -139,14 +139,14 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
 
         await _db.OrgInvites
             .Where(i => i.Id == invite.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiredAt, DateTime.UtcNow.AddHours(-1)));
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiredAt, DateTime.UtcNow.AddHours(-1)), TestContext.Current.CancellationToken);
 
         var service = CreateService(_connection);
-        var result = await service.RunCleanupAsync();
+        var result = await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result >= 1);
         _db.ChangeTracker.Clear();
-        var reloaded = await _db.OrgInvites.AsNoTracking().FirstAsync(i => i.Id == invite.Id);
+        var reloaded = await _db.OrgInvites.AsNoTracking().FirstAsync(i => i.Id == invite.Id, TestContext.Current.CancellationToken);
         Assert.Equal(InviteStatus.Expired, reloaded.Status);
     }
 
@@ -162,10 +162,10 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
         _db.SaveChanges();
 
         var service = CreateService(_connection);
-        await service.RunCleanupAsync();
+        await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         _db.ChangeTracker.Clear();
-        var reloaded = await _db.OrgInvites.AsNoTracking().FirstAsync(i => i.Id == invite.Id);
+        var reloaded = await _db.OrgInvites.AsNoTracking().FirstAsync(i => i.Id == invite.Id, TestContext.Current.CancellationToken);
         Assert.Equal(InviteStatus.Pending, reloaded.Status);
     }
 
@@ -184,14 +184,14 @@ public class ExpiredRecordsCleanupServiceTests : IDisposable
 
         await _db.ProjectInvites
             .Where(i => i.Id == invite.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiredAt, DateTime.UtcNow.AddHours(-1)));
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiredAt, DateTime.UtcNow.AddHours(-1)), TestContext.Current.CancellationToken);
 
         var service = CreateService(_connection);
-        var result = await service.RunCleanupAsync();
+        var result = await service.RunCleanupAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result >= 1);
         _db.ChangeTracker.Clear();
-        var reloaded = await _db.ProjectInvites.AsNoTracking().FirstAsync(i => i.Id == invite.Id);
+        var reloaded = await _db.ProjectInvites.AsNoTracking().FirstAsync(i => i.Id == invite.Id, TestContext.Current.CancellationToken);
         Assert.Equal(InviteStatus.Expired, reloaded.Status);
     }
 }

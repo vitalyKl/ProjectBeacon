@@ -14,7 +14,7 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
 
     public ClaimWorkstationCommandPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [PostgresFact]
+    [Fact]
     public async Task ConcurrentClaim_SingleCommand_OnlyOneWorkerWins()
     {
         _postgres.RequirePostgres();
@@ -40,7 +40,7 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.NotNull(winners[0].Value!.StartedAt);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task ConcurrentClaim_LoserAdvancesToNextPending()
     {
         _postgres.RequirePostgres();
@@ -67,7 +67,7 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.All(claimed, c => Assert.Equal(WorkstationCommandStatus.Running, c!.Status));
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task ClaimReturnsOldestFirstByCreatedAt()
     {
         _postgres.RequirePostgres();
@@ -105,7 +105,7 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.True(oldest.Value!.CreatedAt < next.Value!.CreatedAt);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task ClaimIsIsolatedByDevice()
     {
         _postgres.RequirePostgres();
@@ -130,7 +130,7 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.Equal(deviceA, claimed.Value!.DeviceId);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task ProjectKindWithoutRuntime_IsFailedNotClaimed()
     {
         _postgres.RequirePostgres();

@@ -6,17 +6,18 @@ using Testcontainers.PostgreSql;
 
 public sealed class PostgresFixture : IAsyncLifetime
 {
+    public const string SkipEnvVar = "BEACON_TEST_SKIP_POSTGRES";
+    public const string SkipReasonText =
+        "PostgreSQL integration tests explicitly skipped: BEACON_TEST_SKIP_POSTGRES is set. " +
+        "Unset it to run them against Testcontainers or a BEACON_TEST_DATABASE_URL instance.";
+
     private const string UrlEnvVar = "BEACON_TEST_DATABASE_URL";
     private const string TestcontainersImage = "postgres:16-alpine";
 
     private PostgreSqlContainer? _container;
+    private Exception? _startupFailure;
 
     public bool Available { get; private set; }
-
-    /// <summary>
-    /// Set only when the operator explicitly opted out via BEACON_TEST_SKIP_POSTGRES.
-    /// </summary>
-    public string? SkipReason { get; private set; }
 
     /// <summary>
     /// Superuser (migration role) connection string. Bypasses RLS.
@@ -28,15 +29,19 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// </summary>
     public string AppConnectionString { get; private set; } = string.Empty;
 
-    private Exception? _startupFailure;
-
-    public async Task InitializeAsync()
+    public static bool OptedOut
     {
-        if (PostgresTestCase.OptedOut)
+        get
         {
-            SkipReason = PostgresTestCase.SkipReasonText;
-            return;
+            var value = Environment.GetEnvironmentVariable(SkipEnvVar);
+            return value is "1" or "true" or "True";
         }
+    }
+
+    public async ValueTask InitializeAsync()
+    {
+        if (OptedOut)
+            return;
 
         try
         {
@@ -78,18 +83,21 @@ public sealed class PostgresFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Call at the top of every PostgreSQL-dependent test. Fails explicitly when the
-    /// required infrastructure is unavailable. Skips are reported by [PostgresFact]
-    /// (see PostgresFactAttribute), so this method never itself reports a skip.
+    /// Call at the top of every PostgreSQL-dependent test. When the operator opted out
+    /// via BEACON_TEST_SKIP_POSTGRES, reports a genuine "Skipped" status with a reason.
+    /// When the required infrastructure is unavailable, fails with an actionable
+    /// message instead of passing vacuously.
     /// </summary>
     public void RequirePostgres()
     {
         if (Available)
             return;
-        if (SkipReason is not null)
-            throw new InvalidOperationException(
-                $"This test is not marked with [PostgresFact], so it cannot be reported as skipped: {SkipReasonText()}" +
-                $" Mark it with [PostgresFact] or unset {PostgresTestCase.SkipEnvVar}.");
+
+        if (OptedOut)
+        {
+            Assert.Skip(SkipReasonText);
+            return;
+        }
 
         var url = Environment.GetEnvironmentVariable(UrlEnvVar);
         var mechanism = string.IsNullOrEmpty(url) ? $"Testcontainers ({TestcontainersImage})" : UrlEnvVar;
@@ -97,12 +105,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             $"PostgreSQL test infrastructure is unavailable. Attempted mechanism: {mechanism}" +
             (_startupFailure is null ? "." : $". Last error: {_startupFailure.Message}") +
             $" Corrective action: start the Docker daemon, or set {UrlEnvVar} to a disposable PostgreSQL instance" +
-            $" (never the shared development database), or set {PostgresTestCase.SkipEnvVar}=1 for an explicit, reported skip.");
+            $" (never the shared development database), or set {SkipEnvVar}=1 for an explicit, reported skip.");
     }
 
-    private static string SkipReasonText() => PostgresTestCase.SkipReasonText;
-
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_container is not null)
             await _container.DisposeAsync();

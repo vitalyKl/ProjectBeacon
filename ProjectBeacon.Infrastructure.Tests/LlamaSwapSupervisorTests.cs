@@ -22,14 +22,14 @@ public sealed class LlamaSwapSupervisorTests
         var supervisor = CreateSupervisor(new LlamaSwapOptions { ProjectId = Guid.NewGuid() });
         try
         {
-            var status = await supervisor.GetStatusAsync();
+            var status = await supervisor.GetStatusAsync(TestContext.Current.CancellationToken);
             Assert.False(status.Available);
             Assert.False(status.Healthy);
             Assert.Equal("llama-swap binary not configured (set BEACON_LLAMASWAP_BIN).", status.Error);
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -39,14 +39,14 @@ public sealed class LlamaSwapSupervisorTests
         var supervisor = CreateSupervisor(new LlamaSwapOptions { BinPath = "llama-swap" });
         try
         {
-            var status = await supervisor.GetStatusAsync();
+            var status = await supervisor.GetStatusAsync(TestContext.Current.CancellationToken);
             Assert.False(status.Available);
             Assert.False(status.Healthy);
             Assert.Equal("llama-swap project not configured (set BEACON_PROJECT_ID).", status.Error);
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -61,14 +61,14 @@ public sealed class LlamaSwapSupervisorTests
         });
         try
         {
-            var status = await supervisor.GetStatusAsync();
+            var status = await supervisor.GetStatusAsync(TestContext.Current.CancellationToken);
             Assert.True(status.Available);
             Assert.False(status.Healthy);
             Assert.Equal("llama-swap is starting.", status.Error);
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -78,11 +78,11 @@ public sealed class LlamaSwapSupervisorTests
         var supervisor = CreateSupervisor(new LlamaSwapOptions());
         try
         {
-            Assert.False(await supervisor.ReloadAsync());
+            Assert.False(await supervisor.ReloadAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -104,7 +104,7 @@ public sealed class LlamaSwapSupervisorTests
             }
             finally
             {
-                await supervisor.StopAsync();
+                await supervisor.StopAsync(TestContext.Current.CancellationToken);
             }
         });
     }
@@ -140,7 +140,7 @@ public sealed class LlamaSwapSupervisorTests
             }
             finally
             {
-                await supervisor.StopAsync();
+                await supervisor.StopAsync(TestContext.Current.CancellationToken);
             }
         });
     }
@@ -158,12 +158,12 @@ public sealed class LlamaSwapSupervisorTests
         });
         try
         {
-            Assert.True(await supervisor.UnloadAsync());
+            Assert.True(await supervisor.UnloadAsync(TestContext.Current.CancellationToken));
             Assert.True(server.UnloadCalls > 0);
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -179,11 +179,11 @@ public sealed class LlamaSwapSupervisorTests
         });
         try
         {
-            Assert.False(await supervisor.UnloadAsync());
+            Assert.False(await supervisor.UnloadAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -206,7 +206,7 @@ public sealed class LlamaSwapSupervisorTests
             var task = (Task)method!.Invoke(supervisor, [CancellationToken.None])!;
             await task;
 
-            var status = await supervisor.GetStatusAsync();
+            var status = await supervisor.GetStatusAsync(TestContext.Current.CancellationToken);
             Assert.True(status.Available);
             Assert.True(status.Healthy);
             Assert.Equal("test-model", status.LoadedModel);
@@ -216,7 +216,7 @@ public sealed class LlamaSwapSupervisorTests
         }
         finally
         {
-            await supervisor.StopAsync();
+            await supervisor.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 

@@ -14,7 +14,7 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
 
     public RecoverStaleCommandsPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [PostgresFact]
+    [Fact]
     public async Task ConcurrentRecovery_OnlyOneTickWins()
     {
         _postgres.RequirePostgres();
@@ -48,7 +48,7 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
         }
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task RecoveryFailure_TransitionsExactlyOnce()
     {
         _postgres.RequirePostgres();

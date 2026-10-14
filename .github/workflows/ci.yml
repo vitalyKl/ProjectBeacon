@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: beacon
+      TESTINGPLATFORM_TELEMETRY_OPTOUT: "1"
     services:
       postgres:
         image: postgres:16-alpine
@@ -46,27 +47,54 @@ jobs:
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
       - name: Test
-        run: dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
-      - name: Verify formatting
-        run: dotnet format ProjectBeacon.sln --verify-no-changes
-      - name: Symlink security tests must run
+        run: dotnet test --solution ProjectBeacon.sln --no-build --results-directory TestResults --results-directory-layout per-module --report-xunit-trx --report-xunit-trx-filename test-results.trx
+      - name: Verify test results (TRX guards)
+        shell: bash
         run: |
           set -euo pipefail
-          out=$(dotnet test ProjectBeacon.Application.Tests --no-build --verbosity normal \
-                --filter "FullyQualifiedName~WorkspacePathTests.ResolveInsideRoot_RejectsSymlinkDirectory_Escape|FullyQualifiedName~WorkspacePathTests.ResolveInsideRoot_RejectsDirectoryJunction") || { echo "$out"; exit 1; }
-          echo "$out"
-          for t in ResolveInsideRoot_RejectsSymlinkDirectory_Escape ResolveInsideRoot_RejectsDirectoryJunction; do
-            if ! printf '%s\n' "$out" | grep -q "$t"; then
-              echo "::error::Symlink security test $t was not selected by the filter"
-              exit 1
-            fi
-          done
-          for t in ResolveInsideRoot_RejectsSymlinkDirectory_Escape ResolveInsideRoot_RejectsDirectoryJunction; do
-            if printf '%s\n' "$out" | grep -qF "$t [SKIP]"; then
-              echo "::error::Symlink security test $t was skipped on Linux; the control-plane path escape gate is inactive"
-              exit 1
-            fi
-          done
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          BASE = "TestResults"
+          EXPECTED_MODULES = 7
+          MIN_TOTAL = 1234
+
+          def unit_test_results(path):
+              tree = ET.parse(path)
+              return [r for r in tree.iter() if r.tag.endswith("UnitTestResult")]
+
+          paths = sorted(glob.glob(BASE + "/*/*/test-results.trx"))
+          if len(paths) != EXPECTED_MODULES:
+              raise SystemExit(f"::error::Expected {EXPECTED_MODULES} per-module TRX reports under {BASE}, found {len(paths)}: {paths}")
+
+          app_trx = [p for p in paths if "ProjectBeacon.Application.Tests" in p]
+          if not app_trx:
+              raise SystemExit("::error::Application.Tests TRX report not found")
+          app = {r.get("testName"): r.get("outcome") for r in unit_test_results(app_trx[0])}
+          for t in (
+              "ProjectBeacon.Application.Tests.WorkspacePathTests.ResolveInsideRoot_RejectsSymlinkDirectory_Escape",
+              "ProjectBeacon.Application.Tests.WorkspacePathTests.ResolveInsideRoot_RejectsDirectoryJunction",
+          ):
+              outcome = app.get(t)
+              if outcome != "Passed":
+                  raise SystemExit(f"::error::Symlink security test {t} did not run to Passed (outcome={outcome!r}); the path-escape gate is inactive")
+
+          total = 0
+          not_executed = []
+          for path in paths:
+              for r in unit_test_results(path):
+                  total += 1
+                  if r.get("outcome") == "NotExecuted":
+                      not_executed.append(f"{path}: {r.get('testName')}")
+          if total < MIN_TOTAL:
+              raise SystemExit(f"::error::Only {total} test results reported; expected at least {MIN_TOTAL}")
+          if not_executed:
+              raise SystemExit("::error::Tests skipped on Linux (postgres opt-out or inactive runtime probe):\n" + "\n".join(not_executed))
+          print(f"OK: {total} results, 0 skipped, {len(paths)} modules, symlink gates Passed")
+          PY
+      - name: Verify formatting
+        run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
 
   build-test:
     runs-on: ${{ matrix.os }}
@@ -76,6 +104,7 @@ jobs:
         os: [windows-latest, macos-latest]
     env:
       POSTGRES_PASSWORD: beacon
+      TESTINGPLATFORM_TELEMETRY_OPTOUT: "1"
     services:
       postgres:
         image: postgres:16-alpine
@@ -112,7 +141,7 @@ jobs:
         run: |
           max_retries=2
           for i in $(seq 0 $max_retries); do
-            dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"
+            dotnet test --solution ProjectBeacon.sln --no-build
             code=$?
             if [ $code -eq 0 ]; then exit 0; fi
             if [ $i -lt $max_retries ]; then
@@ -122,4 +151,4 @@ jobs:
           done
           exit $code
       - name: Verify formatting
-        run: dotnet format ProjectBeacon.sln --verify-no-changes
+        run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051

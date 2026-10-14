@@ -10,6 +10,7 @@ using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Web;
 using Bunit;
 using Bunit.TestDoubles;
+using TestContext = Bunit.TestContext;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

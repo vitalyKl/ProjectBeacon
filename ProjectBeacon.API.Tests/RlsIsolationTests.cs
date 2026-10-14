@@ -29,7 +29,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
     public RlsIsolationTests(PostgresFixture postgres) => _postgres = postgres;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         if (!_postgres.Available) return;
 
@@ -67,7 +67,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         _rlsApplied = true;
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (!_roleCreated) return;
 
@@ -134,7 +134,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         return conn;
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task Rls_ProjectScope_HidesOtherProjectRows_ViaRawSql()
     {
         _postgres.RequirePostgres();
@@ -161,7 +161,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         Assert.DoesNotContain(taskB, ids);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task Rls_NoScope_DeniesAllRows_ViaRawSql()
     {
         _postgres.RequirePostgres();
@@ -180,7 +180,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         Assert.Equal(0, count);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task Rls_Unscoped_AllowsAllRows_ViaRawSql()
     {
         _postgres.RequirePostgres();

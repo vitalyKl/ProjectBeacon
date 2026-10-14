@@ -6,7 +6,8 @@ One reference for running the Web app locally and executing the three test execu
 
 | Requirement | Value / source |
 |---|---|
-| .NET SDK | 10.0.401, `rollForward: latestPatch` (`global.json`); all projects target `net9.0`. |
+| .NET SDK | `global.json` pins 10.0.401 with `rollForward: latestPatch` (the verified environment resolves 10.0.402); all projects target `net9.0`. |
+| Test runner | xUnit v3 (`xunit.v3` 4.0.2) on Microsoft Testing Platform 2.5.1. `global.json` sets `test.runner: Microsoft.Testing.Platform`, so `dotnet test` drives the MTP controller. Set `TESTINGPLATFORM_TELEMETRY_OPTOUT=1` for clean logs. |
 | Docker | Required for the `beacon-postgres` container and for Testcontainers in `ProjectBeacon.API.Tests` (unless `BEACON_TEST_DATABASE_URL` points at a disposable PostgreSQL instance). |
 | Node.js + npm | Playwright suite: `tests/playwright/package.json` (`@playwright/test ^1.63.0`); `node_modules/` is checked in as installed — run `npm ci` in `tests/playwright` only if it is missing. Browser binaries: `npx playwright install chromium` **only if** the suite fails to launch a browser (already present in this environment; the command itself is unverified here). |
 | `.env` at the repo root | Copy `.env.example` → `.env`; set `POSTGRES_PASSWORD`, `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, `JWT__Secret`. `AUTH_LOCAL_INVITE_ONLY=true` is the sample default (registration requires an invite). Never commit `.env`; never print its values. |
@@ -82,9 +83,14 @@ dotnet build ProjectBeacon.sln
 dotnet test ProjectBeacon.Web.Tests
 ```
 
-- `ProjectBeacon.Web.Tests` (xUnit + bUnit + `Microsoft.AspNetCore.Mvc.Testing`, SQLite in-memory for DB-dependent cases) needs no services. Verified 2026-10-14: **115/115 passed, 8s**.
-- Solution-wide run uses the GPU-lane filter encoded in `test.runsettings` (`Lane!=Gpu`); CI runs `dotnet test ProjectBeacon.sln --no-build --verbosity normal --filter "Lane!=Gpu"`.
-- `dotnet format ProjectBeacon.sln --verify-no-changes` is the style gate (CI step).
+- `ProjectBeacon.Web.Tests` (xUnit v3 + bUnit + `Microsoft.AspNetCore.Mvc.Testing`, SQLite in-memory for DB-dependent cases) needs no services. Verified 2026-10-14: **115/115 passed**.
+- Test projects are xUnit v3 console apps (`OutputType=Exe`) running on the Microsoft Testing Platform. `dotnet test` drives them in MTP controller mode, where only MTP option keys are accepted (`--filter-trait` / `--filter-not-trait`); the native xunit CLI keys (`-trait`) are rejected before the handshake in that mode. Direct exe runs use the native keys.
+- GPU-lane exclusion is encoded in `Directory.Build.targets` via `TestingPlatformCommandLineArguments`: the default run appends `--filter-not-trait Lane=Gpu`; `-p:TestLane=gpu` switches it to `--filter-trait Lane=Gpu` (the GPU test runs only on the CI GPU lane). `test.runsettings` no longer exists. The filter is resolved by the `dotnet test` MSBuild integration from the properties of the current invocation, not from build artifacts — verified 2026-10-14 with clean per-lane builds: a `--no-build` run immediately after a `TestLane=gpu` build still runs the default 253-test lane (exit 0), and `--no-build -p:TestLane=gpu` over default artifacts selects exactly the 1 GPU test (exit 2 without a GPU). Switching lanes does not require a rebuild, and stale artifacts cannot leak a GPU test into a normal run.
+- Verified solution-wide default-lane run 2026-10-14 (xUnit v3, Windows): **1234 total / 1232 passed / 2 skipped, exit 0** — same counts as the xUnit v2 baseline; the GPU test is excluded by the default lane filter. Re-verified the same day after removing the transitional VSTest packages (`Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio`, `coverlet.collector`): identical counts, exit 0; `dotnet test` in MTP mode does not require `Microsoft.NET.Test.Sdk`.
+- MTP 2.5.1 exit codes observed: `0` success, `2` test failure, `5` no tests selected or invalid command line, `9` executed tests below `--minimum-expected-tests` (empirically verified 2026-10-14).
+- `dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051` is the style gate (CI step). The exclusion is not a waiver of the gate: the v3 `xunit.analyzers` package (pulled in by the `xunit.v3` meta-package) ships code fixes for xUnit1051, and the repo has 1053 pre-existing fixable sites (70 test files; verified via the SARIF-style `--report` output on 2026-10-14), so a plain `--verify-no-changes` run exits 2 on them alone. Fixing those sites is a tracked follow-up; the gate still catches every other formatting violation (verified: a deliberate whitespace violation fails with exit 2 while the excluded diagnostic stays the only other report entry).
+- Machine-readable results (verified 2026-10-14, MTP 2.5.1): single-project runs take `--report-xunit-trx --report-xunit-trx-filename <name>` (TRX written to the results directory); solution runs add `--results-directory <dir> --results-directory-layout per-module`, producing `<dir>/<Project>/<tfm>_<runtime>/test-results.trx`, one per test project. Outcomes map as passed → `outcome="Passed"`, skipped → `outcome="NotExecuted"` (the skip reason appears only on the console, not in the TRX).
+- Coverage: the v2-era `coverlet.collector` and `Microsoft.NET.Test.Sdk` references were removed with the xUnit v3 migration — they only functioned under VSTest and are inert on MTP (CI never collected coverage). The supported MTP path is the `coverlet.MTP` package (an MTP extension): reference it in test projects and run `dotnet test --coverlet` (`coverage.json`; formats via `--coverlet-output-format json|lcov|opencover|cobertura|teamcity`); `Microsoft.Testing.Extensions.CodeCoverage` is the alternative. Neither is referenced today.
 
 ### B. PostgreSQL integration tests (`ProjectBeacon.API.Tests`)
 
@@ -105,7 +111,7 @@ Every PostgreSQL-dependent test calls `PostgresFixture.RequirePostgres()` first;
 
 **Evidence of a real run:** the fixture-based set takes ~10–15s (drop/create + `MigrateAsync` + seed), `docker ps` shows a `testcontainers` container during the run, and each assertion-bearing test appears as passed individually. A report in which all fixture tests are `Skipped` is valid only when `BEACON_TEST_SKIP_POSTGRES` was set by choice; `Failed` with the infrastructure diagnostic means Docker or the URL was unreachable — report the run as blocked and capture the startup error.
 
-CI reference (`.github/workflows/ci.yml`): **all** test jobs (Linux, Windows, macOS) supply `BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon` from a disposable Actions Postgres service, so the integration assertions — including `MigrationApplyTests` against the throwaway service DB — execute on every platform.
+CI reference (`.github/workflows/ci.yml`): **all** test jobs (Linux, Windows, macOS) supply `BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon` from a disposable Actions Postgres service, so the integration assertions — including `MigrationApplyTests` against the throwaway service DB — execute on every platform. The Linux job writes per-module TRX and asserts from it (machine-readable guards, no console grep): total results ≥ 1234, zero `NotExecuted` (on Linux nothing is legitimately skipped — a postgres opt-out or an inactive runtime probe would show up here), and the two `WorkspacePathTests` symlink path-escape tests must be `Passed`. The GPU lane is a separate dispatch-only workflow (`.github/workflows/ci-gpu.yml`): `dotnet test --project ProjectBeacon.Cli.Tests -p:TestLane=gpu --minimum-expected-tests 1` on the self-hosted GPU runner.
 
 ### C. Playwright P1.5 E2E suite (`tests/playwright/p15/`)
 
@@ -173,6 +179,6 @@ For every validation run, record:
 | Fixture selection, `RequirePostgres`, `BEACON_TEST_SKIP_POSTGRES`, `Available` | `ProjectBeacon.API.Tests/PostgresFixture.cs` |
 | `beacon_migrate_test` drop/create | `ProjectBeacon.API.Tests/MigrationApplyTests.cs` |
 | P1.5 suite config, seeding, proxy, ports 5084/5085 | `tests/playwright/p15/{p15.config.js, seed.js, ws-proxy.js, p15.spec.js}` |
-| CI commands, GPU-lane filter, `BEACON_TEST_DATABASE_URL` usage | `.github/workflows/ci.yml`, `test.runsettings` |
+| CI commands, GPU-lane filter, TRX guards, `BEACON_TEST_DATABASE_URL` usage | `.github/workflows/ci.yml`, `.github/workflows/ci-gpu.yml`, `Directory.Build.targets` |
 | SDK pin, EF local tool, product version | `global.json`, `dotnet-tools.json`, `Directory.Build.props` |
 | Self-host walkthrough, `/bootstrap`, invite-only registration | `README.md` |

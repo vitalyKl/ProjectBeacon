@@ -14,7 +14,7 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
 
     public TenantIsolationPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [PostgresFact]
+    [Fact]
     public async Task ProjectScope_HidesOtherProjectTasks()
     {
         _postgres.RequirePostgres();
@@ -69,7 +69,7 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         Assert.Empty(none);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task NoScope_ProjectScopedQuery_ReturnsEmpty()
     {
         _postgres.RequirePostgres();
@@ -105,7 +105,7 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         }
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task OrgScope_HidesOtherOrgProjects()
     {
         _postgres.RequirePostgres();
@@ -150,7 +150,7 @@ public sealed class TenantIsolationPostgresTests : IClassFixture<PostgresFixture
         }
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task FilterAppliesWithoutIgnoreQueryFilters()
     {
         _postgres.RequirePostgres();

@@ -3,17 +3,28 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Common;
 using Application.Mcp;
 
-// Symlink creation needs a privilege on Windows (developer mode / admin) and is
-// always available on Linux; probe once at discovery and skip with a reason when
-// the environment cannot create links, instead of failing or silently passing.
-public sealed class SymlinkRequiredFactAttribute : FactAttribute
+public sealed class WorkspacePathTests
 {
-    private static readonly bool Supported = ProbeSymbolicLinkSupport();
+    // Symlink creation needs a privilege on Windows (developer mode / admin) and is
+    // always available on Linux; probe once and report a genuine skip with a reason
+    // when the environment cannot create links, instead of failing or silently passing.
+    private static readonly bool SymlinkSupported = ProbeSymbolicLinkSupport();
 
-    public SymlinkRequiredFactAttribute()
+    // Directory junctions (mklink /J) are a Windows-only feature that requires no
+    // special privileges. We probe by actually creating one; skip with an explicit
+    // environment reason on non-Windows platforms or if the command is unavailable.
+    private static readonly bool JunctionSupported = ProbeJunctionSupport();
+
+    private static void RequireSymlinkSupport()
     {
-        if (!Supported)
-            Skip = "symbolic links cannot be created by this user/machine";
+        if (!SymlinkSupported)
+            Assert.Skip("symbolic links cannot be created by this user/machine");
+    }
+
+    private static void RequireJunctionSupport()
+    {
+        if (!JunctionSupported)
+            Assert.Skip("directory junctions (mklink /J) are unavailable on this platform");
     }
 
     private static bool ProbeSymbolicLinkSupport()
@@ -44,20 +55,6 @@ public sealed class SymlinkRequiredFactAttribute : FactAttribute
                 // probe cleanup only
             }
         }
-    }
-}
-
-// Directory junctions (mklink /J) are a Windows-only feature that requires no
-// special privileges. We probe by actually creating one; skip with an explicit
-// environment reason on non-Windows platforms or if the command is unavailable.
-public sealed class JunctionRequiredFactAttribute : FactAttribute
-{
-    private static readonly bool Supported = ProbeJunctionSupport();
-
-    public JunctionRequiredFactAttribute()
-    {
-        if (!Supported)
-            Skip = "directory junctions (mklink /J) are unavailable on this platform";
     }
 
     private static bool ProbeJunctionSupport()
@@ -98,10 +95,7 @@ public sealed class JunctionRequiredFactAttribute : FactAttribute
             catch { }
         }
     }
-}
 
-public sealed class WorkspacePathTests
-{
     [Fact]
     public void ResolveInsideRoot_RejectsParentEscape()
     {
@@ -152,9 +146,10 @@ public sealed class WorkspacePathTests
         }
     }
 
-    [SymlinkRequiredFact]
+    [Fact]
     public void ResolveInsideRoot_RejectsDirectoryJunction()
     {
+        RequireSymlinkSupport();
         var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
         var outside = Path.Combine(Path.GetTempPath(), "beacon-out-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -176,9 +171,10 @@ public sealed class WorkspacePathTests
         }
     }
 
-    [SymlinkRequiredFact]
+    [Fact]
     public void ResolveInsideRoot_RejectsSymlinkDirectory_Escape()
     {
+        RequireSymlinkSupport();
         var root = Path.Combine(Path.GetTempPath(), "beacon-ws-" + Guid.NewGuid().ToString("N"));
         var outside = Path.Combine(Path.GetTempPath(), "beacon-out-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -215,9 +211,10 @@ public sealed class WorkspacePathTests
         }
     }
 
-    [JunctionRequiredFact]
+    [Fact]
     public void ResolveInsideRoot_RejectsMklinkJunction()
     {
+        RequireJunctionSupport();
         var root = Path.Combine(Path.GetTempPath(), "beacon-junc-" + Guid.NewGuid().ToString("N"));
         var outside = Path.Combine(Path.GetTempPath(), "beacon-junc-out-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);

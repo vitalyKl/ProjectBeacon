@@ -15,7 +15,7 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
 
     public ClaimTaskPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [PostgresFact]
+    [Fact]
     public async Task ConcurrentClaim_OnlyOneSucceeds()
     {
         _postgres.RequirePostgres();
@@ -45,7 +45,7 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
             Assert.Equal("Task not found or already claimed.", failure.Error);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task SequentialClaim_FirstSucceeds_SecondFails()
     {
         _postgres.RequirePostgres();
@@ -75,7 +75,7 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
         Assert.Equal("Task not found or already claimed.", result2.Error);
     }
 
-    [PostgresFact]
+    [Fact]
     public async Task NonMember_CannotClaimForeignProjectTask()
     {
         _postgres.RequirePostgres();

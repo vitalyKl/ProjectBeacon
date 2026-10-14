@@ -215,7 +215,7 @@ public sealed class ClientDaemonTests : IDisposable
         var run = daemon.RunAsync(cts.Token);
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (handler.Heartbeats < 1 && DateTime.UtcNow < deadline)
-            await Task.Delay(20);
+            await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
         Assert.True(handler.Heartbeats >= 1);
@@ -294,7 +294,7 @@ public sealed class ClientDaemonTests : IDisposable
         var run = daemon.RunAsync(cts.Token);
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (daemon.Snapshot.LastCommand is null && DateTime.UtcNow < deadline)
-            await Task.Delay(20);
+            await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
         Assert.True(handler.Completes >= 1);

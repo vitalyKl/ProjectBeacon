@@ -1,5 +1,13 @@
 <Project>
-  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
-    <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
+  <!-- GPU lane: excluded by default; run with -p:TestLane=gpu to run only GPU tests.
+       The option keys must use the MTP spelling (filter-trait / filter-not-trait with the
+       double-dash prefix): xunit v3's MTP host accepts only those in controller modes and
+       rejects the native CLI keys (trait / trait- with a single dash) with an invalid
+       command line before the handshake completes. Direct exe runs use the native keys. -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests')) and '$(TestLane)' != 'gpu'">
+    <TestingPlatformCommandLineArguments>--filter-not-trait Lane=Gpu</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests')) and '$(TestLane)' == 'gpu'">
+    <TestingPlatformCommandLineArguments>--filter-trait Lane=Gpu</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 </Project>

@@ -6,6 +6,8 @@ on:
 jobs:
   gpu:
     runs-on: [self-hosted, gpu]
+    env:
+      TESTINGPLATFORM_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
@@ -13,4 +15,4 @@ jobs:
         with:
           global-json-file: global.json
       - name: Test real llama-server
-        run: dotnet test --filter Lane=Gpu --verbosity normal
+        run: dotnet test --project ProjectBeacon.Cli.Tests -p:TestLane=gpu --minimum-expected-tests 1

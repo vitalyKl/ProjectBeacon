@@ -22,7 +22,7 @@ public sealed class DaemonCommandLoopTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -47,7 +47,7 @@ public sealed class DaemonCommandLoopTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -72,7 +72,7 @@ public sealed class DaemonCommandLoopTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -95,7 +95,7 @@ public sealed class DaemonCommandLoopTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -123,7 +123,7 @@ public sealed class DaemonCommandLoopTests
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
         http.Dispose();

@@ -37,7 +37,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
 
     public TenantRebindRlsTests(PostgresFixture postgres) => _postgres = postgres;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         if (!_postgres.Available) return;
 
@@ -96,11 +96,11 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
         _taskB = s_taskB;
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // The interceptor must copy the current AsyncLocal scope into the GUCs on every
     // connection open, so a circuit connection opened under scope A carries GUC=A.
-    [PostgresFact]
+    [Fact]
     public async Task Interceptor_SetsGucsFromTenantScope_OnConnectionOpen()
     {
         _postgres.RequirePostgres();
@@ -118,7 +118,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
 
     // A pooled connection keeps its GUC server-side; the interceptor must re-apply the
     // GUCs on every checkout so a stale value from the previous tenant never leaks.
-    [PostgresFact]
+    [Fact]
     public async Task Interceptor_ReappliesGucs_OnPooledConnectionReuse()
     {
         _postgres.RequirePostgres();
@@ -145,7 +145,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     }
 
     // No scope at all: GUCs are empty and the app role is fail-closed (no rows).
-    [PostgresFact]
+    [Fact]
     public async Task NoScope_AppRole_SeesNoRows()
     {
         _postgres.RequirePostgres();
@@ -163,7 +163,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     // scope A, while the scoped tenant (what the EF filter reads) has been rebound to B.
     // RLS must follow the scoped tenant: B's own rows stay visible, A's rows stay hidden.
     // Without the reconciliation this test is red (stale GUC=A hides B's rows).
-    [PostgresFact]
+    [Fact]
     public async Task Rebind_ScopedTenant_BeatsStaleHandshakeScope()
     {
         _postgres.RequirePostgres();
@@ -194,7 +194,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     // project's rows. This documents the exposure window bounded by the 60-second
     // revalidation tick — circuit-side protection comes from the EF scope rebind, not
     // from a membership check inside the RLS policy.
-    [PostgresFact]
+    [Fact]
     public async Task Rls_KeyedByGuc_NotByLiveMembership_StaleGucStillSeesOldProject()
     {
         _postgres.RequirePostgres();
@@ -239,7 +239,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     }
 
     // The unscoped GUC (bootstrap/migration/worker path) sees every row.
-    [PostgresFact]
+    [Fact]
     public async Task UnscopedGuc_SeesAllRows()
     {
         _postgres.RequirePostgres();
