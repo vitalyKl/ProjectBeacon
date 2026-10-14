@@ -15,6 +15,10 @@ Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1
 
 Drawer groups: Operate (Overview, Tasks, Pipeline when a task is running), Intelligence (Agents at `/settings/agents`, Workstations, Context, Chat), Govern (Projects at `/project/settings`, Settings). Backlog `/backlog` and Roadmap `/roadmap` stay on those routes. `/agents` redirects to `/settings/agents`. `ChatDock` is a shell shortcut; `/chat` is the full page. Language is a cookie (`GET /culture`). Appearance is Dark, Light, or System (`beacon-theme` cookie): header toggles Dark/Light, Settings has all three. `/project/settings` lists projects and can create, rename, and delete the open one (`DELETE /v1/projects/{id}`, project administer). Overview shows current workstation load. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers. `ProjectBeacon.Worker` only expires sessions, API tokens, password-reset tokens, and invites.
 
+## Tests
+
+Canonical environment setup and test procedures (unit, PostgreSQL integration, Playwright E2E): `docs/development/test-environment.md`. Read it before starting the app or running tests.
+
 ## Workstation client
 
 The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (init repo, OpenCode config, model process, install). Agents and model backends belong to the user; a project only binds a device and a local root.
