@@ -14,10 +14,10 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
 
     public ClaimWorkstationCommandPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [Fact]
+    [PostgresFact]
     public async Task ConcurrentClaim_SingleCommand_OnlyOneWorkerWins()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid deviceId;
         await using (var seed = _postgres.CreateContext())
@@ -40,10 +40,10 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.NotNull(winners[0].Value!.StartedAt);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task ConcurrentClaim_LoserAdvancesToNextPending()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid deviceId;
         await using (var seed = _postgres.CreateContext())
@@ -67,10 +67,10 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.All(claimed, c => Assert.Equal(WorkstationCommandStatus.Running, c!.Status));
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task ClaimReturnsOldestFirstByCreatedAt()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid deviceId;
         await using (var seed = _postgres.CreateContext())
@@ -105,10 +105,10 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.True(oldest.Value!.CreatedAt < next.Value!.CreatedAt);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task ClaimIsIsolatedByDevice()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid deviceA, deviceB;
         await using (var seed = _postgres.CreateContext())
@@ -130,10 +130,10 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         Assert.Equal(deviceA, claimed.Value!.DeviceId);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task ProjectKindWithoutRuntime_IsFailedNotClaimed()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid deviceId, commandId;
         await using (var seed = _postgres.CreateContext())

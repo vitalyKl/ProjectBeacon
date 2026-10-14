@@ -110,6 +110,13 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - BCrypt only in Infrastructure. Web uses `PasswordHasher` from Infrastructure.
 - `AUTH_LOCAL_INVITE_ONLY=true` requires a valid invite on `POST /v1/auth/register`. Forgot-password always returns 200 (no email enumeration). `/recover` is bootstrap-token admin break-glass, not user reset.
 
+## Agent workflow
+
+- **ProjectBeacon MCP is mandatory for project work.** Before planning or changing code, use the ProjectBeacon MCP tools (`beacon mcp`) to read the current compiled Context brief and inspect the relevant task/board and roadmap state. Use Beacon for project-specific context, decisions, task status, and local code tools. Treat the living Context and board/roadmap as authoritative; `AGENTS.md` is only an exported fallback for hosts that cannot read them.
+- **Context7 is mandatory for external technology documentation.** Before relying on or changing framework/library APIs, configuration, or version-specific behavior, use Context7 to resolve the relevant library and query its current documentation. Prefer the documentation for the version used by this repository. Do not use Context7 as a substitute for inspecting ProjectBeacon's own code.
+- **Do not claim tool use that did not happen.** If ProjectBeacon MCP or Context7 is unavailable in the current environment, explicitly state which one could not be used and why; use the repository and available documentation as a fallback. Do not silently skip the requirement.
+- **Verify before concluding.** Cross-check proposed changes against the repository, the relevant roadmap acceptance criteria, and documentation retrieved through Context7 where applicable. Report tests and checks actually run; do not present planned or inferred checks as completed.
+
 ## Pitfalls
 
 - `Entity.New<T>()` requires `where T : Entity, new()`. Each entity must have a parameterless constructor (EF Core needs it).
@@ -133,4 +140,18 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - Invite and password-reset lookup uses `IgnoreQueryFilters` (the actor is not in the tenant yet). Hash tokens with SHA256 like `bcn_`/`bcd_`; never persist the raw value.
 - `GET /v1/version` is `{ version, gitSha }`. Version comes from the assembly (`Directory.Build.props`); `gitSha` from `BEACON_GIT_SHA`. MCP `serverInfo.version` and heartbeat `clientVersion` use the same assembly version.
 
+## Test Environment Rules
 
+Before running an application or tests, read the repository's test-environment documentation and the README/configuration for the relevant test suite.
+
+- Do not guess application URLs, ports, startup commands, database targets, or test infrastructure. Verify them from the current repository configuration and the running environment.
+- Check for existing processes and listeners before starting another application instance. Reuse a healthy existing instance when appropriate.
+- Build the current code before testing a newly built application. Do not assume an existing DLL contains the latest changes.
+- Treat unit tests, PostgreSQL integration tests, and Playwright E2E tests as separate execution paths with separate prerequisites.
+- A green exit code is not sufficient evidence if tests were skipped, silently bypassed, or did not reach their required dependencies. Report actual execution separately from configured or attempted execution.
+- Never redirect destructive integration tests to a shared development or production database to work around unavailable test infrastructure.
+- Do not reset databases, recreate shared containers, modify secrets, or stop processes that were not started by the current task without explicit authorization.
+- Record the exact command, exit code, test counts, and relevant log path for each validation run.
+- PostgreSQL integration tests never pass vacuously: without a database they fail with a diagnostic. The only sanctioned skip is `BEACON_TEST_SKIP_POSTGRES=1`, and it must show `Skipped` statuses in the report.
+
+See `docs/development/test-environment.md` for the canonical environment setup and test procedures.

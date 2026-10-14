@@ -110,10 +110,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         return Task.CompletedTask;
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Rls_RuntimeRole_FreshSession_FailClosed_ViaRawSql()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
         await conn.OpenAsync();
@@ -122,10 +122,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal(0, count);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Rls_RuntimeRole_ProjectScope_HidesOtherProjects_ViaRawSql()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         var ids = await QueryTaskIdsRawAsync(_projectA.ToString(), "false");
         Assert.Contains(_taskA1, ids);
@@ -133,20 +133,20 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.DoesNotContain(_taskB, ids);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Rls_RuntimeRole_Unscoped_SeesAll_ViaRawSql()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         var ids = await QueryTaskIdsRawAsync("", "true");
         Assert.Equal(3, ids.Count);
         Assert.Contains(_taskB, ids);
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Ef_RuntimeRole_ProjectScope_IsolatesTasks()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
         using (TenantScope.EnterProjectScope(_projectA))
@@ -157,10 +157,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         }
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Ef_RuntimeRole_NoScope_FailClosed()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
         var tasks = await ctx.Tasks.ToListAsync();
@@ -169,10 +169,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
     // Cross-tenant DML on the real migrated schema as the real runtime role:
     // RLS WITH CHECK rejects foreign inserts; foreign UPDATE/DELETE affect zero rows.
-    [Fact]
+    [PostgresFact]
     public async Task Rls_RuntimeRole_CrossTenantInsert_IsRejected_ViaRawSql()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
         await conn.OpenAsync();
@@ -186,10 +186,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal(0, await CountTaskByIdRawAsync(conn, foreignId));
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Rls_RuntimeRole_CrossTenantUpdateDelete_AffectZeroRows_ViaRawSql()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
         await conn.OpenAsync();
@@ -205,10 +205,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal("Runtime B Task 1", await TaskTitleRawAsync(unscoped, _taskB));
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task Rls_RuntimeRole_OwnTenantInsertUpdateDelete_Work_ViaRawSql()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         var ownId = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(_appConn);
@@ -231,10 +231,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
     // Pool-leak: sequential connections must reuse the same physical backend (asserted via
     // pg_backend_pid), and the tenant GUCs set on one must not survive to the next scope.
-    [Fact]
+    [PostgresFact]
     public async Task Rls_PooledConnection_TenantScope_DoesNotLeak_AcrossSequentialScopes()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         long backendPid;
         await using (var connA = new NpgsqlConnection(_appConn))
@@ -266,10 +266,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
     // The production EF path (TenantRlsConnectionInterceptor on every connection open) must
     // isolate sequential scopes even when the pool hands back the same physical connection.
-    [Fact]
+    [PostgresFact]
     public async Task Ef_SequentialScopes_OnPooledConnection_AreIsolated()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using (var ctxA = new BeaconDbContext(NewAppOptions(_appConn)))
         {
@@ -300,10 +300,10 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
     // Drift guard: every table in public with a ProjectId/OrgId column must be FORCE-RLS
     // protected by a tenant policy, so a future migration cannot silently add an unscoped table.
-    [Fact]
+    [PostgresFact]
     public async Task Migration_RlsPolicy_CoversEveryTableWithTenantColumn()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         var exceptions = new HashSet<string>
         {

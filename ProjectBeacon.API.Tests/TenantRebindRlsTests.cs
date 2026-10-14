@@ -100,10 +100,10 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
 
     // The interceptor must copy the current AsyncLocal scope into the GUCs on every
     // connection open, so a circuit connection opened under scope A carries GUC=A.
-    [Fact]
+    [PostgresFact]
     public async Task Interceptor_SetsGucsFromTenantScope_OnConnectionOpen()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
         using (TenantScope.EnterProjectScope(_projectA))
@@ -118,10 +118,10 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
 
     // A pooled connection keeps its GUC server-side; the interceptor must re-apply the
     // GUCs on every checkout so a stale value from the previous tenant never leaks.
-    [Fact]
+    [PostgresFact]
     public async Task Interceptor_ReappliesGucs_OnPooledConnectionReuse()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using (var ctxA = new BeaconDbContext(NewAppOptions(_appConn)))
         {
@@ -145,10 +145,10 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     }
 
     // No scope at all: GUCs are empty and the app role is fail-closed (no rows).
-    [Fact]
+    [PostgresFact]
     public async Task NoScope_AppRole_SeesNoRows()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
         await conn.OpenAsync();
@@ -163,10 +163,10 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     // scope A, while the scoped tenant (what the EF filter reads) has been rebound to B.
     // RLS must follow the scoped tenant: B's own rows stay visible, A's rows stay hidden.
     // Without the reconciliation this test is red (stale GUC=A hides B's rows).
-    [Fact]
+    [PostgresFact]
     public async Task Rebind_ScopedTenant_BeatsStaleHandshakeScope()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         var captured = CaptureScoped(_projectA);
 
@@ -194,10 +194,10 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     // project's rows. This documents the exposure window bounded by the 60-second
     // revalidation tick — circuit-side protection comes from the EF scope rebind, not
     // from a membership check inside the RLS policy.
-    [Fact]
+    [PostgresFact]
     public async Task Rls_KeyedByGuc_NotByLiveMembership_StaleGucStillSeesOldProject()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         var user = User.Create("rebind-user-" + Guid.NewGuid().ToString("N")[..8], "rebind-user@example.local", "hash");
         Guid membershipId;
@@ -239,10 +239,10 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
     }
 
     // The unscoped GUC (bootstrap/migration/worker path) sees every row.
-    [Fact]
+    [PostgresFact]
     public async Task UnscopedGuc_SeesAllRows()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
         await conn.OpenAsync();

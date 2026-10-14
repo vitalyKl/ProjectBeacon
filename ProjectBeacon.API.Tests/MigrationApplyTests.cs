@@ -4,23 +4,30 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-public sealed class MigrationApplyTests
+/// <summary>
+/// Applies migrations to a fresh database on the fixture's server (a disposable
+/// Testcontainers container, or an explicitly supplied BEACON_TEST_DATABASE_URL
+/// instance) and verifies nothing is left pending.
+/// </summary>
+[Collection("postgres-serial")]
+public sealed class MigrationApplyTests : IClassFixture<PostgresFixture>
 {
-    [Fact]
+    private readonly PostgresFixture _postgres;
+
+    public MigrationApplyTests(PostgresFixture postgres) => _postgres = postgres;
+
+    [PostgresFact]
     public async Task Migrate_FreshDatabase_LeavesNoPendingMigrations()
     {
-        var url = Environment.GetEnvironmentVariable("BEACON_TEST_DATABASE_URL");
-        if (string.IsNullOrEmpty(url))
-            return;
+        _postgres.RequirePostgres();
 
-        var connStr = ToNpgsql(url);
         var dbName = "beacon_migrate_test";
-        var serverConn = WithDatabase(connStr, "postgres");
+        var serverConn = WithDatabase(_postgres.ConnectionString, "postgres");
 
         await ExecAdminAsync(serverConn, $"DROP DATABASE IF EXISTS {dbName} WITH (FORCE);");
         await ExecAdminAsync(serverConn, $"CREATE DATABASE {dbName};");
 
-        var targetConn = WithDatabase(connStr, dbName);
+        var targetConn = WithDatabase(_postgres.ConnectionString, dbName);
         var migrateOptions = new DbContextOptionsBuilder<BeaconDbContext>().UseNpgsql(targetConn).Options;
         await using (var migrateDb = new BeaconDbContext(migrateOptions))
         {
@@ -44,12 +51,5 @@ public sealed class MigrationApplyTests
         var parts = connStr.Split(';', StringSplitOptions.RemoveEmptyEntries);
         return string.Join(';', parts.Select(p =>
             p.StartsWith("Database=", StringComparison.OrdinalIgnoreCase) ? $"Database={database}" : p));
-    }
-
-    private static string ToNpgsql(string url)
-    {
-        var uri = new Uri(url.Replace("postgres://", "http://", StringComparison.OrdinalIgnoreCase));
-        var userInfo = uri.UserInfo.Split(':', 2);
-        return $"Host={uri.Host};Port={(uri.Port > 0 ? uri.Port : 5432)};Database={uri.AbsolutePath.Trim('/')};Username={userInfo[0]};Password={(userInfo.Length > 1 ? userInfo[1] : "")}";
     }
 }

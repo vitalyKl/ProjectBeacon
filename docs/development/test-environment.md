@@ -7,7 +7,7 @@ One reference for running the Web app locally and executing the three test execu
 | Requirement | Value / source |
 |---|---|
 | .NET SDK | 10.0.401, `rollForward: latestPatch` (`global.json`); all projects target `net9.0`. |
-| Docker | Required for the `beacon-postgres` container and for Testcontainers in `ProjectBeacon.API.Tests`. |
+| Docker | Required for the `beacon-postgres` container and for Testcontainers in `ProjectBeacon.API.Tests` (unless `BEACON_TEST_DATABASE_URL` points at a disposable PostgreSQL instance). |
 | Node.js + npm | Playwright suite: `tests/playwright/package.json` (`@playwright/test ^1.63.0`); `node_modules/` is checked in as installed — run `npm ci` in `tests/playwright` only if it is missing. Browser binaries: `npx playwright install chromium` **only if** the suite fails to launch a browser (already present in this environment; the command itself is unverified here). |
 | `.env` at the repo root | Copy `.env.example` → `.env`; set `POSTGRES_PASSWORD`, `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, `JWT__Secret`. `AUTH_LOCAL_INVITE_ONLY=true` is the sample default (registration requires an invite). Never commit `.env`; never print its values. |
 
@@ -94,19 +94,18 @@ dotnet test ProjectBeacon.API.Tests
 
 Fixture behavior (`ProjectBeacon.API.Tests/PostgresFixture.cs`), in order:
 
-1. `BEACON_TEST_DATABASE_URL` set → that URL is used (converted `postgres://` → Npgsql key=value), `Available=true`. No Testcontainers.
-2. Else, if `CI != "true"` → Testcontainers `postgres:16-alpine` (db `beacon`, user/password `beacon` — constants in the fixture, not the shared cluster), `EnsureCreatedAsync`, then idempotent `EnsureAppRoleAsync`. `Available=true`.
-3. Else (CI without a URL) → `Available=false`.
+1. `BEACON_TEST_SKIP_POSTGRES` set to `1`/`true` → every PostgreSQL-dependent test is **explicitly skipped** (status `Skipped`, with the reason). This is the only sanctioned skip path.
+2. Else `BEACON_TEST_DATABASE_URL` set → that URL is used (converted `postgres://` → Npgsql key=value). No Testcontainers.
+3. Else → Testcontainers `postgres:16-alpine` (db `beacon`, user/password `beacon` — constants in the fixture, not the shared cluster), `EnsureCreatedAsync`, then idempotent `EnsureAppRoleAsync`.
+4. Else (no URL and Testcontainers failed) → every PostgreSQL-dependent test **fails** with a diagnostic naming the dependency, the attempted mechanism, the last error, and the corrective action. An infrastructure failure is never reported as a pass.
 
-**Destructive / shared-state warning:** `MigrationApplyTests` runs only when `BEACON_TEST_DATABASE_URL` is set, and it **drops and recreates** the `beacon_migrate_test` database on whatever server that URL points at. Pointing the URL at the shared development or production server is how a bad test run can destroy shared state — never do it to work around a Testcontainers failure. If Testcontainers is unavailable, the honest result is *blocked*, not a redirect.
+Every PostgreSQL-dependent test calls `PostgresFixture.RequirePostgres()` first; there is no silent early-return path. A fixture-based test reported as passed means its assertions executed.
 
-**Vacuous-pass detection (critical):** if Testcontainers startup throws, the fixture catches it, disposes, and sets `Available=false`; every fixture-based test then `if (!_postgres.Available) return;` and xUnit reports it **passed** in a few hundred milliseconds. A green exit code in this situation is not evidence. Distinguish a real run:
+**Destructive / shared-state warning:** `MigrationApplyTests` (fixture-based) **drops and recreates** the `beacon_migrate_test` database on the fixture's server — a disposable Testcontainers container by default, or the server of an explicitly supplied `BEACON_TEST_DATABASE_URL`. Pointing the URL at the shared development or production server is how a bad test run can destroy shared state — never do it to work around a Testcontainers failure. If Testcontainers is unavailable, the honest result is *blocked*, not a redirect.
 
-- Real: total duration ~10–15s for the fixture-based set, `docker ps` shows a `testcontainers` container during the run, test count matches the suite (e.g. 6 RLS tests). Reference evidence from this repo: `rls-tests.log` — 6/6 passed in 11.03s with containers created and migrated.
-- Vacuous: all "passed" in <1s, no container activity, and the run log shows no `EnsureCreated`/migration output. Reference: `rls-tests-final*.log` — 6 "passed" in 244–342ms with no container: **not valid RLS evidence**.
-- Rule: never modify the fixture or the tests to force a green result; report the run as blocked and capture the Testcontainers startup failure if possible.
+**Evidence of a real run:** the fixture-based set takes ~10–15s (drop/create + `MigrateAsync` + seed), `docker ps` shows a `testcontainers` container during the run, and each assertion-bearing test appears as passed individually. A report in which all fixture tests are `Skipped` is valid only when `BEACON_TEST_SKIP_POSTGRES` was set by choice; `Failed` with the infrastructure diagnostic means Docker or the URL was unreachable — report the run as blocked and capture the startup error.
 
-CI reference (`.github/workflows/ci.yml`): the Linux job supplies `BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon` from an Actions Postgres service, so it exercises the URL path (and `MigrationApplyTests` against a throwaway service DB). The Windows/macOS jobs run without a database and without the URL — there the fixture tests pass vacuously by design of the fixture; do not cite those runs as RLS evidence either.
+CI reference (`.github/workflows/ci.yml`): **all** test jobs (Linux, Windows, macOS) supply `BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon` from a disposable Actions Postgres service, so the integration assertions — including `MigrationApplyTests` against the throwaway service DB — execute on every platform.
 
 ### C. Playwright P1.5 E2E suite (`tests/playwright/p15/`)
 
@@ -159,7 +158,7 @@ For every validation run, record:
 | Port 5083 already in use | Identify the owner (`netstat -ano`); reuse a healthy instance or stop only a process this task started. |
 | Playwright: `browserType.launch: executable doesn't exist` | `npx playwright install chromium` in `tests/playwright`. **(unverified command path; environment already has browsers)** |
 | Playwright: S4 hangs before reconnect evidence | Verify the proxy is up (suite logs `proxy dropped N circuit socket(s)`); confirm nothing else binds 5084/5085. |
-| API.Tests all "passed" in <1s | Vacuous run — Testcontainers failed. Report blocked; do not redirect to the shared DB. |
+| API.Tests PostgreSQL tests all `Failed` with "PostgreSQL test infrastructure is unavailable" | Docker daemon down or `BEACON_TEST_DATABASE_URL` unreachable. Start Docker or fix the URL; do not redirect to the shared DB. `BEACON_TEST_SKIP_POSTGRES=1` is only for an intentional, reported skip. |
 | `dotnet ef` not found | `dotnet tool restore` (local tool `dotnet-ef 9.0.0` declared in `dotnet-tools.json`), then e.g. `dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure` (CI step). |
 
 ## 8. Sources
@@ -171,7 +170,7 @@ For every validation run, record:
 | `.env` discovery and precedence | `ProjectBeacon.Infrastructure/Data/EnvFile.cs`, `.env.example` |
 | Roles, password resolution, `EnsureAppRoleAsync` | `ProjectBeacon.Infrastructure/Data/PostgresConnection.cs` |
 | Migrate-on-start, `BEACON_MIGRATE_ON_START`, `BEACON_MIGRATE_THEN_EXIT` | `ProjectBeacon.Web/Program.cs` |
-| Fixture selection, silent catch, `Available` | `ProjectBeacon.API.Tests/PostgresFixture.cs` |
+| Fixture selection, `RequirePostgres`, `BEACON_TEST_SKIP_POSTGRES`, `Available` | `ProjectBeacon.API.Tests/PostgresFixture.cs` |
 | `beacon_migrate_test` drop/create | `ProjectBeacon.API.Tests/MigrationApplyTests.cs` |
 | P1.5 suite config, seeding, proxy, ports 5084/5085 | `tests/playwright/p15/{p15.config.js, seed.js, ws-proxy.js, p15.spec.js}` |
 | CI commands, GPU-lane filter, `BEACON_TEST_DATABASE_URL` usage | `.github/workflows/ci.yml`, `test.runsettings` |

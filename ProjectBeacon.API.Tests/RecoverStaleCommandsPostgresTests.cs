@@ -14,10 +14,10 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
 
     public RecoverStaleCommandsPostgresTests(PostgresFixture postgres) => _postgres = postgres;
 
-    [Fact]
+    [PostgresFact]
     public async Task ConcurrentRecovery_OnlyOneTickWins()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid commandId;
         await using (var seed = _postgres.CreateAdminContext())
@@ -48,10 +48,10 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
         }
     }
 
-    [Fact]
+    [PostgresFact]
     public async Task RecoveryFailure_TransitionsExactlyOnce()
     {
-        if (!_postgres.Available) return;
+        _postgres.RequirePostgres();
 
         Guid commandId;
         await using (var seed = _postgres.CreateAdminContext())

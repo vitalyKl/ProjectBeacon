@@ -76,12 +76,29 @@ jobs:
         os: [windows-latest, macos-latest]
     env:
       POSTGRES_PASSWORD: beacon
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: beacon
+          POSTGRES_PASSWORD: beacon
+          POSTGRES_DB: beacon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beacon"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Export test DB URL
+        shell: bash
+        run: echo "BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon" >> "$GITHUB_ENV"
       - name: Restore dependencies
         run: dotnet restore ProjectBeacon.sln
       - name: Build
