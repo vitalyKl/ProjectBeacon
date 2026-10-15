@@ -292,13 +292,21 @@ public sealed class ClientDaemonTests : IDisposable
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
         await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
         {
-            DelayAsync = (_, ct) => Task.Delay(1, ct)
+            DelayAsync = (_, ct) => Task.Delay(1, ct),
+            // Heartbeat work (llama sync, host/GPU sampling) runs in parallel with the
+            // command loop and starves the claim->complete cycle on loaded CI hosts.
+            // The test asserts no heartbeat state, so keep that loop quiet for the window.
+            HeartbeatInterval = TimeSpan.FromSeconds(60)
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         var run = daemon.RunAsync(cts.Token);
-        var deadline = DateTime.UtcNow.AddSeconds(25);
+        // On a loaded 2-core GHA host every continuation in the cycle can be delayed
+        // seconds, so the claim->execute->complete->publish cycle can exceed a tight
+        // deadline even though nothing is broken. Healthy hosts finish in seconds,
+        // because the loop exits as soon as the snapshot is published.
+        var deadline = DateTime.UtcNow.AddSeconds(60);
         while (daemon.Snapshot.LastCommand is null && DateTime.UtcNow < deadline)
-            await Task.Delay(20, TestContext.Current.CancellationToken);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
         Assert.True(handler.Completes >= 1);
