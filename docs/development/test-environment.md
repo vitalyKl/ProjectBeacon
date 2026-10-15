@@ -6,7 +6,7 @@ One reference for running the Web app locally and executing the three test execu
 
 | Requirement | Value / source |
 |---|---|
-| .NET SDK | `global.json` pins 10.0.401 with `rollForward: latestPatch` (the verified environment resolves 10.0.402); all projects target `net9.0`. CI explicitly installs 10.0.402 (`sdk-version` in `ci.yml`) because GHA images preinstall 10.0.401, which lacks `--results-directory-layout` (see the TRX bullet below). |
+| .NET SDK | `global.json` pins 10.0.401 with `rollForward: latestPatch` (the verified environment resolves 10.0.402); all projects target `net9.0`. CI explicitly installs 10.0.402 (`dotnet-version` in `ci.yml`) because GHA images preinstall 10.0.401, which lacks `--results-directory-layout` (see the TRX bullet below). |
 | Test runner | xUnit v3 (`xunit.v3` 4.0.2) on Microsoft Testing Platform 2.5.1. `global.json` sets `test.runner: Microsoft.Testing.Platform`, so `dotnet test` drives the MTP controller. Set `TESTINGPLATFORM_TELEMETRY_OPTOUT=1` for clean logs. |
 | Docker | Required for the `beacon-postgres` container and for Testcontainers in `ProjectBeacon.API.Tests` (unless `BEACON_TEST_DATABASE_URL` points at a disposable PostgreSQL instance). |
 | Node.js + npm | Playwright suite: `tests/playwright/package.json` (`@playwright/test ^1.63.0`); `node_modules/` is checked in as installed — run `npm ci` in `tests/playwright` only if it is missing. Browser binaries: `npx playwright install chromium` **only if** the suite fails to launch a browser (already present in this environment; the command itself is unverified here). |

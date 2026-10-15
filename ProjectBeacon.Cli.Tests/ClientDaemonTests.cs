@@ -263,6 +263,10 @@ public sealed class ClientDaemonTests : IDisposable
         var sent = 0;
         var handler = new RouteHandler
         {
+            // Mimics the real server's long-poll (?wait=25). Without the hold the
+            // daemon tight-repolls 204s after the probe, flooding the thread pool
+            // and starving the polling below on loaded hosts.
+            CommandsHold = TimeSpan.FromSeconds(2),
             Impl = req =>
             {
                 var path = req.RequestUri!.AbsolutePath;
@@ -290,9 +294,9 @@ public sealed class ClientDaemonTests : IDisposable
         {
             DelayAsync = (_, ct) => Task.Delay(1, ct)
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var run = daemon.RunAsync(cts.Token);
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var deadline = DateTime.UtcNow.AddSeconds(25);
         while (daemon.Snapshot.LastCommand is null && DateTime.UtcNow < deadline)
             await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();

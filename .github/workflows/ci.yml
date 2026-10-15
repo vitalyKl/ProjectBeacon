@@ -38,7 +38,7 @@ jobs:
           # --results-directory-layout and forwards it to the MTP host, which
           # rejects it: every module exits 5 with "Zero tests ran". 10.0.402
           # recognizes the option (global.json rollForward then selects it).
-          sdk-version: 10.0.402
+          dotnet-version: 10.0.402
       - name: Export test DB URL
         shell: bash
         run: echo "BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon" >> "$GITHUB_ENV"
@@ -107,15 +107,20 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     env:
-      POSTGRES_PASSWORD: beacon
       TESTINGPLATFORM_TELEMETRY_OPTOUT: "1"
+      # The Testcontainers fallback is unreliable on shared GHA egress IPs
+      # (observed: "No such image: postgres:16-alpine" -> all 35 Postgres tests
+      # failed on both matrix lanes). Linux is the authoritative Postgres lane
+      # (service container + TRX guards); windows/macos opt out explicitly, so
+      # the Postgres tests report a genuine "Skipped" with a reason.
+      BEACON_TEST_SKIP_POSTGRES: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           # Same pin as the Linux job: one SDK version across all CI jobs.
-          sdk-version: 10.0.402
+          dotnet-version: 10.0.402
       - name: Restore dependencies
         run: dotnet restore ProjectBeacon.sln
       - name: Build
@@ -124,9 +129,9 @@ jobs:
         run: |
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
-      # No postgres service container: services are Linux-runner-only. Without
-      # BEACON_TEST_DATABASE_URL the Postgres integration tests fall back to
-      # Testcontainers (Docker is available on the GHA windows/macos runners).
+      # No postgres service container: services are Linux-runner-only, and the
+      # Testcontainers fallback is unreliable on shared GHA egress IPs, so the
+      # matrix lanes run with BEACON_TEST_SKIP_POSTGRES=1 (reported skips).
       - name: Test
         run: dotnet test --solution ProjectBeacon.sln --no-build
       - name: Verify formatting
