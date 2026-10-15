@@ -77,7 +77,7 @@ public class CreateTaskHandler : ICommandHandler<CreateTaskCommand, Result<TaskI
             []);
 }
 /// <summary>
-/// Updates a task title, description, priority, type, label, or milestone.
+/// Updates a task title, description, priority, type, label, or milestone. Description updates are last-writer-wins against finish_work atomic note appends; status transitions never depend on the description value.
 /// </summary>
 public class UpdateTaskHandler : ICommandHandler<UpdateTaskCommand, Result<TaskItemDto>>
 {
@@ -174,6 +174,9 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
         if (task is null)
             return Result.Failure<TaskItemDto>("Task not found.");
 
+        // Unguarded by design: this writer never touches StateRevision, so it cannot
+        // create a second finish-work winner. Under a race with finish_work it may leave
+        // a stale sub-stage on a Done task; the DTO hides sub-stage unless InProgress.
         try
         {
             task.MoveToSubStage(command.Request.SubStage);
@@ -207,7 +210,7 @@ public class ChangeSubStageHandler : ICommandHandler<ChangeSubStageCommand, Resu
             []);
 }
 /// <summary>
-/// Saves review notes. The domain rejects an empty note.
+/// Saves review notes. The domain rejects an empty note. Last-writer-wins by design: the notes are free-form review text; only their non-emptiness is read at a status transition.
 /// </summary>
 public class AddReviewNotesHandler : ICommandHandler<AddReviewNotesCommand, Result<TaskItemDto>>
 {

@@ -1,14 +1,24 @@
 namespace ProjectBeacon.Application.Tests;
 
+using Application.Common;
+using Application.Persistence;
 using Application.Tasks;
+using Domain.Entities.Agents;
+using Domain.Entities.Chat;
+using Domain.Entities.Context;
+using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Reports;
+using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 public sealed class FinishWorkHandlerTests : IDisposable
 {
@@ -276,10 +286,212 @@ public sealed class FinishWorkHandlerTests : IDisposable
         Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
     }
 
+    [Fact]
+    public async Task Failed_StaleRevisionAfterRivalClaim_Conflicts_NoSideEffects()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        // A rival claim commits after the handler reads the row: status InProgress, revision bumped.
+        var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var db = RivalCommittingDb.Wrap(inner, () => inner.Tasks.Where(t => t.Id == task.Id).ExecuteUpdate(s => s
+            .SetProperty(t => t.Status, TaskItemStatus.InProgress)
+            .SetProperty(t => t.StateRevision, t => t.StateRevision + 1)));
+
+        var handler = new FinishWorkHandler(new FixedDbFactory(db));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString())));
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.InProgress, task.Status);
+        Assert.Null(task.Description);
+        Assert.Equal(1, task.StateRevision);
+        Assert.Equal(0, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Done_StaleRevisionAfterRivalDone_IdempotentOk_NoOverwrite()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var proof = Proof(task.Id);
+        _db.ReviewRuns.Add(proof);
+        await _db.SaveChangesAsync();
+
+        // A rival done commits after the handler reads the row.
+        var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var db = RivalCommittingDb.Wrap(inner, () => inner.Tasks.Where(t => t.Id == task.Id).ExecuteUpdate(s => s
+            .SetProperty(t => t.Status, TaskItemStatus.Done)
+            .SetProperty(t => t.CompletedAt, DateTime.UtcNow)
+            .SetProperty(t => t.ReviewNotes, "rival notes")
+            .SetProperty(t => t.StateRevision, t => t.StateRevision + 1)));
+
+        var handler = new FinishWorkHandler(new FixedDbFactory(db));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "done", "my notes", _userId.ToString(), ReviewRunId: proof.Id)));
+
+        // The effect is already in place: idempotent Ok, the rival's notes survive, no comment.
+        Assert.True(result.Success, result.Error);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Done, task.Status);
+        Assert.Equal("rival notes", task.ReviewNotes);
+        Assert.Equal(1, task.StateRevision);
+        Assert.Equal(0, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Failed_SameOutputAfterRivalCommit_IdempotentOk_NoDuplicate()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        // A rival failed report commits after the handler reads the row.
+        var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var db = RivalCommittingDb.Wrap(inner, () => inner.Tasks.Where(t => t.Id == task.Id).ExecuteUpdate(s => s
+            .SetProperty(t => t.Description, "Failed: X")
+            .SetProperty(t => t.StateRevision, t => t.StateRevision + 1)));
+
+        var handler = new FinishWorkHandler(new FixedDbFactory(db));
+        var result = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString())));
+
+        // The re-read shows Todo plus the exact note: idempotent Ok, nothing duplicated.
+        Assert.True(result.Success, result.Error);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Equal("Failed: X", task.Description);
+        Assert.Equal(1, task.StateRevision);
+        Assert.Equal(0, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Failed_WinnerBumpsStateRevision_EachLandingReportOnce()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        Assert.True((await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString())))).Success);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(1, task.StateRevision);
+
+        // A different report reads the fresh revision and lands: the token bumps again.
+        Assert.True((await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "Y", _userId.ToString())))).Success);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(2, task.StateRevision);
+        Assert.Equal("Failed: X\n\nFailed: Y", task.Description);
+        Assert.Equal(2, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
     private ReviewRun Proof(Guid taskId, string artifact = "check:exit0")
     {
         var run = ReviewRun.Start(_projectId, taskId, ReviewerType.Agent, Guid.NewGuid());
         run.Complete("checked", artifact);
         return run;
+    }
+
+    /// <summary>
+    /// Forwards every call to the wrapped context. On the first access to <c>Database</c> —
+    /// after the handler read the row, before its guarded update — it commits the rival's
+    /// state first, simulating a competing write that landed in between.
+    /// </summary>
+    private sealed class RivalCommittingDb : IBeaconDb
+    {
+        private readonly IBeaconDb _inner;
+        private readonly Action _rivalCommit;
+        private bool _rivalCommitted;
+
+        private RivalCommittingDb(IBeaconDb inner, Action rivalCommit)
+        {
+            _inner = inner;
+            _rivalCommit = rivalCommit;
+        }
+
+        public static IBeaconDb Wrap(IBeaconDb inner, Action rivalCommit) => new RivalCommittingDb(inner, rivalCommit);
+
+        public DatabaseFacade Database
+        {
+            get
+            {
+                if (!_rivalCommitted)
+                {
+                    _rivalCommitted = true;
+                    _rivalCommit();
+                }
+                return _inner.Database;
+            }
+        }
+
+        public Guid? FilterProjectId => _inner.FilterProjectId;
+        public Guid? FilterOrgId => _inner.FilterOrgId;
+        public bool FilterUnscoped => _inner.FilterUnscoped;
+
+        public DbSet<User> Users => _inner.Users;
+        public DbSet<OpenCodeConnection> OpenCodeConnections => _inner.OpenCodeConnections;
+        public DbSet<UserSession> Sessions => _inner.Sessions;
+        public DbSet<Org> Orgs => _inner.Orgs;
+        public DbSet<OrgMember> OrgMembers => _inner.OrgMembers;
+        public DbSet<OrgInvite> OrgInvites => _inner.OrgInvites;
+        public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
+        public DbSet<Project> Projects => _inner.Projects;
+        public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
+        public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
+        public DbSet<ApiToken> ApiTokens => _inner.ApiTokens;
+        public DbSet<TaskItem> Tasks => _inner.Tasks;
+        public DbSet<Label> Labels => _inner.Labels;
+        public DbSet<LabelPath> LabelPaths => _inner.LabelPaths;
+        public DbSet<Report> Reports => _inner.Reports;
+        public DbSet<Milestone> Milestones => _inner.Milestones;
+        public DbSet<TaskDependency> TaskDependencies => _inner.TaskDependencies;
+        public DbSet<TaskComment> TaskComments => _inner.TaskComments;
+        public DbSet<Constraint> Constraints => _inner.Constraints;
+        public DbSet<Decision> Decisions => _inner.Decisions;
+        public DbSet<DecisionTask> DecisionTasks => _inner.DecisionTasks;
+        public DbSet<LocalModelBackend> LocalModelBackends => _inner.LocalModelBackends;
+        public DbSet<AgentTemplate> AgentTemplates => _inner.AgentTemplates;
+        public DbSet<TaskKind> TaskKinds => _inner.TaskKinds;
+        public DbSet<TaskKindPhase> TaskKindPhases => _inner.TaskKindPhases;
+        public DbSet<TaskPhase> TaskPhases => _inner.TaskPhases;
+        public DbSet<RoleBinding> RoleBindings => _inner.RoleBindings;
+        public DbSet<Subtask> Subtasks => _inner.Subtasks;
+        public DbSet<PipelineSession> PipelineSessions => _inner.PipelineSessions;
+        public DbSet<ReviewVerdict> ReviewVerdicts => _inner.ReviewVerdicts;
+        public DbSet<DaemonDevice> DaemonDevices => _inner.DaemonDevices;
+        public DbSet<WorkstationCommand> WorkstationCommands => _inner.WorkstationCommands;
+        public DbSet<ProjectRuntime> ProjectRuntimes => _inner.ProjectRuntimes;
+        public DbSet<DeviceHostSample> DeviceHostSamples => _inner.DeviceHostSamples;
+        public DbSet<TaskStep> TaskSteps => _inner.TaskSteps;
+        public DbSet<ChatSession> ChatSessions => _inner.ChatSessions;
+        public DbSet<ChatPart> ChatParts => _inner.ChatParts;
+        public DbSet<EvalRun> EvalRuns => _inner.EvalRuns;
+        public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
+        public DbSet<ContextSection> ContextSections => _inner.ContextSections;
+        public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
+
+        public EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class
+            => _inner.Entry(entity);
+
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+            => _inner.SaveChangesAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => _inner.DisposeAsync();
+    }
+
+    private sealed class FixedDbFactory : IBeaconDbFactory
+    {
+        private readonly IBeaconDb _db;
+
+        public FixedDbFactory(IBeaconDb db) => _db = db;
+
+        public IBeaconDb CreateDbContext() => _db;
     }
 }

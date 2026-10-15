@@ -8,7 +8,12 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
 
-/// <summary>Finishes a task as done, failed, skipped, or partial, including review-proof and actor-access checks.</summary>
+/// <summary>
+/// Finishes a task as done, failed, skipped, or partial, including review-proof and actor-access checks.
+/// Guarded finishes (done, failed) are compare-and-swapped on StateRevision: exactly one
+/// rival wins, and a loser that cannot prove its effect is already in place gets
+/// ErrorKind.Conflict (409) with no side effects.
+/// </summary>
 public class FinishWorkHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
@@ -36,10 +41,14 @@ public class FinishWorkHandler
 
         var resultType = command.Request.Result.ToLowerInvariant();
         var expectedStatus = task.Status;
+        var expectedRevision = task.StateRevision;
         var guardedTransition = resultType is "done" or "failed" or "error";
         var failedNote = resultType is "failed" or "error"
             ? "Failed: " + (command.Request.Output ?? "No output provided")
             : null;
+        // One short transaction: the state write and its "Work finished" comment commit
+        // together, so a winning finish never leaves the row changed without the comment.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
         switch (resultType)
         {
             case "done":
@@ -110,24 +119,28 @@ public class FinishWorkHandler
 
         if (guardedTransition)
         {
-            // Guarded transition: only takes effect while the status is still the one validated above.
-            // A failed report appends its note atomically in SQL, so concurrent reports both land.
-            // A done finish never rewrites the description, so it cannot clobber a concurrent note append.
+            // Guarded transition: only takes effect while the status and the state revision
+            // are still the ones validated above. The revision comparison is what makes this
+            // a true compare-and-swap: a failed report keeps the task Todo, so a rival that
+            // read the row before the winner committed still sees the matching status —
+            // its stale revision is what rejects it at the database.
             var updated = failedNote is null
                 ? await db.Tasks
-                    .Where(t => t.Id == taskId && t.Status == expectedStatus)
+                    .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(t => t.Status, task.Status)
                         .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                        .SetProperty(t => t.ReviewNotes, task.ReviewNotes), ct)
+                        .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                        .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct)
                 : await db.Tasks
-                    .Where(t => t.Id == taskId && t.Status == expectedStatus)
+                    .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(t => t.Status, task.Status)
                         .SetProperty(t => t.CompletedAt, task.CompletedAt)
                         .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
                         .SetProperty(t => t.Description,
-                            t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote), ct);
+                            t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote)
+                        .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct);
             if (updated == 0)
             {
                 // Lost the race: classify by re-reading. A finish whose effect is already in
@@ -137,12 +150,19 @@ public class FinishWorkHandler
                 if (current is not null)
                 {
                     if (resultType == "done" && current.Status == TaskItemStatus.Done)
+                    {
+                        await tx.CommitAsync(ct);
                         return Result.Ok();
+                    }
                     if (resultType is "failed" or "error"
                         && current.Status == TaskItemStatus.Todo
                         && HasNote(current.Description, "Failed: " + (command.Request.Output ?? "No output provided")))
+                    {
+                        await tx.CommitAsync(ct);
                         return Result.Ok();
+                    }
                 }
+                await tx.RollbackAsync(ct);
                 return Result.Failure("Task state changed while finishing; retry.", ErrorKind.Conflict);
             }
         }
@@ -157,6 +177,7 @@ public class FinishWorkHandler
         }
 
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return Result.Ok();
     }
 

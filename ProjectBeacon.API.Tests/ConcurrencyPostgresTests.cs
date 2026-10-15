@@ -607,7 +607,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     }
 
     [Fact]
-    public async Task ConcurrentFinishWorkFailed_DifferentOutputs_BothNotesLand_ReplaySuppressed()
+    public async Task ConcurrentFinishWorkFailed_DifferentOutputs_OneWinner_LoserConflicts_RetryLands()
     {
         _postgres.RequirePostgres();
         Guid taskId, userId;
@@ -639,12 +639,16 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             }
         }
 
-        // Both reports read a Todo task, and a failed report keeps the task Todo, so both
-        // guarded updates land. The note is appended atomically in SQL, so both notes
-        // survive — no last-write-wins clobber.
+        // Both reports read a Todo task, and a failed report keeps the task Todo, so the
+        // status guard alone cannot pick a winner. The state revision does: exactly one
+        // guarded update matches revision 0; the rival gets a conflict and no side effects.
         var results = await Task.WhenAll(Run("X"), Run("Y"));
-        Assert.All(results, r => Assert.True(r.Success, r.Error));
+        var winnerIndex = results[0].Success ? 0 : 1;
+        Assert.Equal(1, results.Count(r => r.Success));
+        var loser = results.Single(r => !r.Success);
+        Assert.Equal(ErrorKind.Conflict, loser.Kind);
 
+        var loserOutput = winnerIndex == 0 ? "Y" : "X";
         await using (var db = _postgres.CreateAdminContext())
         {
             using (TenantScope.EnterUnscoped())
@@ -652,14 +656,17 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
                 Assert.Equal(TaskItemStatus.Todo, row.Status);
                 var parts = (row.Description ?? "").Split("\n\n");
-                Assert.Equal(1, parts.Count(p => p == "Failed: X"));
-                Assert.Equal(1, parts.Count(p => p == "Failed: Y"));
-                Assert.Equal(2, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(1, parts.Count(p => p == "Failed: " + (loserOutput == "Y" ? "X" : "Y")));
+                Assert.Equal(0, parts.Count(p => p == "Failed: " + loserOutput));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
             }
         }
 
-        // A sequential replay of either report is suppressed: no third note, no third comment.
-        Assert.True((await Run("X")).Success);
+        // The losing report retries with a fresh read: its note and comment land.
+        Assert.True((await Run(loserOutput)).Success);
+
+        // A sequential replay of the same report is suppressed: no duplicate note or comment.
+        Assert.True((await Run(loserOutput)).Success);
         await using (var db = _postgres.CreateAdminContext())
         {
             using (TenantScope.EnterUnscoped())
@@ -669,6 +676,360 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 Assert.Equal(1, after.Count(p => p == "Failed: X"));
                 Assert.Equal(1, after.Count(p => p == "Failed: Y"));
                 Assert.Equal(2, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentFinishWorkDoneVsFailed_FromTodo_ExactlyOneWinner_RetryLands()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId, runId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("FW Mix Todo Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("FW Mix Todo Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("fw-mix-todo-user", "fw-mix-todo-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("fw mix todo race", project.Id);
+            seed.Tasks.Add(task);
+            var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
+            run.Complete("checked", "check:exit0");
+            seed.ReviewRuns.Add(run);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+            runId = run.Id;
+        }
+
+        var factory = _postgres.CreateFactory();
+        async Task<Result> RunDone()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new FinishWorkHandler(factory)
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "done", "done-output", userId.ToString(), ReviewRunId: runId)));
+            }
+        }
+        async Task<Result> RunFailed()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new FinishWorkHandler(factory)
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "failed", "X", userId.ToString())));
+            }
+        }
+
+        var results = await Task.WhenAll(RunDone(), RunFailed());
+
+        // The status guard is ambiguous here: the done winner leaves no matching status for
+        // the failed rival's stale read, and vice versa. The state revision picks exactly
+        // one winner; the loser conflicts without side effects.
+        Assert.Equal(1, results.Count(r => r.Success));
+        var loser = results.Single(r => !r.Success);
+        Assert.Equal(ErrorKind.Conflict, loser.Kind);
+        var doneWon = results[0].Success;
+
+        await using (var db = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var parts = (row.Description ?? "").Split("\n\n");
+                Assert.Equal(doneWon ? 0 : 1, parts.Count(p => p == "Failed: X"));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                if (doneWon)
+                {
+                    Assert.Equal(TaskItemStatus.Done, row.Status);
+                    Assert.Equal("done-output", row.ReviewNotes);
+                }
+                else
+                {
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                }
+            }
+        }
+
+        // The loser retries with a fresh read and lands.
+        var retry = doneWon ? RunFailed() : RunDone();
+        Assert.True((await retry).Success);
+
+        await using (var db = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var parts = (row.Description ?? "").Split("\n\n");
+                Assert.Equal(1, parts.Count(p => p == "Failed: X"));
+                var comments = await db.TaskComments.Where(c => c.TaskId == taskId).ToListAsync();
+                Assert.Equal(2, comments.Count);
+                Assert.Contains(comments, c => c.Content.Contains("done"));
+                Assert.Contains(comments, c => c.Content.Contains("failed"));
+                if (doneWon)
+                {
+                    // The failed retry reopens the Done task to Todo (existing semantics).
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                }
+                else
+                {
+                    // The done retry completes the task; the failure note stays as history.
+                    Assert.Equal(TaskItemStatus.Done, row.Status);
+                    Assert.Equal("done-output", row.ReviewNotes);
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentFinishWorkDoneVsFailed_FromInProgress_ExactlyOneWinner_RetryLands()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId, runId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("FW Mix Prog Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("FW Mix Prog Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("fw-mix-prog-user", "fw-mix-prog-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("fw mix prog race", project.Id);
+            task.TransitionTo(TaskItemStatus.InProgress);
+            task.SetReviewNotes("seed notes");
+            seed.Tasks.Add(task);
+            var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
+            run.Complete("checked", "check:exit0");
+            seed.ReviewRuns.Add(run);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+            runId = run.Id;
+        }
+
+        var factory = _postgres.CreateFactory();
+        async Task<Result> RunDone()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new FinishWorkHandler(factory)
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "done", "done-output", userId.ToString(), ReviewRunId: runId)));
+            }
+        }
+        async Task<Result> RunFailed()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new FinishWorkHandler(factory)
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "failed", "X", userId.ToString())));
+            }
+        }
+
+        var results = await Task.WhenAll(RunDone(), RunFailed());
+
+        Assert.Equal(1, results.Count(r => r.Success));
+        var loser = results.Single(r => !r.Success);
+        Assert.Equal(ErrorKind.Conflict, loser.Kind);
+        var doneWon = results[0].Success;
+
+        await using (var db = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var parts = (row.Description ?? "").Split("\n\n");
+                Assert.Equal(doneWon ? 0 : 1, parts.Count(p => p == "Failed: X"));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                if (doneWon)
+                {
+                    Assert.Equal(TaskItemStatus.Done, row.Status);
+                    Assert.Equal("done-output", row.ReviewNotes);
+                }
+                else
+                {
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                }
+            }
+        }
+
+        var retry = doneWon ? RunFailed() : RunDone();
+        Assert.True((await retry).Success);
+
+        await using (var db = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var parts = (row.Description ?? "").Split("\n\n");
+                Assert.Equal(1, parts.Count(p => p == "Failed: X"));
+                var comments = await db.TaskComments.Where(c => c.TaskId == taskId).ToListAsync();
+                Assert.Equal(2, comments.Count);
+                Assert.Contains(comments, c => c.Content.Contains("done"));
+                Assert.Contains(comments, c => c.Content.Contains("failed"));
+                if (doneWon)
+                {
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                }
+                else
+                {
+                    Assert.Equal(TaskItemStatus.Done, row.Status);
+                    Assert.Equal("done-output", row.ReviewNotes);
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentFinishWorkFailed_SameOutput_BothOk_SingleNoteSingleComment()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("FW Same Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("FW Same Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("fw-same-user", "fw-same-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("fw same race", project.Id);
+            seed.Tasks.Add(task);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+        }
+
+        var factory = _postgres.CreateFactory();
+        async Task<Result> Run()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new FinishWorkHandler(factory)
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "failed", "X", userId.ToString())));
+            }
+        }
+
+        // The loser's guarded update misses the bumped revision, but the re-read shows the
+        // report's effect is already in place — Todo plus the exact note — so it is an
+        // idempotent Ok. Neither the note nor the comment may be duplicated.
+        var results = await Task.WhenAll(Run(), Run());
+        Assert.All(results, r => Assert.True(r.Success, r.Error));
+
+        await using (var db = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                Assert.Equal(TaskItemStatus.Todo, row.Status);
+                Assert.Equal(1, (row.Description ?? "").Split("\n\n").Count(p => p == "Failed: X"));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+            }
+        }
+
+        // A sequential replay stays suppressed.
+        Assert.True((await Run()).Success);
+        await using (var db = _postgres.CreateAdminContext())
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                Assert.Equal(1, (row.Description ?? "").Split("\n\n").Count(p => p == "Failed: X"));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentReviewVerdictVsFailed_FromReviewing_NoStaleResurrection()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("Verdict Failed Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("Verdict Failed Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("verdict-failed-user", "verdict-failed-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("verdict failed race", project.Id);
+            task.StartPipeline();
+            task.EnterExecuting();
+            task.EnterReview();
+            seed.Tasks.Add(task);
+            seed.PipelineSessions.Add(PipelineSession.Create(task.Id, project.Id, PipelineRole.Review, "review prompt"));
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+        }
+
+        var factory = _postgres.CreateFactory();
+        async Task<Result<PipelineStateDto>> RunVerdict()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new RecordReviewVerdictHandler(factory)
+                    .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(taskId, ReviewVerdictKind.Approve, "looks good")));
+            }
+        }
+        async Task<Result> RunFailed()
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                return await new FinishWorkHandler(factory)
+                    .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "failed", "X", userId.ToString())));
+            }
+        }
+
+        var verdictTask = RunVerdict();
+        var failedTask = RunFailed();
+        var verdict = await verdictTask;
+        var failed = await failedTask;
+
+        // The failed report always lands: an approve does not move the status, so the
+        // failed guard still matches. The single verdict either wins its stage claim or
+        // loses at it — a stale in-memory status can never be written back.
+        Assert.True(failed.Success, failed.Error);
+        if (!verdict.Success)
+            Assert.Equal("Review state changed while recording verdict; retry.", verdict.Error);
+
+        await using var db = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            Assert.Equal(TaskItemStatus.Todo, row.Status);
+            Assert.Equal(1, (row.Description ?? "").Split("\n\n").Count(p => p == "Failed: X"));
+            Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+            if (verdict.Success)
+            {
+                Assert.Equal(TaskPipelineStage.Approved, row.PipelineStage);
+                Assert.Equal(1, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId));
+                Assert.Equal(1, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId));
+                var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review);
+                Assert.Equal(SessionStatus.Closed, session.Status);
+            }
+            else
+            {
+                Assert.Equal(TaskPipelineStage.Reviewing, row.PipelineStage);
+                Assert.Equal(0, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId));
+                Assert.Equal(0, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId));
+                var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review);
+                Assert.Equal(SessionStatus.Ready, session.Status);
             }
         }
     }

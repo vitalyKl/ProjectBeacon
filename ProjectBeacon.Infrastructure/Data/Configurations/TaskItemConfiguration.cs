@@ -23,6 +23,7 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.CompletedAt);
         entity.Property(e => e.PipelineStage).HasConversion<string>();
+        entity.Property(e => e.StateRevision).HasDefaultValue(0).IsRequired();
 
         entity.HasOne(e => e.Project)
             .WithMany(e => e.Tasks)

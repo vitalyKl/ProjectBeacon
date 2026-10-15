@@ -28,6 +28,13 @@ public class TaskItem : Entity, IProjectScoped
     public DateTime? CompletedAt { get; private set; }
     public TaskPipelineStage? PipelineStage { get; private set; }
 
+    /// <summary>
+    /// Optimistic-concurrency token for guarded state transitions. Guarded finish
+    /// transitions compare-and-swap it in SQL, so a rival report that read a stale
+    /// row is rejected at the database even when its status guard still matches.
+    /// </summary>
+    public int StateRevision { get; private set; }
+
     public Project Project { get; private set; } = null!;
     public Label? Label { get; private set; }
     public Milestone? Milestone { get; private set; }

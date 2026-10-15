@@ -43,6 +43,10 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
             subtask.AssignPhase(phase.Id);
         db.Subtasks.Add(subtask);
 
+        // Unguarded stage write by design: this is the only Planning→Executing claimant
+        // and never touches StateRevision, so it cannot create a second finish-work winner.
+        // A concurrent finish_work that commits first may leave the stage active on a Done
+        // task; pipeline claims re-check the current status before writing.
         try
         {
             task.EnterExecuting();

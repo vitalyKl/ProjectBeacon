@@ -1605,6 +1605,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<int>("StateRevision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");

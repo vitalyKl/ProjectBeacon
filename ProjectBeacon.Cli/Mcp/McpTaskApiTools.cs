@@ -42,7 +42,7 @@ internal static partial class McpApiTools
             () => Props(("stepId", "string", true), ("done", "boolean", true)), StepToggle),
         new("delete_task_step", "Delete a checklist step.",
             () => Props(("stepId", "string", true)), StepDelete),
-        new("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof.",
+        new("finish_work", "Finish work on a task. result: done, failed, skipped, or partial. done requires a completed review run with a target and check artifact (reviewRunId). reviewerRun alone is not proof. On a 409 conflict a competing finish won; re-read the task and retry.",
             FinishSchema, Finish),
     ];
 

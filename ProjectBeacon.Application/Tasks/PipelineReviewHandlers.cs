@@ -119,7 +119,10 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         if (!hasReviewSession)
             return Result.Failure<PipelineStateDto>("No review session found for this task.");
         // All mutations below are staged in memory; the guarded claim below is the single
-        // write gate, and SaveChanges runs only for the winning verdict.
+        // write gate, and SaveChanges runs only for the winning verdict. The status is
+        // captured before any mutation so a concurrent finish that changed it cannot be
+        // resurrected by a stale claim.
+        var expectedStatus = task.Status;
 
         Guid? subtaskId = null;
         if (command.Request.Kind == ReviewVerdictKind.ReopenSubtask)
@@ -171,7 +174,7 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
             session.Close();
 
         var claimed = await db.Tasks
-            .Where(t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Reviewing)
+            .Where(t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Reviewing && t.Status == expectedStatus)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(t => t.PipelineStage, task.PipelineStage)
                 .SetProperty(t => t.Status, task.Status), ct);
