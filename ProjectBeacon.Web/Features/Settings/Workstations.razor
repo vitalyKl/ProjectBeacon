@@ -172,6 +172,7 @@
     private string _projectsRoot = string.Empty;
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
+    private long _wsRevision;
     private string _probeGit = "-";
     private string _probeOpencode = "-";
     private string _probeNode = "-";
@@ -254,6 +255,7 @@
     {
         var device = _devices.FirstOrDefault(d => d.Id == deviceId);
         if (device is null) return;
+        _wsRevision = device.DesiredRevision;
         FillProbe(device.ProbeJson);
         try
         {
@@ -347,6 +349,7 @@
         {
             var payload = JsonSerializer.Serialize(new
             {
+                revision = _wsRevision,
                 modelsRoot = _modelsRoot,
                 opencodeDataDir = _historyDir,
                 projectsRoot = _projectsRoot,

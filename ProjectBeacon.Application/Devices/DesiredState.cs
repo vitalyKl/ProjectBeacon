@@ -9,26 +9,26 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public static class DesiredState
 {
-    public static async Task BumpUserAsync(IBeaconDb db, Guid userId, CancellationToken ct)
+    /// <summary>
+    /// Single atomic increment: concurrent bumps each land on a unique revision, so no
+    /// re-sync signal is ever lost to a read-modify-write race.
+    /// </summary>
+    public static Task BumpUserAsync(IBeaconDb db, Guid userId, CancellationToken ct)
     {
         if (userId == Guid.Empty)
-            return;
-        var devices = await db.DaemonDevices
+            return Task.CompletedTask;
+        return db.DaemonDevices
             .Where(d => d.UserId == userId && d.RevokedAt == null)
-            .ToListAsync(ct);
-        foreach (var device in devices)
-            device.BumpDesired();
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.DesiredRevision, d => d.DesiredRevision + 1), ct);
     }
 
-    public static async Task BumpProjectAsync(IBeaconDb db, Guid projectId, CancellationToken ct)
+    public static Task BumpProjectAsync(IBeaconDb db, Guid projectId, CancellationToken ct)
     {
         if (projectId == Guid.Empty)
-            return;
-        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
+            return Task.CompletedTask;
+        return db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(r => r.ProjectId == projectId)
-            .ToListAsync(ct);
-        foreach (var runtime in runtimes)
-            runtime.BumpConfig();
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ConfigRevision, r => r.ConfigRevision + 1), ct);
     }
 
     public static async Task BumpUserProjectsAsync(IBeaconDb db, Guid userId, CancellationToken ct)
@@ -41,11 +41,9 @@ public static class DesiredState
             .ToListAsync(ct);
         if (deviceIds.Count == 0)
             return;
-        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
+        await db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(r => deviceIds.Contains(r.DeviceId))
-            .ToListAsync(ct);
-        foreach (var runtime in runtimes)
-            runtime.BumpConfig();
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ConfigRevision, r => r.ConfigRevision + 1), ct);
     }
 
     public static bool TryStampWorkstation(string? payloadJson, out string stored, out string? error)

@@ -37,6 +37,9 @@ public class FinishWorkHandler
         var resultType = command.Request.Result.ToLowerInvariant();
         var expectedStatus = task.Status;
         var guardedTransition = resultType is "done" or "failed" or "error";
+        var failedNote = resultType is "failed" or "error"
+            ? "Failed: " + (command.Request.Output ?? "No output provided")
+            : null;
         switch (resultType)
         {
             case "done":
@@ -60,6 +63,8 @@ public class FinishWorkHandler
                     : FormatReview(command.Request.Review, command.Request.Output);
                 if (string.IsNullOrWhiteSpace(notes))
                     return Result.Failure("done requires review notes or output.");
+                if (task.Status == TaskItemStatus.Done)
+                    return Result.Ok();
                 try
                 {
                     task.SetReviewNotes(notes);
@@ -78,19 +83,26 @@ public class FinishWorkHandler
 
             case "failed":
             case "error":
-                task.Update(description: AppendNote(task.Description, "Failed: " + (command.Request.Output ?? "No output provided")));
+                // Sequential replay: the report's effect (Todo + this exact note) is already
+                // in place, so a repeat must not append the note or comment again.
+                if (task.Status == TaskItemStatus.Todo && HasNote(task.Description, failedNote!))
+                    return Result.Ok();
                 task.ResetToTodo();
                 break;
 
             case "skipped":
             case "partial":
-                // No state transition: the description append is not guarded.
-                await db.Tasks
-                    .Where(t => t.Id == taskId)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(t => t.Description,
-                            AppendNote(task.Description, "Note: " + (command.Request.Output ?? "No output provided"))), ct);
-                break;
+                {
+                    var note = "Note: " + (command.Request.Output ?? "No output provided");
+                    // No state transition. The note appends atomically in SQL so concurrent
+                    // reports both land instead of clobbering each other.
+                    await db.Tasks
+                        .Where(t => t.Id == taskId)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(t => t.Description,
+                                t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note), ct);
+                    break;
+                }
 
             default:
                 return Result.Failure("Invalid result type. Use 'done', 'failed', 'skipped', or 'partial'.");
@@ -99,15 +111,40 @@ public class FinishWorkHandler
         if (guardedTransition)
         {
             // Guarded transition: only takes effect while the status is still the one validated above.
-            var updated = await db.Tasks
-                .Where(t => t.Id == taskId && t.Status == expectedStatus)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.Status, task.Status)
-                    .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                    .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
-                    .SetProperty(t => t.Description, task.Description), ct);
+            // A failed report appends its note atomically in SQL, so concurrent reports both land.
+            // A done finish never rewrites the description, so it cannot clobber a concurrent note append.
+            var updated = failedNote is null
+                ? await db.Tasks
+                    .Where(t => t.Id == taskId && t.Status == expectedStatus)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(t => t.Status, task.Status)
+                        .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                        .SetProperty(t => t.ReviewNotes, task.ReviewNotes), ct)
+                : await db.Tasks
+                    .Where(t => t.Id == taskId && t.Status == expectedStatus)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(t => t.Status, task.Status)
+                        .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                        .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                        .SetProperty(t => t.Description,
+                            t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote), ct);
             if (updated == 0)
-                return Result.Failure("Task state changed while finishing; retry.");
+            {
+                // Lost the race: classify by re-reading. A finish whose effect is already in
+                // place is an idempotent replay; anything else is a conflict.
+                var current = await db.Tasks.AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+                if (current is not null)
+                {
+                    if (resultType == "done" && current.Status == TaskItemStatus.Done)
+                        return Result.Ok();
+                    if (resultType is "failed" or "error"
+                        && current.Status == TaskItemStatus.Todo
+                        && HasNote(current.Description, "Failed: " + (command.Request.Output ?? "No output provided")))
+                        return Result.Ok();
+                }
+                return Result.Failure("Task state changed while finishing; retry.", ErrorKind.Conflict);
+            }
         }
 
         if (Guid.TryParse(command.Request.ActorId, out var userId))
@@ -156,8 +193,13 @@ public class FinishWorkHandler
         return sb.ToString().Trim();
     }
 
-    private static string AppendNote(string? current, string note)
-        => string.IsNullOrEmpty(current) ? note : current + "\n\n" + note;
+    /// <summary>
+    /// True when <paramref name="note"/> is a complete "\n\n"-separated segment of
+    /// <paramref name="description"/> — the exact shape the atomic SQL append produces.
+    /// </summary>
+    private static bool HasNote(string? description, string note)
+        => !string.IsNullOrEmpty(description)
+            && description.Split("\n\n").Any(part => part == note);
 
     private static bool FixedTimeEquals(string a, string b)
     {

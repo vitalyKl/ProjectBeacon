@@ -24,7 +24,7 @@ public sealed partial class DeviceHandlerTests
 
         var saved = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
-                deviceId, user.Id, WorkstationCommandKind.SaveWorkstation, """{"modelsRoot":"D:\\\\models"}""", null)));
+                deviceId, user.Id, WorkstationCommandKind.SaveWorkstation, """{"modelsRoot":"D:\\\\models","revision":0}""", null)));
         Assert.True(saved.Success, saved.Error);
 
         var beat = await new HeartbeatDeviceHandler(Factory()).HandleAsync(

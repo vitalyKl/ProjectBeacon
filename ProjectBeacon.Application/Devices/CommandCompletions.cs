@@ -198,14 +198,18 @@ internal sealed class DesiredStateCompletion : ICommandCompletion
             return;
         if (row.Kind == WorkstationCommandKind.ApplyOpencode && row.ProjectId is { } projectId)
         {
-            var runtime = await db.ProjectRuntimes.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.DeviceId == row.DeviceId, ct);
-            runtime?.MarkConfigApplied(value);
+            // Monotone and bounded by the live revision: a stale ack can never move the applied
+            // revision backwards or acknowledge a revision the config no longer carries.
+            await db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(r => r.ProjectId == projectId && r.DeviceId == row.DeviceId
+                    && r.AppliedConfigRevision < value && r.ConfigRevision >= value)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.AppliedConfigRevision, value), ct);
             return;
         }
         if (row.Kind is not (WorkstationCommandKind.SaveWorkstation or WorkstationCommandKind.ReconcileDesired))
             return;
-        var device = await db.DaemonDevices.FirstOrDefaultAsync(d => d.Id == row.DeviceId, ct);
-        device?.MarkApplied(value);
+        await db.DaemonDevices
+            .Where(d => d.Id == row.DeviceId && d.AppliedRevision < value && d.DesiredRevision >= value)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.AppliedRevision, value), ct);
     }
 }

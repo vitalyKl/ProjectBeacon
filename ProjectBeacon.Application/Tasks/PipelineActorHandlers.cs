@@ -85,6 +85,21 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
         if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
             return Result.Failure<PipelineSessionDto>("Subtask is already finished.");
 
+        if (subtask.Status == SubtaskStatus.InProgress)
+        {
+            // The subtask was already claimed. An open actor session means an earlier start
+            // won it; return that session instead of spawning a second one.
+            var open = (await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct))
+                .FirstOrDefault(s => s.SubtaskId == subtask.Id);
+            if (open is not null)
+                return Result.Ok(PipelineMappers.ToDto(open));
+            // No open session: a crash between the claim commit and the session insert left
+            // the subtask stuck. Failing deterministically avoids a double spawn; recover by
+            // failing the subtask and reopening it through a review verdict.
+            return Result.Failure<PipelineSessionDto>(
+                "Subtask is in progress without an open session. Fail and reopen it to retry.");
+        }
+
         var claimedStage = false;
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
@@ -252,6 +267,11 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
         if (subtask is null)
             return Result.Failure<PipelineStateDto>("Subtask not found.");
+
+        if (subtask.Status == SubtaskStatus.Done)
+            return Result.Failure<PipelineStateDto>("Subtask is already done; reopen it through a review verdict.");
+        if (subtask.Status == SubtaskStatus.Failed)
+            return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
 
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {

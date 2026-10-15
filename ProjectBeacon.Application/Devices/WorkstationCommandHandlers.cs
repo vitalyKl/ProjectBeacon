@@ -43,8 +43,31 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         {
             if (!DesiredState.TryStampWorkstation(payloadJson, out var stored, out var error))
                 return Result.Failure<WorkstationCommandDto>(error ?? "Invalid payload.");
-            device.SetDesiredWorkstation(stored);
-            payloadJson = DesiredState.WithRevision(stored, device.DesiredRevision);
+            // Optimistic concurrency: the payload must declare the revision its content was
+            // based on. The JSON and the incremented revision commit as one UPDATE guarded by
+            // that base revision, so a stale client's content can never be stamped as the
+            // latest revision — it gets a conflict and must reload and re-apply its edits.
+            var baseRevision = DesiredState.ReadRevision(payloadJson);
+            if (baseRevision is null)
+                return Result.Failure<WorkstationCommandDto>(
+                    "payload must include the revision the content is based on.", ErrorKind.Conflict);
+            var written = await db.DaemonDevices
+                .Where(d => d.Id == device.Id && d.DesiredRevision == baseRevision.Value)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(d => d.DesiredWorkstationJson, stored)
+                    .SetProperty(d => d.DesiredRevision, baseRevision.Value + 1), ct);
+            if (written == 0)
+            {
+                var current = await db.DaemonDevices.AsNoTracking()
+                    .Where(d => d.Id == device.Id)
+                    .Select(d => (long?)d.DesiredRevision)
+                    .FirstOrDefaultAsync(ct);
+                return Result.Failure<WorkstationCommandDto>(current is null
+                    ? "Device not found."
+                    : $"Workstation config moved from revision {baseRevision.Value} to {current} while saving; reload and re-apply your changes.",
+                    ErrorKind.Conflict);
+            }
+            payloadJson = DesiredState.WithRevision(stored, baseRevision.Value + 1);
         }
         if (CommandSandbox.IsProjectKind(command.Request.Kind))
         {

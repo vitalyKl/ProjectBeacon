@@ -49,7 +49,20 @@ public class ChangeTaskStatusHandler : ICommandHandler<ChangeTaskStatusCommand, 
                 .SetProperty(t => t.Status, task.Status)
                 .SetProperty(t => t.CompletedAt, task.CompletedAt), ct);
         if (updated == 0)
-            return Result.Failure<TaskItemDto>("Task state changed while transitioning; retry.");
+        {
+            // Lost the race: an identical transition already applied is an idempotent replay;
+            // any other state is a genuine conflict.
+            var current = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == task.Id, ct);
+            if (current is not null && current.Status == command.Request.Status)
+                return Result.Ok(new TaskItemDto(
+                    current.Id, current.Title, current.Description, current.Status.ToString(),
+                    current.Priority, current.Type,
+                    current.Status == TaskItemStatus.InProgress ? current.SubStage : null,
+                    current.ProjectId, current.LabelId, current.MilestoneId, current.ReviewNotes,
+                    current.CreatedAt, current.CompletedAt, [], []));
+            return Result.Failure<TaskItemDto>("Task state changed while transitioning; retry.", ErrorKind.Conflict);
+        }
 
         return Result.Ok(new TaskItemDto(
             task.Id, task.Title, task.Description, task.Status.ToString(),

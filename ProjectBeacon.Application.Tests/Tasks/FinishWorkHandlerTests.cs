@@ -176,6 +176,106 @@ public sealed class FinishWorkHandlerTests : IDisposable
         Assert.Contains("did not pass", result.Error);
     }
 
+    [Fact]
+    public async Task Done_ReplayWithDifferentReviewRun_IsIdempotent_KeepsFirstNotes()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var firstProof = Proof(task.Id);
+        var secondProof = Proof(task.Id);
+        _db.ReviewRuns.Add(firstProof);
+        _db.ReviewRuns.Add(secondProof);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var first = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "done", "first notes", _userId.ToString(), ReviewRunId: firstProof.Id)));
+        Assert.True(first.Success, first.Error);
+
+        // A repeated done — even citing a different valid review run — must not write again.
+        var replay = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "done", "second notes", _userId.ToString(), ReviewRunId: secondProof.Id)));
+        Assert.True(replay.Success, replay.Error);
+
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Done, task.Status);
+        Assert.Equal("first notes", task.ReviewNotes);
+        Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Failed_SameOutputReplay_IsSuppressed()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var first = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString())));
+        Assert.True(first.Success, first.Error);
+
+        // The same failure report again: the effect is already in place, so it is a no-op.
+        var replay = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString())));
+        Assert.True(replay.Success, replay.Error);
+
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Equal("Failed: X", task.Description);
+        Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Failed_PrefixCollision_IsNotSuppressed()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var first = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString())));
+        Assert.True(first.Success, first.Error);
+
+        // "Failed: XY" is not a "\n\n" segment of "Failed: X", so it must be appended.
+        var second = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "XY", _userId.ToString())));
+        Assert.True(second.Success, second.Error);
+
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Equal("Failed: X\n\nFailed: XY", task.Description);
+        Assert.Equal(2, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Done_ReplayWithFailedReviewRun_Fails()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        var proof = Proof(task.Id);
+        var failedRun = ReviewRun.Start(_projectId, task.Id, ReviewerType.Agent, Guid.NewGuid());
+        failedRun.Fail("tests failed");
+        _db.ReviewRuns.Add(proof);
+        _db.ReviewRuns.Add(failedRun);
+        await _db.SaveChangesAsync();
+
+        var handler = new FinishWorkHandler(HandlerSqlite.Factory(_connection));
+        var first = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "done", "ok", _userId.ToString(), ReviewRunId: proof.Id)));
+        Assert.True(first.Success, first.Error);
+
+        // The task is already done, but the cited review run failed, so validation rejects it.
+        var replay = await handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "done", "ok", _userId.ToString(), ReviewRunId: failedRun.Id)));
+        Assert.False(replay.Success);
+        Assert.Contains("did not pass", replay.Error);
+        Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
     private ReviewRun Proof(Guid taskId, string artifact = "check:exit0")
     {
         var run = ReviewRun.Start(_projectId, taskId, ReviewerType.Agent, Guid.NewGuid());
