@@ -63,6 +63,14 @@ jobs:
           BASE = "TestResults"
           EXPECTED_MODULES = 7
           MIN_TOTAL = 1234
+          # The only tests allowed to be NotExecuted on Linux: platform-conditional
+          # skips that cannot execute there. Anything else (e.g. a Postgres opt-out
+          # leaking into this authoritative lane) fails the guard.
+          EXPECTED_NOT_EXECUTED = {
+              # mklink /J junctions exist only on Windows; RequireJunctionSupport()
+              # skips this test on non-Windows platforms.
+              "ProjectBeacon.Application.Tests.WorkspacePathTests.ResolveInsideRoot_RejectsMklinkJunction",
+          }
 
           def unit_test_results(path):
               tree = ET.parse(path)
@@ -85,17 +93,18 @@ jobs:
                   raise SystemExit(f"::error::Symlink security test {t} did not run to Passed (outcome={outcome!r}); the path-escape gate is inactive")
 
           total = 0
-          not_executed = []
+          skipped = []
           for path in paths:
               for r in unit_test_results(path):
                   total += 1
                   if r.get("outcome") == "NotExecuted":
-                      not_executed.append(f"{path}: {r.get('testName')}")
+                      skipped.append(r.get("testName"))
           if total < MIN_TOTAL:
               raise SystemExit(f"::error::Only {total} test results reported; expected at least {MIN_TOTAL}")
-          if not_executed:
-              raise SystemExit("::error::Tests skipped on Linux (postgres opt-out or inactive runtime probe):\n" + "\n".join(not_executed))
-          print(f"OK: {total} results, 0 skipped, {len(paths)} modules, symlink gates Passed")
+          unexpected = sorted(set(skipped) - EXPECTED_NOT_EXECUTED)
+          if unexpected:
+              raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\n" + "\n".join(unexpected))
+          print(f"OK: {total} results, {len(skipped)} platform-conditional skips, {len(paths)} modules, symlink gates Passed")
           PY
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
