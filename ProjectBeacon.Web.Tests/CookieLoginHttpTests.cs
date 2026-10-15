@@ -79,6 +79,49 @@ public sealed class CookieLoginHttpTests
     }
 
     [Fact]
+    public async Task CookieLogin_Production_PlainHttp_SetsSecureCookie()
+    {
+        // In Production the auth cookie must always carry Secure, even on plain HTTP.
+        await using var factory = new WebProductionTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var password = await WebTestFactory.GetBootstrapPasswordAsync(client);
+
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["login"] = "admin",
+            ["password"] = password
+        });
+        var response = await client.PostAsync("/v1/auth/cookie-login", form);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var attributes = GetBeaconAuthCookieAttributes(response);
+        Assert.Contains("Secure", attributes, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CookieLogin_Production_SpoofedForwardedProtoHttp_SecureCookieNotStripped()
+    {
+        // A client or proxy cannot spoof X-Forwarded-Proto: http to strip Secure
+        // from the Production auth cookie.
+        await using var factory = new WebProductionTestFactory();
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var password = await WebTestFactory.GetBootstrapPasswordAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/cookie-login");
+        request.Headers.Add("X-Forwarded-Proto", "http");
+        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["login"] = "admin",
+            ["password"] = password
+        });
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var attributes = GetBeaconAuthCookieAttributes(response);
+        Assert.Contains("Secure", attributes, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task AnonymousBoard_ChallengesToLogin()
     {
         await using var factory = new WebTestFactory();
@@ -91,6 +134,35 @@ public sealed class CookieLoginHttpTests
             Assert.Contains("/login", response.Headers.Location?.ToString(), StringComparison.OrdinalIgnoreCase);
         else if (response.StatusCode == HttpStatusCode.OK)
             Assert.Contains("login", (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
+    }
+
+    private static string[] GetBeaconAuthCookieAttributes(HttpResponseMessage response)
+    {
+        var setCookie = response.Headers.GetValues("Set-Cookie")
+            .FirstOrDefault(value => value.StartsWith("BeaconAuth=", StringComparison.Ordinal));
+        Assert.NotNull(setCookie);
+        var tail = setCookie.Contains(';') ? setCookie[(setCookie.IndexOf(';') + 1)..] : string.Empty;
+        return tail.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+}
+
+/// <summary>
+/// WebTestFactory running the host in the Production environment (with the same
+/// in-memory SQLite database) to verify Production-only security behavior.
+/// </summary>
+public sealed class WebProductionTestFactory : WebTestFactory
+{
+    public WebProductionTestFactory()
+    {
+        Environment.SetEnvironmentVariable("BEACON_MIGRATE_ON_START", "false");
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        // The last UseEnvironment call wins; Production is required for the
+        // Production-only cookie and secret policies.
+        builder.UseEnvironment("Production");
     }
 }
 

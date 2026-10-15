@@ -84,7 +84,12 @@ public static class ServiceCollectionExtensions
         })
         .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
         {
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            // Fail-closed in Production: the auth cookie must always carry Secure, even
+            // behind a proxy that strips or fails to forward the scheme.
+            options.Cookie.SecurePolicy =
+                string.Equals(environmentName, "Production", StringComparison.OrdinalIgnoreCase)
+                    ? CookieSecurePolicy.Always
+                    : CookieSecurePolicy.SameAsRequest;
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = SameSiteMode.Strict;
             options.ExpireTimeSpan = TimeSpan.FromHours(24);
