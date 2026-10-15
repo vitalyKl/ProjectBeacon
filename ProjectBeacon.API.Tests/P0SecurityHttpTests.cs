@@ -384,7 +384,8 @@ public sealed class P0SecurityHttpTests
                 var device = DaemonDevice.Create("rc-device", adminUser.Id, "fp-trust", "hash", "bcd_test");
                 seedDb.DaemonDevices.Add(device);
 
-                var run = ReviewRun.Start(projectId, taskId, ReviewerType.Agent, Guid.NewGuid(), "agent-xyz");
+                // No reviewer bound: the run is open and claimable. A bound reviewer would mean a check is already in flight.
+                var run = ReviewRun.Start(projectId, taskId, ReviewerType.Agent, Guid.NewGuid());
                 seedDb.ReviewRuns.Add(run);
                 await seedDb.SaveChangesAsync();
                 deviceId = device.Id;
