@@ -25,7 +25,7 @@ public class FinishWorkHandler
             return Result.Failure("Invalid task ID format.");
 
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks
+        var task = await db.Tasks.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == taskId, ct);
 
         if (task is null)
@@ -35,6 +35,8 @@ public class FinishWorkHandler
             return Result.Failure("Actor does not have access to this project.");
 
         var resultType = command.Request.Result.ToLowerInvariant();
+        var expectedStatus = task.Status;
+        var guardedTransition = resultType is "done" or "failed" or "error";
         switch (resultType)
         {
             case "done":
@@ -82,11 +84,30 @@ public class FinishWorkHandler
 
             case "skipped":
             case "partial":
-                task.Update(description: AppendNote(task.Description, "Note: " + (command.Request.Output ?? "No output provided")));
+                // No state transition: the description append is not guarded.
+                await db.Tasks
+                    .Where(t => t.Id == taskId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(t => t.Description,
+                            AppendNote(task.Description, "Note: " + (command.Request.Output ?? "No output provided"))), ct);
                 break;
 
             default:
                 return Result.Failure("Invalid result type. Use 'done', 'failed', 'skipped', or 'partial'.");
+        }
+
+        if (guardedTransition)
+        {
+            // Guarded transition: only takes effect while the status is still the one validated above.
+            var updated = await db.Tasks
+                .Where(t => t.Id == taskId && t.Status == expectedStatus)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(t => t.Status, task.Status)
+                    .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                    .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                    .SetProperty(t => t.Description, task.Description), ct);
+            if (updated == 0)
+                return Result.Failure("Task state changed while finishing; retry.");
         }
 
         if (Guid.TryParse(command.Request.ActorId, out var userId))

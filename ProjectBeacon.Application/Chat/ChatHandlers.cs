@@ -59,8 +59,6 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
             return Result.Failure<ChatSessionDto>(resolved.Error ?? ProjectFolderRequired);
 
         var session = ChatSession.Create(projectId, device.Id, command.Request.Title ?? "Chat", resolved.Value!.LocalRoot);
-        db.ChatSessions.Add(session);
-        await db.SaveChangesAsync(ct);
 
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             device.Id, command.Request.UserId, WorkstationCommandKind.ChatEnsureSession,
@@ -76,7 +74,9 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
         if (string.IsNullOrWhiteSpace(externalId))
             return Result.Failure<ChatSessionDto>("OpenCode session id missing.");
 
+        // Persist only after the device created the session, so failed attempts leave no orphan row.
         session.SetExternalSessionId(externalId);
+        db.ChatSessions.Add(session);
         await db.SaveChangesAsync(ct);
         return Result.Ok(Map(session));
     }
@@ -198,9 +198,7 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
             return Result.Failure<ChatSessionDto>("OpenCode session is not ready.");
 
         var next = await db.ChatParts.Where(p => p.SessionId == session.Id).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
-        db.ChatParts.Add(ChatPart.Create(session.Id, session.ProjectId, "user", "text", text, next + 1));
-        session.SetStreaming();
-        await db.SaveChangesAsync(ct);
+        var part = ChatPart.Create(session.Id, session.ProjectId, "user", "text", text, next + 1);
 
         var payload = JsonSerializer.Serialize(new
         {
@@ -213,6 +211,11 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
             session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatPrompt, payload, session.ProjectId)), ct);
         if (!queued.Success)
             return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
+
+        // Enqueue won, so the prompt and the streaming state are persisted together.
+        db.ChatParts.Add(part);
+        session.SetStreaming();
+        await db.SaveChangesAsync(ct);
         return Result.Ok(CreateChatSessionHandler.Map(session));
     }
 }
@@ -237,13 +240,15 @@ public class AbortChatHandler : ICommandHandler<AbortChatCommand, Result<ChatSes
         if (session is null)
             return Result.Failure<ChatSessionDto>("Chat session not found.");
         session.Abort();
-        await db.SaveChangesAsync(ct);
         if (!string.IsNullOrWhiteSpace(session.ExternalSessionId))
         {
-            await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
+            var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
                 session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatAbort,
                 JsonSerializer.Serialize(new { externalSessionId = session.ExternalSessionId }), session.ProjectId)), ct);
+            if (!queued.Success)
+                return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
         }
+        await db.SaveChangesAsync(ct);
         return Result.Ok(CreateChatSessionHandler.Map(session));
     }
 }

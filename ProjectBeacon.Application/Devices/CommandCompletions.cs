@@ -49,11 +49,12 @@ internal sealed class ChatSessionCompletion : ICommandCompletion
         var sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "chatSessionId");
         if (sessionId is null)
             return;
-        var session = await db.ChatSessions.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(s => s.Id == sessionId.Value, ct);
-        if (session is null || session.Status != ChatSessionStatus.Streaming)
-            return;
-        session.SetIdle();
+        // Guarded: a concurrent completion or device write that already left Streaming wins.
+        await db.ChatSessions.IgnoreQueryFilters()
+            .Where(s => s.Id == sessionId.Value && s.Status == ChatSessionStatus.Streaming)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(s => s.Status, ChatSessionStatus.Idle)
+                .SetProperty(s => s.UpdatedAt, DateTime.UtcNow), ct);
     }
 }
 
@@ -88,10 +89,7 @@ internal sealed class EvalRunCompletion : ICommandCompletion
             string? transcriptRef = r.TryGetProperty("transcriptRef", out var transcriptElement) && transcriptElement.ValueKind == JsonValueKind.String
                 ? transcriptElement.GetString()
                 : null;
-            var run = await db.EvalRuns.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
-            if (run is null || run.CompletedAt is not null)
-                return;
-            run.Complete(promptTokens, completionTokens, turnCount, exitCode, transcriptRef, checkOutput);
+            await CompleteRunAsync(db, runId.Value, promptTokens, completionTokens, turnCount, exitCode, transcriptRef, checkOutput, ct);
         }
         catch (JsonException)
         {
@@ -105,10 +103,31 @@ internal sealed class EvalRunCompletion : ICommandCompletion
         var runId = DevicePayloadReader.ReadGuid(row.PayloadJson, "evalRunId");
         if (runId is null)
             return;
-        var run = await db.EvalRuns.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Id == runId.Value, ct);
+        await CompleteRunAsync(db, runId.Value, 0, 0, 0, null, null, error, ct);
+    }
+
+    private static async Task CompleteRunAsync(
+        IBeaconDb db, Guid runId, int promptTokens, int completionTokens, int turnCount,
+        int? exitCode, string? transcriptRef, string? checkOutput, CancellationToken ct)
+    {
+        var run = await db.EvalRuns.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == runId, ct);
         if (run is null || run.CompletedAt is not null)
             return;
-        run.Complete(0, 0, 0, null, null, error);
+        run.Complete(promptTokens, completionTokens, turnCount, exitCode, transcriptRef, checkOutput);
+        // Guarded: only the first completion of the run is stored.
+        await db.EvalRuns.IgnoreQueryFilters()
+            .Where(e => e.Id == runId && e.CompletedAt == null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(e => e.PromptTokens, run.PromptTokens)
+                .SetProperty(e => e.CompletionTokens, run.CompletionTokens)
+                .SetProperty(e => e.TurnCount, run.TurnCount)
+                .SetProperty(e => e.CheckExitCode, run.CheckExitCode)
+                .SetProperty(e => e.CheckOutput, run.CheckOutput)
+                .SetProperty(e => e.Passed, run.Passed)
+                .SetProperty(e => e.CompletedAt, run.CompletedAt)
+                .SetProperty(e => e.TranscriptRef, run.TranscriptRef), ct);
     }
 }
 
@@ -121,39 +140,50 @@ internal sealed class ReviewCheckCompletion : ICommandCompletion
         var reviewRunId = DevicePayloadReader.ReadGuid(row.PayloadJson, "reviewRunId");
         if (reviewRunId is null)
             return;
-        var run = await db.ReviewRuns.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Id == reviewRunId.Value, ct);
+        var run = await db.ReviewRuns.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == reviewRunId.Value, ct);
         if (run is null || run.Status != ReviewRunStatus.Started)
             return;
         if (row.ProjectId is Guid projectId && run.ProjectId != projectId)
             return;
 
         if (!success)
-        {
             run.Fail(error);
-            return;
-        }
-
-        int? exitCode = null;
-        string? output = null;
-        if (!string.IsNullOrWhiteSpace(resultJson))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(resultJson);
-                exitCode = DevicePayloadReader.ReadNullableInt(doc.RootElement, "exitCode");
-                if (doc.RootElement.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String)
-                    output = outputElement.GetString();
-            }
-            catch (JsonException)
-            {
-                exitCode = null;
-            }
-        }
-
-        if (exitCode == 0)
-            run.Complete(output, $"cmd:{row.Id:D}");
         else
-            run.Fail(string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
+        {
+            int? exitCode = null;
+            string? output = null;
+            if (!string.IsNullOrWhiteSpace(resultJson))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(resultJson);
+                    exitCode = DevicePayloadReader.ReadNullableInt(doc.RootElement, "exitCode");
+                    if (doc.RootElement.TryGetProperty("checkOutput", out var outputElement) && outputElement.ValueKind == JsonValueKind.String)
+                        output = outputElement.GetString();
+                }
+                catch (JsonException)
+                {
+                    exitCode = null;
+                }
+            }
+
+            if (exitCode == 0)
+                run.Complete(output, $"cmd:{row.Id:D}");
+            else
+                run.Fail(string.IsNullOrWhiteSpace(output) ? "Check did not pass." : output);
+        }
+
+        // Guarded: only the first completion of the started run is stored.
+        await db.ReviewRuns.IgnoreQueryFilters()
+            .Where(r => r.Id == run.Id && r.Status == ReviewRunStatus.Started)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.Findings, run.Findings)
+                .SetProperty(r => r.ArtifactRef, run.ArtifactRef)
+                .SetProperty(r => r.TranscriptRef, run.TranscriptRef)
+                .SetProperty(r => r.Status, run.Status)
+                .SetProperty(r => r.CompletedAt, run.CompletedAt), ct);
     }
 }
 

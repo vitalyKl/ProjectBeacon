@@ -179,7 +179,10 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
     }
 }
 /// <summary>
-/// Marks a device command succeeded or failed.
+/// Marks a device command succeeded or failed. The finish is a guarded
+/// <c>UPDATE ... WHERE Id = @id AND Status = @expected</c>; a concurrent claim, re-queue,
+/// or completion that moved the row first makes the update affect zero rows and the loser
+/// reports failure without applying the completion effects.
 /// </summary>
 public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Result<WorkstationCommandDto>>
 {
@@ -190,25 +193,46 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
     public async Task<Result<WorkstationCommandDto>> HandleAsync(CompleteCommandCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var row = await db.WorkstationCommands.FirstOrDefaultAsync(c => c.Id == command.Request.CommandId, ct);
+        var row = await db.WorkstationCommands.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == command.Request.CommandId, ct);
         if (row is null || row.DeviceId != command.Request.DeviceId)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
         // A late completion from an older attempt must not finish the attempt the row is on now.
         if (!CommandCompletions.AcceptsGeneration(row, command.Request.Generation))
             return Result.Failure<WorkstationCommandDto>("Command generation mismatch.");
+
+        var expectedStatus = row.Status;
+        var error = command.Request.Success
+            ? null
+            : string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error;
         try
         {
             if (command.Request.Success)
-            {
-                await CommandCompletions.ApplyAsync(db, row, true, command.Request.ResultJson, null, ct);
                 row.Succeed(command.Request.ResultJson);
-            }
             else
-            {
-                var error = string.IsNullOrWhiteSpace(command.Request.Error) ? "Command failed." : command.Request.Error;
-                await CommandCompletions.ApplyAsync(db, row, false, command.Request.ResultJson, error, ct);
-                row.Fail(error);
-            }
+                row.Fail(error!);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result.Failure<WorkstationCommandDto>(ex.Message);
+        }
+
+        var finished = await db.WorkstationCommands
+            .Where(c => c.Id == row.Id && c.Status == expectedStatus)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.Status, row.Status)
+                .SetProperty(c => c.ResultJson, row.ResultJson)
+                .SetProperty(c => c.Error, row.Error)
+                .SetProperty(c => c.StartedAt, row.StartedAt)
+                .SetProperty(c => c.CompletedAt, row.CompletedAt)
+                .SetProperty(c => c.LeaseExpiresAt, row.LeaseExpiresAt), ct);
+        if (finished == 0)
+            return Result.Failure<WorkstationCommandDto>("Command state changed while completing; retry.");
+
+        // Completion effects run only for the winning transition.
+        try
+        {
+            await CommandCompletions.ApplyAsync(db, row, command.Request.Success, command.Request.ResultJson, error, ct);
         }
         catch (InvalidOperationException ex)
         {

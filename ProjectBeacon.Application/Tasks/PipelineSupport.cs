@@ -45,6 +45,29 @@ internal static class PipelineSupport
             .Select(p => p.Name)
             .FirstOrDefaultAsync(ct);
 
+    /// <summary>
+    /// Enters the executing stage while the task is in <see cref="TaskPipelineStage.ReopenedForRevision"/>,
+    /// confirming the stage when it is already <see cref="TaskPipelineStage.Executing"/>. Returns the
+    /// number of updated rows; zero means a concurrent transition moved the stage to something else.
+    /// </summary>
+    public static Task<int> EnterExecutingClaimAsync(IBeaconDb db, Guid taskId, CancellationToken ct)
+        => db.Tasks
+            .Where(t => t.Id == taskId
+                && (t.PipelineStage == TaskPipelineStage.ReopenedForRevision
+                    || t.PipelineStage == TaskPipelineStage.Executing))
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.PipelineStage, TaskPipelineStage.Executing), ct);
+
+    /// <summary>
+    /// Rolls back a guarded stage claim made before an external side effect (spawn) failed:
+    /// sets <paramref name="toStage"/> while the stage is still <paramref name="fromStage"/>.
+    /// A concurrent transition that moved the stage first makes this a no-op.
+    /// </summary>
+    public static Task<int> RollbackStageAsync(
+        IBeaconDb db, Guid taskId, TaskPipelineStage fromStage, TaskPipelineStage? toStage, CancellationToken ct)
+        => db.Tasks
+            .Where(t => t.Id == taskId && t.PipelineStage == fromStage)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.PipelineStage, toStage), ct);
+
     public static async Task<PipelineStateDto> StateAsync(IBeaconDb db, TaskItem task, CancellationToken ct)
     {
         var subtasks = await db.Subtasks

@@ -24,13 +24,12 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartPipelineCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
+        var task = await db.Tasks.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
-        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Planner, task.Id, ct);
-        var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
-
+        var expectedStatus = task.Status;
         try
         {
             task.StartPipeline();
@@ -40,9 +39,37 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
+        // Guarded stage claim before the spawn: only takes effect if the pipeline is not started.
+        var claimed = await db.Tasks
+            .Where(t => t.Id == task.Id && t.PipelineStage == null && t.Status == expectedStatus)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                .SetProperty(t => t.Status, task.Status), ct);
+        if (claimed == 0)
+            return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting; retry.");
+
+        SpawnedSession? spawned = null;
+        Exception? spawnFailure = null;
+        try
+        {
+            spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Planner, task.Id, ct);
+        }
+        catch (Exception ex)
+        {
+            spawnFailure = ex;
+        }
+        if (spawnFailure is not null)
+        {
+            await PipelineSupport.RollbackStageAsync(db, task.Id, TaskPipelineStage.Planning, null, ct);
+            if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
+                throw canceled;
+            return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
+        }
+
+        var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Planner,
-            SessionPrompts.Planner(task, projectName), null, spawned.ModelBackendId, spawned.LaunchSpec);
+            SessionPrompts.Planner(task, projectName), null, spawned!.ModelBackendId, spawned.LaunchSpec);
         db.PipelineSessions.Add(session);
         await db.SaveChangesAsync(ct);
 
@@ -61,24 +88,22 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
     public async Task<Result<PipelineSessionDto>> HandleAsync(LaunchSessionCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var session = await db.PipelineSessions.FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
+        var session = await db.PipelineSessions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
         if (session is null)
             return Result.Failure<PipelineSessionDto>("Session not found.");
 
-        var task = await PipelineSupport.FindTaskAsync(db, session.TaskId, ct);
+        var task = await db.Tasks.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
-            try
-            {
-                task.EnterExecuting();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
-            }
+            // Confirm-or-transition: a concurrent launch that already entered executing wins.
+            var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
+            if (entered == 0)
+                return Result.Failure<PipelineSessionDto>("Pipeline state changed while launching; retry.");
         }
 
         try
@@ -90,7 +115,15 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
-        await db.SaveChangesAsync(ct);
+        var launched = await db.PipelineSessions
+            .Where(s => s.Id == session.Id && s.Status == SessionStatus.Ready)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(s => s.Status, session.Status)
+                .SetProperty(s => s.ExternalSessionId, session.ExternalSessionId)
+                .SetProperty(s => s.LaunchedAt, session.LaunchedAt), ct);
+        if (launched == 0)
+            return Result.Failure<PipelineSessionDto>("Session state changed while launching; retry.");
+
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 }
@@ -106,7 +139,8 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
     public async Task<Result<PipelineStateDto>> HandleAsync(ApprovePipelineCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
+        var task = await db.Tasks.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
@@ -130,6 +164,7 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
         if (!proved)
             return Result.Failure<PipelineStateDto>("Close requires a completed review check.");
 
+        var expectedStatus = task.Status;
         try
         {
             task.ClosePipeline(notes);
@@ -141,6 +176,18 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
 
         foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
             session.Close();
+
+        var updated = await db.Tasks
+            .Where(t => t.Id == task.Id
+                && t.PipelineStage == TaskPipelineStage.Approved
+                && t.Status == expectedStatus)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                .SetProperty(t => t.Status, task.Status)
+                .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                .SetProperty(t => t.CompletedAt, task.CompletedAt), ct);
+        if (updated == 0)
+            return Result.Failure<PipelineStateDto>("Pipeline state changed while closing; retry.");
 
         await db.SaveChangesAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
@@ -158,7 +205,8 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
     public async Task<Result<PipelineStateDto>> HandleAsync(ForceClosePipelineCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
+        var task = await db.Tasks.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
@@ -170,6 +218,8 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
             ? "force-closed without review"
             : $"force-closed without review: {reason}";
 
+        var expectedStatus = task.Status;
+        var expectedStage = task.PipelineStage;
         try
         {
             task.ClosePipeline(marker);
@@ -181,6 +231,16 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
 
         foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, null, ct))
             session.Close();
+
+        var updated = await db.Tasks
+            .Where(t => t.Id == task.Id && t.Status == expectedStatus && t.PipelineStage == expectedStage)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                .SetProperty(t => t.Status, task.Status)
+                .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                .SetProperty(t => t.CompletedAt, task.CompletedAt), ct);
+        if (updated == 0)
+            return Result.Failure<PipelineStateDto>("Pipeline state changed while force-closing; retry.");
 
         await db.SaveChangesAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));

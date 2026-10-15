@@ -27,7 +27,8 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartReviewCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
+        var task = await db.Tasks.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
@@ -43,6 +44,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
         if (subtasks.Any(s => s.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress))
             return Result.Failure<PipelineSessionDto>("All subtasks must be done or failed before review.");
 
+        var expectedStatus = task.Status;
         try
         {
             task.EnterReview();
@@ -52,10 +54,36 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
             return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
-        var spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Review, task.Id, ct);
+        // Guarded stage claim before the spawn: only takes effect while the task is still executing.
+        var claimed = await db.Tasks
+            .Where(t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Executing && t.Status == expectedStatus)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                .SetProperty(t => t.Status, task.Status), ct);
+        if (claimed == 0)
+            return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting review; retry.");
+
+        SpawnedSession? spawned = null;
+        Exception? spawnFailure = null;
+        try
+        {
+            spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Review, task.Id, ct);
+        }
+        catch (Exception ex)
+        {
+            spawnFailure = ex;
+        }
+        if (spawnFailure is not null)
+        {
+            await PipelineSupport.RollbackStageAsync(db, task.Id, TaskPipelineStage.Reviewing, TaskPipelineStage.Executing, ct);
+            if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
+                throw canceled;
+            return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
+        }
+
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Review,
-            SessionPrompts.Review(task, subtasks), null, spawned.ModelBackendId, spawned.LaunchSpec);
+            SessionPrompts.Review(task, subtasks), null, spawned!.ModelBackendId, spawned.LaunchSpec);
         db.PipelineSessions.Add(session);
         await db.SaveChangesAsync(ct);
 
@@ -78,7 +106,8 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
             return Result.Failure<PipelineStateDto>("Verdict note is required.");
 
         await using var db = _dbFactory.CreateDbContext();
-        var task = await PipelineSupport.FindTaskAsync(db, command.Request.TaskId, ct);
+        var task = await db.Tasks.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
@@ -89,6 +118,8 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
             .AnyAsync(s => s.TaskId == task.Id && s.Role == PipelineRole.Review, ct);
         if (!hasReviewSession)
             return Result.Failure<PipelineStateDto>("No review session found for this task.");
+        // All mutations below are staged in memory; the guarded claim below is the single
+        // write gate, and SaveChanges runs only for the winning verdict.
 
         Guid? subtaskId = null;
         if (command.Request.Kind == ReviewVerdictKind.ReopenSubtask)
@@ -139,6 +170,14 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Review, ct))
             session.Close();
 
+        var claimed = await db.Tasks
+            .Where(t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Reviewing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.PipelineStage, task.PipelineStage)
+                .SetProperty(t => t.Status, task.Status), ct);
+        if (claimed == 0)
+            return Result.Failure<PipelineStateDto>("Review state changed while recording verdict; retry.");
+
         await db.SaveChangesAsync(ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
@@ -182,7 +221,7 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
         if (task is null)
             return Result.Failure<PipelineStateDto>("Task not found.");
 
-        var reviewRun = await db.ReviewRuns
+        var reviewRun = await db.ReviewRuns.AsNoTracking()
             .Where(r => r.TaskId == task.Id && r.Status == ReviewRunStatus.Started && r.TargetRunId != null)
             .OrderByDescending(r => r.StartedAt)
             .FirstOrDefaultAsync(ct);
@@ -197,8 +236,13 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
             checkCommand = project.ReviewCheckCommand.Trim();
         }
 
-        reviewRun.BindReviewer(command.Request.ActorId.ToString());
-        await db.SaveChangesAsync(ct);
+        var actorId = command.Request.ActorId.ToString();
+        // Claim the run before enqueuing: a second concurrent check loses here and never enqueues.
+        var claimed = await db.ReviewRuns
+            .Where(r => r.Id == reviewRun.Id && r.Status == ReviewRunStatus.Started && r.ReviewerActorId == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.ReviewerActorId, actorId), ct);
+        if (claimed == 0)
+            return Result.Failure<PipelineStateDto>("A review check is already in flight for this run.", ErrorKind.Conflict);
 
         var payload = new JsonObject
         {
@@ -215,7 +259,13 @@ public class RecordReviewCheckHandler : ICommandHandler<RecordReviewCheckCommand
             task.ProjectId,
             checkCommand)), ct);
         if (!queued.Success)
+        {
+            // Give the run back: no check command was delivered, so it must stay claimable.
+            await db.ReviewRuns
+                .Where(r => r.Id == reviewRun.Id && r.Status == ReviewRunStatus.Started && r.ReviewerActorId == actorId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ReviewerActorId, (string?)null), ct);
             return Result.Failure<PipelineStateDto>(queued.Error ?? "Failed to enqueue review check.");
+        }
 
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
