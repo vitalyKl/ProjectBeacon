@@ -27,8 +27,11 @@ public static class MiddlewareExtensions
             await next();
         });
 
-        // The configuration binder cannot convert config strings to IPAddress/IPNetwork, so the
-        // trusted lists are parsed manually. Bind covers the rest (flags, header names, limit).
+        // The configuration binder cannot convert config strings to IPAddress/IPNetwork
+        // (it silently keeps the seeded loopback defaults), so the trusted lists are parsed
+        // manually. An explicitly configured trust list is the complete trust set: the
+        // framework loopback defaults are only used when nothing is configured, which is
+        // safe for local runs.
         var forwardedHeaders = new ForwardedHeadersOptions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
@@ -36,10 +39,17 @@ public static class MiddlewareExtensions
         };
         var forwardedHeadersSection = app.Configuration.GetSection("ForwardedHeaders");
         forwardedHeadersSection.Bind(forwardedHeaders);
-        foreach (var value in ForwardedHeaderValues(forwardedHeadersSection, "KnownProxies"))
-            forwardedHeaders.KnownProxies.Add(IPAddress.Parse(value));
-        foreach (var value in ForwardedHeaderValues(forwardedHeadersSection, "KnownNetworks"))
-            forwardedHeaders.KnownNetworks.Add(Microsoft.AspNetCore.HttpOverrides.IPNetwork.Parse(value));
+        var knownProxies = ForwardedHeaderValues(forwardedHeadersSection, "KnownProxies").ToList();
+        var knownNetworks = ForwardedHeaderValues(forwardedHeadersSection, "KnownNetworks").ToList();
+        if (knownProxies.Count > 0 || knownNetworks.Count > 0)
+        {
+            forwardedHeaders.KnownProxies.Clear();
+            forwardedHeaders.KnownNetworks.Clear();
+            foreach (var value in knownProxies)
+                forwardedHeaders.KnownProxies.Add(IPAddress.Parse(value));
+            foreach (var value in knownNetworks)
+                forwardedHeaders.KnownNetworks.Add(Microsoft.AspNetCore.HttpOverrides.IPNetwork.Parse(value));
+        }
         app.UseForwardedHeaders(forwardedHeaders);
 
         var supportedCultures = ServiceCollectionExtensions.GetSupportedCultures();

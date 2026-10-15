@@ -94,7 +94,7 @@ public sealed class CookieLoginHttpTests
     }
 }
 
-public sealed class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.Dashboard.Dashboard>
+public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.Dashboard.Dashboard>
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
 
