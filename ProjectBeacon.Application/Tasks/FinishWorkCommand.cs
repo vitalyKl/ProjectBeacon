@@ -12,7 +12,9 @@ using System.Text;
 /// Finishes a task as done, failed, skipped, or partial, including review-proof and actor-access checks.
 /// Guarded finishes (done, failed) are compare-and-swapped on StateRevision: exactly one
 /// rival wins, and a loser that cannot prove its effect is already in place gets
-/// ErrorKind.Conflict (409) with no side effects.
+/// ErrorKind.Conflict (409) with no side effects. The state write and the "Work finished"
+/// comment commit in one short transaction; a comment-insert or commit failure rolls the
+/// whole operation back, so no partial state survives.
 /// </summary>
 public class FinishWorkHandler
 {
@@ -176,8 +178,25 @@ public class FinishWorkHandler
                 userId));
         }
 
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            // Roll back explicitly: a comment-insert or commit failure must not leave the
+            // state write (or the appended note) committed without its comment.
+            try
+            {
+                await tx.RollbackAsync(ct);
+            }
+            catch
+            {
+                // The transaction is already broken; disposing the connection rolls back.
+            }
+            throw;
+        }
         return Result.Ok();
     }
 

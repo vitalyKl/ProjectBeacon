@@ -1159,6 +1159,281 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         }
     }
 
+    [Fact]
+    public async Task FinishWorkDone_CommentInsertFailure_RollsBackState_RetryLandsOnce()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId, proofId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("FW inj Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("FW inj Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("fw-inj-done-user", "fw-inj-done-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("fw inj done", project.Id);
+            seed.Tasks.Add(task);
+            var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
+            run.Complete("checked", "check:exit0");
+            seed.ReviewRuns.Add(run);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+            proofId = run.Id;
+
+            // Fault injection at the database level: refuse the comment insert for
+            // marked payloads. Created on the disposable fixture database only.
+            await seed.Database.ExecuteSqlRawAsync(@"
+                CREATE FUNCTION beacon_finish_inject_fail() RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.""Content"" LIKE '%injectFail%' THEN
+                        RAISE EXCEPTION 'injected comment insert failure';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER beacon_finish_inject_fail
+                BEFORE INSERT ON ""TaskComments""
+                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();");
+        }
+
+        var factory = _postgres.CreateFactory();
+        try
+        {
+            // The guarded state write runs, then the comment insert is refused.
+            using (TenantScope.EnterUnscoped())
+            {
+                await Assert.ThrowsAsync<DbUpdateException>(() =>
+                    new FinishWorkHandler(factory).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(
+                            taskId.ToString(), "done", "injectFail", userId.ToString(), ReviewRunId: proofId))));
+            }
+
+            // The state write rolled back with the failed comment: the row is exactly
+            // as before, and no comment exists.
+            await using (var db = _postgres.CreateAdminContext())
+            {
+                using (TenantScope.EnterUnscoped())
+                {
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                    Assert.Null(row.ReviewNotes);
+                    Assert.Null(row.CompletedAt);
+                    Assert.Equal(0, row.StateRevision);
+                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                }
+            }
+
+            // The same request after the fault is gone lands exactly once.
+            using (TenantScope.EnterUnscoped())
+            {
+                var retry = await new FinishWorkHandler(factory).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "done", "clean retry", userId.ToString(), ReviewRunId: proofId)));
+                Assert.True(retry.Success, retry.Error);
+            }
+            await using (var db = _postgres.CreateAdminContext())
+            {
+                using (TenantScope.EnterUnscoped())
+                {
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    Assert.Equal(TaskItemStatus.Done, row.Status);
+                    Assert.Equal("clean retry", row.ReviewNotes);
+                    Assert.Equal(1, row.StateRevision);
+                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                }
+            }
+        }
+        finally
+        {
+            await using var cleanup = _postgres.CreateAdminContext();
+            await cleanup.Database.ExecuteSqlRawAsync(@"
+                DROP TRIGGER IF EXISTS beacon_finish_inject_fail ON ""TaskComments"";
+                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();");
+        }
+    }
+
+    [Fact]
+    public async Task FinishWorkFailed_CommentInsertFailure_RollsBackNote_RetryLandsOnce()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("FW inj Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("FW inj Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("fw-inj-failed-user", "fw-inj-failed-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("fw inj failed", project.Id);
+            seed.Tasks.Add(task);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+
+            await seed.Database.ExecuteSqlRawAsync(@"
+                CREATE FUNCTION beacon_finish_inject_fail() RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.""Content"" LIKE '%injectFail%' THEN
+                        RAISE EXCEPTION 'injected comment insert failure';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER beacon_finish_inject_fail
+                BEFORE INSERT ON ""TaskComments""
+                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();");
+        }
+
+        var factory = _postgres.CreateFactory();
+        try
+        {
+            // The note append and status write run, then the comment insert is refused.
+            using (TenantScope.EnterUnscoped())
+            {
+                await Assert.ThrowsAsync<DbUpdateException>(() =>
+                    new FinishWorkHandler(factory).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(
+                            taskId.ToString(), "failed", "injectFail", userId.ToString()))));
+            }
+
+            // The note append rolled back with the failed comment: the row is unchanged.
+            await using (var db = _postgres.CreateAdminContext())
+            {
+                using (TenantScope.EnterUnscoped())
+                {
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                    Assert.Null(row.Description);
+                    Assert.Equal(0, row.StateRevision);
+                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                }
+            }
+
+            // The same request after the fault is gone lands the note once, with one comment.
+            using (TenantScope.EnterUnscoped())
+            {
+                var retry = await new FinishWorkHandler(factory).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "failed", "clean retry", userId.ToString())));
+                Assert.True(retry.Success, retry.Error);
+            }
+            await using (var db = _postgres.CreateAdminContext())
+            {
+                using (TenantScope.EnterUnscoped())
+                {
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                    Assert.Equal("Failed: clean retry", row.Description);
+                    Assert.Equal(1, row.StateRevision);
+                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                }
+            }
+        }
+        finally
+        {
+            await using var cleanup = _postgres.CreateAdminContext();
+            await cleanup.Database.ExecuteSqlRawAsync(@"
+                DROP TRIGGER IF EXISTS beacon_finish_inject_fail ON ""TaskComments"";
+                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();");
+        }
+    }
+
+    [Fact]
+    public async Task FinishWorkSkipped_CommentInsertFailure_RollsBackNote_RetryLandsOnce()
+    {
+        _postgres.RequirePostgres();
+        Guid taskId, userId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var org = Org.Create("FW inj Org", null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync();
+            var project = Project.Create("FW inj Project", null, org.Id);
+            seed.Projects.Add(project);
+            var user = User.Create("fw-inj-skipped-user", "fw-inj-skipped-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
+            var task = TaskItem.Create("fw inj skipped", project.Id);
+            seed.Tasks.Add(task);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+            userId = user.Id;
+
+            await seed.Database.ExecuteSqlRawAsync(@"
+                CREATE FUNCTION beacon_finish_inject_fail() RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.""Content"" LIKE '%injectFail%' THEN
+                        RAISE EXCEPTION 'injected comment insert failure';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER beacon_finish_inject_fail
+                BEFORE INSERT ON ""TaskComments""
+                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();");
+        }
+
+        var factory = _postgres.CreateFactory();
+        try
+        {
+            // The note append runs, then the comment insert is refused.
+            using (TenantScope.EnterUnscoped())
+            {
+                await Assert.ThrowsAsync<DbUpdateException>(() =>
+                    new FinishWorkHandler(factory).HandleAsync(
+                        new FinishWorkCommand(new FinishWorkRequest(
+                            taskId.ToString(), "skipped", "injectFail", userId.ToString()))));
+            }
+
+            // The note append rolled back with the failed comment; status never moves for skipped.
+            await using (var db = _postgres.CreateAdminContext())
+            {
+                using (TenantScope.EnterUnscoped())
+                {
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                    Assert.Null(row.Description);
+                    Assert.Equal(0, row.StateRevision);
+                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                }
+            }
+
+            // The same request after the fault is gone lands the note once, with one comment.
+            using (TenantScope.EnterUnscoped())
+            {
+                var retry = await new FinishWorkHandler(factory).HandleAsync(
+                    new FinishWorkCommand(new FinishWorkRequest(
+                        taskId.ToString(), "skipped", "clean retry", userId.ToString())));
+                Assert.True(retry.Success, retry.Error);
+            }
+            await using (var db = _postgres.CreateAdminContext())
+            {
+                using (TenantScope.EnterUnscoped())
+                {
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    Assert.Equal(TaskItemStatus.Todo, row.Status);
+                    Assert.Equal("Note: clean retry", row.Description);
+                    Assert.Equal(0, row.StateRevision);
+                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                }
+            }
+        }
+        finally
+        {
+            await using var cleanup = _postgres.CreateAdminContext();
+            await cleanup.Database.ExecuteSqlRawAsync(@"
+                DROP TRIGGER IF EXISTS beacon_finish_inject_fail ON ""TaskComments"";
+                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();");
+        }
+    }
+
     private async Task<(Guid ProjectId, Guid TaskId)> SeedTaskAsync(string title)
     {
         await using var seed = _postgres.CreateAdminContext();

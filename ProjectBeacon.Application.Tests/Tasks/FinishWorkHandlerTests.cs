@@ -392,6 +392,105 @@ public sealed class FinishWorkHandlerTests : IDisposable
         Assert.Equal(2, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
     }
 
+    [Fact]
+    public async Task Done_CommentInsertFails_RollsBackState_RetryLandsOnce()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var proof = Proof(task.Id);
+        _db.ReviewRuns.Add(proof);
+        await _db.SaveChangesAsync();
+
+        // The comment insert fails after the guarded state write has run in the transaction.
+        var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)));
+        await Assert.ThrowsAsync<DbUpdateException>(() => handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "done", "ok", _userId.ToString(), ReviewRunId: proof.Id))));
+
+        // The state write rolled back with the failed comment: nothing landed.
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Null(task.ReviewNotes);
+        Assert.Null(task.CompletedAt);
+        Assert.Equal(0, task.StateRevision);
+        Assert.Equal(0, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+
+        // The retry lands exactly once: Done, the notes, one revision bump, one comment.
+        var retry = await new FinishWorkHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                task.Id.ToString(), "done", "ok", _userId.ToString(), ReviewRunId: proof.Id)));
+        Assert.True(retry.Success, retry.Error);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Done, task.Status);
+        Assert.Equal("ok", task.ReviewNotes);
+        Assert.Equal(1, task.StateRevision);
+        Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Failed_CommentInsertFails_RollsBackNote_RetryLandsOnce()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)));
+        await Assert.ThrowsAsync<DbUpdateException>(() => handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "failed", "X", _userId.ToString()))));
+
+        // The note append and the status write rolled back with the failed comment.
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Null(task.Description);
+        Assert.Equal(0, task.StateRevision);
+        Assert.Equal(0, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+
+        // The retry lands the note and exactly one comment.
+        var retry = await new FinishWorkHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                task.Id.ToString(), "failed", "X", _userId.ToString())));
+        Assert.True(retry.Success, retry.Error);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Equal("Failed: X", task.Description);
+        Assert.Equal(1, task.StateRevision);
+        Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
+    [Fact]
+    public async Task Skipped_CommentInsertFails_RollsBackNote_RetryLandsOnce()
+    {
+        var task = TaskItem.Create("t", _projectId);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+
+        var inner = HandlerSqlite.Factory(_connection).CreateDbContext();
+        var handler = new FinishWorkHandler(new FixedDbFactory(CommentSaveFailingDb.Wrap(inner)));
+        await Assert.ThrowsAsync<DbUpdateException>(() => handler.HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+            task.Id.ToString(), "skipped", "reason", _userId.ToString()))));
+
+        // The note append rolled back with the failed comment; status never moves for skipped.
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Null(task.Description);
+        Assert.Equal(0, task.StateRevision);
+        Assert.Equal(0, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+
+        // The retry lands the note and exactly one comment; the revision stays untouched.
+        var retry = await new FinishWorkHandler(HandlerSqlite.Factory(_connection))
+            .HandleAsync(new FinishWorkCommand(new FinishWorkRequest(
+                task.Id.ToString(), "skipped", "reason", _userId.ToString())));
+        Assert.True(retry.Success, retry.Error);
+        await _db.Entry(task).ReloadAsync();
+        Assert.Equal(TaskItemStatus.Todo, task.Status);
+        Assert.Equal("Note: reason", task.Description);
+        Assert.Equal(0, task.StateRevision);
+        Assert.Equal(1, await _db.TaskComments.CountAsync(c => c.TaskId == task.Id));
+    }
+
     private ReviewRun Proof(Guid taskId, string artifact = "check:exit0")
     {
         var run = ReviewRun.Start(_projectId, taskId, ReviewerType.Agent, Guid.NewGuid());
@@ -482,6 +581,76 @@ public sealed class FinishWorkHandlerTests : IDisposable
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
             => _inner.SaveChangesAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => _inner.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Forwards every call to the wrapped context. Its <c>SaveChangesAsync</c> throws a
+    /// <c>DbUpdateException</c> to simulate the "Work finished" comment insert failing —
+    /// in the finish-work flow that single SaveChanges call is the comment insert.
+    /// </summary>
+    private sealed class CommentSaveFailingDb : IBeaconDb
+    {
+        private readonly IBeaconDb _inner;
+
+        private CommentSaveFailingDb(IBeaconDb inner) => _inner = inner;
+
+        public static IBeaconDb Wrap(IBeaconDb inner) => new CommentSaveFailingDb(inner);
+
+        public DatabaseFacade Database => _inner.Database;
+
+        public Guid? FilterProjectId => _inner.FilterProjectId;
+        public Guid? FilterOrgId => _inner.FilterOrgId;
+        public bool FilterUnscoped => _inner.FilterUnscoped;
+
+        public DbSet<User> Users => _inner.Users;
+        public DbSet<OpenCodeConnection> OpenCodeConnections => _inner.OpenCodeConnections;
+        public DbSet<UserSession> Sessions => _inner.Sessions;
+        public DbSet<Org> Orgs => _inner.Orgs;
+        public DbSet<OrgMember> OrgMembers => _inner.OrgMembers;
+        public DbSet<OrgInvite> OrgInvites => _inner.OrgInvites;
+        public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
+        public DbSet<Project> Projects => _inner.Projects;
+        public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
+        public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
+        public DbSet<ApiToken> ApiTokens => _inner.ApiTokens;
+        public DbSet<TaskItem> Tasks => _inner.Tasks;
+        public DbSet<Label> Labels => _inner.Labels;
+        public DbSet<LabelPath> LabelPaths => _inner.LabelPaths;
+        public DbSet<Report> Reports => _inner.Reports;
+        public DbSet<Milestone> Milestones => _inner.Milestones;
+        public DbSet<TaskDependency> TaskDependencies => _inner.TaskDependencies;
+        public DbSet<TaskComment> TaskComments => _inner.TaskComments;
+        public DbSet<Constraint> Constraints => _inner.Constraints;
+        public DbSet<Decision> Decisions => _inner.Decisions;
+        public DbSet<DecisionTask> DecisionTasks => _inner.DecisionTasks;
+        public DbSet<LocalModelBackend> LocalModelBackends => _inner.LocalModelBackends;
+        public DbSet<AgentTemplate> AgentTemplates => _inner.AgentTemplates;
+        public DbSet<TaskKind> TaskKinds => _inner.TaskKinds;
+        public DbSet<TaskKindPhase> TaskKindPhases => _inner.TaskKindPhases;
+        public DbSet<TaskPhase> TaskPhases => _inner.TaskPhases;
+        public DbSet<RoleBinding> RoleBindings => _inner.RoleBindings;
+        public DbSet<Subtask> Subtasks => _inner.Subtasks;
+        public DbSet<PipelineSession> PipelineSessions => _inner.PipelineSessions;
+        public DbSet<ReviewVerdict> ReviewVerdicts => _inner.ReviewVerdicts;
+        public DbSet<DaemonDevice> DaemonDevices => _inner.DaemonDevices;
+        public DbSet<WorkstationCommand> WorkstationCommands => _inner.WorkstationCommands;
+        public DbSet<ProjectRuntime> ProjectRuntimes => _inner.ProjectRuntimes;
+        public DbSet<DeviceHostSample> DeviceHostSamples => _inner.DeviceHostSamples;
+        public DbSet<TaskStep> TaskSteps => _inner.TaskSteps;
+        public DbSet<ChatSession> ChatSessions => _inner.ChatSessions;
+        public DbSet<ChatPart> ChatParts => _inner.ChatParts;
+        public DbSet<EvalRun> EvalRuns => _inner.EvalRuns;
+        public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
+        public DbSet<ContextSection> ContextSections => _inner.ContextSections;
+        public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
+
+        public EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class
+            => _inner.Entry(entity);
+
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+            => Task.FromException<int>(new DbUpdateException("injected comment insert failure"));
 
         public ValueTask DisposeAsync() => _inner.DisposeAsync();
     }
