@@ -2,16 +2,20 @@ namespace ProjectBeacon.Infrastructure.Data;
 
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 /// <summary>
 /// Resolves connection strings for the two Postgres roles. The runtime role (beacon_app) is a
 /// non-superuser bound by row-level security; the migration role (beacon) is a superuser that
-/// applies EF migrations and bootstraps the runtime role.
+/// applies EF migrations and bootstraps the runtime role. Also hosts the fail-closed role guard:
+/// hosts refuse to serve in Production when the application role bypasses RLS or cannot be verified.
 /// </summary>
 public static class PostgresConnection
 {
     public const string SuperuserName = "beacon";
     public const string AppRoleName = "beacon_app";
+    public const string PostgresProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
 
     private static readonly Regex RoleNamePattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
@@ -80,13 +84,18 @@ public static class PostgresConnection
         await EnsureAppRoleAsync(Resolve(configuration), ResolveMigration(configuration));
     }
 
-    public static async Task EnsureAppRoleAsync(string appConnectionString, string migrationConnectionString)
+    public static async Task EnsureAppRoleAsync(string appConnectionString, string migrationConnectionString, ILogger? logger = null)
     {
         var app = new NpgsqlConnectionStringBuilder(appConnectionString);
         var migration = new NpgsqlConnectionStringBuilder(migrationConnectionString);
 
         if (string.Equals(app.Username, migration.Username, StringComparison.OrdinalIgnoreCase))
+        {
+            logger?.LogInformation(
+                "Application and migration connections use the same login '{Username}'; role bootstrap skipped. The startup role guard verifies privileges.",
+                app.Username);
             return;
+        }
 
         var role = app.Username ?? AppRoleName;
         var password = app.Password ?? string.Empty;
@@ -96,6 +105,100 @@ public static class PostgresConnection
         await using var command = connection.CreateCommand();
         command.CommandText = BuildAppRoleBootstrap(role, password);
         await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Reads the actual connected role's flags from pg_roles via current_user. Fail-closed:
+    /// a connection error, a query failure, or a missing role record all report
+    /// Verified=false with a diagnostic that never contains connection details.
+    /// </summary>
+    public static async Task<AppRoleStatus> GetAppRoleStatusAsync(string appConnectionString)
+    {
+        NpgsqlConnection connection;
+        try
+        {
+            connection = new NpgsqlConnection(appConnectionString);
+            await connection.OpenAsync();
+        }
+        catch (Exception)
+        {
+            return new AppRoleStatus(false, string.Empty, false, false,
+                "could not open a connection to verify the database role");
+        }
+
+        await using (connection)
+        {
+            try
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    "SELECT current_user, r.rolsuper, r.rolbypassrls" +
+                    " FROM pg_roles r WHERE r.rolname = current_user";
+                using var reader = await command.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                    return new AppRoleStatus(false, string.Empty, false, false,
+                        "no pg_roles record for the connected role");
+                return new AppRoleStatus(
+                    true,
+                    reader.GetString(0),
+                    reader.GetBoolean(1),
+                    reader.GetBoolean(2),
+                    null);
+            }
+            catch (Exception)
+            {
+                return new AppRoleStatus(false, string.Empty, false, false,
+                    "could not query pg_roles for the connected role");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Unsafe means the role bypasses RLS (SUPERUSER, BYPASSRLS) or could not be verified.
+    /// </summary>
+    public static bool IsUnsafe(AppRoleStatus status) =>
+        !status.Verified || status.Superuser || status.BypassRls;
+
+    /// <summary>
+    /// Safe diagnostic text for logging/abort: role name and flags only, never connection details.
+    /// </summary>
+    public static string DescribeAppRoleStatus(AppRoleStatus status)
+    {
+        if (!status.Verified)
+            return $"The application database role could not be verified ({status.FailureReason}). " +
+                   "Refusing to run without row-level security guarantees.";
+        var flags = new List<string>();
+        if (status.Superuser) flags.Add("SUPERUSER");
+        if (status.BypassRls) flags.Add("BYPASSRLS");
+        return $"The application database role '{status.RoleName}' has {string.Join(" and ", flags)} " +
+               "privileges, which bypass row-level security. Point the application connection " +
+               "(ConnectionStrings:Default) at a dedicated NOSUPERUSER NOBYPASSRLS role (beacon_app).";
+    }
+
+    /// <summary>
+    /// Host startup guard: throws in Production when the role is unsafe; logs a warning otherwise.
+    /// </summary>
+    public static async Task EnforceAppRoleAsync(string appConnectionString, bool production, ILogger? logger = null)
+    {
+        var status = await GetAppRoleStatusAsync(appConnectionString);
+        if (!IsUnsafe(status))
+            return;
+        var message = DescribeAppRoleStatus(status);
+        if (production)
+            throw new InvalidOperationException(message);
+        logger?.LogWarning("{Message}", message);
+    }
+
+    /// <summary>
+    /// True when the host's BeaconDbContext is configured for Postgres. Integration test hosts
+    /// replace the provider with an in-memory SQLite database, where there is no RLS boundary
+    /// to verify.
+    /// </summary>
+    public static bool IsPostgresBacked(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
+        return string.Equals(db.Database.ProviderName, PostgresProviderName, StringComparison.Ordinal);
     }
 
     private static string BuildAppRoleBootstrap(string role, string password)

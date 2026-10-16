@@ -94,6 +94,16 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Fail-closed role guard: skipped in Testing and on hosts without Postgres
+// (WebApplicationFactory test hosts run on in-memory SQLite).
+if (!app.Environment.IsEnvironment("Testing") && PostgresConnection.IsPostgresBacked(app.Services))
+{
+    await PostgresConnection.EnforceAppRoleAsync(
+        connectionString,
+        app.Environment.IsProduction(),
+        app.Services.GetRequiredService<ILogger<Program>>());
+}
+
 app.UseBeaconExceptionHandler();
 app.UseRouting();
 app.UseRateLimiter();

@@ -13,6 +13,16 @@ Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1
 5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from the open project on the dashboard (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.
 6. Product version is `0.5.0` in `Directory.Build.props`. `GET /v1/version` returns `{ version, gitSha }`. The drawer footer shows `Beacon v` plus that version.
 
+**Postgres roles.** The application connects as `beacon_app` (`NOSUPERUSER NOBYPASSRLS`); migrations run as the superuser `beacon`. At Web startup (and in the k8s migrate Job) `EnsureAppRoleAsync` idempotently creates the runtime role and grants privileges. A fail-closed role guard then verifies the **actual** connected role via `pg_roles`/`current_user`: in **Production** the Web host, the Worker, and the migrate Job refuse to start (the Job fails) if the application role has `SUPERUSER` or `BYPASSRLS`, or if the role cannot be verified. In Development/Testing the guard logs a warning and continues.
+
+**Migrating from an old configuration** where `ConnectionStrings__Default` pointed at the superuser `beacon` (the application ran with RLS bypassed):
+
+1. As the superuser, create the runtime role once: `CREATE ROLE beacon_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '<password>';`
+2. Point `ConnectionStrings__Default` at `beacon_app` (keep `ConnectionStrings__Migration` on `beacon`).
+3. Start the Web host or run the migrate Job — `EnsureAppRoleAsync` grants schema/table/sequence privileges to `beacon_app`.
+
+The order matters: while `Default` still points at the superuser login, role bootstrap is skipped (logins match) and Production startup is refused by the role guard — that refusal is the intended fail-closed behavior until steps 1–2 are done.
+
 Drawer groups: Operate (Overview, Tasks, Pipeline when a task is running), Intelligence (Agents at `/settings/agents`, Workstations, Context, Chat), Govern (Projects at `/project/settings`, Settings). Backlog `/backlog` and Roadmap `/roadmap` stay on those routes. `/agents` redirects to `/settings/agents`. `ChatDock` is a shell shortcut; `/chat` is the full page. Language is a cookie (`GET /culture`). Appearance is Dark, Light, or System (`beacon-theme` cookie): header toggles Dark/Light, Settings has all three. `/project/settings` lists projects and can create, rename, and delete the open one (`DELETE /v1/projects/{id}`, project administer). Overview shows current workstation load. UI screens live in `ProjectBeacon.Web/Features/` and call Application handlers. `ProjectBeacon.Worker` only expires sessions, API tokens, password-reset tokens, and invites.
 
 ## Tests

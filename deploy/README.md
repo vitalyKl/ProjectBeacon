@@ -16,6 +16,17 @@ Replace `OWNER` in `deploy/k8s/*.yaml` with the GHCR owner.
 
 Container env: `BEACON_MIGRATE_ON_START=false`. Local `dotnet run` still migrates (non-Production).
 
+## Role guard (fail-closed)
+
+Every Production host verifies the **application** role (the `ConnectionStrings__Default` login, normally `beacon_app`) against `pg_roles` at startup, using the actual connected role (`current_user`), before serving or exiting:
+
+- Web pods: start is refused when the role has `SUPERUSER` or `BYPASSRLS`, or when the role cannot be verified (connection/query failure). The pod never becomes ready.
+- Migrate Job: exits non-zero in the same cases, so a misconfigured secret stops the deploy before traffic moves.
+- The check never reads or logs connection strings or passwords; diagnostics carry the role name and flags only.
+- The migration role (`ConnectionStrings__Migration`, superuser) is intentionally **not** checked — it only applies schema changes and bootstraps `beacon_app`.
+
+Development/Testing hosts log a warning and continue; the guard is skipped entirely in the `Testing` environment.
+
 ## First apply
 
 1. `kubectl apply -f deploy/k8s/namespace.yaml`

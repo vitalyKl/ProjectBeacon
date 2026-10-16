@@ -25,6 +25,17 @@ if (!app.Environment.IsEnvironment("Testing"))
     if (ShouldMigrateOnStart(app.Environment))
         await app.MigrateDatabase();
 
+    // Fail-closed role guard: in Production the host aborts when the application role
+    // has SUPERUSER/BYPASSRLS or cannot be verified. Runs for every Postgres-backed serving
+    // host, including Production pods with BEACON_MIGRATE_ON_START=false, and the migrate Job.
+    // Test hosts run on in-memory SQLite and have no RLS boundary to verify.
+    var appConnectionString = PostgresConnection.Resolve(app.Services.GetRequiredService<IConfiguration>());
+    if (PostgresConnection.IsPostgresBacked(app.Services))
+        await PostgresConnection.EnforceAppRoleAsync(
+            appConnectionString,
+            app.Environment.IsProduction(),
+            app.Services.GetRequiredService<ILogger<Program>>());
+
     if (IsTruthy(Environment.GetEnvironmentVariable("BEACON_MIGRATE_THEN_EXIT")))
         return;
 }

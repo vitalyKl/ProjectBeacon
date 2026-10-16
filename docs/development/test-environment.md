@@ -22,6 +22,7 @@ Environment precedence: process environment variables always win. `ProjectBeacon
 - Two roles (see `ProjectBeacon.Infrastructure/Data/PostgresConnection.cs`):
   - `beacon` — superuser; applies EF migrations, bootstraps the runtime role (`EnsureAppRoleAsync` is idempotent and runs at Web startup).
   - `beacon_app` — non-superuser, `NOSUPERUSER NOBYPASSRLS`; the role the application and its query filters/RLS run as.
+- Fail-closed role guard: at startup the Web host, the Worker, and the k8s migrate Job verify the actual connected role via `pg_roles`/`current_user` (`PostgresConnection.GetAppRoleStatusAsync`). Production refuses to start (the Job fails) when the application role has `SUPERUSER` or `BYPASSRLS`, or when it cannot be verified (connection/query failure — never fail-open). Development/Testing log a warning and continue. The guard is skipped in the `Testing` environment and on hosts whose `BeaconDbContext` is not Postgres-backed (`PostgresConnection.IsPostgresBacked`): integration test hosts run on in-memory SQLite and have no RLS boundary to verify. Note: .NET 9 `WebApplicationFactory` forces the `Development` environment by default (not `Testing`), so test factories must set the environment explicitly where it matters.
 - The Web host in `Development` also auto-starts this container itself (`ProjectBeacon.Web/Startup/DockerPostgresHelper.cs`): it reuses a running container, starts one only if absent, and waits up to 60s for healthy.
 - The Web host migrates on startup unless the environment is `Production` or `BEACON_MIGRATE_ON_START=false` (`ProjectBeacon.Web/Program.cs`). `BEACON_MIGRATE_THEN_EXIT=true` migrates and exits (used by the k8s migrate Job).
 
@@ -70,6 +71,7 @@ Always build the current code before starting; never assume an existing DLL cont
   - `Docker PostgreSQL helper did not start a container...` — Docker missing/daemon down; the app then tries to migrate against whatever `ConnectionStrings:Default` points at.
   - `Set ConnectionStrings:Default (with Password) or POSTGRES_PASSWORD...` — no `.env` reachable from the CWD and no env vars set (`PostgresConnection.Resolve` throws).
   - `The migration connection string has no password...` — `ConnectionStrings__Migration` used without a password.
+  - `The application database role '...' has SUPERUSER privileges...` / `...could not be verified...` — fail-closed role guard: the `ConnectionStrings__Default` login bypasses RLS or is unreachable. In Production this aborts startup (migrate Job exits non-zero); in Development it is a warning. Fix the role/connection, do not disable the guard.
 - First login: `/bootstrap` with `BOOTSTRAP_ADMIN_TOKEN`, then `/login`. With `AUTH_LOCAL_INVITE_ONLY=true`, `/register` requires an invite.
 
 ## 4. Test execution paths
@@ -106,6 +108,8 @@ Fixture behavior (`ProjectBeacon.API.Tests/PostgresFixture.cs`), in order:
 4. Else (no URL and Testcontainers failed) → every PostgreSQL-dependent test **fails** with a diagnostic naming the dependency, the attempted mechanism, the last error, and the corrective action. An infrastructure failure is never reported as a pass.
 
 Every PostgreSQL-dependent test calls `PostgresFixture.RequirePostgres()` first; there is no silent early-return path. A fixture-based test reported as passed means its assertions executed.
+
+`AppRoleGuardTests` (also fixture-based) verifies the startup role guard against real roles on the fixture cluster: a safe `beacon_app` passes; temporary `guard_*` probe roles with `SUPERUSER` / `BYPASSRLS`, the same-login superuser scenario, and an unreachable server are all reported unsafe; probe roles are dropped after the test (best-effort) and never leak connection details into diagnostics.
 
 **Destructive / shared-state warning:** `MigrationApplyTests` (fixture-based) **drops and recreates** the `beacon_migrate_test` database on the fixture's server — a disposable Testcontainers container by default, or the server of an explicitly supplied `BEACON_TEST_DATABASE_URL`. Pointing the URL at the shared development or production server is how a bad test run can destroy shared state — never do it to work around a Testcontainers failure. If Testcontainers is unavailable, the honest result is *blocked*, not a redirect.
 
@@ -166,6 +170,8 @@ For every validation run, record:
 | Playwright: S4 hangs before reconnect evidence | Verify the proxy is up (suite logs `proxy dropped N circuit socket(s)`); confirm nothing else binds 5084/5085. |
 | API.Tests PostgreSQL tests all `Failed` with "PostgreSQL test infrastructure is unavailable" | Docker daemon down or `BEACON_TEST_DATABASE_URL` unreachable. Start Docker or fix the URL; do not redirect to the shared DB. `BEACON_TEST_SKIP_POSTGRES=1` is only for an intentional, reported skip. |
 | `dotnet ef` not found | `dotnet tool restore` (local tool `dotnet-ef 9.0.0` declared in `dotnet-tools.json`), then e.g. `dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure` (CI step). |
+| Web aborts with `The application database role ... has SUPERUSER privileges` (Production) | The `ConnectionStrings__Default` login is privileged (legacy self-host config). Follow the migration order in `README.md`: create `beacon_app` as superuser, repoint `Default` to it, re-run the migrate Job. |
+| Web aborts with `The application database role could not be verified` (Production) | The guard could not reach/verify the role (DB down, bad credentials). Restore connectivity; the guard is fail-closed by design and must not be disabled. |
 
 ## 8. Sources
 
@@ -175,6 +181,9 @@ For every validation run, record:
 | Postgres container/image/volume/port, healthcheck | `docker-compose.yml`, `ProjectBeacon.Web/Startup/DockerPostgresHelper.cs` |
 | `.env` discovery and precedence | `ProjectBeacon.Infrastructure/Data/EnvFile.cs`, `.env.example` |
 | Roles, password resolution, `EnsureAppRoleAsync` | `ProjectBeacon.Infrastructure/Data/PostgresConnection.cs` |
+| Fail-closed role guard, per-host enforcement | `ProjectBeacon.Infrastructure/Data/PostgresConnection.cs` + `AppRoleStatus.cs`; `ProjectBeacon.Web/Program.cs`, `ProjectBeacon.Worker/Program.cs`, `ProjectBeacon.API/Program.cs` |
+| Role guard unit tests (policy, hygiene) | `ProjectBeacon.Infrastructure.Tests/AppRoleGuardTests.cs` |
+| Role guard integration tests (live roles) | `ProjectBeacon.API.Tests/AppRoleGuardTests.cs` |
 | Migrate-on-start, `BEACON_MIGRATE_ON_START`, `BEACON_MIGRATE_THEN_EXIT` | `ProjectBeacon.Web/Program.cs` |
 | Fixture selection, `RequirePostgres`, `BEACON_TEST_SKIP_POSTGRES`, `Available` | `ProjectBeacon.API.Tests/PostgresFixture.cs` |
 | `beacon_migrate_test` drop/create | `ProjectBeacon.API.Tests/MigrationApplyTests.cs` |
