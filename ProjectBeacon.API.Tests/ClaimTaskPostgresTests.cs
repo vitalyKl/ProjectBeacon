@@ -25,13 +25,13 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Atomic Test Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Atomic Test Project", null, org.Id);
             seed.Projects.Add(project);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var task = TaskItem.Create("Atomic Claim Task", project.Id, TaskPriority.Medium, TaskType.Task);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
         }
@@ -55,13 +55,13 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Sequential Test Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Sequential Test Project", null, org.Id);
             seed.Projects.Add(project);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var task = TaskItem.Create("Sequential Claim Task", project.Id, TaskPriority.Low, TaskType.Task);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
         }
@@ -85,22 +85,22 @@ public sealed class ClaimTaskPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Claim Isolation Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var projectA = Project.Create("Claim Isolation Project A", null, org.Id);
             var projectB = Project.Create("Claim Isolation Project B", null, org.Id);
             seed.Projects.Add(projectA);
             seed.Projects.Add(projectB);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var userA = User.Create("claim-iso-user-a", "claim-iso-user-a@beacon.local", "hash-a");
             var userB = User.Create("claim-iso-user-b", "claim-iso-user-b@beacon.local", "hash-b");
             seed.Users.Add(userA);
             seed.Users.Add(userB);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             seed.ProjectMembers.Add(ProjectMember.Create(projectA.Id, userA.Id, MemberRole.Member));
             seed.ProjectMembers.Add(ProjectMember.Create(projectB.Id, userB.Id, MemberRole.Member));
             var task = TaskItem.Create("Claim Isolation Task", projectB.Id, TaskPriority.Medium, TaskType.Task);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             projectAId = projectA.Id;
             projectBId = projectB.Id;
             taskId = task.Id;

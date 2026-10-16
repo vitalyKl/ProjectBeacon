@@ -47,17 +47,17 @@ public sealed class TenantContextDiTests : IDisposable
             {
                 var org = Org.Create("Org");
                 db.Orgs.Add(org);
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
                 orgA = org.Id;
                 var pA = Project.Create("A", null, org.Id);
                 var pB = Project.Create("B", null, org.Id);
                 db.Projects.AddRange(pA, pB);
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
                 projectA = pA.Id;
                 var tA = TaskItem.Create("keep", pA.Id);
                 var tB = TaskItem.Create("secret", pB.Id);
                 db.Tasks.AddRange(tA, tB);
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
                 taskA = tA.Id;
                 taskB = tB.Id;
             }
@@ -70,7 +70,7 @@ public sealed class TenantContextDiTests : IDisposable
 
         Assert.Null(TenantScope.CurrentProjectId);
         Assert.False(TenantScope.IsUnscoped);
-        var visible = await filtered.Tasks.Select(t => t.Id).ToListAsync();
+        var visible = await filtered.Tasks.Select(t => t.Id).ToListAsync(TestContext.Current.CancellationToken);
         Assert.Contains(taskA, visible);
         Assert.DoesNotContain(taskB, visible);
     }

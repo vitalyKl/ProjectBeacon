@@ -43,7 +43,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
         var handler = new ApplyAgentConfigHandler(factory, new SetRoleBindingHandler(factory), new EnqueueCommandHandler(factory));
 
         var result = await handler.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)));
+            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(WorkstationCommandKind.ApplyOpencode, result.Value!.Kind);
@@ -51,7 +51,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
 
         using (TenantScope.EnterUnscoped())
         {
-            var bindings = await _db.RoleBindings.IgnoreQueryFilters().Where(b => b.ProjectId == project.Id).ToListAsync();
+            var bindings = await _db.RoleBindings.IgnoreQueryFilters().Where(b => b.ProjectId == project.Id).ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(3, bindings.Count);
             Assert.All(bindings, b => Assert.Equal(backendId, b.ModelBackendId));
         }
@@ -65,7 +65,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
         var handler = new ApplyAgentConfigHandler(factory, new SetRoleBindingHandler(factory), new EnqueueCommandHandler(factory));
 
         var result = await handler.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)));
+            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(CommandSandbox.RuntimeRequired, result.Error);

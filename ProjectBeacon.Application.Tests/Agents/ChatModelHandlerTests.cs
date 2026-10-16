@@ -35,18 +35,18 @@ public sealed class ChatModelHandlerTests : IDisposable
             _db.Users.Add(user);
             var backend = LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, user.Id);
             _db.LocalModelBackends.Add(backend);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
             backendId = backend.Id;
         }
 
         var factory = HandlerSqlite.Factory(_connection);
-        var saved = await new SetChatModelHandler(factory).HandleAsync(new SetChatModelCommand(new SetChatModelRequest(userId, backendId)));
+        var saved = await new SetChatModelHandler(factory).HandleAsync(new SetChatModelCommand(new SetChatModelRequest(userId, backendId)), TestContext.Current.CancellationToken);
         Assert.True(saved.Success, saved.Error);
         Assert.Equal(backendId, saved.Value);
 
         await using var db = factory.CreateDbContext();
-        var resolved = await ChatModelSelection.ResolveAsync(db, userId, null, default);
+        var resolved = await ChatModelSelection.ResolveAsync(db, userId, null, TestContext.Current.CancellationToken);
         Assert.Equal("beacon-local/qwen", resolved);
     }
 }

@@ -20,10 +20,10 @@ public sealed class CapabilityWallHttpTests
         var client = ctx.Client;
         var token = await CreateTokenAsync(client, ctx.ProjectId, TaskRead);
 
-        var list = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks");
+        var list = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
 
-        var start = await client.PostAsync($"/v1/tasks/{Guid.NewGuid()}/pipeline/start", JsonContent.Create(new { }));
+        var start = await client.PostAsync($"/v1/tasks/{Guid.NewGuid()}/pipeline/start", JsonContent.Create(new { }), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, start.StatusCode);
     }
 
@@ -40,10 +40,10 @@ public sealed class CapabilityWallHttpTests
             projectId = ctx.ProjectId,
             priority = 1,
             type = 3
-        });
-        Assert.True(create.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(create.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, await create.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
-        var models = await client.GetAsync("/v1/models");
+        var models = await client.GetAsync("/v1/models", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, models.StatusCode);
     }
 
@@ -54,10 +54,10 @@ public sealed class CapabilityWallHttpTests
         var client = ctx.Client;
         var token = await CreateTokenAsync(client, ctx.ProjectId, ContextRead);
 
-        var nodes = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes");
+        var nodes = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, nodes.StatusCode);
 
-        var constraints = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/constraints");
+        var constraints = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/constraints", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, constraints.StatusCode);
 
         var upsert = await client.PostAsJsonAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", new
@@ -66,10 +66,10 @@ public sealed class CapabilityWallHttpTests
             bodyMarkdown = "b",
             scopeType = "Project",
             source = "Native"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, upsert.StatusCode);
 
-        var createConstraint = await client.PostAsJsonAsync($"/v1/projects/{ctx.ProjectId}/constraints", new { body = "c", kind = "Security" });
+        var createConstraint = await client.PostAsJsonAsync($"/v1/projects/{ctx.ProjectId}/constraints", new { body = "c", kind = "Security" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, createConstraint.StatusCode);
     }
 
@@ -80,7 +80,7 @@ public sealed class CapabilityWallHttpTests
         var client = ctx.Client;
         var token = await CreateTokenAsync(client, ctx.ProjectId, TaskRead);
 
-        var nodes = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes");
+        var nodes = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, nodes.StatusCode);
     }
 
@@ -91,16 +91,16 @@ public sealed class CapabilityWallHttpTests
         var client = ctx.Client;
         var token = await CreateTokenAsync(client, ctx.ProjectId, Admin);
 
-        var tasks = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks");
+        var tasks = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, tasks.StatusCode);
 
-        var models = await client.GetAsync("/v1/models");
+        var models = await client.GetAsync("/v1/models", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, models.StatusCode);
 
-        var orgs = await client.GetAsync("/v1/orgs");
+        var orgs = await client.GetAsync("/v1/orgs", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, orgs.StatusCode);
 
-        var me = await client.GetAsync("/v1/auth/me");
+        var me = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, me.StatusCode);
     }
 
@@ -127,7 +127,7 @@ public sealed class CapabilityWallHttpTests
 
         foreach (var (method, path) in routes)
         {
-            var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+            var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path), cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(response.StatusCode == HttpStatusCode.Forbidden, $"{method} {path} -> {response.StatusCode}");
         }
     }
@@ -138,16 +138,16 @@ public sealed class CapabilityWallHttpTests
         await using var ctx = await SetupAsync();
         var client = ctx.Client;
 
-        var orgs = await client.GetAsync("/v1/orgs");
+        var orgs = await client.GetAsync("/v1/orgs", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, orgs.StatusCode);
 
-        var me = await client.GetAsync("/v1/auth/me");
+        var me = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
 
-        var create = await client.PostAsJsonAsync("/v1/projects", new { name = "P2", orgId = ctx.OrgId });
-        Assert.True(create.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
+        var create = await client.PostAsJsonAsync("/v1/projects", new { name = "P2", orgId = ctx.OrgId }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(create.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, await create.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
-        var decisions = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/decisions");
+        var decisions = await client.GetAsync($"/v1/projects/{ctx.ProjectId}/decisions", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, decisions.StatusCode);
 
         var nodes = await client.PostAsJsonAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", new
@@ -156,8 +156,8 @@ public sealed class CapabilityWallHttpTests
             bodyMarkdown = "b",
             scopeType = "Project",
             source = "Native"
-        });
-        Assert.True(nodes.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, await nodes.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(nodes.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created, await nodes.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static async Task<Setup> SetupAsync()

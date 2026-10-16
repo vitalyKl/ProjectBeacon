@@ -41,13 +41,13 @@ public sealed class TaskStepHandlerTests : IDisposable
             var org = Org.Create("Org");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             var task = TaskItem.Create("Work", project.Id);
             _db.Tasks.Add(task);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
         }
@@ -57,23 +57,23 @@ public sealed class TaskStepHandlerTests : IDisposable
         var factory = Factory(tenant);
 
         var added = await new AddTaskStepHandler(factory).HandleAsync(
-            new AddTaskStepCommand(new AddTaskStepRequest(taskId, "Write tests")));
+            new AddTaskStepCommand(new AddTaskStepRequest(taskId, "Write tests")), TestContext.Current.CancellationToken);
         Assert.True(added.Success, added.Error);
         Assert.False(added.Value!.IsDone);
 
         var listed = await new ListTaskStepsHandler(factory).HandleAsync(
-            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)));
+            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)), TestContext.Current.CancellationToken);
         Assert.Single(listed.Value!);
 
         var toggled = await new ToggleTaskStepHandler(factory).HandleAsync(
-            new ToggleTaskStepCommand(new ToggleTaskStepRequest(added.Value.Id, true)));
+            new ToggleTaskStepCommand(new ToggleTaskStepRequest(added.Value.Id, true)), TestContext.Current.CancellationToken);
         Assert.True(toggled.Value!.IsDone);
 
         var deleted = await new DeleteTaskStepHandler(factory).HandleAsync(
-            new DeleteTaskStepCommand(new DeleteTaskStepRequest(added.Value.Id)));
+            new DeleteTaskStepCommand(new DeleteTaskStepRequest(added.Value.Id)), TestContext.Current.CancellationToken);
         Assert.True(deleted.Success);
         var empty = await new ListTaskStepsHandler(factory).HandleAsync(
-            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)));
+            new ListTaskStepsCommand(new ListTaskStepsRequest(taskId)), TestContext.Current.CancellationToken);
         Assert.Empty(empty.Value!);
     }
 
@@ -81,7 +81,7 @@ public sealed class TaskStepHandlerTests : IDisposable
     public async Task Add_RejectsBlankTitle()
     {
         var result = await new AddTaskStepHandler(Factory()).HandleAsync(
-            new AddTaskStepCommand(new AddTaskStepRequest(Guid.NewGuid(), "  ")));
+            new AddTaskStepCommand(new AddTaskStepRequest(Guid.NewGuid(), "  ")), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
     }
 }

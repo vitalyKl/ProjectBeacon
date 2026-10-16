@@ -45,13 +45,13 @@ public sealed class ReportHandlerTests : IDisposable
     public async Task Generate_ThenList_ReturnsSnapshot()
     {
         var generated = await new GenerateReportHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-            new GenerateReportCommand(new GenerateReportRequest(_projectId, "user", "tester")));
+            new GenerateReportCommand(new GenerateReportRequest(_projectId, "user", "tester")), TestContext.Current.CancellationToken);
         Assert.True(generated.Success, generated.Error);
         Assert.Contains("Ready work", generated.Value!.BodyMarkdown);
         Assert.Contains("In flight", generated.Value.BodyMarkdown);
         Assert.Contains("\"todo\":1", generated.Value.SnapshotJson, StringComparison.OrdinalIgnoreCase);
 
-        var listed = await new ListReportsHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new ListReportsRequest(_projectId));
+        var listed = await new ListReportsHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new ListReportsRequest(_projectId), TestContext.Current.CancellationToken);
         Assert.True(listed.Success);
         Assert.Single(listed.Value!);
         Assert.Equal(generated.Value!.Id, listed.Value![0].Id);

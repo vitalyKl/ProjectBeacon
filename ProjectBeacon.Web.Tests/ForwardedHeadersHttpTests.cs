@@ -25,7 +25,7 @@ public sealed class ForwardedHeadersHttpTests
             ["password"] = password
         });
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var attributes = GetBeaconAuthCookieAttributes(response);
@@ -119,7 +119,7 @@ public sealed class ForwardedHeadersHttpTests
             ["password"] = password
         });
 
-        var response = await client.PostAsync("/v1/auth/cookie-login", form);
+        var response = await client.PostAsync("/v1/auth/cookie-login", form, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var attributes = GetBeaconAuthCookieAttributes(response);

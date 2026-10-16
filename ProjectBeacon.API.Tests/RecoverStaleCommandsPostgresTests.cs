@@ -29,7 +29,7 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
             var command = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ListDir);
             command.Claim(TimeSpan.FromSeconds(30), "inst-old");
             seed.WorkstationCommands.Add(command);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             commandId = command.Id;
         }
 
@@ -41,7 +41,7 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
         await using var check = _postgres.CreateContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await check.WorkstationCommands.AsNoTracking().SingleAsync(c => c.Id == commandId);
+            var row = await check.WorkstationCommands.AsNoTracking().SingleAsync(c => c.Id == commandId, TestContext.Current.CancellationToken);
             Assert.Equal(WorkstationCommandStatus.Pending, row.Status);
             Assert.Equal(1, row.Attempts);
             Assert.Null(row.LeaseExpiresAt);
@@ -63,7 +63,7 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
             var command = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ChatPrompt, "{}");
             command.Claim(TimeSpan.FromSeconds(30), "inst-old");
             seed.WorkstationCommands.Add(command);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             commandId = command.Id;
         }
 
@@ -75,7 +75,7 @@ public sealed class RecoverStaleCommandsPostgresTests : IClassFixture<PostgresFi
         await using var check = _postgres.CreateContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await check.WorkstationCommands.AsNoTracking().SingleAsync(c => c.Id == commandId);
+            var row = await check.WorkstationCommands.AsNoTracking().SingleAsync(c => c.Id == commandId, TestContext.Current.CancellationToken);
             Assert.Equal(WorkstationCommandStatus.Failed, row.Status);
             Assert.Equal(CommandRecovery.AtMostOnceExpiredError, row.Error);
         }

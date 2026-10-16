@@ -148,13 +148,13 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
             "       set_config('app.tenant_unscoped', 'false', false)", conn))
         {
             setCmd.Parameters.AddWithValue("@pid", projectA.ToString());
-            await setCmd.ExecuteNonQueryAsync();
+            await setCmd.ExecuteNonQueryAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
 
         await using var cmd = new NpgsqlCommand("SELECT \"Id\" FROM \"Tasks\"", conn);
-        using var reader = await cmd.ExecuteReaderAsync();
+        using var reader = await cmd.ExecuteReaderAsync(TestContext.Current.CancellationToken);
         var ids = new List<Guid>();
-        while (await reader.ReadAsync())
+        while (await reader.ReadAsync(cancellationToken: TestContext.Current.CancellationToken))
             ids.Add(reader.GetGuid(0));
 
         Assert.Contains(taskA, ids);
@@ -176,7 +176,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
         await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\" WHERE \"Id\" = @tid", conn);
         cmd.Parameters.AddWithValue("@tid", taskA);
-        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync()!);
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken: TestContext.Current.CancellationToken)!);
         Assert.Equal(0, count);
     }
 
@@ -195,7 +195,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
 
         await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\" WHERE \"Id\" = @tid", conn);
         cmd.Parameters.AddWithValue("@tid", taskA);
-        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync()!);
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken: TestContext.Current.CancellationToken)!);
         Assert.Equal(1, count);
     }
 }

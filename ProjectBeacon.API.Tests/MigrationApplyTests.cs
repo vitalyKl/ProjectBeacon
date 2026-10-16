@@ -31,8 +31,8 @@ public sealed class MigrationApplyTests : IClassFixture<PostgresFixture>
         var migrateOptions = new DbContextOptionsBuilder<BeaconDbContext>().UseNpgsql(targetConn).Options;
         await using (var migrateDb = new BeaconDbContext(migrateOptions))
         {
-            await migrateDb.Database.MigrateAsync();
-            Assert.Empty(await migrateDb.Database.GetPendingMigrationsAsync());
+            await migrateDb.Database.MigrateAsync(TestContext.Current.CancellationToken);
+            Assert.Empty(await migrateDb.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken));
         }
 
         await ExecAdminAsync(serverConn, $"DROP DATABASE IF EXISTS {dbName} WITH (FORCE);");

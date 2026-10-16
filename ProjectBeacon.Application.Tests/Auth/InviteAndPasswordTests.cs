@@ -62,7 +62,7 @@ public sealed class InviteAndPasswordTests : IDisposable
     public async Task Register_InviteOnly_WithoutToken_Fails()
     {
         var result = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _inviteOnly).HandleAsync(
-            new RegisterCommand(new RegisterRequest("bob", "bob@test.com", "password1")));
+            new RegisterCommand(new RegisterRequest("bob", "bob@test.com", "password1")), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
         Assert.Equal("Invite required.", result.Error);
     }
@@ -77,22 +77,22 @@ public sealed class InviteAndPasswordTests : IDisposable
         _db.Projects.Add(project);
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
         _db.ProjectMembers.Add(ProjectMember.Create(project.Id, admin.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var invited = await new CreateProjectInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
-            new CreateProjectInviteRequest(project.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
+            new CreateProjectInviteRequest(project.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)), TestContext.Current.CancellationToken);
         Assert.True(invited.Success, invited.Error);
         Assert.Contains("invite?token=", invited.Value!.Url);
         Assert.Single(_mail.Sent);
 
         var registered = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _inviteOnly).HandleAsync(
-            new RegisterCommand(new RegisterRequest("bob", "bob@test.com", "password1", invited.Value.Token)));
+            new RegisterCommand(new RegisterRequest("bob", "bob@test.com", "password1", invited.Value.Token)), TestContext.Current.CancellationToken);
         Assert.True(registered.Success, registered.Error);
 
         Assert.True(await _db.ProjectMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.ProjectId == project.Id && m.UserId == registered.Value!.UserId));
+            .AnyAsync(m => m.ProjectId == project.Id && m.UserId == registered.Value!.UserId, TestContext.Current.CancellationToken));
         Assert.True(await _db.OrgMembers.IgnoreQueryFilters()
-            .AnyAsync(m => m.OrgId == org.Id && m.UserId == registered.Value!.UserId));
+            .AnyAsync(m => m.OrgId == org.Id && m.UserId == registered.Value!.UserId, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -102,14 +102,14 @@ public sealed class InviteAndPasswordTests : IDisposable
         var org = Org.Create("Acme");
         _db.Orgs.Add(org);
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var invited = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)), TestContext.Current.CancellationToken);
         Assert.True(invited.Success, invited.Error);
 
         var registered = await new RegisterHandler(Factory(), new BcryptPasswordHasher(), _open).HandleAsync(
-            new RegisterCommand(new RegisterRequest("bob", "other@test.com", "password1", invited.Value!.Token)));
+            new RegisterCommand(new RegisterRequest("bob", "other@test.com", "password1", invited.Value!.Token)), TestContext.Current.CancellationToken);
         Assert.False(registered.Success);
         Assert.Equal("Email does not match invite.", registered.Error);
     }
@@ -119,23 +119,23 @@ public sealed class InviteAndPasswordTests : IDisposable
     {
         var admin = await SeedAdminAsync();
         var unknown = await new ForgotPasswordHandler(Factory(), _mail, _open).HandleAsync(
-            new ForgotPasswordRequest("nobody@test.com"));
+            new ForgotPasswordRequest("nobody@test.com"), TestContext.Current.CancellationToken);
         Assert.True(unknown.Success);
         Assert.Empty(_mail.Sent);
 
         var forgot = await new ForgotPasswordHandler(Factory(), _mail, _open).HandleAsync(
-            new ForgotPasswordRequest(admin.Email));
+            new ForgotPasswordRequest(admin.Email), TestContext.Current.CancellationToken);
         Assert.True(forgot.Success);
         Assert.Single(_mail.Sent);
         var body = _mail.Sent[0].Body;
         var token = body.Split("token=", 2)[1].Split('\n', 2)[0].Trim();
 
         var reset = await new ResetPasswordHandler(Factory(), new BcryptPasswordHasher()).HandleAsync(
-            new ResetPasswordRequest(token, "newpass12"));
+            new ResetPasswordRequest(token, "newpass12"), TestContext.Current.CancellationToken);
         Assert.True(reset.Success, reset.Error);
 
         var login = await new LoginHandler(Factory(), new BcryptPasswordHasher(), new JwtTokenIssuer()).HandleAsync(
-            new LoginCommand(new LoginRequest("admin", "newpass12")));
+            new LoginCommand(new LoginRequest("admin", "newpass12")), TestContext.Current.CancellationToken);
         Assert.True(login.Success, login.Error);
     }
 
@@ -145,14 +145,14 @@ public sealed class InviteAndPasswordTests : IDisposable
         var hash = Infrastructure.Security.PasswordHasher.Hash("oldpass12");
         var user = User.Create("alice", "alice@test.com", hash);
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var bad = await new ChangePasswordHandler(Factory(), new BcryptPasswordHasher()).HandleAsync(
-            new ChangePasswordRequest(user.Id, "wrong", "newpass12"));
+            new ChangePasswordRequest(user.Id, "wrong", "newpass12"), TestContext.Current.CancellationToken);
         Assert.False(bad.Success);
 
         var ok = await new ChangePasswordHandler(Factory(), new BcryptPasswordHasher()).HandleAsync(
-            new ChangePasswordRequest(user.Id, "oldpass12", "newpass12"));
+            new ChangePasswordRequest(user.Id, "oldpass12", "newpass12"), TestContext.Current.CancellationToken);
         Assert.True(ok.Success, ok.Error);
     }
 
@@ -165,17 +165,17 @@ public sealed class InviteAndPasswordTests : IDisposable
         var org = Org.Create("Acme");
         _db.Orgs.Add(org);
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var invited = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, Human(admin.Id, true)));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Admin, Human(admin.Id, true)), TestContext.Current.CancellationToken);
         Assert.True(invited.Success, invited.Error);
 
         var accepted = await new AcceptInviteHandler(Factory()).HandleAsync(
-            new AcceptInviteRequest(invited.Value!.Token, Human(bob.Id, false)));
+            new AcceptInviteRequest(invited.Value!.Token, Human(bob.Id, false)), TestContext.Current.CancellationToken);
         Assert.True(accepted.Success, accepted.Error);
         var member = await _db.OrgMembers.IgnoreQueryFilters()
-            .SingleAsync(m => m.OrgId == org.Id && m.UserId == bob.Id);
+            .SingleAsync(m => m.OrgId == org.Id && m.UserId == bob.Id, TestContext.Current.CancellationToken);
         Assert.Equal(MemberRole.Admin, member.Role);
     }
 
@@ -186,13 +186,13 @@ public sealed class InviteAndPasswordTests : IDisposable
         var org = Org.Create("Acme");
         _db.Orgs.Add(org);
         _db.OrgMembers.Add(OrgMember.Create(org.Id, admin.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var first = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)), TestContext.Current.CancellationToken);
         Assert.True(first.Success, first.Error);
         var second = await new CreateOrgInviteHandler(Factory(), _mail, _auth, _open).HandleAsync(
-            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)));
+            new CreateOrgInviteRequest(org.Id, "bob@test.com", MemberRole.Member, Human(admin.Id, true)), TestContext.Current.CancellationToken);
         Assert.False(second.Success);
         Assert.Equal("Invite already pending.", second.Error);
     }

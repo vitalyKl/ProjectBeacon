@@ -23,10 +23,10 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         await using (var seed = _postgres.CreateContext())
         {
             var device = SeedDevice(seed, "atomic-single");
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             deviceId = device.Id;
             seed.WorkstationCommands.Add(WorkstationCommand.Create(device.Id, WorkstationCommandKind.ListDir));
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var results = await Task.WhenAll(
@@ -49,11 +49,11 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         await using (var seed = _postgres.CreateContext())
         {
             var device = SeedDevice(seed, "atomic-two");
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             deviceId = device.Id;
             seed.WorkstationCommands.Add(WorkstationCommand.Create(device.Id, WorkstationCommandKind.ListDir));
             seed.WorkstationCommands.Add(WorkstationCommand.Create(device.Id, WorkstationCommandKind.Probe));
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var results = await Task.WhenAll(ClaimAsync(deviceId), ClaimAsync(deviceId));
@@ -76,24 +76,24 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         await using (var seed = _postgres.CreateContext())
         {
             var device = SeedDevice(seed, "fifo");
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             deviceId = device.Id;
 
             var first = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ListDir);
             var second = WorkstationCommand.Create(device.Id, WorkstationCommandKind.Probe);
             seed.WorkstationCommands.Add(first);
             seed.WorkstationCommands.Add(second);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             // Detach CreatedAt from insertion order: "first" is actually the newest.
             var baseTime = DateTime.UtcNow.AddMinutes(-5);
             await seed.WorkstationCommands
                 .Where(c => c.Id == first.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.CreatedAt, baseTime.AddMinutes(2)));
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.CreatedAt, baseTime.AddMinutes(2)), TestContext.Current.CancellationToken);
             await seed.WorkstationCommands
                 .Where(c => c.Id == second.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.CreatedAt, baseTime));
-            await seed.SaveChangesAsync();
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.CreatedAt, baseTime), TestContext.Current.CancellationToken);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var oldest = await ClaimAsync(deviceId);
@@ -115,12 +115,12 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         {
             var a = SeedDevice(seed, "iso-a");
             var b = SeedDevice(seed, "iso-b");
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             deviceA = a.Id;
             deviceB = b.Id;
             seed.WorkstationCommands.Add(WorkstationCommand.Create(a.Id, WorkstationCommandKind.ListDir));
             seed.WorkstationCommands.Add(WorkstationCommand.Create(b.Id, WorkstationCommandKind.Probe));
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var claimed = await ClaimAsync(deviceA);
@@ -139,12 +139,12 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         await using (var seed = _postgres.CreateContext())
         {
             var device = SeedDevice(seed, "runtime-missing");
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             deviceId = device.Id;
             var command = WorkstationCommand.Create(
                 device.Id, WorkstationCommandKind.InitProject, null, Guid.NewGuid(), null);
             seed.WorkstationCommands.Add(command);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             commandId = command.Id;
         }
 
@@ -158,7 +158,7 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         {
             var row = await check.WorkstationCommands
                 .AsNoTracking()
-                .SingleAsync(c => c.Id == commandId);
+                .SingleAsync(c => c.Id == commandId, TestContext.Current.CancellationToken);
             Assert.Equal(WorkstationCommandStatus.Failed, row.Status);
             Assert.Equal(CommandSandbox.RuntimeRequired, row.Error);
         }

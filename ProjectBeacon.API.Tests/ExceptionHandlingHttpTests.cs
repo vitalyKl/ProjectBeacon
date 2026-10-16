@@ -13,11 +13,11 @@ public sealed class ExceptionHandlingHttpTests
         await using var factory = new TestingApiFactory();
         var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/v1/__test/unhandled");
+        using var response = await client.GetAsync("/v1/__test/unhandled", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(body);
         Assert.Equal(500, doc.RootElement.GetProperty("status").GetInt32());
         Assert.Equal("Internal Server Error", doc.RootElement.GetProperty("title").GetString());

@@ -71,8 +71,8 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            Assert.Equal(1, await db.PipelineSessions.CountAsync(s => s.TaskId == taskId));
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            Assert.Equal(1, await db.PipelineSessions.CountAsync(s => s.TaskId == taskId, TestContext.Current.CancellationToken));
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskPipelineStage.Planning, row.PipelineStage);
             Assert.Equal(TaskItemStatus.InProgress, row.Status);
         }
@@ -100,7 +100,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskItemStatus.InProgress, row.Status);
             Assert.Null(row.CompletedAt);
         }
@@ -115,7 +115,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Verdict Race Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Verdict Race Project", null, org.Id);
             seed.Projects.Add(project);
             var task = TaskItem.Create("verdict race", project.Id);
@@ -124,7 +124,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             task.EnterReview();
             seed.Tasks.Add(task);
             seed.PipelineSessions.Add(PipelineSession.Create(task.Id, project.Id, PipelineRole.Review, "review prompt"));
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             projectId = project.Id;
         }
@@ -149,11 +149,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            Assert.Equal(1, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId));
-            Assert.Equal(1, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId));
-            var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review);
+            Assert.Equal(1, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId, TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId, TestContext.Current.CancellationToken));
+            var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review, TestContext.Current.CancellationToken);
             Assert.Equal(SessionStatus.Closed, session.Status);
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskPipelineStage.Approved, row.PipelineStage);
         }
     }
@@ -167,7 +167,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Subtask Race Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Subtask Race Project", null, org.Id);
             seed.Projects.Add(project);
             var task = TaskItem.Create("subtask race", project.Id);
@@ -177,7 +177,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var sub = Subtask.Create("do the work", task.Id, project.Id);
             sub.Start();
             seed.Subtasks.Add(sub);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
         }
@@ -202,7 +202,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Subtasks.FirstAsync(s => s.Id == subtaskId);
+            var row = await db.Subtasks.FirstAsync(s => s.Id == subtaskId, TestContext.Current.CancellationToken);
             Assert.Equal(SubtaskStatus.Done, row.Status);
             Assert.Equal(winner.Value!.Subtasks.Single(s => s.Id == subtaskId).Summary, row.Summary);
         }
@@ -217,12 +217,12 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var user = User.Create("completion-user", "completion-user@beacon.local", "hash");
             seed.Users.Add(user);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var device = DaemonDevice.Create("completion device", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"), "bcd_completion");
             seed.DaemonDevices.Add(device);
             var command = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ListDir, "{}");
             seed.WorkstationCommands.Add(command);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             deviceId = device.Id;
             commandId = command.Id;
         }
@@ -247,7 +247,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.WorkstationCommands.FirstAsync(c => c.Id == commandId);
+            var row = await db.WorkstationCommands.FirstAsync(c => c.Id == commandId, TestContext.Current.CancellationToken);
             Assert.Equal(WorkstationCommandStatus.Succeeded, row.Status);
             Assert.Equal(winner.Value!.ResultJson, row.ResultJson);
         }
@@ -262,10 +262,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var user = User.Create("check-user", "check-user@beacon.local", "hash");
             seed.Users.Add(user);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var org = Org.Create("Check Race Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Check Race Project", null, org.Id);
             seed.Projects.Add(project);
             seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
@@ -276,7 +276,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var task = TaskItem.Create("check race", project.Id);
             seed.Tasks.Add(task);
             seed.ReviewRuns.Add(ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid()));
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
             deviceId = device.Id;
             taskId = task.Id;
@@ -305,7 +305,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         using (TenantScope.EnterUnscoped())
         {
             Assert.Equal(1, await db.WorkstationCommands
-                .CountAsync(c => c.DeviceId == deviceId && c.Kind == WorkstationCommandKind.RunReviewCheck));
+                .CountAsync(c => c.DeviceId == deviceId && c.Kind == WorkstationCommandKind.RunReviewCheck, TestContext.Current.CancellationToken));
         }
     }
 
@@ -318,11 +318,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var user = User.Create("save-user", "save-user@beacon.local", "hash");
             seed.Users.Add(user);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var device = DaemonDevice.Create("save device", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"), "bcd_save");
             device.Heartbeat();
             seed.DaemonDevices.Add(device);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
             deviceId = device.Id;
         }
@@ -350,11 +350,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId);
+            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId, TestContext.Current.CancellationToken);
             Assert.Equal(1, row.DesiredRevision);
 
             // Only the winner enqueued a command, and the stored JSON pairs with its payload.
-            Assert.Equal(1, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId && c.Kind == WorkstationCommandKind.SaveWorkstation));
+            Assert.Equal(1, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId && c.Kind == WorkstationCommandKind.SaveWorkstation, TestContext.Current.CancellationToken));
             winningPayload.Remove("revision");
             Assert.True(JsonNode.DeepEquals(winningPayload, JsonNode.Parse(row.DesiredWorkstationJson)));
         }
@@ -369,11 +369,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var user = User.Create("inject-user", "inject-user@beacon.local", "hash");
             seed.Users.Add(user);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var device = DaemonDevice.Create("inject device", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"), "bcd_inject");
             device.Heartbeat();
             seed.DaemonDevices.Add(device);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
             deviceId = device.Id;
 
@@ -390,7 +390,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 $$ LANGUAGE plpgsql;
                 CREATE TRIGGER beacon_inject_fail
                 BEFORE INSERT ON ""WorkstationCommands""
-                FOR EACH ROW EXECUTE FUNCTION beacon_inject_fail();");
+                FOR EACH ROW EXECUTE FUNCTION beacon_inject_fail();", TestContext.Current.CancellationToken);
         }
         try
         {
@@ -401,7 +401,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                     new EnqueueCommandHandler(factory).HandleAsync(
                         new EnqueueCommandCommand(new EnqueueCommandRequest(
                             deviceId, userId, WorkstationCommandKind.SaveWorkstation,
-                            """{"n":"a","revision":0,"injectFail":true}""", null))));
+                            """{"n":"a","revision":0,"injectFail":true}""", null)), TestContext.Current.CancellationToken));
             }
         }
         finally
@@ -409,7 +409,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await using var cleanup = _postgres.CreateAdminContext();
             await cleanup.Database.ExecuteSqlRawAsync(@"
                 DROP TRIGGER IF EXISTS beacon_inject_fail ON ""WorkstationCommands"";
-                DROP FUNCTION IF EXISTS beacon_inject_fail();");
+                DROP FUNCTION IF EXISTS beacon_inject_fail();", TestContext.Current.CancellationToken);
         }
 
         // The guarded UPDATE and the INSERT roll back together: JSON, revision, and the
@@ -417,10 +417,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId);
+            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId, TestContext.Current.CancellationToken);
             Assert.Equal(0, row.DesiredRevision);
             Assert.Equal("{}", row.DesiredWorkstationJson);
-            Assert.Equal(0, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId));
+            Assert.Equal(0, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId, TestContext.Current.CancellationToken));
         }
 
         // The old base revision is still valid: the retry without the fault lands revision 1.
@@ -428,12 +428,12 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var retry = await new EnqueueCommandHandler(_postgres.CreateFactory()).HandleAsync(
                 new EnqueueCommandCommand(new EnqueueCommandRequest(
-                    deviceId, userId, WorkstationCommandKind.SaveWorkstation, """{"n":"a","revision":0}""", null)));
+                    deviceId, userId, WorkstationCommandKind.SaveWorkstation, """{"n":"a","revision":0}""", null)), TestContext.Current.CancellationToken);
             Assert.True(retry.Success, retry.Error);
-            var row = await db.DaemonDevices.AsNoTracking().FirstAsync(d => d.Id == deviceId);
+            var row = await db.DaemonDevices.AsNoTracking().FirstAsync(d => d.Id == deviceId, TestContext.Current.CancellationToken);
             Assert.Equal(1, row.DesiredRevision);
             Assert.Equal("""{"n":"a"}""", row.DesiredWorkstationJson);
-            Assert.Equal(1, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId));
+            Assert.Equal(1, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId, TestContext.Current.CancellationToken));
         }
     }
 
@@ -446,10 +446,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var user = User.Create("bump-user", "bump-user@beacon.local", "hash");
             seed.Users.Add(user);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var device = DaemonDevice.Create("bump device", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"), "bcd_bump");
             seed.DaemonDevices.Add(device);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
             deviceId = device.Id;
         }
@@ -468,7 +468,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId);
+            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId, TestContext.Current.CancellationToken);
             Assert.Equal(3, row.DesiredRevision);
         }
     }
@@ -482,7 +482,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Actor Race Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Actor Race Project", null, org.Id);
             seed.Projects.Add(project);
             var task = TaskItem.Create("actor race", project.Id);
@@ -491,7 +491,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.Tasks.Add(task);
             var sub = Subtask.Create("do the work", task.Id, project.Id);
             seed.Subtasks.Add(sub);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             subtaskId = sub.Id;
         }
@@ -520,10 +520,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         using (TenantScope.EnterUnscoped())
         {
             var actorSessions = await db.PipelineSessions
-                .Where(s => s.TaskId == taskId && s.Role == PipelineRole.Actor).ToListAsync();
+                .Where(s => s.TaskId == taskId && s.Role == PipelineRole.Actor).ToListAsync(TestContext.Current.CancellationToken);
             Assert.Single(actorSessions);
             Assert.Equal(okIds[0], actorSessions[0].Id);
-            var row = await db.Subtasks.FirstAsync(s => s.Id == subtaskId);
+            var row = await db.Subtasks.FirstAsync(s => s.Id == subtaskId, TestContext.Current.CancellationToken);
             Assert.Equal(SubtaskStatus.InProgress, row.Status);
         }
     }
@@ -537,7 +537,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Done Race Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Done Race Project", null, org.Id);
             seed.Projects.Add(project);
             var task = TaskItem.Create("done race", project.Id);
@@ -546,7 +546,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
         }
 
@@ -568,7 +568,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskItemStatus.Done, row.Status);
         }
     }
@@ -582,7 +582,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Mix Race Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Mix Race Project", null, org.Id);
             seed.Projects.Add(project);
             var task = TaskItem.Create("mixed race", project.Id);
@@ -592,7 +592,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
         }
 
@@ -615,7 +615,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.True(row.Status is TaskItemStatus.Todo or TaskItemStatus.Done);
             if (results.All(r => r.Success))
                 Assert.Contains(row.Status.ToString(), results.Select(r => r.Value!.Status));
@@ -636,7 +636,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW Done Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW Done Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-done-user", "fw-done-user@beacon.local", "hash");
@@ -650,7 +650,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             b.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(a);
             seed.ReviewRuns.Add(b);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
             runA = a.Id;
@@ -676,10 +676,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskItemStatus.Done, row.Status);
             Assert.Contains(row.ReviewNotes, new[] { "notes-a", "notes-b" });
-            Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+            Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
         }
     }
 
@@ -692,7 +692,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW Fail Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW Fail Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-fail-user", "fw-fail-user@beacon.local", "hash");
@@ -700,7 +700,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
             var task = TaskItem.Create("fw fail race", project.Id);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
         }
@@ -730,12 +730,12 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 Assert.Equal(TaskItemStatus.Todo, row.Status);
                 var parts = (row.Description ?? "").Split("\n\n");
                 Assert.Equal(1, parts.Count(p => p == "Failed: " + (loserOutput == "Y" ? "X" : "Y")));
                 Assert.Equal(0, parts.Count(p => p == "Failed: " + loserOutput));
-                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
             }
         }
 
@@ -748,11 +748,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 var after = (row.Description ?? "").Split("\n\n");
                 Assert.Equal(1, after.Count(p => p == "Failed: X"));
                 Assert.Equal(1, after.Count(p => p == "Failed: Y"));
-                Assert.Equal(2, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(2, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
             }
         }
     }
@@ -766,7 +766,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW Mix Todo Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW Mix Todo Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-mix-todo-user", "fw-mix-todo-user@beacon.local", "hash");
@@ -777,7 +777,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
             runId = run.Id;
@@ -817,10 +817,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 var parts = (row.Description ?? "").Split("\n\n");
                 Assert.Equal(doneWon ? 0 : 1, parts.Count(p => p == "Failed: X"));
-                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 if (doneWon)
                 {
                     Assert.Equal(TaskItemStatus.Done, row.Status);
@@ -841,10 +841,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 var parts = (row.Description ?? "").Split("\n\n");
                 Assert.Equal(1, parts.Count(p => p == "Failed: X"));
-                var comments = await db.TaskComments.Where(c => c.TaskId == taskId).ToListAsync();
+                var comments = await db.TaskComments.Where(c => c.TaskId == taskId).ToListAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(2, comments.Count);
                 Assert.Contains(comments, c => c.Content.Contains("done"));
                 Assert.Contains(comments, c => c.Content.Contains("failed"));
@@ -872,7 +872,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW Mix Prog Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW Mix Prog Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-mix-prog-user", "fw-mix-prog-user@beacon.local", "hash");
@@ -885,7 +885,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
             runId = run.Id;
@@ -922,10 +922,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 var parts = (row.Description ?? "").Split("\n\n");
                 Assert.Equal(doneWon ? 0 : 1, parts.Count(p => p == "Failed: X"));
-                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 if (doneWon)
                 {
                     Assert.Equal(TaskItemStatus.Done, row.Status);
@@ -945,10 +945,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 var parts = (row.Description ?? "").Split("\n\n");
                 Assert.Equal(1, parts.Count(p => p == "Failed: X"));
-                var comments = await db.TaskComments.Where(c => c.TaskId == taskId).ToListAsync();
+                var comments = await db.TaskComments.Where(c => c.TaskId == taskId).ToListAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(2, comments.Count);
                 Assert.Contains(comments, c => c.Content.Contains("done"));
                 Assert.Contains(comments, c => c.Content.Contains("failed"));
@@ -974,7 +974,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW Same Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW Same Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-same-user", "fw-same-user@beacon.local", "hash");
@@ -982,7 +982,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
             var task = TaskItem.Create("fw same race", project.Id);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
         }
@@ -1008,10 +1008,10 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 Assert.Equal(TaskItemStatus.Todo, row.Status);
                 Assert.Equal(1, (row.Description ?? "").Split("\n\n").Count(p => p == "Failed: X"));
-                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
             }
         }
 
@@ -1021,9 +1021,9 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             using (TenantScope.EnterUnscoped())
             {
-                var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                 Assert.Equal(1, (row.Description ?? "").Split("\n\n").Count(p => p == "Failed: X"));
-                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
             }
         }
     }
@@ -1037,7 +1037,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("Verdict Failed Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("Verdict Failed Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("verdict-failed-user", "verdict-failed-user@beacon.local", "hash");
@@ -1049,7 +1049,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             task.EnterReview();
             seed.Tasks.Add(task);
             seed.PipelineSessions.Add(PipelineSession.Create(task.Id, project.Id, PipelineRole.Review, "review prompt"));
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
         }
@@ -1088,24 +1088,24 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskItemStatus.Todo, row.Status);
             Assert.Equal(1, (row.Description ?? "").Split("\n\n").Count(p => p == "Failed: X"));
-            Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+            Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
             if (verdict.Success)
             {
                 Assert.Equal(TaskPipelineStage.Approved, row.PipelineStage);
-                Assert.Equal(1, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId));
-                Assert.Equal(1, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId));
-                var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review);
+                Assert.Equal(1, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId, TestContext.Current.CancellationToken));
+                Assert.Equal(1, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId, TestContext.Current.CancellationToken));
+                var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review, TestContext.Current.CancellationToken);
                 Assert.Equal(SessionStatus.Closed, session.Status);
             }
             else
             {
                 Assert.Equal(TaskPipelineStage.Reviewing, row.PipelineStage);
-                Assert.Equal(0, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId));
-                Assert.Equal(0, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId));
-                var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review);
+                Assert.Equal(0, await db.ReviewVerdicts.CountAsync(v => v.TaskId == taskId, TestContext.Current.CancellationToken));
+                Assert.Equal(0, await db.ReviewRuns.CountAsync(r => r.TaskId == taskId, TestContext.Current.CancellationToken));
+                var session = await db.PipelineSessions.FirstAsync(s => s.TaskId == taskId && s.Role == PipelineRole.Review, TestContext.Current.CancellationToken);
                 Assert.Equal(SessionStatus.Ready, session.Status);
             }
         }
@@ -1120,7 +1120,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW Skip Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW Skip Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-skip-user", "fw-skip-user@beacon.local", "hash");
@@ -1128,7 +1128,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
             var task = TaskItem.Create("fw skip race", project.Id);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
         }
@@ -1151,7 +1151,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())
         {
-            var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+            var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
             Assert.Equal(TaskItemStatus.Todo, row.Status);
             var parts = (row.Description ?? "").Split("\n\n");
             Assert.Equal(1, parts.Count(p => p == "Note: S1"));
@@ -1168,7 +1168,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW inj Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW inj Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-inj-done-user", "fw-inj-done-user@beacon.local", "hash");
@@ -1179,7 +1179,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             var run = ReviewRun.Start(project.Id, task.Id, ReviewerType.Agent, Guid.NewGuid());
             run.Complete("checked", "check:exit0");
             seed.ReviewRuns.Add(run);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
             proofId = run.Id;
@@ -1197,7 +1197,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 $$ LANGUAGE plpgsql;
                 CREATE TRIGGER beacon_finish_inject_fail
                 BEFORE INSERT ON ""TaskComments""
-                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();");
+                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();", TestContext.Current.CancellationToken);
         }
 
         var factory = _postgres.CreateFactory();
@@ -1209,7 +1209,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
                     new FinishWorkHandler(factory).HandleAsync(
                         new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "done", "injectFail", userId.ToString(), ReviewRunId: proofId))));
+                            taskId.ToString(), "done", "injectFail", userId.ToString(), ReviewRunId: proofId)), TestContext.Current.CancellationToken));
             }
 
             // The state write rolled back with the failed comment: the row is exactly
@@ -1218,12 +1218,12 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             {
                 using (TenantScope.EnterUnscoped())
                 {
-                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                     Assert.Equal(TaskItemStatus.Todo, row.Status);
                     Assert.Null(row.ReviewNotes);
                     Assert.Null(row.CompletedAt);
                     Assert.Equal(0, row.StateRevision);
-                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 }
             }
 
@@ -1232,18 +1232,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             {
                 var retry = await new FinishWorkHandler(factory).HandleAsync(
                     new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "done", "clean retry", userId.ToString(), ReviewRunId: proofId)));
+                        taskId.ToString(), "done", "clean retry", userId.ToString(), ReviewRunId: proofId)), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
             {
                 using (TenantScope.EnterUnscoped())
                 {
-                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                     Assert.Equal(TaskItemStatus.Done, row.Status);
                     Assert.Equal("clean retry", row.ReviewNotes);
                     Assert.Equal(1, row.StateRevision);
-                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 }
             }
         }
@@ -1252,7 +1252,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await using var cleanup = _postgres.CreateAdminContext();
             await cleanup.Database.ExecuteSqlRawAsync(@"
                 DROP TRIGGER IF EXISTS beacon_finish_inject_fail ON ""TaskComments"";
-                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();");
+                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();", TestContext.Current.CancellationToken);
         }
     }
 
@@ -1265,7 +1265,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW inj Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW inj Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-inj-failed-user", "fw-inj-failed-user@beacon.local", "hash");
@@ -1273,7 +1273,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
             var task = TaskItem.Create("fw inj failed", project.Id);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
 
@@ -1288,7 +1288,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 $$ LANGUAGE plpgsql;
                 CREATE TRIGGER beacon_finish_inject_fail
                 BEFORE INSERT ON ""TaskComments""
-                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();");
+                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();", TestContext.Current.CancellationToken);
         }
 
         var factory = _postgres.CreateFactory();
@@ -1300,7 +1300,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
                     new FinishWorkHandler(factory).HandleAsync(
                         new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "failed", "injectFail", userId.ToString()))));
+                            taskId.ToString(), "failed", "injectFail", userId.ToString())), TestContext.Current.CancellationToken));
             }
 
             // The note append rolled back with the failed comment: the row is unchanged.
@@ -1308,11 +1308,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             {
                 using (TenantScope.EnterUnscoped())
                 {
-                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                     Assert.Equal(TaskItemStatus.Todo, row.Status);
                     Assert.Null(row.Description);
                     Assert.Equal(0, row.StateRevision);
-                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 }
             }
 
@@ -1321,18 +1321,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             {
                 var retry = await new FinishWorkHandler(factory).HandleAsync(
                     new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "failed", "clean retry", userId.ToString())));
+                        taskId.ToString(), "failed", "clean retry", userId.ToString())), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
             {
                 using (TenantScope.EnterUnscoped())
                 {
-                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                     Assert.Equal(TaskItemStatus.Todo, row.Status);
                     Assert.Equal("Failed: clean retry", row.Description);
                     Assert.Equal(1, row.StateRevision);
-                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 }
             }
         }
@@ -1341,7 +1341,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await using var cleanup = _postgres.CreateAdminContext();
             await cleanup.Database.ExecuteSqlRawAsync(@"
                 DROP TRIGGER IF EXISTS beacon_finish_inject_fail ON ""TaskComments"";
-                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();");
+                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();", TestContext.Current.CancellationToken);
         }
     }
 
@@ -1354,7 +1354,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         {
             var org = Org.Create("FW inj Org", null);
             seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("FW inj Project", null, org.Id);
             seed.Projects.Add(project);
             var user = User.Create("fw-inj-skipped-user", "fw-inj-skipped-user@beacon.local", "hash");
@@ -1362,7 +1362,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Admin));
             var task = TaskItem.Create("fw inj skipped", project.Id);
             seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
             userId = user.Id;
 
@@ -1377,7 +1377,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 $$ LANGUAGE plpgsql;
                 CREATE TRIGGER beacon_finish_inject_fail
                 BEFORE INSERT ON ""TaskComments""
-                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();");
+                FOR EACH ROW EXECUTE FUNCTION beacon_finish_inject_fail();", TestContext.Current.CancellationToken);
         }
 
         var factory = _postgres.CreateFactory();
@@ -1389,7 +1389,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 await Assert.ThrowsAsync<DbUpdateException>(() =>
                     new FinishWorkHandler(factory).HandleAsync(
                         new FinishWorkCommand(new FinishWorkRequest(
-                            taskId.ToString(), "skipped", "injectFail", userId.ToString()))));
+                            taskId.ToString(), "skipped", "injectFail", userId.ToString())), TestContext.Current.CancellationToken));
             }
 
             // The note append rolled back with the failed comment; status never moves for skipped.
@@ -1397,11 +1397,11 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             {
                 using (TenantScope.EnterUnscoped())
                 {
-                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                     Assert.Equal(TaskItemStatus.Todo, row.Status);
                     Assert.Null(row.Description);
                     Assert.Equal(0, row.StateRevision);
-                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                    Assert.Equal(0, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 }
             }
 
@@ -1410,18 +1410,18 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             {
                 var retry = await new FinishWorkHandler(factory).HandleAsync(
                     new FinishWorkCommand(new FinishWorkRequest(
-                        taskId.ToString(), "skipped", "clean retry", userId.ToString())));
+                        taskId.ToString(), "skipped", "clean retry", userId.ToString())), TestContext.Current.CancellationToken);
                 Assert.True(retry.Success, retry.Error);
             }
             await using (var db = _postgres.CreateAdminContext())
             {
                 using (TenantScope.EnterUnscoped())
                 {
-                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId);
+                    var row = await db.Tasks.FirstAsync(t => t.Id == taskId, TestContext.Current.CancellationToken);
                     Assert.Equal(TaskItemStatus.Todo, row.Status);
                     Assert.Equal("Note: clean retry", row.Description);
                     Assert.Equal(0, row.StateRevision);
-                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId));
+                    Assert.Equal(1, await db.TaskComments.CountAsync(c => c.TaskId == taskId, TestContext.Current.CancellationToken));
                 }
             }
         }
@@ -1430,7 +1430,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             await using var cleanup = _postgres.CreateAdminContext();
             await cleanup.Database.ExecuteSqlRawAsync(@"
                 DROP TRIGGER IF EXISTS beacon_finish_inject_fail ON ""TaskComments"";
-                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();");
+                DROP FUNCTION IF EXISTS beacon_finish_inject_fail();", TestContext.Current.CancellationToken);
         }
     }
 

@@ -39,7 +39,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_ProjectOwner_ProjectAdminister_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -47,7 +47,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_ProjectAdmin_ProjectAdminister_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -55,7 +55,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_ProjectMember_ProjectAdminister_ReturnsForbidden()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -64,7 +64,7 @@ public sealed partial class AuthorizationServiceTests
     {
         var (_, projectId, _) = await SeedProjectWithMembers(MemberRole.Member);
         var strangerId = Guid.NewGuid();
-        var r = await _auth.CanAsync(_db, Human(strangerId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(strangerId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -74,9 +74,9 @@ public sealed partial class AuthorizationServiceTests
         var (orgId, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member, MemberRole.Admin);
         // Remove the project membership to test org escalation only
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.ProjectId == projectId && m.UserId == userId));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -85,9 +85,9 @@ public sealed partial class AuthorizationServiceTests
     {
         var (orgId, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member, MemberRole.Owner);
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.ProjectId == projectId && m.UserId == userId));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -96,9 +96,9 @@ public sealed partial class AuthorizationServiceTests
     {
         var (orgId, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member, MemberRole.Member);
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.ProjectId == projectId && m.UserId == userId));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -106,7 +106,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_ProjectAdmin_OrgMember_ProjectAdminister_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin, MemberRole.Member);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -132,7 +132,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_OrgOwner_OrgAdminister_ReturnsOk()
     {
         var (orgId, userId) = await SeedOrgWithMember(MemberRole.Owner);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Org, AuthAction.Administer, orgId: orgId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -140,7 +140,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_OrgAdmin_OrgAdminister_ReturnsOk()
     {
         var (orgId, userId) = await SeedOrgWithMember(MemberRole.Admin);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Org, AuthAction.Administer, orgId: orgId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -148,7 +148,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task Human_OrgMember_OrgAdminister_ReturnsForbidden()
     {
         var (orgId, userId) = await SeedOrgWithMember(MemberRole.Member);
-        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Org, AuthAction.Administer, orgId: orgId);
+        var r = await _auth.CanAsync(_db, Human(userId), ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -157,7 +157,7 @@ public sealed partial class AuthorizationServiceTests
     {
         var (orgId, _) = await SeedOrgWithMember(MemberRole.Member);
         var strangerId = Guid.NewGuid();
-        var r = await _auth.CanAsync(_db, Human(strangerId), ResourceType.Org, AuthAction.Administer, orgId: orgId);
+        var r = await _auth.CanAsync(_db, Human(strangerId), ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 }

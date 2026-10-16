@@ -28,7 +28,7 @@ public sealed class P2AuthorizationHttpTests
         var outsiderJwt = await RegisterAndLogin(client, "outsider1", "o1@beacon.local");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var outsiderId = me.GetProperty("id").GetGuid();
 
         var response = await client.PostAsJsonAsync($"/v1/projects/{projectId}/members", new
@@ -36,7 +36,7 @@ public sealed class P2AuthorizationHttpTests
             projectId,
             userId = outsiderId,
             role = 1
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -55,7 +55,7 @@ public sealed class P2AuthorizationHttpTests
 
         var outsiderJwt = await RegisterAndLogin(client, "outsider2", "o2@beacon.local");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var outsiderId = me.GetProperty("id").GetGuid();
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
@@ -64,8 +64,8 @@ public sealed class P2AuthorizationHttpTests
             projectId,
             userId = outsiderId,
             role = 1
-        });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -83,16 +83,16 @@ public sealed class P2AuthorizationHttpTests
 
         var outsiderJwt = await RegisterAndLogin(client, "outsider3", "o3@beacon.local");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var outsiderId = me.GetProperty("id").GetGuid();
 
         var adminMe = new AuthenticationHeaderValue("Bearer", adminJwt);
         client.DefaultRequestHeaders.Authorization = adminMe;
-        var adminInfo = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var adminInfo = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var adminId = adminInfo.GetProperty("id").GetGuid();
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
-        var response = await client.DeleteAsync($"/v1/projects/{projectId}/members/{adminId}");
+        var response = await client.DeleteAsync($"/v1/projects/{projectId}/members/{adminId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -111,7 +111,7 @@ public sealed class P2AuthorizationHttpTests
 
         var outsiderJwt = await RegisterAndLogin(client, "outsider4", "o4@beacon.local");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var outsiderId = me.GetProperty("id").GetGuid();
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
@@ -123,7 +123,7 @@ public sealed class P2AuthorizationHttpTests
         });
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
-        var response = await client.DeleteAsync($"/v1/projects/{projectId}/members/{outsiderId}");
+        var response = await client.DeleteAsync($"/v1/projects/{projectId}/members/{outsiderId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
@@ -148,7 +148,7 @@ public sealed class P2AuthorizationHttpTests
             projectId,
             name = "hacker-token",
             capabilities = 1
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -170,8 +170,8 @@ public sealed class P2AuthorizationHttpTests
             projectId,
             name = "legit-token",
             capabilities = 1
-        });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class P2AuthorizationHttpTests
         var outsiderJwt = await RegisterAndLogin(client, "outsider6", "o6@beacon.local");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
 
-        var response = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}");
+        var response = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -223,7 +223,7 @@ public sealed class P2AuthorizationHttpTests
         });
         var tokenId = token.GetProperty("id").GetGuid();
 
-        var response = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}");
+        var response = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
@@ -254,7 +254,7 @@ public sealed class P2AuthorizationHttpTests
             projectId,
             name = "escalated",
             capabilities = 1
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -286,7 +286,7 @@ public sealed class P2AuthorizationHttpTests
             projectId,
             userId = outsiderId,
             role = 1
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -310,7 +310,7 @@ public sealed class P2AuthorizationHttpTests
         {
             projectId,
             name = "Hacked"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -331,8 +331,8 @@ public sealed class P2AuthorizationHttpTests
         {
             projectId,
             name = "Renamed"
-        });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -361,7 +361,7 @@ public sealed class P2AuthorizationHttpTests
         {
             projectId,
             name = "TokenHacked"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -389,7 +389,7 @@ public sealed class P2AuthorizationHttpTests
         var outsiderJwt = await RegisterAndLogin(client, "outsider8", "o8@beacon.local");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
 
-        var response = await client.GetAsync($"/v1/projects/{projectId}/tokens/{tokenId}");
+        var response = await client.GetAsync($"/v1/projects/{projectId}/tokens/{tokenId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -415,7 +415,7 @@ public sealed class P2AuthorizationHttpTests
         var apiTokenValue = tokenResponse.GetProperty("token").GetString()!;
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiTokenValue);
-        var response = await client.GetAsync($"/v1/projects/{projectId}/tokens");
+        var response = await client.GetAsync($"/v1/projects/{projectId}/tokens", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -442,7 +442,7 @@ public sealed class P2AuthorizationHttpTests
         });
         var tokenId = token.GetProperty("id").GetGuid();
 
-        var response = await client.GetAsync($"/v1/projects/{projectIdB}/tokens/{tokenId}");
+        var response = await client.GetAsync($"/v1/projects/{projectIdB}/tokens/{tokenId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 

@@ -37,13 +37,13 @@ public sealed class GetProjectPulseHandlerTests : IDisposable
         var inProgress = TaskItem.Create("progress", project.Id);
         inProgress.MoveToNextStatus();
         _db.Tasks.AddRange(todo, inProgress);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var open = Milestone.Create("M1", null, project.Id, 0);
         var closed = Milestone.Create("M2", null, project.Id, 1);
         closed.Close();
         _db.Milestones.AddRange(open, closed);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ContextSections.Add(ContextSection.Create(
             "goals", "Goals", "Ship the pulse", project.Id, ContextScopeType.Project));
@@ -51,16 +51,16 @@ public sealed class GetProjectPulseHandlerTests : IDisposable
             "definition_of_done", "DoD", "Tests pass", project.Id, ContextScopeType.Project));
         _db.ContextSections.Add(ContextSection.Create(
             "architecture", "Architecture", "ignored", project.Id, ContextScopeType.Project));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var ready = PipelineSession.Create(todo.Id, project.Id, PipelineRole.Planner, "plan");
         var active = PipelineSession.Create(inProgress.Id, project.Id, PipelineRole.Actor, "act");
         active.Launch();
         _db.PipelineSessions.AddRange(ready, active);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectPulseHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id);
+        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Value);
@@ -91,10 +91,10 @@ public sealed class GetProjectPulseHandlerTests : IDisposable
             TaskItem.Create("medium", project.Id, TaskPriority.Medium),
             TaskItem.Create("high", project.Id, TaskPriority.High),
             TaskItem.Create("critical", project.Id, TaskPriority.Critical));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectPulseHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id);
+        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var peek = result.Value!.ReadyPeek;
@@ -116,10 +116,10 @@ public sealed class GetProjectPulseHandlerTests : IDisposable
             "goals", "Project goals", "project body", project.Id, ContextScopeType.Project));
         _db.ContextSections.Add(ContextSection.Create(
             "definition_of_done", "Empty DoD", "   ", project.Id, ContextScopeType.Project));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectPulseHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id);
+        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Single(result.Value!.BriefSections);
@@ -132,10 +132,10 @@ public sealed class GetProjectPulseHandlerTests : IDisposable
     {
         var bob = User.Create("bob", "bob@example.com", "hash");
         _db.Users.Add(bob);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectPulseHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(bob.Id, isAdmin: false);
+        var result = await handler.HandleAsync(bob.Id, isAdmin: false, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Null(result.Value);
@@ -146,18 +146,18 @@ public sealed class GetProjectPulseHandlerTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var root = User.Create("root", "root@example.com", "hash");
         _db.Users.Add(root);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectPulseHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(root.Id, isAdmin: true, project.Id);
+        var result = await handler.HandleAsync(root.Id, isAdmin: true, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Value);

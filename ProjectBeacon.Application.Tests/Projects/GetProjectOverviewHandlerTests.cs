@@ -31,27 +31,27 @@ public sealed class GetProjectOverviewHandlerTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var project = Project.Create("Mine", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var alice = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(alice);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ProjectMembers.Add(ProjectMember.Create(project.Id, alice.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var todo = TaskItem.Create("todo", project.Id);
         var inProgress = TaskItem.Create("progress", project.Id);
         inProgress.MoveToNextStatus();
         _db.Tasks.AddRange(todo, inProgress);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectOverviewHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id);
+        var result = await handler.HandleAsync(alice.Id, isAdmin: false, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Value);
@@ -71,18 +71,18 @@ public sealed class GetProjectOverviewHandlerTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var root = User.Create("root", "root@example.com", "hash");
         _db.Users.Add(root);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectOverviewHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(root.Id, isAdmin: true, project.Id);
+        var result = await handler.HandleAsync(root.Id, isAdmin: true, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Value);
@@ -94,18 +94,18 @@ public sealed class GetProjectOverviewHandlerTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var bob = User.Create("bob", "bob@example.com", "hash");
         _db.Users.Add(bob);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectOverviewHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(bob.Id, isAdmin: false, project.Id);
+        var result = await handler.HandleAsync(bob.Id, isAdmin: false, project.Id, ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Null(result.Value);
@@ -116,10 +116,10 @@ public sealed class GetProjectOverviewHandlerTests : IDisposable
     {
         var root = User.Create("root", "root@example.com", "hash");
         _db.Users.Add(root);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new GetProjectOverviewHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(root.Id, isAdmin: true, Guid.NewGuid());
+        var result = await handler.HandleAsync(root.Id, isAdmin: true, Guid.NewGuid(), ct: TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Null(result.Value);

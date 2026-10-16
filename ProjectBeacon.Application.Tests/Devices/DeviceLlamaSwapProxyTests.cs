@@ -80,26 +80,26 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
             var org = Org.Create("Org");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             projectId = project.Id;
             var created = await new CreateDeviceHandler(HandlerSqlite.Factory(_connection))
-                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
+                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)), TestContext.Current.CancellationToken);
             await new HeartbeatDeviceHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
                 new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(created.Value!.Id,
-                    """{"llamaSwapStatus":{"available":true,"healthy":true,"loadedModel":"qwen"}}""", "{}")));
+                    """{"llamaSwapStatus":{"available":true,"healthy":true,"loadedModel":"qwen"}}""", "{}")), TestContext.Current.CancellationToken);
             await new AttachRuntimeHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, user.Id, @"A:\work")));
+                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, created.Value.Id, user.Id, @"A:\work")), TestContext.Current.CancellationToken);
         }
 
         var tenant = new TenantContext();
         tenant.Assign(projectId, null, false);
         var factory = HandlerSqlite.Factory(_connection, tenant);
         var proxy = new DeviceLlamaSwapProxy(factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory));
-        var status = await proxy.GetStatusAsync();
+        var status = await proxy.GetStatusAsync(TestContext.Current.CancellationToken);
         Assert.True(status.Available);
         Assert.Equal("qwen", status.LoadedModel);
     }
@@ -114,24 +114,24 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
             var org = Org.Create("Org");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             projectId = project.Id;
             var created = await new CreateDeviceHandler(HandlerSqlite.Factory(_connection))
-                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
+                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)), TestContext.Current.CancellationToken);
             await new HeartbeatDeviceHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
                 new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(created.Value!.Id,
-                    """{"hostLoad":{"cpuPercent":22,"ramUsedBytes":100,"ramTotalBytes":200,"sampledAt":"2026-09-20T12:00:00Z"}}""", "{}")));
+                    """{"hostLoad":{"cpuPercent":22,"ramUsedBytes":100,"ramTotalBytes":200,"sampledAt":"2026-09-20T12:00:00Z"}}""", "{}")), TestContext.Current.CancellationToken);
         }
 
         var tenant = new TenantContext();
         tenant.Assign(projectId, null, false);
         var factory = HandlerSqlite.Factory(_connection, tenant);
         var proxy = new DeviceLlamaSwapProxy(factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory));
-        var status = await proxy.GetStatusAsync();
+        var status = await proxy.GetStatusAsync(TestContext.Current.CancellationToken);
         Assert.Equal("laptop", status.DeviceName);
         Assert.Equal(22, status.Host!.CpuPercent);
     }
@@ -146,21 +146,21 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
             var org = Org.Create("Org");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             _db.LocalModelBackends.Add(LocalModelBackend.Create("qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, user.Id, concurrent: true));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var created = await new CreateDeviceHandler(HandlerSqlite.Factory(_connection))
-                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)));
+                .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp", user.Id)), TestContext.Current.CancellationToken);
             deviceId = created.Value!.Id;
             await new AttachRuntimeHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work")));
+                new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, deviceId, user.Id, @"A:\work")), TestContext.Current.CancellationToken);
         }
 
         var result = await new GetLlamaSwapConfigHandler(HandlerSqlite.Factory(_connection), new LlamaSwapCatalog())
-            .HandleAsync(new GetLlamaSwapConfigCommand(new GetLlamaSwapConfigRequest(deviceId)));
+            .HandleAsync(new GetLlamaSwapConfigCommand(new GetLlamaSwapConfigRequest(deviceId)), TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Error);
         Assert.Contains("qwen", result.Value!.Yaml);
         Assert.Contains("llama-server", result.Value.Yaml);

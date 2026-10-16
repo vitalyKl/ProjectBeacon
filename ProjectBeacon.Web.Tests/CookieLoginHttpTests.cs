@@ -24,7 +24,7 @@ public sealed class CookieLoginHttpTests
             ["login"] = "admin",
             ["password"] = password!
         });
-        var response = await client.PostAsync("/v1/auth/cookie-login", form);
+        var response = await client.PostAsync("/v1/auth/cookie-login", form, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/dashboard", response.Headers.Location?.ToString());
         Assert.Contains(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith("BeaconAuth=", StringComparison.Ordinal));
@@ -35,7 +35,7 @@ public sealed class CookieLoginHttpTests
     {
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var response = await client.GetAsync("/");
+        var response = await client.GetAsync("/", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Null(response.Headers.Location);
     }
@@ -45,7 +45,7 @@ public sealed class CookieLoginHttpTests
     {
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient();
-        var response = await client.GetAsync("/recover");
+        var response = await client.GetAsync("/recover", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -54,10 +54,10 @@ public sealed class CookieLoginHttpTests
     {
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient();
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/register")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/forgot")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/reset")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/invite")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/register", cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/forgot", cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/reset", cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/invite", cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Fact]
@@ -66,13 +66,13 @@ public sealed class CookieLoginHttpTests
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var ru = await client.GetAsync("/culture?culture=ru&returnUrl=/dashboard");
+        var ru = await client.GetAsync("/culture?culture=ru&returnUrl=/dashboard", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, ru.StatusCode);
         Assert.Equal("/dashboard", ru.Headers.Location?.ToString());
         Assert.Contains(ru.Headers.GetValues("Set-Cookie"),
             c => c.Contains(".AspNetCore.Culture", StringComparison.Ordinal) && c.Contains("ru", StringComparison.OrdinalIgnoreCase));
 
-        var bad = await client.GetAsync("/culture?culture=xx&returnUrl=/dashboard");
+        var bad = await client.GetAsync("/culture?culture=xx&returnUrl=/dashboard", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, bad.StatusCode);
         Assert.Contains(bad.Headers.GetValues("Set-Cookie"),
             c => c.Contains(".AspNetCore.Culture", StringComparison.Ordinal) && c.Contains("en", StringComparison.OrdinalIgnoreCase));
@@ -91,7 +91,7 @@ public sealed class CookieLoginHttpTests
             ["login"] = "admin",
             ["password"] = password
         });
-        var response = await client.PostAsync("/v1/auth/cookie-login", form);
+        var response = await client.PostAsync("/v1/auth/cookie-login", form, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var attributes = GetBeaconAuthCookieAttributes(response);
@@ -114,7 +114,7 @@ public sealed class CookieLoginHttpTests
             ["login"] = "admin",
             ["password"] = password
         });
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var attributes = GetBeaconAuthCookieAttributes(response);
@@ -126,14 +126,14 @@ public sealed class CookieLoginHttpTests
     {
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var response = await client.GetAsync("/board");
+        var response = await client.GetAsync("/board", cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(
             response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Unauthorized or HttpStatusCode.OK,
             response.StatusCode.ToString());
         if (response.StatusCode == HttpStatusCode.Redirect)
             Assert.Contains("/login", response.Headers.Location?.ToString(), StringComparison.OrdinalIgnoreCase);
         else if (response.StatusCode == HttpStatusCode.OK)
-            Assert.Contains("login", (await response.Content.ReadAsStringAsync()).ToLowerInvariant());
+            Assert.Contains("login", (await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken)).ToLowerInvariant());
     }
 
     private static string[] GetBeaconAuthCookieAttributes(HttpResponseMessage response)

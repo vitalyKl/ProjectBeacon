@@ -37,14 +37,14 @@ public sealed class ListTasksByStatusHandlerTests : IDisposable
             var org = Org.Create("Org");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             var running = TaskItem.Create("Running", project.Id);
             running.TransitionTo(TaskItemStatus.InProgress);
             var todo = TaskItem.Create("Waiting", project.Id);
             _db.Tasks.AddRange(running, todo);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             projectId = project.Id;
             runningId = running.Id;
         }
@@ -52,7 +52,7 @@ public sealed class ListTasksByStatusHandlerTests : IDisposable
         var tenant = new TenantContext();
         tenant.Assign(projectId, null, false);
         var result = await new ListTasksByStatusHandler(HandlerSqlite.Factory(_connection, tenant))
-            .HandleAsync(new ListTasksByStatusCommand(new ListTasksByStatusRequest(projectId, "inprogress")));
+            .HandleAsync(new ListTasksByStatusCommand(new ListTasksByStatusRequest(projectId, "inprogress")), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         var match = Assert.Single(result.Value!);

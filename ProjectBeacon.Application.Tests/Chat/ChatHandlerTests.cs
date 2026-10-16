@@ -37,15 +37,15 @@ public sealed class ChatHandlerTests : IDisposable
         var factory = HandlerSqlite.Factory(_connection, tenant);
 
         var appended = await new AppendChatPartHandler(factory).HandleAsync(
-            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "hello", "p1")));
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "hello", "p1")), TestContext.Current.CancellationToken);
         Assert.True(appended.Success, appended.Error);
 
         var dup = await new AppendChatPartHandler(factory).HandleAsync(
-            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "hello", "p1")));
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "hello", "p1")), TestContext.Current.CancellationToken);
         Assert.Equal(appended.Value!.Id, dup.Value!.Id);
 
         var listed = await new ListChatPartsHandler(factory).HandleAsync(
-            new ListChatPartsCommand(new ListChatPartsRequest(sessionId, Guid.Empty)));
+            new ListChatPartsCommand(new ListChatPartsRequest(sessionId, Guid.Empty)), TestContext.Current.CancellationToken);
         Assert.Single(listed.Value!);
         Assert.Equal("hello", listed.Value![0].Body);
     }
@@ -58,12 +58,12 @@ public sealed class ChatHandlerTests : IDisposable
         tenant.Assign(projectId, null, false);
         var factory = HandlerSqlite.Factory(_connection, tenant);
         await using var db = factory.CreateDbContext();
-        var row = await db.ChatSessions.FirstAsync(s => s.Id == sessionId);
+        var row = await db.ChatSessions.FirstAsync(s => s.Id == sessionId, TestContext.Current.CancellationToken);
         row.SetStreaming();
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var idle = await new MarkChatIdleHandler(factory).HandleAsync(
-            new MarkChatIdleCommand(new MarkChatIdleRequest(sessionId, deviceId)));
+            new MarkChatIdleCommand(new MarkChatIdleRequest(sessionId, deviceId)), TestContext.Current.CancellationToken);
         Assert.True(idle.Success, idle.Error);
         Assert.Equal(ChatSessionStatus.Idle, idle.Value!.Status);
     }

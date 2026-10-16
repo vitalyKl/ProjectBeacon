@@ -93,7 +93,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "llama-small", ModelBackendType.LlamaCpp, "llama-server -m small.gguf", 8192, 300, AccountA, new[] { "--no-mmap" })));
+            new UpsertLocalModelBackendRequest(null, "llama-small", ModelBackendType.LlamaCpp, "llama-server -m small.gguf", 8192, 300, AccountA, new[] { "--no-mmap" })), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         var dto = result.Value!;
@@ -115,11 +115,11 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "old", ModelBackendType.LlamaCpp, "old-cmd", 1024, 0, AccountA)));
+            new UpsertLocalModelBackendRequest(null, "old", ModelBackendType.LlamaCpp, "old-cmd", 1024, 0, AccountA)), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
         var updated = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(created.Value!.Id, "new", ModelBackendType.OpenAiCompatible, "new-cmd", 2048, 60, AccountA, null, false, null, "xai/grok-3")));
+            new UpsertLocalModelBackendRequest(created.Value!.Id, "new", ModelBackendType.OpenAiCompatible, "new-cmd", 2048, 60, AccountA, null, false, null, "xai/grok-3")), TestContext.Current.CancellationToken);
 
         Assert.True(updated.Success, updated.Error);
         Assert.Equal(created.Value.Id, updated.Value!.Id);
@@ -136,12 +136,12 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, AccountA, null, true)));
+            new UpsertLocalModelBackendRequest(null, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, AccountA, null, true)), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.True(created.Value!.Concurrent);
 
         var updated = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(created.Value.Id, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, AccountA, null, false)));
+            new UpsertLocalModelBackendRequest(created.Value.Id, "embed", ModelBackendType.LlamaCpp, "llama-server -m e.gguf --port ${PORT}", 512, 0, AccountA, null, false)), TestContext.Current.CancellationToken);
         Assert.True(updated.Success, updated.Error);
         Assert.False(updated.Value!.Concurrent);
     }
@@ -156,12 +156,12 @@ public sealed class ModelBackendHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.Add(foreign);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectA)));
         var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(foreign.Id, "foreign", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountA)));
+            new UpsertLocalModelBackendRequest(foreign.Id, "foreign", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountA)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -177,7 +177,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
             ? new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, EmptyGuidScope()))
             : new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection));
 
-        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request));
+        var result = await handler.HandleAsync(new UpsertLocalModelBackendCommand(request), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Account is not resolved.", result.Error);
@@ -190,17 +190,17 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
         var noName = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "  ", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountA)));
+            new UpsertLocalModelBackendRequest(null, "  ", ModelBackendType.LlamaCpp, "cmd", 1024, 0, AccountA)), TestContext.Current.CancellationToken);
         Assert.False(noName.Success);
         Assert.Equal("Name is required (max 200 characters).", noName.Error);
 
         var noLaunch = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "  ", 1024, 0, AccountA)));
+            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "  ", 1024, 0, AccountA)), TestContext.Current.CancellationToken);
         Assert.False(noLaunch.Success);
         Assert.Equal("LaunchCommand is required (max 1000 characters).", noLaunch.Error);
 
         var negative = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "cmd", 1024, -1, AccountA)));
+            new UpsertLocalModelBackendRequest(null, "name", ModelBackendType.LlamaCpp, "cmd", 1024, -1, AccountA)), TestContext.Current.CancellationToken);
         Assert.False(negative.Success);
         Assert.Equal("ContextSize and Ttl must be non-negative.", negative.Error);
     }
@@ -216,11 +216,11 @@ public sealed class ModelBackendHandlerTests : IDisposable
             _db.LocalModelBackends.Add(backend);
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, backend.Id, projectId));
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Actor, backend.Id, projectId));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var handler = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id, ownerId)));
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(backend.Id, ownerId)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Contains("planner", result.Error);
@@ -235,11 +235,11 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var upsert = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
         var created = await upsert.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "solo", ModelBackendType.FreeToken, "cmd", 1024, 0, AccountA, null, false, null, "xai/grok-3")));
+            new UpsertLocalModelBackendRequest(null, "solo", ModelBackendType.FreeToken, "cmd", 1024, 0, AccountA, null, false, null, "xai/grok-3")), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
         var del = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var result = await del.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(created.Value!.Id, AccountA)));
+        var result = await del.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(created.Value!.Id, AccountA)), TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Error);
         Assert.Equal(0, await CountBackendsAsync());
     }
@@ -250,7 +250,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new DeleteLocalModelBackendHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
-        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(Guid.NewGuid(), AccountA)));
+        var result = await handler.HandleAsync(new DeleteLocalModelBackendCommand(new DeleteLocalModelBackendRequest(Guid.NewGuid(), AccountA)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -266,15 +266,15 @@ public sealed class ModelBackendHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.AddRange(first, second);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var created = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, first.Id)));
+        var created = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, first.Id)), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal(projectId, created.Value!.ProjectId);
 
-        var repointed = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, second.Id)));
+        var repointed = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Actor, second.Id)), TestContext.Current.CancellationToken);
         Assert.True(repointed.Success, repointed.Error);
         Assert.Equal(created.Value.Id, repointed.Value!.Id);
         Assert.Equal(second.Id, repointed.Value.ModelBackendId);
@@ -287,7 +287,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
         var handler = new SetRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
 
-        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Review, Guid.NewGuid())));
+        var result = await handler.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(PipelineRole.Review, Guid.NewGuid())), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Model backend not found.", result.Error);
@@ -302,14 +302,14 @@ public sealed class ModelBackendHandlerTests : IDisposable
         {
             _db.LocalModelBackends.Add(backend);
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, backend.Id, projectId));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var handler = new RemoveRoleBindingHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
-        var removed = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)));
+        var removed = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)), TestContext.Current.CancellationToken);
         Assert.True(removed.Success, removed.Error);
 
-        var again = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)));
+        var again = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(PipelineRole.Planner)), TestContext.Current.CancellationToken);
         Assert.False(again.Success);
         Assert.Equal("Role binding not found.", again.Error);
     }
@@ -328,16 +328,16 @@ public sealed class ModelBackendHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             _db.LocalModelBackends.AddRange(beta, alpha, other);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Review, alpha.Id, projectA));
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Actor, beta.Id, projectA));
             _db.RoleBindings.Add(RoleBinding.Create(PipelineRole.Planner, other.Id, projectB));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var handler = new GetModelRegistryHandler(HandlerSqlite.Factory(_connection, Scope(projectA)));
-        var result = await handler.HandleAsync(new GetModelRegistryCommand(ownerA));
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(ownerA), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(ownerA, result.Value!.UserId);
@@ -351,7 +351,7 @@ public sealed class ModelBackendHandlerTests : IDisposable
     {
         var handler = new GetModelRegistryHandler(HandlerSqlite.Factory(_connection));
 
-        var result = await handler.HandleAsync(new GetModelRegistryCommand(Guid.Empty));
+        var result = await handler.HandleAsync(new GetModelRegistryCommand(Guid.Empty), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Account is not resolved.", result.Error);
@@ -362,17 +362,17 @@ public sealed class ModelBackendHandlerTests : IDisposable
     {
         var proxy = new UnavailableLlamaSwapProxy();
 
-        var status = await new GetProxyStatusHandler(proxy).HandleAsync(new GetProxyStatusCommand());
+        var status = await new GetProxyStatusHandler(proxy).HandleAsync(new GetProxyStatusCommand(), TestContext.Current.CancellationToken);
         Assert.True(status.Success, status.Error);
         Assert.False(status.Value!.Available);
         Assert.False(status.Value.Healthy);
         Assert.Equal("llama-swap supervisor is not running.", status.Value.Error);
 
-        var reload = await new ReloadProxyHandler(proxy).HandleAsync(new ReloadProxyCommand());
+        var reload = await new ReloadProxyHandler(proxy).HandleAsync(new ReloadProxyCommand(), TestContext.Current.CancellationToken);
         Assert.False(reload.Success);
         Assert.Equal("llama-swap supervisor is not running.", reload.Error);
 
-        var unload = await new UnloadProxyHandler(proxy).HandleAsync(new UnloadProxyCommand());
+        var unload = await new UnloadProxyHandler(proxy).HandleAsync(new UnloadProxyCommand(), TestContext.Current.CancellationToken);
         Assert.False(unload.Success);
         Assert.Equal("llama-swap supervisor is not running.", unload.Error);
     }

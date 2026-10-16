@@ -88,7 +88,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief, 50, 100, 3, false);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(task.Id, result.Value!.TaskId);
@@ -122,7 +122,7 @@ public sealed class ContextCostReportTests : IDisposable
         var (project, task) = await SeedProjectAndTaskAsync("P2", "Lonely task");
         await RecordAsync(project.Id, task.Id, null, EvalCondition.WithBrief);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(0, result.Value!.PairCount);
@@ -134,7 +134,7 @@ public sealed class ContextCostReportTests : IDisposable
     {
         await SeedProjectAndTaskAsync("P3", "Some task");
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(Guid.NewGuid()));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Task not found.", result.Error);
@@ -149,7 +149,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(1, result.Value!.PairCount);
@@ -174,7 +174,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAndCompleteAsync(project.Id, task.Id, pair2, EvalCondition.WithBrief, 80, 160, 4, false);
         await RecordAndCompleteAsync(project.Id, task.Id, pair2, EvalCondition.WithoutBrief, 40, 80, 2, false);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(2, result.Value!.PairCount);
@@ -190,7 +190,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief, 100, 200, 5, true);
         await RecordAndCompleteAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief, 50, 100, 3, false);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, otherProject.Id));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, otherProject.Id), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Task not found.", result.Error);
@@ -205,7 +205,7 @@ public sealed class ContextCostReportTests : IDisposable
         await RecordAsync(project.Id, task.Id, pairId, EvalCondition.WithBrief);
         await RecordAsync(project.Id, task.Id, pairId, EvalCondition.WithoutBrief);
 
-        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id));
+        var result = await Handler().HandleAsync(new GetContextCostReportRequest(task.Id, project.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(1, result.Value!.PairCount);

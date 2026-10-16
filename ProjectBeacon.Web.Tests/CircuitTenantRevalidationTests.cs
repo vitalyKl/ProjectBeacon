@@ -67,7 +67,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
 
         var circuit = OpenScope(project.Id, org.Id);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null);
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Equal(project.Id, circuit.Tenant.ProjectId);
@@ -82,14 +82,14 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         var other = Project.Create("Other", null, org.Id);
         _db.Projects.Add(other);
         _db.ProjectMembers.Add(ProjectMember.Create(other.Id, user.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ProjectMembers.Remove(_db.ProjectMembers.Single(m => m.ProjectId == current.Id && m.UserId == user.Id));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(current.Id, org.Id);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: current.Id), null);
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: current.Id), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Equal(other.Id, circuit.Tenant.ProjectId);
@@ -100,11 +100,11 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     {
         var (_, user, project) = await SeedUserInProjectAsync();
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.UserId == user.Id));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(project.Id, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null);
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
 
         Assert.False(ok);
     }
@@ -114,11 +114,11 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     {
         var (_, user, project) = await SeedUserInProjectAsync();
         _db.Users.Remove(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(project.Id, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null);
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: project.Id), null, TestContext.Current.CancellationToken);
 
         Assert.False(ok);
     }
@@ -128,7 +128,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     {
         var circuit = OpenScope(Guid.NewGuid(), null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, new ClaimsPrincipal(new ClaimsIdentity()), null);
+            circuit.Scope, new ClaimsPrincipal(new ClaimsIdentity()), null, TestContext.Current.CancellationToken);
 
         Assert.False(ok);
     }
@@ -138,11 +138,11 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     {
         var (org, user, _) = await SeedUserInProjectAsync();
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.UserId == user.Id));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(null, null);
         var ok = await CircuitTenantRevalidation.RevalidateAsync(
-            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null);
+            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Equal(_db.Projects.IgnoreQueryFilters().OrderBy(p => p.CreatedAt).First().Id, circuit.Tenant.ProjectId);
@@ -161,7 +161,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         var root = services.BuildServiceProvider();
         using var scope = root.CreateScope();
 
-        var ok = await CircuitTenantRevalidation.RevalidateAsync(scope.ServiceProvider, Principal(user.Id, false, project.Id), null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(scope.ServiceProvider, Principal(user.Id, false, project.Id), null, TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.Equal(project.Id, circuit.Tenant.ProjectId);
@@ -176,13 +176,13 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         _db.Users.Add(bob);
         _db.Projects.Add(projectB);
         _db.ProjectMembers.Add(ProjectMember.Create(projectB.Id, bob.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuitA = OpenScope(projectA.Id, org.Id);
         var circuitB = OpenScope(projectB.Id, org.Id);
 
-        var okA = await CircuitTenantRevalidation.RevalidateAsync(circuitA.Scope, Principal(alice.Id, false, projectA.Id), null);
-        var okB = await CircuitTenantRevalidation.RevalidateAsync(circuitB.Scope, Principal(bob.Id, false, projectB.Id), null);
+        var okA = await CircuitTenantRevalidation.RevalidateAsync(circuitA.Scope, Principal(alice.Id, false, projectA.Id), null, TestContext.Current.CancellationToken);
+        var okB = await CircuitTenantRevalidation.RevalidateAsync(circuitB.Scope, Principal(bob.Id, false, projectB.Id), null, TestContext.Current.CancellationToken);
 
         Assert.True(okA);
         Assert.True(okB);
@@ -198,17 +198,17 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         var other = Project.Create("Other", null, org.Id);
         _db.Projects.Add(other);
         _db.ProjectMembers.Add(ProjectMember.Create(other.Id, user.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var circuit = OpenScope(current.Id, org.Id);
         var auth = (CircuitRevalidatingAuthenticationStateProvider)circuit.Scope.GetRequiredService<CircuitRevalidatingAuthenticationStateProvider>();
         auth.SetAuthenticationState(Task.FromResult(new AuthenticationState(Principal(user.Id, false, current.Id))));
 
         _db.ProjectMembers.Remove(_db.ProjectMembers.Single(m => m.ProjectId == current.Id && m.UserId == user.Id));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = circuit.Scope.GetRequiredService<CircuitTenantRebindHandler>();
-        await handler.OnConnectionUpAsync(null!, default);
+        await handler.OnConnectionUpAsync(null!, TestContext.Current.CancellationToken);
 
         Assert.Equal(other.Id, circuit.Tenant.ProjectId);
     }
@@ -223,10 +223,10 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
         auth.SetAuthenticationState(Task.FromResult(new AuthenticationState(Principal(user.Id, false, project.Id))));
 
         _db.Users.Remove(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = circuit.Scope.GetRequiredService<CircuitTenantRebindHandler>();
-        await handler.OnConnectionUpAsync(null!, default);
+        await handler.OnConnectionUpAsync(null!, TestContext.Current.CancellationToken);
 
         var state = await auth.GetAuthenticationStateAsync();
         Assert.False(state.User.Identity!.IsAuthenticated);

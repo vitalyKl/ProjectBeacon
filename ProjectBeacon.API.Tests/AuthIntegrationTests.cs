@@ -56,7 +56,7 @@ public sealed class AuthIntegrationTests : IDisposable
     public async Task Bootstrap_CreatesAdminUser()
     {
         var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
-        var result = await handler.HandleAsync("test-bootstrap-token");
+        var result = await handler.HandleAsync("test-bootstrap-token", TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var admin = result.Value!;
@@ -76,9 +76,9 @@ public sealed class AuthIntegrationTests : IDisposable
     public async Task Bootstrap_AlreadyCompleted_ReturnsFailure()
     {
         var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
-        await handler.HandleAsync("test-bootstrap-token");
+        await handler.HandleAsync("test-bootstrap-token", TestContext.Current.CancellationToken);
 
-        var result = await handler.HandleAsync("test-bootstrap-token");
+        var result = await handler.HandleAsync("test-bootstrap-token", TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Bootstrap already completed.", result.Error);
@@ -88,7 +88,7 @@ public sealed class AuthIntegrationTests : IDisposable
     public async Task Bootstrap_WithoutConfiguredToken_ReturnsFailure()
     {
         var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig(token: ""));
-        var result = await handler.HandleAsync("anything");
+        var result = await handler.HandleAsync("anything", TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Bootstrap token is not configured.", result.Error);
@@ -98,7 +98,7 @@ public sealed class AuthIntegrationTests : IDisposable
     public async Task Bootstrap_WithWrongToken_ReturnsFailure()
     {
         var handler = new BootstrapHandler(_dbFactory, new BcryptPasswordHasher(), BootstrapConfig());
-        var result = await handler.HandleAsync("wrong-token");
+        var result = await handler.HandleAsync("wrong-token", TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Invalid bootstrap token.", result.Error);
@@ -111,7 +111,7 @@ public sealed class AuthIntegrationTests : IDisposable
 
         var handler = new LoginHandler(_dbFactory, new BcryptPasswordHasher(), new JwtTokenIssuer());
         var result = await handler.HandleAsync(
-            new LoginCommand(new LoginRequest("admin", "wrong-password")));
+            new LoginCommand(new LoginRequest("admin", "wrong-password")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Invalid credentials.", result.Error);
@@ -128,7 +128,7 @@ public sealed class AuthIntegrationTests : IDisposable
 
         var handler = new LoginHandler(_dbFactory, new BcryptPasswordHasher(), new JwtTokenIssuer());
         var result = await handler.HandleAsync(
-            new LoginCommand(new LoginRequest("admin", password)));
+            new LoginCommand(new LoginRequest("admin", password)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var login = result.Value!;
@@ -151,7 +151,7 @@ public sealed class AuthIntegrationTests : IDisposable
         for (var i = 0; i < 5; i++)
         {
             await handler.HandleAsync(
-                new LoginCommand(new LoginRequest("admin", "wrong")));
+                new LoginCommand(new LoginRequest("admin", "wrong")), TestContext.Current.CancellationToken);
         }
 
         var user = _db.Users.FirstOrDefault();
@@ -160,7 +160,7 @@ public sealed class AuthIntegrationTests : IDisposable
         Assert.NotNull(user.LockedUntil);
 
         var lockedResult = await handler.HandleAsync(
-            new LoginCommand(new LoginRequest("admin", correctPassword)));
+            new LoginCommand(new LoginRequest("admin", correctPassword)), TestContext.Current.CancellationToken);
 
         Assert.False(lockedResult.Success);
         Assert.Equal("Account is temporarily locked. Try again later.", lockedResult.Error);
@@ -171,7 +171,7 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
         var result = await handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")));
+            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         var registered = result.Value!;
@@ -187,10 +187,10 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
         await handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")));
+            new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")), TestContext.Current.CancellationToken);
 
         var result = await handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("newuser", "other@test.com", "password")));
+            new RegisterCommand(new RegisterRequest("newuser", "other@test.com", "password")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Login already taken.", result.Error);
@@ -201,10 +201,10 @@ public sealed class AuthIntegrationTests : IDisposable
     {
         var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
         await handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password")));
+            new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password")), TestContext.Current.CancellationToken);
 
         var result = await handler.HandleAsync(
-            new RegisterCommand(new RegisterRequest("user2", "test@test.com", "password")));
+            new RegisterCommand(new RegisterRequest("user2", "test@test.com", "password")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Email already registered.", result.Error);

@@ -33,9 +33,9 @@ public sealed class CoordinationHttpTests
         var decisionId = decision.GetProperty("id").GetGuid();
         Assert.Equal("Proposed", decision.GetProperty("status").GetString());
 
-        var accepted = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{decisionId}/accept", new { });
-        Assert.True(accepted.IsSuccessStatusCode, await accepted.Content.ReadAsStringAsync());
-        var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/decisions");
+        var accepted = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{decisionId}/accept", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(accepted.IsSuccessStatusCode, await accepted.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/decisions", TestContext.Current.CancellationToken);
         Assert.Equal("Accepted", listed[0].GetProperty("status").GetString());
 
         var replacement = await PostJson(client, $"/v1/projects/{projectId}/decisions", new
@@ -46,19 +46,19 @@ public sealed class CoordinationHttpTests
             consequences = "migrate once"
         });
         var replacementId = replacement.GetProperty("id").GetGuid();
-        var acceptedReplacement = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{replacementId}/accept", new { });
-        Assert.True(acceptedReplacement.IsSuccessStatusCode, await acceptedReplacement.Content.ReadAsStringAsync());
+        var acceptedReplacement = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{replacementId}/accept", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(acceptedReplacement.IsSuccessStatusCode, await acceptedReplacement.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         var superseded = await client.PostAsJsonAsync(
             $"/v1/projects/{projectId}/decisions/{decisionId}/supersede",
-            new { replacementId });
-        var supersededBody = await superseded.Content.ReadAsStringAsync();
+            new { replacementId }, cancellationToken: TestContext.Current.CancellationToken);
+        var supersededBody = await superseded.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(superseded.IsSuccessStatusCode, supersededBody);
         var supersededJson = JsonSerializer.Deserialize<JsonElement>(supersededBody, Json);
         Assert.Equal("Superseded", supersededJson.GetProperty("status").GetString());
 
-        var deprecated = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{replacementId}/deprecate", new { });
-        var deprecatedBody = await deprecated.Content.ReadAsStringAsync();
+        var deprecated = await client.PostAsJsonAsync($"/v1/projects/{projectId}/decisions/{replacementId}/deprecate", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        var deprecatedBody = await deprecated.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(deprecated.IsSuccessStatusCode, deprecatedBody);
         var deprecatedJson = JsonSerializer.Deserialize<JsonElement>(deprecatedBody, Json);
         Assert.Equal("Deprecated", deprecatedJson.GetProperty("status").GetString());
@@ -70,8 +70,8 @@ public sealed class CoordinationHttpTests
         });
         var constraintId = constraint.GetProperty("id").GetGuid();
         Assert.Equal("Proposed", constraint.GetProperty("status").GetString());
-        var activated = await client.PostAsJsonAsync($"/v1/projects/{projectId}/constraints/{constraintId}/activate", new { });
-        Assert.True(activated.IsSuccessStatusCode, await activated.Content.ReadAsStringAsync());
+        var activated = await client.PostAsJsonAsync($"/v1/projects/{projectId}/constraints/{constraintId}/activate", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(activated.IsSuccessStatusCode, await activated.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         var milestone = await PostJson(client, $"/v1/projects/{projectId}/milestones", new
         {
@@ -81,17 +81,17 @@ public sealed class CoordinationHttpTests
             order = 0
         });
         var milestoneId = milestone.GetProperty("id").GetGuid();
-        var closed = await client.PostAsJsonAsync($"/v1/projects/{projectId}/milestones/{milestoneId}/close", new { });
-        Assert.True(closed.IsSuccessStatusCode, await closed.Content.ReadAsStringAsync());
-        var closedJson = JsonSerializer.Deserialize<JsonElement>(await closed.Content.ReadAsStringAsync(), Json);
+        var closed = await client.PostAsJsonAsync($"/v1/projects/{projectId}/milestones/{milestoneId}/close", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(closed.IsSuccessStatusCode, await closed.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var closedJson = JsonSerializer.Deserialize<JsonElement>(await closed.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken), Json);
         Assert.False(closedJson.GetProperty("closedAt").ValueKind == JsonValueKind.Null);
 
-        var labels = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/labels");
+        var labels = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/labels", TestContext.Current.CancellationToken);
         var apiLabel = labels.EnumerateArray().First(l => l.GetProperty("name").GetString() == "API");
         var labelId = apiLabel.GetProperty("id").GetGuid();
-        var path = await client.PostAsJsonAsync($"/v1/projects/{projectId}/labels/{labelId}/paths", new { path = "ProjectBeacon.API.Tests" });
-        Assert.True(path.IsSuccessStatusCode, await path.Content.ReadAsStringAsync());
-        var match = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/labels/match?path=ProjectBeacon.API.Tests/Foo.cs");
+        var path = await client.PostAsJsonAsync($"/v1/projects/{projectId}/labels/{labelId}/paths", new { path = "ProjectBeacon.API.Tests" }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(path.IsSuccessStatusCode, await path.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var match = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/labels/match?path=ProjectBeacon.API.Tests/Foo.cs", TestContext.Current.CancellationToken);
         Assert.Equal(labelId, match.GetProperty("id").GetGuid());
     }
 

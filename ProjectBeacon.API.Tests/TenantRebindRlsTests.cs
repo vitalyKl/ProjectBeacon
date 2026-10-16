@@ -108,7 +108,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
         using (TenantScope.EnterProjectScope(_projectA))
         {
-            await ctx.Database.OpenConnectionAsync();
+            await ctx.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
             var conn = ctx.Database.GetDbConnection();
             Assert.Equal(_projectA.ToString(), await CurrentGucAsync(conn, "app.tenant_project_id"));
             Assert.Equal("", await CurrentGucAsync(conn, "app.tenant_org_id"));
@@ -127,7 +127,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
         {
             using (TenantScope.EnterProjectScope(_projectA))
             {
-                await ctxA.Database.OpenConnectionAsync();
+                await ctxA.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(_projectA.ToString(),
                     await CurrentGucAsync(ctxA.Database.GetDbConnection(), "app.tenant_project_id"));
             }
@@ -137,7 +137,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
         {
             using (TenantScope.EnterProjectScope(_projectB))
             {
-                await ctxB.Database.OpenConnectionAsync();
+                await ctxB.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(_projectB.ToString(),
                     await CurrentGucAsync(ctxB.Database.GetDbConnection(), "app.tenant_project_id"));
             }
@@ -151,7 +151,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
         _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         // A pooled connection may carry the interceptor's fail-closed GUC (""); a fresh
         // one has the setting unset. Both must be fail-closed (no rows).
         var pid = await CurrentGucAsync(conn, "app.tenant_project_id");
@@ -208,13 +208,13 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
                 admin.Users.Add(user);
                 var member = ProjectMember.Create(_projectA, user.Id, MemberRole.Member);
                 admin.ProjectMembers.Add(member);
-                await admin.SaveChangesAsync();
+                await admin.SaveChangesAsync(TestContext.Current.CancellationToken);
                 membershipId = member.Id;
             }
         }
 
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetGucAsync(conn, _projectA.ToString(), "false");
         Assert.True(await MembershipExistsAsync(user.Id, _projectA));
         Assert.True(await CountTaskRawAsync(conn, _taskA) == 1,
@@ -226,9 +226,9 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
             {
                 var member = await admin.ProjectMembers
                     .IgnoreQueryFilters()
-                    .SingleAsync(m => m.Id == membershipId);
+                    .SingleAsync(m => m.Id == membershipId, TestContext.Current.CancellationToken);
                 admin.ProjectMembers.Remove(member);
-                await admin.SaveChangesAsync();
+                await admin.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
         }
         Assert.False(await MembershipExistsAsync(user.Id, _projectA));
@@ -245,7 +245,7 @@ public sealed class TenantRebindRlsTests : IClassFixture<PostgresFixture>, IAsyn
         _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetGucAsync(conn, "", "true");
         Assert.Equal(2, await CountTasksRawAsync(conn));
     }

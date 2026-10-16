@@ -81,7 +81,7 @@ public sealed class CommandRecoveryTests : IDisposable
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, recovered);
         var row = await SnapshotAsync(command.Id);
@@ -97,7 +97,7 @@ public sealed class CommandRecoveryTests : IDisposable
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ChatPrompt, "{}", "inst-1");
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, recovered);
         var row = await SnapshotAsync(command.Id);
@@ -114,15 +114,15 @@ public sealed class CommandRecoveryTests : IDisposable
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
 
-        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), default));
+        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken));
 
         _db.ChangeTracker.Clear();
         using var scope = TenantScope.EnterUnscoped();
-        var row = await _db.WorkstationCommands.SingleAsync(c => c.Id == command.Id);
+        var row = await _db.WorkstationCommands.SingleAsync(c => c.Id == command.Id, TestContext.Current.CancellationToken);
         row.Claim(Lease, "inst-1");
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(120), default));
+        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(120), TestContext.Current.CancellationToken));
 
         var failed = await SnapshotAsync(command.Id);
         Assert.Equal(WorkstationCommandStatus.Failed, failed.Status);
@@ -135,7 +135,7 @@ public sealed class CommandRecoveryTests : IDisposable
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), TestContext.Current.CancellationToken);
 
         Assert.Equal(0, recovered);
         var row = await SnapshotAsync(command.Id);
@@ -150,9 +150,9 @@ public sealed class CommandRecoveryTests : IDisposable
         // The process restarted: same device, still heartbeating, new instance id.
         using var scope = TenantScope.EnterUnscoped();
         device.Heartbeat(instanceId: "inst-2");
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, recovered);
         var row = await SnapshotAsync(command.Id);
@@ -166,9 +166,9 @@ public sealed class CommandRecoveryTests : IDisposable
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ChatPrompt, "{}", "inst-1");
         using var scope = TenantScope.EnterUnscoped();
         device.Revoke();
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, recovered);
         var row = await SnapshotAsync(command.Id);
@@ -184,18 +184,18 @@ public sealed class CommandRecoveryTests : IDisposable
         using (var scope = TenantScope.EnterUnscoped())
         {
             _db.ChatSessions.Add(session);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         var command = await SeedRunningAsync(
             device, WorkstationCommandKind.ChatPrompt,
             $$"""{"chatSessionId":"{{session.Id:N}}"}""", "inst-1");
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, recovered);
         Assert.Equal(WorkstationCommandStatus.Failed, (await SnapshotAsync(command.Id)).Status);
         using var check = TenantScope.EnterUnscoped();
-        var fresh = await _db.ChatSessions.AsNoTracking().SingleAsync(s => s.Id == session.Id);
+        var fresh = await _db.ChatSessions.AsNoTracking().SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
         Assert.Equal(ChatSessionStatus.Idle, fresh.Status);
     }
 
@@ -207,17 +207,17 @@ public sealed class CommandRecoveryTests : IDisposable
         using (var scope = TenantScope.EnterUnscoped())
         {
             _db.EvalRuns.Add(run);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         var command = await SeedRunningAsync(
             device, WorkstationCommandKind.RunEvalTurn,
             $$"""{"evalRunId":"{{run.Id:N}}"}""", "inst-1");
 
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, recovered);
         using var check = TenantScope.EnterUnscoped();
-        var fresh = await _db.EvalRuns.AsNoTracking().SingleAsync(e => e.Id == run.Id);
+        var fresh = await _db.EvalRuns.AsNoTracking().SingleAsync(e => e.Id == run.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(fresh.CompletedAt);
         Assert.False(fresh.Passed);
         Assert.Contains("expired", fresh.CheckOutput);
@@ -230,7 +230,7 @@ public sealed class CommandRecoveryTests : IDisposable
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
 
         var completed = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, null)));
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, null)), TestContext.Current.CancellationToken);
 
         Assert.True(completed.Success, completed.Error);
         Assert.Equal(WorkstationCommandStatus.Succeeded, (await SnapshotAsync(command.Id)).Status);
@@ -243,12 +243,12 @@ public sealed class CommandRecoveryTests : IDisposable
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
 
         var stale = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 99)));
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 99)), TestContext.Current.CancellationToken);
         Assert.False(stale.Success);
         Assert.Equal("Command generation mismatch.", stale.Error);
 
         var current = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 1)));
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 1)), TestContext.Current.CancellationToken);
         Assert.True(current.Success, current.Error);
     }
 
@@ -257,24 +257,24 @@ public sealed class CommandRecoveryTests : IDisposable
     {
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
-        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), default));
+        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken));
 
         var oldGeneration = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 1)));
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 1)), TestContext.Current.CancellationToken);
         Assert.False(oldGeneration.Success);
         Assert.Equal("Command generation mismatch.", oldGeneration.Error);
 
         var legacy = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, null)));
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, null)), TestContext.Current.CancellationToken);
         Assert.False(legacy.Success);
 
         var claimed = await new ClaimNextCommandHandler(Factory()).HandleAsync(
-            new ClaimNextCommandCommand(new ClaimNextCommandRequest(device.Id, TimeSpan.Zero)));
+            new ClaimNextCommandCommand(new ClaimNextCommandRequest(device.Id, TimeSpan.Zero)), TestContext.Current.CancellationToken);
         Assert.True(claimed.Success, claimed.Error);
         Assert.Equal(2, claimed.Value!.Generation);
 
         var current = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 2)));
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 2)), TestContext.Current.CancellationToken);
         Assert.True(current.Success, current.Error);
         Assert.Equal(WorkstationCommandStatus.Succeeded, (await SnapshotAsync(command.Id)).Status);
     }
@@ -286,10 +286,10 @@ public sealed class CommandRecoveryTests : IDisposable
         using var scope = TenantScope.EnterUnscoped();
         var queued = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ListDir, null, null, device.UserId);
         _db.WorkstationCommands.Add(queued);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var claimed = await new ClaimNextCommandHandler(Factory()).HandleAsync(
-            new ClaimNextCommandCommand(new ClaimNextCommandRequest(device.Id, TimeSpan.Zero)));
+            new ClaimNextCommandCommand(new ClaimNextCommandRequest(device.Id, TimeSpan.Zero)), TestContext.Current.CancellationToken);
 
         Assert.True(claimed.Success, claimed.Error);
         Assert.NotNull(claimed.Value);
@@ -307,28 +307,28 @@ public sealed class CommandRecoveryTests : IDisposable
         using (var scope = TenantScope.EnterUnscoped())
         {
             device.BumpDesired();
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         var command = await SeedRunningAsync(device, WorkstationCommandKind.ReconcileDesired, null, "inst-old");
 
         // The stuck Running row blocks nothing in the claim queue, but before recovery it can
         // never be re-claimed. Recovery re-queues it.
-        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), default);
+        var recovered = await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(31), TestContext.Current.CancellationToken);
         Assert.Equal(1, recovered);
 
         // A heartbeat from the live daemon must not enqueue a second ReconcileDesired:
         // the re-queued row is already in flight.
         var heartbeat = await new HeartbeatDeviceHandler(Factory()).HandleAsync(
-            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}", "inst-1")));
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}", "inst-1")), TestContext.Current.CancellationToken);
         Assert.True(heartbeat.Success, heartbeat.Error);
         using var countScope = TenantScope.EnterUnscoped();
         var reconcileCount = await _db.WorkstationCommands
-            .CountAsync(c => c.DeviceId == device.Id && c.Kind == WorkstationCommandKind.ReconcileDesired);
+            .CountAsync(c => c.DeviceId == device.Id && c.Kind == WorkstationCommandKind.ReconcileDesired, TestContext.Current.CancellationToken);
         Assert.Equal(1, reconcileCount);
 
         // The live daemon then picks up the re-queued command under the new instance.
         var claimed = await new ClaimNextCommandHandler(Factory()).HandleAsync(
-            new ClaimNextCommandCommand(new ClaimNextCommandRequest(device.Id, TimeSpan.Zero)));
+            new ClaimNextCommandCommand(new ClaimNextCommandRequest(device.Id, TimeSpan.Zero)), TestContext.Current.CancellationToken);
         Assert.True(claimed.Success, claimed.Error);
         Assert.Equal(command.Id, claimed.Value!.Id);
         Assert.Equal(2, claimed.Value!.Generation);

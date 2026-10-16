@@ -70,7 +70,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         await AttachRuntimeAsync(project.Id, deviceId, user.Id);
 
         await using var db = Factory().CreateDbContext();
-        var result = await ProjectRuntimeResolver.ResolveAsync(db, project.Id, deviceId);
+        var result = await ProjectRuntimeResolver.ResolveAsync(db, project.Id, deviceId, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Error);
         Assert.Equal(@"A:\work\app", result.Value!.LocalRoot);
     }
@@ -81,7 +81,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var (user, project, deviceId) = await SeedOnlineProjectDeviceAsync();
 
         await using var db = Factory().CreateDbContext();
-        var result = await ProjectRuntimeResolver.ResolveAsync(db, project.Id, deviceId);
+        var result = await ProjectRuntimeResolver.ResolveAsync(db, project.Id, deviceId, TestContext.Current.CancellationToken);
         Assert.False(result.Success);
         Assert.Equal(CommandSandbox.RuntimeRequired, result.Error);
     }
@@ -93,10 +93,10 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         await AttachRuntimeAsync(project.Id, deviceId, user.Id);
 
         var otherCreated = await new CreateDeviceHandler(Factory())
-            .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("other", "fp-other-" + Guid.NewGuid().ToString("N"), user.Id)));
+            .HandleAsync(new CreateDeviceCommand(new CreateDeviceRequest("other", "fp-other-" + Guid.NewGuid().ToString("N"), user.Id)), TestContext.Current.CancellationToken);
 
         await using var db = Factory().CreateDbContext();
-        var result = await ProjectRuntimeResolver.ResolveAsync(db, project.Id, otherCreated.Value!.Id);
+        var result = await ProjectRuntimeResolver.ResolveAsync(db, project.Id, otherCreated.Value!.Id, TestContext.Current.CancellationToken);
         Assert.False(result.Success);
         Assert.Equal(CommandSandbox.RuntimeRequired, result.Error);
     }
@@ -111,10 +111,10 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         {
             var other = Project.Create("Other", null, project.OrgId);
             _db.Projects.Add(other);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var db = Factory().CreateDbContext();
-            var result = await ProjectRuntimeResolver.ResolveAsync(db, other.Id, deviceId);
+            var result = await ProjectRuntimeResolver.ResolveAsync(db, other.Id, deviceId, TestContext.Current.CancellationToken);
             Assert.False(result.Success);
             Assert.Equal(CommandSandbox.RuntimeRequired, result.Error);
         }
@@ -130,11 +130,11 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         {
             var cmd = WorkstationCommand.Create(deviceId, WorkstationCommandKind.ListDir, "{}");
             _db.WorkstationCommands.Add(cmd);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var db = Factory().CreateDbContext();
-            var row = await db.WorkstationCommands.FirstAsync(c => c.Id == cmd.Id);
-            var root = await ProjectRuntimeResolver.ResolveRootAsync(db, row);
+            var row = await db.WorkstationCommands.FirstAsync(c => c.Id == cmd.Id, TestContext.Current.CancellationToken);
+            var root = await ProjectRuntimeResolver.ResolveRootAsync(db, row, TestContext.Current.CancellationToken);
             Assert.Null(root);
         }
     }
@@ -150,12 +150,12 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
             var second = Project.Create("P2", null, project.OrgId);
             _db.Projects.Add(second);
             _db.ProjectMembers.Add(ProjectMember.Create(second.Id, user.Id, MemberRole.Owner));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             await AttachRuntimeAsync(second.Id, deviceId, user.Id, @"A:\work\second");
         }
 
         await using var db = Factory().CreateDbContext();
-        var roots = await ProjectRuntimeResolver.ResolveRootsAsync(db, deviceId, new[] { project.Id, Guid.NewGuid() });
+        var roots = await ProjectRuntimeResolver.ResolveRootsAsync(db, deviceId, new[] { project.Id, Guid.NewGuid() }, TestContext.Current.CancellationToken);
         Assert.Single(roots);
         Assert.Equal(@"A:\work\app", roots[project.Id]);
     }
@@ -169,7 +169,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
-                """{"path":"src","root":"C:\\\\evil","text":"hi"}""", project.Id)));
+                """{"path":"src","root":"C:\\\\evil","text":"hi"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.True(queued.Success, queued.Error);
         Assert.Equal(@"A:\work\app", queued.Value!.LocalRoot);
         using var doc = JsonDocument.Parse(queued.Value.PayloadJson);
@@ -186,7 +186,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.RunEvalTurn,
-                """{"path":"src/main.cs","prompt":"review"}""", project.Id)));
+                """{"path":"src/main.cs","prompt":"review"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.True(queued.Success, queued.Error);
         Assert.Equal(@"A:\work\app", queued.Value!.LocalRoot);
         using var doc = JsonDocument.Parse(queued.Value.PayloadJson);
@@ -202,7 +202,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
-                """{"path":"../secret","text":"x"}""", project.Id)));
+                """{"path":"../secret","text":"x"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, queued.Error);
     }
@@ -216,7 +216,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
-                """{"path":"..\\secret","text":"x"}""", project.Id)));
+                """{"path":"..\\secret","text":"x"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, queued.Error);
     }
@@ -230,7 +230,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
-                """{"path":"a/../b","text":"x"}""", project.Id)));
+                """{"path":"a/../b","text":"x"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, queued.Error);
     }
@@ -244,7 +244,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
-                """{"path":"a\\..\\b","text":"x"}""", project.Id)));
+                """{"path":"a\\..\\b","text":"x"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, queued.Error);
     }
@@ -258,7 +258,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.ChatPrompt,
-                """{"path":"src/file..name.cs","text":"x"}""", project.Id)));
+                """{"path":"src/file..name.cs","text":"x"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.True(queued.Success, queued.Error);
     }
 
@@ -271,7 +271,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
                 deviceId, user.Id, WorkstationCommandKind.RunEvalTurn,
-                """{"path":"C:\\\\secret","prompt":"x"}""", project.Id)));
+                """{"path":"C:\\\\secret","prompt":"x"}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, queued.Error);
     }
@@ -285,7 +285,7 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         var payload = """{"path":"src\u0000evil","text":"x"}""";
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
-                deviceId, user.Id, WorkstationCommandKind.ChatPrompt, payload, project.Id)));
+                deviceId, user.Id, WorkstationCommandKind.ChatPrompt, payload, project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(WorkspacePath.RelativePathRequired, queued.Error);
     }

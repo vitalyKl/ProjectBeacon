@@ -19,10 +19,10 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         bootstrap.EnsureSuccessStatusCode();
 
-        var fail = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = "nope" });
+        var fail = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = "nope" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, fail.StatusCode);
     }
 
@@ -36,7 +36,7 @@ public sealed class AuthHttpTests
 
         HttpResponseMessage? last = null;
         for (var i = 0; i < 6; i++)
-            last = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "nobody", Password = "x" });
+            last = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "nobody", Password = "x" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, last!.StatusCode);
     }
@@ -54,17 +54,17 @@ public sealed class AuthHttpTests
 
             for (var i = 0; i < 3; i++)
             {
-                var ok = await client.GetAsync("/v1/auth/options");
+                var ok = await client.GetAsync("/v1/auth/options", cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
             }
 
-            var limited = await client.GetAsync("/v1/auth/options");
+            var limited = await client.GetAsync("/v1/auth/options", cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
 
-            var me = await client.GetAsync("/v1/auth/me");
+            var me = await client.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.TooManyRequests, me.StatusCode);
 
-            var login = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "nobody", Password = "x" });
+            var login = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "nobody", Password = "x" }, cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
         }
         finally
@@ -80,9 +80,9 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var response = await client.GetAsync("/v1/version");
+        var response = await client.GetAsync("/v1/version", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var version = json.GetProperty("version").GetString();
         Assert.False(string.IsNullOrWhiteSpace(version));
         Assert.Contains('.', version);
@@ -98,7 +98,7 @@ public sealed class AuthHttpTests
             login = "bob",
             email = "bob@test.com",
             password = "password1"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -107,7 +107,7 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/v1/auth/forgot-password", new { email = "nobody@test.com" });
+        var response = await client.PostAsJsonAsync("/v1/auth/forgot-password", new { email = "nobody@test.com" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
@@ -119,26 +119,26 @@ public sealed class AuthHttpTests
         var jwt = await BootstrapJwt(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var org = await client.PostAsJsonAsync("/v1/orgs", new { name = "Org" });
+        var org = await client.PostAsJsonAsync("/v1/orgs", new { name = "Org" }, cancellationToken: TestContext.Current.CancellationToken);
         org.EnsureSuccessStatusCode();
-        var orgJson = await org.Content.ReadFromJsonAsync<JsonElement>();
+        var orgJson = await org.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var orgId = orgJson.GetProperty("id").GetGuid();
-        var project = await client.PostAsJsonAsync("/v1/projects", new { name = "P", orgId });
+        var project = await client.PostAsJsonAsync("/v1/projects", new { name = "P", orgId }, cancellationToken: TestContext.Current.CancellationToken);
         project.EnsureSuccessStatusCode();
-        var projectId = (await project.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var projectId = (await project.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("id").GetGuid();
 
         var invite = await client.PostAsJsonAsync($"/v1/projects/{projectId}/invites", new
         {
             email = "bob@test.com",
             role = "Member"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         invite.EnsureSuccessStatusCode();
-        var inviteJson = await invite.Content.ReadFromJsonAsync<JsonElement>();
+        var inviteJson = await invite.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var token = inviteJson.GetProperty("token").GetString();
         Assert.StartsWith("bci_", token);
 
         client.DefaultRequestHeaders.Authorization = null;
-        var preview = await client.GetAsync($"/v1/invites/{token}");
+        var preview = await client.GetAsync($"/v1/invites/{token}", cancellationToken: TestContext.Current.CancellationToken);
         preview.EnsureSuccessStatusCode();
 
         var registered = await client.PostAsJsonAsync("/v1/auth/register", new
@@ -147,7 +147,7 @@ public sealed class AuthHttpTests
             email = "bob@test.com",
             password = "password1",
             inviteToken = token
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
     }
 
@@ -169,9 +169,9 @@ public sealed class AuthHttpTests
         Assert.Equal("ProjectBeacon.API", typeof(Program).Assembly.GetName().Name);
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var health = await client.GetAsync("/health");
-        Assert.True(health.IsSuccessStatusCode, await health.Content.ReadAsStringAsync());
-        var orgs = await client.GetAsync("/v1/orgs");
+        var health = await client.GetAsync("/health", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(health.IsSuccessStatusCode, await health.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var orgs = await client.GetAsync("/v1/orgs", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, orgs.StatusCode);
     }
 
@@ -180,21 +180,21 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         bootstrap.EnsureSuccessStatusCode();
-        var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>();
+        var bootJson = await bootstrap.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var oldPassword = bootJson.GetProperty("password").GetString()!;
 
-        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken));
+        var recover = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         recover.EnsureSuccessStatusCode();
-        var recoverJson = await recover.Content.ReadFromJsonAsync<JsonElement>();
+        var recoverJson = await recover.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var newPassword = recoverJson.GetProperty("password").GetString()!;
         Assert.NotEqual(oldPassword, newPassword);
 
-        var oldLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = oldPassword });
+        var oldLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = oldPassword }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
 
-        var newLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = newPassword });
+        var newLogin = await client.PostAsJsonAsync("/v1/auth/login", new { Login = "admin", Password = newPassword }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
     }
 
@@ -203,10 +203,10 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken));
+        var bootstrap = await client.SendAsync(BootstrapRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         bootstrap.EnsureSuccessStatusCode();
 
-        var response = await client.SendAsync(RecoverRequest("wrong-token"));
+        var response = await client.SendAsync(RecoverRequest("wrong-token"), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -215,7 +215,7 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
-        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken));
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -224,7 +224,7 @@ public sealed class AuthHttpTests
     {
         await using var factory = new AuthApiFactory(false);
         var client = factory.CreateClient();
-        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken));
+        var response = await client.SendAsync(RecoverRequest(AuthApiFactory.BootstrapToken), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 

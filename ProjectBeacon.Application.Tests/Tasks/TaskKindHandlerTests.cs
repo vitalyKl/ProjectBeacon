@@ -33,7 +33,7 @@ public sealed class TaskKindHandlerTests : IDisposable
         var userId = Guid.NewGuid();
         var handler = new UpsertLocalModelBackendHandler(HandlerSqlite.Factory(_connection));
         var created = await handler.HandleAsync(new UpsertLocalModelBackendCommand(
-            new UpsertLocalModelBackendRequest(null, "qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, userId, null, false, "UI screens")));
+            new UpsertLocalModelBackendRequest(null, "qwen", ModelBackendType.LlamaCpp, "llama-server -m q.gguf", 4096, 30, userId, null, false, "UI screens")), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal("llama-server -m q.gguf", created.Value!.LaunchCommand);
         Assert.Equal("UI screens", created.Value.Note);
@@ -51,29 +51,29 @@ public sealed class TaskKindHandlerTests : IDisposable
             var org = Org.Create("Org");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             userId = user.Id;
             orgId = org.Id;
             var project = Project.Create("P", null, org.Id);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             projectId = project.Id;
         }
 
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId, orgId));
         var actor = new ActorContext(ActorType.Human, userId, false, null, null, null, null, ApiTokenCapability.None);
         var created = await new CreateTaskHandler(factory).HandleAsync(new CreateTaskCommand(
-            new CreateTaskRequest("Look at screens", null, projectId, TaskPriority.Medium, TaskType.Task, null, null, null, null), actor));
+            new CreateTaskRequest("Look at screens", null, projectId, TaskPriority.Medium, TaskType.Task, null, null, null, null), actor), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
 
-        var phases = await new ListTaskPhasesHandler(factory).HandleAsync(new ListTaskPhasesCommand(created.Value!.Id));
+        var phases = await new ListTaskPhasesHandler(factory).HandleAsync(new ListTaskPhasesCommand(created.Value!.Id), TestContext.Current.CancellationToken);
         Assert.Equal(new[] { "understand", "do", "check" }, phases.Value!.Select(p => p.Key).ToList());
 
         await new StartPipelineHandler(factory, new ManualSessionSpawner(new Infrastructure.LlamaSwap.LlamaSwapCatalog()))
-            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id)));
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(created.Value.Id)), TestContext.Current.CancellationToken);
         var sub = await new CreateSubtaskHandler(factory).HandleAsync(
-            new CreateSubtaskCommand(new CreateSubtaskRequest(created.Value.Id, "Review the settings screen")));
+            new CreateSubtaskCommand(new CreateSubtaskRequest(created.Value.Id, "Review the settings screen")), TestContext.Current.CancellationToken);
         Assert.True(sub.Success, sub.Error);
         Assert.Equal(phases.Value!.Single(p => p.Key == "do").Id, sub.Value!.TaskPhaseId);
     }

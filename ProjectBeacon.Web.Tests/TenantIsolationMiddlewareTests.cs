@@ -37,15 +37,15 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var stale = Project.Create("A", null, org.Id);
         var live = Project.Create("B", null, org.Id);
         _db.Projects.AddRange(stale, live);
         var user = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _db.ProjectMembers.Add(ProjectMember.Create(live.Id, user.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Guid? scoped = null;
         var mw = new TenantIsolationMiddleware(_ =>
@@ -73,16 +73,16 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var first = Project.Create("A", null, org.Id);
         var second = Project.Create("B", null, org.Id);
         _db.Projects.AddRange(first, second);
         var user = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _db.ProjectMembers.Add(ProjectMember.Create(first.Id, user.Id, MemberRole.Owner));
         _db.ProjectMembers.Add(ProjectMember.Create(second.Id, user.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Guid? scoped = null;
         var mw = new TenantIsolationMiddleware(_ =>
@@ -110,12 +110,12 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
         var user = User.Create("admin", "admin@example.com", "hash", true);
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Guid? scoped = null;
         var mw = new TenantIsolationMiddleware(_ =>
@@ -143,7 +143,7 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var oldest = Project.Create("A", null, org.Id);
         var newer = Project.Create("B", null, org.Id);
         SetCreatedAt(oldest, DateTime.UtcNow.AddDays(-1));
@@ -151,7 +151,7 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
         _db.Projects.AddRange(oldest, newer);
         var user = User.Create("admin", "admin@example.com", "hash", true);
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Guid? scoped = null;
         var mw = new TenantIsolationMiddleware(_ =>
@@ -179,12 +179,12 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
         var user = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Guid? scoped = null;
         var mw = new TenantIsolationMiddleware(_ =>
@@ -212,12 +212,12 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var foreign = Project.Create("A", null, org.Id);
         _db.Projects.Add(foreign);
         var user = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         Guid? scoped = null;
         var mw = new TenantIsolationMiddleware(_ =>
@@ -390,10 +390,10 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await TenantIsolationMiddleware.ResolveAdminFallbackOrgAsync(_db, isAdmin: true, project.Id);
 
@@ -413,10 +413,10 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("A", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var result = await TenantIsolationMiddleware.ResolveAdminFallbackOrgAsync(_db, isAdmin: false, project.Id);
 

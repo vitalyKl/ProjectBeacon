@@ -38,15 +38,15 @@ public sealed class ConstraintHandlerTests : IDisposable
     public async Task Activate_ThenReject_UpdatesStatus()
     {
         var created = await new CreateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-            new CreateConstraintRequest(_projectId, "must ship tests", ConstraintKind.Must));
+            new CreateConstraintRequest(_projectId, "must ship tests", ConstraintKind.Must), TestContext.Current.CancellationToken);
         Assert.True(created.Success);
         Assert.Equal(ConstraintStatus.Proposed, created.Value!.Status);
 
-        var activated = await new ActivateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(created.Value!.Id);
+        var activated = await new ActivateConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(created.Value!.Id, TestContext.Current.CancellationToken);
         Assert.True(activated.Success);
         Assert.Equal(ConstraintStatus.Active, activated.Value!.Status);
 
-        var rejected = await new RejectConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(created.Value!.Id);
+        var rejected = await new RejectConstraintHandler(HandlerSqlite.Factory(_connection)).HandleAsync(created.Value!.Id, TestContext.Current.CancellationToken);
         Assert.True(rejected.Success);
         Assert.Equal(ConstraintStatus.Rejected, rejected.Value!.Status);
     }

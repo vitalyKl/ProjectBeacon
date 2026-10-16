@@ -35,11 +35,11 @@ public sealed class ProjectLifecycleTests : IDisposable
         var handler = new UpdateProjectHandler(HandlerSqlite.Factory(_connection), _auth);
 
         var blank = await handler.HandleAsync(new UpdateProjectCommand(
-            new UpdateProjectRequest(projectId, "  ", "desc"), actor));
+            new UpdateProjectRequest(projectId, "  ", "desc"), actor), TestContext.Current.CancellationToken);
         Assert.False(blank.Success);
 
         var renamed = await handler.HandleAsync(new UpdateProjectCommand(
-            new UpdateProjectRequest(projectId, " North ", "notes"), actor));
+            new UpdateProjectRequest(projectId, " North ", "notes"), actor), TestContext.Current.CancellationToken);
         Assert.True(renamed.Success, renamed.Error);
         Assert.Equal("North", renamed.Value!.Name);
         Assert.Equal("notes", renamed.Value.Description);
@@ -50,9 +50,9 @@ public sealed class ProjectLifecycleTests : IDisposable
     {
         var (actor, projectId) = await CreateOwnedProject();
         var deleted = await new DeleteProjectHandler(HandlerSqlite.Factory(_connection), _auth)
-            .HandleAsync(new DeleteProjectCommand(projectId, actor));
+            .HandleAsync(new DeleteProjectCommand(projectId, actor), TestContext.Current.CancellationToken);
         Assert.True(deleted.Success, deleted.Error);
-        Assert.False(await _db.Projects.IgnoreQueryFilters().AnyAsync(p => p.Id == projectId));
+        Assert.False(await _db.Projects.IgnoreQueryFilters().AnyAsync(p => p.Id == projectId, TestContext.Current.CancellationToken));
     }
 
     private async Task<(ActorContext Actor, Guid ProjectId)> CreateOwnedProject()

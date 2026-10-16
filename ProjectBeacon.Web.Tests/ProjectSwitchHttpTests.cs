@@ -13,7 +13,7 @@ public sealed class ProjectSwitchHttpTests
         var (factory, client, projectId) = await SetupAsync();
         using var _ = factory;
 
-        var response = await client.GetAsync($"/project/switch?projectId={projectId}&returnUrl=/board");
+        var response = await client.GetAsync($"/project/switch?projectId={projectId}&returnUrl=/board", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/board", response.Headers.Location?.ToString());
@@ -26,7 +26,7 @@ public sealed class ProjectSwitchHttpTests
         var (factory, client, _) = await SetupAsync();
         using var _ = factory;
 
-        var response = await client.GetAsync($"/project/switch?projectId={Guid.NewGuid()}&returnUrl=/board");
+        var response = await client.GetAsync($"/project/switch?projectId={Guid.NewGuid()}&returnUrl=/board", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/dashboard", response.Headers.Location?.ToString());
@@ -38,7 +38,7 @@ public sealed class ProjectSwitchHttpTests
         var (factory, client, projectId) = await SetupAsync();
         using var _ = factory;
 
-        var response = await client.GetAsync($"/project/switch?projectId={projectId}&returnUrl=https%3A%2F%2Fevil.example");
+        var response = await client.GetAsync($"/project/switch?projectId={projectId}&returnUrl=https%3A%2F%2Fevil.example", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/dashboard", response.Headers.Location?.ToString());
@@ -50,7 +50,7 @@ public sealed class ProjectSwitchHttpTests
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var response = await client.GetAsync($"/project/switch?projectId={Guid.NewGuid()}");
+        var response = await client.GetAsync($"/project/switch?projectId={Guid.NewGuid()}", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Contains("/login", response.Headers.Location?.ToString(), StringComparison.OrdinalIgnoreCase);

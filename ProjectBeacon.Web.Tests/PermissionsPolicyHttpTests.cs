@@ -11,7 +11,7 @@ public sealed class PermissionsPolicyHttpTests
         await using var factory = new WebTestFactory();
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var response = await client.GetAsync("/");
+        var response = await client.GetAsync("/", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.TryGetValues("Permissions-Policy", out var values));

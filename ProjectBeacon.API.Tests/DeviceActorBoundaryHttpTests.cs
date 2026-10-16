@@ -18,15 +18,15 @@ public sealed class DeviceActorBoundaryHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var created = await client.PostAsJsonAsync("/v1/devices", new { name = "bnd1", fingerprint = "fp-bnd1" });
+        var created = await client.PostAsJsonAsync("/v1/devices", new { name = "bnd1", fingerprint = "fp-bnd1" }, cancellationToken: TestContext.Current.CancellationToken);
         created.EnsureSuccessStatusCode();
-        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         var token = device.GetProperty("token").GetString();
 
         var deviceClient = factory.CreateClient();
         deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await deviceClient.GetAsync("/v1/devices");
+        var response = await deviceClient.GetAsync("/v1/devices", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -38,16 +38,16 @@ public sealed class DeviceActorBoundaryHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var created = await client.PostAsJsonAsync("/v1/devices", new { name = "bnd2", fingerprint = "fp-bnd2" });
+        var created = await client.PostAsJsonAsync("/v1/devices", new { name = "bnd2", fingerprint = "fp-bnd2" }, cancellationToken: TestContext.Current.CancellationToken);
         created.EnsureSuccessStatusCode();
-        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         var token = device.GetProperty("token").GetString();
 
         var deviceClient = factory.CreateClient();
         deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await deviceClient.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}", workstationJson = "{}" });
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var response = await deviceClient.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}", workstationJson = "{}" }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class DeviceActorBoundaryHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var response = await client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}", workstationJson = "{}" });
+        var response = await client.PostAsJsonAsync("/v1/devices/me/heartbeat", new { probeJson = "{}", workstationJson = "{}" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -70,15 +70,15 @@ public sealed class DeviceActorBoundaryHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var created = await client.PostAsJsonAsync("/v1/devices", new { name = "bnd3", fingerprint = "fp-bnd3" });
+        var created = await client.PostAsJsonAsync("/v1/devices", new { name = "bnd3", fingerprint = "fp-bnd3" }, cancellationToken: TestContext.Current.CancellationToken);
         created.EnsureSuccessStatusCode();
-        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var device = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         var token = device.GetProperty("token").GetString();
 
         var deviceClient = factory.CreateClient();
         deviceClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await deviceClient.GetAsync("/v1/auth/me");
+        var response = await deviceClient.GetAsync("/v1/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 

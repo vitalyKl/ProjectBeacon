@@ -43,11 +43,11 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         task.SetReviewNotes("ok");
         task.TransitionTo(TaskItemStatus.Done);
         _db.Tasks.Add(task);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
-            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Todo)));
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Todo)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal("Todo", result.Value!.Status);
@@ -59,15 +59,15 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         var task = TaskItem.Create("t", _projectId);
         task.TransitionTo(TaskItemStatus.InProgress);
         _db.Tasks.Add(task);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
-            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Contains("completed review run", result.Error, StringComparison.OrdinalIgnoreCase);
-        var stored = await _db.Tasks.FindAsync([task.Id]);
+        var stored = await _db.Tasks.FindAsync([task.Id], cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(TaskItemStatus.InProgress, stored!.Status);
     }
 
@@ -78,11 +78,11 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         task.TransitionTo(TaskItemStatus.InProgress);
         task.SetReviewNotes("notes only");
         _db.Tasks.Add(task);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
-            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Contains("completed review run", result.Error);
@@ -97,11 +97,11 @@ public sealed class ChangeTaskStatusHandlerTests : IDisposable
         run.Complete("checked", "check:exit0");
         _db.Tasks.Add(task);
         _db.ReviewRuns.Add(run);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var handler = new ChangeTaskStatusHandler(HandlerSqlite.Factory(_connection));
         var result = await handler.HandleAsync(new ChangeTaskStatusCommand(
-            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)));
+            new ChangeTaskStatusRequest(task.Id, TaskItemStatus.Done)), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Contains("review notes", result.Error, StringComparison.OrdinalIgnoreCase);

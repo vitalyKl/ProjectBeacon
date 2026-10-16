@@ -23,21 +23,21 @@ public sealed class OrgProjectTaskHttpTests
 
         var org = await PostJson(client, "/v1/orgs", new { name = "Org" });
         var orgId = org.GetProperty("id").GetGuid();
-        var gotOrg = await client.GetFromJsonAsync<JsonElement>($"/v1/orgs/{orgId}");
+        var gotOrg = await client.GetFromJsonAsync<JsonElement>($"/v1/orgs/{orgId}", TestContext.Current.CancellationToken);
         Assert.Equal("Org", gotOrg.GetProperty("name").GetString());
-        var orgs = await client.GetFromJsonAsync<JsonElement>("/v1/orgs");
+        var orgs = await client.GetFromJsonAsync<JsonElement>("/v1/orgs", TestContext.Current.CancellationToken);
         Assert.True(orgs.GetArrayLength() >= 1);
 
         var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
         var projectId = project.GetProperty("id").GetGuid();
-        var gotProject = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}");
+        var gotProject = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}", TestContext.Current.CancellationToken);
         Assert.Equal("P", gotProject.GetProperty("name").GetString());
-        var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/orgs/{orgId}/projects");
+        var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/orgs/{orgId}/projects", TestContext.Current.CancellationToken);
         Assert.True(listed.GetArrayLength() >= 1);
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var userId = me.GetProperty("id").GetGuid();
-        var members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members");
+        var members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members", TestContext.Current.CancellationToken);
         Assert.True(members.GetArrayLength() >= 1);
         Assert.Equal(userId, members[0].GetProperty("userId").GetGuid());
 
@@ -47,7 +47,7 @@ public sealed class OrgProjectTaskHttpTests
             var db = seed.ServiceProvider.GetRequiredService<BeaconDbContext>();
             var extra = User.Create("member2", "member2@beacon.local", "hash");
             db.Users.Add(extra);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             extraUserId = extra.Id;
         }
 
@@ -58,7 +58,7 @@ public sealed class OrgProjectTaskHttpTests
             role = 2
         });
         Assert.Equal(extraUserId, member.GetProperty("userId").GetGuid());
-        members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members");
+        members = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/members", TestContext.Current.CancellationToken);
         Assert.True(members.GetArrayLength() >= 2);
 
         var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
@@ -80,33 +80,33 @@ public sealed class OrgProjectTaskHttpTests
             var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
             using (TenantScope.EnterUnscoped())
             {
-                var stored = await db.ApiTokens.FindAsync([tokenId]);
+                var stored = await db.ApiTokens.FindAsync([tokenId], cancellationToken: TestContext.Current.CancellationToken);
                 Assert.NotNull(stored);
                 Assert.DoesNotContain("bcn_", stored.TokenHash);
                 Assert.NotEqual(raw, stored.TokenHash);
             }
         }
 
-        var tokens = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens");
+        var tokens = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens", TestContext.Current.CancellationToken);
         Assert.True(tokens.GetArrayLength() >= 1);
         var listedPrefix = tokens[0].GetProperty("tokenPrefix").GetString();
         Assert.Equal(createdPrefix, listedPrefix);
         Assert.False(tokens[0].TryGetProperty("token", out _));
 
-        var one = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens/{tokenId}");
+        var one = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tokens/{tokenId}", TestContext.Current.CancellationToken);
         Assert.Equal(createdPrefix, one.GetProperty("tokenPrefix").GetString());
         Assert.False(one.TryGetProperty("token", out _));
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", raw);
-        var asToken = await client.GetAsync($"/v1/projects/{projectId}/tasks");
+        var asToken = await client.GetAsync($"/v1/projects/{projectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, asToken.StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
-        var revoked = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}");
+        var revoked = await client.DeleteAsync($"/v1/projects/{projectId}/tokens/{tokenId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, revoked.StatusCode);
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", raw);
-        var after = await client.GetAsync($"/v1/projects/{projectId}/tasks");
+        var after = await client.GetAsync($"/v1/projects/{projectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
     }
 
@@ -141,12 +141,12 @@ public sealed class OrgProjectTaskHttpTests
         });
         var otherId = other.GetProperty("id").GetGuid();
 
-        var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks");
+        var listed = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks", TestContext.Current.CancellationToken);
         Assert.True(listed.GetArrayLength() >= 2);
 
-        var toProgress = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = "InProgress" });
-        Assert.True(toProgress.IsSuccessStatusCode, await toProgress.Content.ReadAsStringAsync());
-        var missingReview = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = "Done" });
+        var toProgress = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = "InProgress" }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(toProgress.IsSuccessStatusCode, await toProgress.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var missingReview = await client.PatchAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/status", new { status = "Done" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, missingReview.StatusCode);
 
         var updated = await client.PutAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}", new
@@ -156,33 +156,33 @@ public sealed class OrgProjectTaskHttpTests
             description = "two",
             priority = 2,
             type = 3
-        });
-        Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync());
-        var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}");
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(updated.IsSuccessStatusCode, await updated.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}", TestContext.Current.CancellationToken);
         Assert.Equal("A2", got.GetProperty("title").GetString());
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var userId = me.GetProperty("id").GetGuid();
         var comment = await client.PostAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/comments", new
         {
             taskId,
             content = "hello",
             userId
-        });
-        Assert.True(comment.IsSuccessStatusCode, await comment.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(comment.IsSuccessStatusCode, await comment.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         var deps = await client.PutAsJsonAsync($"/v1/projects/{projectId}/tasks/{taskId}/dependencies", new
         {
             taskId,
             dependentTaskIds = new[] { otherId }
-        });
-        Assert.True(deps.IsSuccessStatusCode, await deps.Content.ReadAsStringAsync());
-        var withDeps = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}");
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(deps.IsSuccessStatusCode, await deps.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var withDeps = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/tasks/{taskId}", TestContext.Current.CancellationToken);
         Assert.Equal(otherId, withDeps.GetProperty("dependencies")[0].GetGuid());
 
-        var deleteDependent = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{taskId}");
+        var deleteDependent = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{taskId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, deleteDependent.StatusCode);
-        var delete = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{otherId}");
+        var delete = await client.DeleteAsync($"/v1/projects/{projectId}/tasks/{otherId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
     }
 
@@ -199,11 +199,11 @@ public sealed class OrgProjectTaskHttpTests
         var project = await PostJson(client, "/v1/projects", new { name = "P", orgId });
         var projectId = project.GetProperty("id").GetGuid();
 
-        var labels = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/labels");
+        var labels = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/labels", TestContext.Current.CancellationToken);
         Assert.True(labels.GetArrayLength() >= 1);
-        var match = await client.GetAsync($"/v1/projects/{projectId}/labels/match?path=ProjectBeacon.API/Program.cs");
-        Assert.True(match.IsSuccessStatusCode, await match.Content.ReadAsStringAsync());
-        var matched = await match.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var match = await client.GetAsync($"/v1/projects/{projectId}/labels/match?path=ProjectBeacon.API/Program.cs", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(match.IsSuccessStatusCode, await match.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var matched = await match.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal("API", matched.GetProperty("name").GetString());
 
         var autoTask = await PostJson(client, $"/v1/projects/{projectId}/tasks", new
@@ -219,15 +219,15 @@ public sealed class OrgProjectTaskHttpTests
         var report = await PostJson(client, $"/v1/projects/{projectId}/reports", new { createdByType = "user", createdById = "t" });
         Assert.Contains("development report", report.GetProperty("title").GetString());
         var reportId = report.GetProperty("id").GetGuid();
-        var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/reports/{reportId}");
+        var got = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/reports/{reportId}", TestContext.Current.CancellationToken);
         Assert.Equal(reportId, got.GetProperty("id").GetGuid());
 
         var other = await PostJson(client, "/v1/projects", new { name = "Q", orgId });
         var otherId = other.GetProperty("id").GetGuid();
-        var cross = await client.GetAsync($"/v1/projects/{otherId}/reports/{reportId}");
+        var cross = await client.GetAsync($"/v1/projects/{otherId}/reports/{reportId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, cross.StatusCode);
 
-        var reports = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/reports");
+        var reports = await client.GetFromJsonAsync<JsonElement>($"/v1/projects/{projectId}/reports", TestContext.Current.CancellationToken);
         Assert.True(reports.GetArrayLength() >= 1);
 
         var compile = await PostJson(client, $"/v1/projects/{projectId}/context/compile", new
@@ -267,16 +267,16 @@ public sealed class OrgProjectTaskHttpTests
             login = "outsider",
             email = "outsider@beacon.local",
             password = "Passw0rd!x"
-        });
-        Assert.True(register.IsSuccessStatusCode, await register.Content.ReadAsStringAsync());
-        var login = await client.PostAsJsonAsync("/v1/auth/login", new { login = "outsider", password = "Passw0rd!x" });
-        Assert.True(login.IsSuccessStatusCode, await login.Content.ReadAsStringAsync());
-        var outsiderJwt = (await login.Content.ReadFromJsonAsync<JsonElement>(Json)).GetProperty("token").GetString();
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(register.IsSuccessStatusCode, await register.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var login = await client.PostAsJsonAsync("/v1/auth/login", new { login = "outsider", password = "Passw0rd!x" }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(login.IsSuccessStatusCode, await login.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var outsiderJwt = (await login.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken)).GetProperty("token").GetString();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", outsiderJwt);
 
-        var listed = await client.GetAsync($"/v1/projects/{projectId}/tasks");
-        Assert.True(listed.IsSuccessStatusCode, await listed.Content.ReadAsStringAsync());
-        var tasks = await listed.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var listed = await client.GetAsync($"/v1/projects/{projectId}/tasks", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(listed.IsSuccessStatusCode, await listed.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var tasks = await listed.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal(0, tasks.GetArrayLength());
     }
 

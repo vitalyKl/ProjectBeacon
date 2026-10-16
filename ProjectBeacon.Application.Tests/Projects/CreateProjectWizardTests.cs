@@ -30,15 +30,15 @@ public sealed class CreateProjectWizardTests : IDisposable
     [Fact]
     public async Task Wizard_CreatesOrgProjectAndStarterLabels()
     {
-        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null), ActorContext.Anonymous));
+        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null), ActorContext.Anonymous), TestContext.Current.CancellationToken);
         Assert.True(org.Success, org.Error);
 
         var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateProjectCommand(
-            new CreateProjectRequest("Beacon", "desc", org.Value!.Id), ActorContext.Anonymous));
+            new CreateProjectRequest("Beacon", "desc", org.Value!.Id), ActorContext.Anonymous), TestContext.Current.CancellationToken);
         Assert.True(project.Success, project.Error);
         Assert.Equal(org.Value.Id, project.Value!.OrgId);
 
-        var labels = await new ListLabelsHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new ListLabelsRequest(project.Value.Id));
+        var labels = await new ListLabelsHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new ListLabelsRequest(project.Value.Id), TestContext.Current.CancellationToken);
         Assert.True(labels.Success);
         Assert.Equal(5, labels.Value!.Count);
         Assert.Contains(labels.Value, l => l.Name == "API" && l.PathPrefix == "ProjectBeacon.API");
@@ -51,32 +51,32 @@ public sealed class CreateProjectWizardTests : IDisposable
     {
         var user = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var actor = new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
         var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
-            new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor));
+            new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor), TestContext.Current.CancellationToken);
         Assert.True(org.Success, org.Error);
 
         var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(new CreateProjectCommand(
-            new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor));
+            new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor), TestContext.Current.CancellationToken);
         Assert.True(project.Success, project.Error);
 
-        var orgMember = await _db.OrgMembers.SingleAsync(m => m.OrgId == org.Value.Id);
+        var orgMember = await _db.OrgMembers.SingleAsync(m => m.OrgId == org.Value.Id, TestContext.Current.CancellationToken);
         Assert.Equal(user.Id, orgMember.UserId);
         Assert.Equal(MemberRole.Owner, orgMember.Role);
 
-        var projectMember = await _db.ProjectMembers.SingleAsync(m => m.ProjectId == project.Value!.Id);
+        var projectMember = await _db.ProjectMembers.SingleAsync(m => m.ProjectId == project.Value!.Id, TestContext.Current.CancellationToken);
         Assert.Equal(user.Id, projectMember.UserId);
         Assert.Equal(MemberRole.Owner, projectMember.Role);
 
         using (TenantScope.EnterProjectScope(Guid.Empty))
         using (TenantScope.EnterOrgScope(Guid.Empty))
         {
-            var missed = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync();
+            var missed = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(TestContext.Current.CancellationToken);
             Assert.Null(missed.Value);
 
-            var current = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(user.Id, isAdmin: false);
+            var current = await new GetCurrentProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(user.Id, isAdmin: false, ct: TestContext.Current.CancellationToken);
             Assert.True(current.Success);
             Assert.NotNull(current.Value);
             Assert.Equal(project.Value!.Id, current.Value!.Id);

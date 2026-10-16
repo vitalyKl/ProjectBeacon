@@ -79,7 +79,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         await MakeOnlineAsync(device, project, user);
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work")), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         var value = result.Value!;
@@ -87,7 +87,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.NotEqual(value.WithBriefRunId, value.WithoutBriefRunId);
         Assert.NotEqual(value.WithBriefCommandId, value.WithoutBriefCommandId);
 
-        var list = await new ListEvalRunsHandler(Factory()).HandleAsync(new ListEvalRunsRequest(project.Id, task.Id));
+        var list = await new ListEvalRunsHandler(Factory()).HandleAsync(new ListEvalRunsRequest(project.Id, task.Id), TestContext.Current.CancellationToken);
         Assert.True(list.Success, list.Error);
         Assert.Equal(2, list.Value!.Count);
 
@@ -102,7 +102,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.Equal(value.PairId, withoutBriefRun.PairId);
 
         var withCmd = await new GetCommandHandler(Factory()).HandleAsync(
-            new GetCommandCommand(new GetCommandRequest(value.WithBriefCommandId, user.Id)));
+            new GetCommandCommand(new GetCommandRequest(value.WithBriefCommandId, user.Id)), TestContext.Current.CancellationToken);
         Assert.True(withCmd.Success, withCmd.Error);
         Assert.Equal(WorkstationCommandKind.RunEvalTurn, withCmd.Value!.Kind);
 
@@ -115,7 +115,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.Contains("Do the work", withPrompt);
 
         var withoutCmd = await new GetCommandHandler(Factory()).HandleAsync(
-            new GetCommandCommand(new GetCommandRequest(value.WithoutBriefCommandId, user.Id)));
+            new GetCommandCommand(new GetCommandRequest(value.WithoutBriefCommandId, user.Id)), TestContext.Current.CancellationToken);
         Assert.True(withoutCmd.Success, withoutCmd.Error);
 
         var withoutPayload = JsonNode.Parse(withoutCmd.Value!.PayloadJson)!.AsObject();
@@ -131,7 +131,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         Assert.Equal("dotnet test", controls["checkCommand"]!.GetValue<string>());
         Assert.Equal(0.2, controls["temperature"]!.GetValue<double>());
 
-        var stored = await _db.EvalRuns.SingleAsync(r => r.Id == value.WithBriefRunId);
+        var stored = await _db.EvalRuns.SingleAsync(r => r.Id == value.WithBriefRunId, TestContext.Current.CancellationToken);
         Assert.Equal("opencode/test", stored.Model);
         Assert.Equal(0.2, stored.Temperature);
         Assert.Equal("abc123", stored.RepoRevision);
@@ -145,7 +145,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         await MakeOnlineAsync(device, project, user);
 
         var result = await CreateHandler().HandleAsync(new EvalPairCommand(new EvalPairRequest(
-            project.Id, task.Id, device.Id, user.Id, "Do the work")));
+            project.Id, task.Id, device.Id, user.Id, "Do the work")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Contains("Eval controls", result.Error);
@@ -167,12 +167,12 @@ public sealed class EvalPairHandlerTests : IDisposable
         var (user, project, task, device) = await SeedAsync();
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Device is not connected.", result.Error);
 
-        var list = await new ListEvalRunsHandler(Factory()).HandleAsync(new ListEvalRunsRequest(project.Id));
+        var list = await new ListEvalRunsHandler(Factory()).HandleAsync(new ListEvalRunsRequest(project.Id), TestContext.Current.CancellationToken);
         Assert.True(list.Success);
         Assert.Empty(list.Value!);
     }
@@ -184,7 +184,7 @@ public sealed class EvalPairHandlerTests : IDisposable
         await MakeOnlineAsync(device, project, user);
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, Guid.NewGuid(), device.Id, user.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, Guid.NewGuid(), device.Id, user.Id, "Do the work")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("Task not found.", result.Error);
@@ -200,11 +200,11 @@ public sealed class EvalPairHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             _db.Users.Add(otherUser);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var handler = CreateHandler();
-        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, otherUser.Id, "Do the work")));
+        var result = await handler.HandleAsync(new EvalPairCommand(Pinned(project.Id, task.Id, device.Id, otherUser.Id, "Do the work")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
     }

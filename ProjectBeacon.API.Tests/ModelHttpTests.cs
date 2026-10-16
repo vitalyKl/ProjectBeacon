@@ -30,7 +30,7 @@ public sealed class ModelHttpTests
         });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
-        var empty = await client.GetFromJsonAsync<JsonElement>("/v1/models");
+        var empty = await client.GetFromJsonAsync<JsonElement>("/v1/models", TestContext.Current.CancellationToken);
         Assert.Equal(0, empty.GetProperty("backends").GetArrayLength());
 
         var created = await client.PostAsJsonAsync("/v1/models", new
@@ -42,13 +42,13 @@ public sealed class ModelHttpTests
             contextSize = 8192,
             ttl = 300,
             extraFlags = new[] { "--no-mmap" }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         Assert.StartsWith("/v1/models/", created.Headers.Location?.ToString());
-        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         var modelId = createdBody.GetProperty("id").GetGuid();
 
-        var read = await client.GetFromJsonAsync<JsonElement>("/v1/models");
+        var read = await client.GetFromJsonAsync<JsonElement>("/v1/models", TestContext.Current.CancellationToken);
         Assert.Single(read.GetProperty("backends").EnumerateArray());
         Assert.Equal("m1", read.GetProperty("backends")[0].GetProperty("name").GetString());
 
@@ -61,32 +61,32 @@ public sealed class ModelHttpTests
             contextSize = 4096,
             ttl = 0,
             openCodeModel = "xai/grok-3"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
-        var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var updatedBody = await updated.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal("m1-upd", updatedBody.GetProperty("name").GetString());
 
-        var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "planner", modelBackendId = modelId });
+        var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "planner", modelBackendId = modelId }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, bind.StatusCode);
 
-        var blocked = await client.DeleteAsync($"/v1/models/{modelId}");
+        var blocked = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, blocked.StatusCode);
-        var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var blockedBody = await blocked.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Contains("planner", blockedBody.GetProperty("detail").GetString());
 
-        var unbind = await client.DeleteAsync("/v1/models/bind/planner");
+        var unbind = await client.DeleteAsync("/v1/models/bind/planner", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, unbind.StatusCode);
 
-        var del = await client.DeleteAsync($"/v1/models/{modelId}");
+        var del = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
 
-        var missing = await client.DeleteAsync($"/v1/models/{modelId}");
+        var missing = await client.DeleteAsync($"/v1/models/{modelId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
 
-        var status = await client.GetFromJsonAsync<JsonElement>("/v1/models/proxy/status");
+        var status = await client.GetFromJsonAsync<JsonElement>("/v1/models/proxy/status", TestContext.Current.CancellationToken);
         Assert.False(status.GetProperty("available").GetBoolean());
 
-        var reload = await client.PostAsync("/v1/models/proxy/reload", null);
+        var reload = await client.PostAsync("/v1/models/proxy/reload", null, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, reload.StatusCode);
     }
 
@@ -110,7 +110,7 @@ public sealed class ModelHttpTests
         });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
-        var read = await client.GetAsync("/v1/models");
+        var read = await client.GetAsync("/v1/models", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, read.StatusCode);
 
         var write = await client.PostAsJsonAsync("/v1/models", new
@@ -118,16 +118,16 @@ public sealed class ModelHttpTests
             name = "x",
             backendType = "LlamaCpp",
             launchCommand = "c"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
 
-        var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "actor", modelBackendId = Guid.NewGuid() });
+        var bind = await client.PostAsJsonAsync("/v1/models/bind", new { role = "actor", modelBackendId = Guid.NewGuid() }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, bind.StatusCode);
 
-        var status = await client.GetAsync("/v1/models/proxy/status");
+        var status = await client.GetAsync("/v1/models/proxy/status", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, status.StatusCode);
 
-        var reload = await client.PostAsync("/v1/models/proxy/reload", null);
+        var reload = await client.PostAsync("/v1/models/proxy/reload", null, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, reload.StatusCode);
     }
 
@@ -151,9 +151,9 @@ public sealed class ModelHttpTests
         });
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString()!);
 
-        var bad = await client.DeleteAsync("/v1/models/bind/notarole");
+        var bad = await client.DeleteAsync("/v1/models/bind/notarole", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
-        var body = await bad.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var body = await bad.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Contains("Unknown role", body.GetProperty("detail").GetString());
     }
 
@@ -172,9 +172,9 @@ public sealed class ModelHttpTests
 
         var request = new HttpRequestMessage(HttpMethod.Get, "/v1/models");
         request.Headers.Add("X-Project-Id", projectId.ToString());
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.True(body.TryGetProperty("backends", out var backends));
         Assert.Equal(0, backends.GetArrayLength());
     }

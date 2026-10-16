@@ -47,13 +47,13 @@ public sealed class ContextCostHttpTests
                 withoutBrief.Complete(50, 100, 3, 1, "ref://2");
                 db.EvalRuns.Add(withBrief);
                 db.EvalRuns.Add(withoutBrief);
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
         }
 
-        var response = await client.GetAsync($"/v1/reports/context-cost/{taskId}");
+        var response = await client.GetAsync($"/v1/reports/context-cost/{taskId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
 
         Assert.Equal(taskId, body.GetProperty("taskId").GetGuid());
         Assert.Equal(projectId, body.GetProperty("projectId").GetGuid());
@@ -79,7 +79,7 @@ public sealed class ContextCostHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var response = await client.GetAsync($"/v1/reports/context-cost/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/v1/reports/context-cost/{Guid.NewGuid()}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -104,9 +104,9 @@ public sealed class ContextCostHttpTests
         });
         var taskId = task.GetProperty("id").GetGuid();
 
-        var response = await client.GetAsync($"/v1/reports/context-cost/{taskId}");
+        var response = await client.GetAsync($"/v1/reports/context-cost/{taskId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
         Assert.Equal(0, body.GetProperty("pairCount").GetInt32());
     }
 

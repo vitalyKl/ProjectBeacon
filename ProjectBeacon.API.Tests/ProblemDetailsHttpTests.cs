@@ -18,11 +18,11 @@ public sealed class ProblemDetailsHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var response = await client.GetAsync($"/v1/tasks/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/v1/tasks/{Guid.NewGuid()}", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
         Assert.Equal(404, root.GetProperty("status").GetInt32());
@@ -42,11 +42,11 @@ public sealed class ProblemDetailsHttpTests
 
         var response = await client.PutAsJsonAsync(
             $"/v1/projects/{Guid.NewGuid()}/tasks/{Guid.NewGuid()}",
-            new { TaskId = Guid.NewGuid(), Title = "test" });
+            new { TaskId = Guid.NewGuid(), Title = "test" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
         Assert.Equal(400, root.GetProperty("status").GetInt32());
@@ -62,11 +62,11 @@ public sealed class ProblemDetailsHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var response = await client.GetAsync($"/v1/orgs/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/v1/orgs/{Guid.NewGuid()}", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
         Assert.Equal(404, root.GetProperty("status").GetInt32());
@@ -81,10 +81,10 @@ public sealed class ProblemDetailsHttpTests
         var jwt = await BootstrapAndLogin(client);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
 
-        var response = await client.GetAsync($"/v1/tasks/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/v1/tasks/{Guid.NewGuid()}", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
         var type = root.GetProperty("type").GetString();

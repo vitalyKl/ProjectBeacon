@@ -33,18 +33,18 @@ public sealed class TenantFilterTests : IDisposable
     {
         var org = Org.Create("Org");
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var project = Project.Create("P", null, org.Id);
         _db.Projects.Add(project);
         var task = TaskItem.Create("secret", project.Id);
         _db.Tasks.Add(task);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(await _db.Tasks.Select(t => t.Id).ToListAsync());
+        Assert.Empty(await _db.Tasks.Select(t => t.Id).ToListAsync(TestContext.Current.CancellationToken));
         using (TenantScope.EnterProjectScope(project.Id))
-            Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync());
+            Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync(TestContext.Current.CancellationToken));
         using (TenantScope.EnterUnscoped())
-            Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync());
+            Assert.Contains(task.Id, await _db.Tasks.Select(t => t.Id).ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

@@ -41,7 +41,7 @@ public sealed class EvalRunHandlerTests : IDisposable
         var handler = new RecordEvalRunHandler(_factory);
 
         var result = await handler.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(_projectId, _taskId, "pair-1", EvalCondition.WithBrief)));
+            new RecordEvalRunRequest(_projectId, _taskId, "pair-1", EvalCondition.WithBrief)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Value);
@@ -57,12 +57,12 @@ public sealed class EvalRunHandlerTests : IDisposable
     {
         var record = new RecordEvalRunHandler(_factory);
         var recordResult = await record.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(_projectId, _taskId, "pair-1", EvalCondition.WithBrief)));
+            new RecordEvalRunRequest(_projectId, _taskId, "pair-1", EvalCondition.WithBrief)), TestContext.Current.CancellationToken);
         Assert.True(recordResult.Success);
 
         var complete = new CompleteEvalRunHandler(_factory);
         var completeResult = await complete.HandleAsync(new CompleteEvalRunCommand(
-            new CompleteEvalRunRequest(recordResult.Value!.Id, 100, 200, 5, 0, "ref://1")));
+            new CompleteEvalRunRequest(recordResult.Value!.Id, 100, 200, 5, 0, "ref://1")), TestContext.Current.CancellationToken);
 
         Assert.True(completeResult.Success);
         Assert.Equal(100, completeResult.Value!.PromptTokens);
@@ -78,7 +78,7 @@ public sealed class EvalRunHandlerTests : IDisposable
         var complete = new CompleteEvalRunHandler(_factory);
 
         var result = await complete.HandleAsync(new CompleteEvalRunCommand(
-            new CompleteEvalRunRequest(Guid.NewGuid(), 100, 200, 5, 0, "ref://1")));
+            new CompleteEvalRunRequest(Guid.NewGuid(), 100, 200, 5, 0, "ref://1")), TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal("EvalRun not found.", result.Error);
@@ -91,11 +91,11 @@ public sealed class EvalRunHandlerTests : IDisposable
         var list = new ListEvalRunsHandler(_factory);
 
         await record.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(_projectId, _taskId, null, EvalCondition.WithBrief)));
+            new RecordEvalRunRequest(_projectId, _taskId, null, EvalCondition.WithBrief)), TestContext.Current.CancellationToken);
         await record.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(_projectId, _taskId, null, EvalCondition.WithoutBrief)));
+            new RecordEvalRunRequest(_projectId, _taskId, null, EvalCondition.WithoutBrief)), TestContext.Current.CancellationToken);
 
-        var result = await list.HandleAsync(new ListEvalRunsRequest(_projectId));
+        var result = await list.HandleAsync(new ListEvalRunsRequest(_projectId), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Equal(2, result.Value!.Count);
@@ -109,11 +109,11 @@ public sealed class EvalRunHandlerTests : IDisposable
 
         var otherTask = Guid.NewGuid();
         await record.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(_projectId, _taskId, null, EvalCondition.WithBrief)));
+            new RecordEvalRunRequest(_projectId, _taskId, null, EvalCondition.WithBrief)), TestContext.Current.CancellationToken);
         await record.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(_projectId, otherTask, null, EvalCondition.WithBrief)));
+            new RecordEvalRunRequest(_projectId, otherTask, null, EvalCondition.WithBrief)), TestContext.Current.CancellationToken);
 
-        var result = await list.HandleAsync(new ListEvalRunsRequest(_projectId, _taskId));
+        var result = await list.HandleAsync(new ListEvalRunsRequest(_projectId, _taskId), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Single(result.Value!);
@@ -125,7 +125,7 @@ public sealed class EvalRunHandlerTests : IDisposable
     {
         var list = new ListEvalRunsHandler(_factory);
 
-        var result = await list.HandleAsync(new ListEvalRunsRequest(Guid.NewGuid()));
+        var result = await list.HandleAsync(new ListEvalRunsRequest(Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success);
         Assert.Empty(result.Value!);

@@ -33,25 +33,25 @@ public sealed class TenantContextBinderTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var first = Project.Create("First", null, org.Id);
         var second = Project.Create("Second", null, org.Id);
         _db.Projects.AddRange(first, second);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var user = User.Create("alice", "alice@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ProjectMembers.Add(ProjectMember.Create(first.Id, user.Id, MemberRole.Owner));
         _db.ProjectMembers.Add(ProjectMember.Create(second.Id, user.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: false));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
 
         Assert.Equal(first.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -63,20 +63,20 @@ public sealed class TenantContextBinderTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var project = Project.Create("Only", null, org.Id);
         _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var user = User.Create("root", "root@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: true));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: true), TestContext.Current.CancellationToken);
 
         Assert.Equal(project.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -88,12 +88,12 @@ public sealed class TenantContextBinderTests : IDisposable
     {
         var user = User.Create("bob", "bob@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: false));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false), TestContext.Current.CancellationToken);
 
         Assert.Null(tenant.ProjectId);
         Assert.Null(tenant.OrgId);
@@ -105,25 +105,25 @@ public sealed class TenantContextBinderTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var first = Project.Create("First", null, org.Id);
         var second = Project.Create("Second", null, org.Id);
         _db.Projects.AddRange(first, second);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var user = User.Create("erin", "erin@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ProjectMembers.Add(ProjectMember.Create(first.Id, user.Id, MemberRole.Member));
         _db.ProjectMembers.Add(ProjectMember.Create(second.Id, user.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: false, projectClaim: second.Id));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false, projectClaim: second.Id), TestContext.Current.CancellationToken);
 
         Assert.Equal(second.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -134,23 +134,23 @@ public sealed class TenantContextBinderTests : IDisposable
     {
         var org = Org.Create("Org", null);
         _db.Orgs.Add(org);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var first = Project.Create("First", null, org.Id);
         _db.Projects.Add(first);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var user = User.Create("frank", "frank@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         _db.ProjectMembers.Add(ProjectMember.Create(first.Id, user.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var tenant = new TenantContext();
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: false, projectClaim: Guid.NewGuid()));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: false, projectClaim: Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         Assert.Equal(first.Id, tenant.ProjectId);
         Assert.Equal(org.Id, tenant.OrgId);
@@ -165,11 +165,11 @@ public sealed class TenantContextBinderTests : IDisposable
 
         var user = User.Create("carol", "carol@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: true));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: true), TestContext.Current.CancellationToken);
 
         Assert.Equal(existing, tenant.ProjectId);
         Assert.Equal(existing, tenant.OrgId);
@@ -183,11 +183,11 @@ public sealed class TenantContextBinderTests : IDisposable
 
         var user = User.Create("dave", "dave@example.com", "hash");
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var binder = new TenantContextBinder(HandlerSqlite.Factory(_connection, tenant), tenant);
 
-        await binder.BindUserAsync(Actor(user.Id, isAdmin: true));
+        await binder.BindUserAsync(Actor(user.Id, isAdmin: true), TestContext.Current.CancellationToken);
 
         Assert.Null(tenant.ProjectId);
         Assert.Null(tenant.OrgId);

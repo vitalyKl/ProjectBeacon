@@ -16,7 +16,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_ApiToken_ReturnsForbidden()
     {
         var (_, projectId, _) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanAddMemberAsync(_db, Token(ApiTokenCapability.Admin), projectId, Guid.NewGuid(), MemberRole.Member);
+        var r = await _auth.CanAddMemberAsync(_db, Token(ApiTokenCapability.Admin), projectId, Guid.NewGuid(), MemberRole.Member, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -24,7 +24,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_ProjectOwner_AddMember_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member);
+        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -32,7 +32,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_ProjectAdmin_AddMember_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member);
+        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -40,7 +40,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_ProjectMember_AddMember_ReturnsForbidden()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member);
-        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member);
+        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -48,7 +48,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_ProjectOwner_AddOwner_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Owner);
+        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Owner, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -56,7 +56,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_ProjectAdmin_AddOwner_ReturnsForbidden()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Owner);
+        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Owner, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
         Assert.Contains("Owner", r.Error);
     }
@@ -65,7 +65,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanAddMember_SystemAdmin_AddOwner_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanAddMemberAsync(_db, Admin(userId), projectId, Guid.NewGuid(), MemberRole.Owner);
+        var r = await _auth.CanAddMemberAsync(_db, Admin(userId), projectId, Guid.NewGuid(), MemberRole.Owner, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -74,9 +74,9 @@ public sealed partial class AuthorizationServiceTests
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member, MemberRole.Admin);
         _db.ProjectMembers.RemoveRange(_db.ProjectMembers.Where(m => m.ProjectId == projectId && m.UserId == userId));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member);
+        var r = await _auth.CanAddMemberAsync(_db, Human(userId), projectId, Guid.NewGuid(), MemberRole.Member, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -86,7 +86,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanRemoveMember_ApiToken_ReturnsForbidden()
     {
         var (_, projectId, _) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanRemoveMemberAsync(_db, Token(ApiTokenCapability.Admin), projectId, Guid.NewGuid());
+        var r = await _auth.CanRemoveMemberAsync(_db, Token(ApiTokenCapability.Admin), projectId, Guid.NewGuid(), TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -94,7 +94,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanRemoveMember_SelfRemoval_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member);
-        var r = await _auth.CanRemoveMemberAsync(_db, Human(userId), projectId, userId);
+        var r = await _auth.CanRemoveMemberAsync(_db, Human(userId), projectId, userId, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -104,11 +104,11 @@ public sealed partial class AuthorizationServiceTests
         var (_, projectId, ownerUserId) = await SeedProjectWithMembers(MemberRole.Owner);
         var member = User.Create("member", "member@example.com", "hash");
         _db.Users.Add(member);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _db.ProjectMembers.Add(ProjectMember.Create(projectId, member.Id, MemberRole.Member));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanRemoveMemberAsync(_db, Human(ownerUserId), projectId, member.Id);
+        var r = await _auth.CanRemoveMemberAsync(_db, Human(ownerUserId), projectId, member.Id, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -116,7 +116,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanRemoveMember_ProjectMember_RemoveMember_ReturnsForbidden()
     {
         var (_, projectId, memberUserId) = await SeedProjectWithMembers(MemberRole.Member);
-        var r = await _auth.CanRemoveMemberAsync(_db, Human(memberUserId), projectId, Guid.NewGuid());
+        var r = await _auth.CanRemoveMemberAsync(_db, Human(memberUserId), projectId, Guid.NewGuid(), TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -124,7 +124,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanRemoveMember_ProjectOwner_RemoveLastOwner_ReturnsForbidden()
     {
         var (_, projectId, ownerUserId) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanRemoveMemberAsync(_db, Human(ownerUserId), projectId, ownerUserId);
+        var r = await _auth.CanRemoveMemberAsync(_db, Human(ownerUserId), projectId, ownerUserId, TestContext.Current.CancellationToken);
         // Self-removal check fires first, so this returns Ok.
         // To test last-owner guard, use a different owner.
         // Actually self-removal returns Ok before the owner check, so let's test with two owners.
@@ -137,11 +137,11 @@ public sealed partial class AuthorizationServiceTests
         var (_, projectId, owner1Id) = await SeedProjectWithMembers(MemberRole.Owner);
         var owner2 = User.Create("owner2", "owner2@example.com", "hash");
         _db.Users.Add(owner2);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _db.ProjectMembers.Add(ProjectMember.Create(projectId, owner2.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanRemoveMemberAsync(_db, Human(owner1Id), projectId, owner2.Id);
+        var r = await _auth.CanRemoveMemberAsync(_db, Human(owner1Id), projectId, owner2.Id, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -152,12 +152,12 @@ public sealed partial class AuthorizationServiceTests
         var owner = User.Create("theowner", "owner@example.com", "hash");
         var coOwner = User.Create("coowner", "coowner@example.com", "hash");
         _db.Users.AddRange(owner, coOwner);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _db.ProjectMembers.Add(ProjectMember.Create(projectId, owner.Id, MemberRole.Owner));
         _db.ProjectMembers.Add(ProjectMember.Create(projectId, coOwner.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanRemoveMemberAsync(_db, Human(adminId), projectId, owner.Id);
+        var r = await _auth.CanRemoveMemberAsync(_db, Human(adminId), projectId, owner.Id, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
         Assert.Contains("Owner", r.Error);
     }
@@ -169,12 +169,12 @@ public sealed partial class AuthorizationServiceTests
         var owner = User.Create("theowner", "owner@example.com", "hash");
         var coOwner = User.Create("coowner", "coowner@example.com", "hash");
         _db.Users.AddRange(owner, coOwner);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         _db.ProjectMembers.Add(ProjectMember.Create(projectId, owner.Id, MemberRole.Owner));
         _db.ProjectMembers.Add(ProjectMember.Create(projectId, coOwner.Id, MemberRole.Owner));
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var r = await _auth.CanRemoveMemberAsync(_db, Admin(adminId), projectId, owner.Id);
+        var r = await _auth.CanRemoveMemberAsync(_db, Admin(adminId), projectId, owner.Id, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -184,7 +184,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_ApiToken_ReturnsForbidden()
     {
         var (_, projectId, _) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanCreateTokenAsync(_db, Token(ApiTokenCapability.Admin), projectId, ApiTokenCapability.TaskRead);
+        var r = await _auth.CanCreateTokenAsync(_db, Token(ApiTokenCapability.Admin), projectId, ApiTokenCapability.TaskRead, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -192,7 +192,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_ProjectOwner_CreateNormalToken_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite);
+        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -200,7 +200,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_ProjectAdmin_CreateNormalToken_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.TaskRead);
+        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.TaskRead, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -208,7 +208,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_ProjectMember_CreateToken_ReturnsForbidden()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Member);
-        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.TaskRead);
+        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.TaskRead, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
     }
 
@@ -216,7 +216,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_ProjectAdmin_CreateAdminToken_ReturnsForbidden()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.Admin);
+        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.Admin, TestContext.Current.CancellationToken);
         Assert.False(r.Success);
         Assert.Contains("Admin", r.Error);
     }
@@ -225,7 +225,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_ProjectOwner_CreateAdminToken_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Owner);
-        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.Admin);
+        var r = await _auth.CanCreateTokenAsync(_db, Human(userId), projectId, ApiTokenCapability.Admin, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 
@@ -233,7 +233,7 @@ public sealed partial class AuthorizationServiceTests
     public async Task CanCreateToken_SystemAdmin_CreateAdminToken_ReturnsOk()
     {
         var (_, projectId, userId) = await SeedProjectWithMembers(MemberRole.Admin);
-        var r = await _auth.CanCreateTokenAsync(_db, Admin(userId), projectId, ApiTokenCapability.Admin);
+        var r = await _auth.CanCreateTokenAsync(_db, Admin(userId), projectId, ApiTokenCapability.Admin, TestContext.Current.CancellationToken);
         Assert.True(r.Success);
     }
 

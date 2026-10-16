@@ -39,14 +39,14 @@ public sealed class LabelHandlerTests : IDisposable
     public async Task Create_Update_Delete_Label()
     {
         var create = new CreateLabelHandler(HandlerSqlite.Factory(_connection));
-        var created = await create.HandleAsync(new CreateLabelRequest(_projectId, "API", null, "ProjectBeacon.API"));
+        var created = await create.HandleAsync(new CreateLabelRequest(_projectId, "API", null, "ProjectBeacon.API"), TestContext.Current.CancellationToken);
         Assert.True(created.Success, created.Error);
         Assert.Equal("API", created.Value!.Name);
         Assert.Equal("ProjectBeacon.API", created.Value.PathPrefix);
 
         var update = new UpdateLabelHandler(HandlerSqlite.Factory(_connection));
         var updated = await update.HandleAsync(new UpdateLabelRequest(
-            _projectId, created.Value.Id, "Web", "#111111", "ProjectBeacon.Web"));
+            _projectId, created.Value.Id, "Web", "#111111", "ProjectBeacon.Web"), TestContext.Current.CancellationToken);
         Assert.True(updated.Success, updated.Error);
         Assert.Equal("Web", updated.Value!.Name);
         Assert.Equal("#111111", updated.Value.Color);
@@ -55,22 +55,22 @@ public sealed class LabelHandlerTests : IDisposable
         var task = TaskItem.Create("t", _projectId);
         task.AssignLabel(created.Value.Id);
         _db.Tasks.Add(task);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var delete = new DeleteLabelHandler(HandlerSqlite.Factory(_connection));
-        var deleted = await delete.HandleAsync(new DeleteLabelRequest(_projectId, created.Value.Id));
+        var deleted = await delete.HandleAsync(new DeleteLabelRequest(_projectId, created.Value.Id), TestContext.Current.CancellationToken);
         Assert.True(deleted.Success, deleted.Error);
 
-        await _db.Entry(task).ReloadAsync();
+        await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Null(task.LabelId);
-        Assert.False(await _db.Labels.AsNoTracking().AnyAsync(l => l.Id == created.Value.Id));
+        Assert.False(await _db.Labels.AsNoTracking().AnyAsync(l => l.Id == created.Value.Id, TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task Create_EmptyName_Fails()
     {
         var handler = new CreateLabelHandler(HandlerSqlite.Factory(_connection));
-        var result = await handler.HandleAsync(new CreateLabelRequest(_projectId, "  ", null, null));
+        var result = await handler.HandleAsync(new CreateLabelRequest(_projectId, "  ", null, null), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
     }
 }

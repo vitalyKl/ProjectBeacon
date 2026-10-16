@@ -44,7 +44,7 @@ public sealed class CapabilityAndWorkHttpTests
             projectId,
             priority = 1,
             type = 3
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
     }
 
@@ -69,7 +69,7 @@ public sealed class CapabilityAndWorkHttpTests
         });
         var taskId = task.GetProperty("id").GetGuid();
 
-        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me");
+        var me = await client.GetFromJsonAsync<JsonElement>("/v1/auth/me", TestContext.Current.CancellationToken);
         var actorId = me.GetProperty("id").GetGuid().ToString();
 
         var missing = await client.PostAsJsonAsync("/v1/work/finish_work", new
@@ -78,7 +78,7 @@ public sealed class CapabilityAndWorkHttpTests
             result = "done",
             output = "no review",
             actorId
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
 
         var selfReported = await client.PostAsJsonAsync("/v1/work/finish_work", new
@@ -88,7 +88,7 @@ public sealed class CapabilityAndWorkHttpTests
             output = "reviewed",
             actorId,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, selfReported.StatusCode);
 
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -97,7 +97,7 @@ public sealed class CapabilityAndWorkHttpTests
             using (TenantScope.EnterUnscoped())
             {
                 db.ReviewRuns.Add(ReviewRun.Create(projectId, taskId, "transcript-abc"));
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
         }
 
@@ -109,7 +109,7 @@ public sealed class CapabilityAndWorkHttpTests
             actorId,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
             reviewTranscriptRef = "transcript-abc"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, transcriptOnly.StatusCode);
 
         Guid proofId;
@@ -122,7 +122,7 @@ public sealed class CapabilityAndWorkHttpTests
                 proof.Complete("checked", "check:exit0");
                 proofId = proof.Id;
                 db.ReviewRuns.Add(proof);
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
         }
 
@@ -134,15 +134,15 @@ public sealed class CapabilityAndWorkHttpTests
             actorId,
             review = new { reviewerRun = true, regressionsFound = 0, regressionsFixed = 0 },
             reviewRunId = proofId
-        });
-        Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync());
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(ok.IsSuccessStatusCode, await ok.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<BeaconDbContext>();
             using (TenantScope.EnterUnscoped())
             {
-                var entity = await db.Tasks.FindAsync([taskId]);
+                var entity = await db.Tasks.FindAsync([taskId], cancellationToken: TestContext.Current.CancellationToken);
                 Assert.NotNull(entity);
                 Assert.Equal(Domain.Enums.TaskItemStatus.Done, entity.Status);
             }

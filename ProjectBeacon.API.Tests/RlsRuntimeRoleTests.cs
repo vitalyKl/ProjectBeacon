@@ -116,9 +116,9 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\"", conn);
-        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync()!);
+        var count = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken: TestContext.Current.CancellationToken)!);
         Assert.Equal(0, count);
     }
 
@@ -151,7 +151,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
         using (TenantScope.EnterProjectScope(_projectA))
         {
-            var tasks = await ctx.Tasks.ToListAsync();
+            var tasks = await ctx.Tasks.ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(2, tasks.Count);
             Assert.DoesNotContain(tasks, t => t.Id == _taskB);
         }
@@ -163,7 +163,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _postgres.RequirePostgres();
 
         await using var ctx = new BeaconDbContext(NewAppOptions(_appConn));
-        var tasks = await ctx.Tasks.ToListAsync();
+        var tasks = await ctx.Tasks.ToListAsync(TestContext.Current.CancellationToken);
         Assert.Empty(tasks);
     }
 
@@ -175,7 +175,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetTenantScopeAsync(conn, _projectA.ToString(), "false");
 
         var foreignId = Guid.NewGuid();
@@ -192,14 +192,14 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         _postgres.RequirePostgres();
 
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetTenantScopeAsync(conn, _projectA.ToString(), "false");
 
         Assert.Equal(0, await UpdateTaskTitleRawAsync(conn, _taskB, "rls cross-tenant pwned"));
         Assert.Equal(0, await DeleteTaskRawAsync(conn, _taskB));
 
         await using var unscoped = new NpgsqlConnection(_appConn);
-        await unscoped.OpenAsync();
+        await unscoped.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetTenantScopeAsync(unscoped, "", "true");
         Assert.Equal(1, await CountTaskByIdRawAsync(unscoped, _taskB));
         Assert.Equal("Runtime B Task 1", await TaskTitleRawAsync(unscoped, _taskB));
@@ -212,7 +212,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
         var ownId = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(_appConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetTenantScopeAsync(conn, _projectA.ToString(), "false");
 
         await InsertTaskRawAsync(conn, ownId, _projectA);
@@ -224,7 +224,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         Assert.Equal(1, await DeleteTaskRawAsync(conn, ownId));
 
         await using var unscoped = new NpgsqlConnection(_appConn);
-        await unscoped.OpenAsync();
+        await unscoped.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await SetTenantScopeAsync(unscoped, "", "true");
         Assert.Equal(0, await CountTaskByIdRawAsync(unscoped, ownId));
     }
@@ -245,7 +245,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         long backendPid;
         await using (var connA = new NpgsqlConnection(_appConn))
         {
-            await connA.OpenAsync();
+            await connA.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
             backendPid = await BackendPidAsync(connA);
             await SetTenantScopeAsync(connA, _projectA.ToString(), "false");
             Assert.Equal(2, await CountTasksRawAsync(connA));
@@ -253,7 +253,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
         await using (var connB = new NpgsqlConnection(_appConn))
         {
-            await connB.OpenAsync();
+            await connB.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(backendPid, await BackendPidAsync(connB));
             await SetTenantScopeAsync(connB, _projectB.ToString(), "false");
             Assert.Equal(1, await CountTasksRawAsync(connB));
@@ -264,7 +264,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         // No scope applied at all on the reused backend: fail closed, no stale A or B scope.
         await using (var connC = new NpgsqlConnection(_appConn))
         {
-            await connC.OpenAsync();
+            await connC.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(backendPid, await BackendPidAsync(connC));
             Assert.Equal(0, await CountTasksRawAsync(connC));
         }
@@ -281,7 +281,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         {
             using (TenantScope.EnterProjectScope(_projectA))
             {
-                var tasks = await ctxA.Tasks.ToListAsync();
+                var tasks = await ctxA.Tasks.ToListAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(2, tasks.Count);
                 Assert.DoesNotContain(tasks, t => t.Id == _taskB);
             }
@@ -291,7 +291,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         {
             using (TenantScope.EnterProjectScope(_projectB))
             {
-                var tasks = await ctxB.Tasks.ToListAsync();
+                var tasks = await ctxB.Tasks.ToListAsync(TestContext.Current.CancellationToken);
                 Assert.Single(tasks);
                 Assert.Equal(_taskB, tasks[0].Id);
             }
@@ -299,7 +299,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
 
         await using (var ctxC = new BeaconDbContext(NewAppOptions(_appConn)))
         {
-            var tasks = await ctxC.Tasks.ToListAsync();
+            var tasks = await ctxC.Tasks.ToListAsync(TestContext.Current.CancellationToken);
             Assert.Empty(tasks);
         }
     }
@@ -319,7 +319,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         };
 
         await using var conn = new NpgsqlConnection(_adminConn);
-        await conn.OpenAsync();
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var tables = new List<string>();
         await using (var cmd = new NpgsqlCommand(
@@ -329,8 +329,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             "JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND a.attname IN ('ProjectId','OrgId') " +
             "WHERE n.nspname = 'public' AND c.relkind = 'r'", conn))
         {
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            using var reader = await cmd.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            while (await reader.ReadAsync(cancellationToken: TestContext.Current.CancellationToken))
                 tables.Add(reader.GetString(0));
         }
 
@@ -350,8 +350,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                 "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
                 "WHERE n.nspname = 'public' AND c.relname = @t", conn);
             check.Parameters.Add(new NpgsqlParameter("@t", table));
-            using var reader = await check.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
+            using var reader = await check.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+            if (!await reader.ReadAsync(cancellationToken: TestContext.Current.CancellationToken))
             {
                 violations.Add($"{table}: missing from catalog");
                 continue;
