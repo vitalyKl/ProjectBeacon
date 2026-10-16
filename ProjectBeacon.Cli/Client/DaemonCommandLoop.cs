@@ -80,8 +80,10 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
     /// <summary>
     /// Posts the completion, retrying only transport failures and 5xx responses with bounded
     /// exponential backoff. A 4xx is final (terminal state or generation mismatch), and the
-    /// command body is never re-executed. When retries are exhausted, the server-side
-    /// recovery rule reclaims the command.
+    /// command body is never re-executed. When retries are exhausted the command stays Running;
+    /// the server-side recovery rule resolves it — re-queued for idempotent kinds, failed for
+    /// at-most-once kinds — once the device state proves the attempt gone or the long-stale
+    /// lease grace has passed.
     /// </summary>
     private async Task CompleteAsync(WorkstationDaemon.CommandWire command, bool ok, string? result, string? error, CancellationToken ct)
     {
@@ -119,7 +121,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             }
             if (attempt >= MaxCompletionRetries)
             {
-                _state.Log($"complete {command.Kind} failed after {attempt + 1} attempts ({(status > 0 ? status.ToString() : transportError)}); recovery will reclaim it");
+                _state.Log($"complete {command.Kind} failed after {attempt + 1} attempts ({(status > 0 ? status.ToString() : transportError)}); giving up — server-side recovery resolves the command (re-queue or failure) after the lease grace");
                 return;
             }
             _state.Log($"complete {command.Kind} {(status > 0 ? status.ToString() : transportError)}; retrying");

@@ -65,6 +65,16 @@ public sealed class CommandRecoveryTests : IDisposable
         return await _db.WorkstationCommands.AsNoTracking().SingleAsync(c => c.Id == id);
     }
 
+    // Moves the device's last heartbeat to a model time, keeping the daemon "alive" at a
+    // future `now` without sleeping.
+    private async Task SetHeartbeatAsync(Guid deviceId, DateTime beat)
+    {
+        using var scope = TenantScope.EnterUnscoped();
+        await _db.DaemonDevices
+            .Where(d => d.Id == deviceId)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.LastHeartbeatAt, beat), TestContext.Current.CancellationToken);
+    }
+
     [Fact]
     public void Decide_EncodesTheRecoveryRule()
     {
@@ -335,5 +345,124 @@ public sealed class CommandRecoveryTests : IDisposable
         var row = await SnapshotAsync(command.Id);
         Assert.Equal(WorkstationCommandStatus.Running, row.Status);
         Assert.Equal("inst-1", row.ClaimInstanceId);
+    }
+
+    // Long-stale tier: the lease has been expired longer than CommandRecovery.LongStaleGraceMinutes
+    // and the same process is still alive — a lost completion or a wedged loop, not a live run,
+    // since every kind is hard-capped client-side far below the 15-minute lease.
+
+    [Fact]
+    public async Task LongStaleIdempotent_LiveDaemon_IsRequeued()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
+
+        var now = t0.AddSeconds(30).AddMinutes(31);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-10));
+
+        var recovered = await CommandRecovery.RecoverAsync(_db, now, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, recovered);
+        var row = await SnapshotAsync(command.Id);
+        Assert.Equal(WorkstationCommandStatus.Pending, row.Status);
+        Assert.Equal(1, row.Attempts);
+        Assert.Null(row.LeaseExpiresAt);
+        Assert.Null(row.StartedAt);
+    }
+
+    [Fact]
+    public async Task LongStaleIdempotent_InsideGrace_LiveDaemon_IsNotRecovered()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
+
+        // The lease expired, but the long-stale grace has not passed: no proof of loss yet.
+        var now = t0.AddSeconds(30).AddMinutes(29);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-10));
+
+        var recovered = await CommandRecovery.RecoverAsync(_db, now, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, recovered);
+        Assert.Equal(WorkstationCommandStatus.Running, (await SnapshotAsync(command.Id)).Status);
+    }
+
+    [Fact]
+    public async Task LongStaleAtMostOnce_LiveDaemon_IsFailedWithEffect()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var session = ChatSession.Create(Guid.NewGuid(), device.Id, "session", @"A:\repo");
+        session.SetStreaming();
+        using (var scope = TenantScope.EnterUnscoped())
+        {
+            _db.ChatSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+        var command = await SeedRunningAsync(
+            device, WorkstationCommandKind.ChatPrompt,
+            $$"""{"chatSessionId":"{{session.Id:N}}"}""", "inst-1");
+
+        var now = t0.AddSeconds(30).AddMinutes(31);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-10));
+
+        var recovered = await CommandRecovery.RecoverAsync(_db, now, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, recovered);
+        var row = await SnapshotAsync(command.Id);
+        Assert.Equal(WorkstationCommandStatus.Failed, row.Status);
+        Assert.Equal(CommandRecovery.AtMostOnceExpiredError, row.Error);
+        Assert.Equal(0, row.Attempts);
+        Assert.NotNull(row.CompletedAt);
+        using var check = TenantScope.EnterUnscoped();
+        var fresh = await _db.ChatSessions.AsNoTracking().SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ChatSessionStatus.Idle, fresh.Status);
+    }
+
+    [Fact]
+    public async Task LongStaleAfterRequeue_LiveDaemon_IsFailedAtLimit()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var command = await SeedRunningAsync(device, WorkstationCommandKind.ListDir, null, "inst-1");
+
+        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken));
+
+        _db.ChangeTracker.Clear();
+        using var scope = TenantScope.EnterUnscoped();
+        var row = await _db.WorkstationCommands.SingleAsync(c => c.Id == command.Id, TestContext.Current.CancellationToken);
+        row.Claim(Lease, "inst-1");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // The second attempt also wedges on the live daemon: the re-queue limit is exhausted.
+        var now = t0.AddSeconds(30).AddMinutes(31);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-10));
+
+        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, now, TestContext.Current.CancellationToken));
+
+        var failed = await SnapshotAsync(command.Id);
+        Assert.Equal(WorkstationCommandStatus.Failed, failed.Status);
+        Assert.Equal(CommandRecovery.RequeueLimitExpiredError, failed.Error);
+    }
+
+    [Fact]
+    public async Task Complete_TerminalRow_LegacyNullAndOldGeneration_Rejected()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var command = await SeedRunningAsync(device, WorkstationCommandKind.ChatPrompt, "{}", "inst-1");
+        Assert.Equal(1, await CommandRecovery.RecoverAsync(_db, t0.AddSeconds(46), TestContext.Current.CancellationToken));
+
+        // A late completion from the lost attempt must not finish a terminal row: neither the
+        // legacy null generation nor the first-attempt generation may apply, and no effect runs.
+        var legacy = await new CompleteCommandHandler(Factory()).HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, null)), TestContext.Current.CancellationToken);
+        Assert.False(legacy.Success);
+        Assert.Equal("Command already finished.", legacy.Error);
+
+        var oldGeneration = await new CompleteCommandHandler(Factory()).HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(command.Id, device.Id, true, "{}", null, 1)), TestContext.Current.CancellationToken);
+        Assert.False(oldGeneration.Success);
+        Assert.Equal("Command already finished.", oldGeneration.Error);
+
+        var row = await SnapshotAsync(command.Id);
+        Assert.Equal(WorkstationCommandStatus.Failed, row.Status);
+        Assert.Equal(CommandRecovery.AtMostOnceExpiredError, row.Error);
     }
 }

@@ -81,14 +81,19 @@ combination of the following. **All of these must be preserved.**
    `UPDATE … WHERE Status='Pending'`; exactly one daemon wins the row, so the
    body executes once per queued command.
 2. **Reaper that never re-delivers at-most-once (H4.4 / P1.4).** A command
-   left in `Running` (its daemon died before completing) is recovered by the
-   `CommandRecovery` rule (worker, every 60 s), but only through the stale
-   predicate (lease expired AND the claiming process is gone). At-most-once
-   kinds are **failed, never re-queued**; idempotent kinds are re-queued at
-   most once, then failed. A stuck at-most-once command is therefore lost,
-   not re-delivered — the intended at-most-once-with-loss behaviour — and no
-   recovery path ever writes `Succeeded`. See `command-recovery.md` for the
-   full rule, the lease contract, and the generation protocol.
+   left in `Running` is recovered by the `CommandRecovery` rule (worker,
+   every 60 s), but only through the stale predicate: the lease is expired
+   AND either the claiming process is gone (device revoked, offline, or a
+   different process instance) or the lease expired long ago — the long-stale
+   tier, 30 minutes past expiry, which also covers a live daemon with a
+   wedged loop or a lost acknowledgement (no legitimate execution can still
+   be in flight at that point, every kind is hard-capped client-side).
+   At-most-once kinds are **failed, never re-queued**; idempotent kinds are
+   re-queued at most once, then failed. A stuck at-most-once command is
+   therefore lost, not re-delivered — the intended at-most-once-with-loss
+   behaviour — and no recovery path ever writes `Succeeded`. See
+   `command-recovery.md` for the full rule, the lease contract, and the
+   generation protocol.
 3. **Guarded completion.** `CompleteCommandHandler` applies the row's terminal
    transition; a completion on an already-terminal row is rejected, and a
    completion carrying a stale generation is rejected, so neither a duplicate

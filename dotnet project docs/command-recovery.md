@@ -16,9 +16,11 @@ completion делал один fire-and-forget запрос. Теперь:
 
 - claim выдаёт команде **lease** (по виду, 15 минут) и запоминает
   **идентификатор процесса** (instance id) заявившего daemon'а;
-- **stale-правило** переводит `Running` в recovery state только при явных
-  признаках гибели процесса (устройство отозвано, offline > 45 c, или
-  heartbeat от другого процесса);
+- **stale-правило** переводит `Running` в recovery state при истёкшем lease,
+  если гибель процесса доказана (устройство отозвано, offline > 45 c, или
+  heartbeat от другого процесса) **или** lease истёк давно — long-stale:
+  более 30 минут (`LongStaleGraceMinutes`) назад, даже если тот же процесс
+  жив и heartbeat'ит;
 - **at-most-once** виды завершаются как `Failed` и **никогда не
   повторляются** (at-most-once-with-loss сохраняется); **idempotent** виды
   возвращаются в `Pending` один раз (`Attempts++`), затем `Failed`;
@@ -43,8 +45,8 @@ completion делал один fire-and-forget запрос. Теперь:
 | `Pending`/`Running` → `Succeeded` | completion POST | guarded: строка не в терминальном статусе; generation сходится; эффекты completion применяются |
 | `Pending`/`Running` → `Failed` | completion POST | то же, `success=false` |
 | `Pending`/`Running` → `Cancelled` | `Cancel` | только пока не в терминальном |
-| `Running` → `Pending` | recovery (`CommandRecovery.RecoverAsync`) | stale-правило + idempotent вид + `Attempts < 1`; `Attempts++`, lease и `StartedAt` сбрасываются |
-| `Running` → `Failed` | recovery | stale-правило + (at-most-once вид или `Attempts >= 1`) |
+| `Running` → `Pending` | recovery (`CommandRecovery.RecoverAsync`) | stale-правило (любой ярус) + idempotent вид + `Attempts < 1`; `Attempts++`, lease и `StartedAt` сбрасываются |
+| `Running` → `Failed` | recovery | stale-правило (любой ярус) + (at-most-once вид или `Attempts >= 1`) |
 
 `Succeed`/`Fail` в домене разрешены из `Pending` и `Running`; защита от
 двойного применения — в completion handler (guarded terminal transition,
@@ -66,7 +68,8 @@ H4.1-стиль). `LeaseExpiresAt` сбрасывается при requeue и п
   «процесс мёртв», а не для точного учёта времени.
 - Lease — не TTL исполнения. Живой daemon может завершить команду в любой
   момент до конца lease; истечение lease само по себе ничего не означает
-  (см. stale-правило).
+  (см. stale-правило). Long-stale-ярус — тоже не продление lease: это
+  разрешение давно истёкшего lease, а не новое время жизни.
 
 ## Stale-правило
 
@@ -74,22 +77,44 @@ H4.1-стиль). `LeaseExpiresAt` сбрасывается при requeue и п
 выполняются оба условия:
 
 1. `LeaseExpiresAt < now` — lease истёк;
-2. процесс, заявивший claim, признан неживым — хотя бы одно:
-   - устройство отозвано (`RevokedAt != null`);
-   - устройство offline (`LastHeartbeatAt < now - 45s`,
-     `DaemonDevice.OnlineWindowSeconds`);
-   - устройство heartbeat'ит с **другим** process instance id
-     (`ActiveInstanceId <> ClaimInstanceId`).
+2. хотя бы один из двух ярусов:
+   - **ярус 1 — процесс мёртв**, хотя бы одно:
+     - устройство отозвано (`RevokedAt != null`);
+     - устройство offline (`LastHeartbeatAt < now - 45s`,
+       `DaemonDevice.OnlineWindowSeconds`);
+     - устройство heartbeat'ит с **другим** process instance id
+       (`ActiveInstanceId <> ClaimInstanceId`);
+   - **ярус 2 — long-stale**: `LeaseExpiresAt < now - 30 мин`
+     (`CommandRecovery.LongStaleGraceMinutes`) — lease истёк давно, и ярус
+     работает **даже когда тот же процесс жив и heartbeat'ит**.
+     Обоснование: 15-минутный lease многократно превышает клиентские
+     лимиты всех видов (LLM/eval — 180 c, review/winget — 120 c, остальные
+     — секунды), bounded-ретраи completion (~15 c) к этому моменту
+     исчерпаны, поэтому в полёте не может быть никакого легитимного
+     исполнения: попытка потеряна (потерян ACK или цикл заклинил).
+     Худшее время разрешения: 45 мин (lease + grace) плюс один 60-секундный
+     тик Worker.
 
-Сравнение instance id идёт по SQL-семантике: `NULL = NULL` считается
-равным, что сохраняет совместимость с legacy-daemon'ами, не шлющими
-instance id (оба поля `NULL`).
+Все три SQL-точки (запрос кандидатов и оба guarded update) строят строки
+через **один** предикат `CommandRecovery.StaleRows` — ложные кандидаты
+невозможны, и конкурирующие тики не дают двойного перехода.
 
-**Живой daemon с заклинившим циклом намеренно не восстанавливается**: если
-тот же процесс всё ещё heartbeat'ит, нет доказательства гибели, и перевод
-`Running` в `Pending` мог бы задублировать side effect. Такие команды
-разрешаются сами собой при перезапуске процесса (новый instance id) или
-при offline устройства (> 45 c без heartbeat'а).
+Сравнение instance id идёт по обычной SQL-семантике `=`: `NULL = NULL`
+**не** считается равным (EF Core переводит `==` в `=`, а не в
+`IS NOT DISTINCT FROM`). Для legacy-daemon'ов, не шлющих instance id (оба
+поля `NULL`), это означает, что ярус 1 признаёт строку stale сразу после
+истечения lease — без 30-минутного grace. Это безопасно: клиентские лимиты
+всех видов (≤ 180 s) многократно ниже 15-минутного lease, поэтому lease не
+может истечь, пока живое исполнение в полёте; потерянный ACK решается по
+тому же пути, что и для daemon'ов с instance id, а поздний дублированный
+ACK отклоняется generation guard и терминальным статусом.
+
+**Живой daemon с заклинившим циклом теперь разрешается**: внутри
+30-минутного long-stale grace строка не трогается (доказательства гибели
+нет, а requeue мог бы задублировать side effect), после grace ярус 2
+переводит idempotent-команду в `Pending` (не более одного раза) или
+завершает at-most-once `Failed`. Прежний путь (рестарт процесса — новый
+instance id, или offline устройства) по-прежнему работает как ярус 1.
 
 Instance id: клиент генерирует `Guid.ToString("N")` на процесс
 (`DaemonInstance`, не персистится) и шлёт его в heartbeat; claim забирает
@@ -106,6 +131,10 @@ Instance id: клиент генерирует `Guid.ToString("N")` на про�
 | stale + at-most-once (`CommandDelivery.IsAtMostOnce`) | `Fail` — ошибка `AtMostOnceExpiredError`; повторять запрещено |
 | stale + idempotent + `Attempts >= 1` | `Fail` — ошибка `RequeueLimitExpiredError` |
 | stale + idempotent + `Attempts < 1` | `Requeue` — `Pending`, `Attempts++`, lease/`StartedAt`/`Error` сбрасываются |
+
+Ярусы stale-правила влияют только на флаг `stale`; `Decide` от них не
+зависит. Лимит суммарный: idempotent-команда переисполняется не более
+одного раза — повторный stale после requeue (любым ярусом) даёт `Fail`.
 
 Последствия (effects) применяются **только** при `Fail` и идут через
 стандартные `CommandCompletions`:
@@ -158,8 +187,9 @@ ACK от первой попытки не может задублировать 
   или **5xx**; 4xx финален (терминальный статус или generation mismatch);
 - bounded: первый + не более 4 повторных попыток, backoff 1 c × 2
   (1, 2, 4, 8 c) через `DaemonTiming.DelayAsync`;
-- при исчерпании ретраев клиент сдает: команда остаётся `Running` с
-  истёкшим lease, и серверная recovery-правилка забирает её;
+- при исчерпании ретраев клиент сдает: команда остаётся `Running`;
+  серверная recovery разрешает её по stale-правилу — ярус 1 (доказанная
+  гибель процесса) или ярус 2 (long-stale, после 30-минутного grace);
 - **никогда** нет клиентского ре-исполнения команды.
 
 Это и есть «acknowledgement retry» из `command-delivery-semantics.md`.
@@ -174,8 +204,9 @@ ACK от первой попытки не может задублировать 
   (`WorkstationCommand`/`DaemonDevice` не tenant-filtered, но
   project-scoped эффекты читают через `IgnoreQueryFilters`);
 - каждый переход — отдельный guarded `ExecuteUpdateAsync`, который
-  **повторяет весь stale-predicate в той же SQL-выборке**: даже если два
-  тика (или ручной запуск рядом с тиком) выбрали одну строку, обновится
+  **повторяет весь stale-predicate в той же SQL-выборке** (один общий
+  предикат `CommandRecovery.StaleRows`, включая long-stale-ярус): даже если
+  два тика (или ручной запуск рядом с тиком) выбрали одну строку, обновится
   ровно тот, кому `WHERE` отдал строку; проигравший получает `0` строк и
   не применяет эффекты. Одновременно Postgres-тест
   (`RecoverStaleCommandsPostgresTests`) гоняет три конкурентных
@@ -204,6 +235,13 @@ ACK от первой попытки не может задублировать 
    (`DesiredStateCompletion`) — evidence-based; gap не найден.
 6. **Преждевременный success.** Не найден: ни completion, ни recovery не
    пишут `Succeeded` без подтверждения runtime.
+7. **Живой daemon, потерянный completion (long-stale).** Тот же процесс
+   жив и heartbeat'ит, но completion не доставлен (или цикл заклинил).
+   Внутри 30-минутного grace строка не трогается; после grace ярус 2:
+   idempotent → `Pending` (не более одного раза, затем `Failed`),
+   at-most-once → `Failed`. Поздний/дублированный ACK утерянной попытки
+   отклонён: generation guard — после requeue, терминальный статус — после
+   `Failed` (включая legacy `null` generation).
 
 ## Что НЕ изменено (H4.1–H4.3)
 
@@ -230,10 +268,17 @@ ACK от первой попытки не может задублировать 
   at-most-once не переqueue'ивается, эффекты (ChatPrompt → `Idle`,
   RunEvalTurn → eval завершён), generation (legacy null, current, stale,
   после requeue), claim DTO (`Generation`, lease, instance),
-  `ReconcileDesired` requeue + heartbeat без дубликата + повторный claim.
+  `ReconcileDesired` requeue + heartbeat без дубликата + повторный claim,
+  long-stale-ярус (живой daemon: внутри grace не тронут, после grace
+  requeue / `Failed` с эффектом, лимит после requeue, поздний completion к
+  терминальной строке отклонён — legacy `null` и старый generation).
 - `ProjectBeacon.API.Tests/RecoverStaleCommandsPostgresTests.cs` (Postgres,
   `[Collection("postgres-serial")]`) — конкурентные recovery: ровно один
-  победитель, ровно один переход.
+  победитель, ровно один переход (оба яруса); long-stale на живом daemon:
+  не восстановлен внутри grace, восстановлен после; конкурентные тики —
+  один победитель; at-most-once `Failed` + поздний completion отклонён;
+  requeue → claim с generation 2 → `Succeeded`, дублированный completion
+  отклонён, `AppliedRevision` продвинулся ровно один раз.
 - `ProjectBeacon.Cli.Tests/DaemonCommandLoopTests.cs` (fake
   `HttpMessageHandler`, `TaskCompletionSource` вместо sleep'ов) — 500→200
   ретраит с одним исполнением, 4xx без ретра, transport failure ретраится,
