@@ -150,6 +150,68 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
+    public async Task SaveWorkstation_InsertFailure_RollsBackJsonAndRevision_AllowsRetry()
+    {
+        var user = await SeedUserAsync("inject");
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "fp-" + Guid.NewGuid().ToString("N"), user.Id)));
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")));
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var before = await _db.DaemonDevices.AsNoTracking().SingleAsync(d => d.Id == deviceId);
+            Assert.Equal(0, before.DesiredRevision);
+            Assert.Equal("{}", before.DesiredWorkstationJson);
+
+            // Fault injection: the DB itself refuses the command insert for marked payloads.
+            await _db.Database.ExecuteSqlRawAsync(
+                "CREATE TRIGGER beacon_inject_fail BEFORE INSERT ON \"WorkstationCommands\" " +
+                "WHEN NEW.\"PayloadJson\" LIKE '%injectFail%' " +
+                "BEGIN SELECT RAISE(ABORT, 'injected insert failure'); END");
+        }
+        try
+        {
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                new EnqueueCommandHandler(Factory()).HandleAsync(
+                    new EnqueueCommandCommand(new EnqueueCommandRequest(
+                        deviceId, user.Id, WorkstationCommandKind.SaveWorkstation,
+                        """{"n":"a","revision":0,"injectFail":true}""", null))));
+        }
+        finally
+        {
+            using (TenantScope.EnterUnscoped())
+            {
+                await _db.Database.ExecuteSqlRawAsync("DROP TRIGGER IF EXISTS beacon_inject_fail");
+            }
+        }
+
+        // The guarded UPDATE and the INSERT roll back together: JSON, revision, and the
+        // queue are exactly as before the failed save.
+        using (TenantScope.EnterUnscoped())
+        {
+            var device = await _db.DaemonDevices.AsNoTracking().SingleAsync(d => d.Id == deviceId);
+            Assert.Equal(0, device.DesiredRevision);
+            Assert.Equal("{}", device.DesiredWorkstationJson);
+            Assert.Equal(0, await _db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId));
+        }
+
+        // The old base revision is still valid: the retry without the fault lands revision 1.
+        var retry = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, user.Id, WorkstationCommandKind.SaveWorkstation, """{"n":"a","revision":0}""", null)));
+        Assert.True(retry.Success, retry.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var device = await _db.DaemonDevices.AsNoTracking().SingleAsync(d => d.Id == deviceId);
+            Assert.Equal(1, device.DesiredRevision);
+            Assert.Equal("""{"n":"a"}""", device.DesiredWorkstationJson);
+            Assert.Equal(1, await _db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId));
+        }
+    }
+
+    [Fact]
     public async Task Bumps_ExpressionValueIncrements_TranslateAndApply()
     {
         var user = await SeedUserAsync("bumps");

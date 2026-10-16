@@ -361,6 +361,83 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     }
 
     [Fact]
+    public async Task SaveWorkstation_InsertFailure_RollsBackJsonAndRevision_AllowsRetry()
+    {
+        _postgres.RequirePostgres();
+        Guid userId, deviceId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var user = User.Create("inject-user", "inject-user@beacon.local", "hash");
+            seed.Users.Add(user);
+            await seed.SaveChangesAsync();
+            var device = DaemonDevice.Create("inject device", user.Id, "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"), "bcd_inject");
+            device.Heartbeat();
+            seed.DaemonDevices.Add(device);
+            await seed.SaveChangesAsync();
+            userId = user.Id;
+            deviceId = device.Id;
+
+            // Fault injection at the database level: refuse the command insert for marked
+            // payloads. Created as superuser on the disposable fixture database only.
+            await seed.Database.ExecuteSqlRawAsync(@"
+                CREATE FUNCTION beacon_inject_fail() RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.""PayloadJson"" LIKE '%injectFail%' THEN
+                        RAISE EXCEPTION 'injected insert failure';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER beacon_inject_fail
+                BEFORE INSERT ON ""WorkstationCommands""
+                FOR EACH ROW EXECUTE FUNCTION beacon_inject_fail();");
+        }
+        try
+        {
+            var factory = _postgres.CreateFactory();
+            using (TenantScope.EnterUnscoped())
+            {
+                await Assert.ThrowsAsync<DbUpdateException>(() =>
+                    new EnqueueCommandHandler(factory).HandleAsync(
+                        new EnqueueCommandCommand(new EnqueueCommandRequest(
+                            deviceId, userId, WorkstationCommandKind.SaveWorkstation,
+                            """{"n":"a","revision":0,"injectFail":true}""", null))));
+            }
+        }
+        finally
+        {
+            await using var cleanup = _postgres.CreateAdminContext();
+            await cleanup.Database.ExecuteSqlRawAsync(@"
+                DROP TRIGGER IF EXISTS beacon_inject_fail ON ""WorkstationCommands"";
+                DROP FUNCTION IF EXISTS beacon_inject_fail();");
+        }
+
+        // The guarded UPDATE and the INSERT roll back together: JSON, revision, and the
+        // queue are exactly as before the failed save.
+        await using var db = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var row = await db.DaemonDevices.FirstAsync(d => d.Id == deviceId);
+            Assert.Equal(0, row.DesiredRevision);
+            Assert.Equal("{}", row.DesiredWorkstationJson);
+            Assert.Equal(0, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId));
+        }
+
+        // The old base revision is still valid: the retry without the fault lands revision 1.
+        using (TenantScope.EnterUnscoped())
+        {
+            var retry = await new EnqueueCommandHandler(_postgres.CreateFactory()).HandleAsync(
+                new EnqueueCommandCommand(new EnqueueCommandRequest(
+                    deviceId, userId, WorkstationCommandKind.SaveWorkstation, """{"n":"a","revision":0}""", null)));
+            Assert.True(retry.Success, retry.Error);
+            var row = await db.DaemonDevices.AsNoTracking().FirstAsync(d => d.Id == deviceId);
+            Assert.Equal(1, row.DesiredRevision);
+            Assert.Equal("""{"n":"a"}""", row.DesiredWorkstationJson);
+            Assert.Equal(1, await db.WorkstationCommands.CountAsync(c => c.DeviceId == deviceId));
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentBumpUser_AllBumpsLand()
     {
         _postgres.RequirePostgres();
