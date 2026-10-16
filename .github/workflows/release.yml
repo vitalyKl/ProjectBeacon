@@ -9,44 +9,242 @@ permissions:
   contents: read
   packages: write
 
+# Gate chain (no bypass): tests -> image -> scan -> deploy.
+# Only this workflow publishes images; ci.yml never pushes to the registry.
+
 jobs:
+  tests:
+    # Mirror of the authoritative CI Linux lane (build-test-linux in
+    # .github/workflows/ci.yml). Tag pushes do not trigger ci.yml, so the
+    # release gate re-runs the full suite here.
+    # KEEP IN SYNC with ci.yml: same SDK pin, postgres service, test command,
+    # TRX guards (MIN_TOTAL, module count, allowed skips).
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: beacon
+      TESTINGPLATFORM_TELEMETRY_OPTOUT: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: beacon
+          POSTGRES_PASSWORD: beacon
+          POSTGRES_DB: beacon
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beacon"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          # Same pin as ci.yml: one SDK version across all CI jobs.
+          dotnet-version: 10.0.402
+      - name: Export test DB URL
+        shell: bash
+        run: echo "BEACON_TEST_DATABASE_URL=postgres://beacon:beacon@localhost:5432/beacon" >> "$GITHUB_ENV"
+      - name: Restore dependencies
+        run: dotnet restore ProjectBeacon.sln
+      - name: Build
+        run: dotnet build ProjectBeacon.sln --no-restore
+      - name: No pending model changes
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+      - name: Test
+        run: dotnet test --solution ProjectBeacon.sln --no-build --results-directory TestResults --results-directory-layout per-module --report-xunit-trx --report-xunit-trx-filename test-results.trx
+      - name: Verify test results (TRX guards)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          BASE = "TestResults"
+          EXPECTED_MODULES = 7
+          # Exact current total across the 7 modules; bump when tests are added.
+          MIN_TOTAL = 1243
+          # The only tests allowed to be NotExecuted on Linux: platform-conditional
+          # skips that cannot execute there. Anything else (e.g. a Postgres opt-out
+          # leaking into this authoritative lane) fails the guard.
+          EXPECTED_NOT_EXECUTED = {
+              # mklink /J junctions exist only on Windows; RequireJunctionSupport()
+              # skips this test on non-Windows platforms.
+              "ProjectBeacon.Application.Tests.WorkspacePathTests.ResolveInsideRoot_RejectsMklinkJunction",
+          }
+
+          def unit_test_results(path):
+              tree = ET.parse(path)
+              return [r for r in tree.iter() if r.tag.endswith("UnitTestResult")]
+
+          paths = sorted(glob.glob(BASE + "/*/*/test-results.trx"))
+          if len(paths) != EXPECTED_MODULES:
+              raise SystemExit(f"::error::Expected {EXPECTED_MODULES} per-module TRX reports under {BASE}, found {len(paths)}: {paths}")
+
+          app_trx = [p for p in paths if "ProjectBeacon.Application.Tests" in p]
+          if not app_trx:
+              raise SystemExit("::error::Application.Tests TRX report not found")
+          app = {r.get("testName"): r.get("outcome") for r in unit_test_results(app_trx[0])}
+          for t in (
+              "ProjectBeacon.Application.Tests.WorkspacePathTests.ResolveInsideRoot_RejectsSymlinkDirectory_Escape",
+              "ProjectBeacon.Application.Tests.WorkspacePathTests.ResolveInsideRoot_RejectsDirectoryJunction",
+          ):
+              outcome = app.get(t)
+              if outcome != "Passed":
+                  raise SystemExit(f"::error::Symlink security test {t} did not run to Passed (outcome={outcome!r}); the path-escape gate is inactive")
+
+          total = 0
+          skipped = []
+          for path in paths:
+              for r in unit_test_results(path):
+                  total += 1
+                  if r.get("outcome") == "NotExecuted":
+                      skipped.append(r.get("testName"))
+          if total < MIN_TOTAL:
+              raise SystemExit(f"::error::Only {total} test results reported; expected at least {MIN_TOTAL}")
+          unexpected = sorted(set(skipped) - EXPECTED_NOT_EXECUTED)
+          if unexpected:
+              raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\n" + "\n".join(unexpected))
+          print(f"OK: {total} results, {len(skipped)} platform-conditional skips, {len(paths)} modules, symlink gates Passed")
+          PY
+      - name: Verify formatting
+        run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
+
   image:
+    needs: tests
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.meta.outputs.image }}
+      repo: ${{ steps.meta.outputs.repo }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Image name
         id: meta
         run: |
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "owner=${owner}" >> "$GITHUB_OUTPUT"
+          echo "repo=ghcr.io/${owner}/projectbeacon-web" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${owner}/projectbeacon-web:${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           version="${GITHUB_REF_NAME#v}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           push: true
+          # Immutable tags only: the version tag (protect v* on GitHub) and the
+          # full commit SHA. Never publish a mutable `latest`. The push digest
+          # is exported and bound to scan/deploy below.
           tags: |
             ${{ steps.meta.outputs.image }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/projectbeacon-web:latest
+            ghcr.io/${{ steps.meta.outputs.owner }}/projectbeacon-web:${{ github.sha }}
           build-args: |
             BEACON_GIT_SHA=${{ github.sha }}
             BEACON_VERSION=${{ steps.meta.outputs.version }}
 
-  deploy:
+  scan:
+    # Verifies and scans the exact immutable image pushed by the image job.
+    # Fail-closed: any auth, pull, digest mismatch, or scanner failure exits
+    # non-zero and fails the job (verified with Trivy 0.76.0: denied pull ->
+    # exit 1). Digest binding: the tag must resolve to the digest the image
+    # job exported; a mismatch means the tag was re-pointed and the release
+    # is aborted. Deploy uses this job's verified digest, never a tag.
+    # Policy: fixed HIGH/CRITICAL findings block the release. Unfixed findings
+    # are excluded from the gate (--ignore-unfixed) but are NOT excluded from
+    # the uploaded report: trivy-report.json is the full HIGH/CRITICAL report
+    # and must be reviewed on every release.
     needs: image
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Resolve and verify image digest
+        id: digest
+        env:
+          SCAN_IMAGE: ${{ needs.image.outputs.image }}
+          EXPECTED_DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Top-level Digest: line = digest of the pushed artifact (image
+          # manifest, or index when attestations are attached).
+          ACTUAL="$(docker buildx imagetools inspect "$SCAN_IMAGE" | sed -n 's/^Digest:[[:space:]]*//p' | head -n 1)"
+          echo "tag $SCAN_IMAGE resolves to $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "::error::Could not resolve the digest of $SCAN_IMAGE."
+            exit 1
+          fi
+          if [ "$ACTUAL" != "$EXPECTED_DIGEST" ]; then
+            echo "::error::Image digest mismatch: the tag was re-pointed between build and scan ($ACTUAL != $EXPECTED_DIGEST)."
+            exit 1
+          fi
+          echo "digest=$ACTUAL" >> "$GITHUB_OUTPUT"
+      - name: Trivy scan + SBOM of the published image
+        env:
+          SCAN_IMAGE: ${{ needs.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          # One container. The token is piped via stdin for a scoped login to
+          # ghcr.io only (per Trivy docs, TRIVY_USERNAME/TRIVY_PASSWORD env
+          # credentials would be sent to every registry Trivy contacts).
+          # Artifacts are generated before the blocking gate, so they exist
+          # even when the gate fails the job.
+          # --entrypoint /bin/sh overrides trivy's own entrypoint (the image
+          # refuses "/bin/sh" as a subcommand); stdin carries the token.
+          printf '%s' "${GITHUB_TOKEN}" | docker run --rm -i --entrypoint /bin/sh \
+            -e TRIVY_ACTOR="${GITHUB_ACTOR}" \
+            -e SCAN_IMAGE \
+            -v "${PWD}/sbom:/out" \
+            aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222 \
+            -c '
+              set -e
+              trivy registry login --username "$TRIVY_ACTOR" --password-stdin ghcr.io
+              # 1) CycloneDX SBOM of the verified image (audit artifact).
+              trivy image --format cyclonedx --output /out/sbom.cdx.json --no-progress "$SCAN_IMAGE"
+              # 2) Full HIGH/CRITICAL report, fixed AND unfixed (review).
+              trivy image --severity HIGH,CRITICAL --format json --output /out/trivy-report.json --no-progress "$SCAN_IMAGE"
+              # 3) Blocking gate: fixed HIGH/CRITICAL findings fail the release.
+              trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress "$SCAN_IMAGE"
+            '
+      - name: Upload scan report and SBOM
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scan-sbom-${{ github.sha }}
+          path: sbom/
+          retention-days: 90
+
+  deploy:
+    # Deploys the exact digest the scan job verified (repo@sha256:...) —
+    # immutable even if the version tag is later re-pointed. No rebuild
+    # happens between image, scan, and deploy: the image is built once in
+    # the image job and only pulled from the registry afterwards.
+    needs: [image, scan]
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
       - name: Switch idle color
         env:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
@@ -59,6 +257,8 @@ jobs:
           mkdir -p "$HOME/.kube"
           printf '%s\n' "$KUBECONFIG_DATA" > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
+          IMAGE_REF="${{ needs.image.outputs.repo }}@${{ needs.scan.outputs.digest }}"
+          echo "deploying verified image $IMAGE_REF"
           current=$(kubectl -n beacon get svc beacon-web -o jsonpath='{.spec.selector.color}' || echo blue)
           if [ "$current" = "blue" ]; then next=green; else next=blue; fi
-          sh deploy/k8s/switch.sh "$next" "${{ needs.image.outputs.image }}"
+          sh deploy/k8s/switch.sh "$next" "$IMAGE_REF"

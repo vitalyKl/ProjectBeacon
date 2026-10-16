@@ -12,7 +12,9 @@ docker build -t ghcr.io/<org>/projectbeacon-web:<tag> \
 
 `BEACON_VERSION` becomes the assembly `Version`. `BEACON_GIT_SHA` is a runtime env var, not `InformationalVersion`.
 
-Replace `OWNER` in `deploy/k8s/*.yaml` with the GHCR owner.
+Replace `OWNER` in `deploy/k8s/*.yaml` with the GHCR owner and `__PINNED_TAG__` with the immutable version tag (e.g. `v1.2.3`). Never run from a mutable `latest` tag.
+
+Containers run as non-root (UID `1654`, the `app` user of the base image) with a read-only root filesystem and a writable `emptyDir` at `/tmp`. The namespace enforces `restricted` Pod Security Admission.
 
 Container env: `BEACON_MIGRATE_ON_START=false`. Local `dotnet run` still migrates (non-Production).
 
@@ -31,10 +33,12 @@ Development/Testing hosts log a warning and continue; the guard is skipped entir
 
 1. `kubectl apply -f deploy/k8s/namespace.yaml`
 2. Create the secret (see `secret.yaml.example`). Do not commit real secrets.
-3. Point Deployments at your image, then:
+3. Replace `OWNER` with your GHCR owner and `__PINNED_TAG__` with the immutable version tag in `deploy/k8s/*.yaml`, then:
    ```
+   kubectl apply --dry-run=server -f deploy/k8s/web.yaml -f deploy/k8s/ingress.yaml
    kubectl apply -f deploy/k8s/web.yaml -f deploy/k8s/ingress.yaml
    ```
+   The `--dry-run=server` pass is required: client-side YAML checks do not validate against the cluster's admission policies (`restricted` PSA) or the API schema.
 4. Run a migrate Job once (`BEACON_MIGRATE_ON_START=true`, `BEACON_MIGRATE_THEN_EXIT=true`).
 5. Ingress needs nginx (or equivalent) with **cookie affinity** — Blazor Server circuits.
 
@@ -63,8 +67,9 @@ Stored secrets (TOTP, OpenCode API keys) are encrypted with `DATA_PROTECTION_KEY
 
 Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app
 runs `UseForwardedHeaders` (`X-Forwarded-For`, `X-Forwarded-Proto`) before authentication to restore
-`IsHttps` from the forwarded proto; the `BeaconAuth` cookie (`SecurePolicy = SameAsRequest`) is then
-issued with `Secure` for HTTPS clients.
+`IsHttps` from the forwarded proto. In Production the `BeaconAuth` cookie uses
+`SecurePolicy = Always` (fail-closed), so it carries `Secure` even before the forwarded proto is
+honored; in other environments it is `SameAsRequest`.
 
 The middleware only honors forwarded headers from trusted sources (default: loopback only). The web
 pod sees the ingress controller's pod IP as the client, so add the cluster pod CIDR:
@@ -84,7 +89,17 @@ behaves as before (plain HTTP, no `Secure` flag).
 
 ## CI
 
-Tag `v*` runs `.github/workflows/release.yml`: build/push GHCR with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. The deploy job always runs. If the `KUBECONFIG` secret on the `production` environment is empty, the job prints a skip message and exits 0.
+Tag `v*` runs `.github/workflows/release.yml` with the gate chain **tests → image → scan → deploy**:
+
+1. `tests` — the full authoritative CI Linux lane (mirror of `build-test-linux` in `ci.yml`, including the TRX guards; keep both in sync). A tag push does not trigger `ci.yml`, so this job is the release test gate.
+2. `image` — builds once and pushes **immutable** tags only: the version tag (`v1.2.3`) and the full commit SHA. No `latest`. The push's image **digest** is exported as a job output. Protect `v*` tags on GitHub so they cannot be re-pointed (an additional measure — the chain below does not rely on tag immutability).
+3. `scan` — **digest binding + Trivy** (pinned by digest) on the exact pushed image:
+   - the tag is resolved via `buildx imagetools inspect` and must equal the digest the `image` job exported; a mismatch (tag re-pointed between jobs) fails the job;
+   - Trivy generates, before the gate, the CycloneDX **SBOM** (`sbom.cdx.json`) and the **full** HIGH/CRITICAL report (`trivy-report.json`, fixed **and** unfixed findings); both are uploaded as the `scan-sbom-<sha>` artifact even when the gate fails;
+   - the **blocking gate** then runs with `--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`: fixed HIGH/CRITICAL findings fail the job and block the deploy. Unfixed findings are deliberately excluded from the gate (distro base-image CVEs without an upstream fix) but **remain in the uploaded report and must be explicitly reviewed and tracked on every release**.
+4. `deploy` — deploys `repo@sha256:<digest>` using the **digest verified by the scan job**, never a tag: even if the version tag is re-pointed afterwards, the rollout pulls the exact scanned artifact. No rebuild occurs between `image`, `scan`, and `deploy`. Always runs (the `production` environment gate still applies). If the `KUBECONFIG` secret is empty, the job prints a skip message and exits 0.
+
+All workflow actions are pinned by commit SHA.
 
 ## Client
 

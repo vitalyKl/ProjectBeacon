@@ -8,10 +8,27 @@ spec:
   backoffLimit: 1
   template:
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: migrate
-          image: ghcr.io/OWNER/projectbeacon-web:latest
+          image: ghcr.io/OWNER/projectbeacon-web:__PINNED_TAG__
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           envFrom:
             - secretRef:
                 name: beacon-web

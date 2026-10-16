@@ -7,7 +7,7 @@ Authoritative product docs: `dotnet project docs/ProjectBeacon-master-roadmap-v1
 ## Self-host
 
 1. Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD` and/or `ConnectionStrings__Default`, `BOOTSTRAP_ADMIN_TOKEN`, and `JWT__Secret`.
-2. Start Postgres: `docker compose up -d` (or let `DockerPostgresHelper` start it on first Web run). Both use image `postgres:16-bookworm`, container `beacon-postgres`, and the named volume `pgdata` mounted at `/var/lib/postgresql/data`.
+2. Start Postgres: `docker compose up -d` (or let `DockerPostgresHelper` start it on first Web run). Both use image `postgres:16-bookworm`, container `beacon-postgres`, and the named volume `pgdata` mounted at `/var/lib/postgresql/data`. Port `5432` is published to `127.0.0.1` only — connections come from the host; remote clients are not supported.
 3. `dotnet run --project ProjectBeacon.Web --launch-profile http` — Web loads `.env` from the repo root.
 4. Open `http://localhost:5083/` (landing). Bootstrap at `/bootstrap`, then `/login`. Logged-in `/` goes to the dashboard.
 5. Users: `/register` is open unless `AUTH_LOCAL_INVITE_ONLY=true` (default in `.env.example`). Invite from the open project on the dashboard (email + role); the `bci_` link is shown once and emailed when `MAIL__*` is set. Forgot password is `/forgot` → `/reset`. `/recover` is bootstrap-token admin break-glass only.

@@ -1,8 +1,11 @@
 #!/bin/sh
 set -eu
 # Usage: switch.sh <blue|green> <image> [namespace]
+# <image> is a tag or digest reference, e.g. ghcr.io/org/projectbeacon-web:v1.2.3
+# or ghcr.io/org/projectbeacon-web@sha256:<digest> (the release pipeline passes
+# the digest verified by the scan job).
 COLOR=${1:?color blue or green}
-IMAGE=${2:?image tag, e.g. ghcr.io/org/projectbeacon-web:v1.2.3}
+IMAGE=${2:?image tag or digest reference}
 NS=${3:-beacon}
 
 if [ "$COLOR" != "blue" ] && [ "$COLOR" != "green" ]; then
@@ -18,7 +21,7 @@ fi
 
 echo "migrate $IMAGE"
 kubectl -n "$NS" delete job beacon-migrate --ignore-not-found
-sed "s|image: ghcr.io/OWNER/projectbeacon-web:latest|image: ${IMAGE}|" "$(dirname "$0")/migrate-job.yaml" \
+sed "s|image: ghcr.io/OWNER/projectbeacon-web:__PINNED_TAG__|image: ${IMAGE}|" "$(dirname "$0")/migrate-job.yaml" \
   | kubectl apply -f -
 kubectl -n "$NS" wait --for=condition=complete job/beacon-migrate --timeout=180s
 

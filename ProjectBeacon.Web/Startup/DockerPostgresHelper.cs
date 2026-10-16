@@ -43,7 +43,7 @@ public class DockerPostgresHelper
 
             RunDockerCommand(
                 $"run --name {config.ContainerName} -d " +
-                $"-p {config.Port}:5432 " +
+                $"-p 127.0.0.1:{config.Port}:5432 " +
                 $"-e POSTGRES_USER={User} " +
                 $"-e POSTGRES_PASSWORD={password} " +
                 $"-e POSTGRES_DB={Database} " +

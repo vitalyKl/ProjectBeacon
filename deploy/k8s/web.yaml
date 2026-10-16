@@ -18,10 +18,27 @@ spec:
         app: beacon-web
         color: blue
     spec:
+      automountServiceAccountToken: false
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: web
-          image: ghcr.io/OWNER/projectbeacon-web:latest
+          image: ghcr.io/OWNER/projectbeacon-web:__PINNED_TAG__
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: 8080
               name: http
@@ -35,6 +52,10 @@ spec:
               value: "false"
             - name: BEACON_GIT_SHA
               value: unknown
+            # TLS terminates at the ingress. Set the ingress pod CIDR so the app
+            # trusts X-Forwarded-Proto/For (Secure cookies, rate-limit keying).
+            # - name: FORWARDEDHEADERS__KNOWNNETWORKS__0
+            #   value: "10.244.0.0/16"
           readinessProbe:
             httpGet:
               path: /health
@@ -79,10 +100,27 @@ spec:
         app: beacon-web
         color: green
     spec:
+      automountServiceAccountToken: false
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: web
-          image: ghcr.io/OWNER/projectbeacon-web:latest
+          image: ghcr.io/OWNER/projectbeacon-web:__PINNED_TAG__
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1654
+            runAsGroup: 1654
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: 8080
               name: http
@@ -96,6 +134,10 @@ spec:
               value: "false"
             - name: BEACON_GIT_SHA
               value: unknown
+            # TLS terminates at the ingress. Set the ingress pod CIDR so the app
+            # trusts X-Forwarded-Proto/For (Secure cookies, rate-limit keying).
+            # - name: FORWARDEDHEADERS__KNOWNNETWORKS__0
+            #   value: "10.244.0.0/16"
           readinessProbe:
             httpGet:
               path: /health
