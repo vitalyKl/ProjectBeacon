@@ -48,6 +48,17 @@ Order: migrate Job → scale idle color to 1 → wait Available → patch Servic
 
 Breaking schema changes need expand/contract across two releases. Additive EF migrations can run in the Job before traffic moves.
 
+## Data-key rotation
+
+Stored secrets (TOTP, OpenCode API keys) are encrypted with `DATA_PROTECTION_KEY`, separate from the JWT signing key. New writes use the v2 format (`v2:` prefix, HKDF-derived AES-GCM key) only when `DATA_PROTECTION_WRITE_V2=true`; otherwise they stay v1, which is read with `DATA_PROTECTION_LEGACY_KEY`. Rotating the key is a multi-step rollout because v2 ciphertexts are unreadable without the key that wrote them:
+
+1. Add `DATA_PROTECTION_KEY=<new key>` and `DATA_PROTECTION_LEGACY_KEY=<old key>` to the secret. Deploy. Writes stay v1; old rows remain readable through the legacy key.
+2. Set `DATA_PROTECTION_WRITE_V2="true"` in the secret and deploy. New writes are v2; v1 rows are still read via the legacy key.
+3. Stop old instances' traffic (scale the previous color to 0) and run a migrate Job (`BEACON_MIGRATE_ON_START=true`, `BEACON_MIGRATE_THEN_EXIT=true`). It re-encrypts v1 rows to v2 in place, never touching other columns. Its log reports `migrated`, `remaining_v1`, and `failed`. Re-run until `remaining_v1=0` and `failed=0`. Rows that fail keep their original ciphertext — they are counted, not masked or dropped.
+4. Remove `DATA_PROTECTION_LEGACY_KEY` from the secret and deploy. If any v1 row is still unreadable, the startup log says the v1 migration is impossible until the old key is provided again.
+
+`failed>0` rows need the old key (step 4 undoes it if you already removed it). The pass is idempotent; a row is rewritten only after it decrypts and re-seals.
+
 ## TLS termination and forwarded headers
 
 Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app

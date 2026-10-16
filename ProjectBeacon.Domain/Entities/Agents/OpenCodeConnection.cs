@@ -43,4 +43,7 @@ public class OpenCodeConnection : Entity
             ApiKeyCipher = apiKeyCipher;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    /// <summary>Replaces the stored ciphertext only (key re-encryption); does not touch <see cref="UpdatedAt"/>.</summary>
+    public void UpdateApiKeyCipher(string cipher) => ApiKeyCipher = cipher ?? string.Empty;
 }

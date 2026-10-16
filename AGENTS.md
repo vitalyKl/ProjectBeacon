@@ -108,6 +108,7 @@ Edit the living brief in Context. Export `AGENTS.md` when a host only reads the 
 - `BEACON_WORKER_TOKEN` is an `ActorId` string for `finish_work` and pipeline force-close (constant-time compare). It is not a bearer that makes the caller project admin, and the Worker process does not read it. Do not print this token.
 - All auth endpoints get rate limiting. No hardcoded credentials.
 - BCrypt only in Infrastructure. Web uses `PasswordHasher` from Infrastructure.
+- Data encryption is separate from JWT signing: `JWT:Secret` signs tokens only. `DATA_PROTECTION_KEY` (≥32 chars, required in non-safe environments, fail-closed startup without it) keys v2 AES-GCM ciphertexts (`v2:` prefix, HKDF-SHA256 derived key, AAD-bound). v1 rows read only via `DATA_PROTECTION_LEGACY_KEY` (absent legacy falls back to a temporary `JWT:Secret` bridge with a warning). `DATA_PROTECTION_WRITE_V2` (off by default) switches writes to v2. `DataKeyMigration` (Web post-migration hook; Production via the migrate Job) re-encrypts v1→v2 in place — a failed row keeps its original ciphertext and is reported, never masked. Do not log or print any of these keys.
 - `AUTH_LOCAL_INVITE_ONLY=true` requires a valid invite on `POST /v1/auth/register`. Forgot-password always returns 200 (no email enumeration). `/recover` is bootstrap-token admin break-glass, not user reset.
 
 ## Agent workflow

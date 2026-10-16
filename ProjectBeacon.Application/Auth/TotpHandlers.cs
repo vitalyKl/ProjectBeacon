@@ -61,7 +61,7 @@ public sealed class GetTotpStatusHandler : ICommandHandler<GetTotpStatusCommand,
         {
             try
             {
-                secret = _secrets.Open(user.TotpSecretCipher, _secrets.KeyMaterial());
+                secret = _secrets.Open(user.TotpSecretCipher);
                 uri = _totp.OtpAuthUri(secret, user.Email);
             }
             catch (System.Security.Cryptography.CryptographicException)
@@ -95,7 +95,7 @@ public sealed class BeginTotpHandler : ICommandHandler<BeginTotpCommand, Result<
         if (user is null)
             return Result.Failure<string>("Account is not resolved.");
         var secret = _totp.GenerateSecret();
-        user.BeginTotp(_secrets.Seal(secret, _secrets.KeyMaterial()));
+        user.BeginTotp(_secrets.Seal(secret));
         await db.SaveChangesAsync(ct);
         return Result.Ok(_totp.OtpAuthUri(secret, user.Email) + "\n" + secret);
     }
@@ -123,7 +123,7 @@ public sealed class ConfirmTotpHandler : ICommandHandler<ConfirmTotpCommand, Res
         if (user is null || string.IsNullOrEmpty(user.TotpSecretCipher))
             return Result.Failure("Authenticator is not started.");
         string secret;
-        try { secret = _secrets.Open(user.TotpSecretCipher, _secrets.KeyMaterial()); }
+        try { secret = _secrets.Open(user.TotpSecretCipher); }
         catch (System.Security.Cryptography.CryptographicException) { return Result.Failure("Authenticator secret cannot be read."); }
         if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure("Code is not valid.");
@@ -154,7 +154,7 @@ public sealed class DisableTotpHandler : ICommandHandler<DisableTotpCommand, Res
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == command.Request.UserId, ct);
         if (user is null || !user.TotpEnabled)
             return Result.Failure("Authenticator is not on.");
-        var secret = _secrets.Open(user.TotpSecretCipher, _secrets.KeyMaterial());
+        var secret = _secrets.Open(user.TotpSecretCipher);
         if (!_totp.Verify(secret, command.Request.Code, DateTime.UtcNow))
             return Result.Failure("Code is not valid.");
         user.ClearTotp();
@@ -175,7 +175,8 @@ public static class TotpGate
             return Result.Ok();
         if (string.IsNullOrEmpty(user.TotpSecretCipher) || secrets is null || totp is null)
             return Result.Failure("Authenticator is not configured.");
-        var secret = secrets.Open(user.TotpSecretCipher, secrets.KeyMaterial());
+        if (!secrets.TryOpen(user.TotpSecretCipher, out var secret))
+            return Result.Failure("Authenticator secret cannot be read.");
         return totp.Verify(secret, code ?? "", DateTime.UtcNow)
             ? Result.Ok()
             : Result.Failure("Authenticator code is required.");

@@ -67,6 +67,9 @@ public class User : Entity
         TotpEnabled = false;
     }
 
+    /// <summary>Replaces the stored ciphertext only (key re-encryption); does not change <see cref="TotpEnabled"/>.</summary>
+    public void UpdateTotpCipher(string cipher) => TotpSecretCipher = cipher;
+
     public void ConfirmTotp() => TotpEnabled = true;
 
     public void ClearTotp()

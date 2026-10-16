@@ -37,8 +37,9 @@ public static class ServiceCollectionExtensions
 
         var jwtSecret = JwtSecretPolicy.EnsureConfigured(configuration["JWT:Secret"], environmentName);
 
-        // Fail-fast: validate the data key at startup (same source as the JWT secret).
-        DataKeyPolicy.EnsureConfigured(configuration[DataKeyPolicy.ConfigKey], environmentName);
+        // Fail-fast: resolve the data-protection keys at startup. The JWT secret signs tokens
+        // only; it never becomes the current data key.
+        DataKeyPolicy.ResolveDataKeys(configuration, environmentName);
 
         services.Configure<DockerPostgresConfig>(config =>
         {

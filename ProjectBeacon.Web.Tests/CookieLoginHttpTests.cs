@@ -183,6 +183,9 @@ public class WebTestFactory : WebApplicationFactory<ProjectBeacon.Web.Features.D
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("JWT:Secret", "ProjectBeacon-JWT-Secret-Key-Must-Be-At-Least-32-Characters-Long");
+        // The Production environment requires an explicit data key; the legacy
+        // v1 material is bridged from JWT:Secret, mirroring the rollout phase.
+        builder.UseSetting("DATA_PROTECTION_KEY", "ProjectBeacon-Data-Protection-Key-Must-Be-At-Least-32-Chars");
         builder.UseSetting("BOOTSTRAP_ADMIN_TOKEN", BootstrapToken);
         builder.ConfigureServices(services =>
         {

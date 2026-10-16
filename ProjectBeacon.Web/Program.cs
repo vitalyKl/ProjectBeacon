@@ -23,7 +23,10 @@ if (!app.Environment.IsEnvironment("Testing"))
     }
 
     if (ShouldMigrateOnStart(app.Environment))
+    {
         await app.MigrateDatabase();
+        await app.ReEncryptDataKeys();
+    }
 
     // Fail-closed role guard: in Production the host aborts when the application role
     // has SUPERUSER/BYPASSRLS or cannot be verified. Runs for every Postgres-backed serving
