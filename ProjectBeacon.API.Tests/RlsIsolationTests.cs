@@ -8,24 +8,26 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
+/// <summary>
+/// Row-visibility verification through a minimal-privilege role (SELECT only, no DML
+/// grants) against a fully-migrated isolated database. The policies under test are the
+/// ones applied by the real EF migrations — this class applies no RLS DDL of its own,
+/// which keeps the check independent of the app role's grant profile.
+/// </summary>
 [Collection("postgres-serial")]
 public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLifetime
 {
+    private const string DbName = "beacon_rls_isolation";
+
+    // xUnit instantiates this class once per test, so the heavy isolated-DB setup
+    // (drop/create + full MigrateAsync) must run only once per process.
+    private static bool _initialized;
+    private static string s_adminConn = string.Empty;
+
     private readonly string _rlsRole = "rls_" + Guid.NewGuid().ToString("N");
     private readonly PostgresFixture _postgres;
     private bool _roleCreated;
-    private bool _rlsApplied;
-
-    private static readonly string[] ProjectScopedTables =
-    {
-        "Tasks", "Labels", "LabelPaths", "Reports", "Milestones", "Constraints",
-        "Decisions", "ApiTokens", "PipelineSessions", "ProjectRuntimes",
-        "ProjectMembers", "ProjectInvites", "ReviewVerdicts", "Subtasks",
-        "RoleBindings", "TaskPhases", "TaskSteps", "ChatSessions", "ChatParts",
-        "EvalRuns", "ReviewRuns", "ContextSections", "ContextRevisions"
-    };
-
-    private static readonly string[] OrgScopedTables = { "Projects", "OrgMembers", "OrgInvites" };
+    private string _adminConn = string.Empty;
 
     public RlsIsolationTests(PostgresFixture postgres) => _postgres = postgres;
 
@@ -33,63 +35,45 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     {
         if (!_postgres.Available) return;
 
-        await using var conn = new NpgsqlConnection(_postgres.ConnectionString);
-        await conn.OpenAsync();
+        if (!_initialized)
+        {
+            var adminConn = WithDatabase(_postgres.ConnectionString, DbName);
+            var serverConn = WithDatabase(_postgres.ConnectionString, "postgres");
 
+            await ExecAdminAsync(serverConn, $"DROP DATABASE IF EXISTS {DbName} WITH (FORCE);");
+            await ExecAdminAsync(serverConn, $"CREATE DATABASE {DbName};");
+
+            var migrateOptions = new DbContextOptionsBuilder<BeaconDbContext>().UseNpgsql(adminConn).Options;
+            await using (var migrateDb = new BeaconDbContext(migrateOptions))
+                await migrateDb.Database.MigrateAsync();
+
+            // Mirror production: the app role must exist with its grants, even though
+            // this class does not log in as it.
+            var appConn = PostgresConnection.DeriveAppConnectionString(adminConn);
+            await PostgresConnection.EnsureAppRoleAsync(appConn, adminConn);
+
+            s_adminConn = adminConn;
+            _initialized = true;
+        }
+
+        _adminConn = s_adminConn;
+
+        // SELECT-only ephemeral role: a pure row-visibility probe.
+        await using var conn = new NpgsqlConnection(_adminConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await Exec(conn, $"CREATE ROLE {_rlsRole} LOGIN PASSWORD 'rls_test'");
         _roleCreated = true;
         await Exec(conn, $"GRANT {_rlsRole} TO CURRENT_USER");
         await Exec(conn, $"GRANT USAGE ON SCHEMA public TO {_rlsRole}");
         await Exec(conn, $"GRANT SELECT ON ALL TABLES IN SCHEMA public TO {_rlsRole}");
-
-        foreach (var table in ProjectScopedTables)
-        {
-            await Exec(conn, $"ALTER TABLE \"{table}\" ENABLE ROW LEVEL SECURITY");
-            await Exec(conn, $"ALTER TABLE \"{table}\" FORCE ROW LEVEL SECURITY");
-            await Exec(conn, $"DROP POLICY IF EXISTS tenant_project_isolation ON \"{table}\"");
-            await Exec(conn,
-                $"CREATE POLICY tenant_project_isolation ON \"{table}\" " +
-                "USING (current_setting('app.tenant_unscoped', true) = 'true' " +
-                "OR \"ProjectId\"::text = current_setting('app.tenant_project_id', true))");
-        }
-
-        foreach (var table in OrgScopedTables)
-        {
-            await Exec(conn, $"ALTER TABLE \"{table}\" ENABLE ROW LEVEL SECURITY");
-            await Exec(conn, $"ALTER TABLE \"{table}\" FORCE ROW LEVEL SECURITY");
-            await Exec(conn, $"DROP POLICY IF EXISTS tenant_org_isolation ON \"{table}\"");
-            await Exec(conn,
-                $"CREATE POLICY tenant_org_isolation ON \"{table}\" " +
-                "USING (current_setting('app.tenant_unscoped', true) = 'true' " +
-                "OR \"OrgId\"::text = current_setting('app.tenant_org_id', true))");
-        }
-
-        _rlsApplied = true;
     }
 
     public async ValueTask DisposeAsync()
     {
         if (!_roleCreated) return;
 
-        await using var conn = new NpgsqlConnection(_postgres.ConnectionString);
-        await conn.OpenAsync();
-
-        if (_rlsApplied)
-        {
-            foreach (var table in ProjectScopedTables)
-            {
-                await Exec(conn, $"DROP POLICY IF EXISTS tenant_project_isolation ON \"{table}\"");
-                await Exec(conn, $"ALTER TABLE \"{table}\" NO FORCE ROW LEVEL SECURITY");
-                await Exec(conn, $"ALTER TABLE \"{table}\" DISABLE ROW LEVEL SECURITY");
-            }
-
-            foreach (var table in OrgScopedTables)
-            {
-                await Exec(conn, $"DROP POLICY IF EXISTS tenant_org_isolation ON \"{table}\"");
-                await Exec(conn, $"ALTER TABLE \"{table}\" NO FORCE ROW LEVEL SECURITY");
-                await Exec(conn, $"ALTER TABLE \"{table}\" DISABLE ROW LEVEL SECURITY");
-            }
-        }
+        await using var conn = new NpgsqlConnection(_adminConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         await Exec(conn, $"REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM {_rlsRole}");
         await Exec(conn, $"REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM {_rlsRole}");
@@ -101,35 +85,39 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
     private static async Task Exec(NpgsqlConnection conn, string sql)
     {
         await using var cmd = new NpgsqlCommand(sql, conn);
-        await cmd.ExecuteNonQueryAsync();
+        await cmd.ExecuteNonQueryAsync(cancellationToken: TestContext.Current.CancellationToken);
+    }
+
+    private BeaconDbContext NewAdminContext()
+    {
+        var options = new DbContextOptionsBuilder<BeaconDbContext>().UseNpgsql(_adminConn).Options;
+        return new BeaconDbContext(options);
     }
 
     private async Task<(Guid ProjectId, Guid TaskId)> SeedTestDataAsync(string suffix)
     {
-        // Seed as the superuser: beacon_app is RLS-bound and would be fail-closed here.
-        await using var seed = _postgres.CreateAdminContext();
-        using (TenantScope.EnterUnscoped())
-        {
-            var org = Org.Create($"Rls {suffix} Org");
-            seed.Orgs.Add(org);
-            await seed.SaveChangesAsync();
+        // Seed as the superuser (migration role): it bypasses RLS entirely, so no
+        // tenant GUCs are needed for the inserts.
+        await using var seed = NewAdminContext();
+        var org = Org.Create($"Rls {suffix} Org");
+        seed.Orgs.Add(org);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            var proj = Project.Create($"Rls {suffix} Project", null, org.Id);
-            seed.Projects.Add(proj);
-            await seed.SaveChangesAsync();
+        var proj = Project.Create($"Rls {suffix} Project", null, org.Id);
+        seed.Projects.Add(proj);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            var task = TaskItem.Create($"Rls {suffix} Task", proj.Id, TaskPriority.Medium, TaskType.Task);
-            seed.Tasks.Add(task);
-            await seed.SaveChangesAsync();
+        var task = TaskItem.Create($"Rls {suffix} Task", proj.Id, TaskPriority.Medium, TaskType.Task);
+        seed.Tasks.Add(task);
+        await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            return (proj.Id, task.Id);
-        }
+        return (proj.Id, task.Id);
     }
 
     private async Task<NpgsqlConnection> OpenRlsConnectionAsync()
     {
-        var conn = new NpgsqlConnection(_postgres.ConnectionString);
-        await conn.OpenAsync();
+        var conn = new NpgsqlConnection(_adminConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
         await Exec(conn, $"SET ROLE {_rlsRole}");
         return conn;
     }
@@ -140,7 +128,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         _postgres.RequirePostgres();
 
         var (projectA, taskA) = await SeedTestDataAsync("A");
-        var (projectB, taskB) = await SeedTestDataAsync("B");
+        var (_, taskB) = await SeedTestDataAsync("B");
 
         await using var conn = await OpenRlsConnectionAsync();
         await using (var setCmd = new NpgsqlCommand(
@@ -158,6 +146,7 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
             ids.Add(reader.GetGuid(0));
 
         Assert.Contains(taskA, ids);
+        // taskB belongs to a different project and must be hidden by the tenant policy.
         Assert.DoesNotContain(taskB, ids);
     }
 
@@ -197,5 +186,20 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         cmd.Parameters.AddWithValue("@tid", taskA);
         var count = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken: TestContext.Current.CancellationToken)!);
         Assert.Equal(1, count);
+    }
+
+    private static async Task ExecAdminAsync(string serverConn, string sql)
+    {
+        await using var conn = new NpgsqlConnection(serverConn);
+        await conn.OpenAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        await cmd.ExecuteNonQueryAsync(cancellationToken: TestContext.Current.CancellationToken);
+    }
+
+    private static string WithDatabase(string connStr, string database)
+    {
+        var parts = connStr.Split(';', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(';', parts.Select(p =>
+            p.StartsWith("Database=", StringComparison.OrdinalIgnoreCase) ? $"Database={database}" : p));
     }
 }
