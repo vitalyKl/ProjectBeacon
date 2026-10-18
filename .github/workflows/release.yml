@@ -200,6 +200,9 @@ jobs:
       - name: Trivy scan + SBOM of the published image
         env:
           SCAN_IMAGE: ${{ needs.image.outputs.image }}
+          # The job token is no longer auto-injected as an env var; expose it
+          # explicitly so the stdin pipe below receives it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p sbom
