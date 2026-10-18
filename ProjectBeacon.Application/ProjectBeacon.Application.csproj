@@ -8,6 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Locator" />
+    <!-- Pin the fixed version; runtime excluded so the SDK-registered MSBuild
+         (via Build.Locator) is used, not a copied MSBuild assembly. -->
+    <PackageReference Include="Microsoft.Build.Tasks.Core" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.CodeAnalysis.Common" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
