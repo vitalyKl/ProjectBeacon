@@ -66,7 +66,7 @@ Always build the current code before starting; never assume an existing DLL cont
 
 - Console shows `Now listening on: http://localhost:5083`.
 - `curl -I http://localhost:5083/login` → HTTP 200.
-- `GET /v1/version` → `{ "version": "0.5.0", "gitSha": "..." }` (version from `Directory.Build.props`; `gitSha` from `BEACON_GIT_SHA`).
+- `GET /v1/version` → `{ "version": "0.6.0", "gitSha": "..." }` (version from `Directory.Build.props`; `gitSha` from `BEACON_GIT_SHA`).
 - Startup failure signals in the Web log:
   - `Docker PostgreSQL helper did not start a container...` — Docker missing/daemon down; the app then tries to migrate against whatever `ConnectionStrings:Default` points at.
   - `Set ConnectionStrings:Default (with Password) or POSTGRES_PASSWORD...` — no `.env` reachable from the CWD and no env vars set (`PostgresConnection.Resolve` throws).
