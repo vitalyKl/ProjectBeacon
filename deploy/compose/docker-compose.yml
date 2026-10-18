@@ -1,0 +1,149 @@
+# ProjectBeacon closed-alpha stack for a single Ubuntu VPS.
+#
+# Rules this file must keep (do not break):
+# - postgres has NO published ports: reachable only from beacon-alpha-internal.
+# - web/worker/migrate are pinned to an image digest via BEACON_WEB_IMAGE (set in .env,
+#   updated by upgrade.sh). Never a mutable tag.
+# - All containers run read-only with capabilities dropped; /tmp is the only writable mount.
+# - Secrets come from .env (chmod 600, never committed). Never inline them here.
+#
+# The local development stack (repo-root docker-compose.yml) is a different project:
+# it publishes 127.0.0.1:5432 and uses the pgdata volume. Do not merge the two.
+
+name: beacon-alpha
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    container_name: beacon-alpha-postgres
+    environment:
+      POSTGRES_USER: beacon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: beacon
+    volumes:
+      - beacon-alpha-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beacon -d beacon"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [beacon-alpha-internal]
+    restart: unless-stopped
+
+  web:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-web
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      BEACON_MIGRATE_ON_START: "false"
+      # Application role is beacon_app (NOSUPERUSER NOBYPASSRLS); migrations use beacon (superuser).
+      # The superuser password doubles as the beacon_app password (EnsureAppRoleAsync bootstraps it).
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+      # The docker network subnet below. An explicit list is the COMPLETE trust set
+      # (the framework loopback default is dropped) — required for X-Forwarded-Proto
+      # (Secure cookies, HTTPS redirect) and for per-client-IP rate limiting.
+      FORWARDEDHEADERS__KNOWNNETWORKS__0: "172.29.0.0/16"
+      BEACON_PUBLIC_URL: "https://${BEACON_DOMAIN:?set BEACON_DOMAIN in .env}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    stop_grace_period: 45s
+    mem_limit: 512m
+    networks: [beacon-alpha-internal]
+    restart: unless-stopped
+
+  worker:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-worker
+    command: ["dotnet", "/app/worker/ProjectBeacon.Worker.dll"]
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    stop_grace_period: 45s
+    mem_limit: 256m
+    networks: [beacon-alpha-internal]
+    restart: unless-stopped
+
+  # One-shot schema migration + data-key re-encryption + role bootstrap.
+  # Run: docker compose --profile migrate run --rm migrate
+  # Non-zero exit = fail-closed (role guard or migration error); do not start web until it passes.
+  migrate:
+    image: ${BEACON_WEB_IMAGE:?set BEACON_WEB_IMAGE in .env to repo@sha256:digest}
+    container_name: beacon-alpha-migrate
+    profiles: ["migrate"]
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      BEACON_MIGRATE_ON_START: "true"
+      BEACON_MIGRATE_THEN_EXIT: "true"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=beacon;Username=beacon_app;Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Migration: "Host=postgres;Port=5432;Database=beacon;Username=beacon;Password=${POSTGRES_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    restart: "no"
+    networks: [beacon-alpha-internal]
+
+  caddy:
+    # Pinned tag; verify the amd64 digest on first pull and record it in README evidence.
+    image: caddy:2.10.2
+    container_name: beacon-alpha-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # The caddy:2 image reads its Caddyfile from /etc/caddy/Caddyfile; /config
+      # and /data hold Caddy's app data (autosave, ACME/TLS storage).
+      - beacon-alpha-caddy-data:/data
+      - beacon-alpha-caddy-config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      BEACON_DOMAIN: ${BEACON_DOMAIN:?set BEACON_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    depends_on:
+      - web
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    # Caddy binds privileged ports 80/443 as root; NET_BIND_SERVICE is the only
+    # capability it needs back (everything else stays dropped).
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges]
+    stop_grace_period: 45s
+    restart: unless-stopped
+    networks: [beacon-alpha-internal]
+
+volumes:
+  beacon-alpha-pgdata:
+  beacon-alpha-caddy-data:
+  beacon-alpha-caddy-config:
+
+networks:
+  beacon-alpha-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16

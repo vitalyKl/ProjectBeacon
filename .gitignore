@@ -88,6 +88,9 @@ Thumbs.db
 # Docker
 .docker/
 
+# Deploy state (deployed image digests) — local per server, never shared
+deploy/compose/.state/
+
 # Miscellaneous
 *.log
 *.tmp

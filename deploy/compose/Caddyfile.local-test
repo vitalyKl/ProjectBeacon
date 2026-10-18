@@ -1,0 +1,22 @@
+# Local verification variant of Caddyfile: same proxy block, but with an
+# internally issued (self-signed) certificate for beacon.test instead of
+# public ACME. Used only for host-side smoke tests without a public domain:
+#
+#   curl -k --resolve beacon.test:18443:127.0.0.1 https://beacon.test:18443/health
+#
+# NOT used on the VPS. The production file is Caddyfile.
+
+{
+	email localtest@example.com
+}
+
+beacon.test {
+	tls internal
+
+	reverse_proxy web:8080 {
+		health_uri /health
+		health_interval 10s
+		health_timeout 5s
+		health_status 200
+	}
+}

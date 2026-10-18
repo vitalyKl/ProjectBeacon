@@ -11,11 +11,15 @@ COPY ProjectBeacon.Infrastructure/ProjectBeacon.Infrastructure.csproj ProjectBea
 COPY ProjectBeacon.Application/ProjectBeacon.Application.csproj ProjectBeacon.Application/
 COPY ProjectBeacon.API/ProjectBeacon.API.csproj ProjectBeacon.API/
 COPY ProjectBeacon.Web/ProjectBeacon.Web.csproj ProjectBeacon.Web/
+COPY ProjectBeacon.Worker/ProjectBeacon.Worker.csproj ProjectBeacon.Worker/
 RUN dotnet restore ProjectBeacon.Web/ProjectBeacon.Web.csproj
+RUN dotnet restore ProjectBeacon.Worker/ProjectBeacon.Worker.csproj
 COPY . .
 ARG BEACON_GIT_SHA=unknown
 ARG BEACON_VERSION=0.1.0
 RUN dotnet publish ProjectBeacon.Web/ProjectBeacon.Web.csproj -c Release -o /app --no-restore \
+    -p:Version=${BEACON_VERSION} \
+ && dotnet publish ProjectBeacon.Worker/ProjectBeacon.Worker.csproj -c Release -o /app/worker --no-restore \
     -p:Version=${BEACON_VERSION}
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim AS runtime

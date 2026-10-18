@@ -1,0 +1,23 @@
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$BEACON_DOMAIN:beacon.example.com} {
+	encode zstd gzip
+
+	reverse_proxy web:8080 {
+		# Caddy forwards X-Forwarded-For (with the real client IP appended) and
+		# X-Forwarded-Proto automatically, restoring IsHttps for the app
+		# (SecurePolicy=Always cookie, UseHttpsRedirection, per-client-IP rate
+		# limiting); the app trusts this network via FORWARDEDHEADERS__KNOWNNETWORKS__0.
+
+		# Upstream health: Caddy marks web down and returns 502 when /health is not 2xx.
+		health_uri /health
+		health_interval 10s
+		health_timeout 5s
+		health_status 200
+
+		# Blazor Server uses WebSockets on the same endpoint. Caddy upgrades and tunnels
+		# them with no stream timeout by default — do not add stream_timeout.
+	}
+}
