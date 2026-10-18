@@ -6,7 +6,7 @@
 **/obj
 **/TestResults
 **/*.user
-.env
+**/.env
 typescript
 .opencode
 .serena
