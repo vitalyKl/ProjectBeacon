@@ -203,6 +203,7 @@ public sealed class TenantlessCreateRlsTests : IClassFixture<PostgresFixture>, I
 
         Assert.False(result.Success);
         Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal("You need Owner or Admin rights in this org to create a project.", result.Error);
         Assert.Null(tenant.ProjectId);
         Assert.False(tenant.Unscoped);
 

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Authorization;
+using Application.Common;
 using Application.Identity;
 using Application.Persistence;
 using Application.Projects;
@@ -92,6 +93,30 @@ public sealed class CreateProjectWizardTests : IDisposable
             WindowTenants.Add(tenant);
             return _inner.CreateDbContext(tenant);
         }
+    }
+
+    [Fact]
+    public async Task CreateProject_ForeignOrg_Forbidden_WithDescriptiveMessage()
+    {
+        var owner = User.Create("owner", "owner@example.com", "hash");
+        var outsider = User.Create("outsider", "outsider@example.com", "hash");
+        _db.Users.Add(owner);
+        _db.Users.Add(outsider);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var ownerActor = new ActorContext(ActorType.Human, owner.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var tenant = new TenantContext();
+        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection), tenant).HandleAsync(new CreateOrgCommand(new CreateOrgRequest("Acme", null), ownerActor), TestContext.Current.CancellationToken);
+        Assert.True(org.Success, org.Error);
+
+        var outsiderActor = new ActorContext(ActorType.Human, outsider.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var result = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), auth: null, tenant).HandleAsync(new CreateProjectCommand(
+            new CreateProjectRequest("Intruder", null, org.Value!.Id), outsiderActor), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal("You need Owner or Admin rights in this org to create a project.", result.Error);
+        Assert.Null(tenant.ProjectId);
     }
 
     [Fact]

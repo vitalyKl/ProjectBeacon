@@ -43,7 +43,7 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
         window.Assign(_tenant.ProjectId, orgId, _tenant.Unscoped);
         await using var authDb = _dbFactory.CreateDbContext(window);
         if (!await CanCreateInOrgAsync(authDb, command.Actor, orgId, ct))
-            return Result.Forbidden<ProjectDto>();
+            return Result.Forbidden<ProjectDto>("You need Owner or Admin rights in this org to create a project.");
 
         var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, orgId);
 
