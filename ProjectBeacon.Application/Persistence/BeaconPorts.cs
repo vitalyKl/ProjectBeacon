@@ -26,6 +26,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<OrgMember> OrgMembers { get; }
     DbSet<OrgInvite> OrgInvites { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
+    DbSet<DataProtectionKey> DataProtectionKeys { get; }
     DbSet<Project> Projects { get; }
     DbSet<ProjectMember> ProjectMembers { get; }
     DbSet<ProjectInvite> ProjectInvites { get; }

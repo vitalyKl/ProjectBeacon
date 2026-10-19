@@ -906,6 +906,21 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("ApiTokens");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Identity.DataProtectionKey", b =>
+                {
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("XmlData")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("KeyId");
+
+                    b.ToTable("DataProtectionKeys");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Identity.Org", b =>
                 {
                     b.Property<Guid>("Id")
