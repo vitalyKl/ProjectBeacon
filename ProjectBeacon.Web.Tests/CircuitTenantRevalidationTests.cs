@@ -149,6 +149,60 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     }
 
     [Fact]
+    public async Task AdminWithoutProjects_NeverHadProject_KeepsSession()
+    {
+        var user = User.Create("admin", "admin@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(null, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: true, projectId: null), null, TestContext.Current.CancellationToken);
+
+        Assert.True(ok);
+        Assert.Null(circuit.Tenant.ProjectId);
+        Assert.False(circuit.Tenant.Unscoped);
+    }
+
+    [Fact]
+    public async Task NonAdminWithoutMembership_NeverHadProject_KeepsSession()
+    {
+        var user = User.Create("plain", "plain@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(null, null);
+        var ok = await CircuitTenantRevalidation.RevalidateAsync(
+            circuit.Scope, Principal(user.Id, isAdmin: false, projectId: null), null, TestContext.Current.CancellationToken);
+
+        Assert.True(ok);
+        Assert.Null(circuit.Tenant.ProjectId);
+        Assert.False(circuit.Tenant.Unscoped);
+    }
+
+    [Fact]
+    public async Task NonAdminFailClosedHandshakeScope_NeverHadProject_KeepsSession()
+    {
+        var user = User.Create("plain2", "plain2@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var circuit = OpenScope(null, null);
+
+        // Mirrors the isolation middleware's handshake scope for an authenticated
+        // user without a project: a Guid.Empty fail-closed scope.
+        using (TenantScope.EnterProjectScope(Guid.Empty))
+        using (TenantScope.EnterOrgScope(Guid.Empty))
+        {
+            var ok = await CircuitTenantRevalidation.RevalidateAsync(
+                circuit.Scope, Principal(user.Id, isAdmin: false, projectId: null), null, TestContext.Current.CancellationToken);
+
+            Assert.True(ok);
+            Assert.Null(circuit.Tenant.ProjectId);
+        }
+    }
+
+    [Fact]
     public async Task DbFailure_KeepsSession_FailClosedScopeUnchanged()
     {
         var (org, user, project) = await SeedUserInProjectAsync();
@@ -274,5 +328,7 @@ public sealed class CircuitTenantRevalidationTests : IDisposable
     private sealed class ThrowingDbFactory : IBeaconDbFactory
     {
         public IBeaconDb CreateDbContext() => throw new InvalidOperationException("database unavailable");
+
+        public IBeaconDb CreateDbContext(ITenantContext tenant) => throw new InvalidOperationException("database unavailable");
     }
 }

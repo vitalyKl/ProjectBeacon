@@ -34,6 +34,10 @@ public static class CircuitTenantRevalidation
         // The scoped assignment wins over the AsyncLocal captured at handshake time,
         // so read the scoped value first to get the tenant the circuit is actually using.
         var currentProjectId = tenant.Unscoped ? null : (tenant.ProjectId ?? TenantScope.CurrentProjectId);
+        // Guid.Empty is the fail-closed sentinel the isolation middleware applies for an
+        // authenticated user with no project; treat it as "no project ever", not a lost one.
+        if (currentProjectId == Guid.Empty)
+            currentProjectId = null;
 
         try
         {
@@ -47,8 +51,12 @@ public static class CircuitTenantRevalidation
 
                 var (projectId, orgId) = await CurrentProjectLookup.ForUserAsync(
                     db, actor.UserId.Value, actor.IsAdmin, currentProjectId, ct);
+                // "The project was lost" (the circuit had a project, none remain) forces
+                // sign-out. "No project ever" (the circuit never held one, e.g. a freshly
+                // registered user or the bootstrap admin) keeps the session; the scoped
+                // tenant stays fail-closed with a null project until one appears.
                 if (projectId is null)
-                    return false;
+                    return currentProjectId is null;
 
                 if (!tenant.Unscoped)
                     tenant.Assign(projectId, orgId, unscoped: false);
