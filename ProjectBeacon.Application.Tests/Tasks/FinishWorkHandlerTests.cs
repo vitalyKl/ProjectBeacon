@@ -662,5 +662,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public FixedDbFactory(IBeaconDb db) => _db = db;
 
         public IBeaconDb CreateDbContext() => _db;
+
+        public IBeaconDb CreateDbContext(ITenantContext tenant) => _db;
     }
 }

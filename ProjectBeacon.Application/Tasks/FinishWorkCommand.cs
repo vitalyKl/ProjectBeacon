@@ -50,154 +50,161 @@ public class FinishWorkHandler
             : null;
         // One short transaction: the state write and its "Work finished" comment commit
         // together, so a winning finish never leaves the row changed without the comment.
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        switch (resultType)
+        // The whole transaction sits inside the execution strategy: the production Npgsql
+        // options enable retrying, which does not support user-initiated transactions
+        // started outside a strategy (the ClaimTaskHandler pattern).
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            case "done":
-                if (command.Request.Review is { } review
-                    && review.RegressionsFound > review.RegressionsFixed)
-                    return Result.Failure("Unfixed regressions remain; cannot mark done.");
-
-                if (command.Request.ReviewRunId is null)
-                    return Result.Failure("done requires a completed review run.");
-
-                var reviewRun = await FindReviewRun(db, taskId, command.Request, ct);
-                if (reviewRun is null)
-                    return Result.Failure("Review run not found.");
-                if (reviewRun.Status == ReviewRunStatus.Failed)
-                    return Result.Failure("Review run did not pass.");
-                if (!reviewRun.IsCheckProof())
-                    return Result.Failure("Review run is not check proof.");
-
-                var notes = command.Request.Review is null
-                    ? (command.Request.Output ?? "").Trim()
-                    : FormatReview(command.Request.Review, command.Request.Output);
-                if (string.IsNullOrWhiteSpace(notes))
-                    return Result.Failure("done requires review notes or output.");
-                if (task.Status == TaskItemStatus.Done)
-                    return Result.Ok();
-                try
-                {
-                    task.SetReviewNotes(notes);
-                    if (task.Status == TaskItemStatus.Todo)
-                        task.MoveToNextStatus();
-                    if (task.Status == TaskItemStatus.InProgress)
-                        task.MoveToNextStatus();
-                    if (task.Status != TaskItemStatus.Done)
-                        return Result.Failure("Cannot complete task: status is not Done.");
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Result.Failure($"Cannot complete task: {ex.Message}");
-                }
-                break;
-
-            case "failed":
-            case "error":
-                // Sequential replay: the report's effect (Todo + this exact note) is already
-                // in place, so a repeat must not append the note or comment again.
-                if (task.Status == TaskItemStatus.Todo && HasNote(task.Description, failedNote!))
-                    return Result.Ok();
-                task.ResetToTodo();
-                break;
-
-            case "skipped":
-            case "partial":
-                {
-                    var note = "Note: " + (command.Request.Output ?? "No output provided");
-                    // No state transition. The note appends atomically in SQL so concurrent
-                    // reports both land instead of clobbering each other.
-                    await db.Tasks
-                        .Where(t => t.Id == taskId)
-                        .ExecuteUpdateAsync(s => s
-                            .SetProperty(t => t.Description,
-                                t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note), ct);
-                    break;
-                }
-
-            default:
-                return Result.Failure("Invalid result type. Use 'done', 'failed', 'skipped', or 'partial'.");
-        }
-
-        if (guardedTransition)
-        {
-            // Guarded transition: only takes effect while the status and the state revision
-            // are still the ones validated above. The revision comparison is what makes this
-            // a true compare-and-swap: a failed report keeps the task Todo, so a rival that
-            // read the row before the winner committed still sees the matching status —
-            // its stale revision is what rejects it at the database.
-            var updated = failedNote is null
-                ? await db.Tasks
-                    .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(t => t.Status, task.Status)
-                        .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                        .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
-                        .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct)
-                : await db.Tasks
-                    .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(t => t.Status, task.Status)
-                        .SetProperty(t => t.CompletedAt, task.CompletedAt)
-                        .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
-                        .SetProperty(t => t.Description,
-                            t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote)
-                        .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct);
-            if (updated == 0)
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            switch (resultType)
             {
-                // Lost the race: classify by re-reading. A finish whose effect is already in
-                // place is an idempotent replay; anything else is a conflict.
-                var current = await db.Tasks.AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.Id == taskId, ct);
-                if (current is not null)
-                {
-                    if (resultType == "done" && current.Status == TaskItemStatus.Done)
-                    {
-                        await tx.CommitAsync(ct);
+                case "done":
+                    if (command.Request.Review is { } review
+                        && review.RegressionsFound > review.RegressionsFixed)
+                        return Result.Failure("Unfixed regressions remain; cannot mark done.");
+
+                    if (command.Request.ReviewRunId is null)
+                        return Result.Failure("done requires a completed review run.");
+
+                    var reviewRun = await FindReviewRun(db, taskId, command.Request, ct);
+                    if (reviewRun is null)
+                        return Result.Failure("Review run not found.");
+                    if (reviewRun.Status == ReviewRunStatus.Failed)
+                        return Result.Failure("Review run did not pass.");
+                    if (!reviewRun.IsCheckProof())
+                        return Result.Failure("Review run is not check proof.");
+
+                    var notes = command.Request.Review is null
+                        ? (command.Request.Output ?? "").Trim()
+                        : FormatReview(command.Request.Review, command.Request.Output);
+                    if (string.IsNullOrWhiteSpace(notes))
+                        return Result.Failure("done requires review notes or output.");
+                    if (task.Status == TaskItemStatus.Done)
                         return Result.Ok();
-                    }
-                    if (resultType is "failed" or "error"
-                        && current.Status == TaskItemStatus.Todo
-                        && HasNote(current.Description, "Failed: " + (command.Request.Output ?? "No output provided")))
+                    try
                     {
-                        await tx.CommitAsync(ct);
-                        return Result.Ok();
+                        task.SetReviewNotes(notes);
+                        if (task.Status == TaskItemStatus.Todo)
+                            task.MoveToNextStatus();
+                        if (task.Status == TaskItemStatus.InProgress)
+                            task.MoveToNextStatus();
+                        if (task.Status != TaskItemStatus.Done)
+                            return Result.Failure("Cannot complete task: status is not Done.");
                     }
-                }
-                await tx.RollbackAsync(ct);
-                return Result.Failure("Task state changed while finishing; retry.", ErrorKind.Conflict);
+                    catch (InvalidOperationException ex)
+                    {
+                        return Result.Failure($"Cannot complete task: {ex.Message}");
+                    }
+                    break;
+
+                case "failed":
+                case "error":
+                    // Sequential replay: the report's effect (Todo + this exact note) is already
+                    // in place, so a repeat must not append the note or comment again.
+                    if (task.Status == TaskItemStatus.Todo && HasNote(task.Description, failedNote!))
+                        return Result.Ok();
+                    task.ResetToTodo();
+                    break;
+
+                case "skipped":
+                case "partial":
+                    {
+                        var note = "Note: " + (command.Request.Output ?? "No output provided");
+                        // No state transition. The note appends atomically in SQL so concurrent
+                        // reports both land instead of clobbering each other.
+                        await db.Tasks
+                            .Where(t => t.Id == taskId)
+                            .ExecuteUpdateAsync(s => s
+                                .SetProperty(t => t.Description,
+                                    t => string.IsNullOrEmpty(t.Description) ? note : t.Description + "\n\n" + note), ct);
+                        break;
+                    }
+
+                default:
+                    return Result.Failure("Invalid result type. Use 'done', 'failed', 'skipped', or 'partial'.");
             }
-        }
 
-        if (Guid.TryParse(command.Request.ActorId, out var userId))
-        {
-            db.TaskComments.Add(TaskComment.Create(
-                $"Work finished: {command.Request.Result}" +
-                (command.Request.Output != null ? $"\nOutput: {command.Request.Output}" : ""),
-                taskId,
-                userId));
-        }
+            if (guardedTransition)
+            {
+                // Guarded transition: only takes effect while the status and the state revision
+                // are still the ones validated above. The revision comparison is what makes this
+                // a true compare-and-swap: a failed report keeps the task Todo, so a rival that
+                // read the row before the winner committed still sees the matching status —
+                // its stale revision is what rejects it at the database.
+                var updated = failedNote is null
+                    ? await db.Tasks
+                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(t => t.Status, task.Status)
+                            .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                            .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                            .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct)
+                    : await db.Tasks
+                        .Where(t => t.Id == taskId && t.Status == expectedStatus && t.StateRevision == expectedRevision)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(t => t.Status, task.Status)
+                            .SetProperty(t => t.CompletedAt, task.CompletedAt)
+                            .SetProperty(t => t.ReviewNotes, task.ReviewNotes)
+                            .SetProperty(t => t.Description,
+                                t => string.IsNullOrEmpty(t.Description) ? failedNote : t.Description + "\n\n" + failedNote)
+                            .SetProperty(t => t.StateRevision, t => t.StateRevision + 1), ct);
+                if (updated == 0)
+                {
+                    // Lost the race: classify by re-reading. A finish whose effect is already in
+                    // place is an idempotent replay; anything else is a conflict.
+                    var current = await db.Tasks.AsNoTracking()
+                        .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+                    if (current is not null)
+                    {
+                        if (resultType == "done" && current.Status == TaskItemStatus.Done)
+                        {
+                            await tx.CommitAsync(ct);
+                            return Result.Ok();
+                        }
+                        if (resultType is "failed" or "error"
+                            && current.Status == TaskItemStatus.Todo
+                            && HasNote(current.Description, "Failed: " + (command.Request.Output ?? "No output provided")))
+                        {
+                            await tx.CommitAsync(ct);
+                            return Result.Ok();
+                        }
+                    }
+                    await tx.RollbackAsync(ct);
+                    return Result.Failure("Task state changed while finishing; retry.", ErrorKind.Conflict);
+                }
+            }
 
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-        }
-        catch
-        {
-            // Roll back explicitly: a comment-insert or commit failure must not leave the
-            // state write (or the appended note) committed without its comment.
+            if (Guid.TryParse(command.Request.ActorId, out var userId))
+            {
+                db.TaskComments.Add(TaskComment.Create(
+                    $"Work finished: {command.Request.Result}" +
+                    (command.Request.Output != null ? $"\nOutput: {command.Request.Output}" : ""),
+                    taskId,
+                    userId));
+            }
+
             try
             {
-                await tx.RollbackAsync(ct);
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
             }
             catch
             {
-                // The transaction is already broken; disposing the connection rolls back.
+                // Roll back explicitly: a comment-insert or commit failure must not leave the
+                // state write (or the appended note) committed without its comment.
+                try
+                {
+                    await tx.RollbackAsync(ct);
+                }
+                catch
+                {
+                    // The transaction is already broken; disposing the connection rolls back.
+                }
+                throw;
             }
-            throw;
-        }
-        return Result.Ok();
+            return Result.Ok();
+        });
     }
 
     private static async Task<Domain.Entities.Evals.ReviewRun?> FindReviewRun(

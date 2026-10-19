@@ -54,36 +54,43 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
             // One short transaction over this single context: the guarded UPDATE and the
             // command INSERT commit together, so a failed insert rolls back the JSON and
             // the revision with it, and a retry with the same base revision succeeds.
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
-            var written = await db.DaemonDevices
-                .Where(d => d.Id == device.Id && d.DesiredRevision == baseRevision.Value)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(d => d.DesiredWorkstationJson, stored)
-                    .SetProperty(d => d.DesiredRevision, baseRevision.Value + 1), ct);
-            if (written == 0)
+            // The whole transaction sits inside the execution strategy: the production
+            // Npgsql options enable retrying, which does not support user-initiated
+            // transactions started outside a strategy (the ClaimTaskHandler pattern).
+            var strategy = db.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                // PostgreSQL READ COMMITTED snapshots per statement, so this reread sees
-                // the rival's committed revision for the error message.
-                var current = await db.DaemonDevices.AsNoTracking()
-                    .Where(d => d.Id == device.Id)
-                    .Select(d => (long?)d.DesiredRevision)
-                    .FirstOrDefaultAsync(ct);
-                await tx.RollbackAsync(ct);
-                return Result.Failure<WorkstationCommandDto>(current is null
-                    ? "Device not found."
-                    : $"Workstation config moved from revision {baseRevision.Value} to {current} while saving; reload and re-apply your changes.",
-                    ErrorKind.Conflict);
-            }
-            var queuedSave = WorkstationCommand.Create(
-                device.Id,
-                command.Request.Kind,
-                DesiredState.WithRevision(stored, baseRevision.Value + 1),
-                command.Request.ProjectId,
-                command.Request.UserId);
-            db.WorkstationCommands.Add(queuedSave);
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-            return Result.Ok(MapCommand(queuedSave));
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                var written = await db.DaemonDevices
+                    .Where(d => d.Id == device.Id && d.DesiredRevision == baseRevision.Value)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(d => d.DesiredWorkstationJson, stored)
+                        .SetProperty(d => d.DesiredRevision, baseRevision.Value + 1), ct);
+                if (written == 0)
+                {
+                    // PostgreSQL READ COMMITTED snapshots per statement, so this reread sees
+                    // the rival's committed revision for the error message.
+                    var current = await db.DaemonDevices.AsNoTracking()
+                        .Where(d => d.Id == device.Id)
+                        .Select(d => (long?)d.DesiredRevision)
+                        .FirstOrDefaultAsync(ct);
+                    await tx.RollbackAsync(ct);
+                    return Result.Failure<WorkstationCommandDto>(current is null
+                        ? "Device not found."
+                        : $"Workstation config moved from revision {baseRevision.Value} to {current} while saving; reload and re-apply your changes.",
+                        ErrorKind.Conflict);
+                }
+                var queuedSave = WorkstationCommand.Create(
+                    device.Id,
+                    command.Request.Kind,
+                    DesiredState.WithRevision(stored, baseRevision.Value + 1),
+                    command.Request.ProjectId,
+                    command.Request.UserId);
+                db.WorkstationCommands.Add(queuedSave);
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return Result.Ok(MapCommand(queuedSave));
+            });
         }
         if (CommandSandbox.IsProjectKind(command.Request.Kind))
         {
