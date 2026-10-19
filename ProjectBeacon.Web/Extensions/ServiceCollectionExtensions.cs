@@ -151,6 +151,9 @@ public static class ServiceCollectionExtensions
         services.AddLocalization();
         services.AddInfrastructure(connectionString);
         services.AddApplicationHandlers();
+        // Postgres-backed hosts persist the Data Protection key ring in the database;
+        // other hosts (in-memory test databases) keep the framework's default ring.
+        services.AddBeaconDataProtection(configuration, environmentName);
 
         services.AddTransient<ILlamaSwapProxy, ProjectBeacon.Application.Devices.DeviceLlamaSwapProxy>();
         services.AddHttpContextAccessor();

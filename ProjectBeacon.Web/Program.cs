@@ -1,4 +1,5 @@
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Security;
 using ProjectBeacon.Web.Extensions;
 using ProjectBeacon.Web.Startup;
 
@@ -34,10 +35,16 @@ if (!app.Environment.IsEnvironment("Testing"))
     // Test hosts run on in-memory SQLite and have no RLS boundary to verify.
     var appConnectionString = PostgresConnection.Resolve(app.Services.GetRequiredService<IConfiguration>());
     if (PostgresConnection.IsPostgresBacked(app.Services))
+    {
+        // Seed the persisted key ring (advisory-locked, idempotent) so the startup guard
+        // never faces an empty ring, then verify the role and the ring itself.
+        await app.Services.SeedPrimaryKeyAsync();
         await PostgresConnection.EnforceAppRoleAsync(
             appConnectionString,
             app.Environment.IsProduction(),
             app.Services.GetRequiredService<ILogger<Program>>());
+        app.Services.AssertRingHealthy(requireKeys: app.Environment.IsProduction());
+    }
 
     if (IsTruthy(Environment.GetEnvironmentVariable("BEACON_MIGRATE_THEN_EXIT")))
         return;

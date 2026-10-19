@@ -467,7 +467,8 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
             "TaskKinds",            // global catalog
             "TaskKindPhases",       // catalog child of TaskKinds
             "DaemonDevices",        // user-owned devices, not tenant-filtered
-            "DeviceHostSamples"     // device-scoped host metrics
+            "DeviceHostSamples",    // device-scoped host metrics
+            "DataProtectionKeys"    // sealed key ring; rows are sealed blobs, no tenant scope
         };
 
         // Carries a ProjectId column but is device-scoped: the ProjectId is optional
