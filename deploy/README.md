@@ -63,6 +63,31 @@ Stored secrets (TOTP, OpenCode API keys) are encrypted with `DATA_PROTECTION_KEY
 
 `failed>0` rows need the old key (step 4 undoes it if you already removed it). The pass is idempotent; a row is rewritten only after it decrypts and re-seals.
 
+## Data Protection key ring
+
+The ASP.NET Data Protection key ring (which protects the `BeaconAuth` cookie)
+lives in the shared Postgres database (`DataProtectionKeys` table), not on the
+pod file system. Each row is sealed with key material derived from
+`DATA_PROTECTION_KEY` (AES-GCM); rows sealed before a key change stay readable
+via `DATA_PROTECTION_LEGACY_KEY`. On every start, each web pod seeds the ring
+if it is empty (a database advisory lock serializes parallel first starts) and
+a fail-closed guard refuses to serve when the ring is unreadable with the
+configured key material (wrong key, tampered rows) — and, in Production, when
+it is empty.
+
+- Every host that shares one ring database must use the same
+  `DATA_PROTECTION_KEY` — here, every web pod (blue and green). A divergent
+  key makes the ring unreadable and the pod never becomes ready.
+- Rotating `DATA_PROTECTION_KEY` orphans the existing sealed ring: without the
+  old key available as `DATA_PROTECTION_LEGACY_KEY` the host fails closed, and
+  a start on a fresh (empty) ring issues new keys that invalidate every
+  session — a one-time logout of everyone. To rotate without a logout, deploy
+  the new key alongside `DATA_PROTECTION_LEGACY_KEY=<old key>` and keep the
+  legacy key for as long as the pre-rotation ring keys must stay readable.
+- Losing the database (and its backups) means losing the ring: a fresh
+  database is seeded with new keys on start, and every session is invalidated
+  once.
+
 ## TLS termination and forwarded headers
 
 Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app

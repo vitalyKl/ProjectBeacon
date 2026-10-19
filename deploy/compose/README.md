@@ -193,7 +193,35 @@ dotnet ef migrations script --idempotent --from <older-migration> --to <newer-mi
   schema with the current image (the dump contains `__EFMigrationsHistory`,
   so only pending migrations apply), then starts the stack and gates on
   `/health`. Verify a known row afterwards (e.g. the admin user in `/Users`
-  admin screen).
+  admin screen). The dump includes the sealed key ring
+  (`DataProtectionKeys`), so a restore also restores sessions.
+
+## Data Protection key ring
+
+The ASP.NET Data Protection key ring that protects the `BeaconAuth` cookie
+lives in the shared Postgres database (`DataProtectionKeys` table), not in a
+container file system — the containers are read-only, so a file-based ring
+would not survive a re-deploy. Each row is sealed with key material derived
+from `DATA_PROTECTION_KEY` (AES-GCM); rows sealed before a key change stay
+readable via `DATA_PROTECTION_LEGACY_KEY`. On start, `web` seeds the ring if
+it is empty and refuses to serve when the ring is unreadable with the
+configured key material (fail-closed).
+
+- **Shared key.** `web` and `worker` both receive `DATA_PROTECTION_KEY` from
+  the same `.env` and share the same database; every host that reads the ring
+  must use the same value. A divergent key makes the ring unreadable and web
+  refuses to start.
+- **Rotating `DATA_PROTECTION_KEY`.** Replacing the value without also
+  providing the old key as `DATA_PROTECTION_LEGACY_KEY` orphans the sealed
+  ring: web fails closed, and a start on a fresh (empty) ring issues new keys
+  that invalidate every session — a one-time logout of everyone. To rotate
+  without a logout, set `DATA_PROTECTION_KEY=<new>` and
+  `DATA_PROTECTION_LEGACY_KEY=<old>` in `.env` and restart; keep the legacy
+  key for as long as the pre-rotation ring keys must stay readable.
+- **Database loss = ring loss.** The ring has no copy outside Postgres.
+  `backup.sh` includes it, so `restore.sh` restores sessions with the data; a
+  fresh database without ring rows gets a freshly seeded ring and logs
+  everyone out once.
 
 ## Diagnostics
 
@@ -267,3 +295,5 @@ The full stack was exercised end-to-end locally with a test Caddy override
   role-guard pass were verified; the first tick is deferred).
 - Schema rollback via `migrations script` is documented only; test it on a
   database copy before relying on it.
+- The key-ring behaviors (shared key across hosts, rotation, restore) were
+  verified by the API/Web test suites, not on this compose stack.
