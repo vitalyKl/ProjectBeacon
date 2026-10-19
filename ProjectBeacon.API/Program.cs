@@ -118,12 +118,14 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 if (app.Environment.IsEnvironment("Testing"))
 {
     app.MapGet("/v1/__test/unhandled", _ => throw new InvalidOperationException("test unhandled exception"));
+    app.MapPost("/v1/__test/bad-request", _ => throw new BadHttpRequestException("test bad request", 400));
 }
 
 app.Run();
 
 /// <summary>
 /// API host entry point. Calls <c>MapBeaconApi</c> so every <c>/v1</c> group is mapped, and maps <c>GET /health</c> with no auth filter in this file.
-/// In the Testing environment also maps <c>GET /v1/__test/unhandled</c> with no auth filter in this file.
+/// In the Testing environment also maps <c>GET /v1/__test/unhandled</c> and
+/// <c>POST /v1/__test/bad-request</c> with no auth filter in this file.
 /// </summary>
 public partial class Program { }

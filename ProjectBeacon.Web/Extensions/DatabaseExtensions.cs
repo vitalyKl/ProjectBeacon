@@ -25,7 +25,9 @@ public static class DatabaseExtensions
     /// </summary>
     public static async Task ReEncryptDataKeys(this WebApplication app)
     {
-        var dbFactory = app.Services.GetRequiredService<Application.Persistence.IBeaconDbFactory>();
+        // IBeaconDbFactory is scoped; it cannot be resolved from the root provider.
+        using var scope = app.Services.CreateScope();
+        var dbFactory = scope.ServiceProvider.GetRequiredService<Application.Persistence.IBeaconDbFactory>();
         var secrets = app.Services.GetRequiredService<ISecretProtector>();
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
         using var unscoped = TenantScope.EnterUnscoped();

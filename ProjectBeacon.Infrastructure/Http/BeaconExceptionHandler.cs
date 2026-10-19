@@ -10,6 +10,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 /// <summary>
 /// Turns unhandled exceptions on the API prefix into problem+json. Development may include the exception message.
+/// A <see cref="BadHttpRequestException"/> is a client fault: it returns its own status code (400)
+/// and is logged as a warning, not as a server error.
 /// </summary>
 public static class BeaconExceptionHandler
 {
@@ -33,17 +35,21 @@ public static class BeaconExceptionHandler
                     return;
                 }
 
-                if (exception is not null)
+                var badRequest = exception as BadHttpRequestException;
+                if (badRequest is not null)
+                    logger.LogWarning("Bad request ({Status}) for {Method} {Path}", badRequest.StatusCode, context.Request.Method, context.Request.Path.Value);
+                else if (exception is not null)
                     logger.LogError(exception, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path.Value);
 
                 if (context.Response.HasStarted)
                     return;
 
+                var status = badRequest?.StatusCode ?? StatusCodes.Status500InternalServerError;
                 var problem = new Dictionary<string, object?>
                 {
                     ["type"] = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
-                    ["title"] = "Internal Server Error",
-                    ["status"] = StatusCodes.Status500InternalServerError,
+                    ["title"] = status == StatusCodes.Status400BadRequest ? "Bad Request" : "Internal Server Error",
+                    ["status"] = status,
                     ["traceId"] = ProblemJson.TraceId(context)
                 };
 
@@ -53,7 +59,7 @@ public static class BeaconExceptionHandler
                     problem["exceptionType"] = exception.GetType().Name;
                 }
 
-                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                context.Response.StatusCode = status;
                 context.Response.ContentType = "application/problem+json";
                 await context.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOptions));
             }));
