@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using Application.Authorization;
 using Application.Identity;
+using Application.Persistence;
 using Application.Projects;
 using Domain.Entities.Identity;
 using Domain.Enums;
@@ -61,9 +62,10 @@ public sealed class ProjectLifecycleTests : IDisposable
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
         var actor = new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None);
-        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
+        var tenant = new TenantContext();
+        var org = await new CreateOrgHandler(HandlerSqlite.Factory(_connection), tenant).HandleAsync(
             new CreateOrgCommand(new CreateOrgRequest("Acme", null), actor));
-        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection)).HandleAsync(
+        var project = await new CreateProjectHandler(HandlerSqlite.Factory(_connection), _auth, tenant).HandleAsync(
             new CreateProjectCommand(new CreateProjectRequest("Beacon", "desc", org.Value!.Id), actor));
         return (actor, project.Value!.Id);
     }

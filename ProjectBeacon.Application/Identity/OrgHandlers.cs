@@ -6,13 +6,21 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// Creates an org and adds the caller as owner.
+/// Creates an org and adds the caller as owner. The org-scoped member insert runs on a
+/// separate tenant instance keyed by the new org id so it succeeds for callers that hold
+/// no tenant (fresh registrant, bootstrap admin). The circuit's scoped tenant is never
+/// mutated, so concurrent operations on the same circuit keep their own tenant.
 /// </summary>
 public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ITenantContext _tenant;
 
-    public CreateOrgHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateOrgHandler(IBeaconDbFactory dbFactory, ITenantContext tenant)
+    {
+        _dbFactory = dbFactory;
+        _tenant = tenant;
+    }
 
     public async Task<Result<OrgDto>> HandleAsync(CreateOrgCommand command, CancellationToken ct = default)
     {
@@ -23,10 +31,13 @@ public class CreateOrgHandler : ICommandHandler<CreateOrgCommand, Result<OrgDto>
 
         var org = Org.Create(command.Request.Name, command.Request.Description);
 
-        db.Orgs.Add(org);
+        var window = new TenantContext();
+        window.Assign(_tenant.ProjectId, org.Id, _tenant.Unscoped);
+        await using var writeDb = _dbFactory.CreateDbContext(window);
+        writeDb.Orgs.Add(org);
         if (command.Actor.UserId is { } ownerId)
-            db.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
-        await db.SaveChangesAsync(ct);
+            writeDb.OrgMembers.Add(OrgMember.Create(org.Id, ownerId, MemberRole.Owner));
+        await writeDb.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(org));
     }

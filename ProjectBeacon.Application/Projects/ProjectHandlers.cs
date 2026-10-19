@@ -8,17 +8,30 @@ using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// Creates a project in an org and seeds the starter labels. The caller becomes owner.
+/// The caller must be an org Owner/Admin or a system admin. The rights check and the
+/// inserts run on a separate tenant instance keyed by the target org and the new project
+/// id, so the flow works for callers that hold no tenant without ever mutating the
+/// circuit's scoped tenant (concurrent operations on the same circuit are unaffected).
 /// </summary>
 public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result<ProjectDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService? _auth;
+    private readonly ITenantContext _tenant;
 
-    public CreateProjectHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CreateProjectHandler(IBeaconDbFactory dbFactory, IAuthorizationService? auth, ITenantContext tenant)
+    {
+        _dbFactory = dbFactory;
+        _auth = auth;
+        _tenant = tenant;
+    }
 
     public async Task<Result<ProjectDto>> HandleAsync(CreateProjectCommand command, CancellationToken ct = default)
     {
+        var orgId = command.Request.OrgId;
+
         await using var db = _dbFactory.CreateDbContext();
-        var orgExists = await db.Orgs.AnyAsync(o => o.Id == command.Request.OrgId, ct);
+        var orgExists = await db.Orgs.AnyAsync(o => o.Id == orgId, ct);
         if (!orgExists)
             return Result.Failure<ProjectDto>("Org not found.");
 
@@ -26,15 +39,43 @@ public class CreateProjectHandler : ICommandHandler<CreateProjectCommand, Result
             && !await db.Users.AnyAsync(u => u.Id == userId, ct))
             return Result.Failure<ProjectDto>("User not found.");
 
-        var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, command.Request.OrgId);
+        var window = new TenantContext();
+        window.Assign(_tenant.ProjectId, orgId, _tenant.Unscoped);
+        await using var authDb = _dbFactory.CreateDbContext(window);
+        if (!await CanCreateInOrgAsync(authDb, command.Actor, orgId, ct))
+            return Result.Forbidden<ProjectDto>();
 
-        db.Projects.Add(project);
+        var project = Domain.Entities.Projects.Project.Create(command.Request.Name, command.Request.Description, orgId);
+
+        window.Assign(project.Id, orgId, _tenant.Unscoped);
+        await using var writeDb = _dbFactory.CreateDbContext(window);
+        writeDb.Projects.Add(project);
         if (command.Actor.UserId is { } ownerId)
-            db.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
-        SeedStarterLabels(db, project.Id);
-        await db.SaveChangesAsync(ct);
+            writeDb.ProjectMembers.Add(ProjectMember.Create(project.Id, ownerId, MemberRole.Owner));
+        SeedStarterLabels(writeDb, project.Id);
+        await writeDb.SaveChangesAsync(ct);
 
         return Result.Ok(MapToDto(project));
+    }
+
+    // The membership rows are tenant-scoped, so the check must run inside the RLS window
+    // for the target org. Delegates to IAuthorizationService when one was injected; a
+    // direct construction without it (e.g. tests) applies the same rule: org Owner/Admin
+    // or system admin.
+    private async Task<bool> CanCreateInOrgAsync(IBeaconDb db, ActorContext actor, Guid orgId, CancellationToken ct)
+    {
+        if (actor.UserId is not { } userId)
+            return false;
+
+        if (_auth is not null)
+            return (await _auth.CanAsync(db, actor, ResourceType.Org, AuthAction.Administer, orgId: orgId, ct: ct)).Success;
+
+        if (await db.OrgMembers.IgnoreQueryFilters()
+                .AnyAsync(m => m.OrgId == orgId && m.UserId == userId
+                    && (m.Role == MemberRole.Owner || m.Role == MemberRole.Admin), ct))
+            return true;
+        return await db.Users.IgnoreQueryFilters()
+            .AnyAsync(u => u.Id == userId && u.IsAdmin, ct);
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>

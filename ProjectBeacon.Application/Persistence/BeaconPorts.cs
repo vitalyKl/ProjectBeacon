@@ -73,6 +73,13 @@ public interface IBeaconDb : IAsyncDisposable
 public interface IBeaconDbFactory
 {
     IBeaconDb CreateDbContext();
+
+    /// <summary>
+    /// Creates a context bound to the given tenant instead of the scoped one. The scoped
+    /// tenant is left untouched, so concurrent operations on the same circuit are unaffected.
+    /// </summary>
+    IBeaconDb CreateDbContext(ITenantContext tenant);
+
     Task<IBeaconDb> CreateDbContextAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(CreateDbContext());
 }
