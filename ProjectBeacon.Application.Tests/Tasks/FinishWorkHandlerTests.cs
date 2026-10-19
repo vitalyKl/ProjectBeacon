@@ -541,6 +541,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<OrgMember> OrgMembers => _inner.OrgMembers;
         public DbSet<OrgInvite> OrgInvites => _inner.OrgInvites;
         public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
+        public DbSet<DataProtectionKey> DataProtectionKeys => _inner.DataProtectionKeys;
         public DbSet<Project> Projects => _inner.Projects;
         public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
         public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
@@ -611,6 +612,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<OrgMember> OrgMembers => _inner.OrgMembers;
         public DbSet<OrgInvite> OrgInvites => _inner.OrgInvites;
         public DbSet<PasswordResetToken> PasswordResetTokens => _inner.PasswordResetTokens;
+        public DbSet<DataProtectionKey> DataProtectionKeys => _inner.DataProtectionKeys;
         public DbSet<Project> Projects => _inner.Projects;
         public DbSet<ProjectMember> ProjectMembers => _inner.ProjectMembers;
         public DbSet<ProjectInvite> ProjectInvites => _inner.ProjectInvites;
