@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Tests;
 
 using Application.Auth;
+using Application.Persistence;
 using Infrastructure.Data;
 using Infrastructure.Security;
 using Microsoft.Data.Sqlite;
@@ -169,7 +170,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_CreatesUser()
     {
-        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), null);
         var result = await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")), TestContext.Current.CancellationToken);
 
@@ -185,7 +186,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_DuplicateLogin_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), null);
         await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("newuser", "new@test.com", "password")), TestContext.Current.CancellationToken);
 
@@ -199,7 +200,7 @@ public sealed class AuthIntegrationTests : IDisposable
     [Fact]
     public async Task Register_DuplicateEmail_ReturnsFailure()
     {
-        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher());
+        var handler = new RegisterHandler(_dbFactory, new BcryptPasswordHasher(), null);
         await handler.HandleAsync(
             new RegisterCommand(new RegisterRequest("user1", "test@test.com", "password")), TestContext.Current.CancellationToken);
 

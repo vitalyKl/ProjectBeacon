@@ -63,6 +63,10 @@ public class LoginHandler
 }
 /// <summary>
 /// Creates a user. Password must be at least 8 characters. When invite-only is on, the invite must match the email and still be pending.
+/// Invite rows are tenant-scoped, so the token lookup runs on a separate unscoped tenant
+/// instance and the acceptance plus membership inserts run on one keyed by the invite's
+/// tenant. The caller's scoped tenant is never mutated, so concurrent operations on the
+/// same circuit are unaffected.
 /// </summary>
 public class RegisterHandler
 {
@@ -93,24 +97,28 @@ public class RegisterHandler
         if (inviteOnly && string.IsNullOrEmpty(inviteToken))
             return Result.Failure<RegisterResponse>("Invite required.", ErrorKind.Forbidden);
 
+        // Users are not tenant-scoped, so the uniqueness checks run in the caller's own session.
         await using var db = _dbFactory.CreateDbContext();
-        var existing = await db.Users.AnyAsync(u => u.Login == login, ct);
-        if (existing)
+        if (await db.Users.AnyAsync(u => u.Login == login, ct))
             return Result.Failure<RegisterResponse>("Login already taken.");
-
-        var existingEmail = await db.Users.AnyAsync(u => u.Email == email, ct);
-        if (existingEmail)
+        if (await db.Users.AnyAsync(u => u.Email == email, ct))
             return Result.Failure<RegisterResponse>("Email already registered.");
 
         Domain.Entities.Identity.OrgInvite? orgInvite = null;
         Domain.Entities.Projects.ProjectInvite? projectInvite = null;
+        Guid? projectOrgId = null;
         if (!string.IsNullOrEmpty(inviteToken))
         {
+            // The invite row belongs to some tenant the anonymous caller cannot see
+            // under the fail-closed session: look the token up on a separate unscoped tenant.
+            var lookupTenant = new TenantContext();
+            lookupTenant.Assign(null, null, unscoped: true);
+            await using var lookupDb = _dbFactory.CreateDbContext(lookupTenant);
             var hash = OpaqueToken.Hash(inviteToken);
-            orgInvite = await db.OrgInvites.IgnoreQueryFilters()
+            orgInvite = await lookupDb.OrgInvites.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
             projectInvite = orgInvite is null
-                ? await db.ProjectInvites.IgnoreQueryFilters()
+                ? await lookupDb.ProjectInvites.IgnoreQueryFilters()
                     .FirstOrDefaultAsync(i => i.TokenHash == hash, ct)
                 : null;
             if (orgInvite is null && projectInvite is null)
@@ -122,38 +130,60 @@ public class RegisterHandler
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
             if (projectInvite is not null && (projectInvite.Status != Domain.Enums.InviteStatus.Pending || projectInvite.ExpiredAt < DateTime.UtcNow))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
+            if (projectInvite is not null)
+            {
+                var project = await lookupDb.Projects.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);
+                if (project is null)
+                    return Result.Failure<RegisterResponse>("Project not found.");
+                projectOrgId = project.OrgId;
+            }
         }
 
+        // Accept the invite and insert the memberships. RLS must validate each write
+        // against the tenant the row belongs to, so key the window by that tenant
+        // instead of running the writes unscoped.
+        var window = new TenantContext();
+        if (orgInvite is not null)
+            window.Assign(null, orgInvite.OrgId, unscoped: false);
+        else if (projectInvite is not null)
+            window.Assign(projectInvite.ProjectId, projectOrgId, unscoped: false);
+
         var user = User.Create(login, email, _passwords.Hash(password));
-        db.Users.Add(user);
+        await using var writeDb = _dbFactory.CreateDbContext(window);
+        writeDb.Users.Add(user);
 
         if (orgInvite is not null)
         {
-            if (!orgInvite.TryAccept())
+            var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(i => i.Id == orgInvite.Id, ct);
+            if (invite is null || !invite.TryAccept())
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
-            if (!await db.OrgMembers.IgnoreQueryFilters()
-                    .AnyAsync(m => m.OrgId == orgInvite.OrgId && m.UserId == user.Id, ct))
-                db.OrgMembers.Add(OrgMember.Create(orgInvite.OrgId, user.Id, orgInvite.Role));
+            if (!await writeDb.OrgMembers.IgnoreQueryFilters()
+                    .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
+                writeDb.OrgMembers.Add(OrgMember.Create(invite.OrgId, user.Id, invite.Role));
         }
 
         if (projectInvite is not null)
         {
-            if (!projectInvite.TryAccept())
+            var invite = await writeDb.ProjectInvites.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(i => i.Id == projectInvite.Id, ct);
+            if (invite is null || !invite.TryAccept())
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
-            var project = await db.Projects.IgnoreQueryFilters()
+            var project = await writeDb.Projects.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);
             if (project is null)
                 return Result.Failure<RegisterResponse>("Project not found.");
-            if (!await db.OrgMembers.IgnoreQueryFilters()
+            if (!await writeDb.OrgMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.OrgId == project.OrgId && m.UserId == user.Id, ct))
-                db.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, Domain.Enums.MemberRole.Member));
-            if (!await db.ProjectMembers.IgnoreQueryFilters()
+                writeDb.OrgMembers.Add(OrgMember.Create(project.OrgId, user.Id, Domain.Enums.MemberRole.Member));
+            if (!await writeDb.ProjectMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.ProjectId == projectInvite.ProjectId && m.UserId == user.Id, ct))
-                db.ProjectMembers.Add(Domain.Entities.Projects.ProjectMember.Create(
-                    projectInvite.ProjectId, user.Id, projectInvite.Role));
+                writeDb.ProjectMembers.Add(Domain.Entities.Projects.ProjectMember.Create(
+                    projectInvite.ProjectId, user.Id, invite.Role));
         }
 
-        await db.SaveChangesAsync(ct);
+        await writeDb.SaveChangesAsync(ct);
         return Result.Ok(new RegisterResponse(user.Id, user.Login, user.Email));
     }
 }
