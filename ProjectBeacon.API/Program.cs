@@ -118,7 +118,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 if (app.Environment.IsEnvironment("Testing"))
 {
     app.MapGet("/v1/__test/unhandled", _ => throw new InvalidOperationException("test unhandled exception"));
-    app.MapPost("/v1/__test/bad-request", _ => throw new BadHttpRequestException("test bad request", 400));
+    app.MapPost("/v1/__test/bad-request",
+        new Func<int?, Task<IResult>>(status => throw new BadHttpRequestException("test bad request", status ?? 400)));
 }
 
 app.Run();

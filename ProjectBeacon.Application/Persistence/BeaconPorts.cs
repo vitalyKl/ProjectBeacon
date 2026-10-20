@@ -66,6 +66,7 @@ public interface IBeaconDb : IAsyncDisposable
     Guid? FilterOrgId { get; }
     bool FilterUnscoped { get; }
     DatabaseFacade Database { get; }
+    ChangeTracker ChangeTracker { get; }
     EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class;
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

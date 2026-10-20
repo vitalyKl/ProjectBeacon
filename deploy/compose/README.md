@@ -152,6 +152,32 @@ the failed state in place for forensics. There is no automatic deployment on
 push: `release.yml` does not reach this VPS (no SSH/credentials); this script
 is the only deploy path and requires a person on the server.
 
+### Ring check after deploy (mandatory)
+
+The web container is read-only and its only persistent authentication state is
+the key ring in Postgres, so right after every deploy on the VPS verify that
+the new container reads the existing ring and still accepts a live session:
+
+1. Log in at `https://<BEACON_DOMAIN>/login` in a browser.
+2. Devtools → Application → Cookies: copy the value of the `BeaconAuth` cookie.
+3. Restart web:
+
+   ```bash
+   docker compose restart web
+   ```
+
+4. Call the API with that same cookie:
+
+   ```bash
+   curl -fsS -H "Cookie: BeaconAuth=<copied value>" https://<BEACON_DOMAIN>/v1/auth/me
+   ```
+
+   `200` with the user's JSON means the ring survived the deploy. A `401`
+   means the container read a different database or a different
+   `DATA_PROTECTION_KEY` — treat it as a deploy failure and stop before anyone
+   logs in again (a freshly seeded ring has just invalidated every session
+   once).
+
 ### Rollback without upgrade.sh
 
 ```bash
@@ -222,6 +248,20 @@ configured key material (fail-closed).
   `backup.sh` includes it, so `restore.sh` restores sessions with the data; a
   fresh database without ring rows gets a freshly seeded ring and logs
   everyone out once.
+- **Recovery: reset a wedged ring.** If web fails closed because the ring is
+  unreadable with the configured key material (wrong `DATA_PROTECTION_KEY`,
+  tampered rows) and neither the old key nor the old rows can be restored,
+  reset the ring:
+
+  ```bash
+  docker compose stop web
+  docker compose exec postgres psql -U beacon -d beacon -c 'TRUNCATE "DataProtectionKeys"'
+  docker compose up -d web
+  ```
+
+  On start web seeds a fresh ring: every session is invalidated once. The
+  effect is the same as the database-loss case above — no application data is
+  touched, only the sealed authentication state is reset.
 
 ## Diagnostics
 
@@ -297,3 +337,6 @@ The full stack was exercised end-to-end locally with a test Caddy override
   database copy before relying on it.
 - The key-ring behaviors (shared key across hosts, rotation, restore) were
   verified by the API/Web test suites, not on this compose stack.
+- The mandatory **ring check after deploy** (restart web → the same
+  `BeaconAuth` cookie is still accepted by `/v1/auth/me`) has not yet been
+  performed on the VPS; run it right after the first deploy there.

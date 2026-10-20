@@ -54,8 +54,33 @@ public class FinishWorkHandler
         // options enable retrying, which does not support user-initiated transactions
         // started outside a strategy (the ClaimTaskHandler pattern).
         var strategy = db.Database.CreateExecutionStrategy();
+        var attempt = 0;
         return await strategy.ExecuteAsync(async () =>
         {
+            attempt++;
+            if (attempt > 1)
+            {
+                // A transient failure rolls the attempt back and re-enters this lambda.
+                // Re-read the row so the retry works from the committed state: if the
+                // effect is already in place (the attempt committed, or a rival made the
+                // same transition) return the idempotent result; otherwise the row is
+                // back at the baseline below and the guarded compare-and-swap still
+                // protects it. The baseline stays the pre-strategy read, so a rival that
+                // committed in the meantime is still detected by its stale revision.
+                var live = await db.Tasks.AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+                if (live is null)
+                    return Result.Failure("Task not found.");
+                if (guardedTransition
+                    && (resultType == "done"
+                        ? live.Status == TaskItemStatus.Done
+                        : live.Status == TaskItemStatus.Todo && HasNote(live.Description, failedNote!)))
+                    return Result.Ok();
+                task = live;
+            }
+            // A retry re-enters with the failed attempt's tracked comment still in the
+            // change tracker; detach it so the retried save cannot insert it twice.
+            db.ChangeTracker.Clear();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             switch (resultType)
             {

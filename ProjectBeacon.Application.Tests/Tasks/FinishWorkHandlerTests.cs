@@ -530,6 +530,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
             }
         }
 
+        public ChangeTracker ChangeTracker => _inner.ChangeTracker;
+
         public Guid? FilterProjectId => _inner.FilterProjectId;
         public Guid? FilterOrgId => _inner.FilterOrgId;
         public bool FilterUnscoped => _inner.FilterUnscoped;
@@ -600,6 +602,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public static IBeaconDb Wrap(IBeaconDb inner) => new CommentSaveFailingDb(inner);
 
         public DatabaseFacade Database => _inner.Database;
+
+        public ChangeTracker ChangeTracker => _inner.ChangeTracker;
 
         public Guid? FilterProjectId => _inner.FilterProjectId;
         public Guid? FilterOrgId => _inner.FilterOrgId;

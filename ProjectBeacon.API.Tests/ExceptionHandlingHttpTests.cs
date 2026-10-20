@@ -51,6 +51,33 @@ public sealed class ExceptionHandlingHttpTests
         Assert.False(doc.RootElement.TryGetProperty("detail", out _));
         Assert.False(doc.RootElement.TryGetProperty("exceptionType", out _));
     }
+
+    // A client fault with a non-400 status (413, 415) keeps its own status and the
+    // matching RFC 9110 title instead of being reported as a server error.
+    [Fact]
+    public async Task BadRequest_Exception_Non400Status_Keeps_Title()
+    {
+        await using var factory = new TestingApiFactory();
+        var client = factory.CreateClient();
+
+        foreach (var (status, title) in new (int, string)[]
+        {
+            (413, "Payload Too Large"),
+            (415, "Unsupported Media Type")
+        })
+        {
+            using var response = await client.PostAsync(
+                $"/v1/__test/bad-request?status={status}",
+                new StringContent(string.Empty),
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(status, (int)response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken: TestContext.Current.CancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            Assert.Equal(status, doc.RootElement.GetProperty("status").GetInt32());
+            Assert.Equal(title, doc.RootElement.GetProperty("title").GetString());
+        }
+    }
 }
 
 public sealed class TestingApiFactory : AuthApiFactory

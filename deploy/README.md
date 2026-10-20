@@ -88,6 +88,31 @@ it is empty.
   database is seeded with new keys on start, and every session is invalidated
   once.
 
+### Recovery: reset a wedged ring
+
+If a host fails closed because the ring is unreadable with the configured key
+material (wrong `DATA_PROTECTION_KEY`, tampered rows) and neither the old key
+nor the old rows can be restored, the ring can be reset. The effect is the
+same as losing the database: a fresh ring is seeded and every session is
+invalidated once; no application data is touched.
+
+1. Scale all web pods to zero so no pod is serving on the old ring:
+
+   ```
+   kubectl scale deployment beacon-web-blue beacon-web-green --replicas=0
+   ```
+
+2. Truncate the ring table on the shared database (as the superuser, e.g. via
+   the migration role):
+
+   ```
+   psql "$ConnectionStrings__Migration" -c 'TRUNCATE "DataProtectionKeys"'
+   ```
+
+3. Scale the web pods back up. Each pod seeds the fresh ring on start (the
+   advisory lock serializes parallel first starts) and all users are logged
+   out once.
+
 ## TLS termination and forwarded headers
 
 Ingress terminates TLS, so the web pods receive plain HTTP and `Request.IsHttps` is false. The app

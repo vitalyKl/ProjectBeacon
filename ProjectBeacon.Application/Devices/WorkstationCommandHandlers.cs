@@ -60,6 +60,10 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
             var strategy = db.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
+                // A transient failure rolls the attempt back and re-enters this lambda
+                // with the failed attempt's command still tracked; detach it so the
+                // retried save cannot insert a second command row.
+                db.ChangeTracker.Clear();
                 await using var tx = await db.Database.BeginTransactionAsync(ct);
                 var written = await db.DaemonDevices
                     .Where(d => d.Id == device.Id && d.DesiredRevision == baseRevision.Value)

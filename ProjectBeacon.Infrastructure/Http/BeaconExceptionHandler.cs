@@ -10,8 +10,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 /// <summary>
 /// Turns unhandled exceptions on the API prefix into problem+json. Development may include the exception message.
-/// A <see cref="BadHttpRequestException"/> is a client fault: it returns its own status code (400)
-/// and is logged as a warning, not as a server error.
+/// A <see cref="BadHttpRequestException"/> is a client fault: it returns its own status code
+/// (400, 413, 415) with a matching title, and is logged as a warning, not as a server error.
 /// </summary>
 public static class BeaconExceptionHandler
 {
@@ -47,8 +47,20 @@ public static class BeaconExceptionHandler
                 var status = badRequest?.StatusCode ?? StatusCodes.Status500InternalServerError;
                 var problem = new Dictionary<string, object?>
                 {
-                    ["type"] = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
-                    ["title"] = status == StatusCodes.Status400BadRequest ? "Bad Request" : "Internal Server Error",
+                    ["type"] = status switch
+                    {
+                        StatusCodes.Status400BadRequest => "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                        StatusCodes.Status413PayloadTooLarge => "https://tools.ietf.org/html/rfc9110#section-15.5.14",
+                        StatusCodes.Status415UnsupportedMediaType => "https://tools.ietf.org/html/rfc9110#section-15.5.16",
+                        _ => "https://tools.ietf.org/html/rfc9110#section-15.6.1"
+                    },
+                    ["title"] = status switch
+                    {
+                        StatusCodes.Status400BadRequest => "Bad Request",
+                        StatusCodes.Status413PayloadTooLarge => "Payload Too Large",
+                        StatusCodes.Status415UnsupportedMediaType => "Unsupported Media Type",
+                        _ => "Internal Server Error"
+                    },
                     ["status"] = status,
                     ["traceId"] = ProblemJson.TraceId(context)
                 };
