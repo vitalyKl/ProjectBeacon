@@ -41,6 +41,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     internal string? ServerPassword => _serverPassword;
     internal bool TestForceRunning { get; set; }
     internal Func<int, int>? PortHolderProbe { get; set; }
+    internal Func<string, string?>? BinaryProbe { get; set; }
     internal int TestSettleSeconds { get; set; } = 10;
     internal void TestSetStartedAt(DateTime at) => _startedAt = at;
     private int _lastBusyHolderLogged;
@@ -70,7 +71,9 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     public async Task TickAsync(string? cwd, CancellationToken ct)
     {
         var next = string.IsNullOrWhiteSpace(cwd) ? null : Path.GetFullPath(cwd);
-        var bin = WorkstationProbe.Which("opencode") ?? WorkstationProbe.Which("opencode.exe");
+        var bin = BinaryProbe is { } probe
+            ? probe("opencode") ?? probe("opencode.exe")
+            : WorkstationProbe.Which("opencode") ?? WorkstationProbe.Which("opencode.exe");
         if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess && !TestForceRunning)
         {
             await KillProcessAsync();

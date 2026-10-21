@@ -451,7 +451,11 @@ public sealed class OpenCodeServeTests : IDisposable
     [Fact]
     public async Task TickAsync_PortBusy_SkipsLaunchAndReportsHolder()
     {
-        await using var serve = new ClientOpenCodeServe { PortHolderProbe = _ => 4242 };
+        await using var serve = new ClientOpenCodeServe
+        {
+            PortHolderProbe = _ => 4242,
+            BinaryProbe = _ => "opencode"
+        };
         await serve.TickAsync(_dir, CancellationToken.None);
         Assert.Equal(0, serve.StartCount);
         Assert.False(serve.Status.Healthy);

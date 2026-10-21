@@ -37,7 +37,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
             {
                 var settings = _loadSettings();
                 await _llamaSync.SyncAsync(settings, ct);
-                        // Keep the cwd the last chat used; fall back to the projects root only until serve has one.
+                // Keep the cwd the last chat used; fall back to the projects root only until serve has one.
                 await _gate.TryTickAsync(_gate.OpenCode.Cwd ?? settings.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
