@@ -74,11 +74,12 @@ public static class ClientHost
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", store.Token);
             await using var llama = new ClientLlamaSwap { VramChecker = new ModelSwapping.NvidiaSmiVramChecker() };
             await using var openCode = new ClientOpenCodeServe();
+            var fileLog = new ClientFileLog();
             await using var daemon = new WorkstationDaemon(
                 http,
                 llama,
                 () => WorkstationSettings.Load(),
-                interactive ? null : msg => Console.Error.WriteLine(msg),
+                interactive ? fileLog.Write : msg => { fileLog.Write(msg); Console.Error.WriteLine(msg); },
                 openCode);
 
             if (interactive)

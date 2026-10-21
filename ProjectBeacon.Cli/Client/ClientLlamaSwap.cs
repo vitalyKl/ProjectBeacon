@@ -29,6 +29,7 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
 
     internal int StartCount { get; private set; }
     internal bool SkipRealProcess { get; set; }
+    internal Func<int, int>? PortHolderProbe { get; set; }
     internal string ConfigFile { get; set; } = ConfigPath;
     internal bool UseOwnSwapper { get; set; }
     internal int ConcurrentPortBase { get; set; } = 9000;
@@ -40,6 +41,8 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
     private string? _ownLastYaml;
     private string? _desiredSwapModel;
     private int _externalCrashes;
+    private int _portBusyHolder;
+    private int _lastBusyHolderLogged;
     private const int MaxExternalCrashes = 5;
 
     public static string ConfigPath =>
@@ -111,8 +114,10 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         _lastHash = hash;
         _port = nextPort;
         _lastBin = bin;
-        EnsureProcess(bin);
+        var launched = EnsureProcess(bin);
         await PollAsync(ct);
+        if (!launched && !Status.Healthy)
+            Status = new LlamaSwapStatusDto(true, false, null, null, _lastSwap, PortBusyMessage());
     }
 
     public async Task ReloadAsync(CancellationToken ct)
@@ -137,8 +142,10 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap binary not found on this device.");
             return;
         }
-        EnsureProcess(_lastBin);
+        var launched = EnsureProcess(_lastBin);
         await PollAsync(ct);
+        if (!launched && !Status.Healthy)
+            Status = new LlamaSwapStatusDto(true, false, null, null, _lastSwap, PortBusyMessage());
     }
 
     public async Task UnloadAsync(CancellationToken ct)
@@ -178,17 +185,37 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
 
     private bool IsRunning => SkipRealProcess ? _runningFake : _process is { HasExited: false };
 
-    private void EnsureProcess(string? bin)
+    private string PortBusyMessage() =>
+        _portBusyHolder > 0
+            ? $"port {_port} is in use by another process (pid {_portBusyHolder}); llama-swap cannot start. Stop that process or change the port."
+            : $"port {_port} is in use by another process; llama-swap cannot start. Stop that process or change the port.";
+
+    private bool EnsureProcess(string? bin)
     {
         if (IsRunning)
-            return;
-        StartCount++;
+            return true;
         if (SkipRealProcess)
         {
             _runningFake = true;
+            StartCount++;
             Status = new LlamaSwapStatusDto(true, true, null, null, null, null);
-            return;
+            return true;
         }
+        var holder = PortHolderProbe is { } probe ? probe(_port) : ProcessControl.FindListeningPortPid(_port);
+        if (holder > 0)
+        {
+            _portBusyHolder = holder;
+            if (_portBusyHolder != _lastBusyHolderLogged)
+            {
+                _lastBusyHolderLogged = _portBusyHolder;
+                Log?.Invoke($"llama-swap: port {_port} is already in use by pid {holder}; not launching llama-swap");
+            }
+            Status = new LlamaSwapStatusDto(true, false, null, null, null, PortBusyMessage());
+            return false;
+        }
+        _portBusyHolder = 0;
+        _lastBusyHolderLogged = 0;
+        StartCount++;
         var psi = new ProcessStartInfo
         {
             FileName = bin!,
@@ -205,19 +232,20 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         if (launched.Error == ProcessLaunchError.NotStarted)
         {
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to start.");
-            return;
+            return true;
         }
         if (launched.Error == ProcessLaunchError.StartThrew)
         {
             Status = new LlamaSwapStatusDto(false, false, null, null, null, $"llama-swap failed to start: {launched.ExceptionMessage}");
-            return;
+            return true;
         }
         if (launched.Error == ProcessLaunchError.Drain)
         {
             Status = new LlamaSwapStatusDto(false, false, null, null, null, "llama-swap failed to drain output.");
-            return;
+            return true;
         }
         _process = launched.Process;
+        return true;
     }
 
     private async Task KillProcessAsync()

@@ -139,6 +139,21 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
+    public async Task LlamaSwap_TickAsync_PortBusy_SkipsLaunchAndReportsHolder()
+    {
+        await using var llama = new ClientLlamaSwap
+        {
+            PortHolderProbe = _ => 4242,
+            ConfigFile = Path.Combine(_dir, "config-busy.yaml")
+        };
+        await llama.TickAsync("models: {}\n", 9999, "fake-bin", CancellationToken.None);
+        Assert.Equal(0, llama.StartCount);
+        Assert.False(llama.Status.Healthy);
+        Assert.Contains("4242", llama.Status.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("in use", llama.Status.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Enroll_ReturnsToken_OnLoginAndCreate()
     {
         var handler = new RouteHandler
@@ -560,6 +575,256 @@ public sealed class ClientDaemonTests : IDisposable
             if (CommandsHold > TimeSpan.Zero && path.Contains("/commands", StringComparison.Ordinal))
                 await Task.Delay(CommandsHold, cancellationToken);
             return Impl(request);
+        }
+    }
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_WaitsThroughToolCallsUntilStop()
+    {
+        var chatId = Guid.NewGuid();
+        var logs = new List<string>();
+        var capture = new ChatCaptureHandler();
+        using var http = new HttpClient(capture) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        var toolCalls = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"tool-calls","content":[{"type":"reasoning","id":"p1","text":"thinking","time":{"created":1,"completed":2}}]}]
+            """;
+        var streaming = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"tool-calls","content":[{"type":"reasoning","id":"p1","text":"thinking","time":{"created":1,"completed":2}}]},{"type":"message","role":"assistant","id":"m2","time":{"created":3},"content":[{"type":"text","id":"p2","text":"partial","time":{"created":3}}]}]
+            """;
+        var finished = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"tool-calls","content":[{"type":"reasoning","id":"p1","text":"thinking","time":{"created":1,"completed":2}}]},{"type":"message","role":"assistant","id":"m2","time":{"created":3,"completed":5},"finish":"stop","content":[{"type":"text","id":"p2","text":"the answer","time":{"created":3,"completed":5}}]}]
+            """;
+        var messageGets = 0;
+        await using var openCode = new ClientOpenCodeServe
+        {
+            TestForceRunning = true,
+            SendAsync = (request, _) =>
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                if (path == "/api/info")
+                    return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
+                if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
+                {
+                    var n = Interlocked.Increment(ref messageGets);
+                    return Task.FromResult(OkJson(n <= 3 ? toolCalls : n <= 5 ? streaming : finished));
+                }
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }
+        };
+        openCode.HandleStdoutLine("server password test-pw");
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask,
+            ChatIdleTimeout = TimeSpan.FromSeconds(10),
+            ChatMaxDuration = TimeSpan.FromSeconds(60)
+        };
+        var (ok, result, error) = await daemon.ExecuteAsync(
+            new WorkstationDaemon.CommandWire
+            {
+                Id = Guid.NewGuid(),
+                Kind = WorkstationCommandKind.ChatPrompt,
+                LocalRoot = _dir,
+                PayloadJson = JsonSerializer.Serialize(new { path = ".", chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+            },
+            CancellationToken.None);
+        Assert.True(ok, error);
+        Assert.Equal(2, capture.PartBodies.Count);
+        Assert.Contains("thinking", capture.PartBodies[0]);
+        Assert.Contains("the answer", capture.PartBodies[1]);
+        Assert.DoesNotContain("partial", string.Join("|", capture.PartBodies));
+        Assert.Equal(1, capture.IdlePosts);
+        Assert.Contains("\"interrupted\":false", result);
+        Assert.Contains("idle", string.Join("\n", logs));
+        Assert.Equal(7, messageGets);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_IdlesWhenNoAssistantMessageAppears()
+    {
+        var chatId = Guid.NewGuid();
+        var logs = new List<string>();
+        var capture = new ChatCaptureHandler();
+        using var http = new HttpClient(capture) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        await using var openCode = new ClientOpenCodeServe
+        {
+            TestForceRunning = true,
+            SendAsync = (request, _) =>
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                if (path == "/api/info")
+                    return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
+                if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
+                    return Task.FromResult(OkJson("[{\"role\":\"user\",\"text\":\"hello\"}]"));
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask,
+            ChatIdleTimeout = TimeSpan.FromSeconds(1),
+            ChatMaxDuration = TimeSpan.FromSeconds(180)
+        };
+        var (ok, result, error) = await daemon.ExecuteAsync(
+            new WorkstationDaemon.CommandWire
+            {
+                Id = Guid.NewGuid(),
+                Kind = WorkstationCommandKind.ChatPrompt,
+                LocalRoot = _dir,
+                PayloadJson = JsonSerializer.Serialize(new { chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+            },
+            CancellationToken.None);
+        Assert.True(ok, error);
+        Assert.Empty(capture.PartBodies);
+        Assert.Equal(1, capture.IdlePosts);
+        Assert.Contains("\"interrupted\":false", result);
+        Assert.Contains("idle", string.Join("\n", logs));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_ErrorTurn_PostsErrorPart()
+    {
+        var chatId = Guid.NewGuid();
+        var logs = new List<string>();
+        var capture = new ChatCaptureHandler();
+        using var http = new HttpClient(capture) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        var errorTurn = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"error","error":{"name":"ContextOverflow","message":"request (12099 tokens) exceeds the available context size (10240 tokens)"}}]
+            """;
+        var messageGets = 0;
+        await using var openCode = new ClientOpenCodeServe
+        {
+            TestForceRunning = true,
+            SendAsync = (request, _) =>
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                if (path == "/api/info")
+                    return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
+                if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
+                {
+                    var n = Interlocked.Increment(ref messageGets);
+                    return Task.FromResult(OkJson(n <= 1 ? "[]" : errorTurn));
+                }
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask,
+            ChatIdleTimeout = TimeSpan.FromSeconds(10),
+            ChatMaxDuration = TimeSpan.FromSeconds(60)
+        };
+        var (ok, result, error) = await daemon.ExecuteAsync(
+            new WorkstationDaemon.CommandWire
+            {
+                Id = Guid.NewGuid(),
+                Kind = WorkstationCommandKind.ChatPrompt,
+                LocalRoot = _dir,
+                PayloadJson = JsonSerializer.Serialize(new { path = ".", chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+            },
+            CancellationToken.None);
+        Assert.True(ok, error);
+        Assert.Single(capture.PartBodies);
+        Assert.Contains("\"kind\":\"error\"", capture.PartBodies[0]);
+        Assert.Contains("request (12099 tokens) exceeds", capture.PartBodies[0]);
+        Assert.Equal(1, capture.IdlePosts);
+        Assert.Contains("\"interrupted\":false", result);
+        Assert.Contains("idle with error", string.Join("\n", logs));
+        Assert.Equal(3, messageGets);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ChatPrompt_StaleErrorTurn_WaitsForNewTurn()
+    {
+        var chatId = Guid.NewGuid();
+        var logs = new List<string>();
+        var capture = new ChatCaptureHandler();
+        using var http = new HttpClient(capture) { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "config.yaml")
+        };
+        var staleError = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"error","error":{"message":"Step interrupted"}}]
+            """;
+        var newTurnRunning = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"error","error":{"message":"Step interrupted"}},{"type":"message","role":"assistant","id":"m2","time":{"created":3},"content":[{"type":"text","id":"p2","text":"partial","time":{"created":3}}]}]
+            """;
+        var newTurnDone = """
+            [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"error","error":{"message":"Step interrupted"}},{"type":"message","role":"assistant","id":"m2","time":{"created":3,"completed":5},"finish":"stop","content":[{"type":"text","id":"p2","text":"the answer","time":{"created":3,"completed":5}}]}]
+            """;
+        var messageGets = 0;
+        await using var openCode = new ClientOpenCodeServe
+        {
+            TestForceRunning = true,
+            SendAsync = (request, _) =>
+            {
+                var path = request.RequestUri!.AbsolutePath;
+                if (path == "/api/info")
+                    return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
+                if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
+                {
+                    var n = Interlocked.Increment(ref messageGets);
+                    return Task.FromResult(OkJson(n <= 3 ? staleError : n <= 5 ? newTurnRunning : newTurnDone));
+                }
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask,
+            ChatIdleTimeout = TimeSpan.FromSeconds(10),
+            ChatMaxDuration = TimeSpan.FromSeconds(60)
+        };
+        var (ok, result, error) = await daemon.ExecuteAsync(
+            new WorkstationDaemon.CommandWire
+            {
+                Id = Guid.NewGuid(),
+                Kind = WorkstationCommandKind.ChatPrompt,
+                LocalRoot = _dir,
+                PayloadJson = JsonSerializer.Serialize(new { path = ".", chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
+            },
+            CancellationToken.None);
+        Assert.True(ok, error);
+        Assert.Single(capture.PartBodies);
+        Assert.Contains("the answer", capture.PartBodies[0]);
+        Assert.DoesNotContain("Step interrupted", string.Join("|", capture.PartBodies));
+        Assert.DoesNotContain("\"kind\":\"error\"", string.Join("|", capture.PartBodies));
+        Assert.Equal(1, capture.IdlePosts);
+        Assert.Contains("\"interrupted\":false", result);
+        Assert.Equal(7, messageGets);
+    }
+
+    private static HttpResponseMessage OkJson(string json) =>
+        new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+
+    private sealed class ChatCaptureHandler : HttpMessageHandler
+    {
+        public List<string> PartBodies { get; } = new();
+        public int IdlePosts { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri?.AbsolutePath ?? "";
+            if (path.EndsWith("/parts", StringComparison.Ordinal))
+                PartBodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken));
+            else if (path.EndsWith("/idle", StringComparison.Ordinal))
+                IdlePosts++;
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
         }
     }
 }

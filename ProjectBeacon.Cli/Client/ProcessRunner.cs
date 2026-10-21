@@ -20,7 +20,7 @@ public readonly record struct LaunchedProcess(Process? Process, ProcessLaunchErr
 /// </summary>
 public static class ProcessRunner
 {
-    public static LaunchedProcess TryStart(ProcessStartInfo info)
+    public static LaunchedProcess TryStart(ProcessStartInfo info, Action<string>? onStdoutLine = null, Action<string>? onStderrLine = null, Action<Process>? onExit = null)
     {
         var process = new Process { StartInfo = info };
         try
@@ -37,7 +37,9 @@ public static class ProcessRunner
             return new LaunchedProcess(null, ProcessLaunchError.StartThrew, ex.Message);
         }
 
-        if (!ProcessControl.TryBeginDrain(process))
+        ProcessJob.TryAssign(process);
+
+        if (!ProcessControl.TryBeginDrain(process, onStdoutLine, onStderrLine, onExit))
         {
             process.Dispose();
             return new LaunchedProcess(null, ProcessLaunchError.Drain, null);

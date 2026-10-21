@@ -20,11 +20,14 @@ public sealed class OpenCodeAgentRuntime : IAgentRuntime
     public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, [EnumeratorCancellation] CancellationToken ct)
     {
         foreach (var part in await _serve.ListPartsAsync(sessionId, ct))
-            yield return new AgentMessagePart(part.Role, part.Kind, part.Body, part.ExternalId);
+            yield return new AgentMessagePart(part.Role, part.Kind, part.Body, part.ExternalId, part.Complete);
     }
 
     public Task AbortAsync(string sessionId, CancellationToken ct)
         => _serve.AbortAsync(sessionId, ct);
+
+    public Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+        => _serve.GetTurnStatusAsync(sessionId, ct);
 
     public async Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
     {

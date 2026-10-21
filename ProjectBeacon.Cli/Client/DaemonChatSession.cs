@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Application.Runtime;
 
@@ -83,12 +85,16 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             return (false, null, openCode.Status.Error ?? "OpenCode is not running.");
         if (_llama.UseOwnSwapper && model is not null)
             await _llamaSync.RunLockedAsync(() => _llama.EnsureSwapModelAsync(DaemonPayload.ExtractSwapName(model), ct), ct);
+        // Baseline: the last assistant message before the prompt; an ended turn from an
+        // earlier prompt must not close this one.
+        var baselineMessageId = (await runtime.GetTurnStatusAsync(externalId, ct))?.MessageId;
         await runtime.SendPromptAsync(externalId, text, model, ct);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(_timing.ChatIdleTimeout / _timing.ChatPollInterval));
         var maxIterations = Math.Max(1, (int)Math.Ceiling(_timing.ChatMaxDuration / _timing.ChatPollInterval));
         var quiet = 0;
         var idle = false;
+        AgentTurnStatus? lastTurn = null;
         try
         {
             for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
@@ -97,8 +103,10 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 var added = 0;
                 foreach (var part in parts)
                 {
+                    if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase) || !part.Complete)
+                        continue;
                     var key = part.ExternalId ?? $"{part.Role}:{part.Kind}:{part.Body}";
-                    if (!seen.Add(key) || string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                    if (!seen.Add(key))
                         continue;
                     added++;
                     await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
@@ -110,11 +118,18 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     }, ct);
                 }
                 quiet = added > 0 ? 0 : quiet + 1;
-                if (quiet >= maxQuiet && seen.Count > 0)
-                {
+                // The turn ends only when the last assistant message finishes without pending tool calls;
+                // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
+                var turn = await runtime.GetTurnStatusAsync(externalId, ct);
+                lastTurn = turn;
+                // Fresh means a new assistant message appeared after the baseline.
+                var fresh = turn is not null && turn.MessageId is not null && turn.MessageId != baselineMessageId;
+                if (turn is { Ended: true } && fresh)
                     idle = true;
+                else if (turn is null && quiet >= maxQuiet)
+                    idle = true;
+                if (idle)
                     break;
-                }
                 await _timing.DelayAsync(_timing.ChatPollInterval, ct);
             }
         }
@@ -124,7 +139,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             throw;
         }
         if (idle)
-            _state.Log($"chat prompt done: {seen.Count} parts, idle");
+        {
+            if (lastTurn is { Error: not null, MessageId: not null } && lastTurn.MessageId != baselineMessageId)
+                await PostErrorPartAsync(chatId, lastTurn, ct);
+            _state.Log(lastTurn is { Error: not null }
+                ? $"chat prompt done: {seen.Count} parts, idle with error: {ClipError(lastTurn.Error!)}"
+                : $"chat prompt done: {seen.Count} parts, idle");
+        }
         else
         {
             _state.Log($"chat prompt interrupted: max duration {_timing.ChatMaxDuration.TotalSeconds:0}s reached, {seen.Count} parts");
@@ -132,6 +153,22 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         }
         await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/idle", new { }, ct);
         return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
+    }
+
+    private static string ClipError(string error) => error.Length <= 200 ? error : error[..200];
+
+    private async Task PostErrorPartAsync(Guid chatId, AgentTurnStatus turn, CancellationToken ct)
+    {
+        // Stable external id derived from the error text so a repeated identical error dedupes on the API.
+        var body = ClipError(turn.Error!);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..16];
+        await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
+        {
+            role = "assistant",
+            kind = "error",
+            body,
+            externalId = $"error:{hash}"
+        }, ct);
     }
 
     private static async Task<IReadOnlyList<AgentMessagePart>> CollectPartsAsync(IAgentRuntime runtime, string sessionId, CancellationToken ct)

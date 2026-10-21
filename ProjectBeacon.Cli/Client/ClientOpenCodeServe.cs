@@ -1,14 +1,19 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 /// <summary>
 /// Token counts and cost reported by one OpenCode session.
 /// </summary>
 public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
 /// <summary>
 /// Local OpenCode server used by chat and eval. Creating a session fails when OpenCode does not return an id.
+/// Supports OpenCode 1.x (API at the root, no auth) and 2.x (API under /api with Basic auth); the 2.x
+/// server password is read from serve stdout and kept in memory only.
 /// </summary>
 public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
@@ -21,6 +26,11 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     private string? _cwd;
     private int _port = 4096;
     private bool _runningFake;
+    private volatile string? _serverPassword;
+    private DateTime _passwordCapturedAt = DateTime.MinValue;
+    private DateTime _startedAt = DateTime.MinValue;
+    private int _passwordFromPid;
+    private static readonly Regex PasswordLinePattern = new(@"^\s*server password\s+(\S+)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public OpenCodeServeStatus Status { get; private set; } = OpenCodeServeStatus.Missing("opencode is not started on this device.");
     public int Port => _port;
@@ -28,6 +38,13 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     internal int StartCount { get; private set; }
     internal bool SkipRealProcess { get; set; }
     internal Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? SendAsync { get; set; }
+    internal string? ServerPassword => _serverPassword;
+    internal bool TestForceRunning { get; set; }
+    internal Func<int, int>? PortHolderProbe { get; set; }
+    internal int TestSettleSeconds { get; set; } = 10;
+    internal void TestSetStartedAt(DateTime at) => _startedAt = at;
+    private int _lastBusyHolderLogged;
+    internal Action<string>? Log { get; set; }
 
     public object StatusWire() => new
     {
@@ -54,28 +71,31 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         var next = string.IsNullOrWhiteSpace(cwd) ? null : Path.GetFullPath(cwd);
         var bin = WorkstationProbe.Which("opencode") ?? WorkstationProbe.Which("opencode.exe");
-        if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess)
+        if (string.IsNullOrWhiteSpace(bin) && !SkipRealProcess && !TestForceRunning)
         {
             await KillProcessAsync();
-            Status = OpenCodeServeStatus.Missing("opencode binary not found on this device.");
+            SetStatus(OpenCodeServeStatus.Missing("opencode binary not found on this device."));
             return;
         }
 
         if (!string.Equals(next, _cwd, StringComparison.OrdinalIgnoreCase) || !IsRunning)
         {
             _restarts = 0;
+            if (_process is not null)
+                Log?.Invoke($"opencode: restarting serve (cwd changed or process stopped); cwd={next}");
             await KillProcessAsync();
         }
 
         _cwd = next;
         if (string.IsNullOrWhiteSpace(_cwd))
         {
-            Status = OpenCodeServeStatus.Missing("No project folder to start OpenCode in.");
+            SetStatus(OpenCodeServeStatus.Missing("No project folder to start OpenCode in."));
             return;
         }
 
         Directory.CreateDirectory(_cwd);
-        EnsureProcess(bin ?? "opencode");
+        if (!EnsureProcess(bin ?? "opencode"))
+            return;
         await PollAsync(ct);
         if (SkipRealProcess || !IsRunning || Status.Healthy)
         {
@@ -90,12 +110,13 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         _unhealthyPolls = 0;
         if (_restarts >= MaxRestarts)
         {
-            Status = new OpenCodeServeStatus(Status.Available, false, Status.Version, $"opencode restart limit ({MaxRestarts}).");
+            SetStatus(new OpenCodeServeStatus(Status.Available, false, Status.Version, $"opencode restart limit ({MaxRestarts})."));
             return;
         }
         _restarts++;
         await KillProcessAsync();
-        EnsureProcess(bin ?? "opencode");
+        if (!EnsureProcess(bin ?? "opencode"))
+            return;
         await PollAsync(ct);
     }
 
@@ -103,7 +124,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         if (SkipRealProcess)
             return "oc_test";
-        using var response = await Send(HttpMethod.Post, "/session", new { title }, ct);
+        using var response = await Send(HttpMethod.Post, IsV2 ? "/api/session" : "/session", new { title }, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         return ReadId(doc.RootElement) ?? throw new InvalidOperationException("OpenCode session id missing.");
@@ -113,21 +134,29 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         if (SkipRealProcess)
             return;
+        if (IsV2)
+        {
+            // v2 sets the model on the session and the prompt payload carries text only;
+            // temperature/reasoningEffort/tools have no v2 equivalent and are v1-only.
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                var (providerID, modelID) = SplitModelRef(model);
+                using var switched = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/model", new { model = new { id = modelID, providerID } }, ct);
+                switched.EnsureSuccessStatusCode();
+            }
+            using var v2Response = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/prompt", new { text }, ct);
+            if (v2Response.StatusCode != System.Net.HttpStatusCode.NoContent)
+                v2Response.EnsureSuccessStatusCode();
+            return;
+        }
         var body = new Dictionary<string, object?>
         {
             ["parts"] = new object[] { new { type = "text", text } }
         };
         if (!string.IsNullOrWhiteSpace(model))
         {
-            if (model.Contains('/', StringComparison.Ordinal))
-            {
-                var i = model.IndexOf('/');
-                body["model"] = new { providerID = model[..i], modelID = model[(i + 1)..] };
-            }
-            else
-            {
-                body["model"] = new { providerID = "opencode", modelID = model };
-            }
+            var (providerID, modelID) = SplitModelRef(model);
+            body["model"] = new { providerID, modelID };
         }
         if (controls?.Temperature is double temperature)
             body["temperature"] = temperature;
@@ -147,6 +176,12 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         AbortCount++;
         if (SkipRealProcess)
             return;
+        if (IsV2)
+        {
+            using var v2Response = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/interrupt", null, ct);
+            v2Response.EnsureSuccessStatusCode();
+            return;
+        }
         using var response = await Send(HttpMethod.Post, $"/session/{sessionId}/abort", new { }, ct);
         response.EnsureSuccessStatusCode();
     }
@@ -155,10 +190,20 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         if (SkipRealProcess)
             return [new OpenCodeMessagePart("assistant", "text", "ok", "fake-1")];
-        using var response = await Send(HttpMethod.Get, $"/session/{sessionId}/message", null, ct);
+        using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         return ParseParts(doc.RootElement);
+    }
+
+    public async Task<Application.Runtime.AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+    {
+        if (SkipRealProcess)
+            return null;
+        using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        return ParseTurnStatus(doc.RootElement);
     }
 
     public async Task<OpenCodeSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
@@ -166,35 +211,131 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (SkipRealProcess)
             return new OpenCodeSessionUsage(12, 34, 1, 0.0001);
 
-        using var response = await Send(HttpMethod.Get, $"/session/{Uri.EscapeDataString(sessionId)}/message", null, ct);
+        using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         return ParseUsage(doc.RootElement);
     }
+
+    private string MessagePath(string sessionId) =>
+        IsV2 ? $"/api/session/{Uri.EscapeDataString(sessionId)}/message" : $"/session/{sessionId}/message";
 
     private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body, CancellationToken ct)
     {
         var request = new HttpRequestMessage(method, $"http://127.0.0.1:{_port}{path}");
         if (body is not null)
             request.Content = JsonContent.Create(body);
-        if (SendAsync is not null)
-            return await SendAsync(request, ct);
-        return await _http.SendAsync(request, ct);
+        if (_serverPassword is { } password && path.StartsWith("/api/", StringComparison.Ordinal))
+        {
+            var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("opencode:" + password));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        }
+        var response = SendAsync is not null
+            ? await SendAsync(request, ct)
+            : await _http.SendAsync(request, ct);
+        await LogFailure(response, method, path);
+        return response;
     }
 
-    private bool IsRunning => SkipRealProcess ? _runningFake : _process is { HasExited: false };
+    private bool IsRunning => TestForceRunning || (SkipRealProcess ? _runningFake : _process is { HasExited: false });
 
-    private void EnsureProcess(string bin)
+    private bool IsV2 => _serverPassword is not null;
+
+    private void SetStatus(OpenCodeServeStatus next)
+    {
+        if (Status.Available == next.Available && Status.Healthy == next.Healthy && Status.Version == next.Version && Status.Error == next.Error)
+            return;
+        Status = next;
+        Log?.Invoke(next.Healthy ? $"opencode healthy: {next.Version ?? "unknown"}" : $"opencode unhealthy: {next.Error ?? "no detail"}");
+    }
+
+    private async Task LogFailure(HttpResponseMessage response, HttpMethod method, string path)
+    {
+        if ((int)response.StatusCode < 400)
+            return;
+        string detail = "";
+        try
+        {
+            detail = Clip(await response.Content.ReadAsStringAsync(), 300);
+        }
+        catch
+        {
+        }
+        Log?.Invoke($"opencode http: {method.Method} {path} -> {(int)response.StatusCode} {detail}".TrimEnd());
+    }
+
+    private static string Clip(string value, int max = 200)
+    {
+        var single = value.Replace("\r", " ").Replace("\n", " ");
+        return single.Length <= max ? single : single[..max] + "...";
+    }
+
+    private static int SecondsSince(DateTime at) =>
+        at == DateTime.MinValue ? 0 : Math.Max(0, (int)(DateTime.UtcNow - at).TotalSeconds);
+
+    private static (string ProviderID, string ModelID) SplitModelRef(string model)
+    {
+        var i = model.IndexOf('/', StringComparison.Ordinal);
+        return i > 0 ? (model[..i], model[(i + 1)..]) : ("opencode", model);
+    }
+
+    internal void HandleStdoutLine(string line) => HandleStdoutLine(line, _process?.Id ?? 0);
+
+    private void HandleStdoutLine(string line, int sourcePid)
+    {
+        var match = PasswordLinePattern.Match(line);
+        if (match.Success)
+        {
+            var password = match.Groups[1].Value;
+            _serverPassword = password;
+            _passwordCapturedAt = DateTime.UtcNow;
+            _passwordFromPid = sourcePid;
+            Log?.Invoke($"opencode: server password captured ({password.Length} chars, from pid {_passwordFromPid})");
+            return;
+        }
+        Log?.Invoke($"opencode stdout: {Clip(line)}");
+    }
+
+    private void HandleProcessExit(Process process)
+    {
+        try
+        {
+            Log?.Invoke($"opencode: serve pid={process.Id} exited (code {process.ExitCode})");
+        }
+        catch
+        {
+            Log?.Invoke($"opencode: serve pid={process.Id} exited");
+        }
+    }
+
+    private bool EnsureProcess(string bin)
     {
         if (IsRunning)
-            return;
-        StartCount++;
+            return true;
         if (SkipRealProcess)
         {
             _runningFake = true;
-            Status = OpenCodeServeStatus.Ok(null);
-            return;
+            StartCount++;
+            SetStatus(OpenCodeServeStatus.Ok(null));
+            return true;
         }
+        var holder = PortHolderProbe is { } probe ? probe(_port) : ProcessControl.FindListeningPortPid(_port);
+        if (holder > 0)
+        {
+            _serverPassword = null;
+            _passwordCapturedAt = DateTime.MinValue;
+            _passwordFromPid = 0;
+            if (_lastBusyHolderLogged != holder)
+            {
+                _lastBusyHolderLogged = holder;
+                Log?.Invoke($"opencode: port {_port} is already in use by pid {holder}; not launching serve");
+            }
+            SetStatus(new OpenCodeServeStatus(true, false, null,
+                $"port {_port} is in use by another process (pid {holder}); our serve cannot start. Stop that process or restart the client."));
+            return false;
+        }
+        _lastBusyHolderLogged = 0;
+        StartCount++;
         var psi = new ProcessStartInfo
         {
             FileName = bin,
@@ -211,23 +352,35 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         psi.ArgumentList.Add(_port.ToString());
         foreach (var pair in _env)
             psi.Environment[pair.Key] = pair.Value;
-        var launched = ProcessRunner.TryStart(psi);
+        _serverPassword = null;
+        _passwordCapturedAt = DateTime.MinValue;
+        _passwordFromPid = 0;
+        _startedAt = DateTime.UtcNow;
+        int launchedPid = 0;
+        var launched = ProcessRunner.TryStart(
+            psi,
+            line => HandleStdoutLine(line, launchedPid),
+            line => Log?.Invoke($"opencode stderr: {Clip(line)}"),
+            HandleProcessExit);
+        launchedPid = launched.Process?.Id ?? 0;
         if (launched.Error == ProcessLaunchError.NotStarted)
         {
-            Status = OpenCodeServeStatus.Missing("opencode serve failed to start.");
-            return;
+            SetStatus(OpenCodeServeStatus.Missing("opencode serve failed to start."));
+            return true;
         }
         if (launched.Error == ProcessLaunchError.StartThrew)
         {
-            Status = OpenCodeServeStatus.Missing($"opencode serve failed to start: {launched.ExceptionMessage}");
-            return;
+            SetStatus(OpenCodeServeStatus.Missing($"opencode serve failed to start: {launched.ExceptionMessage}"));
+            return true;
         }
         if (launched.Error == ProcessLaunchError.Drain)
         {
-            Status = OpenCodeServeStatus.Missing("opencode serve failed to drain output.");
-            return;
+            SetStatus(OpenCodeServeStatus.Missing("opencode serve failed to drain output."));
+            return true;
         }
         _process = launched.Process;
+        Log?.Invoke($"opencode: launched serve pid={_process!.Id} bin={bin} cwd={_cwd}");
+        return true;
     }
 
     private async Task KillProcessAsync()
@@ -241,40 +394,120 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         _process = null;
         if (process is null)
             return;
+        Log?.Invoke($"opencode: killing serve pid={process.Id}");
         await ProcessControl.KillAsync(process);
+        try
+        {
+            if (process.HasExited)
+                Log?.Invoke($"opencode: serve pid={process.Id} exited (code {process.ExitCode})");
+            else
+                Log?.Invoke($"opencode: serve pid={process.Id} did not exit within the kill timeout");
+        }
+        catch
+        {
+        }
         try { process.Dispose(); } catch { }
     }
 
-    private async Task PollAsync(CancellationToken ct)
+    internal async Task PollAsync(CancellationToken ct)
     {
         if (SkipRealProcess)
         {
-            Status = OpenCodeServeStatus.Ok(null);
+            SetStatus(OpenCodeServeStatus.Ok(null));
             return;
         }
+        // A fresh serve needs a moment to bind and print its password; a single probe races it. Retry until healthy.
+        while (true)
+        {
+            if (await PollOnceAsync(ct))
+                return;
+            if (_startedAt == DateTime.MinValue || SecondsSince(_startedAt) >= TestSettleSeconds)
+                return;
+            await Task.Delay(1000, ct);
+        }
+    }
+
+    private async Task<bool> PollOnceAsync(CancellationToken ct)
+    {
         try
         {
+            using var probe = await Send(HttpMethod.Get, "/api/info", null, ct);
+            if (probe.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                var version = await TryReadInfoVersionAsync(probe, ct);
+                if (version is not null)
+                {
+                    SetStatus(OpenCodeServeStatus.Ok(version));
+                    return true;
+                }
+                // 200 without a JSON info body: not the v2 info endpoint; fall through to v1 health.
+            }
+            else if (probe.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                string message;
+                if (!IsRunning)
+                    message = $"opencode v2 on port {_port} but the client's own process is not running; an older opencode serve may occupy the port. Stop it and restart the client.";
+                else if (_serverPassword is { } password)
+                    message = $"/api/info rejected credentials at http://127.0.0.1:{_port} (captured {password.Length}-char password, {SecondsSince(_passwordCapturedAt)}s ago from pid {_passwordFromPid}; serve pid {_process?.Id ?? 0}; process up {SecondsSince(_startedAt)}s).";
+                else
+                    message = "opencode v2 detected; waiting for server password from serve output.";
+                SetStatus(new OpenCodeServeStatus(true, false, null, message));
+                return false;
+            }
+            else if (probe.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                SetStatus(new OpenCodeServeStatus(true, false, null, $"/api/info {(int)probe.StatusCode}"));
+                return false;
+            }
+            // v1 servers do not mount /api; fall back to the classic health endpoint.
             using var health = await Send(HttpMethod.Get, "/global/health", null, ct);
             if (!health.IsSuccessStatusCode)
             {
-                Status = new OpenCodeServeStatus(true, false, null, $"/global/health {(int)health.StatusCode}");
-                return;
+                SetStatus(new OpenCodeServeStatus(true, false, null, $"/global/health {(int)health.StatusCode}"));
+                return false;
             }
             var json = await health.Content.ReadAsStringAsync(ct);
-            string? version = null;
+            string? healthVersion = null;
+            var healthy = false;
             try
             {
                 using var doc = JsonDocument.Parse(json);
-                version = doc.RootElement.TryGetProperty("version", out var v) ? v.GetString() : null;
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    healthy = doc.RootElement.TryGetProperty("healthy", out var h) && h.ValueKind == JsonValueKind.True;
+                    healthVersion = doc.RootElement.TryGetProperty("version", out var v) ? v.GetString() : null;
+                }
             }
             catch (JsonException)
             {
             }
-            Status = OpenCodeServeStatus.Ok(version);
+            SetStatus(healthy
+                ? OpenCodeServeStatus.Ok(healthVersion)
+                : new OpenCodeServeStatus(true, false, null, "/global/health did not return a JSON health body."));
+            return healthy;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Status = new OpenCodeServeStatus(true, false, null, $"opencode serve not reachable: {ex.Message}");
+            SetStatus(new OpenCodeServeStatus(true, false, null, $"opencode serve not reachable: {ex.Message}"));
+            return false;
+        }
+    }
+
+    private static async Task<string?> TryReadInfoVersionAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        var json = await response.Content.ReadAsStringAsync(ct);
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return null;
+            if (!doc.RootElement.TryGetProperty("pid", out _) && !doc.RootElement.TryGetProperty("version", out _))
+                return null;
+            return doc.RootElement.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
@@ -282,38 +515,135 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         if (root.TryGetProperty("id", out var id))
             return id.GetString();
-        if (root.TryGetProperty("info", out var info) && info.TryGetProperty("id", out var nested))
+        if (root.TryGetProperty("info", out var info) && info.ValueKind == JsonValueKind.Object && info.TryGetProperty("id", out var nested))
             return nested.GetString();
+        if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object && data.TryGetProperty("id", out var dataId))
+            return dataId.GetString();
         return null;
     }
 
     private static IReadOnlyList<OpenCodeMessagePart> ParseParts(JsonElement root)
     {
         var list = new List<OpenCodeMessagePart>();
-        var messages = root.ValueKind == JsonValueKind.Array ? root.EnumerateArray()
-            : root.TryGetProperty("messages", out var arr) && arr.ValueKind == JsonValueKind.Array ? arr.EnumerateArray()
-            : default;
-        if (messages.Equals(default(JsonElement.ArrayEnumerator)) && root.ValueKind != JsonValueKind.Array)
+        if (MessageArray(root) is not { } messages)
             return list;
-        foreach (var message in root.ValueKind == JsonValueKind.Array ? root.EnumerateArray() : messages)
+        foreach (var message in messages.EnumerateArray())
         {
-            var role = "assistant";
-            if (message.TryGetProperty("info", out var info) && info.TryGetProperty("role", out var roleEl))
-                role = roleEl.GetString() ?? role;
-            else if (message.TryGetProperty("role", out var r))
-                role = r.GetString() ?? role;
-            if (!message.TryGetProperty("parts", out var parts) || parts.ValueKind != JsonValueKind.Array)
+            if (message.ValueKind != JsonValueKind.Object)
                 continue;
-            foreach (var part in parts.EnumerateArray())
-                AddPart(list, role, part);
+            // v1 wraps the info as {info, parts}; v2 items are the info objects themselves, tagged by type.
+            JsonElement info = default;
+            if (message.TryGetProperty("info", out var infoEl) && infoEl.ValueKind == JsonValueKind.Object)
+                info = infoEl;
+            else if (message.TryGetProperty("type", out _))
+                info = message;
+            var role = "assistant";
+            if (info.ValueKind == JsonValueKind.Object)
+            {
+                if (info.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String)
+                    role = roleEl.GetString() ?? role;
+                else if (info.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String)
+                {
+                    var type = typeEl.GetString();
+                    if (type is not ("user" or "assistant"))
+                        continue;
+                    role = type;
+                }
+            }
+            else if (message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
+            {
+                role = topRole.GetString() ?? role;
+            }
+            // Assistant parts are relayed only once their message is final, so streamed text is never posted mid-stream.
+            var complete = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase)
+                ? MessageCompleted(info.ValueKind == JsonValueKind.Object ? info : message)
+                : true;
+            var infoId = info.ValueKind == JsonValueKind.Object
+                && info.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
+                ? idEl.GetString()
+                : null;
+            JsonElement? parts = null;
+            if (message.TryGetProperty("parts", out var partsEl) && partsEl.ValueKind == JsonValueKind.Array)
+                parts = partsEl;
+            else if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.Array)
+                parts = contentEl;
+            if (parts is not null)
+            {
+                var index = 0;
+                foreach (var part in parts.Value.EnumerateArray())
+                    AddPart(list, role, part, infoId is null ? null : $"{infoId}:{index++}", complete);
+                continue;
+            }
+            if (role == "user" && info.ValueKind == JsonValueKind.Object)
+            {
+                var text = info.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String ? textEl.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(text))
+                    list.Add(new OpenCodeMessagePart("user", "text", text!, infoId, true));
+            }
         }
         return list;
     }
 
-    private static void AddPart(List<OpenCodeMessagePart> list, string role, JsonElement part)
+    private static Application.Runtime.AgentTurnStatus? ParseTurnStatus(JsonElement root)
+    {
+        if (MessageArray(root) is not { } messages)
+            return null;
+        Application.Runtime.AgentTurnStatus? last = null;
+        foreach (var message in messages.EnumerateArray())
+        {
+            if (message.ValueKind != JsonValueKind.Object)
+                continue;
+            JsonElement info = default;
+            if (message.TryGetProperty("info", out var infoEl) && infoEl.ValueKind == JsonValueKind.Object)
+                info = infoEl;
+            else if (message.TryGetProperty("type", out _))
+                info = message;
+            var role = info.ValueKind == JsonValueKind.Object
+                ? ReadString(info, "role") ?? ReadString(info, "type")
+                : ReadString(message, "role");
+            if (!string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var finish = info.ValueKind == JsonValueKind.Object ? ReadString(info, "finish") : null;
+            var error = info.ValueKind == JsonValueKind.Object
+                && info.TryGetProperty("error", out var errorEl) && errorEl.ValueKind == JsonValueKind.Object
+                ? ReadString(errorEl, "message") ?? "error"
+                : null;
+            // A tool-calls finish means the agent loop continues with a new message, so the turn is not done.
+            var ended = error is not null
+                || ((finish is null || !string.Equals(finish, "tool-calls", StringComparison.OrdinalIgnoreCase))
+                && (MessageCompleted(info) || finish is not null));
+            var messageId = info.ValueKind == JsonValueKind.Object ? ReadString(info, "id") : null;
+            last = new Application.Runtime.AgentTurnStatus(ended, finish, error, messageId);
+        }
+        return last;
+    }
+
+    private static bool MessageCompleted(JsonElement info)
+    {
+        return info.ValueKind == JsonValueKind.Object
+            && info.TryGetProperty("time", out var time) && time.ValueKind == JsonValueKind.Object
+            && time.TryGetProperty("completed", out _);
+    }
+
+    private static JsonElement? MessageArray(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+            return root;
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var name in new[] { "messages", "data" })
+            {
+                if (root.TryGetProperty(name, out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    return arr;
+            }
+        }
+        return null;
+    }
+
+    private static void AddPart(List<OpenCodeMessagePart> list, string role, JsonElement part, string? fallbackId, bool complete)
     {
         var kind = part.TryGetProperty("type", out var t) ? t.GetString() ?? "text" : "text";
-        var id = part.TryGetProperty("id", out var pid) ? pid.GetString() : null;
+        var id = ReadString(part, "id") ?? fallbackId;
         if (kind is "tool" or "tool-call" or "tool_use" or "tool_call")
         {
             var name = ReadString(part, "tool") ?? ReadString(part, "name") ?? "tool";
@@ -324,7 +654,27 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
                 if (state.ValueKind == JsonValueKind.Object)
                 {
                     status = ReadString(state, "status") ?? "";
-                    summary = ReadString(state, "output") ?? ReadString(state, "error") ?? ReadString(state, "title") ?? "";
+                    summary = ReadString(state, "output") ?? "";
+                    if (summary.Length == 0 && state.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
+                    {
+                        summary = error.ValueKind == JsonValueKind.String
+                            ? error.GetString() ?? ""
+                            : ReadString(error, "message") ?? error.ToString();
+                    }
+                    if (summary.Length == 0)
+                        summary = ReadString(state, "title") ?? "";
+                    // v2 tool states carry the result as a content array instead of a plain output string.
+                    if (summary.Length == 0 && state.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Array)
+                    {
+                        var joined = new StringBuilder();
+                        foreach (var item in content.EnumerateArray())
+                        {
+                            var itemText = ReadString(item, "text");
+                            if (!string.IsNullOrWhiteSpace(itemText))
+                                joined.Append(itemText);
+                        }
+                        summary = joined.ToString();
+                    }
                 }
                 else if (state.ValueKind == JsonValueKind.String)
                 {
@@ -336,7 +686,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             if (summary.Length > 240)
                 summary = summary[..240];
             var body = summary.Length == 0 ? name + "\n" + status : name + "\n" + status + "\n" + summary;
-            list.Add(new OpenCodeMessagePart(role, "tool", body, id));
+            list.Add(new OpenCodeMessagePart(role, "tool", body, id, complete));
             return;
         }
 
@@ -344,7 +694,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(text))
             return;
         var normalized = kind is "reasoning" or "thinking" ? "reasoning" : kind;
-        list.Add(new OpenCodeMessagePart(role, normalized, text, id));
+        list.Add(new OpenCodeMessagePart(role, normalized, text, id, complete));
     }
 
     private static string? ReadString(JsonElement element, string name)
@@ -360,12 +710,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         var completionTokens = 0;
         var assistantMessages = 0;
         var totalCost = 0.0;
-        if (root.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var message in root.EnumerateArray())
-                (assistantMessages, promptTokens, completionTokens, totalCost) = AddMessageUsage(message, assistantMessages, promptTokens, completionTokens, totalCost);
-        }
-        else if (root.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array)
+        if (MessageArray(root) is { } messages)
         {
             foreach (var message in messages.EnumerateArray())
                 (assistantMessages, promptTokens, completionTokens, totalCost) = AddMessageUsage(message, assistantMessages, promptTokens, completionTokens, totalCost);
@@ -375,13 +720,22 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 
     private static (int AssistantMessages, int PromptTokens, int CompletionTokens, double TotalCost) AddMessageUsage(JsonElement message, int assistantMessages, int promptTokens, int completionTokens, double totalCost)
     {
-        string? role = null;
+        if (message.ValueKind != JsonValueKind.Object)
+            return (assistantMessages, promptTokens, completionTokens, totalCost);
         JsonElement info = default;
         if (message.TryGetProperty("info", out var infoElement) && infoElement.ValueKind == JsonValueKind.Object)
             info = infoElement;
-        if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("role", out var infoRole) && infoRole.ValueKind == JsonValueKind.String)
-            role = infoRole.GetString();
-        else if (message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
+        else if (message.TryGetProperty("type", out _))
+            info = message;
+        string? role = null;
+        if (info.ValueKind == JsonValueKind.Object)
+        {
+            if (info.TryGetProperty("role", out var infoRole) && infoRole.ValueKind == JsonValueKind.String)
+                role = infoRole.GetString();
+            else if (info.TryGetProperty("type", out var infoType) && infoType.ValueKind == JsonValueKind.String)
+                role = infoType.GetString();
+        }
+        if (role is null && message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
             role = topRole.GetString();
         if (role != "assistant")
             return (assistantMessages, promptTokens, completionTokens, totalCost);
@@ -429,6 +783,6 @@ public readonly record struct OpenCodeServeStatus(bool Available, bool Healthy, 
     public static OpenCodeServeStatus Missing(string error) => new(false, false, null, error);
 }
 /// <summary>
-/// One chat part read back from OpenCode: role, kind, body, and optional external id.
+/// One chat part read back from OpenCode: role, kind, body, optional external id, and a completeness flag.
 /// </summary>
-public readonly record struct OpenCodeMessagePart(string Role, string Kind, string Body, string? ExternalId);
+public readonly record struct OpenCodeMessagePart(string Role, string Kind, string Body, string? ExternalId, bool Complete = true);

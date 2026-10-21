@@ -34,6 +34,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _timing = new DaemonTiming();
         _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log);
         _llama.Log = message => _state.Log(message);
+        _openCode.Log = message => _state.Log(message);
         var deps = new DaemonDependencies(
             http,
             llama,
