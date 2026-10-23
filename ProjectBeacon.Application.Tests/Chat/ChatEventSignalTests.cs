@@ -73,4 +73,25 @@ public sealed class ChatEventSignalTests
         var results = await Task.WhenAll(first, second);
         Assert.All(results, r => Assert.True(r));
     }
+
+    [Fact]
+    public async Task WaitAsync_UnknownSession_LeavesNoState()
+    {
+        var signal = new ChatEventSignal();
+        var changed = await signal.WaitAsync(Guid.NewGuid(), TimeSpan.FromMilliseconds(150));
+        Assert.False(changed);
+        Assert.Equal(0, signal.ActiveSessions);
+    }
+
+    [Fact]
+    public void Forget_RemovesSessionState()
+    {
+        var signal = new ChatEventSignal();
+        var id = Guid.NewGuid();
+        signal.Signal(id);
+        Assert.Equal(1, signal.ActiveSessions);
+        signal.Forget(id);
+        Assert.Equal(0, signal.ActiveSessions);
+        Assert.Equal(0, signal.GetVersion(id));
+    }
 }

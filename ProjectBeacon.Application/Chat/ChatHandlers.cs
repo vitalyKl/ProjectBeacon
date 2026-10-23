@@ -345,6 +345,7 @@ public class ArchiveChatSessionHandler : ICommandHandler<ArchiveChatSessionComma
         session.Archive();
         await db.SaveChangesAsync(ct);
         _events.Signal(session.Id);
+        _events.Forget(session.Id);
         return Result.Ok(CreateChatSessionHandler.Map(session));
     }
 }

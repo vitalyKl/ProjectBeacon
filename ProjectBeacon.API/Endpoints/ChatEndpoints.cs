@@ -84,8 +84,9 @@ public static class ChatEndpoints
 
     /// <summary>
     /// Thin SSE stream for a chat session. Emits a <c>ready</c> event, then a <c>changed</c> event on
-    /// every part append or status change, with heartbeat comments in between. Clients refetch the
-    /// parts through the REST list endpoint.
+    /// every part append, status change, or wait-interval timeout. There are no bare heartbeats:
+    /// with multiple replicas a timeout is the only evidence that another replica may have written,
+    /// so every wake announces a refresh. Clients refetch the parts through the REST list endpoint.
     /// </summary>
     private static async Task<IResult> ChatEvents(Guid id, GetChatSessionHandler handler, ChatEventSignal events, HttpContext ctx, CancellationToken ct)
     {
@@ -119,15 +120,17 @@ public static class ChatEndpoints
                 if (ct.IsCancellationRequested)
                     break;
                 if (events.GetVersion(id) != before)
-                {
                     before = events.GetVersion(id);
-                    await writer.WriteLineAsync("event: changed");
-                    await writer.WriteLineAsync("data: " + JsonSerializer.Serialize(new { sessionId = id }, json));
-                }
                 else
                 {
-                    await writer.WriteLineAsync(": heartbeat");
+                    // The wait interval elapsed without an in-process signal. With multiple replicas
+                    // a write may have landed in another process, so announce a refresh instead of a
+                    // heartbeat: the client refetches the parts and the REST listing is the source
+                    // of truth.
+                    before = events.GetVersion(id);
                 }
+                await writer.WriteLineAsync("event: changed");
+                await writer.WriteLineAsync("data: " + JsonSerializer.Serialize(new { sessionId = id }, json));
                 await writer.WriteLineAsync();
                 await writer.FlushAsync();
             }

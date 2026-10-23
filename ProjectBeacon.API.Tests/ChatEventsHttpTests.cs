@@ -178,6 +178,43 @@ public sealed class ChatEventsHttpTests
             ChatEndpoints.EventWaitInterval = old;
         }
     }
+
+    [Fact]
+    public async Task EventsStream_NoSignalWithinInterval_EmitsChanged()
+    {
+        var old = ChatEndpoints.EventWaitInterval;
+        ChatEndpoints.EventWaitInterval = TimeSpan.FromMilliseconds(200);
+        try
+        {
+            await using var factory = new AuthApiFactory();
+            var (client, sessionId) = await OpenSessionAsync(factory);
+            var ct = TestContext.Current.CancellationToken;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+            using var response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/v1/chat/sessions/{sessionId}/events"), HttpCompletionOption.ResponseHeadersRead, readCts.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
+            await ReadLineAsync(reader, readCts.Token);
+            await ReadLineAsync(reader, readCts.Token);
+            Assert.Equal("event: ready", await ReadLineAsync(reader, readCts.Token));
+            await ReadLineAsync(reader, readCts.Token);
+
+            // No signal fires: after the wait interval elapses the stream must announce a
+            // refresh (multi-replica evidence), not a heartbeat.
+            string? line = null;
+            for (var i = 0; i < 30; i++)
+            {
+                line = await ReadLineAsync(reader, readCts.Token);
+                if (line == "event: changed")
+                    break;
+            }
+            Assert.Equal("event: changed", line);
+        }
+        finally
+        {
+            ChatEndpoints.EventWaitInterval = old;
+        }
+    }
     private sealed class RacingSessionHandler : GetChatSessionHandler
     {
         private readonly ChatEventSignal _events;

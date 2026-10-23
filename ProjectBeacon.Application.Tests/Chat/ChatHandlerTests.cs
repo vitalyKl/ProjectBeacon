@@ -226,4 +226,23 @@ public sealed class ChatHandlerTests : IDisposable
         var changed = await wait;
         Assert.True(changed);
     }
+
+    [Fact]
+    public async Task ArchiveChatSession_ForgetsSignalEntry()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+        var signal = new ChatEventSignal();
+        signal.Signal(sessionId);
+        Assert.Equal(1, signal.ActiveSessions);
+        var archive = new ArchiveChatSessionHandler(factory, new AbortChatHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal()), signal);
+
+        var archived = await archive.HandleAsync(
+            new ArchiveChatSessionCommand(new ArchiveChatSessionRequest(sessionId, userId)), ct);
+        Assert.True(archived.Success, archived.Error);
+        Assert.Equal(0, signal.ActiveSessions);
+    }
 }
