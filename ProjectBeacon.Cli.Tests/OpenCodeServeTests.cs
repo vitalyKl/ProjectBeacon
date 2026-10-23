@@ -63,7 +63,7 @@ public sealed class OpenCodeServeTests : IDisposable
                     [{"info":{"role":"assistant"},"parts":[
                       {"id":"t1","type":"text","text":"hello"},
                       {"id":"r1","type":"reasoning","text":"think"},
-                      {"id":"c1","type":"tool","tool":"read","state":{"status":"completed","output":"src/a.cs"}}
+                      {"id":"c1","type":"tool","tool":"read","state":{"status":"completed","output":"src/a.cs","time":{"start":1000,"end":2500}}}
                     ]}]
                     """;
                 return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
@@ -80,6 +80,7 @@ public sealed class OpenCodeServeTests : IDisposable
         Assert.Equal("reasoning", parts[1].Kind);
         Assert.Equal("tool", parts[2].Kind);
         Assert.Equal("read\ncompleted\nsrc/a.cs", parts[2].Body);
+        Assert.Equal(1500, parts[2].DurationMs);
     }
 
     [Fact]
@@ -358,7 +359,7 @@ public sealed class OpenCodeServeTests : IDisposable
                          "content":[
                            {"type":"text","text":"hello"},
                            {"type":"reasoning","text":"think"},
-                           {"id":"c1","type":"tool","name":"read","state":{"status":"completed","content":[{"type":"text","text":"src/a.cs"}]}},
+                           {"id":"c1","type":"tool","name":"read","state":{"status":"completed","time":{"start":1000,"end":2500},"content":[{"type":"text","text":"src/a.cs"}]}},
                            {"type":"tool","name":"bad","state":{"status":"error","error":{"message":"boom"}}}
                          ],
                          "tokens":{"input":10,"output":5},"cost":0.001}
@@ -385,6 +386,7 @@ public sealed class OpenCodeServeTests : IDisposable
         Assert.Equal("tool", parts[3].Kind);
         Assert.Equal("read\ncompleted\nsrc/a.cs", parts[3].Body);
         Assert.Equal("c1", parts[3].ExternalId);
+        Assert.Null(parts[3].DurationMs);
         Assert.Equal("bad\nerror\nboom", parts[4].Body);
         Assert.Equal("m2:3", parts[4].ExternalId);
     }

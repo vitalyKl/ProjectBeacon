@@ -196,7 +196,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        return ParseParts(doc.RootElement);
+        return ParseParts(doc.RootElement, IsV2);
     }
 
     public async Task<Application.Runtime.AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
@@ -525,7 +525,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         return null;
     }
 
-    private static IReadOnlyList<OpenCodeMessagePart> ParseParts(JsonElement root)
+    private static IReadOnlyList<OpenCodeMessagePart> ParseParts(JsonElement root, bool isV2)
     {
         var list = new List<OpenCodeMessagePart>();
         if (MessageArray(root) is not { } messages)
@@ -574,7 +574,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             {
                 var index = 0;
                 foreach (var part in parts.Value.EnumerateArray())
-                    AddPart(list, role, part, infoId is null ? null : $"{infoId}:{index++}", complete);
+                    AddPart(list, role, part, infoId is null ? null : $"{infoId}:{index++}", complete, isV2);
                 continue;
             }
             if (role == "user" && info.ValueKind == JsonValueKind.Object)
@@ -643,7 +643,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         return null;
     }
 
-    private static void AddPart(List<OpenCodeMessagePart> list, string role, JsonElement part, string? fallbackId, bool complete)
+    private static void AddPart(List<OpenCodeMessagePart> list, string role, JsonElement part, string? fallbackId, bool complete, bool isV2)
     {
         var kind = part.TryGetProperty("type", out var t) ? t.GetString() ?? "text" : "text";
         var id = ReadString(part, "id") ?? fallbackId;
@@ -682,11 +682,12 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
                     }
                     if (state.TryGetProperty("input", out var inputEl) && inputEl.ValueKind != JsonValueKind.Null)
                         toolInput = inputEl.ValueKind == JsonValueKind.String ? inputEl.GetString() : inputEl.ToString();
-                    if (state.TryGetProperty("time", out var time) && time.ValueKind == JsonValueKind.Object
+                    // Only v1 tool states carry start/end timestamps; v2 omits them.
+                    if (!isV2 && state.TryGetProperty("time", out var time) && time.ValueKind == JsonValueKind.Object
                         && time.TryGetProperty("start", out var startEl) && startEl.ValueKind == JsonValueKind.Number
-                        && time.TryGetProperty("completed", out var doneEl) && doneEl.ValueKind == JsonValueKind.Number)
+                        && time.TryGetProperty("end", out var endEl) && endEl.ValueKind == JsonValueKind.Number)
                     {
-                        var ms = doneEl.GetInt64() - startEl.GetInt64();
+                        var ms = endEl.GetInt64() - startEl.GetInt64();
                         if (ms > 0)
                             durationMs = (int)ms;
                     }
