@@ -20,4 +20,8 @@
     <Content Update="appsettings.*.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ProjectBeacon.API.Tests" />
+  </ItemGroup>
+
 </Project>

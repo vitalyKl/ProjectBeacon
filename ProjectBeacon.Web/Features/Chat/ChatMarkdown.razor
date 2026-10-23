@@ -1,0 +1,57 @@
+@using Markdig
+@using Markdig.Renderers.Html
+@using Ganss.Xss
+@using Microsoft.Extensions.Localization
+
+@inject IStringLocalizer<Web> L
+
+@if (Rendered.Length > 0)
+{
+    <div class="beacon-markdown">@((MarkupString)Rendered)</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().DisableHtml().Build();
+    private static readonly object SanitizeLock = new();
+    private static HtmlSanitizer? _sanitizer;
+
+    // Raw HTML from the agent is never rendered unsanitized: Markdig strips HTML input,
+    // and the sanitizer is the second line keeping the output to an allow-list.
+    private string Rendered
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Text))
+                return "";
+            var writer = new System.IO.StringWriter();
+            var renderer = new Markdig.Renderers.HtmlRenderer(writer);
+            Pipeline.Setup(renderer);
+            renderer.ObjectRenderers.Insert(0, new ChatCodeBlockRenderer(L["ChatCollapse"].Value, L["ChatExpand"].Value, L["ChatCopyCode"].Value));
+            renderer.Render(Markdown.Parse(Text, Pipeline));
+            var html = writer.ToString();
+            lock (SanitizeLock)
+            {
+                _sanitizer ??= CreateSanitizer();
+                return _sanitizer.Sanitize(html);
+            }
+        }
+    }
+
+    private static HtmlSanitizer CreateSanitizer()
+    {
+        var sanitizer = new HtmlSanitizer();
+        sanitizer.AllowedTags.Add("button");
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.Add("http");
+        sanitizer.AllowedSchemes.Add("https");
+        foreach (var attribute in new[]
+        {
+            "class", "type", "aria-label",
+            "data-beacon-code-collapse", "data-beacon-code-collapse-label", "data-beacon-code-expand", "data-beacon-code-copy"
+        })
+            sanitizer.AllowedAttributes.Add(attribute);
+        return sanitizer;
+    }
+}

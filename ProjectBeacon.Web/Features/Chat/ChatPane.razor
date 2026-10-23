@@ -1,0 +1,141 @@
+@using ProjectBeacon.Application.Chat
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject IJSRuntime Js
+
+@if (ShowSessionHead && Session is not null)
+{
+    <div class="beacon-chat-session-head">
+        <strong>@Session.Title</strong>
+        @if (!string.IsNullOrEmpty(Phase))
+        {
+            <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
+        }
+    </div>
+}
+<div class="beacon-chat-log" @ref="_log">
+    @foreach (var part in Parts)
+    {
+        <ChatPartView Part="part" />
+    }
+</div>
+@if (_showJump)
+{
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowDownward" OnClick="JumpToLatest" Class="beacon-chat-jump">@L["ChatJumpToLatest"]</MudButton>
+}
+@if (!string.IsNullOrEmpty(Phase))
+{
+    <MudText Typo="Typo.caption" Class="mt-2">@PhaseLabel</MudText>
+    @if (Phase is "Generating" or "UsingTool" or "Waiting")
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-2" />
+    }
+}
+@if (Phase is "Failed" or "Aborted")
+{
+    <MudAlert Severity="Severity.Error" Class="mt-2">@PhaseLabel</MudAlert>
+}
+@if (ShowModelSelect)
+{
+    <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
+        <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
+        @foreach (var backend in Models)
+        {
+            <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
+        }
+    </MudSelect>
+}
+<MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
+    <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
+                  OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
+    @if (CanAbort)
+    {
+        <MudButton Variant="Variant.Outlined" OnClick="Abort" Disabled="@Busy">@L["Abort"]</MudButton>
+    }
+    @if (CanRetry)
+    {
+        <MudButton Variant="Variant.Outlined" OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
+    }
+</MudStack>
+
+@code {
+    // Presentation shared by the full /chat page and the global ChatDock. The hosts own the
+    // state, polling, and send/abort/retry operations; they push data and the resolved phase
+    // in and receive composer events out.
+    [Parameter] public ChatSessionDto? Session { get; set; }
+    [Parameter] public bool ShowSessionHead { get; set; }
+    [Parameter] public IEnumerable<ChatPartDto> Parts { get; set; } = [];
+    [Parameter] public string? Phase { get; set; }
+    [Parameter] public string? PhaseLabel { get; set; }
+    [Parameter] public Color PhaseColor { get; set; }
+    [Parameter] public bool ShowModelSelect { get; set; }
+    [Parameter] public List<string> Models { get; set; } = [];
+    [Parameter] public string? Model { get; set; }
+    [Parameter] public EventCallback<string?> ModelChanged { get; set; }
+    [Parameter] public string Draft { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> DraftChanged { get; set; }
+    [Parameter] public string? DraftLabel { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool CanAbort { get; set; }
+    [Parameter] public bool CanRetry { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> Send { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> Abort { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> Retry { get; set; }
+
+    private ElementReference _log;
+    private bool _showJump;
+    private int _partsCount = -1;
+
+    protected override void OnParametersSet()
+    {
+        var count = 0;
+        foreach (var _ in Parts)
+            count++;
+        // The hosts push the full part list on every refresh; a changed count means the log
+        // content moved. Keep it pinned to the latest part unless the user scrolled away,
+        // in which case offer the jump button.
+        if (_partsCount >= 0 && count != _partsCount)
+        {
+            _ = ScrollFollowAsync();
+        }
+        _partsCount = count;
+    }
+
+    private Task OnDraftChanged(string value)
+    {
+        Draft = value ?? string.Empty;
+        return DraftChanged.InvokeAsync(Draft);
+    }
+
+    private async Task OnModelChanged(string? value)
+    {
+        Model = value;
+        await ModelChanged.InvokeAsync(value);
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+            await Send.InvokeAsync();
+    }
+
+    private async Task JumpToLatest()
+    {
+        _showJump = false;
+        await Js.InvokeVoidAsync("BeaconChat.jumpToLatest", _log);
+    }
+
+    private async Task ScrollFollowAsync()
+    {
+        var nearBottom = await Js.InvokeAsync<bool>("BeaconChat.isNearBottom", _log);
+        if (nearBottom)
+        {
+            await Js.InvokeVoidAsync("BeaconChat.jumpToLatest", _log);
+            _showJump = false;
+        }
+        else
+        {
+            _showJump = true;
+        }
+    }
+}

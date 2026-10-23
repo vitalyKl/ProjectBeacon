@@ -183,12 +183,15 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ReloadProxyHandler>();
         services.AddTransient<UnloadProxyHandler>();
         services.AddTransient<ApplyAgentConfigHandler>();
+        services.AddSingleton<ChatEventSignal>();
         services.AddTransient<CreateChatSessionHandler>();
         services.AddTransient<ListChatSessionsHandler>();
         services.AddTransient<GetChatSessionHandler>();
         services.AddTransient<ListChatPartsHandler>();
         services.AddTransient<SendChatPromptHandler>();
         services.AddTransient<AbortChatHandler>();
+        services.AddTransient<RenameChatSessionHandler>();
+        services.AddTransient<ArchiveChatSessionHandler>();
         services.AddTransient<AppendChatPartHandler>();
         services.AddTransient<MarkChatIdleHandler>();
 

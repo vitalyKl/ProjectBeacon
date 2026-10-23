@@ -1,0 +1,44 @@
+@using ProjectBeacon.Application.Chat
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject RenameChatSessionHandler Rename
+@inject ISnackbar Snackbar
+
+<MudTextField @bind-Value="_title" Label="@L["ChatRename"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+<MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+    <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">@L["Save"]</MudButton>
+</MudStack>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? Instance { get; set; }
+    [CascadingParameter] private DialogParameters? Parameters { get; set; }
+
+    private string? _title;
+
+    protected override void OnInitialized()
+    {
+        var session = Parameters?["Session"] as ChatSessionDto;
+        _title = session?.Title ?? string.Empty;
+    }
+
+    private void Cancel() => Instance?.Cancel();
+
+    private async Task Save()
+    {
+        var session = Parameters?["Session"] as ChatSessionDto;
+        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        if (session is null || actor.UserId is null)
+        {
+            Instance?.Cancel();
+            return;
+        }
+        var result = await Rename.HandleAsync(new RenameChatSessionCommand(new RenameChatSessionRequest(session.Id, actor.UserId.Value, _title ?? string.Empty)));
+        if (!result.Success)
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+        else
+            Instance?.Close();
+    }
+}

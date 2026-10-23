@@ -1,5 +1,4 @@
 @implements IDisposable
-@using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Chat
@@ -7,14 +6,16 @@
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
-@inject AuthenticationStateProvider Auth
 @inject GetCurrentProjectHandler CurrentProject
 @inject ListChatSessionsHandler ListSessions
 @inject ListChatPartsHandler ListParts
 @inject GetChatSessionHandler GetSession
 @inject SendChatPromptHandler SendPrompt
 @inject CreateChatSessionHandler CreateSession
+@inject ChatEventSignal Events
 @inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Logging.ILogger<ChatDock> Logger
+@inject AuthenticationStateProvider Auth
 
 @if (_visible)
 {
@@ -44,20 +45,13 @@
             }
             else
             {
-                <div class="beacon-chat-dock-log">
-                    @foreach (var part in DockParts)
-                    {
-                        <ChatPartView Part="part" />
-                    }
-                </div>
-                @if (!string.IsNullOrEmpty(Phase))
-                {
-                    <MudText Typo="Typo.caption" Class="mb-1">@PhaseLabel</MudText>
-                }
-                <MudStack Row="true" AlignItems="AlignItems.End" Spacing="1" Class="beacon-chat-dock-compose">
-                    <MudTextField @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Disabled="_busy" />
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="_busy || string.IsNullOrWhiteSpace(_draft)">@L["Send"]</MudButton>
-                </MudStack>
+                <ChatPane
+                    Parts="DockParts"
+                    Phase="Phase"
+                    PhaseLabel="PhaseLabel"
+                    @bind-Draft="_draft"
+                    Busy="_busy"
+                    Send="Send" />
             }
         </MudPaper>
     }
@@ -83,10 +77,10 @@
     {
         Navigation.LocationChanged += OnLocation;
         UpdateVisible();
-        var user = (await Auth.GetAuthenticationStateAsync()).User;
-        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
-            _userId = id;
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal(user));
+        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        if (actor.UserId is not null)
+            _userId = actor.UserId.Value;
+        var current = await CurrentProject.HandleAsync(actor);
         if (current.Value is null || _userId == Guid.Empty)
             return;
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
@@ -172,21 +166,55 @@
         _parts = parts.Success ? parts.Value!.ToList() : [];
     }
 
+    // Two-stage live update, same as Chat.razor: the in-process ChatEventSignal wakes this loop the
+    // moment a part is appended or the session status changes. The 5-second safety net stays because
+    // the signal is in-memory only: it is lost on a Blazor circuit reconnect, when a part is written
+    // by another replica, or when it fires before this loop starts waiting. The timer guarantees the
+    // UI converges within 5 seconds regardless.
+    internal static TimeSpan PollSafetyNet = TimeSpan.FromSeconds(5);
+
     private async Task PollAsync()
     {
         _poll = new CancellationTokenSource();
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
         try
         {
-            while (await timer.WaitForNextTickAsync(_poll.Token))
+            while (!_poll.Token.IsCancellationRequested)
             {
-                if (!_open || _session is null)
-                    continue;
-                var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(_session.Id, _userId)));
-                if (session.Success)
-                    _session = session.Value;
-                await ReloadParts();
-                await InvokeAsync(StateHasChanged);
+                try
+                {
+                    if (!_open || _session is null)
+                    {
+                        await Task.Delay(PollSafetyNet, _poll.Token);
+                        continue;
+                    }
+                    var sessionId = _session.Id;
+                    await Events.WaitAsync(sessionId, PollSafetyNet, _poll.Token);
+                    if (!_open || _session?.Id != sessionId)
+                        continue;
+                    var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(sessionId, _userId)));
+                    if (session.Success && _session?.Id == sessionId)
+                        _session = session.Value;
+                    if (_session?.Id != sessionId)
+                        continue;
+                    await ReloadParts();
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (OperationCanceledException) when (_poll.Token.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Chat dock poll iteration failed; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
+                    try
+                    {
+                        await Task.Delay(PollSafetyNet, _poll.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
             }
         }
         catch (OperationCanceledException)

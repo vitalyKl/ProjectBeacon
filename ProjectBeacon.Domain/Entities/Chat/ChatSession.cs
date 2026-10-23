@@ -16,6 +16,7 @@ public class ChatSession : Entity, IProjectScoped
     public ChatSessionStatus Status { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
+    public DateTime? ArchivedAt { get; private set; }
 
     public ICollection<ChatPart> Parts { get; private set; } = [];
 
@@ -59,6 +60,14 @@ public class ChatSession : Entity, IProjectScoped
     public void Abort()
     {
         Status = ChatSessionStatus.Aborted;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Soft delete: excluded from lists, parts kept for audit. The caller must abort a streaming session first.</summary>
+    public void Archive()
+    {
+        Status = ChatSessionStatus.Idle;
+        ArchivedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 }

@@ -114,7 +114,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                         role = part.Role,
                         kind = part.Kind,
                         body = part.Body,
-                        externalId = part.ExternalId
+                        externalId = part.ExternalId,
+                        tool = part.Tool,
+                        toolStatus = part.ToolStatus,
+                        toolInput = part.ToolInput,
+                        toolResult = part.ToolResult,
+                        durationMs = part.DurationMs
                     }, ct);
                 }
                 quiet = added > 0 ? 0 : quiet + 1;

@@ -651,6 +651,8 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         {
             var name = ReadString(part, "tool") ?? ReadString(part, "name") ?? "tool";
             var status = "";
+            string? toolInput = null;
+            int? durationMs = null;
             var summary = "";
             if (part.TryGetProperty("state", out var state))
             {
@@ -678,6 +680,16 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
                         }
                         summary = joined.ToString();
                     }
+                    if (state.TryGetProperty("input", out var inputEl) && inputEl.ValueKind != JsonValueKind.Null)
+                        toolInput = inputEl.ValueKind == JsonValueKind.String ? inputEl.GetString() : inputEl.ToString();
+                    if (state.TryGetProperty("time", out var time) && time.ValueKind == JsonValueKind.Object
+                        && time.TryGetProperty("start", out var startEl) && startEl.ValueKind == JsonValueKind.Number
+                        && time.TryGetProperty("completed", out var doneEl) && doneEl.ValueKind == JsonValueKind.Number)
+                    {
+                        var ms = doneEl.GetInt64() - startEl.GetInt64();
+                        if (ms > 0)
+                            durationMs = (int)ms;
+                    }
                 }
                 else if (state.ValueKind == JsonValueKind.String)
                 {
@@ -686,10 +698,11 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             }
 
             summary = summary.Replace('\r', ' ').Replace('\n', ' ').Trim();
-            if (summary.Length > 240)
-                summary = summary[..240];
-            var body = summary.Length == 0 ? name + "\n" + status : name + "\n" + status + "\n" + summary;
-            list.Add(new OpenCodeMessagePart(role, "tool", body, id, complete));
+            var bodySummary = summary.Length > 240 ? summary[..240] : summary;
+            var toolResult = summary.Length > 4000 ? summary[..4000] : summary;
+
+            var body = bodySummary.Length == 0 ? name + "\n" + status : name + "\n" + status + "\n" + bodySummary;
+            list.Add(new OpenCodeMessagePart(role, "tool", body, id, complete, name, status, toolInput, toolResult, durationMs));
             return;
         }
 
@@ -788,4 +801,14 @@ public readonly record struct OpenCodeServeStatus(bool Available, bool Healthy, 
 /// <summary>
 /// One chat part read back from OpenCode: role, kind, body, optional external id, and a completeness flag.
 /// </summary>
-public readonly record struct OpenCodeMessagePart(string Role, string Kind, string Body, string? ExternalId, bool Complete = true);
+public readonly record struct OpenCodeMessagePart(
+    string Role,
+    string Kind,
+    string Body,
+    string? ExternalId,
+    bool Complete = true,
+    string? Tool = null,
+    string? ToolStatus = null,
+    string? ToolInput = null,
+    string? ToolResult = null,
+    int? DurationMs = null);

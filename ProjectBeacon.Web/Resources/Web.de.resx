@@ -1967,4 +1967,34 @@ orthstar</value>
   <data name="Revoked" xml:space="preserve">
     <value>Widerrufen</value>
   </data>
+<data name="ChatRename" xml:space="preserve">
+    <value>Umbenennen</value>
+  </data>
+<data name="ChatArchive" xml:space="preserve">
+    <value>In den Archiv</value>
+  </data>
+<data name="ChatBusy" xml:space="preserve">
+    <value>Beschäftigt</value>
+  </data>
+<data name="ChatToolInput" xml:space="preserve">
+    <value>Eingabe</value>
+  </data>
+<data name="ChatToolResult" xml:space="preserve">
+    <value>Ergebnis</value>
+  </data>
+<data name="ChatAssistant" xml:space="preserve">
+    <value>Assistent</value>
+  </data>
+<data name="ChatCopyCode" xml:space="preserve">
+    <value>Code kopieren</value>
+  </data>
+<data name="ChatCollapse" xml:space="preserve">
+    <value>Zuklappen</value>
+  </data>
+<data name="ChatExpand" xml:space="preserve">
+    <value>Aufklappen</value>
+  </data>
+<data name="ChatJumpToLatest" xml:space="preserve">
+    <value>Zu den neuesten</value>
+  </data>
 </root>

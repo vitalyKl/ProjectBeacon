@@ -2189,4 +2189,34 @@ No Beacon-hosted coding agent.</value>
   <data name="Goal" xml:space="preserve">
     <value>Goal</value>
   </data>
+<data name="ChatRename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+<data name="ChatArchive" xml:space="preserve">
+    <value>Archive</value>
+  </data>
+<data name="ChatBusy" xml:space="preserve">
+    <value>Busy</value>
+  </data>
+<data name="ChatToolInput" xml:space="preserve">
+    <value>Input</value>
+  </data>
+<data name="ChatToolResult" xml:space="preserve">
+    <value>Result</value>
+  </data>
+<data name="ChatAssistant" xml:space="preserve">
+    <value>Assistant</value>
+  </data>
+<data name="ChatCopyCode" xml:space="preserve">
+    <value>Copy code</value>
+  </data>
+<data name="ChatCollapse" xml:space="preserve">
+    <value>Collapse</value>
+  </data>
+<data name="ChatExpand" xml:space="preserve">
+    <value>Expand</value>
+  </data>
+<data name="ChatJumpToLatest" xml:space="preserve">
+    <value>Jump to latest</value>
+  </data>
 </root>

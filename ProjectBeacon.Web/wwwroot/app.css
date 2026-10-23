@@ -1200,14 +1200,13 @@ body:has(.beacon-theme-dark) .mud-main-content {
     flex-direction: column;
 }
 
-.beacon-chat-dock-log,
 .beacon-chat-log {
     overflow-y: auto;
     flex: 1 1 auto;
     max-height: 48vh;
 }
 
-.beacon-chat-dock-compose {
+.beacon-chat-compose {
     flex-shrink: 0;
 }
 
@@ -1288,23 +1287,6 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
     .beacon-task-tabs .mud-tab.mud-tab-active {
         background-color: var(--color-bg-accent);
-    }
-}
-
-@media (max-width: 479px) {
-    .beacon-chat-dock {
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: auto;
-        max-height: min(85vh, calc(100dvh - env(safe-area-inset-bottom, 0px)));
-        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-        padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
-    }
-
-    .beacon-chat-dock-log,
-    .beacon-chat-log {
-        max-height: 50vh;
     }
 }
 
@@ -2205,5 +2187,216 @@ body:has(.beacon-theme-dark) .mud-main-content {
     .mud-input.mud-input-outlined > .mud-input-outlined-border {
         transition: none;
         animation: none;
+    }
+}
+
+/* Chat page (full-height layout, session list, part panels, markdown code blocks) */
+.beacon-chat-page {
+    display: flex;
+    gap: var(--space-3);
+    height: calc(100vh - 200px);
+    min-height: 420px;
+}
+
+.beacon-chat-sessions {
+    width: 260px;
+    flex: 0 0 auto;
+    overflow-y: auto;
+    padding: var(--space-2);
+}
+
+.beacon-chat-page .beacon-chat-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.beacon-chat-page .beacon-chat-log {
+    max-height: none;
+}
+
+.beacon-chat-page .beacon-chat-pane > .mt-2,
+.beacon-chat-page .beacon-chat-pane > .my-2 {
+    flex-shrink: 0;
+}
+
+.beacon-chat-project {
+    padding: 0 var(--space-2) var(--space-1);
+    color: var(--color-text-muted);
+}
+
+.beacon-new-chat {
+    justify-content: flex-start;
+    margin-bottom: var(--space-1);
+}
+
+.beacon-session-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-control);
+}
+
+.beacon-session-item:hover {
+    background: var(--color-bg-surface-hover);
+}
+
+.beacon-session-active {
+    background: var(--color-accent-soft);
+}
+
+.beacon-session-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.beacon-chat-part-head {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+    color: var(--color-text-muted);
+}
+
+.beacon-tool-panel {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    padding: var(--space-2);
+    margin-top: var(--space-1);
+}
+
+.beacon-tool-panel-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.beacon-tool-name {
+    font-weight: 600;
+}
+
+.beacon-pre-clip {
+    max-height: 160px;
+    overflow: auto;
+    background: var(--color-surface-2);
+    padding: var(--space-2);
+    border-radius: var(--radius-small);
+    margin-bottom: var(--space-1);
+}
+
+.beacon-markdown {
+    line-height: 1.5;
+    overflow-wrap: break-word;
+}
+
+.beacon-markdown p {
+    margin: 0 0 var(--space-2);
+}
+
+.beacon-markdown p:last-child {
+    margin-bottom: 0;
+}
+
+.beacon-markdown pre {
+    overflow-x: auto;
+}
+
+.beacon-markdown code {
+    font-family: var(--font-mono);
+}
+
+.beacon-code {
+    margin: var(--space-2) 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    overflow: hidden;
+}
+
+.beacon-code-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    background: var(--color-surface-2);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.beacon-code-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 0 var(--space-1);
+    font-size: var(--type-caption);
+    line-height: 1;
+}
+
+.beacon-code-btn:hover {
+    color: var(--color-text-primary);
+}
+
+.beacon-code-btn:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+.beacon-code-copied {
+    color: var(--color-success);
+}
+
+.beacon-code-lang {
+    color: var(--color-text-muted);
+    margin-left: auto;
+}
+
+.beacon-code-collapsed pre {
+    display: none;
+}
+
+.beacon-chat-jump {
+    align-self: center;
+    margin: var(--space-2) 0;
+}
+
+@media (max-width: 767px) {
+    .beacon-chat-page {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .beacon-chat-sessions {
+        width: 100%;
+        max-height: 220px;
+    }
+}
+/* Chat dock: on mobile it becomes a bottom sheet / near-full-screen panel instead of a
+   fixed desktop-style box (ui-ux review roadmap Phase 6). Declared after the mobile-nav
+   rule so the open sheet wins the cascade; that rule only lifts the closed FAB. */
+@media (max-width: 767px) {
+    .beacon-chat-dock {
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: auto;
+        max-height: 80vh;
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    }
+
+    .beacon-chat-log {
+        max-height: 55vh;
+    }
+}
+
+@media (max-width: 479px) {
+    .beacon-chat-dock {
+        max-height: min(92vh, calc(100dvh - env(safe-area-inset-bottom, 0px)));
+    }
+
+    .beacon-chat-log {
+        max-height: 65vh;
     }
 }

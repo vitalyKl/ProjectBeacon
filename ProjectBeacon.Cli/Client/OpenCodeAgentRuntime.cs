@@ -20,7 +20,7 @@ public sealed class OpenCodeAgentRuntime : IAgentRuntime
     public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, [EnumeratorCancellation] CancellationToken ct)
     {
         foreach (var part in await _serve.ListPartsAsync(sessionId, ct))
-            yield return new AgentMessagePart(part.Role, part.Kind, part.Body, part.ExternalId, part.Complete);
+            yield return new AgentMessagePart(part.Role, part.Kind, part.Body, part.ExternalId, part.Complete, part.Tool, part.ToolStatus, part.ToolInput, part.ToolResult, part.DurationMs);
     }
 
     public Task AbortAsync(string sessionId, CancellationToken ct)

@@ -1981,4 +1981,34 @@
   <data name="ChatYou" xml:space="preserve">
     <value>Вы</value>
   </data>
+<data name="ChatRename" xml:space="preserve">
+    <value>Переименовать</value>
+  </data>
+<data name="ChatArchive" xml:space="preserve">
+    <value>В архив</value>
+  </data>
+<data name="ChatBusy" xml:space="preserve">
+    <value>Занят</value>
+  </data>
+<data name="ChatToolInput" xml:space="preserve">
+    <value>Вход</value>
+  </data>
+<data name="ChatToolResult" xml:space="preserve">
+    <value>Результат</value>
+  </data>
+<data name="ChatAssistant" xml:space="preserve">
+    <value>Ассистент</value>
+  </data>
+<data name="ChatCopyCode" xml:space="preserve">
+    <value>Копировать код</value>
+  </data>
+<data name="ChatCollapse" xml:space="preserve">
+    <value>Свернуть</value>
+  </data>
+<data name="ChatExpand" xml:space="preserve">
+    <value>Развернуть</value>
+  </data>
+<data name="ChatJumpToLatest" xml:space="preserve">
+    <value>К последнему</value>
+  </data>
 </root>

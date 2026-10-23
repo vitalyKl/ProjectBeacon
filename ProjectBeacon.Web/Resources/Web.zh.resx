@@ -1967,4 +1967,34 @@ orthstar</value>
   <data name="Revoked" xml:space="preserve">
     <value>已撤销</value>
   </data>
+<data name="ChatRename" xml:space="preserve">
+    <value>重命名</value>
+  </data>
+<data name="ChatArchive" xml:space="preserve">
+    <value>归档</value>
+  </data>
+<data name="ChatBusy" xml:space="preserve">
+    <value>忙碌</value>
+  </data>
+<data name="ChatToolInput" xml:space="preserve">
+    <value>输入</value>
+  </data>
+<data name="ChatToolResult" xml:space="preserve">
+    <value>结果</value>
+  </data>
+<data name="ChatAssistant" xml:space="preserve">
+    <value>助手</value>
+  </data>
+<data name="ChatCopyCode" xml:space="preserve">
+    <value>复制代码</value>
+  </data>
+<data name="ChatCollapse" xml:space="preserve">
+    <value>折叠</value>
+  </data>
+<data name="ChatExpand" xml:space="preserve">
+    <value>展开</value>
+  </data>
+<data name="ChatJumpToLatest" xml:space="preserve">
+    <value>到最新</value>
+  </data>
 </root>

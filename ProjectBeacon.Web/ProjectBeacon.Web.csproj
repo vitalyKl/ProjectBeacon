@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="HtmlSanitizer" />
+    <PackageReference Include="Markdig" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -31,6 +33,10 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Web.resx</DependentUpon>
     </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ProjectBeacon.Web.Tests" />
   </ItemGroup>
 
 </Project>
