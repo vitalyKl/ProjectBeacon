@@ -125,17 +125,19 @@
         await Js.InvokeVoidAsync("BeaconChat.jumpToLatest", _log);
     }
 
+    // Interleaved follow calls must not let a stale scroll answer from an earlier refresh
+    // overwrite the jump-button state decided by a newer one.
+    private int _followGeneration;
+
     private async Task ScrollFollowAsync()
     {
-        var nearBottom = await Js.InvokeAsync<bool>("BeaconChat.isNearBottom", _log);
-        if (nearBottom)
-        {
-            await Js.InvokeVoidAsync("BeaconChat.jumpToLatest", _log);
-            _showJump = false;
-        }
-        else
-        {
-            _showJump = true;
-        }
+        var generation = ++_followGeneration;
+        // One atomic JS call: the proximity check and the snap-to-latest happen together,
+        // so a user scroll cannot land between the check and the snap.
+        var nearBottom = await Js.InvokeAsync<bool>("BeaconChat.followLatest", _log);
+        if (generation != _followGeneration)
+            return;
+        _showJump = !nearBottom;
+        StateHasChanged();
     }
 }

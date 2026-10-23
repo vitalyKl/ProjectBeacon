@@ -45,4 +45,37 @@ public sealed class ChatPaneTests : BUnitRenderBase
             .Add(p => p.Session, session));
         Assert.DoesNotContain("Pane session", withoutHead.Markup);
     }
+
+    [Fact]
+    public async Task Follow_ScrolledAway_ShowsJumpButton()
+    {
+        Bunit.JSInterop.Setup<bool>("BeaconChat.followLatest", _ => true).SetResult(false);
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Parts, new List<ChatPartDto> { Part(1, "user", "one") }));
+        Assert.Empty(cut.FindAll(".beacon-chat-jump"));
+
+        cut.SetParametersAndRender(p => p.Add(x => x.Parts, new List<ChatPartDto>
+        {
+            Part(1, "user", "one"), Part(2, "assistant", "two")
+        }));
+        cut.WaitForElement(".beacon-chat-jump", TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task Follow_NearLatest_KeepsLogPinned()
+    {
+        Bunit.JSInterop.Setup<bool>("BeaconChat.followLatest", _ => true).SetResult(true);
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Parts, new List<ChatPartDto> { Part(1, "user", "one") }));
+        cut.SetParametersAndRender(p => p.Add(x => x.Parts, new List<ChatPartDto>
+        {
+            Part(1, "user", "one"), Part(2, "assistant", "two")
+        }));
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (Bunit.JSInterop.Invocations.Count == 0 && DateTime.UtcNow < deadline)
+            await Task.Delay(25);
+        Assert.True(Bunit.JSInterop.Invocations.Count > 0);
+        Assert.Empty(cut.FindAll(".beacon-chat-jump"));
+    }
 }

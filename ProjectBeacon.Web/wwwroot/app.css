@@ -2347,6 +2347,10 @@ body:has(.beacon-theme-dark) .mud-main-content {
     color: var(--color-success);
 }
 
+.beacon-code-failed {
+    color: var(--color-danger);
+}
+
 .beacon-code-lang {
     color: var(--color-text-muted);
     margin-left: auto;
