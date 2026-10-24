@@ -28,18 +28,10 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         Bunit.Services.AddTransient<GetChatSessionHandler>(
             sp => new RecoveringGetSessionHandler(sp.GetRequiredService<IBeaconDbFactory>()));
         AuthAsSeededUser();
-        var old = Chat.PollSafetyNet;
-        Chat.PollSafetyNet = TimeSpan.FromMilliseconds(150);
-        try
-        {
-            var cut = Bunit.RenderComponent<Chat>();
-            cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
-            Assert.Contains("recovered-marker", cut.Markup);
-        }
-        finally
-        {
-            Chat.PollSafetyNet = old;
-        }
+        var cut = Bunit.RenderComponent<Chat>(parameters => parameters
+            .Add(p => p.PollSafetyNet, TimeSpan.FromMilliseconds(150)));
+        cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
+        Assert.Contains("recovered-marker", cut.Markup);
     }
     [Fact]
     public async Task ChatDock_PollSurvivesTransientFailure()
@@ -48,20 +40,12 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         Bunit.Services.AddTransient<GetChatSessionHandler>(
             sp => new RecoveringGetSessionHandler(sp.GetRequiredService<IBeaconDbFactory>()));
         AuthAsSeededUser();
-        var old = ChatDock.PollSafetyNet;
-        ChatDock.PollSafetyNet = TimeSpan.FromMilliseconds(150);
-        try
-        {
-            Bunit.Services.GetRequiredService<NavigationManager>().NavigateTo("/dashboard");
-            var cut = Bunit.RenderComponent<ChatDock>();
-            cut.Find(".beacon-chat-fab").Click(new MouseEventArgs());
-            cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
-            Assert.Contains("recovered-marker", cut.Markup);
-        }
-        finally
-        {
-            ChatDock.PollSafetyNet = old;
-        }
+        Bunit.Services.GetRequiredService<NavigationManager>().NavigateTo("/dashboard");
+        var cut = Bunit.RenderComponent<ChatDock>(parameters => parameters
+            .Add(p => p.PollSafetyNet, TimeSpan.FromMilliseconds(150)));
+        cut.Find(".beacon-chat-fab").Click(new MouseEventArgs());
+        cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
+        Assert.Contains("recovered-marker", cut.Markup);
     }
 
     [Fact]
@@ -74,26 +58,17 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
             sp => new DelayedGetSessionHandler(sp.GetRequiredService<IBeaconDbFactory>()));
         AuthAsSeededUser();
         var signal = Bunit.Services.GetRequiredService<ChatEventSignal>();
-        var old = Chat.PollSafetyNet;
-        Chat.PollSafetyNet = TimeSpan.FromSeconds(5);
-        try
-        {
-            var cut = Bunit.RenderComponent<Chat>();
-            // Wake the poll loop and let its fetch start (the handler delays it 100 ms), then
-            // switch sessions while the fetch is in flight.
-            signal.Signal(sessionA);
-            await Task.Yield();
-            await Task.Delay(10);
-            var target = cut.FindAll("div.beacon-session-main")
-                .Single(e => e.TextContent.Contains("Session B"));
-            target.Click(new MouseEventArgs());
-            await Task.Delay(500);
-            Assert.Contains("Session B", cut.Find(".beacon-chat-session-head").TextContent);
-        }
-        finally
-        {
-            Chat.PollSafetyNet = old;
-        }
+        var cut = Bunit.RenderComponent<Chat>();
+        // Wake the poll loop and let its fetch start (the handler delays it 100 ms), then
+        // switch sessions while the fetch is in flight.
+        signal.Signal(sessionA);
+        await Task.Yield();
+        await Task.Delay(10);
+        var target = cut.FindAll("div.beacon-session-main")
+            .Single(e => e.TextContent.Contains("Session B"));
+        target.Click(new MouseEventArgs());
+        await Task.Delay(500);
+        Assert.Contains("Session B", cut.Find(".beacon-chat-session-head").TextContent);
     }
     private void AuthAsSeededUser()
     {

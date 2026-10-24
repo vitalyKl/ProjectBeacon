@@ -92,35 +92,44 @@ public sealed class ChatEventsHttpTests
     [Fact]
     public async Task EventsStream_EmitsChangedOnSignal()
     {
-        await using var factory = new AuthApiFactory();
-        var (client, sessionId) = await OpenSessionAsync(factory);
-        var ct = TestContext.Current.CancellationToken;
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
-        using var response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/v1/chat/sessions/{sessionId}/events"), HttpCompletionOption.ResponseHeadersRead, readCts.Token);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
-        await ReadLineAsync(reader, readCts.Token);
-        await ReadLineAsync(reader, readCts.Token);
-        Assert.Equal("event: ready", await ReadLineAsync(reader, readCts.Token));
-        await ReadLineAsync(reader, readCts.Token);
-
-        // Give the stream loop time to arm its first wait before the signal fires.
-        await Task.Delay(500);
-        var events = factory.Services.GetRequiredService<ChatEventSignal>();
-        events.Signal(sessionId);
-
-        string? line = null;
-        for (var i = 0; i < 30; i++)
+        var old = ChatEndpoints.EventWaitInterval;
+        ChatEndpoints.EventWaitInterval = TimeSpan.FromMilliseconds(200);
+        try
         {
-            line = await ReadLineAsync(reader, readCts.Token);
-            if (line == "event: changed")
-                break;
+            await using var factory = new AuthApiFactory();
+            var (client, sessionId) = await OpenSessionAsync(factory);
+            var ct = TestContext.Current.CancellationToken;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+            using var response = await client.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/v1/chat/sessions/{sessionId}/events"), HttpCompletionOption.ResponseHeadersRead, readCts.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(ct));
+            await ReadLineAsync(reader, readCts.Token);
+            await ReadLineAsync(reader, readCts.Token);
+            Assert.Equal("event: ready", await ReadLineAsync(reader, readCts.Token));
+            await ReadLineAsync(reader, readCts.Token);
+
+            // Give the stream loop time to arm its first wait before the signal fires.
+            await Task.Delay(500);
+            var events = factory.Services.GetRequiredService<ChatEventSignal>();
+            events.Signal(sessionId);
+
+            string? line = null;
+            for (var i = 0; i < 30; i++)
+            {
+                line = await ReadLineAsync(reader, readCts.Token);
+                if (line == "event: changed")
+                    break;
+            }
+            Assert.Equal("event: changed", line);
+            var dataLine = await ReadLineAsync(reader, readCts.Token);
+            var data = JsonSerializer.Deserialize<JsonElement>(dataLine["data: ".Length..]);
+            Assert.Equal(sessionId, data.GetProperty("sessionId").GetGuid());
         }
-        Assert.Equal("event: changed", line);
-        var dataLine = await ReadLineAsync(reader, readCts.Token);
-        var data = JsonSerializer.Deserialize<JsonElement>(dataLine["data: ".Length..]);
-        Assert.Equal(sessionId, data.GetProperty("sessionId").GetGuid());
+        finally
+        {
+            ChatEndpoints.EventWaitInterval = old;
+        }
     }
 
     [Fact]

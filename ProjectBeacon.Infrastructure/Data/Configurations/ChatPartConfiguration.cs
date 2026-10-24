@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 /// <summary>
-/// EF mapping for chat parts. Indexed by session and sort order, and by session and external id.
+/// EF mapping for chat parts. Unique index on session and sort order, plus session and external id.
 /// </summary>
 public class ChatPartConfiguration : IEntityTypeConfiguration<ChatPart>
 {
@@ -19,7 +19,7 @@ public class ChatPartConfiguration : IEntityTypeConfiguration<ChatPart>
         entity.Property(e => e.Tool).HasMaxLength(40);
         entity.Property(e => e.ToolStatus).HasMaxLength(40);
         entity.Property(e => e.CreatedAt).IsRequired();
-        entity.HasIndex(e => new { e.SessionId, e.SortOrder });
+        entity.HasIndex(e => new { e.SessionId, e.SortOrder }).IsUnique();
         entity.HasIndex(e => new { e.SessionId, e.ExternalId });
     }
 }

@@ -207,6 +207,24 @@ public sealed class ChatHandlerTests : IDisposable
             return (project.Id, user.Id, org.Id, deviceId, session.Id);
         }
     }
+
+    /// <summary>Seeds a session whose device is online and has an attached runtime, so the send handler can enqueue.</summary>
+    private async Task<(Guid ProjectId, Guid UserId, Guid OrgId, Guid DeviceId, Guid SessionId)> SeedSendableAsync()
+    {
+        var (projectId, userId, orgId, deviceId, sessionId) = await SeedSessionAsync();
+        using (TenantScope.EnterUnscoped())
+        {
+            var factory = HandlerSqlite.Factory(_connection);
+            var beat = await new HeartbeatDeviceHandler(factory)
+                .HandleAsync(new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
+            Assert.True(beat.Success, beat.Error);
+            var attach = await new AttachRuntimeHandler(factory)
+                .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(projectId, deviceId, userId, @"A:\work")), TestContext.Current.CancellationToken);
+            Assert.True(attach.Success, attach.Error);
+        }
+        return (projectId, userId, orgId, deviceId, sessionId);
+    }
+
     [Fact]
     public async Task ArchiveChatSession_SignalsChange()
     {
@@ -244,5 +262,62 @@ public sealed class ChatHandlerTests : IDisposable
             new ArchiveChatSessionCommand(new ArchiveChatSessionRequest(sessionId, userId)), ct);
         Assert.True(archived.Success, archived.Error);
         Assert.Equal(0, signal.ActiveSessions);
+    }
+
+    [Fact]
+    public async Task SendChatPrompt_PersistsPartCommandAndStreaming()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+
+        var sent = await new SendChatPromptHandler(factory, new ChatEventSignal())
+            .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(sessionId, userId, "hello", null)), ct);
+        Assert.True(sent.Success, sent.Error);
+        Assert.Equal(ChatSessionStatus.Streaming, sent.Value!.Status);
+
+        await using var check = factory.CreateDbContext();
+        var parts = await check.ChatParts.Where(p => p.SessionId == sessionId).ToListAsync(ct);
+        Assert.Single(parts);
+        Assert.Equal("user", parts[0].Role);
+        Assert.Equal("hello", parts[0].Body);
+        var command = await check.WorkstationCommands
+            .Where(c => c.ProjectId == projectId && c.Kind == WorkstationCommandKind.ChatPrompt).SingleAsync(ct);
+        Assert.Contains("hello", command.PayloadJson);
+    }
+
+    [Fact]
+    public async Task SendChatPrompt_InsertFails_LeavesNoPartAndNoStreaming()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+
+        // A database trigger fails every command insert: the part and the streaming flag
+        // must roll back with it in the same transaction.
+        await _db.Database.ExecuteSqlRawAsync(
+            "CREATE TRIGGER chat_prompt_guard BEFORE INSERT ON WorkstationCommands " +
+            "BEGIN INSERT INTO chat_test_blocker (x) VALUES (1); END;", ct);
+        try
+        {
+            var factory = HandlerSqlite.Factory(_connection, tenant);
+            var sent = await new SendChatPromptHandler(factory, new ChatEventSignal())
+                .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(sessionId, userId, "hello", null)), ct);
+            Assert.False(sent.Success);
+
+            await using var check = factory.CreateDbContext();
+            Assert.Equal(0, await check.ChatParts.CountAsync(p => p.SessionId == sessionId, ct));
+            Assert.Equal(0, await check.WorkstationCommands.CountAsync(c => c.ProjectId == projectId, ct));
+            var status = await check.ChatSessions.AsNoTracking()
+                .Where(s => s.Id == sessionId).Select(s => s.Status).FirstAsync(ct);
+            Assert.Equal(ChatSessionStatus.Idle, status);
+        }
+        finally
+        {
+            await _db.Database.ExecuteSqlRawAsync("DROP TRIGGER chat_prompt_guard;", ct);
+        }
     }
 }

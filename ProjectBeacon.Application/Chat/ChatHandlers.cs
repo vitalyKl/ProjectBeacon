@@ -5,6 +5,7 @@ using Application.Common;
 using Application.Devices;
 using Application.Identity;
 using Domain.Entities.Chat;
+using Domain.Entities.Devices;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
@@ -180,7 +181,7 @@ public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result
         var parts = await db.ChatParts
             .Where(p => p.SessionId == command.Request.SessionId)
             .OrderBy(p => p.SortOrder)
-            .ThenBy(p => p.CreatedAt)
+            .ThenBy(p => p.Id)
             .ToListAsync(ct);
         return Result.Ok((IList<ChatPartDto>)parts.Select(MapPart).ToList());
     }
@@ -190,18 +191,20 @@ public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result
             p.Tool, p.ToolStatus, p.ToolInput, p.ToolResult, p.DurationMs);
 }
 /// <summary>
-/// Queues a prompt on the device. The message is required and the OpenCode session must already exist.
+/// Queues a prompt on the device. The message is required and the OpenCode session must already
+/// exist. The user part, the streaming flag, and the command row commit in one transaction, so a
+/// failed insert leaves neither the part nor the flag.
 /// </summary>
 public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Result<ChatSessionDto>>
 {
+    private const int MaxSortOrderAttempts = 5;
+
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly EnqueueCommandHandler _enqueue;
     private readonly ChatEventSignal _events;
 
-    public SendChatPromptHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue, ChatEventSignal events)
+    public SendChatPromptHandler(IBeaconDbFactory dbFactory, ChatEventSignal events)
     {
         _dbFactory = dbFactory;
-        _enqueue = enqueue;
         _events = events;
     }
 
@@ -211,35 +214,90 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
         if (text.Length == 0)
             return Result.Failure<ChatSessionDto>("Message is required.");
 
-        await using var db = _dbFactory.CreateDbContext();
-        var session = await db.ChatSessions
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
-        if (session is null)
-            return Result.Failure<ChatSessionDto>("Chat session not found.");
-        if (string.IsNullOrWhiteSpace(session.ExternalSessionId))
-            return Result.Failure<ChatSessionDto>("OpenCode session is not ready.");
-
-        var next = await db.ChatParts.Where(p => p.SessionId == session.Id).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
-        var part = ChatPart.Create(session.Id, session.ProjectId, "user", "text", text, next + 1);
-
-        var payload = JsonSerializer.Serialize(new
+        for (var attempt = 0; attempt < MaxSortOrderAttempts; attempt++)
         {
-            chatSessionId = session.Id,
-            externalSessionId = session.ExternalSessionId,
-            text,
-            model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct)
-        });
-        var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
-            session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatPrompt, payload, session.ProjectId)), ct);
-        if (!queued.Success)
-            return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
-
-        // Enqueue won, so the prompt and the streaming state are persisted together.
-        db.ChatParts.Add(part);
-        session.SetStreaming();
-        await db.SaveChangesAsync(ct);
-        _events.Signal(session.Id);
-        return Result.Ok(CreateChatSessionHandler.Map(session));
+            await using var db = _dbFactory.CreateDbContext();
+            // The whole attempt sits inside the execution strategy: production Npgsql options
+            // enable retrying, which does not support user-initiated transactions started
+            // outside a strategy (the EnqueueCommandHandler pattern).
+            var strategy = db.Database.CreateExecutionStrategy();
+            Result<ChatSessionDto> outcome;
+            try
+            {
+                outcome = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await db.Database.BeginTransactionAsync(ct);
+                    var session = await db.ChatSessions
+                        .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
+                    if (session is null)
+                        return Result.Failure<ChatSessionDto>("Chat session not found.");
+                    if (string.IsNullOrWhiteSpace(session.ExternalSessionId))
+                        return Result.Failure<ChatSessionDto>("OpenCode session is not ready.");
+                    var device = await db.DaemonDevices
+                        .FirstOrDefaultAsync(d => d.Id == session.DeviceId, ct);
+                    if (device is null || device.IsRevoked || device.UserId != command.Request.UserId)
+                        return Result.Failure<ChatSessionDto>("Device not found.");
+                    if (!device.IsOnline(DateTime.UtcNow))
+                        return Result.Failure<ChatSessionDto>("Device is not connected.", ErrorKind.Conflict);
+                    var member = await db.ProjectMembers.IgnoreQueryFilters()
+                        .AnyAsync(m => m.ProjectId == session.ProjectId && m.UserId == command.Request.UserId, ct);
+                    if (!member)
+                        return Result.Failure<ChatSessionDto>("Project not found.");
+                    var resolved = await ProjectRuntimeResolver.ResolveAsync(db, session.ProjectId, session.DeviceId, ct);
+                    if (!resolved.Success)
+                        return Result.Failure<ChatSessionDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        chatSessionId = session.Id,
+                        externalSessionId = session.ExternalSessionId,
+                        text,
+                        model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct)
+                    });
+                    var sanitized = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.ChatPrompt);
+                    if (!sanitized.Success)
+                        return Result.Failure<ChatSessionDto>(sanitized.Error ?? "Invalid payload.");
+                    // The guarded status UPDATE, the part INSERT, and the command INSERT commit
+                    // together, so a failed insert leaves neither the part nor the flag.
+                    var streamed = await db.ChatSessions
+                        .Where(s => s.Id == session.Id && s.ArchivedAt == null)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(x => x.Status, ChatSessionStatus.Streaming)
+                            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+                    if (streamed == 0)
+                    {
+                        await tx.RollbackAsync(ct);
+                        return Result.Failure<ChatSessionDto>("Chat session changed while sending; retry.", ErrorKind.Conflict);
+                    }
+                    session.SetStreaming();
+                    var next = await db.ChatParts
+                        .Where(p => p.SessionId == session.Id)
+                        .MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
+                    db.ChatParts.Add(ChatPart.Create(session.Id, session.ProjectId, "user", "text", text, next + 1));
+                    db.WorkstationCommands.Add(WorkstationCommand.Create(
+                        session.DeviceId, WorkstationCommandKind.ChatPrompt, sanitized.Value, session.ProjectId,
+                        command.Request.UserId));
+                    await db.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
+                    var fresh = await db.ChatSessions.AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Id == session.Id, ct);
+                    return Result.Ok(CreateChatSessionHandler.Map(fresh!));
+                });
+            }
+            catch (DbUpdateException ex) when (ChatPartSql.IsUniqueViolation(ex))
+            {
+                // A rival claimed the same sort order; the next attempt recomputes it.
+                continue;
+            }
+            catch (DbUpdateException)
+            {
+                return Result.Failure<ChatSessionDto>("Could not send the message; try again.");
+            }
+            if (!outcome.Success)
+                return outcome;
+            _events.Signal(command.Request.SessionId);
+            return outcome;
+        }
+        return Result.Failure<ChatSessionDto>("Could not send the message; try again.");
     }
 }
 /// <summary>
@@ -342,8 +400,17 @@ public class ArchiveChatSessionHandler : ICommandHandler<ArchiveChatSessionComma
             // The abort handler committed in its own context; reload before archiving.
             await db.Entry(session).ReloadAsync(ct);
         }
+        // Guarded UPDATE: an archive racing a send must not archive a streaming turn, and a
+        // rival archive wins alone - zero affected rows is the conflict signal.
+        var archived = await db.ChatSessions
+            .Where(s => s.Id == session.Id && s.ArchivedAt == null && s.Status != ChatSessionStatus.Streaming)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Status, ChatSessionStatus.Idle)
+                .SetProperty(x => x.ArchivedAt, DateTime.UtcNow)
+                .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+        if (archived == 0)
+            return Result.Failure<ChatSessionDto>("Chat session changed while archiving; retry.", ErrorKind.Conflict);
         session.Archive();
-        await db.SaveChangesAsync(ct);
         _events.Signal(session.Id);
         _events.Forget(session.Id);
         return Result.Ok(CreateChatSessionHandler.Map(session));
@@ -357,6 +424,8 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
     private readonly IBeaconDbFactory _dbFactory;
     private readonly ChatEventSignal _events;
 
+    private const int MaxSortOrderAttempts = 5;
+
     public AppendChatPartHandler(IBeaconDbFactory dbFactory, ChatEventSignal events)
     {
         _dbFactory = dbFactory;
@@ -365,29 +434,64 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
 
     public async Task<Result<ChatPartDto>> HandleAsync(AppendChatPartCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var session = await db.ChatSessions.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
-        if (session is null || session.DeviceId != command.Request.DeviceId)
-            return Result.Failure<ChatPartDto>("Chat session not found.");
-        if (!string.IsNullOrWhiteSpace(command.Request.ExternalId))
+        for (var attempt = 0; attempt < MaxSortOrderAttempts; attempt++)
         {
-            var existing = await db.ChatParts.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(p => p.SessionId == session.Id && p.ExternalId == command.Request.ExternalId, ct);
-            if (existing is not null)
-                return Result.Ok(ListChatPartsHandler.MapPart(existing));
+            await using var db = _dbFactory.CreateDbContext();
+            // The whole attempt sits inside the execution strategy with an explicit
+            // transaction: the session row lock is held until commit, so rival appends
+            // and sends serialize on it and every MAX sees all committed parts.
+            var strategy = db.Database.CreateExecutionStrategy();
+            Result<ChatPartDto> outcome;
+            try
+            {
+                outcome = await strategy.ExecuteAsync(async () =>
+                {
+                    await using var tx = await db.Database.BeginTransactionAsync(ct);
+                    var session = await db.ChatSessions.IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
+                    if (session is null || session.DeviceId != command.Request.DeviceId)
+                        return Result.Failure<ChatPartDto>("Chat session not found.");
+                    if (!string.IsNullOrWhiteSpace(command.Request.ExternalId))
+                    {
+                        var existing = await db.ChatParts.IgnoreQueryFilters()
+                            .FirstOrDefaultAsync(p => p.SessionId == session.Id && p.ExternalId == command.Request.ExternalId, ct);
+                        if (existing is not null)
+                            return Result.Ok(ListChatPartsHandler.MapPart(existing));
+                    }
+                    var streamed = await db.ChatSessions
+                        .Where(s => s.Id == session.Id && s.ArchivedAt == null)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(x => x.Status, ChatSessionStatus.Streaming)
+                            .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
+                    if (streamed == 0)
+                        return Result.Failure<ChatPartDto>("Chat session not found.");
+                    var next = await db.ChatParts.IgnoreQueryFilters()
+                        .Where(p => p.SessionId == session.Id).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
+                    var part = ChatPart.Create(session.Id, session.ProjectId, command.Request.Role, command.Request.Kind,
+                        command.Request.Body, next + 1, command.Request.ExternalId,
+                        command.Request.Tool, command.Request.ToolStatus, command.Request.ToolInput,
+                        command.Request.ToolResult, command.Request.DurationMs);
+                    db.ChatParts.Add(part);
+                    await db.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
+                    return Result.Ok(ListChatPartsHandler.MapPart(part));
+                });
+            }
+            catch (DbUpdateException ex) when (ChatPartSql.IsUniqueViolation(ex))
+            {
+                // A rival claimed the same sort order; the next attempt recomputes it.
+                continue;
+            }
+            catch (DbUpdateException)
+            {
+                return Result.Failure<ChatPartDto>("Could not append the part; try again.");
+            }
+            if (!outcome.Success)
+                return outcome;
+            _events.Signal(command.Request.SessionId);
+            return outcome;
         }
-        var next = await db.ChatParts.IgnoreQueryFilters()
-            .Where(p => p.SessionId == session.Id).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
-        var part = ChatPart.Create(session.Id, session.ProjectId, command.Request.Role, command.Request.Kind,
-            command.Request.Body, next + 1, command.Request.ExternalId,
-            command.Request.Tool, command.Request.ToolStatus, command.Request.ToolInput,
-            command.Request.ToolResult, command.Request.DurationMs);
-        db.ChatParts.Add(part);
-        session.SetStreaming();
-        await db.SaveChangesAsync(ct);
-        _events.Signal(session.Id);
-        return Result.Ok(ListChatPartsHandler.MapPart(part));
+        return Result.Failure<ChatPartDto>("Could not append the part; try again.");
     }
 }
 /// <summary>

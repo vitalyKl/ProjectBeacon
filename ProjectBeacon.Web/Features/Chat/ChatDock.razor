@@ -171,7 +171,7 @@
     // the signal is in-memory only: it is lost on a Blazor circuit reconnect, when a part is written
     // by another replica, or when it fires before this loop starts waiting. The timer guarantees the
     // UI converges within 5 seconds regardless.
-    internal static TimeSpan PollSafetyNet = TimeSpan.FromSeconds(5);
+    [Parameter] public TimeSpan PollSafetyNet { get; set; } = TimeSpan.FromSeconds(5);
 
     private async Task PollAsync()
     {

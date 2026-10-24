@@ -2,10 +2,12 @@ namespace ProjectBeacon.API.Tests;
 
 using System.Text.Json.Nodes;
 using Application.Authorization;
+using Application.Chat;
 using Application.Common;
 using Application.Devices;
 using Application.Persistence;
 using Application.Tasks;
+using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
@@ -14,6 +16,7 @@ using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 /// <summary>
 /// Genuine PostgreSQL concurrency tests: two truly parallel handler calls race the same
@@ -1446,5 +1449,150 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         seed.Tasks.Add(task);
         await seed.SaveChangesAsync();
         return (project.Id, task.Id);
+    }
+
+    /// <summary>Seeds an online chat device with an attached runtime so the chat handlers can run.</summary>
+    private async Task<(Guid ProjectId, Guid DeviceId, Guid UserId, Guid SessionId)> SeedChatAsync()
+    {
+        await using var seed = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var user = User.Create("chat-" + Guid.NewGuid().ToString("N")[..8], $"chat-{Guid.NewGuid():N}@beacon.local", "hash");
+            var org = Org.Create("Chat Race Org");
+            seed.Users.Add(user);
+            seed.Orgs.Add(org);
+            var project = Project.Create("Chat Race Project", null, org.Id);
+            seed.Projects.Add(project);
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
+            var device = DaemonDevice.Create("chat-device", user.Id,
+                "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"),
+                "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+            seed.DaemonDevices.Add(device);
+            var session = ChatSession.Create(project.Id, device.Id, "Chat Race", @"A:\work");
+            session.SetExternalSessionId("oc_" + Guid.NewGuid().ToString("N"));
+            seed.ChatSessions.Add(session);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var factory = _postgres.CreateFactory();
+            var beat = await new HeartbeatDeviceHandler(factory)
+                .HandleAsync(new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(device.Id, "{}", "{}")), TestContext.Current.CancellationToken);
+            Assert.True(beat.Success, beat.Error);
+            var attach = await new AttachRuntimeHandler(factory)
+                .HandleAsync(new AttachRuntimeCommand(new AttachRuntimeRequest(project.Id, device.Id, user.Id, @"A:\work")), TestContext.Current.CancellationToken);
+            Assert.True(attach.Success, attach.Error);
+            return (project.Id, device.Id, user.Id, session.Id);
+        }
+    }
+
+    [Fact]
+    public async Task ChatPart_SortOrderIndex_IsUnique()
+    {
+        _postgres.RequirePostgres();
+        var (projectId, deviceId, _, sessionId) = await SeedChatAsync();
+        var factory = _postgres.CreateFactory();
+        using (TenantScope.EnterUnscoped())
+        {
+            var appended = await new AppendChatPartHandler(factory, new ChatEventSignal())
+                .HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "first", "pa")), TestContext.Current.CancellationToken);
+            Assert.True(appended.Success, appended.Error);
+
+            // A second part at the same sort order must be rejected by the index, not stored.
+            await using var db = _postgres.CreateAdminContext();
+            var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
+                await db.Database.ExecuteSqlRawAsync(
+                    @"INSERT INTO ""ChatParts"" (""Id"", ""SessionId"", ""ProjectId"", ""Role"", ""Kind"", ""Body"", ""SortOrder"", ""CreatedAt"") " +
+                    $"VALUES ('{Guid.NewGuid()}', '{sessionId}', '{projectId}', 'assistant', 'text', 'duplicate', {appended.Value!.SortOrder}, NOW())", TestContext.Current.CancellationToken));
+            Assert.Equal("23505", ex.SqlState);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentSendAndAppend_NoLostParts_UniqueSortOrders()
+    {
+        _postgres.RequirePostgres();
+        var (_, deviceId, userId, sessionId) = await SeedChatAsync();
+        var factory = _postgres.CreateFactory();
+        var ct = TestContext.Current.CancellationToken;
+
+        using (TenantScope.EnterUnscoped())
+        {
+            // One send and seven appends start together: every writer recomputes the next
+            // sort order, and the unique index plus retry keeps all eight parts distinct.
+            var sendTask = new SendChatPromptHandler(factory, new ChatEventSignal())
+                .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(sessionId, userId, "storm", null)), ct);
+            var appendTasks = Enumerable.Range(1, 7)
+                .Select(i => new AppendChatPartHandler(factory, new ChatEventSignal())
+                    .HandleAsync(new AppendChatPartCommand(
+                        new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "part-" + i, "pa-" + i)), ct))
+                .ToArray();
+
+            var sent = await sendTask;
+            Assert.True(sent.Success, sent.Error);
+            var appended = await Task.WhenAll(appendTasks);
+            foreach (var result in appended)
+                Assert.True(result.Success, result.Error);
+
+            await using var db = _postgres.CreateAdminContext();
+            var parts = await db.ChatParts.Where(p => p.SessionId == sessionId).ToListAsync(ct);
+            Assert.Equal(8, parts.Count);
+            Assert.Equal(8, parts.Select(p => p.SortOrder).Distinct().Count());
+        }
+    }
+
+    [Fact]
+    public async Task SendVsArchive_Race_NeverArchivesStreamingTurn()
+    {
+        _postgres.RequirePostgres();
+        // "Exactly one wins" is not an invariant: an archive that loads the session after the
+        // send commits aborts first and then archives, so both calls can legitimately succeed.
+        for (var round = 0; round < 5; round++)
+        {
+            var (projectId, deviceId, userId, sessionId) = await SeedChatAsync();
+            var factory = _postgres.CreateFactory();
+            var ct = TestContext.Current.CancellationToken;
+
+            using (TenantScope.EnterUnscoped())
+            {
+                var sendTask = new SendChatPromptHandler(factory, new ChatEventSignal())
+                    .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(sessionId, userId, "race", null)), ct);
+                var archiveTask = new ArchiveChatSessionHandler(factory,
+                        new AbortChatHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal()),
+                        new ChatEventSignal())
+                    .HandleAsync(new ArchiveChatSessionCommand(new ArchiveChatSessionRequest(sessionId, userId)), ct);
+                var sent = await sendTask;
+                var archived = await archiveTask;
+
+                await using var db = _postgres.CreateAdminContext();
+                var status = await db.ChatSessions.AsNoTracking()
+                    .Where(s => s.Id == sessionId).Select(s => s.Status).FirstAsync(ct);
+                var archivedAt = await db.ChatSessions.AsNoTracking()
+                    .Where(s => s.Id == sessionId).Select(s => s.ArchivedAt).FirstAsync(ct);
+                var partCount = await db.ChatParts.Where(p => p.SessionId == sessionId).CountAsync(ct);
+                var promptCount = await db.WorkstationCommands
+                    .Where(c => c.ProjectId == projectId && c.Kind == WorkstationCommandKind.ChatPrompt)
+                    .CountAsync(ct);
+
+                Assert.False(status == ChatSessionStatus.Streaming && archivedAt is not null,
+                    "round " + round + ": the session was archived while streaming");
+                if (sent.Success && !archived.Success)
+                {
+                    Assert.Equal(ChatSessionStatus.Streaming, status);
+                    Assert.Equal(1, partCount);
+                    Assert.Equal(1, promptCount);
+                }
+                else if (!sent.Success)
+                {
+                    Assert.True(archivedAt is not null, "round " + round + ": send lost but the session was not archived");
+                    Assert.Equal(ChatSessionStatus.Idle, status);
+                    Assert.Equal(0, partCount);
+                    Assert.Equal(0, promptCount);
+                }
+                else
+                {
+                    Assert.True(archivedAt is not null, "round " + round + ": send won but the session was not archived");
+                    Assert.Equal(1, partCount);
+                    Assert.True(promptCount >= 1);
+                }
+            }
+        }
     }
 }

@@ -73,7 +73,7 @@ public sealed class ChatErrorPathTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var factory = ScopedFactory(_connection, projectId);
-            var sent = await new SendChatPromptHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal())
+            var sent = await new SendChatPromptHandler(factory, new ChatEventSignal())
                 .HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(session.Id, userId, "hello", null)), TestContext.Current.CancellationToken);
 
             Assert.False(sent.Success);

@@ -84,21 +84,31 @@
 
     private ElementReference _log;
     private bool _showJump;
-    private int _partsCount = -1;
+    private Guid _sessionId;
+    private Guid _lastPartId;
+    private bool _attached;
 
     protected override void OnParametersSet()
     {
-        var count = 0;
-        foreach (var _ in Parts)
-            count++;
-        // The hosts push the full part list on every refresh; a changed count means the log
-        // content moved. Keep it pinned to the latest part unless the user scrolled away,
-        // in which case offer the jump button.
-        if (_partsCount >= 0 && count != _partsCount)
+        var sessionId = Session?.Id ?? Guid.Empty;
+        var lastPartId = Parts.LastOrDefault()?.Id ?? Guid.Empty;
+        if (!_attached)
         {
+            // The first render only records the baseline; it must not scroll the pane open
+            // or pin a restored conversation to its newest part.
+            _sessionId = sessionId;
+            _lastPartId = lastPartId;
+            _attached = true;
+            return;
+        }
+        // The hosts push a sliding window of the latest parts, so a changed count does not
+        // mean the content moved: follow only when the session or the newest part changed.
+        if (sessionId != _sessionId || lastPartId != _lastPartId)
+        {
+            _sessionId = sessionId;
+            _lastPartId = lastPartId;
             _ = ScrollFollowAsync();
         }
-        _partsCount = count;
     }
 
     private Task OnDraftChanged(string value)

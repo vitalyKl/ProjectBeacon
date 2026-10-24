@@ -55,7 +55,7 @@ else
                             <StatusChip Color="Color.Info" Label="@L["ChatBusy"]" />
                         }
                     </div>
-                    <div @onclick:stop="StopBubble">
+                    <div @onclick:stopPropagation="true">
                         <MudIconButton Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Edit" OnClick="() => Rename(session)" title="@L["ChatRename"].Value" aria-label="@L["ChatRename"].Value" />
                         <MudIconButton Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Archive" OnClick="() => Archive(session)" title="@L["ChatArchive"].Value" aria-label="@L["ChatArchive"].Value" />
                     </div>
@@ -251,17 +251,13 @@ else
             _selected = result.Value;
     }
 
-    private static void StopBubble()
-    {
-    }
-
     // Two-stage live update: the in-process ChatEventSignal wakes this loop the moment a part is
     // appended or the session status changes (writer and readers share the Web process in
     // self-hosted deployments). The 5-second safety net stays because the signal is in-memory
     // only: it is lost on a Blazor circuit reconnect, when a part is written by another
     // replica, or when it fires before this loop starts waiting. The timer guarantees the UI
     // converges within 5 seconds regardless.
-    internal static TimeSpan PollSafetyNet = TimeSpan.FromSeconds(5);
+    [Parameter] public TimeSpan PollSafetyNet { get; set; } = TimeSpan.FromSeconds(5);
 
     private async Task PollAsync()
     {

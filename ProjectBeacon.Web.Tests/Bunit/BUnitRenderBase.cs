@@ -76,7 +76,6 @@ public abstract class BUnitRenderBase : IDisposable
         _bunit.Services.AddSingleton(authProvider);
 
         _bunit.Services.AddSingleton<IEmailSender, FakeEmailSender>();
-        _bunit.Services.AddLogging();
         _bunit.Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         _bunit.Services.AddSingleton<IHostEnvironment>(new TestHostEnvironment("Testing"));
 
