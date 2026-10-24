@@ -341,6 +341,9 @@ public sealed class CallerTests
         }
     }
 
+    // Machine-sensitive: a full MSBuild evaluation of a broken solution can take
+    // minutes on a loaded machine; the trait makes it greppable for exclusion.
+    [Trait("Category", "RoslynMsBuild")]
     [Fact]
     public void GetCallers_Roslyn_BrokenSolution_SolutionBuildsFalse()
     {
