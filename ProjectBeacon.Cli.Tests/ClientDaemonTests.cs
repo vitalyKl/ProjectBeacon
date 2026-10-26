@@ -226,9 +226,11 @@ public sealed class ClientDaemonTests : IDisposable
             // process every loop turn, which would starve the polling below on loaded hosts.
             HeartbeatInterval = TimeSpan.FromMilliseconds(150)
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        // The first heartbeat may take up to ~55 s on a loaded host (eleven bounded
+        // `where` launches in WorkstationProbe), so wait past that instead of 10 s.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var run = daemon.RunAsync(cts.Token);
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var deadline = DateTime.UtcNow.AddSeconds(90);
         while (handler.Heartbeats < 1 && DateTime.UtcNow < deadline)
             await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();

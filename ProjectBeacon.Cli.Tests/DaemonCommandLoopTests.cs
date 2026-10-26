@@ -121,9 +121,13 @@ public sealed class DaemonCommandLoopTests
         var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         api.OnHeartbeat = () => done.TrySetResult(true);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        // The first heartbeat iteration launches up to eleven bounded `where`/`which`
+        // processes (WorkstationProbe.Which, 5 s each), so on a loaded CI host the first
+        // beat can take well over 10 s even though nothing is broken. Wait past the
+        // ~55 s worst case.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(90), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
         http.Dispose();
@@ -177,6 +181,9 @@ public sealed class DaemonCommandLoopTests
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            // Yield like real network I/O: a completed-task fake lets the loop
+            // spin synchronously on the calling thread until the CTS lifetime fires.
+            await Task.Delay(1, cancellationToken);
             var path = request.RequestUri!.AbsolutePath;
             if (path.EndsWith("/complete", StringComparison.Ordinal))
             {
