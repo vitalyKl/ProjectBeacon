@@ -291,6 +291,7 @@ jobs:
           IMAGE_DIGEST: ${{ needs.scan.outputs.digest }}
           SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
           SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          EXPECTED_GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           IMAGE_REF="${IMAGE_REPO}@${IMAGE_DIGEST}"
@@ -307,9 +308,10 @@ jobs:
             -o ConnectTimeout=15 \
             -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=4 \
-            "${SSH_USER}@${SSH_HOST}" "bash -s -- '${IMAGE_REF}'" <<'REMOTE'
+            "${SSH_USER}@${SSH_HOST}" "bash -s -- '${IMAGE_REF}' '${EXPECTED_GIT_SHA}'" <<'REMOTE'
           set -Eeuo pipefail
           IMAGE_REF="$1"
+          EXPECTED_GIT_SHA="$2"
           cd /opt/beacon/deploy/compose
 
           exec 9>/tmp/projectbeacon-compose-deploy.lock
@@ -325,7 +327,7 @@ jobs:
           # If the GHCR package is private, the VPS Docker daemon must already be
           # logged in with a read:packages credential.
           docker pull "$IMAGE_REF"
-          ./upgrade.sh "$IMAGE_REF" --expected-git-sha "${GITHUB_SHA}"
+          ./upgrade.sh "$IMAGE_REF" --expected-git-sha "$EXPECTED_GIT_SHA"
           REMOTE
 
       - name: Verify public health and deployed Git SHA
