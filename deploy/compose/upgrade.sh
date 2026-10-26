@@ -5,6 +5,7 @@
 #
 # Usage:
 #   ./upgrade.sh <image-reference>            # auto-rollback enabled
+#   ./upgrade.sh <image-reference> --expected-git-sha <40-char-sha>
 #   ./upgrade.sh <image-reference> --no-rollback
 #
 # <image-reference> is either repo@sha256:<digest> (preferred) or repo:<tag>.
@@ -17,15 +18,42 @@ cd "$(dirname "$0")"
 
 REF=""
 NO_ROLLBACK=0
-for arg in "$@"; do
-  case "$arg" in
-    --no-rollback) NO_ROLLBACK=1 ;;
-    *) REF="$arg" ;;
+EXPECTED_GIT_SHA=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --no-rollback)
+      NO_ROLLBACK=1
+      shift
+      ;;
+    --expected-git-sha)
+      if [ "$#" -lt 2 ]; then
+        echo "ERROR: --expected-git-sha requires a value." >&2
+        exit 2
+      fi
+      EXPECTED_GIT_SHA="$2"
+      shift 2
+      ;;
+    -*)
+      echo "ERROR: unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      if [ -n "$REF" ]; then
+        echo "ERROR: only one image reference may be supplied." >&2
+        exit 2
+      fi
+      REF="$1"
+      shift
+      ;;
   esac
 done
 
 if [ -z "$REF" ]; then
-  echo "usage: $0 <image-reference> [--no-rollback]" >&2
+  echo "usage: $0 <image-reference> [--expected-git-sha <sha>] [--no-rollback]" >&2
+  exit 2
+fi
+if [ -n "$EXPECTED_GIT_SHA" ] && ! [[ "$EXPECTED_GIT_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+  echo "ERROR: expected Git SHA must be 40 lowercase hexadecimal characters." >&2
   exit 2
 fi
 
@@ -137,6 +165,12 @@ echo "Health gate passed."
 
 VERSION_JSON="$(curl -fsSk --resolve "$DOMAIN:443:$HEALTH_IP" "https://$DOMAIN/v1/version")"
 echo "Running: $VERSION_JSON"
+if [ -n "$EXPECTED_GIT_SHA" ]; then
+  if ! printf '%s' "$VERSION_JSON" | grep -Eq '"gitSha"[[:space:]]*:[[:space:]]*"'"$EXPECTED_GIT_SHA"'"'; then
+    echo "ERROR: deployed application Git SHA does not match expected release $EXPECTED_GIT_SHA." >&2
+    false
+  fi
+fi
 
 # --- 6. Record success --------------------------------------------------------
 mkdir -p "$STATE_DIR"
