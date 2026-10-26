@@ -237,31 +237,116 @@ jobs:
           retention-days: 90
 
   deploy:
-    # Deploys the exact digest the scan job verified (repo@sha256:...) —
-    # immutable even if the version tag is later re-pointed. No rebuild
-    # happens between image, scan, and deploy: the image is built once in
-    # the image job and only pulled from the registry afterwards.
+    # Deploy the exact digest verified by the scan to the production VPS.
+    # The VPS runs the existing fail-closed Compose upgrade script.
     needs: [image, scan]
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     environment: production
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ github.sha }}
-      - name: Switch idle color
+      - name: Validate release and required SSH configuration
         env:
-          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+          IMAGE_REPO: ${{ needs.image.outputs.repo }}
+          IMAGE_DIGEST: ${{ needs.scan.outputs.digest }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
         run: |
-          set -e
-          if [ -z "$KUBECONFIG_DATA" ]; then
-            echo "KUBECONFIG secret not set; skip deploy."
-            exit 0
+          set -euo pipefail
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error::Release tag must be a semantic version such as v0.6.2."
+            exit 1
+          }
+          [[ "${IMAGE_REPO}" =~ ^ghcr\.io/[a-z0-9-]+/projectbeacon-web$ ]] || {
+            echo "::error::Unexpected image repository."
+            exit 1
+          }
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]] || {
+            echo "::error::The scan job did not provide a valid immutable digest."
+            exit 1
+          }
+          for name in SSH_HOST SSH_USER SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required production environment secret: ${name}."
+              exit 1
+            fi
+          done
+
+      - name: Configure pinned SSH host and key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/projectbeacon_deploy"
+          chmod 600 "$HOME/.ssh/projectbeacon_deploy"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Pull verified image and run Compose deployment over SSH
+        env:
+          IMAGE_REPO: ${{ needs.image.outputs.repo }}
+          IMAGE_DIGEST: ${{ needs.scan.outputs.digest }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          EXPECTED_GIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          IMAGE_REF="${IMAGE_REPO}@${IMAGE_DIGEST}"
+          echo "Deploying immutable image: ${IMAGE_REF}"
+
+          # No TTY: avoids terminal job-control stopping the migration process.
+          # The remote lock prevents overlapping deployments from any source.
+          ssh -T \
+            -i "$HOME/.ssh/projectbeacon_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=4 \
+            "${SSH_USER}@${SSH_HOST}" "bash -s -- '${IMAGE_REF}' '${EXPECTED_GIT_SHA}'" <<'REMOTE'
+          set -Eeuo pipefail
+          IMAGE_REF="$1"
+          EXPECTED_GIT_SHA="$2"
+          cd /opt/beacon/deploy/compose
+
+          exec 9>/tmp/projectbeacon-compose-deploy.lock
+          if ! flock -n 9; then
+            echo "ERROR: another ProjectBeacon deployment is already running." >&2
+            exit 1
           fi
-          mkdir -p "$HOME/.kube"
-          printf '%s\n' "$KUBECONFIG_DATA" > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-          IMAGE_REF="${{ needs.image.outputs.repo }}@${{ needs.scan.outputs.digest }}"
-          echo "deploying verified image $IMAGE_REF"
-          current=$(kubectl -n beacon get svc beacon-web -o jsonpath='{.spec.selector.color}' || echo blue)
-          if [ "$current" = "blue" ]; then next=green; else next=blue; fi
-          sh deploy/k8s/switch.sh "$next" "$IMAGE_REF"
+
+          test -f .env
+          test -x ./upgrade.sh
+          docker compose --profile migrate config --quiet
+          # Pull the exact scanned digest before changing .env or running migrations.
+          # If the GHCR package is private, the VPS Docker daemon must already be
+          # logged in with a read:packages credential.
+          docker pull "$IMAGE_REF"
+          ./upgrade.sh "$IMAGE_REF" --expected-git-sha "$EXPECTED_GIT_SHA"
+          REMOTE
+
+      - name: Verify public health and deployed Git SHA
+        env:
+          EXPECTED_GIT_SHA: ${{ github.sha }}
+          EXPECTED_VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected_version="${EXPECTED_VERSION#v}"
+          for attempt in $(seq 1 12); do
+            if response="$(curl --fail --silent --show-error --max-time 10 https://projectbeacon.tech/v1/version 2>/dev/null)" &&
+               health="$(curl --fail --silent --show-error --max-time 10 https://projectbeacon.tech/health 2>/dev/null)" &&
+               printf '%s' "$health" | jq -e '.status == "healthy"' >/dev/null &&
+               printf '%s' "$response" | jq -e --arg sha "$EXPECTED_GIT_SHA" --arg version "$expected_version" '.gitSha == $sha and .version == $version' >/dev/null; then
+              echo "Production is healthy: $response"
+              exit 0
+            fi
+            echo "Public health/version gate attempt $attempt/12 failed; retrying in 5s."
+            sleep 5
+          done
+          echo "::error::Public health/version gate failed. Inspect the production deployment and GitHub Actions logs."
+          exit 1
