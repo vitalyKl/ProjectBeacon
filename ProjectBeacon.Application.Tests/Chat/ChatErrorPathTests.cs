@@ -176,7 +176,11 @@ public sealed class ChatErrorPathTests : IDisposable
                         }
                         Assert.NotEqual(Guid.Empty, commandId);
 
-                        var failed = await new CompleteCommandHandler(factory).HandleAsync(
+                        // A second concurrent context on the same connection re-registers EF's SQLite user functions and
+                        // hits SQLITE_BUSY against the handler's active statement, so it completes on its own connection.
+                        using var completionConnection = new SqliteConnection($"Data Source={path}");
+                        completionConnection.Open();
+                        var failed = await new CompleteCommandHandler(ScopedFactory(completionConnection, projectId)).HandleAsync(
                             new CompleteCommandCommand(new CompleteCommandRequest(commandId, deviceId, false, null, "boom")), TestContext.Current.CancellationToken);
                         Assert.True(failed.Success, failed.Error);
 
