@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploys a given image reference (digest or tag) to the VPS stack and rolls
 # back automatically on failure. Never deploys on a schedule or by push —
-# this script only runs when a person runs it on the server.
+# this script is invoked manually or by the protected release workflow.
 #
 # Usage:
 #   ./upgrade.sh <image-reference>            # auto-rollback enabled
