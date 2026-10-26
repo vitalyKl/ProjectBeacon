@@ -59,6 +59,13 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         AuthAsSeededUser();
         var signal = Bunit.Services.GetRequiredService<ChatEventSignal>();
         var cut = Bunit.RenderComponent<Chat>();
+        // Settle the component's own async initialization before interacting: the newest
+        // session (A) must be selected and its parts loaded, which also guarantees the poll
+        // loop is already waiting. Clicking first would race the init on slow machines,
+        // where the initial Select(A) would apply after the click.
+        var head = cut.WaitForElement(".beacon-chat-session-head", TimeSpan.FromSeconds(10));
+        Assert.Contains("Session A", head.TextContent);
+        cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
         // Wake the poll loop and let its fetch start (the handler delays it 100 ms), then
         // switch sessions while the fetch is in flight.
         signal.Signal(sessionA);
