@@ -250,6 +250,7 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                     {
                         chatSessionId = session.Id,
                         externalSessionId = session.ExternalSessionId,
+                        projectId = session.ProjectId,
                         text,
                         model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct)
                     });

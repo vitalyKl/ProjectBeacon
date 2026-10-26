@@ -10,6 +10,7 @@ using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 public sealed class ChatHandlerTests : IDisposable
 {
@@ -286,6 +287,8 @@ public sealed class ChatHandlerTests : IDisposable
         var command = await check.WorkstationCommands
             .Where(c => c.ProjectId == projectId && c.Kind == WorkstationCommandKind.ChatPrompt).SingleAsync(ct);
         Assert.Contains("hello", command.PayloadJson);
+        using var payload = JsonDocument.Parse(command.PayloadJson);
+        Assert.Equal(projectId, payload.RootElement.GetProperty("projectId").GetGuid());
     }
 
     [Fact]

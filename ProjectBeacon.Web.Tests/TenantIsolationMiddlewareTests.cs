@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Web.Tests;
 
 using System.Security.Claims;
+using Application.Authorization;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Enums;
@@ -31,6 +32,77 @@ public sealed class TenantIsolationMiddlewareTests : IDisposable
 
     private static void SetCreatedAt(Project project, DateTime when)
         => typeof(Project).GetProperty(nameof(Project.CreatedAt))!.SetValue(project, when);
+
+    private static void SetJoinedAt(ProjectMember member, DateTime when)
+        => typeof(ProjectMember).GetProperty(nameof(ProjectMember.JoinedAt))!.SetValue(member, when);
+
+    private static ClaimsPrincipal DevicePrincipal(Guid deviceId, Guid ownerId)
+        => new(new ClaimsIdentity(
+            [
+                new Claim("device_id", deviceId.ToString()),
+                new Claim("device_owner_id", ownerId.ToString())
+            ], ActorContextFactory.DeviceTokenAuthType));
+
+    [Fact]
+    public async Task DeviceToken_WithProjectHeader_ScopesToHeaderProject()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var oldest = Project.Create("A", null, org.Id);
+        var other = Project.Create("B", null, org.Id);
+        _db.Projects.AddRange(oldest, other);
+        var user = User.Create("owner", "owner@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var memberOldest = ProjectMember.Create(oldest.Id, user.Id, MemberRole.Owner);
+        SetJoinedAt(memberOldest, DateTime.UtcNow.AddDays(-1));
+        _db.ProjectMembers.AddRange(memberOldest, ProjectMember.Create(other.Id, user.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var device = Guid.NewGuid();
+        Guid? scoped = null;
+        var mw = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext { User = DevicePrincipal(device, user.Id) };
+        http.Request.Headers["X-Project-Id"] = other.Id.ToString();
+
+        await mw.InvokeAsync(http, _db);
+        Assert.Equal(other.Id, scoped);
+    }
+
+    [Fact]
+    public async Task DeviceToken_WithoutProjectHeader_ScopesToOldestMembership()
+    {
+        var org = Org.Create("Org", null);
+        _db.Orgs.Add(org);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var oldest = Project.Create("A", null, org.Id);
+        var other = Project.Create("B", null, org.Id);
+        _db.Projects.AddRange(oldest, other);
+        var user = User.Create("owner2", "owner2@example.com", "hash");
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var memberOldest = ProjectMember.Create(oldest.Id, user.Id, MemberRole.Owner);
+        SetJoinedAt(memberOldest, DateTime.UtcNow.AddDays(-1));
+        _db.ProjectMembers.AddRange(memberOldest, ProjectMember.Create(other.Id, user.Id, MemberRole.Member));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var device = Guid.NewGuid();
+        Guid? scoped = null;
+        var mw = new TenantIsolationMiddleware(_ =>
+        {
+            scoped = TenantScope.CurrentProjectId;
+            return Task.CompletedTask;
+        });
+        var http = new DefaultHttpContext { User = DevicePrincipal(device, user.Id) };
+
+        await mw.InvokeAsync(http, _db);
+        Assert.Equal(oldest.Id, scoped);
+    }
 
     [Fact]
     public async Task StaleCookieProjectId_ReplacedByMembership()

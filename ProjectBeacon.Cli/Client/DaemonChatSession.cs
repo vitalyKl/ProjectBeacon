@@ -58,10 +58,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var chatId = doc.RootElement.TryGetProperty("chatSessionId", out var c) ? c.GetGuid() : Guid.Empty;
         var text = doc.RootElement.TryGetProperty("text", out var tx) ? tx.GetString() : null;
         var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+        // Carries the session's project so the daemon's parts/idle writes are scoped to it, not the owner's default scope.
+        var projectId = doc.RootElement.TryGetProperty("projectId", out var p) && p.TryGetGuid(out var pid) ? pid : Guid.Empty;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
         return await _gate.RunExclusiveAsync(
-            () => PromptLockedAsync(cwd, externalId, chatId, text, model, ct),
+            () => PromptLockedAsync(cwd, externalId, chatId, text, model, projectId, ct),
             ct);
     }
 
@@ -76,7 +78,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
-        string cwd, string externalId, Guid chatId, string text, string? model, CancellationToken ct)
+        string cwd, string externalId, Guid chatId, string text, string? model, Guid projectId, CancellationToken ct)
     {
         var openCode = _gate.OpenCode;
         var runtime = _gate.Runtime;
@@ -109,7 +111,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     if (!seen.Add(key))
                         continue;
                     added++;
-                    await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
+                    await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
                     {
                         role = part.Role,
                         kind = part.Kind,
@@ -120,7 +122,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                         toolInput = part.ToolInput,
                         toolResult = part.ToolResult,
                         durationMs = part.DurationMs
-                    }, ct);
+                    }, projectId, ct);
                 }
                 quiet = added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
@@ -146,7 +148,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         if (idle)
         {
             if (lastTurn is { Error: not null, MessageId: not null } && lastTurn.MessageId != baselineMessageId)
-                await PostErrorPartAsync(chatId, lastTurn, ct);
+                await PostErrorPartAsync(chatId, lastTurn, projectId, ct);
             _state.Log(lastTurn is { Error: not null }
                 ? $"chat prompt done: {seen.Count} parts, idle with error: {ClipError(lastTurn.Error!)}"
                 : $"chat prompt done: {seen.Count} parts, idle");
@@ -156,24 +158,32 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             _state.Log($"chat prompt interrupted: max duration {_timing.ChatMaxDuration.TotalSeconds:0}s reached, {seen.Count} parts");
             try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
         }
-        await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/idle", new { }, ct);
+        await PostChatAsync($"/v1/chat/sessions/{chatId}/idle", new { }, projectId, ct);
         return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
     }
 
     private static string ClipError(string error) => error.Length <= 200 ? error : error[..200];
 
-    private async Task PostErrorPartAsync(Guid chatId, AgentTurnStatus turn, CancellationToken ct)
+    private async Task PostErrorPartAsync(Guid chatId, AgentTurnStatus turn, Guid projectId, CancellationToken ct)
     {
         // Stable external id derived from the error text so a repeated identical error dedupes on the API.
         var body = ClipError(turn.Error!);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..16];
-        await _http.PostAsJsonAsync($"/v1/chat/sessions/{chatId}/parts", new
+        await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
         {
             role = "assistant",
             kind = "error",
             body,
             externalId = $"error:{hash}"
-        }, ct);
+        }, projectId, ct);
+    }
+
+    private Task PostChatAsync(string url, object body, Guid projectId, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
+        if (projectId != Guid.Empty)
+            request.Headers.TryAddWithoutValidation("X-Project-Id", projectId.ToString());
+        return _http.SendAsync(request, ct);
     }
 
     private static async Task<IReadOnlyList<AgentMessagePart>> CollectPartsAsync(IAgentRuntime runtime, string sessionId, CancellationToken ct)

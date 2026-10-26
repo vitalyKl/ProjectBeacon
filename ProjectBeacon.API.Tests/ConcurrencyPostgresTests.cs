@@ -1595,4 +1595,55 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             }
         }
     }
+
+    [Fact]
+    public async Task AppendChatPart_ScopedToSessionProject_Succeeds_UnderRls()
+    {
+        _postgres.RequirePostgres();
+        var (projectId, oldestProjectId, deviceId, sessionId) = await SeedMultiProjectChatAsync();
+        var factory = _postgres.CreateFactory();
+
+        // Scoped to the session's project: FORCE RLS admits the device's write.
+        using (TenantScope.EnterProjectScope(projectId))
+        {
+            var scoped = await new AppendChatPartHandler(factory, new ChatEventSignal())
+                .HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "hello", "pa")), TestContext.Current.CancellationToken);
+            Assert.True(scoped.Success, scoped.Error);
+        }
+
+        // Scoped to the owner's oldest membership (the pre-fix device scope): the session is invisible.
+        using (TenantScope.EnterProjectScope(oldestProjectId))
+        {
+            var hidden = await new AppendChatPartHandler(factory, new ChatEventSignal())
+                .HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "hello", "pb")), TestContext.Current.CancellationToken);
+            Assert.False(hidden.Success);
+        }
+    }
+
+    /// <summary>Seeds a user in two projects (oldest first), a device, and a session in the newer project.</summary>
+    private async Task<(Guid ProjectId, Guid OldestProjectId, Guid DeviceId, Guid SessionId)> SeedMultiProjectChatAsync()
+    {
+        await using var seed = _postgres.CreateAdminContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var user = User.Create("chat-multi-" + Guid.NewGuid().ToString("N")[..8], $"chat-multi-{Guid.NewGuid():N}@beacon.local", "hash");
+            var org = Org.Create("Chat Multi Org");
+            seed.Users.Add(user);
+            seed.Orgs.Add(org);
+            var oldest = Project.Create("Chat Multi Oldest", null, org.Id);
+            var project = Project.Create("Chat Multi Newer", null, org.Id);
+            seed.Projects.AddRange(oldest, project);
+            seed.ProjectMembers.Add(ProjectMember.Create(oldest.Id, user.Id, MemberRole.Owner));
+            seed.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Member));
+            var device = DaemonDevice.Create("chat-multi-device", user.Id,
+                "fp-" + Guid.NewGuid().ToString("N"), "hash-" + Guid.NewGuid().ToString("N"),
+                "bcd_" + Guid.NewGuid().ToString("N")[..4]);
+            seed.DaemonDevices.Add(device);
+            var session = ChatSession.Create(project.Id, device.Id, "Chat Multi", @"A:\work");
+            session.SetExternalSessionId("oc_" + Guid.NewGuid().ToString("N"));
+            seed.ChatSessions.Add(session);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            return (project.Id, oldest.Id, device.Id, session.Id);
+        }
+    }
 }
