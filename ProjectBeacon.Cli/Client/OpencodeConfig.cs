@@ -20,6 +20,7 @@ public static class OpencodeConfig
         JsonElement agent,
         bool denyNativeFiles,
         JsonElement provider = default,
+        JsonElement providers = default,
         bool replaceMcp = false,
         string[]? instructions = null)
     {
@@ -64,6 +65,13 @@ public static class OpencodeConfig
             foreach (var prop in provider.EnumerateObject())
                 providerObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
             root["provider"] = providerObj;
+        }
+        if (providers.ValueKind == JsonValueKind.Object)
+        {
+            var providersObj = root["providers"] as JsonObject ?? new JsonObject();
+            foreach (var prop in providers.EnumerateObject())
+                providersObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
+            root["providers"] = providersObj;
         }
 
         if (instructions is { Length: > 0 })
@@ -166,9 +174,10 @@ public static class OpencodeConfig
         var model = payloadRoot.TryGetProperty("model", out var modelEl) ? modelEl.GetString() : null;
         var agent = payloadRoot.TryGetProperty("agent", out var agentEl) ? agentEl : default;
         var provider = payloadRoot.TryGetProperty("provider", out var providerEl) ? providerEl : default;
+        var providers = payloadRoot.TryGetProperty("providers", out var providersEl) ? providersEl : default;
         var replaceMcp = payloadRoot.TryGetProperty("mcpReplace", out var replaceEl) && replaceEl.ValueKind == JsonValueKind.True;
         WriteToolDisciplineInstructions(full);
-        Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider, replaceMcp,
+        Upsert(opencodePath, mcp, model, agent, denyNativeFiles: true, provider, providers, replaceMcp,
             instructions: new[] { BeaconToolDiscipline.RelativePath });
         return Result.Ok(JsonSerializer.Serialize(new { path = opencodePath }));
     }

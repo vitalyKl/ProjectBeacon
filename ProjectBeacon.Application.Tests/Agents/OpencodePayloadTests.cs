@@ -57,8 +57,14 @@ public sealed class OpencodePayloadTests
         var qwen = Backend("qwen");
         var json = OpencodePayload.BuildApply(AgentRunMode.Solo, [qwen], qwen.Id, null, null, null);
         using var doc = JsonDocument.Parse(json);
-        var models = doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("models");
-        var variants = models.GetProperty("qwen").GetProperty("variants");
+        // 2.x rejects a variants array in the deprecated provider block, so it stays variant-free.
+        var legacyModel = doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("models").GetProperty("qwen");
+        Assert.Equal("qwen", legacyModel.GetProperty("name").GetString());
+        Assert.False(legacyModel.TryGetProperty("variants", out _));
+        var newProvider = doc.RootElement.GetProperty("providers").GetProperty("beacon-local");
+        Assert.Equal("@opencode/ai/providers/openai-compatible", newProvider.GetProperty("package").GetString());
+        Assert.Equal("http://127.0.0.1:8080/v1", newProvider.GetProperty("settings").GetProperty("baseURL").GetString());
+        var variants = newProvider.GetProperty("models").GetProperty("qwen").GetProperty("variants");
         Assert.Equal(4, variants.GetArrayLength());
         var ids = variants.EnumerateArray().Select(v => v.GetProperty("id").GetString()).ToList();
         Assert.Equal(new[] { "low", "medium", "high", "xhigh" }, ids);

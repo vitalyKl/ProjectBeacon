@@ -90,7 +90,18 @@ public sealed class WorkstationActionsTests : IDisposable
                     ["options"] = new JsonObject { ["baseURL"] = "http://127.0.0.1:8080/v1" }
                 }
             },
-            ["agent"] = new JsonObject { ["build"] = new JsonObject { ["model"] = "beacon-local/qwen" } }
+            ["agent"] = new JsonObject { ["build"] = new JsonObject { ["model"] = "beacon-local/qwen" } },
+            ["providers"] = new JsonObject
+            {
+                ["beacon-local"] = new JsonObject
+                {
+                    ["package"] = "@opencode/ai/providers/openai-compatible",
+                    ["models"] = new JsonObject
+                    {
+                        ["qwen"] = new JsonObject { ["name"] = "qwen" }
+                    }
+                }
+            }
         };
         var result = OpencodeConfig.ApplyOpencode(_dir, payload.ToJsonString());
         Assert.True(result.Success);
@@ -98,6 +109,9 @@ public sealed class WorkstationActionsTests : IDisposable
         Assert.Contains("beacon-local", opc);
         Assert.Contains("127.0.0.1:8080", opc);
         Assert.Contains("\"build\"", opc);
+        using var mergedDoc = JsonDocument.Parse(opc);
+        Assert.Equal("@opencode/ai/providers/openai-compatible",
+            mergedDoc.RootElement.GetProperty("providers").GetProperty("beacon-local").GetProperty("package").GetString());
     }
 
     [Fact]

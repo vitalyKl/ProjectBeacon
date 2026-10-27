@@ -1230,9 +1230,17 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-chat-model-select {
     flex: 0 0 auto;
-    width: 180px;
+    width: 140px;
     max-width: 60%;
 }
+.beacon-chat-model-pair {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    flex: 0 0 auto;
+}
+
 
 .beacon-chat-model-bar {
     display: flex;
@@ -1244,7 +1252,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-chat-effort-select {
     flex: 0 0 auto;
-    width: 150px;
+    width: 120px;
     max-width: 100%;
 }
 

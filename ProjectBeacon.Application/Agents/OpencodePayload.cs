@@ -22,25 +22,28 @@ public static class OpencodePayload
         int llamaSwapPort = 8080)
     {
         var byId = backends.ToDictionary(b => b.Id);
+        // OpenCode 1.x reads the deprecated "provider" key; 2.x reads the new "providers" key
+        // and prefers it when both are present. 2.x rejects a variants array inside the
+        // deprecated block (its schema allows a variant map with a disabled flag only), so
+        // the variants ride on the new block; v1 resolves reasoning effort per prompt.
         var models = new JsonObject();
+        var variantModels = new JsonObject();
         foreach (var backend in backends.Where(b => b.BackendType == ModelBackendType.LlamaCpp).OrderBy(b => b.Name, StringComparer.Ordinal))
         {
-            // Reasoning variants (#low/#medium/#high/#xhigh) let per-prompt reasoning effort resolve in
-            // OpenCode v2; each variant sets reasoningEffort, which the OpenAI-compatible client
-            // sends as reasoning_effort — accepted per request by llama-server.
             models[ModelKey(backend.Name)] = new JsonObject
             {
+                ["name"] = backend.Name
+            };
+            variantModels[ModelKey(backend.Name)] = new JsonObject
+            {
                 ["name"] = backend.Name,
-                ["variants"] = new JsonArray
-                {
-                    new JsonObject { ["id"] = "low", ["settings"] = new JsonObject { ["reasoningEffort"] = "low" } },
-                    new JsonObject { ["id"] = "medium", ["settings"] = new JsonObject { ["reasoningEffort"] = "medium" } },
-                    new JsonObject { ["id"] = "high", ["settings"] = new JsonObject { ["reasoningEffort"] = "high" } },
-                    new JsonObject { ["id"] = "xhigh", ["settings"] = new JsonObject { ["reasoningEffort"] = "xhigh" } }
-                }
+                // Each variant sets reasoningEffort, which the OpenAI-compatible client sends as
+                // reasoning_effort, accepted per request by llama-server.
+                ["variants"] = ReasoningVariants()
             };
         }
 
+        var baseUrl = $"http://127.0.0.1:{llamaSwapPort}/v1";
         var provider = new JsonObject
         {
             [ProviderId] = new JsonObject
@@ -49,10 +52,24 @@ public static class OpencodePayload
                 ["name"] = "Beacon local",
                 ["options"] = new JsonObject
                 {
-                    ["baseURL"] = $"http://127.0.0.1:{llamaSwapPort}/v1",
+                    ["baseURL"] = baseUrl,
                     ["apiKey"] = "beacon"
                 },
                 ["models"] = models
+            }
+        };
+        var providers = new JsonObject
+        {
+            [ProviderId] = new JsonObject
+            {
+                ["name"] = "Beacon local",
+                ["package"] = "@opencode/ai/providers/openai-compatible",
+                ["settings"] = new JsonObject
+                {
+                    ["baseURL"] = baseUrl,
+                    ["apiKey"] = "beacon"
+                },
+                ["models"] = variantModels
             }
         };
 
@@ -90,7 +107,8 @@ public static class OpencodePayload
         var root = new JsonObject
         {
             ["path"] = ".",
-            ["provider"] = provider
+            ["provider"] = provider,
+            ["providers"] = providers
         };
         if (model is not null)
             root["model"] = model;
@@ -132,6 +150,19 @@ public static class OpencodePayload
     {
         var trimmed = name.Trim();
         return string.IsNullOrEmpty(trimmed) ? "model" : trimmed;
+    }
+
+    private static JsonArray ReasoningVariants()
+    {
+        // A fresh array per call: a JsonNode has a single parent, so the list cannot
+        // be shared between model entries.
+        return new JsonArray
+        {
+            new JsonObject { ["id"] = "low", ["settings"] = new JsonObject { ["reasoningEffort"] = "low" } },
+            new JsonObject { ["id"] = "medium", ["settings"] = new JsonObject { ["reasoningEffort"] = "medium" } },
+            new JsonObject { ["id"] = "high", ["settings"] = new JsonObject { ["reasoningEffort"] = "high" } },
+            new JsonObject { ["id"] = "xhigh", ["settings"] = new JsonObject { ["reasoningEffort"] = "xhigh" } }
+        };
     }
 
     private static LocalModelBackendDto? Resolve(IReadOnlyDictionary<Guid, LocalModelBackendDto> byId, Guid? id) =>

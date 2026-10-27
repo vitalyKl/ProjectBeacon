@@ -41,20 +41,22 @@
 @if (ShowModelSelect)
 {
     <div class="beacon-chat-model-bar">
-        <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-model-select">
-            <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
-            @foreach (var backend in Models)
-            {
-                <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
-            }
-        </MudSelect>
-        <MudSelect T="string?" Value="@ReasoningEffort" ValueChanged="value => OnEffortChanged(value)" Label="@L["ChatReasoningEffort"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-effort-select">
-            <MudSelectItem Value="@((string?)null)">@L["ChatEffortDefault"]</MudSelectItem>
-            <MudSelectItem Value=@(" + low + ")>@L["ChatEffortLow"]</MudSelectItem>
-            <MudSelectItem Value=@(" + medium + ")>@L["ChatEffortMedium"]</MudSelectItem>
-            <MudSelectItem Value=@(" + high + ")>@L["ChatEffortHigh"]</MudSelectItem>
-            <MudSelectItem Value=@(" + xhigh + ")>@L["ChatEffortXhigh"]</MudSelectItem>
-        </MudSelect>
+        <div class="beacon-chat-model-pair">
+            <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-model-select">
+                <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
+                @foreach (var backend in Models)
+                {
+                    <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="string?" Value="@ReasoningEffort" ValueChanged="value => OnEffortChanged(value)" Label="@L["ChatReasoningEffort"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-effort-select">
+                <MudSelectItem Value="@((string?)null)">@L["ChatEffortDefault"]</MudSelectItem>
+                <MudSelectItem Value=@(" + low + ")>@L["ChatEffortLow"]</MudSelectItem>
+                <MudSelectItem Value=@(" + medium + ")>@L["ChatEffortMedium"]</MudSelectItem>
+                <MudSelectItem Value=@(" + high + ")>@L["ChatEffortHigh"]</MudSelectItem>
+                <MudSelectItem Value=@(" + xhigh + ")>@L["ChatEffortXhigh"]</MudSelectItem>
+            </MudSelect>
+        </div>
         @if (!string.IsNullOrEmpty(ModelStatus))
         {
             @if (ModelStatus == "switching")
