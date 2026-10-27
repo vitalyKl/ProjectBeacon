@@ -54,11 +54,13 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         var sessionB = await SeedSessionAsync("Session B", null);
         await Task.Delay(10);
         var sessionA = await SeedSessionAsync("Session A", "alpha-part");
+        DelayedGetSessionHandler? delayed = null;
         Bunit.Services.AddTransient<GetChatSessionHandler>(
-            sp => new DelayedGetSessionHandler(sp.GetRequiredService<IBeaconDbFactory>()));
+            sp => delayed ??= new DelayedGetSessionHandler(sp.GetRequiredService<IBeaconDbFactory>()));
         AuthAsSeededUser();
         var signal = Bunit.Services.GetRequiredService<ChatEventSignal>();
         var cut = Bunit.RenderComponent<Chat>();
+        var handler = (DelayedGetSessionHandler)Bunit.Services.GetRequiredService<GetChatSessionHandler>();
         // Settle the component's own async initialization before interacting: the newest
         // session (A) must be selected and its parts loaded, which also guarantees the poll
         // loop is already waiting. Clicking first would race the init on slow machines,
@@ -69,13 +71,15 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         // Wake the poll loop and let its fetch start (the handler delays it 100 ms), then
         // switch sessions while the fetch is in flight.
         signal.Signal(sessionA);
-        await Task.Yield();
-        await Task.Delay(10);
+        // Wait for the woken iteration to start its delayed fetch so the switch below is
+        // guaranteed to land mid-flight; then wait for the fetch to complete so the poll
+        // guards have run before asserting.
+        await handler.FetchStarted.WaitAsync(TimeSpan.FromSeconds(10));
         var target = cut.FindAll("div.beacon-session-main")
             .Single(e => e.TextContent.Contains("Session B"));
         target.Click(new MouseEventArgs());
-        await Task.Delay(500);
-        Assert.Contains("Session B", cut.Find(".beacon-chat-session-head").TextContent);
+        await handler.FetchCompleted.WaitAsync(TimeSpan.FromSeconds(10));
+        cut.WaitForAssertion(() => Assert.Contains("Session B", cut.Find(".beacon-chat-session-head").TextContent), TimeSpan.FromSeconds(10));
     }
     private void AuthAsSeededUser()
     {
@@ -134,6 +138,11 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
     private sealed class DelayedGetSessionHandler : GetChatSessionHandler
     {
         private bool _delayed;
+        private readonly TaskCompletionSource _fetchStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _fetchCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task FetchStarted => _fetchStarted.Task;
+        public Task FetchCompleted => _fetchCompleted.Task;
 
         public DelayedGetSessionHandler(IBeaconDbFactory dbFactory) : base(dbFactory)
         {
@@ -144,7 +153,9 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
             if (!_delayed)
             {
                 _delayed = true;
+                _fetchStarted.TrySetResult();
                 await Task.Delay(100, ct);
+                _fetchCompleted.TrySetResult();
             }
             return await base.HandleAsync(command, ct);
         }
