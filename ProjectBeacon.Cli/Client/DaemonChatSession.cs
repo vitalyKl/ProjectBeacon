@@ -58,12 +58,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var chatId = doc.RootElement.TryGetProperty("chatSessionId", out var c) ? c.GetGuid() : Guid.Empty;
         var text = doc.RootElement.TryGetProperty("text", out var tx) ? tx.GetString() : null;
         var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+        var effort = doc.RootElement.TryGetProperty("reasoningEffort", out var eff) ? eff.GetString() : null;
         // Carries the session's project so the daemon's parts/idle writes are scoped to it, not the owner's default scope.
         var projectId = doc.RootElement.TryGetProperty("projectId", out var p) && p.TryGetGuid(out var pid) ? pid : Guid.Empty;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
         return await _gate.RunExclusiveAsync(
-            () => PromptLockedAsync(cwd, externalId, chatId, text, model, projectId, ct),
+            () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, ct),
             ct);
     }
 
@@ -78,7 +79,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
-        string cwd, string externalId, Guid chatId, string text, string? model, Guid projectId, CancellationToken ct)
+        string cwd, string externalId, Guid chatId, string text, string? model, string? effort, Guid projectId, CancellationToken ct)
     {
         var openCode = _gate.OpenCode;
         var runtime = _gate.Runtime;
@@ -90,7 +91,10 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         // Baseline: the last assistant message before the prompt; an ended turn from an
         // earlier prompt must not close this one.
         var baselineMessageId = (await runtime.GetTurnStatusAsync(externalId, ct))?.MessageId;
-        await runtime.SendPromptAsync(externalId, text, model, ct);
+        var controls = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : new AgentPromptControls(null, effort, null);
+        await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(_timing.ChatIdleTimeout / _timing.ChatPollInterval));
         var maxIterations = Math.Max(1, (int)Math.Ceiling(_timing.ChatMaxDuration / _timing.ChatPollInterval));

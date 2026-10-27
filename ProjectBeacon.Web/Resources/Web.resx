@@ -2219,4 +2219,31 @@ No Beacon-hosted coding agent.</value>
 <data name="ChatJumpToLatest" xml:space="preserve">
     <value>Jump to latest</value>
   </data>
+  <data name="ChatReasoningEffort" xml:space="preserve">
+    <value>Reasoning effort</value>
+  </data>
+  <data name="ChatEffortDefault" xml:space="preserve">
+    <value>Default</value>
+  </data>
+  <data name="ChatEffortLow" xml:space="preserve">
+    <value>Low</value>
+  </data>
+  <data name="ChatEffortMedium" xml:space="preserve">
+    <value>Medium</value>
+  </data>
+  <data name="ChatEffortHigh" xml:space="preserve">
+    <value>High</value>
+  </data>
+  <data name="ChatEffortXhigh" xml:space="preserve">
+    <value>XHigh</value>
+  </data>
+  <data name="ChatModelReady" xml:space="preserve">
+    <value>Model ready: {0}</value>
+  </data>
+  <data name="ChatModelSwitching" xml:space="preserve">
+    <value>Switching model: {0}</value>
+  </data>
+  <data name="ChatModelNotLoaded" xml:space="preserve">
+    <value>Model not loaded: {0}</value>
+  </data>
 </root>

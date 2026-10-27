@@ -24,7 +24,22 @@ public static class OpencodePayload
         var byId = backends.ToDictionary(b => b.Id);
         var models = new JsonObject();
         foreach (var backend in backends.Where(b => b.BackendType == ModelBackendType.LlamaCpp).OrderBy(b => b.Name, StringComparer.Ordinal))
-            models[ModelKey(backend.Name)] = new JsonObject { ["name"] = backend.Name };
+        {
+            // Reasoning variants (#low/#medium/#high/#xhigh) let per-prompt reasoning effort resolve in
+            // OpenCode v2; each variant sets reasoningEffort, which the OpenAI-compatible client
+            // sends as reasoning_effort — accepted per request by llama-server.
+            models[ModelKey(backend.Name)] = new JsonObject
+            {
+                ["name"] = backend.Name,
+                ["variants"] = new JsonArray
+                {
+                    new JsonObject { ["id"] = "low", ["settings"] = new JsonObject { ["reasoningEffort"] = "low" } },
+                    new JsonObject { ["id"] = "medium", ["settings"] = new JsonObject { ["reasoningEffort"] = "medium" } },
+                    new JsonObject { ["id"] = "high", ["settings"] = new JsonObject { ["reasoningEffort"] = "high" } },
+                    new JsonObject { ["id"] = "xhigh", ["settings"] = new JsonObject { ["reasoningEffort"] = "xhigh" } }
+                }
+            };
+        }
 
         var provider = new JsonObject
         {

@@ -142,11 +142,17 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (IsV2)
         {
             // v2 sets the model on the session and the prompt payload carries text only;
-            // temperature/reasoningEffort/tools have no v2 equivalent and are v1-only.
+            // temperature/tools have no v2 equivalent; reasoning effort travels as the model variant.
             if (!string.IsNullOrWhiteSpace(model))
             {
                 var (providerID, modelID) = SplitModelRef(model);
-                using var switched = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/model", new { model = new { id = modelID, providerID } }, ct);
+                // v2 exposes reasoning effort as a model variant (defined per model in the apply payload);
+                // temperature and tool permissions remain v1-only.
+                var effort = controls?.ReasoningEffort;
+                var modelRef = new Dictionary<string, object?> { ["id"] = modelID, ["providerID"] = providerID };
+                if (!string.IsNullOrWhiteSpace(effort) && !string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase))
+                    modelRef["variant"] = effort;
+                using var switched = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/model", new { model = modelRef }, ct);
                 switched.EnsureSuccessStatusCode();
             }
             using var v2Response = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/prompt", new { text }, ct);

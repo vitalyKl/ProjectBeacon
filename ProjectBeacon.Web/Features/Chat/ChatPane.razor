@@ -12,16 +12,7 @@
                 <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
             }
         </div>
-        @if (ShowModelSelect)
-        {
-            <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-model-select">
-                <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
-                @foreach (var backend in Models)
-                {
-                    <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
-                }
-            </MudSelect>
-        }
+
     </div>
 }
 <div class="beacon-chat-log" @ref="_log">
@@ -47,7 +38,33 @@
     <MudAlert Severity="Severity.Error" Class="mt-2">@PhaseLabel</MudAlert>
 }
 
-<form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
+@if (ShowModelSelect)
+{
+    <div class="beacon-chat-model-bar">
+        <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-model-select">
+            <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
+            @foreach (var backend in Models)
+            {
+                <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string?" Value="@ReasoningEffort" ValueChanged="value => OnEffortChanged(value)" Label="@L["ChatReasoningEffort"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-effort-select">
+            <MudSelectItem Value="@((string?)null)">@L["ChatEffortDefault"]</MudSelectItem>
+            <MudSelectItem Value=@(" + low + ")>@L["ChatEffortLow"]</MudSelectItem>
+            <MudSelectItem Value=@(" + medium + ")>@L["ChatEffortMedium"]</MudSelectItem>
+            <MudSelectItem Value=@(" + high + ")>@L["ChatEffortHigh"]</MudSelectItem>
+            <MudSelectItem Value=@(" + xhigh + ")>@L["ChatEffortXhigh"]</MudSelectItem>
+        </MudSelect>
+        @if (!string.IsNullOrEmpty(ModelStatus))
+        {
+            @if (ModelStatus == "switching")
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Info" Class="beacon-chat-model-progress" />
+            }
+            <MudText Typo="Typo.caption" Class="beacon-chat-model-status">@ModelStatusLabel</MudText>
+        }
+    </div>
+}<form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
     <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
         <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
                       OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
@@ -76,6 +93,10 @@
     [Parameter] public bool ShowModelSelect { get; set; }
     [Parameter] public List<string> Models { get; set; } = [];
     [Parameter] public string? Model { get; set; }
+    [Parameter] public string? ReasoningEffort { get; set; }
+    [Parameter] public EventCallback<string?> ReasoningEffortChanged { get; set; }
+    [Parameter] public string? ModelStatus { get; set; }
+    [Parameter] public string ModelStatusLabel { get; set; } = string.Empty;
     [Parameter] public EventCallback<string?> ModelChanged { get; set; }
     [Parameter] public string Draft { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> DraftChanged { get; set; }
@@ -126,6 +147,12 @@
     {
         Model = value;
         await ModelChanged.InvokeAsync(value);
+    }
+
+    private Task OnEffortChanged(string? value)
+    {
+        ReasoningEffort = value;
+        return ReasoningEffortChanged.InvokeAsync(value);
     }
 
 

@@ -2011,4 +2011,31 @@
 <data name="ChatJumpToLatest" xml:space="preserve">
     <value>К последнему</value>
   </data>
+  <data name="ChatReasoningEffort" xml:space="preserve">
+    <value>Уроеен рассуждений</value>
+  </data>
+  <data name="ChatEffortDefault" xml:space="preserve">
+    <value>По умольаний</value>
+  </data>
+  <data name="ChatEffortLow" xml:space="preserve">
+    <value>Низкий</value>
+  </data>
+  <data name="ChatEffortMedium" xml:space="preserve">
+    <value>Средний</value>
+  </data>
+  <data name="ChatEffortHigh" xml:space="preserve">
+    <value>Высокий</value>
+  </data>
+  <data name="ChatEffortXhigh" xml:space="preserve">
+    <value>Очень высокий</value>
+  </data>
+  <data name="ChatModelReady" xml:space="preserve">
+    <value>Модель готова: {0}</value>
+  </data>
+  <data name="ChatModelSwitching" xml:space="preserve">
+    <value>Перекление модели: {0}</value>
+  </data>
+  <data name="ChatModelNotLoaded" xml:space="preserve">
+    <value>Модель не загружена: {0}</value>
+  </data>
 </root>

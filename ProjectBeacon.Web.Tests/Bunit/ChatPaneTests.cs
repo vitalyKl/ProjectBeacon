@@ -46,6 +46,37 @@ public sealed class ChatPaneTests : BUnitRenderBase
         Assert.DoesNotContain("Pane session", withoutHead.Markup);
     }
 
+
+    [Fact]
+    public void ModelBarRendersAboveComposerWithEffortAndStatus()
+    {
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.ShowModelSelect, true)
+            .Add(p => p.Models, new List<string> { "qwen3.8-Q3-medium", "gemma small" })
+            .Add(p => p.Model, "beacon-local/qwen3.8-Q3-medium")
+            .Add(p => p.ModelStatus, "switching")
+            .Add(p => p.ModelStatusLabel, "Switching model: qwen3.8-Q3-medium"));
+
+        Assert.Contains("beacon-chat-model-bar", cut.Markup);
+        Assert.Contains("beacon-chat-model-select", cut.Markup);
+        Assert.Contains("beacon-chat-effort-select", cut.Markup);
+        Assert.Contains("qwen3.8-Q3-medium", cut.Markup);
+        Assert.Contains("beacon-chat-model-progress", cut.Markup);
+        Assert.Contains("Switching model: qwen3.8-Q3-medium", cut.Markup);
+        Assert.True(cut.Markup.IndexOf("beacon-chat-model-bar") < cut.Markup.IndexOf("beacon-chat-compose"),
+            "model bar must sit above the composer");
+    }
+
+    [Fact]
+    public void ModelBarHiddenWithoutShowModelSelect()
+    {
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.ShowSessionHead, true)
+            .Add(p => p.Session, SessionDto("A")));
+        Assert.DoesNotContain("beacon-chat-model-bar", cut.Markup);
+        Assert.DoesNotContain("beacon-chat-model-select", cut.Markup);
+    }
+
     [Fact]
     public async Task Follow_ScrolledAway_ShowsJumpButton()
     {

@@ -1997,4 +1997,31 @@ orthstar</value>
 <data name="ChatJumpToLatest" xml:space="preserve">
     <value>Zu den neuesten</value>
   </data>
+  <data name="ChatReasoningEffort" xml:space="preserve">
+    <value>Reasoning-Aufwand</value>
+  </data>
+  <data name="ChatEffortDefault" xml:space="preserve">
+    <value>Standard</value>
+  </data>
+  <data name="ChatEffortLow" xml:space="preserve">
+    <value>Niedrig</value>
+  </data>
+  <data name="ChatEffortMedium" xml:space="preserve">
+    <value>Mittel</value>
+  </data>
+  <data name="ChatEffortHigh" xml:space="preserve">
+    <value>Hoch</value>
+  </data>
+  <data name="ChatEffortXhigh" xml:space="preserve">
+    <value>Extra hoch</value>
+  </data>
+  <data name="ChatModelReady" xml:space="preserve">
+    <value>Modell bereit: {0}</value>
+  </data>
+  <data name="ChatModelSwitching" xml:space="preserve">
+    <value>Modellwechsel: {0}</value>
+  </data>
+  <data name="ChatModelNotLoaded" xml:space="preserve">
+    <value>Modell nicht geladen: {0}</value>
+  </data>
 </root>

@@ -1234,6 +1234,30 @@ body:has(.beacon-theme-dark) .mud-main-content {
     max-width: 60%;
 }
 
+.beacon-chat-model-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+}
+
+.beacon-chat-effort-select {
+    flex: 0 0 auto;
+    width: 150px;
+    max-width: 100%;
+}
+
+.beacon-chat-model-status {
+    color: var(--color-text-secondary);
+}
+
+.beacon-chat-model-progress {
+    flex: 1 1 120px;
+    min-width: 80px;
+    max-width: 160px;
+}
+
 
 
 .beacon-chat-pane {

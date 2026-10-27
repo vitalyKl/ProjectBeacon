@@ -7,6 +7,7 @@
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Chat
 @using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Runtime
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
@@ -21,6 +22,7 @@
 @inject ArchiveChatSessionHandler ArchiveSession
 @inject GetModelRegistryHandler GetRegistry
 @inject GetChatModelHandler GetChatModel
+@inject GetProxyStatusHandler GetStatus
 @inject ChatEventSignal Events
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -88,6 +90,10 @@ else
                     ShowModelSelect
                     Models="_models"
                     @bind-Model="_model"
+                    @bind-Model:after="OnModelBound"
+                    @bind-ReasoningEffort="_effort"
+                    ModelStatus="ModelStatus"
+                    ModelStatusLabel="ModelStatusLabel"
                     @bind-Draft="_draft"
                     DraftLabel="@L["Message"]"
                     Busy="_busy"
@@ -110,6 +116,8 @@ else
     private List<ChatPartDto> _parts = [];
     private List<string> _models = [];
     private string? _model;
+    private string? _effort;
+    private LlamaSwapStatusDto? _proxy;
     private string _draft = string.Empty;
     private bool _busy;
     private bool _failed;
@@ -136,6 +144,7 @@ else
                     _model = OpencodePayload.OpenCodeId(chosen);
             }
         }
+        await LoadProxyStatus();
         await ReloadSessions();
         if (_sessions.Count > 0)
             await Select(_sessions[0]);
@@ -222,7 +231,7 @@ else
         _failed = false;
         try
         {
-            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_selected.Id, _userId, _draft, _model)));
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_selected.Id, _userId, _draft, _model, _effort)));
             if (!sent.Success)
             {
                 _failed = true;
@@ -285,6 +294,7 @@ else
                     var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
                     if (parts.Success && _selected?.Id == sessionId)
                         _parts = parts.Value!.ToList();
+                    await LoadProxyStatus();
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (OperationCanceledException) when (_poll.Token.IsCancellationRequested)
@@ -325,6 +335,60 @@ else
         "Generating" or "UsingTool" or "Waiting" => Color.Info,
         _ => Color.Default
     };
+
+    private async Task LoadProxyStatus()
+    {
+        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+        if (status.Success)
+            _proxy = status.Value;
+    }
+
+    private async Task OnModelBound()
+    {
+        await LoadProxyStatus();
+    }
+
+    private string? SelectedBackendName
+    {
+        get
+        {
+            if (_model is null)
+                return null;
+            var i = _model.IndexOf('/');
+            var name = i < 0 ? _model : _model[(i + 1)..];
+            return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        }
+    }
+
+    private string? ModelStatus
+    {
+        get
+        {
+            var name = SelectedBackendName;
+            if (name is null)
+                return null;
+            var loaded = _proxy?.LoadedModel;
+            if (string.Equals(loaded, name, StringComparison.OrdinalIgnoreCase))
+                return "ready";
+            return _selected?.Status == ChatSessionStatus.Streaming ? "switching" : "pending";
+        }
+    }
+
+    private string ModelStatusLabel
+    {
+        get
+        {
+            var name = SelectedBackendName;
+            if (name is null)
+                return string.Empty;
+            return ModelStatus switch
+            {
+                "ready" => string.Format(L["ChatModelReady"].Value, name),
+                "switching" => string.Format(L["ChatModelSwitching"].Value, name),
+                _ => string.Format(L["ChatModelNotLoaded"].Value, name)
+            };
+        }
+    }
 
     private bool CanRetry => Phase is "Failed" or "Aborted"
         && _parts.Any(p => string.Equals(p.Role, "user", StringComparison.OrdinalIgnoreCase));

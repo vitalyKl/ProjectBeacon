@@ -1997,4 +1997,31 @@ orthstar</value>
 <data name="ChatJumpToLatest" xml:space="preserve">
     <value>最新へ</value>
   </data>
+  <data name="ChatReasoningEffort" xml:space="preserve">
+    <value>推論レベル</value>
+  </data>
+  <data name="ChatEffortDefault" xml:space="preserve">
+    <value>デフォルト</value>
+  </data>
+  <data name="ChatEffortLow" xml:space="preserve">
+    <value>低</value>
+  </data>
+  <data name="ChatEffortMedium" xml:space="preserve">
+    <value>中</value>
+  </data>
+  <data name="ChatEffortHigh" xml:space="preserve">
+    <value>高</value>
+  </data>
+  <data name="ChatEffortXhigh" xml:space="preserve">
+    <value>極高</value>
+  </data>
+  <data name="ChatModelReady" xml:space="preserve">
+    <value>モデル準備完了: {0}</value>
+  </data>
+  <data name="ChatModelSwitching" xml:space="preserve">
+    <value>モデル切り替え中: {0}</value>
+  </data>
+  <data name="ChatModelNotLoaded" xml:space="preserve">
+    <value>モデル未読み゙み: {0}</value>
+  </data>
 </root>

@@ -252,7 +252,8 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                         externalSessionId = session.ExternalSessionId,
                         projectId = session.ProjectId,
                         text,
-                        model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct)
+                        model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct),
+                        reasoningEffort = command.Request.ReasoningEffort
                     });
                     var sanitized = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.ChatPrompt);
                     if (!sanitized.Success)

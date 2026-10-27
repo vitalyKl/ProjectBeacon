@@ -1,8 +1,10 @@
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Chat
 @using ProjectBeacon.Application.Projects
+@using ProjectBeacon.Application.Runtime
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -10,6 +12,9 @@
 @inject ListChatSessionsHandler ListSessions
 @inject ListChatPartsHandler ListParts
 @inject GetChatSessionHandler GetSession
+@inject GetModelRegistryHandler GetRegistry
+@inject GetChatModelHandler GetChatModel
+@inject GetProxyStatusHandler GetStatus
 @inject SendChatPromptHandler SendPrompt
 @inject CreateChatSessionHandler CreateSession
 @inject ChatEventSignal Events
@@ -46,6 +51,13 @@
             else
             {
                 <ChatPane
+                    ShowModelSelect
+                    Models="_models"
+                    @bind-Model="_model"
+                    @bind-Model:after="OnModelBound"
+                    @bind-ReasoningEffort="_effort"
+                    ModelStatus="ModelStatus"
+                    ModelStatusLabel="ModelStatusLabel"
                     Parts="DockParts"
                     Phase="Phase"
                     PhaseLabel="PhaseLabel"
@@ -68,6 +80,10 @@
     private Guid _userId;
     private ChatSessionDto? _session;
     private List<ChatPartDto> _parts = [];
+    private List<string> _models = [];
+    private string? _model;
+    private string? _effort;
+    private LlamaSwapStatusDto? _proxy;
     private string _draft = string.Empty;
     private bool _busy;
     private bool _failed;
@@ -83,6 +99,18 @@
         var current = await CurrentProject.HandleAsync(actor);
         if (current.Value is null || _userId == Guid.Empty)
             return;
+        var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
+        if (registry.Success)
+        {
+            _models = registry.Value!.Backends.Select(b => b.Name).ToList();
+            var preferred = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
+            if (preferred.Success && preferred.Value is Guid backendId)
+            {
+                var chosen = registry.Value.Backends.FirstOrDefault(b => b.Id == backendId);
+                if (chosen is not null)
+                    _model = OpencodePayload.OpenCodeId(chosen);
+            }
+        }
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
         if (listed.Success && listed.Value!.Count > 0)
         {
@@ -141,7 +169,7 @@
         _failed = false;
         try
         {
-            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, null)));
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, _model, _effort)));
             if (!sent.Success)
             {
                 _failed = true;
@@ -196,6 +224,7 @@
                         _session = session.Value;
                     if (_session?.Id != sessionId)
                         continue;
+                    await LoadProxyStatus();
                     await ReloadParts();
                     await InvokeAsync(StateHasChanged);
                 }
@@ -227,6 +256,60 @@
     private string Phase => ChatPhase.Resolve(_session?.Status, _parts.LastOrDefault()?.Kind, _failed, _parts.Count);
 
     private string PhaseLabel => L[ChatPhase.LabelKey(Phase)].Value;
+
+    private async Task LoadProxyStatus()
+    {
+        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+        if (status.Success)
+            _proxy = status.Value;
+    }
+
+    private async Task OnModelBound()
+    {
+        await LoadProxyStatus();
+    }
+
+    private string? SelectedBackendName
+    {
+        get
+        {
+            if (_model is null)
+                return null;
+            var i = _model.IndexOf('/');
+            var name = i < 0 ? _model : _model[(i + 1)..];
+            return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        }
+    }
+
+    private string? ModelStatus
+    {
+        get
+        {
+            var name = SelectedBackendName;
+            if (name is null)
+                return null;
+            var loaded = _proxy?.LoadedModel;
+            if (string.Equals(loaded, name, StringComparison.OrdinalIgnoreCase))
+                return "ready";
+            return _session?.Status == ChatSessionStatus.Streaming ? "switching" : "pending";
+        }
+    }
+
+    private string ModelStatusLabel
+    {
+        get
+        {
+            var name = SelectedBackendName;
+            if (name is null)
+                return string.Empty;
+            return ModelStatus switch
+            {
+                "ready" => string.Format(L["ChatModelReady"].Value, name),
+                "switching" => string.Format(L["ChatModelSwitching"].Value, name),
+                _ => string.Format(L["ChatModelNotLoaded"].Value, name)
+            };
+        }
+    }
 
     public void Dispose()
     {

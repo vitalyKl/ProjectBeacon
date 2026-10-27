@@ -50,4 +50,19 @@ public sealed class OpencodePayloadTests
         Assert.Equal("subagent", agent.GetProperty("review").GetProperty("mode").GetString());
         Assert.Equal("beacon-local/rev-model", agent.GetProperty("review").GetProperty("model").GetString());
     }
+
+    [Fact]
+    public void LlamaModelsExposeReasoningEffortVariants()
+    {
+        var qwen = Backend("qwen");
+        var json = OpencodePayload.BuildApply(AgentRunMode.Solo, [qwen], qwen.Id, null, null, null);
+        using var doc = JsonDocument.Parse(json);
+        var models = doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("models");
+        var variants = models.GetProperty("qwen").GetProperty("variants");
+        Assert.Equal(4, variants.GetArrayLength());
+        var ids = variants.EnumerateArray().Select(v => v.GetProperty("id").GetString()).ToList();
+        Assert.Equal(new[] { "low", "medium", "high", "xhigh" }, ids);
+        foreach (var v in variants.EnumerateArray())
+            Assert.Equal(v.GetProperty("id").GetString(), v.GetProperty("settings").GetProperty("reasoningEffort").GetString());
+    }
 }
