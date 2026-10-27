@@ -14,5 +14,8 @@ jobs:
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
+      # The self-hosted runner must have a small valid GGUF staged once as test.gguf in the checkout
+      # directory (or set BEACON_TEST_GPU_MODEL); without it, the test fails under GITHUB_ACTIONS,
+      # so this lane never passes vacuously.
       - name: Test real llama-server
         run: dotnet test --project ProjectBeacon.Cli.Tests -p:TestLane=gpu --minimum-expected-tests 1
