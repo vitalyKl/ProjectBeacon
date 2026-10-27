@@ -27,6 +27,8 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     private int _port = 4096;
     private bool _runningFake;
     private volatile string? _serverPassword;
+    // 0 = unknown, 1 = v1, 2 = v2; set by health polling and probed on demand for ungated calls (abort).
+    private volatile int _detectedVersion;
     private DateTime _passwordCapturedAt = DateTime.MinValue;
     private DateTime _startedAt = DateTime.MinValue;
     private int _passwordFromPid;
@@ -179,14 +181,59 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         AbortCount++;
         if (SkipRealProcess)
             return;
-        if (IsV2)
+        if (await IsV2Async(ct))
         {
+            // A v2 interrupt needs Basic auth, but a queued abort can reach a fresh serve
+            // before its password line is read from stdout; wait for it briefly.
+            if (_serverPassword is null)
+                await WaitForPasswordAsync(ct);
             using var v2Response = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/interrupt", null, ct);
             v2Response.EnsureSuccessStatusCode();
             return;
         }
         using var response = await Send(HttpMethod.Post, $"/session/{sessionId}/abort", new { }, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Resolves the serve major version on demand so path selection never depends on the
+    /// captured password: an ungated abort can race the v2 handshake at serve start.
+    /// </summary>
+    private async Task<bool> IsV2Async(CancellationToken ct)
+    {
+        if (_serverPassword is not null || _detectedVersion == 2)
+            return true;
+        if (_detectedVersion == 1)
+            return false;
+        bool v2 = false;
+        try
+        {
+            using var probe = await Send(HttpMethod.Get, "/api/info", null, ct);
+            v2 = probe.StatusCode is System.Net.HttpStatusCode.OK or System.Net.HttpStatusCode.Unauthorized;
+            if (v2)
+                _detectedVersion = 2;
+            else if (probe.StatusCode == System.Net.HttpStatusCode.NotFound)
+                _detectedVersion = 1;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+        }
+        return v2;
+    }
+
+    private async Task WaitForPasswordAsync(CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (_serverPassword is null)
+                await Task.Delay(100, cts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // No password within the wait window; the interrupt request surfaces the auth error.
+        }
     }
 
     public async Task<IReadOnlyList<OpenCodeMessagePart>> ListPartsAsync(string sessionId, CancellationToken ct)
@@ -242,7 +289,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
 
     private bool IsRunning => TestForceRunning || (SkipRealProcess ? _runningFake : _process is { HasExited: false });
 
-    private bool IsV2 => _serverPassword is not null;
+    private bool IsV2 => _serverPassword is not null || _detectedVersion == 2;
 
     private void SetStatus(OpenCodeServeStatus next)
     {
@@ -326,6 +373,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (holder > 0)
         {
             _serverPassword = null;
+            _detectedVersion = 0;
             _passwordCapturedAt = DateTime.MinValue;
             _passwordFromPid = 0;
             if (_lastBusyHolderLogged != holder)
@@ -356,6 +404,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         foreach (var pair in _env)
             psi.Environment[pair.Key] = pair.Value;
         _serverPassword = null;
+        _detectedVersion = 0;
         _passwordCapturedAt = DateTime.MinValue;
         _passwordFromPid = 0;
         _startedAt = DateTime.UtcNow;
@@ -440,6 +489,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
                 var version = await TryReadInfoVersionAsync(probe, ct);
                 if (version is not null)
                 {
+                    _detectedVersion = 2;
                     SetStatus(OpenCodeServeStatus.Ok(version));
                     return true;
                 }
@@ -447,6 +497,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             }
             else if (probe.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
+                _detectedVersion = 2;
                 string message;
                 if (!IsRunning)
                     message = $"opencode v2 on port {_port} but the client's own process is not running; an older opencode serve may occupy the port. Stop it and restart the client.";
@@ -484,6 +535,8 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             catch (JsonException)
             {
             }
+            if (healthy)
+                _detectedVersion = 1;
             SetStatus(healthy
                 ? OpenCodeServeStatus.Ok(healthVersion)
                 : new OpenCodeServeStatus(true, false, null, "/global/health did not return a JSON health body."));

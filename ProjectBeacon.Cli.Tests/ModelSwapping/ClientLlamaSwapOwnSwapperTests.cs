@@ -1,4 +1,4 @@
-namespace ProjectBeacon.Cli.Tests.ModelSwapping;
+﻿namespace ProjectBeacon.Cli.Tests.ModelSwapping;
 
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.ModelSwapping;
@@ -6,11 +6,19 @@ using ProjectBeacon.Infrastructure.LlamaSwap;
 
 public sealed class ClientLlamaSwapOwnSwapperTests
 {
+    // Redirect the generated llama-swap config to a scratch file so tests never touch the real workstation config.
+    private static readonly string TempCfg = Path.Combine(Path.GetTempPath(), "beacon-llama-test-" + Guid.NewGuid().ToString("N"));
+
+    public ClientLlamaSwapOwnSwapperTests()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(TempCfg)!);
+    }
     [Fact]
     public async Task TickOwn_NoModels_StatusNotAvailable()
     {
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true
         };
@@ -28,6 +36,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true
         };
@@ -49,6 +58,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true,
             ConcurrentPortBase = 9000
@@ -71,6 +81,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true
         };
@@ -87,6 +98,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     {
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true
         };
@@ -104,6 +116,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true
         };
@@ -120,6 +133,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true
         };
@@ -136,6 +150,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true,
             VramChecker = new FixedVram(1)
@@ -167,6 +182,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true,
             VramChecker = new FixedVram(1)
@@ -186,6 +202,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true,
             VramChecker = new FixedVram(6)
@@ -207,6 +224,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true,
             VramChecker = new FixedVram(100)
@@ -228,6 +246,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
 
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = true,
             SkipRealProcess = true,
             VramChecker = new FailedVram()
@@ -243,6 +262,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     {
         var ll = new ClientLlamaSwap
         {
+            ConfigFile = TempCfg,
             UseOwnSwapper = false,
             SkipRealProcess = true
         };
@@ -260,7 +280,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     [Fact]
     public async Task TickOwn_NoDesired_FallsBackToFirstAlphabetical()
     {
-        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        var ll = new ClientLlamaSwap { ConfigFile = TempCfg, UseOwnSwapper = true, SkipRealProcess = true };
         await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
         Assert.Equal("alpha", ll.Status.LoadedModel);
     }
@@ -268,7 +288,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     [Fact]
     public async Task TickOwn_PrefersDesiredSwapModel_NotFirstAlphabetical()
     {
-        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        var ll = new ClientLlamaSwap { ConfigFile = TempCfg, UseOwnSwapper = true, SkipRealProcess = true };
         ll.PreferSwapModel("beta");
         await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
         Assert.Equal("beta", ll.Status.LoadedModel);
@@ -277,7 +297,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     [Fact]
     public async Task TickOwn_SwapsToDesiredOnDemand()
     {
-        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        var ll = new ClientLlamaSwap { ConfigFile = TempCfg, UseOwnSwapper = true, SkipRealProcess = true };
         ll.PreferSwapModel("alpha");
         await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
         Assert.Equal("alpha", ll.Status.LoadedModel);
@@ -290,7 +310,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     [Fact]
     public async Task TickOwn_UnknownDesired_FallsBackToFirst()
     {
-        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        var ll = new ClientLlamaSwap { ConfigFile = TempCfg, UseOwnSwapper = true, SkipRealProcess = true };
         ll.PreferSwapModel("zzz");
         await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
         Assert.Equal("alpha", ll.Status.LoadedModel);
@@ -299,7 +319,7 @@ public sealed class ClientLlamaSwapOwnSwapperTests
     [Fact]
     public async Task EnsureSwapModelAsync_SetsPreferenceAndTicks()
     {
-        var ll = new ClientLlamaSwap { UseOwnSwapper = true, SkipRealProcess = true };
+        var ll = new ClientLlamaSwap { ConfigFile = TempCfg, UseOwnSwapper = true, SkipRealProcess = true };
         await ll.TickAsync(TwoModelYaml(), 8080, null, CancellationToken.None);
         Assert.Equal("alpha", ll.Status.LoadedModel);
 

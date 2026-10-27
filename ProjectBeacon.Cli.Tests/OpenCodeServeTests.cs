@@ -342,6 +342,50 @@ public sealed class OpenCodeServeTests : IDisposable
     }
 
     [Fact]
+    public async Task AbortAsync_V2WithoutPassword_DetectsViaInfoAndWaitsForPassword()
+    {
+        string? path = null;
+        var scheme = "";
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                path = request.RequestUri!.AbsolutePath;
+                scheme = request.Headers.Authorization?.Scheme ?? "";
+                return path == "/api/info"
+                    ? Task.FromResult(StatusCode(HttpStatusCode.Unauthorized))
+                    : Task.FromResult(JsonResponse("""{"interrupted":true}"""));
+            }
+        };
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(150);
+            serve.HandleStdoutLine("SERVER PASSWORD pw123");
+        });
+        await serve.AbortAsync("ses_1", CancellationToken.None);
+        Assert.Equal("/api/session/ses_1/interrupt", path);
+        Assert.Equal("Basic", scheme);
+    }
+
+    [Fact]
+    public async Task AbortAsync_V1DetectedViaInfo_UsesV1Path()
+    {
+        string? path = null;
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                path = request.RequestUri!.AbsolutePath;
+                return path == "/api/info"
+                    ? Task.FromResult(StatusCode(HttpStatusCode.NotFound))
+                    : Task.FromResult(StatusCode(HttpStatusCode.NoContent));
+            }
+        };
+        await serve.AbortAsync("s1", CancellationToken.None);
+        Assert.Equal("/session/s1/abort", path);
+    }
+
+    [Fact]
     public async Task ListParts_ParsesV2MessageList()
     {
         string? path = null;
