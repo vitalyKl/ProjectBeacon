@@ -1210,6 +1210,32 @@ body:has(.beacon-theme-dark) .mud-main-content {
     flex-shrink: 0;
 }
 
+.beacon-chat-compose-form {
+    flex-shrink: 0;
+}
+
+.beacon-chat-session-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.beacon-chat-session-title strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.beacon-chat-model-select {
+    flex: 0 0 auto;
+    width: 180px;
+    max-width: 60%;
+}
+
+
+
 .beacon-chat-pane {
     min-height: 60vh;
     display: flex;

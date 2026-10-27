@@ -5,10 +5,22 @@
 @if (ShowSessionHead && Session is not null)
 {
     <div class="beacon-chat-session-head">
-        <strong>@Session.Title</strong>
-        @if (!string.IsNullOrEmpty(Phase))
+        <div class="beacon-chat-session-title">
+            <strong>@Session.Title</strong>
+            @if (!string.IsNullOrEmpty(Phase))
+            {
+                <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
+            }
+        </div>
+        @if (ShowModelSelect)
         {
-            <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
+            <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-model-select">
+                <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
+                @foreach (var backend in Models)
+                {
+                    <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
+                }
+            </MudSelect>
         }
     </div>
 }
@@ -34,29 +46,22 @@
 {
     <MudAlert Severity="Severity.Error" Class="mt-2">@PhaseLabel</MudAlert>
 }
-@if (ShowModelSelect)
-{
-    <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
-        <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
-        @foreach (var backend in Models)
+
+<form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
+    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
+        <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
+                      OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
+        @if (CanAbort)
         {
-            <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
+            <MudButton Variant="Variant.Outlined" OnClick="Abort" Disabled="@Busy">@L["Abort"]</MudButton>
         }
-    </MudSelect>
-}
-<MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
-    <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
-                  OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
-    @if (CanAbort)
-    {
-        <MudButton Variant="Variant.Outlined" OnClick="Abort" Disabled="@Busy">@L["Abort"]</MudButton>
-    }
-    @if (CanRetry)
-    {
-        <MudButton Variant="Variant.Outlined" OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
-    }
-</MudStack>
+        @if (CanRetry)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
+        }
+    </MudStack>
+</form>
 
 @code {
     // Presentation shared by the full /chat page and the global ChatDock. The hosts own the
@@ -123,10 +128,45 @@
         await ModelChanged.InvokeAsync(value);
     }
 
+
+    // Enter handling: KeyboardEventArgs has no PreventDefault, so on one Enter both the
+    // keydown handler and the native form submit fire. SendOnce serializes them into a
+    // single send; _shiftEnter keeps Shift+Enter from sending via the implicit submit.
+    private bool _sending;
+    private bool _shiftEnter;
+
     private async Task OnKey(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey)
+        if (e.Key != "Enter")
+            return;
+        _shiftEnter = e.ShiftKey;
+        if (!e.ShiftKey)
+            await SendOnce();
+    }
+
+    private Task OnSendSubmit()
+    {
+        if (_shiftEnter)
+        {
+            _shiftEnter = false;
+            return Task.CompletedTask;
+        }
+        return SendOnce();
+    }
+
+    private async Task SendOnce()
+    {
+        if (_sending)
+            return;
+        _sending = true;
+        try
+        {
             await Send.InvokeAsync();
+        }
+        finally
+        {
+            _sending = false;
+        }
     }
 
     private async Task JumpToLatest()
