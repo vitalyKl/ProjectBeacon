@@ -11,13 +11,8 @@ public static class CommandSandbox
 {
     public const string RuntimeRequired = "Project runtime is required.";
 
-    public static bool IsProjectKind(WorkstationCommandKind kind) => kind is
-        WorkstationCommandKind.InitProject
-        or WorkstationCommandKind.ApplyOpencode
-        or WorkstationCommandKind.RunEvalTurn
-        or WorkstationCommandKind.RunReviewCheck
-        or WorkstationCommandKind.ChatEnsureSession
-        or WorkstationCommandKind.ChatPrompt;
+    public static bool IsProjectKind(WorkstationCommandKind kind) =>
+        WorkstationCommandCatalog.Get(kind).Scope == WorkstationCommandScope.ProjectRuntime;
 
     public static Result<string> SanitizeProjectPayload(string? payloadJson, WorkstationCommandKind? kind = null)
     {
