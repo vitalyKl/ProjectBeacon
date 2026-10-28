@@ -45,9 +45,9 @@ public sealed class ApplicationDispatcherTests
 
         services.AddApplicationHandlers();
 
-        Assert.True(services.Any(descriptor =>
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ICommandHandler<CreateTaskCommand, Result<TaskItemDto>>)
-            && descriptor.ImplementationType == typeof(CreateTaskHandler)));
+            && descriptor.ImplementationType == typeof(CreateTaskHandler));
     }
 
     [Fact]
