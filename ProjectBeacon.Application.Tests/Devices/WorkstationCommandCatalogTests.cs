@@ -1,7 +1,7 @@
 namespace ProjectBeacon.Application.Tests.Devices;
 
-using Application.Devices;
-using Domain.Enums;
+using ProjectBeacon.Application.Devices;
+using ProjectBeacon.Domain.Enums;
 using Xunit;
 
 public sealed class WorkstationCommandCatalogTests
