@@ -1,6 +1,16 @@
 namespace ProjectBeacon.Application.Common;
 
-using Microsoft.Extensions.DependencyInjection;
+/// <summary>Why an operation failed.</summary>
+public enum ErrorKind
+{
+    None,
+    Validation,
+    Unauthorized,
+    Forbidden,
+    NotFound,
+    Conflict,
+    Unavailable
+}
 
 /// <summary>Stable machine-readable code for a business failure.</summary>
 public static class ErrorCodes
