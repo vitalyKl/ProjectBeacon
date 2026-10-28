@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using Application.Common;
 using Domain.Enums;
 using Application.Persistence;
 using Application.Runtime;
