@@ -32,7 +32,7 @@ public static class WorkstationCommandCatalog
 {
     private static readonly IReadOnlyDictionary<WorkstationCommandKind, WorkstationCommandDescriptor> ByKind = Build();
 
-    public static IReadOnlyCollection<WorkstationCommandDescriptor> All => ByKind.Values;
+    public static IReadOnlyCollection<WorkstationCommandDescriptor> All => ByKind.Values.ToArray();
 
     public static WorkstationCommandDescriptor Get(WorkstationCommandKind kind) =>
         ByKind.TryGetValue(kind, out var descriptor)
