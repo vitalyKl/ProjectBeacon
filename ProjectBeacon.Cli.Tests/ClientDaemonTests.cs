@@ -607,12 +607,14 @@ public sealed class ClientDaemonTests : IDisposable
             SendAsync = (request, _) =>
             {
                 var path = request.RequestUri!.AbsolutePath;
+                var query = request.RequestUri?.Query ?? "";
                 if (path == "/api/info")
                     return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
                 if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
                 {
                     var n = Interlocked.Increment(ref messageGets);
-                    return Task.FromResult(OkJson(n <= 3 ? toolCalls : n <= 5 ? streaming : finished));
+                    var json = n <= 3 ? toolCalls : n <= 5 ? streaming : finished;
+                    return Task.FromResult(OkJson(query.Contains("order=desc", StringComparison.Ordinal) ? DescPage(json) : json));
                 }
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
             }
@@ -713,12 +715,14 @@ public sealed class ClientDaemonTests : IDisposable
             SendAsync = (request, _) =>
             {
                 var path = request.RequestUri!.AbsolutePath;
+                var query = request.RequestUri?.Query ?? "";
                 if (path == "/api/info")
                     return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
                 if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
                 {
                     var n = Interlocked.Increment(ref messageGets);
-                    return Task.FromResult(OkJson(n <= 1 ? "[]" : errorTurn));
+                    var json = n <= 1 ? "[]" : errorTurn;
+                    return Task.FromResult(OkJson(query.Contains("order=desc", StringComparison.Ordinal) ? DescPage(json) : json));
                 }
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
             }
@@ -776,12 +780,14 @@ public sealed class ClientDaemonTests : IDisposable
             SendAsync = (request, _) =>
             {
                 var path = request.RequestUri!.AbsolutePath;
+                var query = request.RequestUri?.Query ?? "";
                 if (path == "/api/info")
                     return Task.FromResult(OkJson("{\"version\":\"2.1.0\"}"));
                 if (request.Method == HttpMethod.Get && path.EndsWith("/message", StringComparison.Ordinal))
                 {
                     var n = Interlocked.Increment(ref messageGets);
-                    return Task.FromResult(OkJson(n <= 3 ? staleError : n <= 5 ? newTurnRunning : newTurnDone));
+                    var json = n <= 3 ? staleError : n <= 5 ? newTurnRunning : newTurnDone;
+                    return Task.FromResult(OkJson(query.Contains("order=desc", StringComparison.Ordinal) ? DescPage(json) : json));
                 }
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
             }
@@ -809,6 +815,19 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.Equal(1, capture.IdlePosts);
         Assert.Contains("\"interrupted\":false", result);
         Assert.Equal(7, messageGets);
+    }
+
+    // The v2 server lists newest-first when ?order=desc is requested; the chat fixtures are authored oldest-first.
+    private static string DescPage(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var items = new List<string>();
+        foreach (var element in doc.RootElement.EnumerateArray())
+            items.Add(element.GetRawText());
+        var reversed = new string[items.Count];
+        for (var i = 0; i < items.Count; i++)
+            reversed[i] = items[items.Count - 1 - i];
+        return "[" + string.Join(",", reversed) + "]";
     }
 
     private static HttpResponseMessage OkJson(string json) =>

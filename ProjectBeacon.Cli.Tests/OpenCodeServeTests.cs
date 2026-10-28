@@ -628,12 +628,12 @@ public sealed class OpenCodeServeTests : IDisposable
     }
 
     [Fact]
-    public async Task GetTurnStatus_V2_ReturnsLastAssistantMessageId()
+    public async Task GetTurnStatus_V2_ReturnsNewestAssistantMessageId()
     {
         await using var serve = new ClientOpenCodeServe
         {
             SendAsync = (_, _) => Task.FromResult(JsonResponse("""
-                [{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"stop","content":[]},{"type":"message","role":"assistant","id":"m2","time":{"created":3},"content":[]}]
+                [{"type":"message","role":"assistant","id":"m2","time":{"created":3},"content":[]},{"type":"message","role":"assistant","id":"m1","time":{"created":1,"completed":2},"finish":"stop","content":[]}]
                 """))
         };
         MarkV2(serve);

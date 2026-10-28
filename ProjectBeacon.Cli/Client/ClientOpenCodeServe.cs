@@ -246,6 +246,8 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         if (SkipRealProcess)
             return [new OpenCodeMessagePart("assistant", "text", "ok", "fake-1")];
+        if (IsV2)
+            return ParseParts(await ReadAllMessagesAscAsync(sessionId, ct), IsV2);
         using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -256,17 +258,17 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         if (SkipRealProcess)
             return null;
-        using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
+        using var response = await Send(HttpMethod.Get, TurnStatusPath(sessionId), null, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
-        return ParseTurnStatus(doc.RootElement);
+        return IsV2 ? ParseLatestTurnStatus(doc.RootElement) : ParseTurnStatus(doc.RootElement);
     }
-
     public async Task<OpenCodeSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
     {
         if (SkipRealProcess)
             return new OpenCodeSessionUsage(12, 34, 1, 0.0001);
-
+        if (IsV2)
+            return ParseUsage(await ReadAllMessagesAscAsync(sessionId, ct));
         using var response = await Send(HttpMethod.Get, MessagePath(sessionId), null, ct);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -276,6 +278,40 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     private string MessagePath(string sessionId) =>
         IsV2 ? $"/api/session/{Uri.EscapeDataString(sessionId)}/message" : $"/session/{sessionId}/message";
 
+    // The v2 server lists newest-first by default; only the tail of the session decides whether a turn ended.
+    private string TurnStatusPath(string sessionId) =>
+        IsV2 ? $"/api/session/{Uri.EscapeDataString(sessionId)}/message?order=desc&limit=20" : MessagePath(sessionId);
+
+    // v2 pages the message list (limit 1..200, default 50); follow cursor.next until exhausted.
+    private static string AscMessagesPath(string sessionId) =>
+        $"/api/session/{Uri.EscapeDataString(sessionId)}/message?order=asc&limit=200";
+
+    private static string? NextPagePath(string sessionId, JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("cursor", out var cursor) || cursor.ValueKind != JsonValueKind.Object
+            || !cursor.TryGetProperty("next", out var next) || next.ValueKind != JsonValueKind.String)
+            return null;
+        return $"/api/session/{Uri.EscapeDataString(sessionId)}/message?cursor={Uri.EscapeDataString(next.GetString()!)}";
+    }
+
+    private async Task<IReadOnlyList<string>> ReadAllMessagesAscAsync(string sessionId, CancellationToken ct)
+    {
+        var raw = new List<string>();
+        var path = AscMessagesPath(sessionId);
+        var pages = 0;
+        while (path is not null && pages++ < 500)
+        {
+            using var response = await Send(HttpMethod.Get, path, null, ct);
+            response.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            if (MessageArray(doc.RootElement) is { } array)
+                foreach (var message in array.EnumerateArray())
+                    raw.Add(message.GetRawText());
+            path = NextPagePath(sessionId, doc.RootElement);
+        }
+        return raw;
+    }
     private async Task<HttpResponseMessage> Send(HttpMethod method, string path, object? body, CancellationToken ct)
     {
         var request = new HttpRequestMessage(method, $"http://127.0.0.1:{_port}{path}");
@@ -590,60 +626,74 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (MessageArray(root) is not { } messages)
             return list;
         foreach (var message in messages.EnumerateArray())
+            AddMessageParts(list, message, isV2);
+        return list;
+    }
+
+    private static IReadOnlyList<OpenCodeMessagePart> ParseParts(IReadOnlyList<string> rawMessages, bool isV2)
+    {
+        var list = new List<OpenCodeMessagePart>();
+        foreach (var raw in rawMessages)
         {
-            if (message.ValueKind != JsonValueKind.Object)
-                continue;
-            // v1 wraps the info as {info, parts}; v2 items are the info objects themselves, tagged by type.
-            JsonElement info = default;
-            if (message.TryGetProperty("info", out var infoEl) && infoEl.ValueKind == JsonValueKind.Object)
-                info = infoEl;
-            else if (message.TryGetProperty("type", out _))
-                info = message;
-            var role = "assistant";
-            if (info.ValueKind == JsonValueKind.Object)
-            {
-                if (info.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String)
-                    role = roleEl.GetString() ?? role;
-                else if (info.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String)
-                {
-                    var type = typeEl.GetString();
-                    if (type is not ("user" or "assistant"))
-                        continue;
-                    role = type;
-                }
-            }
-            else if (message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
-            {
-                role = topRole.GetString() ?? role;
-            }
-            // Assistant parts are relayed only once their message is final, so streamed text is never posted mid-stream.
-            var complete = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase)
-                ? MessageCompleted(info.ValueKind == JsonValueKind.Object ? info : message)
-                : true;
-            var infoId = info.ValueKind == JsonValueKind.Object
-                && info.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
-                ? idEl.GetString()
-                : null;
-            JsonElement? parts = null;
-            if (message.TryGetProperty("parts", out var partsEl) && partsEl.ValueKind == JsonValueKind.Array)
-                parts = partsEl;
-            else if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.Array)
-                parts = contentEl;
-            if (parts is not null)
-            {
-                var index = 0;
-                foreach (var part in parts.Value.EnumerateArray())
-                    AddPart(list, role, part, infoId is null ? null : $"{infoId}:{index++}", complete, isV2);
-                continue;
-            }
-            if (role == "user" && info.ValueKind == JsonValueKind.Object)
-            {
-                var text = info.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String ? textEl.GetString() : null;
-                if (!string.IsNullOrWhiteSpace(text))
-                    list.Add(new OpenCodeMessagePart("user", "text", text!, infoId, true));
-            }
+            using var doc = JsonDocument.Parse(raw);
+            AddMessageParts(list, doc.RootElement, isV2);
         }
         return list;
+    }
+
+    private static void AddMessageParts(List<OpenCodeMessagePart> list, JsonElement message, bool isV2)
+    {
+        if (message.ValueKind != JsonValueKind.Object)
+            return;
+        // v1 wraps the info as {info, parts}; v2 items are the info objects themselves, tagged by type.
+        JsonElement info = default;
+        if (message.TryGetProperty("info", out var infoEl) && infoEl.ValueKind == JsonValueKind.Object)
+            info = infoEl;
+        else if (message.TryGetProperty("type", out _))
+            info = message;
+        var role = "assistant";
+        if (info.ValueKind == JsonValueKind.Object)
+        {
+            if (info.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String)
+                role = roleEl.GetString() ?? role;
+            else if (info.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String)
+            {
+                var type = typeEl.GetString();
+                if (type is not ("user" or "assistant"))
+                    return;
+                role = type;
+            }
+        }
+        else if (message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
+        {
+            role = topRole.GetString() ?? role;
+        }
+        // Assistant parts are relayed only once their message is final, so streamed text is never posted mid-stream.
+        var complete = string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase)
+            ? MessageCompleted(info.ValueKind == JsonValueKind.Object ? info : message)
+            : true;
+        var infoId = info.ValueKind == JsonValueKind.Object
+            && info.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
+            ? idEl.GetString()
+            : null;
+        JsonElement? parts = null;
+        if (message.TryGetProperty("parts", out var partsEl) && partsEl.ValueKind == JsonValueKind.Array)
+            parts = partsEl;
+        else if (info.ValueKind == JsonValueKind.Object && info.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.Array)
+            parts = contentEl;
+        if (parts is not null)
+        {
+            var index = 0;
+            foreach (var part in parts.Value.EnumerateArray())
+                AddPart(list, role, part, infoId is null ? null : $"{infoId}:{index++}", complete, isV2);
+            return;
+        }
+        if (role == "user" && info.ValueKind == JsonValueKind.Object)
+        {
+            var text = info.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String ? textEl.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(text))
+                list.Add(new OpenCodeMessagePart("user", "text", text!, infoId, true));
+        }
     }
 
     private static Application.Runtime.AgentTurnStatus? ParseTurnStatus(JsonElement root)
@@ -679,6 +729,49 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         }
         return last;
     }
+
+    // v2 lists newest-first: the newest idle message closes the turn; otherwise the newest
+    // assistant message decides. A failed idle keeps scanning for the assistant error.
+    private static Application.Runtime.AgentTurnStatus? ParseLatestTurnStatus(JsonElement root)
+    {
+        if (MessageArray(root) is not { } messages)
+            return null;
+        string? idleId = null;
+        string? idleOutcome = null;
+        foreach (var message in messages.EnumerateArray())
+        {
+            if (message.ValueKind != JsonValueKind.Object)
+                continue;
+            var type = ReadString(message, "type");
+            if (string.Equals(type, "idle", StringComparison.OrdinalIgnoreCase))
+            {
+                if (idleId is null)
+                {
+                    idleId = ReadString(message, "id");
+                    idleOutcome = ReadString(message, "outcome");
+                }
+                continue;
+            }
+            if (string.Equals(type, "assistant", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(ReadString(message, "role"), "assistant", StringComparison.OrdinalIgnoreCase))
+            {
+                var finish = ReadString(message, "finish");
+                var error = message.TryGetProperty("error", out var errorEl) && errorEl.ValueKind == JsonValueKind.Object
+                    ? ReadString(errorEl, "message") ?? "error"
+                    : null;
+                if (idleId is not null)
+                    return new Application.Runtime.AgentTurnStatus(true, idleOutcome, error, idleId);
+                var ended = error is not null
+                    || ((finish is null || !string.Equals(finish, "tool-calls", StringComparison.OrdinalIgnoreCase))
+                    && (MessageCompleted(message) || finish is not null));
+                return new Application.Runtime.AgentTurnStatus(ended, finish, error, ReadString(message, "id"));
+            }
+        }
+        return idleId is not null
+            ? new Application.Runtime.AgentTurnStatus(true, idleOutcome, null, idleId)
+            : null;
+    }
+
 
     private static bool MessageCompleted(JsonElement info)
     {
@@ -793,6 +886,22 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         }
         return new OpenCodeSessionUsage(promptTokens, completionTokens, assistantMessages, totalCost);
     }
+
+    private static OpenCodeSessionUsage ParseUsage(IReadOnlyList<string> rawMessages)
+    {
+        var assistantMessages = 0;
+        var promptTokens = 0;
+        var completionTokens = 0;
+        var totalCost = 0.0;
+        foreach (var raw in rawMessages)
+        {
+            using var doc = JsonDocument.Parse(raw);
+            (assistantMessages, promptTokens, completionTokens, totalCost) =
+                AddMessageUsage(doc.RootElement, assistantMessages, promptTokens, completionTokens, totalCost);
+        }
+        return new OpenCodeSessionUsage(promptTokens, completionTokens, assistantMessages, totalCost);
+    }
+
 
     private static (int AssistantMessages, int PromptTokens, int CompletionTokens, double TotalCost) AddMessageUsage(JsonElement message, int assistantMessages, int promptTokens, int completionTokens, double totalCost)
     {
