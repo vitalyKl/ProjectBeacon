@@ -1,8 +1,8 @@
 namespace ProjectBeacon.Application.Tests.Common;
 
-using Application;
-using Application.Common;
-using Application.Tasks;
+using ProjectBeacon.Application;
+using ProjectBeacon.Application.Common;
+using ProjectBeacon.Application.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
