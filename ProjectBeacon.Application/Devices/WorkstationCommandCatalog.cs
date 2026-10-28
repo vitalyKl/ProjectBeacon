@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Domain.Enums;
+using ProjectBeacon.Application.Common;
 
 /// <summary>Execution context required to handle a workstation command.</summary>
 public enum WorkstationCommandScope
@@ -11,11 +12,17 @@ public enum WorkstationCommandScope
 
 /// <summary>
 /// Static metadata for a workstation command. Execution and authorization remain in their
-/// dedicated handlers; this catalog centralizes command context requirements.
+/// dedicated handlers; this catalog centralizes command context, retry, and contract metadata.
 /// </summary>
 public sealed record WorkstationCommandDescriptor(
     WorkstationCommandKind Kind,
-    WorkstationCommandScope Scope);
+    string OperationId,
+    string Summary,
+    int Version,
+    WorkstationCommandScope Scope,
+    OperationRetrySemantics RetrySemantics,
+    string PayloadContract,
+    string SecurityPolicy);
 
 /// <summary>
 /// Authoritative metadata catalog for every persisted workstation command kind.
@@ -23,8 +30,7 @@ public sealed record WorkstationCommandDescriptor(
 /// </summary>
 public static class WorkstationCommandCatalog
 {
-    private static readonly IReadOnlyDictionary<WorkstationCommandKind, WorkstationCommandDescriptor> ByKind =
-        Build();
+    private static readonly IReadOnlyDictionary<WorkstationCommandKind, WorkstationCommandDescriptor> ByKind = Build();
 
     public static IReadOnlyCollection<WorkstationCommandDescriptor> All => ByKind.Values;
 
@@ -37,23 +43,23 @@ public static class WorkstationCommandCatalog
     {
         var descriptors = new[]
         {
-            Device(WorkstationCommandKind.Probe),
-            Device(WorkstationCommandKind.ListDir),
-            Device(WorkstationCommandKind.Install),
-            Project(WorkstationCommandKind.InitProject),
-            Project(WorkstationCommandKind.ApplyOpencode),
-            Device(WorkstationCommandKind.ScanGguf),
-            Device(WorkstationCommandKind.ReloadProxy),
-            Device(WorkstationCommandKind.UnloadProxy),
-            Device(WorkstationCommandKind.SwapModel),
-            Device(WorkstationCommandKind.SaveWorkstation),
-            Project(WorkstationCommandKind.ChatEnsureSession),
-            Project(WorkstationCommandKind.ChatPrompt),
-            Device(WorkstationCommandKind.ChatAbort),
-            Device(WorkstationCommandKind.ConfigureOpenCode),
-            Project(WorkstationCommandKind.RunEvalTurn),
-            Device(WorkstationCommandKind.ReconcileDesired),
-            Project(WorkstationCommandKind.RunReviewCheck)
+            Device(WorkstationCommandKind.Probe, "device.probe", "Check workstation connectivity and environment.", OperationRetrySemantics.ReadOnly, "{}"),
+            Device(WorkstationCommandKind.ListDir, "workspace.list-directory", "List a directory inside the configured workspace.", OperationRetrySemantics.ReadOnly, "{path:string}"),
+            Device(WorkstationCommandKind.Install, "device.install-tool", "Install a supported workstation tool.", OperationRetrySemantics.GuardedMutation, "{tool:string}"),
+            Project(WorkstationCommandKind.InitProject, "workspace.initialize", "Initialize project-local development configuration.", OperationRetrySemantics.Idempotent, "{projectId:guid}"),
+            Project(WorkstationCommandKind.ApplyOpencode, "agent.apply-config", "Apply the selected agent and model configuration.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
+            Device(WorkstationCommandKind.ScanGguf, "model.scan-local", "Discover local GGUF models.", OperationRetrySemantics.ReadOnly, "{}"),
+            Device(WorkstationCommandKind.ReloadProxy, "model-proxy.reload", "Reload the local model proxy configuration.", OperationRetrySemantics.Reconciliation, "{}"),
+            Device(WorkstationCommandKind.UnloadProxy, "model-proxy.unload", "Unload a local model from the model proxy.", OperationRetrySemantics.Idempotent, "{}"),
+            Device(WorkstationCommandKind.SwapModel, "model.swap", "Switch the active local model.", OperationRetrySemantics.GuardedMutation, "{model:string}"),
+            Device(WorkstationCommandKind.SaveWorkstation, "device.save-config", "Persist workstation desired configuration.", OperationRetrySemantics.GuardedMutation, "{revision:integer,...}"),
+            Project(WorkstationCommandKind.ChatEnsureSession, "chat.ensure-session", "Ensure a chat runtime session exists.", OperationRetrySemantics.AtMostOnce, "{sessionId?:guid}"),
+            Project(WorkstationCommandKind.ChatPrompt, "chat.prompt", "Submit one prompt to a chat session.", OperationRetrySemantics.AtMostOnce, "{sessionId:guid,prompt:string}"),
+            Device(WorkstationCommandKind.ChatAbort, "chat.abort", "Abort a running chat operation.", OperationRetrySemantics.Idempotent, "{sessionId:guid}"),
+            Device(WorkstationCommandKind.ConfigureOpenCode, "agent.configure-opencode", "Reconcile OpenCode runtime configuration.", OperationRetrySemantics.Reconciliation, "{revision?:integer,...}"),
+            Project(WorkstationCommandKind.RunEvalTurn, "eval.run-turn", "Run one evaluation turn.", OperationRetrySemantics.AtMostOnce, "{evalRunId:guid}"),
+            Device(WorkstationCommandKind.ReconcileDesired, "device.reconcile", "Reconcile workstation desired state.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
+            Project(WorkstationCommandKind.RunReviewCheck, "review.run-check", "Run the trusted project review check.", OperationRetrySemantics.AtMostOnce, "{reviewRunId:guid}")
         };
 
         var byKind = descriptors.ToDictionary(descriptor => descriptor.Kind);
@@ -72,9 +78,13 @@ public static class WorkstationCommandCatalog
         return byKind;
     }
 
-    private static WorkstationCommandDescriptor Device(WorkstationCommandKind kind) =>
-        new(kind, WorkstationCommandScope.Device);
+    private static WorkstationCommandDescriptor Device(WorkstationCommandKind kind, string id, string summary,
+        OperationRetrySemantics retry, string payload) =>
+        new(kind, id, summary, 1, WorkstationCommandScope.Device, retry, payload,
+            "Device ownership and command policy are enforced by the trusted Application boundary.");
 
-    private static WorkstationCommandDescriptor Project(WorkstationCommandKind kind) =>
-        new(kind, WorkstationCommandScope.ProjectRuntime);
+    private static WorkstationCommandDescriptor Project(WorkstationCommandKind kind, string id, string summary,
+        OperationRetrySemantics retry, string payload) =>
+        new(kind, id, summary, 1, WorkstationCommandScope.ProjectRuntime, retry, payload,
+            "Project membership, runtime binding, and payload sandboxing are enforced server-side.");
 }
