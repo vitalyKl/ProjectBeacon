@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application;
 
 using Application.Agents;
+using Application.Common;
 using Application.Auth;
 using Application.Authorization;
 using Application.Chat;
@@ -201,6 +202,40 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListEvalRunsHandler>();
         services.AddTransient<EvalPairHandler>();
 
+        RegisterDispatchableHandlers(services);
+        services.AddTransient<ICommandDispatcher, ApplicationDispatcher>();
+        services.AddTransient<IQueryDispatcher, ApplicationDispatcher>();
+
         return services;
+    }
+
+    private static void RegisterDispatchableHandlers(IServiceCollection services)
+    {
+        var handlerDefinitions = new HashSet<Type>
+        {
+            typeof(ICommandHandler<,>),
+            typeof(IQueryHandler<,>)
+        };
+
+        var candidates = typeof(ServiceCollectionExtensions).Assembly.GetTypes()
+            .Where(type => type.IsClass && !type.IsAbstract && !type.ContainsGenericParameters)
+            .SelectMany(implementationType => implementationType.GetInterfaces()
+                .Where(contract => contract.IsGenericType
+                    && handlerDefinitions.Contains(contract.GetGenericTypeDefinition()))
+                .Select(contract => (Contract: contract, Implementation: implementationType)))
+            .ToArray();
+
+        var duplicate = candidates
+            .GroupBy(candidate => candidate.Contract)
+            .FirstOrDefault(group => group.Select(candidate => candidate.Implementation).Distinct().Count() > 1);
+        if (duplicate is not null)
+        {
+            var implementations = string.Join(", ", duplicate.Select(candidate => candidate.Implementation.FullName).Distinct());
+            throw new InvalidOperationException(
+                $"Multiple Application handlers implement '{duplicate.Key.FullName}': {implementations}.");
+        }
+
+        foreach (var candidate in candidates)
+            services.AddTransient(candidate.Contract, candidate.Implementation);
     }
 }
