@@ -2038,4 +2038,7 @@
   <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Модель не загружена: {0}</value>
   </data>
+  <data name="ChatUsage" xml:space="preserve">
+    <value>Токены: {0} · {1}</value>
+  </data>
 </root>

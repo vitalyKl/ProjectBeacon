@@ -15,7 +15,12 @@ public record ChatSessionDto(
     string Title,
     ChatSessionStatus Status,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    int? PromptTokens = null,
+    int? CompletionTokens = null,
+    int? AssistantMessages = null,
+    double? TotalCost = null,
+    int? ContextLimit = null);
 
 /// <summary>
 /// One chat part: role, kind, body, optional external id, and sort order.
@@ -34,7 +39,8 @@ public record ChatPartDto(
     string? ToolStatus = null,
     string? ToolInput = null,
     string? ToolResult = null,
-    int? DurationMs = null);
+    int? DurationMs = null,
+    bool Complete = false);
 
 /// <summary>
 /// User and optional title for a new chat on the current project device.
@@ -131,7 +137,8 @@ public record AppendChatPartRequest(
     string? ToolStatus = null,
     string? ToolInput = null,
     string? ToolResult = null,
-    int? DurationMs = null);
+    int? DurationMs = null,
+    bool Complete = false);
 
 /// <summary>
 /// Command for append chat part.
@@ -147,3 +154,20 @@ public record MarkChatIdleRequest(Guid SessionId, Guid DeviceId);
 /// Command for mark chat idle.
 /// </summary>
 public record MarkChatIdleCommand(MarkChatIdleRequest Request) : ICommand<Result<ChatSessionDto>>;
+
+/// <summary>
+/// A device reports the session's token totals and the active model's context limit.
+/// </summary>
+public record ReportChatUsageRequest(
+    Guid SessionId,
+    Guid DeviceId,
+    int PromptTokens,
+    int CompletionTokens,
+    int AssistantMessages,
+    double TotalCost,
+    int? ContextLimit = null);
+
+/// <summary>
+/// Command for report chat usage.
+/// </summary>
+public record ReportChatUsageCommand(ReportChatUsageRequest Request) : ICommand<Result<ChatSessionDto>>;

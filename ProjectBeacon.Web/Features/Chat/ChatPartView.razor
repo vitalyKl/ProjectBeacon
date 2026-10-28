@@ -70,6 +70,7 @@
 
 @code {
     [Parameter, EditorRequired] public ChatPartDto Part { get; set; } = default!;
+    [Parameter] public string? ModelName { get; set; }
 
     private bool IsTool => string.Equals(Part.Kind, "tool", StringComparison.OrdinalIgnoreCase);
 
@@ -79,11 +80,13 @@
 
     private string RoleLabel => string.Equals(Part.Role, "user", StringComparison.OrdinalIgnoreCase)
         ? L["ChatYou"].Value
-        : IsAssistant ? L["ChatAssistant"].Value : Part.Role;
+        : IsAssistant
+            ? string.IsNullOrWhiteSpace(ModelName) ? L["ChatAssistant"].Value : $"{L["ChatAssistant"].Value} � {ModelName}"
+            : Part.Role;
 
     private string PartClass => string.Equals(Part.Role, "user", StringComparison.OrdinalIgnoreCase)
         ? "pa-3 mb-2 beacon-chat-user"
-        : "pa-3 mb-2";
+        : "pa-3 mb-2 beacon-chat-subtle";
 
     private string ToolTitle
     {

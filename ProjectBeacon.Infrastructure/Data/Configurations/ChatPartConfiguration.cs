@@ -16,6 +16,7 @@ public class ChatPartConfiguration : IEntityTypeConfiguration<ChatPart>
         entity.Property(e => e.Kind).IsRequired().HasMaxLength(40);
         entity.Property(e => e.Body).IsRequired();
         entity.Property(e => e.ExternalId).HasMaxLength(200);
+        entity.Property(e => e.Complete).IsRequired().HasDefaultValue(false);
         entity.Property(e => e.Tool).HasMaxLength(40);
         entity.Property(e => e.ToolStatus).HasMaxLength(40);
         entity.Property(e => e.CreatedAt).IsRequired();

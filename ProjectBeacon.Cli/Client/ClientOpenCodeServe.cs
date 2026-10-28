@@ -18,6 +18,8 @@ public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens
 public sealed class ClientOpenCodeServe : IAsyncDisposable
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    // The event stream lives as long as the chat turn; the 30s request timeout must not cut it.
+    private readonly HttpClient _streamHttp = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
     private Process? _process;
     private const int MaxRestarts = 5;
     private int _unhealthyPolls;
@@ -40,6 +42,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     internal int StartCount { get; private set; }
     internal bool SkipRealProcess { get; set; }
     internal Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? SendAsync { get; set; }
+    internal Func<string, Func<string, string, int, string, CancellationToken, Task>, CancellationToken, Task>? TestStream { get; set; }
     internal string? ServerPassword => _serverPassword;
     internal bool TestForceRunning { get; set; }
     internal Func<int, int>? PortHolderProbe { get; set; }
@@ -273,6 +276,136 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         return ParseUsage(doc.RootElement);
+    }
+
+    /// <summary>
+    /// The context limit of the session's model from the server catalog. Falls back to the
+    /// first listed model when none is selected; null when the catalog has no usable entry.
+    /// </summary>
+    public async Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct)
+    {
+        if (SkipRealProcess)
+            return null;
+        using var response = await Send(HttpMethod.Get, IsV2 ? "/api/model" : "/app/models", null, ct);
+        if (!response.IsSuccessStatusCode)
+            return null;
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            root = data;
+        if (root.ValueKind is not JsonValueKind.Array)
+            return null;
+        string? wantProvider = null;
+        string? wantModel = null;
+        if (!string.IsNullOrWhiteSpace(modelId))
+            (wantProvider, wantModel) = SplitModelRef(modelId);
+        foreach (var entry in root.EnumerateArray())
+        {
+            if (entry.ValueKind is not JsonValueKind.Object)
+                continue;
+            var provider = entry.TryGetProperty("providerID", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+            var model = entry.TryGetProperty("modelID", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+            if (wantModel is not null && (model != wantModel || (wantProvider is not null && provider != wantProvider)))
+                continue;
+            if (entry.TryGetProperty("limit", out var limit)
+                && limit.ValueKind == JsonValueKind.Object
+                && limit.TryGetProperty("context", out var context)
+                && context.ValueKind == JsonValueKind.Number
+                && context.TryGetInt32(out var value))
+                return value;
+            if (wantModel is null)
+                return null;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Subscribes to the v2 global event feed and reports the live text/reasoning deltas of one session.
+    /// Deltas are ephemeral (the feed is volatile), so this is a display accelerator only: the chat
+    /// poll loop re-reads the durable message list and remains the correctness backstop. One
+    /// connection per call, no reconnect. No-op for v1 servers and for fake test processes.
+    /// </summary>
+    public Task StreamSessionTextAsync(
+        string sessionId,
+        Func<string, string, int, string, CancellationToken, Task> onDelta,
+        CancellationToken ct)
+    {
+        if (TestStream is { } hook)
+            return hook(sessionId, onDelta, ct);
+        if (SkipRealProcess || !IsV2 || _serverPassword is null)
+            return Task.CompletedTask;
+        return StreamSessionTextLockedAsync(sessionId, onDelta, ct);
+    }
+
+    private async Task StreamSessionTextLockedAsync(
+        string sessionId,
+        Func<string, string, int, string, CancellationToken, Task> onDelta,
+        CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{_port}/api/event");
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("opencode:" + _serverPassword));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        HttpResponseMessage response;
+        try
+        {
+            response = SendAsync is { } hook
+                ? await hook(request, ct)
+                : await _streamHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log?.Invoke($"opencode event stream: connect failed: {ex.Message}");
+            return;
+        }
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogFailure(response, HttpMethod.Get, "/api/event");
+                return;
+            }
+            try
+            {
+                using var stream = await response.Content.ReadAsStreamAsync(ct);
+                using var reader = new StreamReader(stream);
+                string? line;
+                while (!ct.IsCancellationRequested && (line = await reader.ReadLineAsync(ct)) is not null)
+                {
+                    if (!line.StartsWith("data:", StringComparison.Ordinal))
+                        continue; // heartbeats (": heartbeat") and blank frame separators
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(line[5..].TrimStart());
+                        var root = doc.RootElement;
+                        var type = ReadString(root, "type");
+                        if (type is not ("session.text.delta" or "session.reasoning.delta")
+                            || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                            continue;
+                        var session = ReadString(data, "sessionID");
+                        var messageId = ReadString(data, "assistantMessageID");
+                        var delta = ReadString(data, "delta");
+                        if (session is null || session != sessionId || messageId is null || messageId.Length == 0 || delta is null)
+                            continue;
+                        var ordinal = data.TryGetProperty("ordinal", out var ord) && ord.ValueKind == JsonValueKind.Number
+                            ? ord.GetInt32()
+                            : 0;
+                        await onDelta(type == "session.text.delta" ? "text" : "reasoning", messageId, ordinal, delta, ct);
+                    }
+                    catch (JsonException)
+                    {
+                        // Skip malformed frames.
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // The turn ended; drop the stream on purpose.
+            }
+            catch (Exception ex)
+            {
+                Log?.Invoke($"opencode event stream: closed: {ex.Message}");
+            }
+        }
     }
 
     private string MessagePath(string sessionId) =>
@@ -683,9 +816,25 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             parts = contentEl;
         if (parts is not null)
         {
-            var index = 0;
+            // Fallback ids are kind-scoped ordinals: the durable content array interleaves reasoning,
+            // text, and tool parts, so a plain array index does not match the live event ordinals.
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var part in parts.Value.EnumerateArray())
-                AddPart(list, role, part, infoId is null ? null : $"{infoId}:{index++}", complete, isV2);
+            {
+                if (infoId is null)
+                {
+                    AddPart(list, role, part, null, complete, isV2);
+                    continue;
+                }
+                var rawKind = part.ValueKind == JsonValueKind.Object
+                    && part.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String
+                    ? t.GetString() ?? "text"
+                    : "text";
+                var normKind = rawKind is "reasoning" or "thinking" ? "reasoning" : rawKind;
+                var ordinal = counts.TryGetValue(normKind, out var n) ? n : 0;
+                counts[normKind] = ordinal + 1;
+                AddPart(list, role, part, $"{infoId}:{normKind}:{ordinal}", complete, isV2);
+            }
             return;
         }
         if (role == "user" && info.ValueKind == JsonValueKind.Object)
@@ -957,6 +1106,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     {
         await KillProcessAsync();
         _http.Dispose();
+        _streamHttp.Dispose();
     }
 }
 /// <summary>

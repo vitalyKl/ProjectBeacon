@@ -65,6 +65,73 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.All(_posts, p => Assert.Null(p.ProjectHeader));
     }
 
+    [Fact]
+    public async Task Prompt_PublishesStreamedSnapshotThenFinalPartOnSameKey()
+    {
+        var chatId = Guid.NewGuid();
+        _openCode.TestStream = (sessionId, onDelta, ct) =>
+        {
+            Assert.Equal("oc-1", sessionId);
+            return onDelta("text", "m1", 0, "Hel", ct);
+        };
+        var timing = new DaemonTiming
+        {
+            ChatPollInterval = TimeSpan.FromMilliseconds(1),
+            ChatIdleTimeout = TimeSpan.FromMilliseconds(1),
+            DelayAsync = (_, ct) => Task.CompletedTask
+        };
+        var runtime = new FinalPartRuntime();
+        var chat = new DaemonChatSession(
+            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
+            new StubGate(_openCode, runtime),
+            new StubLlamaSync(),
+            new StubState(),
+            timing);
+        var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
+        {
+            chatSessionId = chatId,
+            externalSessionId = "oc-1",
+            text = "hello",
+            model = (string?)null
+        }), CancellationToken.None);
+        Assert.True(ok, error);
+
+        var partPosts = _posts.Where(p => p.Path == $"/v1/chat/sessions/{chatId}/parts").ToList();
+        Assert.Equal(2, partPosts.Count);
+        using var streamed = JsonDocument.Parse(partPosts[0].Body!);
+        Assert.Equal("Hel", streamed.RootElement.GetProperty("body").GetString());
+        Assert.Equal("m1:text:0", streamed.RootElement.GetProperty("externalId").GetString());
+        Assert.False(streamed.RootElement.GetProperty("complete").GetBoolean());
+        using var final = JsonDocument.Parse(partPosts[1].Body!);
+        Assert.Equal("hello", final.RootElement.GetProperty("body").GetString());
+        Assert.Equal("m1:text:0", final.RootElement.GetProperty("externalId").GetString());
+        Assert.True(final.RootElement.GetProperty("complete").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Prompt_PostsSessionUsageBeforeIdle()
+    {
+        var chatId = Guid.NewGuid();
+        await RunPromptAsync(JsonSerializer.Serialize(new
+        {
+            chatSessionId = chatId,
+            externalSessionId = "oc-1",
+            text = "hello",
+            model = (string?)null
+        }));
+
+        var usage = _posts.Single(p => p.Path == $"/v1/chat/sessions/{chatId}/usage");
+        using var doc = JsonDocument.Parse(usage.Body!);
+        Assert.Equal(1, doc.RootElement.GetProperty("promptTokens").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("completionTokens").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("assistantMessages").GetInt32());
+        Assert.Equal(0, doc.RootElement.GetProperty("totalCost").GetDouble());
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("contextLimit").ValueKind);
+        // The usage report lands before the idle marker so the UI shows totals as soon as idle arrives.
+        var idle = _posts.Single(p => p.Path == $"/v1/chat/sessions/{chatId}/idle");
+        Assert.True(_posts.IndexOf(usage) < _posts.IndexOf(idle));
+    }
+
     private async Task RunPromptAsync(string payload)
     {
         var runtime = new StubRuntime();
@@ -84,7 +151,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.True(ok, error);
     }
 
-    private sealed record CapturedPost(string Method, string Path, string? ProjectHeader);
+    private sealed record CapturedPost(string Method, string Path, string? ProjectHeader, string? Body);
 
     private sealed class CapturingHandler : HttpMessageHandler
     {
@@ -92,15 +159,16 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
         public CapturingHandler(List<CapturedPost> posts) => _posts = posts;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             _posts.Add(new CapturedPost(request.Method.Method, request.RequestUri!.AbsolutePath,
-                request.Headers.TryGetValues("X-Project-Id", out var values) ? string.Join(",", values) : null));
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
+                request.Headers.TryGetValues("X-Project-Id", out var values) ? string.Join(",", values) : null, body));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         }
     }
 
-    private sealed class StubRuntime : IAgentRuntime
+    private class StubRuntime : IAgentRuntime
     {
         private int _statusCalls;
 
@@ -108,7 +176,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
         public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null) => Task.CompletedTask;
 
-        public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
+        public virtual async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
         {
             yield return new AgentMessagePart("assistant", "text", "hello", "p1");
         }
@@ -125,6 +193,16 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             => Task.FromResult(new AgentSessionUsage(1, 1, 1, 0));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FinalPartRuntime : StubRuntime
+    {
+        // The poller sees the final text under the same kind-scoped key the stream used.
+        public override async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            yield return new AgentMessagePart("assistant", "text", "hello", "m1:text:0");
+        }
     }
 
     private sealed class StubGate : IDaemonOpenCodeGate

@@ -323,4 +323,99 @@ public sealed class ChatHandlerTests : IDisposable
             await _db.Database.ExecuteSqlRawAsync("DROP TRIGGER chat_prompt_guard;", ct);
         }
     }
+
+    [Fact]
+    public async Task AppendPart_FinalOverwritesStreamedSnapshot()
+    {
+        var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+        var append = new AppendChatPartHandler(factory, new ChatEventSignal());
+
+        var streamed = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "Hel", "m1:text:0")), ct);
+        Assert.True(streamed.Success, streamed.Error);
+        Assert.False(streamed.Value!.Complete);
+
+        var final = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "Hello", "m1:text:0", Complete: true)), ct);
+        Assert.True(final.Success, final.Error);
+        Assert.Equal(streamed.Value!.Id, final.Value!.Id);
+        Assert.True(final.Value!.Complete);
+        Assert.Equal("Hello", final.Value!.Body);
+
+        var listed = await new ListChatPartsHandler(factory).HandleAsync(
+            new ListChatPartsCommand(new ListChatPartsRequest(sessionId, Guid.Empty)), ct);
+        Assert.True(listed.Success, listed.Error);
+        Assert.Single(listed.Value!);
+        Assert.Equal("Hello", listed.Value![0].Body);
+    }
+
+    [Fact]
+    public async Task AppendPart_LateStreamedSnapshotDoesNotClobberFinalPart()
+    {
+        var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+        var append = new AppendChatPartHandler(factory, new ChatEventSignal());
+
+        var final = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "Hello", "m1:text:0", Complete: true)), ct);
+        Assert.True(final.Success, final.Error);
+
+        var late = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "Hell", "m1:text:0")), ct);
+        Assert.True(late.Success, late.Error);
+        Assert.Equal(final.Value!.Id, late.Value!.Id);
+        Assert.True(late.Value!.Complete);
+        Assert.Equal("Hello", late.Value!.Body);
+
+        var listed = await new ListChatPartsHandler(factory).HandleAsync(
+            new ListChatPartsCommand(new ListChatPartsRequest(sessionId, Guid.Empty)), ct);
+        Assert.True(listed.Success, listed.Error);
+        Assert.Single(listed.Value!);
+        Assert.Equal("Hello", listed.Value![0].Body);
+    }
+
+    [Fact]
+    public async Task ReportUsage_StoresTotalsAndContextLimit()
+    {
+        var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+
+        var reported = await new ReportChatUsageHandler(factory, new ChatEventSignal()).HandleAsync(
+            new ReportChatUsageCommand(new ReportChatUsageRequest(sessionId, deviceId, 1200, 350, 4, 0.0123, 262144)), ct);
+        Assert.True(reported.Success, reported.Error);
+        Assert.Equal(1200, reported.Value!.PromptTokens);
+        Assert.Equal(350, reported.Value!.CompletionTokens);
+        Assert.Equal(4, reported.Value!.AssistantMessages);
+        Assert.Equal(0.0123, reported.Value!.TotalCost);
+        Assert.Equal(262144, reported.Value!.ContextLimit);
+
+        var fetched = await new GetChatSessionHandler(factory).HandleAsync(
+            new GetChatSessionCommand(new GetChatSessionRequest(sessionId, Guid.Empty)), ct);
+        Assert.True(fetched.Success, fetched.Error);
+        Assert.Equal(1200, fetched.Value!.PromptTokens);
+        Assert.Equal(262144, fetched.Value!.ContextLimit);
+    }
+
+    [Fact]
+    public async Task ReportUsage_WrongDevice_Fails()
+    {
+        var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+
+        var result = await new ReportChatUsageHandler(factory, new ChatEventSignal()).HandleAsync(
+            new ReportChatUsageCommand(new ReportChatUsageRequest(sessionId, Guid.NewGuid(), 1, 1, 1, 0, null)), TestContext.Current.CancellationToken);
+        Assert.False(result.Success);
+    }
 }

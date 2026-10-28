@@ -1278,6 +1278,14 @@ body:has(.beacon-theme-dark) .mud-main-content {
     background-color: var(--color-bg-accent);
 }
 
+.beacon-chat-part:not(.beacon-chat-user) {
+    color: var(--color-chat-subtle);
+}
+
+.beacon-chat-usage {
+    color: var(--color-text-muted);
+}
+
 .beacon-form {
     width: 100%;
     max-width: 520px;

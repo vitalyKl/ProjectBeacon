@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Client;
 
+using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -91,6 +92,23 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         // Baseline: the last assistant message before the prompt; an ended turn from an
         // earlier prompt must not close this one.
         var baselineMessageId = (await runtime.GetTurnStatusAsync(externalId, ct))?.MessageId;
+        // Open the live text stream before the prompt so no delta is missed. v1 servers have no
+        // event feed (the stream method is a no-op for them) and polling stays the backstop.
+        var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var streamBuffers = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+        var streamTask = openCode.StreamSessionTextAsync(externalId, (kind, messageId, ordinal, delta, streamCt) =>
+        {
+            var key = messageId + ":" + kind + ":" + ordinal;
+            var body = streamBuffers.AddOrUpdate(key, delta, (_, old) => old + delta);
+            return PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
+            {
+                role = "assistant",
+                kind,
+                body,
+                externalId = key,
+                complete = false
+            }, projectId, streamCt);
+        }, streamCts.Token);
         var controls = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
             : new AgentPromptControls(null, effort, null);
@@ -125,7 +143,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                         toolStatus = part.ToolStatus,
                         toolInput = part.ToolInput,
                         toolResult = part.ToolResult,
-                        durationMs = part.DurationMs
+                        durationMs = part.DurationMs,
+                        complete = part.Complete
                     }, projectId, ct);
                 }
                 quiet = added > 0 ? 0 : quiet + 1;
@@ -149,6 +168,11 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
             throw;
         }
+        finally
+        {
+            streamCts.Cancel();
+            try { await streamTask; } catch { }
+        }
         if (idle)
         {
             if (lastTurn is { Error: not null, MessageId: not null } && lastTurn.MessageId != baselineMessageId)
@@ -161,6 +185,23 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         {
             _state.Log($"chat prompt interrupted: max duration {_timing.ChatMaxDuration.TotalSeconds:0}s reached, {seen.Count} parts");
             try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
+        }
+        try
+        {
+            var usage = await runtime.ReadUsageAsync(externalId, ct);
+            var contextLimit = await openCode.ReadContextLimitAsync(model, ct);
+            await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new
+            {
+                promptTokens = usage.PromptTokens,
+                completionTokens = usage.CompletionTokens,
+                assistantMessages = usage.AssistantMessages,
+                totalCost = usage.TotalCost,
+                contextLimit
+            }, projectId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _state.Log($"chat usage report failed: {ex.Message}");
         }
         await PostChatAsync($"/v1/chat/sessions/{chatId}/idle", new { }, projectId, ct);
         return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);

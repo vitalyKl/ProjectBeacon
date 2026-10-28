@@ -29,6 +29,7 @@ public static class ChatEndpoints
         app.MapPost("/v1/chat/sessions/{id:guid}/abort", Abort).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/parts", AppendPart).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/chat/sessions/{id:guid}/idle", MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/chat/sessions/{id:guid}/usage", ReportUsage).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
     }
     /// <summary>
@@ -47,6 +48,11 @@ public static class ChatEndpoints
     /// Body a device posts for one chat part: role, kind, body, an optional external id,
     /// and structured tool fields for tool call parts.
     /// </summary>
+    /// <summary>
+    /// Body a device posts for the session's token totals and the active model's context limit.
+    /// </summary>
+    public record UsageBody(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, int? ContextLimit = null);
+
     public record AppendBody(
         string Role,
         string Kind,
@@ -56,7 +62,8 @@ public static class ChatEndpoints
         string? ToolStatus,
         string? ToolInput,
         string? ToolResult,
-        int? DurationMs);
+        int? DurationMs,
+        bool Complete = false);
 
     private static async Task<IResult> ListSessions(ListChatSessionsHandler handler, HttpContext ctx, CancellationToken ct)
     {
@@ -186,7 +193,15 @@ public static class ChatEndpoints
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new AppendChatPartCommand(new AppendChatPartRequest(
             id, actor.DeviceId!.Value, body.Role, body.Kind, body.Body, body.ExternalId,
-            body.Tool, body.ToolStatus, body.ToolInput, body.ToolResult, body.DurationMs)), ct);
+            body.Tool, body.ToolStatus, body.ToolInput, body.ToolResult, body.DurationMs, body.Complete)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
+    private static async Task<IResult> ReportUsage(Guid id, [FromBody] UsageBody body, ReportChatUsageHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(new ReportChatUsageCommand(new ReportChatUsageRequest(
+            id, actor.DeviceId!.Value, body.PromptTokens, body.CompletionTokens, body.AssistantMessages, body.TotalCost, body.ContextLimit)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 

@@ -23,6 +23,9 @@ public class ChatPart : Entity, IProjectScoped
     public string? ToolResult { get; private set; }
     public int? DurationMs { get; private set; }
 
+    /// <summary>True once the part content is final. Streamed snapshots arrive with false until the source message completes.</summary>
+    public bool Complete { get; private set; }
+
     public ChatSession Session { get; private set; } = null!;
 
     public static ChatPart Create(
@@ -37,7 +40,8 @@ public class ChatPart : Entity, IProjectScoped
         string? toolStatus = null,
         string? toolInput = null,
         string? toolResult = null,
-        int? durationMs = null)
+        int? durationMs = null,
+        bool complete = false)
     {
         var part = Entity.New<ChatPart>();
         part.SessionId = sessionId;
@@ -52,8 +56,30 @@ public class ChatPart : Entity, IProjectScoped
         part.ToolInput = string.IsNullOrWhiteSpace(toolInput) ? null : toolInput;
         part.ToolResult = string.IsNullOrWhiteSpace(toolResult) ? null : toolResult;
         part.DurationMs = durationMs is > 0 ? durationMs : null;
+        part.Complete = complete;
         part.CreatedAt = DateTime.UtcNow;
         return part;
+    }
+
+    /// <summary>Overwrites an existing part's content with a newer snapshot of the same external id.</summary>
+    public void Update(
+        string kind,
+        string body,
+        string? tool,
+        string? toolStatus,
+        string? toolInput,
+        string? toolResult,
+        int? durationMs,
+        bool complete)
+    {
+        Kind = string.IsNullOrWhiteSpace(kind) ? "text" : kind.Trim();
+        Body = body ?? "";
+        Tool = TrimTo(tool, 40);
+        ToolStatus = TrimTo(toolStatus, 40);
+        ToolInput = string.IsNullOrWhiteSpace(toolInput) ? null : toolInput;
+        ToolResult = string.IsNullOrWhiteSpace(toolResult) ? null : toolResult;
+        DurationMs = durationMs is > 0 ? durationMs : null;
+        Complete = complete;
     }
 
     private static string? TrimTo(string? value, int max)

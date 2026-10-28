@@ -2243,6 +2243,9 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatModelSwitching" xml:space="preserve">
     <value>Switching model: {0}</value>
   </data>
+  <data name="ChatUsage" xml:space="preserve">
+    <value>{0} tokens · {1}</value>
+  </data>
   <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Model not loaded: {0}</value>
   </data>

@@ -2024,4 +2024,7 @@ orthstar</value>
   <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>モデル未読み゙み: {0}</value>
   </data>
+  <data name="ChatUsage" xml:space="preserve">
+    <value>トークン: {0} · {1}</value>
+  </data>
 </root>

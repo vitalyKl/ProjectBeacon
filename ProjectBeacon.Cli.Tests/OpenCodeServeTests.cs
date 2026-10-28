@@ -424,15 +424,15 @@ public sealed class OpenCodeServeTests : IDisposable
         Assert.Equal("assistant", parts[1].Role);
         Assert.Equal("text", parts[1].Kind);
         Assert.Equal("hello", parts[1].Body);
-        Assert.Equal("m2:0", parts[1].ExternalId);
+        Assert.Equal("m2:text:0", parts[1].ExternalId);
         Assert.Equal("reasoning", parts[2].Kind);
-        Assert.Equal("m2:1", parts[2].ExternalId);
+        Assert.Equal("m2:reasoning:0", parts[2].ExternalId);
         Assert.Equal("tool", parts[3].Kind);
         Assert.Equal("read\ncompleted\nsrc/a.cs", parts[3].Body);
         Assert.Equal("c1", parts[3].ExternalId);
         Assert.Null(parts[3].DurationMs);
         Assert.Equal("bad\nerror\nboom", parts[4].Body);
-        Assert.Equal("m2:3", parts[4].ExternalId);
+        Assert.Equal("m2:tool:1", parts[4].ExternalId);
     }
 
     [Fact]
@@ -641,5 +641,182 @@ public sealed class OpenCodeServeTests : IDisposable
         Assert.NotNull(turn);
         Assert.False(turn!.Ended);
         Assert.Equal("m2", turn.MessageId);
+    }
+
+    [Fact]
+    public async Task StreamSessionText_V2_DeliversDeltasAndSkipsForeignFrames()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                Assert.EndsWith("/api/event", request.RequestUri!.AbsolutePath);
+                Assert.Equal("Basic", request.Headers.Authorization?.Scheme);
+                var body = """
+                    : heartbeat
+
+                    data: {"type":"message.updated","data":{"id":"m1"}}
+                    data: {"type":"session.text.delta","data":{"sessionID":"other","assistantMessageID":"m9","ordinal":0,"delta":"nope"}}
+                    data: {"type":"session.text.delta","data":{"sessionID":"ses_1","assistantMessageID":"m1","ordinal":0,"delta":"Hel"}}
+                    data: {"type":"session.reasoning.delta","data":{"sessionID":"ses_1","assistantMessageID":"m1","ordinal":2,"delta":"think"}}
+                    data: not-json
+                    data: {"type":"session.text.delta","data":{"sessionID":"ses_1","assistantMessageID":"m1","ordinal":1,"delta":"lo"}}
+                    """;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(body)
+                });
+            }
+        };
+        MarkV2(serve);
+
+        var deltas = new List<(string Kind, string MessageId, int Ordinal, string Delta)>();
+        await serve.StreamSessionTextAsync("ses_1", (kind, messageId, ordinal, delta, _) =>
+        {
+            deltas.Add((kind, messageId, ordinal, delta));
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.Equal(
+            new[] { ("text", "m1", 0, "Hel"), ("reasoning", "m1", 2, "think"), ("text", "m1", 1, "lo") },
+            deltas);
+    }
+
+    [Fact]
+    public async Task StreamSessionText_V1_IsNoOp()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (_, _) => throw new InvalidOperationException("v1 has no event feed")
+        };
+        var called = false;
+        await serve.StreamSessionTextAsync("ses_1", (k, m, o, d, ct) =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+        Assert.False(called);
+    }
+
+    [Fact]
+    public async Task StreamSessionText_CancellationStopsOpenStream()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (_, _) =>
+            {
+                var frame = """
+                    data: {"type":"session.text.delta","data":{"sessionID":"ses_1","assistantMessageID":"m1","ordinal":0,"delta":"Hel"}}
+                    """;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StreamContent(new HangingStream(frame.TrimEnd('\r', '\n') + "\n"))
+                });
+            }
+        };
+        MarkV2(serve);
+
+        var received = new List<string>();
+        var firstFrame = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cts = new CancellationTokenSource();
+        var streamTask = serve.StreamSessionTextAsync("ses_1", (k, m, o, d, ct) =>
+        {
+            received.Add(d);
+            firstFrame.TrySetResult(true);
+            return Task.CompletedTask;
+        }, cts.Token);
+
+        // The first frame must be delivered before the turn token is cancelled.
+        await firstFrame.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The stream then hangs on the next read; the cancellation must end the task.
+        cts.Cancel();
+        var ended = await Task.WhenAny(streamTask, Task.Delay(10_000));
+        Assert.Same(streamTask, ended);
+        Assert.Equal(new[] { "Hel" }, received);
+    }
+
+    [Fact]
+    public async Task ReadContextLimit_V2_MatchesModelAndFallsBackToFirst()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                Assert.Equal("/api/model", request.RequestUri!.AbsolutePath);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        [{"id":"flint","modelID":"flint-40b-free","providerID":"opencode","limit":{"context":262144,"output":65536}},
+                         {"id":"other","modelID":"nemotron","providerID":"opencode","limit":{"context":128000}}]
+                        """, System.Text.Encoding.UTF8, "application/json")
+                });
+            }
+        };
+        MarkV2(serve);
+        Assert.Equal(262144, await serve.ReadContextLimitAsync("opencode/flint-40b-free", CancellationToken.None));
+        Assert.Equal(128000, await serve.ReadContextLimitAsync("opencode/nemotron", CancellationToken.None));
+        Assert.Equal(262144, await serve.ReadContextLimitAsync(null, CancellationToken.None));
+        Assert.Null(await serve.ReadContextLimitAsync("opencode/missing", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReadContextLimit_V1_ReadsAppModels()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                Assert.Equal("/app/models", request.RequestUri!.AbsolutePath);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""
+                        [{"providerID":"local","modelID":"qwen","limit":{"context":32768}}]
+                        """, System.Text.Encoding.UTF8, "application/json")
+                });
+            }
+        };
+        Assert.Equal(32768, await serve.ReadContextLimitAsync("local/qwen", CancellationToken.None));
+        Assert.Null(await serve.ReadContextLimitAsync("local/missing", CancellationToken.None));
+    }
+
+    /// <summary>Emits one frame, then blocks on read until the cancellation token fires.</summary>
+    private sealed class HangingStream : Stream
+    {
+        private readonly MemoryStream _head = new();
+        private bool _headDone;
+
+        public HangingStream(string frame)
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(frame);
+            _head.Write(bytes, 0, bytes.Length);
+            _head.Position = 0;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            if (!_headDone)
+            {
+                _headDone = true;
+                return Task.FromResult(_head.Read(buffer, offset, count));
+            }
+            if (cancellationToken.IsCancellationRequested)
+                return Task.FromException<int>(new OperationCanceledException(cancellationToken));
+            var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // The registration must outlive this call: it fires when the turn token is cancelled.
+            cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+            return tcs.Task;
+        }
     }
 }

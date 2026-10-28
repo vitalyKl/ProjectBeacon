@@ -199,6 +199,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("Complete")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -291,6 +296,21 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UsageAssistantMessages")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("UsageCompletionTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("UsageContextLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("UsagePromptTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("UsageTotalCost")
+                        .HasColumnType("double precision");
 
                     b.HasKey("Id");
 

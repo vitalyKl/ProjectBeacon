@@ -18,7 +18,7 @@
 <div class="beacon-chat-log" @ref="_log">
     @foreach (var part in Parts)
     {
-        <ChatPartView Part="part" />
+        <ChatPartView Part="part" ModelName="@ModelName" />
     }
 </div>
 @if (_showJump)
@@ -66,7 +66,11 @@
             <MudText Typo="Typo.caption" Class="beacon-chat-model-status">@ModelStatusLabel</MudText>
         }
     </div>
-}<form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
+}@if (UsageLabel is { } usage)
+{
+    <MudText Typo="Typo.caption" Class="beacon-chat-usage mt-2">@usage</MudText>
+}
+<form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
     <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
         <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
                       OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
@@ -106,6 +110,20 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public bool CanAbort { get; set; }
     [Parameter] public bool CanRetry { get; set; }
+    [Parameter] public string? ModelName { get; set; }
+
+    // Session totals reported by the device: prompt tokens, the model's context limit, and cost.
+    private string? UsageLabel
+    {
+        get
+        {
+            if (Session is not { PromptTokens: not null, TotalCost: not null })
+                return null;
+            var prompt = Session.PromptTokens!.Value;
+            var tokens = Session.ContextLimit is { } limit ? $"{prompt:N0} / {limit:N0}" : $"{prompt:N0}";
+            return string.Format(L["ChatUsage"].Value, tokens, "$" + Session.TotalCost!.Value.ToString("0.####"));
+        }
+    }
     [Parameter] public EventCallback<MouseEventArgs> Send { get; set; }
     [Parameter] public EventCallback<MouseEventArgs> Abort { get; set; }
     [Parameter] public EventCallback<MouseEventArgs> Retry { get; set; }

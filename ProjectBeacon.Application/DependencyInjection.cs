@@ -194,6 +194,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ArchiveChatSessionHandler>();
         services.AddTransient<AppendChatPartHandler>();
         services.AddTransient<MarkChatIdleHandler>();
+        services.AddTransient<ReportChatUsageHandler>();
 
         services.AddTransient<RecordEvalRunHandler>();
         services.AddTransient<CompleteEvalRunHandler>();

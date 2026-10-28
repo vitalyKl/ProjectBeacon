@@ -643,7 +643,7 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.Equal(1, capture.IdlePosts);
         Assert.Contains("\"interrupted\":false", result);
         Assert.Contains("idle", string.Join("\n", logs));
-        Assert.Equal(7, messageGets);
+        Assert.Equal(8, messageGets);
     }
 
     [Fact]
@@ -749,7 +749,7 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.Equal(1, capture.IdlePosts);
         Assert.Contains("\"interrupted\":false", result);
         Assert.Contains("idle with error", string.Join("\n", logs));
-        Assert.Equal(3, messageGets);
+        Assert.Equal(4, messageGets);
     }
 
     [Fact]
@@ -814,7 +814,7 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.DoesNotContain("\"kind\":\"error\"", string.Join("|", capture.PartBodies));
         Assert.Equal(1, capture.IdlePosts);
         Assert.Contains("\"interrupted\":false", result);
-        Assert.Equal(7, messageGets);
+        Assert.Equal(8, messageGets);
     }
 
     // The v2 server lists newest-first when ?order=desc is requested; the chat fixtures are authored oldest-first.

@@ -18,6 +18,12 @@ public class ChatSession : Entity, IProjectScoped
     public DateTime? UpdatedAt { get; private set; }
     public DateTime? ArchivedAt { get; private set; }
 
+    public int? UsagePromptTokens { get; private set; }
+    public int? UsageCompletionTokens { get; private set; }
+    public int? UsageAssistantMessages { get; private set; }
+    public double? UsageTotalCost { get; private set; }
+    public int? UsageContextLimit { get; private set; }
+
     public ICollection<ChatPart> Parts { get; private set; } = [];
 
     public static ChatSession Create(Guid projectId, Guid deviceId, string title, string localRoot)
@@ -54,6 +60,17 @@ public class ChatSession : Entity, IProjectScoped
     public void SetIdle()
     {
         Status = ChatSessionStatus.Idle;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Records the session's token totals and the active model's context limit. Nulls stay until first report.</summary>
+    public void SetUsage(int promptTokens, int completionTokens, int assistantMessages, double totalCost, int? contextLimit)
+    {
+        UsagePromptTokens = promptTokens;
+        UsageCompletionTokens = completionTokens;
+        UsageAssistantMessages = assistantMessages;
+        UsageTotalCost = totalCost;
+        UsageContextLimit = contextLimit;
         UpdatedAt = DateTime.UtcNow;
     }
 

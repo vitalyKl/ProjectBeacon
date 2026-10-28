@@ -112,7 +112,8 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
 
     internal static ChatSessionDto Map(ChatSession session, string? projectName = null) =>
         new(session.Id, session.ProjectId, projectName, session.DeviceId, session.ExternalSessionId, session.Title,
-            session.Status, session.CreatedAt, session.UpdatedAt);
+            session.Status, session.CreatedAt, session.UpdatedAt,
+            session.UsagePromptTokens, session.UsageCompletionTokens, session.UsageAssistantMessages, session.UsageTotalCost, session.UsageContextLimit);
 }
 /// <summary>
 /// Lists the user's chat sessions in the current project. Archived sessions are hidden.
@@ -188,7 +189,7 @@ public class ListChatPartsHandler : ICommandHandler<ListChatPartsCommand, Result
 
     internal static ChatPartDto MapPart(ChatPart p) =>
         new(p.Id, p.SessionId, p.Role, p.Kind, p.Body, p.ExternalId, p.SortOrder, p.CreatedAt,
-            p.Tool, p.ToolStatus, p.ToolInput, p.ToolResult, p.DurationMs);
+            p.Tool, p.ToolStatus, p.ToolInput, p.ToolResult, p.DurationMs, p.Complete);
 }
 /// <summary>
 /// Queues a prompt on the device. The message is required and the OpenCode session must already
@@ -274,7 +275,7 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                     var next = await db.ChatParts
                         .Where(p => p.SessionId == session.Id)
                         .MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
-                    db.ChatParts.Add(ChatPart.Create(session.Id, session.ProjectId, "user", "text", text, next + 1));
+                    db.ChatParts.Add(ChatPart.Create(session.Id, session.ProjectId, "user", "text", text, next + 1, complete: true));
                     db.WorkstationCommands.Add(WorkstationCommand.Create(
                         session.DeviceId, WorkstationCommandKind.ChatPrompt, sanitized.Value, session.ProjectId,
                         command.Request.UserId));
@@ -453,11 +454,14 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
                         .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
                     if (session is null || session.DeviceId != command.Request.DeviceId)
                         return Result.Failure<ChatPartDto>("Chat session not found.");
+                    ChatPart? existing = null;
                     if (!string.IsNullOrWhiteSpace(command.Request.ExternalId))
                     {
-                        var existing = await db.ChatParts.IgnoreQueryFilters()
+                        existing = await db.ChatParts.IgnoreQueryFilters()
                             .FirstOrDefaultAsync(p => p.SessionId == session.Id && p.ExternalId == command.Request.ExternalId, ct);
-                        if (existing is not null)
+                        // A late streamed snapshot must not clobber a part the poller already finalized;
+                        // every other re-post overwrites so the newest content wins.
+                        if (existing is not null && existing.Complete && !command.Request.Complete)
                             return Result.Ok(ListChatPartsHandler.MapPart(existing));
                     }
                     var streamed = await db.ChatSessions
@@ -467,13 +471,24 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
                             .SetProperty(x => x.UpdatedAt, DateTime.UtcNow), ct);
                     if (streamed == 0)
                         return Result.Failure<ChatPartDto>("Chat session not found.");
-                    var next = await db.ChatParts.IgnoreQueryFilters()
-                        .Where(p => p.SessionId == session.Id).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
-                    var part = ChatPart.Create(session.Id, session.ProjectId, command.Request.Role, command.Request.Kind,
-                        command.Request.Body, next + 1, command.Request.ExternalId,
-                        command.Request.Tool, command.Request.ToolStatus, command.Request.ToolInput,
-                        command.Request.ToolResult, command.Request.DurationMs);
-                    db.ChatParts.Add(part);
+                    ChatPart part;
+                    if (existing is not null)
+                    {
+                        existing.Update(command.Request.Kind, command.Request.Body,
+                            command.Request.Tool, command.Request.ToolStatus, command.Request.ToolInput,
+                            command.Request.ToolResult, command.Request.DurationMs, command.Request.Complete);
+                        part = existing;
+                    }
+                    else
+                    {
+                        var next = await db.ChatParts.IgnoreQueryFilters()
+                            .Where(p => p.SessionId == session.Id).MaxAsync(p => (int?)p.SortOrder, ct) ?? -1;
+                        part = ChatPart.Create(session.Id, session.ProjectId, command.Request.Role, command.Request.Kind,
+                            command.Request.Body, next + 1, command.Request.ExternalId,
+                            command.Request.Tool, command.Request.ToolStatus, command.Request.ToolInput,
+                            command.Request.ToolResult, command.Request.DurationMs, command.Request.Complete);
+                        db.ChatParts.Add(part);
+                    }
                     await db.SaveChangesAsync(ct);
                     await tx.CommitAsync(ct);
                     return Result.Ok(ListChatPartsHandler.MapPart(part));
@@ -518,6 +533,34 @@ public class MarkChatIdleHandler : ICommandHandler<MarkChatIdleCommand, Result<C
         if (session is null || session.DeviceId != command.Request.DeviceId)
             return Result.Failure<ChatSessionDto>("Chat session not found.");
         session.SetIdle();
+        await db.SaveChangesAsync(ct);
+        _events.Signal(session.Id);
+        return Result.Ok(CreateChatSessionHandler.Map(session));
+    }
+}
+/// <summary>
+/// Device path that records the session's token totals and context limit.
+/// </summary>
+public class ReportChatUsageHandler : ICommandHandler<ReportChatUsageCommand, Result<ChatSessionDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ChatEventSignal _events;
+
+    public ReportChatUsageHandler(IBeaconDbFactory dbFactory, ChatEventSignal events)
+    {
+        _dbFactory = dbFactory;
+        _events = events;
+    }
+
+    public async Task<Result<ChatSessionDto>> HandleAsync(ReportChatUsageCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var session = await db.ChatSessions.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
+        if (session is null || session.DeviceId != command.Request.DeviceId)
+            return Result.Failure<ChatSessionDto>("Chat session not found.");
+        session.SetUsage(command.Request.PromptTokens, command.Request.CompletionTokens,
+            command.Request.AssistantMessages, command.Request.TotalCost, command.Request.ContextLimit);
         await db.SaveChangesAsync(ct);
         _events.Signal(session.Id);
         return Result.Ok(CreateChatSessionHandler.Map(session));

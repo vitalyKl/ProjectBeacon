@@ -18,6 +18,7 @@ public static class DesignTokens
     public const string TextSecondary = "#535d6c";
     public const string TextMuted = "#818b99";
     public const string TextDisabled = "#a0a8b3";
+    public const string ChatSubtle = "#6d7686";
     public const string Accent = "#625cf6";
     public const string AccentHover = "#4f48dc";
     public const string AccentActive = "#3f39c4";
@@ -90,6 +91,7 @@ public static class DesignTokens
         public const string TextSecondary = "#a3adbb";
         public const string TextMuted = "#707b8b";
         public const string TextDisabled = "#5c6776";
+        public const string ChatSubtle = "#9aa4b3";
         public const string Accent = "#8883ff";
         public const string AccentHover = "#aaa7ff";
         public const string AccentActive = "#6e69d6";
@@ -136,6 +138,7 @@ public static class DesignTokens
         ("--color-text-secondary", TextSecondary),
         ("--color-text-muted", TextMuted),
         ("--color-text-disabled", TextDisabled),
+        ("--color-chat-subtle", ChatSubtle),
         ("--color-accent", Accent),
         ("--color-accent-hover", AccentHover),
         ("--color-accent-active", AccentActive),
@@ -192,6 +195,7 @@ public static class DesignTokens
         ("--color-text-secondary", Dark.TextSecondary),
         ("--color-text-muted", Dark.TextMuted),
         ("--color-text-disabled", Dark.TextDisabled),
+        ("--color-chat-subtle", Dark.ChatSubtle),
         ("--color-accent", Dark.Accent),
         ("--color-accent-hover", Dark.AccentHover),
         ("--color-accent-active", Dark.AccentActive),
