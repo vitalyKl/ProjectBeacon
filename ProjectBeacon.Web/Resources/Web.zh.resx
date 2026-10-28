@@ -2027,4 +2027,31 @@ orthstar</value>
   <data name="ChatUsage" xml:space="preserve">
     <value>令牌: {0} · {1}</value>
   </data>
+  <data name="ChatAgent" xml:space="preserve">
+    <value>代理</value>
+  </data>
+  <data name="ChatAgentAct" xml:space="preserve">
+    <value>执行</value>
+  </data>
+  <data name="ChatAgentPlan" xml:space="preserve">
+    <value>规划</value>
+  </data>
+  <data name="ChatAgentSwitching" xml:space="preserve">
+    <value>正在切换代理…</value>
+  </data>
+  <data name="ChatQuestion" xml:space="preserve">
+    <value>问题</value>
+  </data>
+  <data name="ChatQuestionAnswered" xml:space="preserve">
+    <value>已回答</value>
+  </data>
+  <data name="ChatAnswer" xml:space="preserve">
+    <value>发送回答</value>
+  </data>
+  <data name="ChatAnswered" xml:space="preserve">
+    <value>回答已发送。</value>
+  </data>
+  <data name="ChatAnswerFailed" xml:space="preserve">
+    <value>无法回答问题：{0}</value>
+  </data>
 </root>

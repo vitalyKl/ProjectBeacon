@@ -737,7 +737,7 @@ public sealed class OpenCodeServeTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadContextLimit_V2_MatchesModelAndFallsBackToFirst()
+    public async Task ReadContextLimit_V2_ExactMatchOrUnknown()
     {
         await using var serve = new ClientOpenCodeServe
         {
@@ -756,8 +756,107 @@ public sealed class OpenCodeServeTests : IDisposable
         MarkV2(serve);
         Assert.Equal(262144, await serve.ReadContextLimitAsync("opencode/flint-40b-free", CancellationToken.None));
         Assert.Equal(128000, await serve.ReadContextLimitAsync("opencode/nemotron", CancellationToken.None));
-        Assert.Equal(262144, await serve.ReadContextLimitAsync(null, CancellationToken.None));
+        // No fallback: an unknown or missing model leaves the limit unknown.
+        Assert.Null(await serve.ReadContextLimitAsync(null, CancellationToken.None));
+        Assert.Null(await serve.ReadContextLimitAsync("", CancellationToken.None));
         Assert.Null(await serve.ReadContextLimitAsync("opencode/missing", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SwitchAgent_V2_PostsAgentAndAccepts204()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                Assert.Equal(HttpMethod.Post, request.Method);
+                Assert.Equal("/api/session/ses_1/agent", request.RequestUri!.AbsolutePath);
+                var body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                Assert.Contains("\"agent\":\"plan\"", body);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+            }
+        };
+        MarkV2(serve);
+        await serve.SwitchAgentAsync("ses_1", "plan", CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SwitchAgent_V2_UnknownAgentThrows()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) => Task.FromResult(StatusCode(HttpStatusCode.NotFound)),
+        };
+        MarkV2(serve);
+        await Assert.ThrowsAsync<HttpRequestException>(() => serve.SwitchAgentAsync("ses_1", "ghost", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SwitchAgent_V1_Throws()
+    {
+        await using var serve = new ClientOpenCodeServe { SkipRealProcess = false };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => serve.SwitchAgentAsync("ses_1", "plan", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListPendingForms_V2_ParsesEnvelope()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                Assert.Equal("/api/session/ses_1/form", request.RequestUri!.AbsolutePath);
+                return Task.FromResult(JsonResponse("""
+                    {"data":[{"id":"f1","title":"Pick an option","metadata":"{}","fields":[{"key":"choice","type":"string","required":true}]}]}
+                    """));
+            }
+        };
+        MarkV2(serve);
+        var forms = await serve.ListPendingFormsAsync("ses_1", CancellationToken.None);
+        Assert.Single(forms);
+        Assert.Equal("f1", forms[0].Id);
+        Assert.Equal("Pick an option", forms[0].Title);
+        Assert.Contains("\"choice\"", forms[0].FieldsJson);
+    }
+
+    [Fact]
+    public async Task ListPendingForms_V2_EmptyWhenNone()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) => Task.FromResult(JsonResponse("{\"data\":[]}"))
+        };
+        MarkV2(serve);
+        Assert.Empty(await serve.ListPendingFormsAsync("ses_1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReplyForm_V2_SendsAnswerObject()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) =>
+            {
+                Assert.Equal(HttpMethod.Post, request.Method);
+                Assert.Equal("/api/session/ses_1/form/f1/reply", request.RequestUri!.AbsolutePath);
+                var body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                Assert.Contains("\"answer\":{\"choice\":\"b\"}", body);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+            }
+        };
+        MarkV2(serve);
+        Assert.True(await serve.ReplyFormAsync("ses_1", "f1", "{\"choice\":\"b\"}", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ReplyForm_V2_AlreadySettledReturnsFalse()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (request, _) => Task.FromResult(StatusCode(HttpStatusCode.Conflict)),
+        };
+        MarkV2(serve);
+        Assert.False(await serve.ReplyFormAsync("ses_1", "f1", "{}", CancellationToken.None));
     }
 
     [Fact]

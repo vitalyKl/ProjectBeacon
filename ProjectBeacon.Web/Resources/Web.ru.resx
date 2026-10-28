@@ -2041,4 +2041,31 @@
   <data name="ChatUsage" xml:space="preserve">
     <value>Токены: {0} · {1}</value>
   </data>
+  <data name="ChatAgent" xml:space="preserve">
+    <value>Агент</value>
+  </data>
+  <data name="ChatAgentAct" xml:space="preserve">
+    <value>Выполнение</value>
+  </data>
+  <data name="ChatAgentPlan" xml:space="preserve">
+    <value>Планирование</value>
+  </data>
+  <data name="ChatAgentSwitching" xml:space="preserve">
+    <value>Переключение агента…</value>
+  </data>
+  <data name="ChatQuestion" xml:space="preserve">
+    <value>Вопрос</value>
+  </data>
+  <data name="ChatQuestionAnswered" xml:space="preserve">
+    <value>Отвечено</value>
+  </data>
+  <data name="ChatAnswer" xml:space="preserve">
+    <value>Ответить</value>
+  </data>
+  <data name="ChatAnswered" xml:space="preserve">
+    <value>Ответ отправлен.</value>
+  </data>
+  <data name="ChatAnswerFailed" xml:space="preserve">
+    <value>Не удалось ответить на вопрос: {0}</value>
+  </data>
 </root>

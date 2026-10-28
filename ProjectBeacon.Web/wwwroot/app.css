@@ -1256,6 +1256,12 @@ body:has(.beacon-theme-dark) .mud-main-content {
     max-width: 100%;
 }
 
+.beacon-chat-agent-select {
+    flex: 0 0 auto;
+    width: 120px;
+    max-width: 100%;
+}
+
 .beacon-chat-model-status {
     color: var(--color-text-secondary);
 }
@@ -1276,6 +1282,11 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-chat-user {
     background-color: var(--color-bg-accent);
+}
+
+.beacon-chat-question {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
 }
 
 .beacon-chat-part:not(.beacon-chat-user) {

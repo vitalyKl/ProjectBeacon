@@ -13,6 +13,8 @@ internal sealed class DaemonTiming
     public TimeSpan ChatPollInterval { get; set; } = TimeSpan.FromMilliseconds(250);
     // CPU inference routinely pauses between tokens; 10s of quiet counts the turn as done.
     public TimeSpan ChatIdleTimeout { get; set; } = TimeSpan.FromSeconds(10);
-    // Hard cap so a stuck generation cannot hold the command queue indefinitely.
-    public TimeSpan ChatMaxDuration { get; set; } = TimeSpan.FromSeconds(180);
+    // Hard cap so a stuck generation cannot hold the command queue indefinitely. It must stay
+    // well under the 15-minute command lease: a reclaimed command would re-send the prompt.
+    // 600s covers slow local inference and context compaction, which can run for minutes.
+    public TimeSpan ChatMaxDuration { get; set; } = TimeSpan.FromSeconds(600);
 }

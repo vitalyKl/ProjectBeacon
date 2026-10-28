@@ -27,6 +27,8 @@ public static class ChatEndpoints
         app.MapGet("/v1/chat/sessions/{id:guid}/events", ChatEvents).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/prompt", SendPrompt).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/abort", Abort).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/chat/sessions/{id:guid}/agent", SwitchAgent).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapPost("/v1/chat/sessions/{id:guid}/forms/{formId}/reply", ReplyForm).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/chat/sessions/{id:guid}/parts", AppendPart).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/chat/sessions/{id:guid}/idle", MarkIdle).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/chat/sessions/{id:guid}/usage", ReportUsage).RequireAuthorization().DisableAntiforgery().RequireDevice();
@@ -44,6 +46,14 @@ public static class ChatEndpoints
     /// Body for sending a chat prompt: text and an optional model id.
     /// </summary>
     public record PromptBody(string Text, string? Model);
+    /// <summary>
+    /// Body for switching a chat session's agent.
+    /// </summary>
+    public record AgentBody(string Agent);
+    /// <summary>
+    /// Body for answering a model question: the raw JSON answer object.
+    /// </summary>
+    public record FormReplyBody(string AnswerJson);
     /// <summary>
     /// Body a device posts for one chat part: role, kind, body, an optional external id,
     /// and structured tool fields for tool call parts.
@@ -186,6 +196,20 @@ public static class ChatEndpoints
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new AbortChatCommand(new AbortChatRequest(id, actor.UserId!.Value)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
+    private static async Task<IResult> SwitchAgent(Guid id, [FromBody] AgentBody body, SwitchChatAgentHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(new SwitchChatAgentCommand(new SwitchChatAgentRequest(id, actor.UserId!.Value, body.Agent)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ReplyForm(Guid id, string formId, [FromBody] FormReplyBody body, ReplyChatFormHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(new ReplyChatFormCommand(new ReplyChatFormRequest(id, actor.UserId!.Value, formId, body.AnswerJson)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> AppendPart(Guid id, [FromBody] AppendBody body, AppendChatPartHandler handler, HttpContext ctx, CancellationToken ct)

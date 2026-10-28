@@ -185,6 +185,122 @@ public sealed class ChatHandlerTests : IDisposable
             new ListChatSessionsCommand(new ListChatSessionsRequest(userId)), ct);
         Assert.Single(listed.Value!);
     }
+    [Fact]
+    public async Task SwitchChatAgent_EnqueuesCommandWithPayload()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+
+        var switched = await new SwitchChatAgentHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal())
+            .HandleAsync(new SwitchChatAgentCommand(new SwitchChatAgentRequest(sessionId, userId, "  plan ")), ct);
+        Assert.True(switched.Success, switched.Error);
+
+        await using var check = factory.CreateDbContext();
+        var command = await check.WorkstationCommands
+            .Where(c => c.ProjectId == projectId && c.Kind == WorkstationCommandKind.ChatSwitchAgent).SingleAsync(ct);
+        using var payload = JsonDocument.Parse(command.PayloadJson);
+        Assert.Equal("oc_test", payload.RootElement.GetProperty("externalSessionId").GetString());
+        Assert.Equal(sessionId, payload.RootElement.GetProperty("chatSessionId").GetGuid());
+        Assert.Equal(projectId, payload.RootElement.GetProperty("projectId").GetGuid());
+        Assert.Equal("plan", payload.RootElement.GetProperty("agent").GetString());
+    }
+
+    [Fact]
+    public async Task SwitchChatAgent_RejectsEmptyAgentAndUnknownSession()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var handler = new SwitchChatAgentHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal());
+
+        var blank = await handler.HandleAsync(
+            new SwitchChatAgentCommand(new SwitchChatAgentRequest(sessionId, userId, "   ")), ct);
+        Assert.False(blank.Success);
+        Assert.Equal("Agent is required.", blank.Error);
+
+        var unknown = await handler.HandleAsync(
+            new SwitchChatAgentCommand(new SwitchChatAgentRequest(Guid.NewGuid(), userId, "plan")), ct);
+        Assert.False(unknown.Success);
+        Assert.Equal("Chat session not found.", unknown.Error);
+    }
+
+    [Fact]
+    public async Task ReplyChatForm_RecordsAnswerAndEnqueues()
+    {
+        var (projectId, userId, _, deviceId, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+
+        var questionBody = JsonSerializer.Serialize(new
+        {
+            id = "f1",
+            title = "Pick",
+            metadata = "{}",
+            fields = new object[] { new { key = "choice", type = "string" } }
+        });
+        var question = await new AppendChatPartHandler(factory, new ChatEventSignal()).HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "question",
+                questionBody, "form:f1", Complete: true)), ct);
+        Assert.True(question.Success, question.Error);
+
+        var answer = JsonSerializer.Serialize(new { choice = "b" });
+        var handler = new ReplyChatFormHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal());
+        var replied = await handler.HandleAsync(
+            new ReplyChatFormCommand(new ReplyChatFormRequest(sessionId, userId, "f1", answer)), ct);
+        Assert.True(replied.Success, replied.Error);
+
+        await using var check = factory.CreateDbContext();
+        var part = await check.ChatParts.SingleAsync(pp => pp.Id == question.Value!.Id, ct);
+        using var body = JsonDocument.Parse(part.Body);
+        Assert.Equal("b", body.RootElement.GetProperty("answer").GetProperty("choice").GetString());
+
+        var command = await check.WorkstationCommands
+            .Where(c => c.ProjectId == projectId && c.Kind == WorkstationCommandKind.ChatReplyForm).SingleAsync(ct);
+        using var payload = JsonDocument.Parse(command.PayloadJson);
+        Assert.Equal("oc_test", payload.RootElement.GetProperty("externalSessionId").GetString());
+        Assert.Equal("f1", payload.RootElement.GetProperty("formId").GetString());
+        Assert.Equal(answer, payload.RootElement.GetProperty("answerJson").GetString());
+
+        var again = await handler.HandleAsync(
+            new ReplyChatFormCommand(new ReplyChatFormRequest(sessionId, userId, "f1",
+                JsonSerializer.Serialize(new { choice = "a" }))), ct);
+        Assert.False(again.Success);
+        Assert.Equal("Question already answered.", again.Error);
+    }
+
+    [Fact]
+    public async Task ReplyChatForm_ValidatesAnswerJson()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var handler = new ReplyChatFormHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal());
+
+        var bad = await handler.HandleAsync(
+            new ReplyChatFormCommand(new ReplyChatFormRequest(sessionId, userId, "f1", "not-json")), ct);
+        Assert.False(bad.Success);
+        Assert.Equal("Answer must be a JSON object.", bad.Error);
+
+        var array = await handler.HandleAsync(
+            new ReplyChatFormCommand(new ReplyChatFormRequest(sessionId, userId, "f1", "[1]")), ct);
+        Assert.False(array.Success);
+        Assert.Equal("Answer must be a JSON object.", array.Error);
+
+        var missing = await handler.HandleAsync(
+            new ReplyChatFormCommand(new ReplyChatFormRequest(sessionId, userId, "nope", "{}")), ct);
+        Assert.False(missing.Success);
+        Assert.Equal("Question not found.", missing.Error);
+    }
+
     private async Task<(Guid ProjectId, Guid UserId, Guid OrgId, Guid DeviceId, Guid SessionId)> SeedSessionAsync()
     {
         using (TenantScope.EnterUnscoped())

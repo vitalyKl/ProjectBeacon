@@ -2027,4 +2027,31 @@ orthstar</value>
   <data name="ChatUsage" xml:space="preserve">
     <value>トークン: {0} · {1}</value>
   </data>
+  <data name="ChatAgent" xml:space="preserve">
+    <value>エージェント</value>
+  </data>
+  <data name="ChatAgentAct" xml:space="preserve">
+    <value>実行</value>
+  </data>
+  <data name="ChatAgentPlan" xml:space="preserve">
+    <value>計画</value>
+  </data>
+  <data name="ChatAgentSwitching" xml:space="preserve">
+    <value>エージェントを切り替え中…</value>
+  </data>
+  <data name="ChatQuestion" xml:space="preserve">
+    <value>質問</value>
+  </data>
+  <data name="ChatQuestionAnswered" xml:space="preserve">
+    <value>回答済み</value>
+  </data>
+  <data name="ChatAnswer" xml:space="preserve">
+    <value>回答を送信</value>
+  </data>
+  <data name="ChatAnswered" xml:space="preserve">
+    <value>回答を送信しました。</value>
+  </data>
+  <data name="ChatAnswerFailed" xml:space="preserve">
+    <value>質問に回答できませんでした：{0}</value>
+  </data>
 </root>

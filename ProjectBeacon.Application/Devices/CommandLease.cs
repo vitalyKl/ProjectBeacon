@@ -4,7 +4,7 @@ using Domain.Enums;
 
 /// <summary>
 /// Execution lease granted at claim, per command kind. Every current kind is hard-capped
-/// client-side (LLM/eval turns 180s, review check and winget install 120s), so a 15-minute
+/// client-side (chat/eval turns 600s, review check and winget install 120s), so a 15-minute
 /// lease covers all of them with margin. The exhaustive switch forces an explicit lease
 /// whenever a new kind is added.
 /// </summary>
@@ -30,6 +30,8 @@ public static class CommandLease
         WorkstationCommandKind.ChatEnsureSession => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.ChatPrompt => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.ChatAbort => TimeSpan.FromMinutes(Minutes),
+        WorkstationCommandKind.ChatSwitchAgent => TimeSpan.FromMinutes(Minutes),
+        WorkstationCommandKind.ChatReplyForm => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.ConfigureOpenCode => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.RunEvalTurn => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.ReconcileDesired => TimeSpan.FromMinutes(Minutes),

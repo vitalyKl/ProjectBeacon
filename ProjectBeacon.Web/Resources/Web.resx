@@ -2249,4 +2249,31 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Model not loaded: {0}</value>
   </data>
+  <data name="ChatAgent" xml:space="preserve">
+    <value>Agent</value>
+  </data>
+  <data name="ChatAgentAct" xml:space="preserve">
+    <value>Act</value>
+  </data>
+  <data name="ChatAgentPlan" xml:space="preserve">
+    <value>Plan</value>
+  </data>
+  <data name="ChatAgentSwitching" xml:space="preserve">
+    <value>Switching agent…</value>
+  </data>
+  <data name="ChatQuestion" xml:space="preserve">
+    <value>Question</value>
+  </data>
+  <data name="ChatQuestionAnswered" xml:space="preserve">
+    <value>Answered</value>
+  </data>
+  <data name="ChatAnswer" xml:space="preserve">
+    <value>Send answer</value>
+  </data>
+  <data name="ChatAnswered" xml:space="preserve">
+    <value>Answer sent.</value>
+  </data>
+  <data name="ChatAnswerFailed" xml:space="preserve">
+    <value>Could not answer the question: {0}</value>
+  </data>
 </root>

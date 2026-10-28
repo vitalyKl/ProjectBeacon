@@ -5,11 +5,16 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 /// <summary>
 /// Token counts and cost reported by one OpenCode session.
 /// </summary>
 public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
+/// <summary>
+/// One pending OpenCode 2.x form (a model question). Fields is the raw JSON field array.
+/// </summary>
+public sealed record OpenCodeFormInfo(string Id, string Title, string Metadata, string FieldsJson);
 /// <summary>
 /// Local OpenCode server used by chat and eval. Creating a session fails when OpenCode does not return an id.
 /// Supports OpenCode 1.x (API at the root, no auth) and 2.x (API under /api with Basic auth); the 2.x
@@ -43,6 +48,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     internal bool SkipRealProcess { get; set; }
     internal Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? SendAsync { get; set; }
     internal Func<string, Func<string, string, int, string, CancellationToken, Task>, CancellationToken, Task>? TestStream { get; set; }
+    internal Func<string, CancellationToken, Task<IReadOnlyList<OpenCodeFormInfo>>>? TestPendingForms { get; set; }
     internal string? ServerPassword => _serverPassword;
     internal bool TestForceRunning { get; set; }
     internal Func<int, int>? PortHolderProbe { get; set; }
@@ -205,6 +211,77 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     }
 
     /// <summary>
+    /// Switches the session's agent (OpenCode 2.x only: 1.x has no agent-switch endpoint).
+    /// The agent must exist in the session's project config; a 404 surfaces as an error.
+    /// </summary>
+    public async Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
+    {
+        if (SkipRealProcess)
+            return;
+        if (!IsV2)
+            throw new InvalidOperationException("Agent switching is only supported by OpenCode 2.x.");
+        using var response = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/agent", new { agent }, ct);
+        if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
+            response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// v2 pending forms (questions) of a session. Empty for v1 servers and fake test processes.
+    /// </summary>
+    public async Task<IReadOnlyList<OpenCodeFormInfo>> ListPendingFormsAsync(string sessionId, CancellationToken ct)
+    {
+        if (TestPendingForms is { } hook)
+            return await hook(sessionId, ct);
+        if (SkipRealProcess || !IsV2)
+            return [];
+        using var response = await Send(HttpMethod.Get, $"/api/session/{Uri.EscapeDataString(sessionId)}/form", null, ct);
+        if (!response.IsSuccessStatusCode)
+            return [];
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        var root = doc.RootElement;
+        var data = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var d) ? d : root;
+        if (data.ValueKind is not JsonValueKind.Array)
+            return [];
+        var forms = new List<OpenCodeFormInfo>();
+        foreach (var entry in data.EnumerateArray())
+        {
+            if (entry.ValueKind is not JsonValueKind.Object)
+                continue;
+            var id = ReadString(entry, "id");
+            if (id is null)
+                continue;
+            forms.Add(new OpenCodeFormInfo(
+                id,
+                ReadString(entry, "title") ?? string.Empty,
+                ReadString(entry, "metadata") ?? string.Empty,
+                entry.TryGetProperty("fields", out var fields) && fields.ValueKind == JsonValueKind.Array
+                    ? fields.GetRawText()
+                    : "[]"));
+        }
+        return forms;
+    }
+
+    /// <summary>
+    /// Replies to one pending form with the raw JSON answer object. Returns false when the
+    /// form is already settled (409); the reply is safe to treat as already delivered then.
+    /// </summary>
+    public async Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct)
+    {
+        if (SkipRealProcess)
+            return true;
+        if (!IsV2)
+            throw new InvalidOperationException("Form replies are only supported by OpenCode 2.x.");
+        var payload = new JsonObject();
+        payload["answer"] = JsonNode.Parse(answerJson);
+        using var response = await Send(HttpMethod.Post, $"/api/session/{Uri.EscapeDataString(sessionId)}/form/{Uri.EscapeDataString(formId)}/reply", payload, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            return false;
+        if (!response.IsSuccessStatusCode)
+            response.EnsureSuccessStatusCode();
+        return true;
+    }
+
+    /// <summary>
     /// Resolves the serve major version on demand so path selection never depends on the
     /// captured password: an ungated abort can race the v2 handshake at serve start.
     /// </summary>
@@ -279,12 +356,14 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     }
 
     /// <summary>
-    /// The context limit of the session's model from the server catalog. Falls back to the
-    /// first listed model when none is selected; null when the catalog has no usable entry.
+    /// The context limit of the session's model from the server catalog. No fallback: when the
+    /// selected model is unknown or absent the limit stays unknown and the UI hides the ratio.
     /// </summary>
     public async Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct)
     {
         if (SkipRealProcess)
+            return null;
+        if (string.IsNullOrWhiteSpace(modelId))
             return null;
         using var response = await Send(HttpMethod.Get, IsV2 ? "/api/model" : "/app/models", null, ct);
         if (!response.IsSuccessStatusCode)
@@ -295,17 +374,14 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
             root = data;
         if (root.ValueKind is not JsonValueKind.Array)
             return null;
-        string? wantProvider = null;
-        string? wantModel = null;
-        if (!string.IsNullOrWhiteSpace(modelId))
-            (wantProvider, wantModel) = SplitModelRef(modelId);
+        var (wantProvider, wantModel) = SplitModelRef(modelId);
         foreach (var entry in root.EnumerateArray())
         {
             if (entry.ValueKind is not JsonValueKind.Object)
                 continue;
             var provider = entry.TryGetProperty("providerID", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
             var model = entry.TryGetProperty("modelID", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
-            if (wantModel is not null && (model != wantModel || (wantProvider is not null && provider != wantProvider)))
+            if (model != wantModel || (wantProvider is not null && provider != wantProvider))
                 continue;
             if (entry.TryGetProperty("limit", out var limit)
                 && limit.ValueKind == JsonValueKind.Object
@@ -313,8 +389,6 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
                 && context.ValueKind == JsonValueKind.Number
                 && context.TryGetInt32(out var value))
                 return value;
-            if (wantModel is null)
-                return null;
         }
         return null;
     }

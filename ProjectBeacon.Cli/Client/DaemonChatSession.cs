@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Application.Runtime;
 
 internal interface IDaemonChatSession
@@ -12,6 +13,8 @@ internal interface IDaemonChatSession
     Task<(bool Ok, string? Result, string? Error)> EnsureAsync(string cwd, string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> AbortAsync(string payload, CancellationToken ct);
+    Task<(bool Ok, string? Result, string? Error)> SwitchAgentAsync(string payload, CancellationToken ct);
+    Task<(bool Ok, string? Result, string? Error)> ReplyFormAsync(string payload, CancellationToken ct);
 }
 
 internal sealed class DaemonChatSession : IDaemonChatSession
@@ -79,6 +82,62 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         return (true, "{}", null);
     }
 
+    public async Task<(bool Ok, string? Result, string? Error)> SwitchAgentAsync(string payload, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(payload);
+        var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
+        var agent = doc.RootElement.TryGetProperty("agent", out var a) ? a.GetString() : null;
+        var chatId = doc.RootElement.TryGetProperty("chatSessionId", out var c) && c.TryGetGuid(out var cid) ? cid : Guid.Empty;
+        var projectId = doc.RootElement.TryGetProperty("projectId", out var p) && p.TryGetGuid(out var pid) ? pid : Guid.Empty;
+        if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(agent))
+            return (false, null, "externalSessionId and agent are required.");
+        try
+        {
+            // No gate: the switch is a plain serve HTTP call and must not wait out an active turn.
+            await _gate.OpenCode.SwitchAgentAsync(externalId, agent, ct);
+            return (true, "{}", null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var error = ClipError(ex.Message);
+            // Surface the failure in the chat: the agent may simply not exist in the project config.
+            if (chatId != Guid.Empty)
+            {
+                var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{agent}:{error}")))[..16];
+                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
+                {
+                    role = "assistant",
+                    kind = "error",
+                    body = error,
+                    externalId = $"agent:{hash}"
+                }, projectId, ct);
+            }
+            return (false, null, error);
+        }
+    }
+
+    public async Task<(bool Ok, string? Result, string? Error)> ReplyFormAsync(string payload, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(payload);
+        var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
+        var formId = doc.RootElement.TryGetProperty("formId", out var f) ? f.GetString() : null;
+        var answerJson = doc.RootElement.TryGetProperty("answerJson", out var ans) ? ans.GetString() : null;
+        if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(formId) || string.IsNullOrWhiteSpace(answerJson))
+            return (false, null, "externalSessionId, formId, and answerJson are required.");
+        try
+        {
+            // No gate: a queued prompt turn holds it, but the model blocks on the form answer.
+            var settled = await _gate.OpenCode.ReplyFormAsync(externalId, formId, answerJson, ct);
+            return settled
+                ? (true, "{}", null)
+                : (true, JsonSerializer.Serialize(new { alreadySettled = true }), null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return (false, null, ClipError(ex.Message));
+        }
+    }
+
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
         string cwd, string externalId, Guid chatId, string text, string? model, string? effort, Guid projectId, CancellationToken ct)
     {
@@ -114,9 +173,11 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             : new AgentPromptControls(null, effort, null);
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seenForms = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(_timing.ChatIdleTimeout / _timing.ChatPollInterval));
         var maxIterations = Math.Max(1, (int)Math.Ceiling(_timing.ChatMaxDuration / _timing.ChatPollInterval));
         var quiet = 0;
+        var assistantParts = 0;
         var idle = false;
         AgentTurnStatus? lastTurn = null;
         try
@@ -146,7 +207,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                         durationMs = part.DurationMs,
                         complete = part.Complete
                     }, projectId, ct);
+                    if (string.Equals(part.Role, "assistant", StringComparison.OrdinalIgnoreCase))
+                        assistantParts++;
                 }
+                // Surface model questions: v2 forms live outside the message list, so poll them
+                // while the turn runs instead of waiting for the durable parts.
+                if (i % 8 == 0)
+                    await SurfacePendingFormsAsync(openCode, externalId, chatId, projectId, seenForms, ct);
                 quiet = added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
                 // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
@@ -156,7 +223,9 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 var fresh = turn is not null && turn.MessageId is not null && turn.MessageId != baselineMessageId;
                 if (turn is { Ended: true } && fresh)
                     idle = true;
-                else if (turn is null && quiet >= maxQuiet)
+                else if (turn is null && quiet >= maxQuiet && assistantParts > 0)
+                    // The quiet path must not end a turn before the first assistant part: a slow
+                    // first token (model swap, context compaction) can outlast ChatIdleTimeout.
                     idle = true;
                 if (idle)
                     break;
@@ -221,6 +290,42 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             body,
             externalId = $"error:{hash}"
         }, projectId, ct);
+    }
+
+    private async Task SurfacePendingFormsAsync(
+        ClientOpenCodeServe openCode, string externalId, Guid chatId, Guid projectId, HashSet<string> seenForms, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var form in await openCode.ListPendingFormsAsync(externalId, ct))
+            {
+                if (!seenForms.Add(form.Id))
+                    continue;
+                var body = JsonSerializer.Serialize(new
+                {
+                    id = form.Id,
+                    title = form.Title,
+                    metadata = form.Metadata,
+                    fields = JsonNode.Parse(form.FieldsJson)
+                });
+                await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
+                {
+                    role = "assistant",
+                    kind = "question",
+                    body,
+                    externalId = $"form:{form.Id}",
+                    complete = true
+                }, projectId, ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _state.Log($"chat form poll failed: {ex.Message}");
+        }
     }
 
     private Task PostChatAsync(string url, object body, Guid projectId, CancellationToken ct)

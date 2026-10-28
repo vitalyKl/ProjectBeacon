@@ -19,6 +19,8 @@ public enum WorkstationCommandKind
     ChatEnsureSession,
     ChatPrompt,
     ChatAbort,
+    ChatSwitchAgent,
+    ChatReplyForm,
     ConfigureOpenCode,
     RunEvalTurn,
     ReconcileDesired,

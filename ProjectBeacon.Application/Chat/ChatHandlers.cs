@@ -11,6 +11,7 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 /// <summary>
 /// Opens a chat on the current project's online device. Fails without a project folder, a client, or an OpenCode session id.
@@ -334,6 +335,115 @@ public class AbortChatHandler : ICommandHandler<AbortChatCommand, Result<ChatSes
                 JsonSerializer.Serialize(new { externalSessionId = session.ExternalSessionId }), session.ProjectId)), ct);
             if (!queued.Success)
                 return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
+        }
+        await db.SaveChangesAsync(ct);
+        _events.Signal(session.Id);
+        return Result.Ok(CreateChatSessionHandler.Map(session));
+    }
+}
+/// <summary>
+/// Switches a chat session's agent on its device (OpenCode 2.x agent switch).
+/// </summary>
+public class SwitchChatAgentHandler : ICommandHandler<SwitchChatAgentCommand, Result<ChatSessionDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly EnqueueCommandHandler _enqueue;
+    private readonly ChatEventSignal _events;
+
+    public SwitchChatAgentHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue, ChatEventSignal events)
+    {
+        _dbFactory = dbFactory;
+        _enqueue = enqueue;
+        _events = events;
+    }
+
+    public async Task<Result<ChatSessionDto>> HandleAsync(SwitchChatAgentCommand command, CancellationToken ct = default)
+    {
+        var agent = command.Request.Agent?.Trim() ?? "";
+        if (agent.Length == 0)
+            return Result.Failure<ChatSessionDto>("Agent is required.");
+        await using var db = _dbFactory.CreateDbContext();
+        var session = await db.ChatSessions
+            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
+        if (session is null)
+            return Result.Failure<ChatSessionDto>("Chat session not found.");
+        if (string.IsNullOrWhiteSpace(session.ExternalSessionId))
+            return Result.Failure<ChatSessionDto>("Chat session has no device session yet.");
+        var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
+            session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatSwitchAgent,
+            JsonSerializer.Serialize(new { externalSessionId = session.ExternalSessionId, chatSessionId = session.Id, projectId = session.ProjectId, agent }), session.ProjectId)), ct);
+        if (!queued.Success)
+            return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
+        await db.SaveChangesAsync(ct);
+        _events.Signal(session.Id);
+        return Result.Ok(CreateChatSessionHandler.Map(session));
+    }
+}
+/// <summary>
+/// Answers a model question (form) in a chat session: records the answer on the
+/// question part and forwards it to the device so the turn can continue.
+/// </summary>
+public class ReplyChatFormHandler : ICommandHandler<ReplyChatFormCommand, Result<ChatSessionDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly EnqueueCommandHandler _enqueue;
+    private readonly ChatEventSignal _events;
+
+    public ReplyChatFormHandler(IBeaconDbFactory dbFactory, EnqueueCommandHandler enqueue, ChatEventSignal events)
+    {
+        _dbFactory = dbFactory;
+        _enqueue = enqueue;
+        _events = events;
+    }
+
+    public async Task<Result<ChatSessionDto>> HandleAsync(ReplyChatFormCommand command, CancellationToken ct = default)
+    {
+        var formId = command.Request.FormId?.Trim() ?? "";
+        var answerJson = command.Request.AnswerJson?.Trim() ?? "";
+        if (formId.Length == 0)
+            return Result.Failure<ChatSessionDto>("Form id is required.");
+        JsonNode answer;
+        try
+        {
+            answer = JsonNode.Parse(answerJson);
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<ChatSessionDto>("Answer must be a JSON object.");
+        }
+        if (answer is not JsonObject)
+            return Result.Failure<ChatSessionDto>("Answer must be a JSON object.");
+        await using var db = _dbFactory.CreateDbContext();
+        var session = await db.ChatSessions
+            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
+        if (session is null)
+            return Result.Failure<ChatSessionDto>("Chat session not found.");
+        var question = await db.ChatParts
+            .FirstOrDefaultAsync(p => p.SessionId == session.Id && p.Kind == "question" && p.ExternalId == $"form:{formId}", ct);
+        if (question is null)
+            return Result.Failure<ChatSessionDto>("Question not found.");
+        JsonNode doc;
+        try
+        {
+            doc = JsonNode.Parse(question.Body);
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<ChatSessionDto>("Question part is corrupted.");
+        }
+        if (doc is not JsonObject body || body["answer"] is not null)
+            return Result.Failure<ChatSessionDto>("Question already answered.");
+        body["answer"] = answer.DeepClone();
+        question.Update("question", body.ToJsonString(), null, null, null, null, null, complete: true);
+        if (string.IsNullOrWhiteSpace(session.ExternalSessionId))
+            return Result.Failure<ChatSessionDto>("Chat session has no device session yet.");
+        var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
+            session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatReplyForm,
+            JsonSerializer.Serialize(new { externalSessionId = session.ExternalSessionId, formId, answerJson }), session.ProjectId)), ct);
+        if (!queued.Success)
+        {
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
         }
         await db.SaveChangesAsync(ct);
         _events.Signal(session.Id);

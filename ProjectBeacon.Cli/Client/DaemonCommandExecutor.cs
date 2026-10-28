@@ -93,6 +93,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             }
             if (kind == WorkstationCommandKind.ChatAbort)
                 return await _chat.AbortAsync(payload, ct);
+            if (kind == WorkstationCommandKind.ChatSwitchAgent)
+                return await _chat.SwitchAgentAsync(payload, ct);
+            if (kind == WorkstationCommandKind.ChatReplyForm)
+                return await _chat.ReplyFormAsync(payload, ct);
             if (kind == WorkstationCommandKind.ReloadProxy)
             {
                 await _llamaSync.RunLockedAsync(() => _llama.ReloadAsync(ct), ct);

@@ -647,7 +647,7 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteAsync_ChatPrompt_IdlesWhenNoAssistantMessageAppears()
+    public async Task ExecuteAsync_ChatPrompt_RunsToMaxDurationWhenNoAssistantMessageAppears()
     {
         var chatId = Guid.NewGuid();
         var logs = new List<string>();
@@ -675,7 +675,7 @@ public sealed class ClientDaemonTests : IDisposable
         {
             DelayAsync = (_, _) => Task.CompletedTask,
             ChatIdleTimeout = TimeSpan.FromSeconds(1),
-            ChatMaxDuration = TimeSpan.FromSeconds(180)
+            ChatMaxDuration = TimeSpan.FromSeconds(2)
         };
         var (ok, result, error) = await daemon.ExecuteAsync(
             new WorkstationDaemon.CommandWire
@@ -689,8 +689,10 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.True(ok, error);
         Assert.Empty(capture.PartBodies);
         Assert.Equal(1, capture.IdlePosts);
-        Assert.Contains("\"interrupted\":false", result);
-        Assert.Contains("idle", string.Join("\n", logs));
+        // No assistant part ever arrived, so the quiet path must not idle the turn: it ran to the
+        // max duration and was aborted (the final idle marker is still posted).
+        Assert.Contains("\"interrupted\":true", result);
+        Assert.Contains("max duration", string.Join("\n", logs));
     }
 
     [Fact]

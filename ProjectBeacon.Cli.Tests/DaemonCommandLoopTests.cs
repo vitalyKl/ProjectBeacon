@@ -53,7 +53,7 @@ public sealed class DaemonCommandLoopTests
 
         Assert.Equal(1, executor.Executed);
         Assert.Equal(1, api.CompleteRequests);
-        Assert.Contains(state.Snapshot.Log, line => line.Contains("not retrying"));
+        AssertLogEventually(state, "not retrying");
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class DaemonCommandLoopTests
 
         Assert.Equal(1, executor.Executed);
         Assert.Equal(5, api.CompleteRequests);
-        Assert.Contains(state.Snapshot.Log, line => line.Contains("failed after 5 attempts"));
+        AssertLogEventually(state, "failed after 5 attempts");
     }
 
     [Fact]
@@ -134,6 +134,18 @@ public sealed class DaemonCommandLoopTests
 
         using var doc = JsonDocument.Parse(api.HeartbeatBody!);
         Assert.Equal(DaemonInstance.Id, doc.RootElement.GetProperty("instanceId").GetString());
+    }
+
+    /// <summary>
+    /// The fake signals completion a few thread-pool hops before the loop writes its
+    /// verdict log line; on loaded hosts the snapshot can lag, so poll briefly.
+    /// </summary>
+    private static void AssertLogEventually(DaemonRuntimeState state, string fragment)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline && !state.Snapshot.Log.Any(l => l.Contains(fragment, StringComparison.Ordinal)))
+            Thread.Sleep(10);
+        Assert.Contains(state.Snapshot.Log, l => l.Contains(fragment, StringComparison.Ordinal));
     }
 
     private static (DaemonCommandLoop Loop, CountingExecutor Executor, DaemonRuntimeState State, FakeApi Api)

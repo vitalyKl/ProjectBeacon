@@ -2027,4 +2027,31 @@ orthstar</value>
   <data name="ChatUsage" xml:space="preserve">
     <value>Tokens: {0} · {1}</value>
   </data>
+  <data name="ChatAgent" xml:space="preserve">
+    <value>Agent</value>
+  </data>
+  <data name="ChatAgentAct" xml:space="preserve">
+    <value>Ausführen</value>
+  </data>
+  <data name="ChatAgentPlan" xml:space="preserve">
+    <value>Planen</value>
+  </data>
+  <data name="ChatAgentSwitching" xml:space="preserve">
+    <value>Agent wird gewechselt…</value>
+  </data>
+  <data name="ChatQuestion" xml:space="preserve">
+    <value>Frage</value>
+  </data>
+  <data name="ChatQuestionAnswered" xml:space="preserve">
+    <value>Beantwortet</value>
+  </data>
+  <data name="ChatAnswer" xml:space="preserve">
+    <value>Antwort senden</value>
+  </data>
+  <data name="ChatAnswered" xml:space="preserve">
+    <value>Antwort gesendet.</value>
+  </data>
+  <data name="ChatAnswerFailed" xml:space="preserve">
+    <value>Die Frage konnte nicht beantwortet werden: {0}</value>
+  </data>
 </root>

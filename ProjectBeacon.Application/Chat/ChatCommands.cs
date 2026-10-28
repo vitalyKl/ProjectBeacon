@@ -103,6 +103,26 @@ public record AbortChatRequest(Guid SessionId, Guid UserId);
 public record AbortChatCommand(AbortChatRequest Request) : ICommand<Result<ChatSessionDto>>;
 
 /// <summary>
+/// User switching a chat session's agent (e.g., plan/act).
+/// </summary>
+public record SwitchChatAgentRequest(Guid SessionId, Guid UserId, string Agent);
+
+/// <summary>
+/// Command for switch chat agent.
+/// </summary>
+public record SwitchChatAgentCommand(SwitchChatAgentRequest Request) : ICommand<Result<ChatSessionDto>>;
+
+/// <summary>
+/// User answering a model question (form) surfaced in a chat session.
+/// </summary>
+public record ReplyChatFormRequest(Guid SessionId, Guid UserId, string FormId, string AnswerJson);
+
+/// <summary>
+/// Command for reply chat form.
+/// </summary>
+public record ReplyChatFormCommand(ReplyChatFormRequest Request) : ICommand<Result<ChatSessionDto>>;
+
+/// <summary>
 /// User renaming a chat session.
 /// </summary>
 public record RenameChatSessionRequest(Guid SessionId, Guid UserId, string Title);

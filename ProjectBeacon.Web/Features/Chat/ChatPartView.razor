@@ -1,5 +1,12 @@
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Microsoft.AspNetCore.Components.Authorization
+@using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Chat
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject ReplyChatFormHandler ReplyForm
+@inject ISnackbar Snackbar
 
 <div class="beacon-chat-part @PartClass">
     <div class="beacon-chat-part-head">
@@ -58,6 +65,76 @@
             </MudExpansionPanel>
         </MudExpansionPanels>
     }
+    else if (IsQuestion)
+    {
+        <div class="pa-3 mb-2 beacon-chat-question">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <StatusChip Color="Color.Info" Label="@L["ChatQuestion"]" />
+                @if (!string.IsNullOrWhiteSpace(QTitle))
+                {
+                    <MudText Typo="Typo.body2">@QTitle</MudText>
+                }
+            </div>
+            @if (QAnswer is { } answer)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">@L["ChatQuestionAnswered"]</MudAlert>
+                <MudStack Spacing="1">
+                    @foreach (var f in QFields.Where(x => !x.Hidden))
+                    {
+                        <MudText Typo="Typo.body2">@($"{FieldLabel(f)}: {AnswerValue(f.Key, answer)}")</MudText>
+                    }
+                </MudStack>
+            }
+            else
+            {
+                <MudStack Spacing="2" Class="mb-2">
+                    @foreach (var f in QFields.Where(x => !x.Hidden))
+                    {
+                        @if (f.Type == "string" && f.Options.Count > 0)
+                        {
+                            <MudSelect T="string?" Value="GetString(f.Key)" ValueChanged="v => SetString(f.Key, v)" Label="@FieldLabel(f)" Placeholder="@f.Placeholder" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var opt in f.Options)
+                                {
+                                    <MudSelectItem Value="@opt.Value">@opt.Label</MudSelectItem>
+                                }
+                            </MudSelect>
+                        }
+                        else if (f.Type == "string")
+                        {
+                            <MudTextField T="string" Value="GetString(f.Key)" ValueChanged="v => SetString(f.Key, v)" Label="@FieldLabel(f)" Placeholder="@f.Placeholder" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        }
+                        else if (f.Type == "number" || f.Type == "integer")
+                        {
+                            <MudNumericField T="double?" Value="GetNumber(f.Key)" ValueChanged="v => SetNumber(f.Key, v)" Label="@FieldLabel(f)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        }
+                        else if (f.Type == "boolean")
+                        {
+                            <MudCheckBox T="bool" Value="GetBool(f.Key)" ValueChanged="v => SetBool(f.Key, v)" Label="@FieldLabel(f)" Color="Color.Primary" />
+                        }
+                        else if (f.Type == "multiselect")
+                        {
+                            <div>
+                                <MudText Typo="Typo.caption">@FieldLabel(f)</MudText>
+                                @foreach (var opt in f.Options)
+                                {
+                                    <MudCheckBox T="bool" Value="GetMulti(f.Key, opt.Value)" ValueChanged="v => SetMulti(f.Key, opt.Value, v)" Label="@opt.Label" Color="Color.Primary" Class="mt-1" />
+                                }
+                            </div>
+                        }
+                        else if (f.Type == "external")
+                        {
+                            <MudText Typo="Typo.body2">
+                                <a href="@f.Url" target="_blank" rel="noopener noreferrer">@FieldLabel(f)</a>
+                            </MudText>
+                        }
+                    }
+                    <div>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="AnswerQuestion" Disabled="@_answering">@L["ChatAnswer"]</MudButton>
+                    </div>
+                </MudStack>
+            }
+        </div>
+    }
     else if (IsAssistant)
     {
         <ChatMarkdown Text="@Part.Body" />
@@ -75,6 +152,8 @@
     private bool IsTool => string.Equals(Part.Kind, "tool", StringComparison.OrdinalIgnoreCase);
 
     private bool IsReasoning => string.Equals(Part.Kind, "reasoning", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsQuestion => string.Equals(Part.Kind, "question", StringComparison.OrdinalIgnoreCase);
 
     private bool IsAssistant => string.Equals(Part.Role, "assistant", StringComparison.OrdinalIgnoreCase);
 
@@ -115,4 +194,193 @@
         "running" or "pending" => Color.Info,
         _ => Color.Default
     };
+
+    // --- Question (model form) parts -----------------------------------------------
+    private sealed class QField
+    {
+        public string Key = string.Empty;
+        public string? Title;
+        public string Type = string.Empty;
+        public string? Placeholder;
+        public string? Url;
+        public bool Hidden;
+        public List<(string Value, string Label)> Options { get; } = [];
+        public JsonNode? Default;
+    }
+
+    private string? QFormId;
+    private string? QTitle;
+    private List<QField> QFields { get; set; } = [];
+    private JsonObject? QAnswer;
+
+    private Dictionary<string, string?> _str = new();
+    private Dictionary<string, double?> _num = new();
+    private Dictionary<string, bool> _bool = new();
+    private Dictionary<string, List<string>> _multi = new();
+    private Guid _userId;
+    private bool _answering;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
+        _userId = actor.UserId ?? Guid.Empty;
+    }
+
+    // The host re-pushes the part on every refresh; an "answer" object appearing in the
+    // body flips the part from the editable form to the read-only answered view.
+    protected override void OnParametersSet()
+    {
+        if (!IsQuestion)
+            return;
+        QFormId = null;
+        QTitle = null;
+        QFields = [];
+        QAnswer = null;
+        _str = new();
+        _num = new();
+        _bool = new();
+        _multi = new();
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(Part.Body);
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+        if (root is not JsonObject obj)
+            return;
+        if (obj["id"] is JsonValue id && id.GetValueKind() == JsonValueKind.String)
+            QFormId = id.GetValue<string>();
+        if (obj["title"] is JsonValue title && title.GetValueKind() == JsonValueKind.String)
+            QTitle = title.GetValue<string>();
+        if (obj["fields"] is JsonArray fields)
+        {
+            foreach (var el in fields)
+            {
+                if (el is not JsonObject f)
+                    continue;
+                var field = new QField
+                {
+                    Key = f["key"] is JsonValue k && k.GetValueKind() == JsonValueKind.String ? k.GetValue<string>() : "",
+                    Title = f["title"] is JsonValue t && t.GetValueKind() == JsonValueKind.String ? t.GetValue<string>() : null,
+                    Type = f["type"] is JsonValue ty && ty.GetValueKind() == JsonValueKind.String ? ty.GetValue<string>() : "",
+                    Placeholder = f["placeholder"] is JsonValue ph && ph.GetValueKind() == JsonValueKind.String ? ph.GetValue<string>() : null,
+                    Url = f["url"] is JsonValue u && u.GetValueKind() == JsonValueKind.String ? u.GetValue<string>() : null,
+                    Hidden = f["hidden"] is JsonValue h && h.GetValueKind() == JsonValueKind.True
+                };
+                if (field.Key.Length == 0)
+                    continue;
+                if (f["options"] is JsonArray options)
+                {
+                    foreach (var o in options)
+                    {
+                        if (o is not JsonObject oo || oo["value"] is not JsonValue ov || ov.GetValueKind() != JsonValueKind.String)
+                            continue;
+                        var value = ov.GetValue<string>();
+                        var label = oo["label"] is JsonValue ol && ol.GetValueKind() == JsonValueKind.String ? ol.GetValue<string>() : value;
+                        field.Options.Add((value, label));
+                    }
+                }
+                if (f["default"] is { } d)
+                    field.Default = d.DeepClone();
+                QFields.Add(field);
+            }
+        }
+        if (obj["answer"] is JsonObject ans)
+            QAnswer = (JsonObject)ans.DeepClone();
+        foreach (var f in QFields)
+        {
+            if (f.Type == "string")
+                _str[f.Key] = f.Default is JsonValue sv && sv.GetValueKind() == JsonValueKind.String ? sv.GetValue<string>() : null;
+            else if (f.Type == "number" || f.Type == "integer")
+                _num[f.Key] = f.Default is JsonValue nv && nv.GetValueKind() == JsonValueKind.Number ? nv.GetValue<double>() : (double?)null;
+            else if (f.Type == "boolean")
+                _bool[f.Key] = f.Default is JsonValue bv && (bv.GetValueKind() == JsonValueKind.True || bv.GetValueKind() == JsonValueKind.False) ? bv.GetValue<bool>() : false;
+            else if (f.Type == "multiselect")
+                _multi[f.Key] = f.Default is JsonArray ma
+                    ? ma.OfType<JsonValue>().Where(e => e.GetValueKind() == JsonValueKind.String).Select(e => e.GetValue<string>()).ToList()
+                    : [];
+        }
+    }
+
+    private static string FieldLabel(QField f) => string.IsNullOrWhiteSpace(f.Title) ? f.Key : f.Title!;
+
+    private string? GetString(string key) => _str.GetValueOrDefault(key);
+    private void SetString(string key, string? value) => _str[key] = value;
+    private double? GetNumber(string key) => _num.GetValueOrDefault(key);
+    private void SetNumber(string key, double? value) => _num[key] = value;
+    private bool GetBool(string key) => _bool.GetValueOrDefault(key, false);
+    private void SetBool(string key, bool value) => _bool[key] = value;
+    private bool GetMulti(string key, string value) => _multi.GetValueOrDefault(key) is { } list && list.Contains(value);
+    private void SetMulti(string key, string value, bool isOn)
+    {
+        var list = _multi.GetValueOrDefault(key) ?? [];
+        if (isOn && !list.Contains(value))
+            list.Add(value);
+        else if (!isOn)
+            list.Remove(value);
+        _multi[key] = list;
+    }
+
+    private static string AnswerValue(string key, JsonObject answer)
+    {
+        if (answer[key] is not { } v || v is null)
+            return "";
+        return v switch
+        {
+            JsonValue s when s.GetValueKind() == JsonValueKind.String => s.GetValue<string>(),
+            JsonValue n when n.GetValueKind() == JsonValueKind.Number => n.ToString(),
+            JsonValue b when b.GetValueKind() == JsonValueKind.True || b.GetValueKind() == JsonValueKind.False => b.GetValue<bool>() ? "true" : "false",
+            JsonArray a => string.Join(", ", a.OfType<JsonValue>().Where(e => e.GetValueKind() == JsonValueKind.String).Select(e => e.GetValue<string>())),
+            _ => v.ToJsonString()
+        };
+    }
+
+    private async Task AnswerQuestion()
+    {
+        if (_answering || QFormId is null || _userId == Guid.Empty)
+            return;
+        _answering = true;
+        try
+        {
+            var answer = new JsonObject();
+            foreach (var f in QFields.Where(x => !x.Hidden))
+            {
+                switch (f.Type)
+                {
+                    case "string":
+                        var s = _str.GetValueOrDefault(f.Key);
+                        if (!string.IsNullOrWhiteSpace(s))
+                            answer[f.Key] = s;
+                        break;
+                    case "number":
+                    case "integer":
+                        if (_num.GetValueOrDefault(f.Key) is { } nv)
+                            answer[f.Key] = nv;
+                        break;
+                    case "boolean":
+                        answer[f.Key] = _bool.GetValueOrDefault(f.Key, false);
+                        break;
+                    case "multiselect":
+                        var ms = _multi.GetValueOrDefault(f.Key) ?? [];
+                        if (ms.Count > 0)
+                            answer[f.Key] = new JsonArray(ms.Select(x => (JsonNode)x).ToArray());
+                        break;
+                }
+            }
+            var result = await ReplyForm.HandleAsync(new ReplyChatFormCommand(new ReplyChatFormRequest(
+                Part.SessionId, _userId, QFormId, answer.ToJsonString())), CancellationToken.None);
+            if (result.Success)
+                Snackbar.Add(L["ChatAnswered"].Value, Severity.Info);
+            else
+                Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, result.Error ?? L["Error"].Value), Severity.Error);
+            StateHasChanged();
+        }
+        finally
+        {
+            _answering = false;
+        }
+    }
 }

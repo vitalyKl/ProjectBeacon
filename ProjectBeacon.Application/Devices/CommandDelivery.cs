@@ -13,6 +13,8 @@ public static class CommandDelivery
     public static bool IsAtMostOnce(WorkstationCommandKind kind) => kind is
         WorkstationCommandKind.ChatEnsureSession
         or WorkstationCommandKind.ChatPrompt
+        or WorkstationCommandKind.ChatSwitchAgent
+        or WorkstationCommandKind.ChatReplyForm
         or WorkstationCommandKind.RunEvalTurn
         or WorkstationCommandKind.RunReviewCheck;
 

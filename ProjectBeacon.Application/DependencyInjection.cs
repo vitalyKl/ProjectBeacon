@@ -190,6 +190,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListChatPartsHandler>();
         services.AddTransient<SendChatPromptHandler>();
         services.AddTransient<AbortChatHandler>();
+        services.AddTransient<SwitchChatAgentHandler>();
+        services.AddTransient<ReplyChatFormHandler>();
         services.AddTransient<RenameChatSessionHandler>();
         services.AddTransient<ArchiveChatSessionHandler>();
         services.AddTransient<AppendChatPartHandler>();
