@@ -37,8 +37,7 @@ public class CreateSubtaskHandler : ICommandHandler<CreateSubtaskCommand, Result
             command.Request.AllowedMcpTools, command.Request.AllowedPaths);
         var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).OrderBy(p => p.SortOrder).ToListAsync(ct);
         var phase = phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)
-            ?? phases.FirstOrDefault(p => p.Key == "do")
-            ?? phases.FirstOrDefault();
+            ?? phases.FirstOrDefault(p => string.Equals(p.Key, "do", StringComparison.Ordinal));
         if (phase is not null)
             subtask.AssignPhase(phase.Id);
         db.Subtasks.Add(subtask);
