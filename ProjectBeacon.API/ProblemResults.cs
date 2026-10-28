@@ -15,7 +15,7 @@ public static class ProblemResults
     /// <param name="status">Status when the error kind is not mapped. Defaults to 400.</param>
     /// <param name="title">Problem title. When null, a default title for the status is used.</param>
     public static IResult FromResult(this Result result, int status = StatusCodes.Status400BadRequest, string? title = null)
-        => Problem(Resolve(result.Kind, status), title, result.Error);
+        => Problem(Resolve(result.Kind, status), title, result.Error, result.ErrorCode ?? ErrorCodes.For(result.Kind));
 
     /// <summary>
     /// Problem response for <paramref name="result"/>. Known error kinds set the status; other kinds use <paramref name="status"/>.
@@ -61,8 +61,12 @@ public static class ProblemResults
         return Results.Problem(details);
     }
 
-    private static IResult Problem(int status, string? title, string? detail) =>
-        Results.Problem(Create(status, title ?? DefaultTitle(status), detail));
+    private static IResult Problem(int status, string? title, string? detail, string? code = null)
+    {
+        var problem = Create(status, title ?? DefaultTitle(status), detail);
+        problem.Extensions["code"] = code ?? ErrorCodes.For(ErrorKind.None);
+        return Results.Problem(problem);
+    }
 
     private static ProblemDetails Create(int status, string title, string? detail)
     {
