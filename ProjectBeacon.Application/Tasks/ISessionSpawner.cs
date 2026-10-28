@@ -61,16 +61,14 @@ public sealed class ManualSessionSpawner : ISessionSpawner
 
     private SpawnedSession SessionFrom(LocalModelBackend backend)
     {
-        // Provider-backed models are identifiers consumed by OpenCode, not local process
-        // launch commands. Until the pipeline runtime has a provider execution contract,
-        // fail closed rather than feeding API model IDs into the llama-swap command builder.
-        if (backend.BackendType != ModelBackendType.LlamaCpp)
-            return new SpawnedSession(backend.Id, backend.OpenCodeModel, null);
-
         var port = _catalog.Port.ToString(CultureInfo.InvariantCulture);
         var command = backend.LaunchCommand.Replace("${PORT}", port, StringComparison.Ordinal);
         var spec = _catalog.BuildLaunchSpec(backend.Name, command, backend.ContextSize, backend.Ttl, backend.ExtraFlags);
-        if (!spec.Contains("--no-reasoning-preserve", StringComparison.Ordinal))
+
+        // This spawner currently prepares a launch spec for the pipeline harness for every
+        // backend type. The llama.cpp-specific flag must not leak into OpenAI-compatible providers.
+        if (backend.BackendType == ModelBackendType.LlamaCpp
+            && !spec.Contains("--no-reasoning-preserve", StringComparison.Ordinal))
             spec += " --no-reasoning-preserve";
         return new SpawnedSession(backend.Id, backend.Name, spec);
     }
