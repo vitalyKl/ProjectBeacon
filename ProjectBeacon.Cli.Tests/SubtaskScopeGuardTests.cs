@@ -248,11 +248,19 @@ public sealed class SubtaskScopeGuardTests
     // ── Reject: requestedPaths variations ──────────────────────────────────
 
     [Fact]
-    public void NullRequestedPaths_WithPathLimits_ReturnsNull_NoRestriction()
+    public void NullRequestedPaths_WithPathLimits_IsRejected()
     {
         var lists = new[] { new SubtaskScopeGuard.Allowlist(SubtaskId, "InProgress", [], ["src"]) };
-        // null requestedPaths means the tool didn't provide paths → no path check
-        Assert.Null(SubtaskScopeGuard.Reject("read_file", null, lists, null));
+        // A path-scoped tool must not bypass the allowlist by omitting its path.
+        var error = SubtaskScopeGuard.Reject("read_file", null, lists, null);
+        Assert.Contains("outside", error);
+    }
+
+    [Fact]
+    public void NonPathTool_IsNotRejectedByPathLimits()
+    {
+        var lists = new[] { new SubtaskScopeGuard.Allowlist(SubtaskId, "InProgress", [], ["src"]) };
+        Assert.Null(SubtaskScopeGuard.Reject("create_task", null, lists, null));
     }
 
     [Fact]

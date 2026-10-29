@@ -55,10 +55,10 @@ public static class SubtaskScopeGuard
         if (active.Value.Tools.Count > 0 && !ToolAllowed(active.Value.Tools, tool))
             return $"tool '{tool}' is not allowed for this subtask";
 
-        if (active.Value.Paths.Count == 0 || requestedPaths is null)
+        if (active.Value.Paths.Count == 0 || !UsesPath(tool))
             return null;
 
-        if (requestedPaths.Count == 0)
+        if (requestedPaths is null || requestedPaths.Count == 0)
             return "path is outside the subtask allowlist";
 
         foreach (var path in requestedPaths)
