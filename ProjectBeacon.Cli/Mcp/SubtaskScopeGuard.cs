@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 /// <summary>
 /// Enforces a subtask allowlist on MCP tools. An empty tool list does not restrict tools. An empty path list does not restrict paths. Several limited in-progress subtasks require an explicit subtask id.
 /// </summary>

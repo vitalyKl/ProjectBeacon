@@ -73,7 +73,7 @@ public static partial class McpStdioServer
                 ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
                 ["serverInfo"] = new JsonObject { ["name"] = "beacon", ["version"] = AssemblyVersion() }
             }),
-            "tools/list" => Result(id, new JsonObject { ["tools"] = Tools() }),
+            "tools/list" => await ListToolsAsync(id, api, env),
             "tools/call" => await CallToolAsync(id, message["params"], workspace, index, api, env),
             "ping" => Result(id, new JsonObject()),
             _ => Error(id, -32601, $"Unknown method: {method}")

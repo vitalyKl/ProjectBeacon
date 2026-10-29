@@ -4,6 +4,62 @@ namespace ProjectBeacon.Cli.Tests;
 
 public sealed class SubtaskScopeGuardTests
 {
+    [Fact]
+    public void FilterTools_OnlyExposesToolsAllowedForActiveSubtask()
+    {
+        var tools = new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "read_file" },
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "write_file" },
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "task_pipeline_status" }
+        };
+        var allowlists = new[]
+        {
+            new SubtaskScopeGuard.Allowlist(SubtaskId, "InProgress", ["read_file", "beacon_write_file"], ["src"])
+        };
+
+        var filtered = SubtaskScopeGuard.FilterTools(tools, allowlists, SubtaskId);
+
+        Assert.Equal(2, filtered.Count);
+        Assert.Contains(filtered, tool => tool?["name"]?.GetValue<string>() == "read_file");
+        Assert.Contains(filtered, tool => tool?["name"]?.GetValue<string>() == "write_file");
+        Assert.DoesNotContain(filtered, tool => tool?["name"]?.GetValue<string>() == "task_pipeline_status");
+    }
+
+    [Fact]
+    public void FilterTools_AmbiguousRestrictedSubtasks_ExposesNoToolsWithoutExplicitId()
+    {
+        var tools = new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "read_file" },
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "task_pipeline_status" }
+        };
+        var allowlists = new[]
+        {
+            new SubtaskScopeGuard.Allowlist(SubtaskId, "InProgress", ["read_file"], []),
+            new SubtaskScopeGuard.Allowlist(OtherId, "InProgress", ["task_pipeline_status"], [])
+        };
+
+        Assert.Empty(SubtaskScopeGuard.FilterTools(tools, allowlists, null));
+    }
+
+    [Fact]
+    public void FilterTools_UnrestrictedSubtask_PreservesAllTools()
+    {
+        var tools = new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "read_file" },
+            new System.Text.Json.Nodes.JsonObject { ["name"] = "write_file" }
+        };
+        var allowlists = new[]
+        {
+            new SubtaskScopeGuard.Allowlist(SubtaskId, "InProgress", [], [])
+        };
+
+        Assert.Equal(2, SubtaskScopeGuard.FilterTools(tools, allowlists, SubtaskId).Count);
+    }
+
+
     private static readonly Guid SubtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid OtherId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
