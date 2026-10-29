@@ -12,6 +12,10 @@ internal interface IDaemonChatSession
 {
     Task<(bool Ok, string? Result, string? Error)> EnsureAsync(string cwd, string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct);
+
+    Task<(bool Ok, string? Result, string? Error)> PromptAsync(
+        string cwd, string payload, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
+        => PromptAsync(cwd, payload, ct);
     Task<(bool Ok, string? Result, string? Error)> AbortAsync(string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> SwitchAgentAsync(string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> ReplyFormAsync(string payload, CancellationToken ct);
@@ -57,7 +61,11 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         }, ct);
     }
 
-    public async Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct)
+    public Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct)
+        => PromptAsync(cwd, payload, null, ct);
+
+    public async Task<(bool Ok, string? Result, string? Error)> PromptAsync(
+        string cwd, string payload, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
     {
         using var doc = JsonDocument.Parse(payload);
         var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
@@ -80,7 +88,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             return await _gate.RunExclusiveAsync(
-                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, contextLimit, activeTurn.Token),
+                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, contextLimit, harnessAuthorization, activeTurn.Token),
                 activeTurn.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && activeTurn.IsCancellationRequested)
@@ -190,7 +198,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
 
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
         string cwd, string externalId, Guid chatId, string text, string? model, string? effort,
-        Guid projectId, int? configuredContextLimit, CancellationToken ct)
+        Guid projectId, int? configuredContextLimit, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
     {
         var runtime = _gate.Runtime;
         var capabilities = runtime as IAgentRuntimeCapabilities;
@@ -237,9 +245,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
             : effort;
-        var controls = normalizedEffort is null && configuredContextLimit is not > 0
+        var controls = normalizedEffort is null && configuredContextLimit is not > 0 && harnessAuthorization is null
             ? null
-            : new AgentPromptControls(null, normalizedEffort, null) { ContextLimit = configuredContextLimit };
+            : new AgentPromptControls(null, normalizedEffort, null)
+            {
+                ContextLimit = configuredContextLimit,
+                HarnessAuthorization = harnessAuthorization
+            };
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var seenForms = new HashSet<string>(StringComparer.Ordinal);

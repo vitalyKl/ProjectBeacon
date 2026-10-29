@@ -13,10 +13,22 @@ public sealed record AgentTurnStatus(bool Ended, string? Finish, string? Error, 
 public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, double GenerationSeconds = 0);
 
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
+/// <summary>Transient authorization for local MCP calls during one active workstation command.</summary>
+/// <remarks>The token is memory-only and must never be copied to a transcript, log, or command payload.</remarks>
+public sealed record AgentHarnessAuthorization(
+    string ApiBaseUrl,
+    string ApiToken,
+    Guid ProjectId,
+    Guid? TaskId,
+    Guid CommandId,
+    int Generation,
+    DateTime ExpiresAt);
+
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
 {
     public int? ContextLimit { get; init; }
     public int? MaxTokens { get; init; }
+    public AgentHarnessAuthorization? HarnessAuthorization { get; init; }
 }
 
 /// <summary>Readiness reported by a workstation-local agent runtime.</summary>

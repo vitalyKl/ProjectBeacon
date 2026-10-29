@@ -1,6 +1,9 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Text.Json;
+using System.Net.Http.Json;
+using Application.Runtime;
+using ProjectBeacon.Cli.Client.AgentHarness;
 using Application.Common;
 using Application.Devices;
 using Domain.Enums;
@@ -56,9 +59,50 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     var resolved = WorkspacePath.ResolveInRoot(command.LocalRoot, DaemonPayload.ReadPath(payload), relativeOnly: true);
                     if (!resolved.Success)
                         return (false, null, resolved.Error);
-                    return kind == WorkstationCommandKind.ChatEnsureSession
-                        ? await _chat.EnsureAsync(resolved.Value!, payload, ct)
-                        : await _chat.PromptAsync(resolved.Value!, payload, ct);
+                    if (kind == WorkstationCommandKind.ChatEnsureSession)
+                        return await _chat.EnsureAsync(resolved.Value!, payload, ct);
+
+                    AgentHarnessAuthorization? harnessAuthorization = null;
+                    if (_gate.Runtime is NativeAgentRuntime)
+                    {
+                        if (command.ProjectId is not { } projectId || projectId == Guid.Empty)
+                            return (false, null, "A project is required to issue a native harness token.");
+                        if (_http.BaseAddress is null)
+                            return (false, null, "The daemon API base URL is not configured.");
+
+                        using var tokenResponse = await _http.PostAsJsonAsync(
+                            $"/v1/commands/{command.Id:D}/harness-token",
+                            new { generation = command.Generation },
+                            ct);
+                        if (!tokenResponse.IsSuccessStatusCode)
+                            return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
+                        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+                        if (token is null || string.IsNullOrWhiteSpace(token.Token)
+                            || token.ProjectId != projectId || token.CommandId != command.Id
+                            || token.Generation != command.Generation || token.ExpiresAt <= DateTime.UtcNow)
+                            return (false, null, "The API returned an invalid or expired harness token.");
+
+                        Guid? taskId = null;
+                        using (var promptDoc = JsonDocument.Parse(payload))
+                        {
+                            if (promptDoc.RootElement.TryGetProperty("taskId", out var rawTask)
+                                && rawTask.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawTask.GetString(), out var parsedTask)
+                                && parsedTask != Guid.Empty)
+                                taskId = parsedTask;
+                        }
+
+                        harnessAuthorization = new AgentHarnessAuthorization(
+                            _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+                            token.Token,
+                            projectId,
+                            taskId,
+                            command.Id,
+                            command.Generation,
+                            token.ExpiresAt);
+                    }
+
+                    return await _chat.PromptAsync(resolved.Value!, payload, harnessAuthorization, ct);
                 }
                 if (kind == WorkstationCommandKind.RunEvalTurn)
                 {
@@ -164,6 +208,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             : 0;
         return (true, JsonSerializer.Serialize(new { revision }), null);
     }
+
+    private sealed record HarnessTokenWire(
+        string Token,
+        Guid ProjectId,
+        Guid CommandId,
+        int Generation,
+        DateTime ExpiresAt);
 
     private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
     {
