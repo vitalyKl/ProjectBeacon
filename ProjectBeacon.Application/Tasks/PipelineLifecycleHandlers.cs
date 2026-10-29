@@ -92,6 +92,14 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
     public async Task<Result<PipelineSessionDto>> HandleAsync(LaunchSessionCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+        // Reset state before a strategy retry and keep reads, state transition, and command insert
+        // in the same transaction. This is required by Npgsql's retrying execution strategy.
+        db.ChangeTracker.Clear();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         var session = await db.PipelineSessions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
         if (session is null)
@@ -101,10 +109,6 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
-
-        // Keep the session transition and its at-most-once command in the same commit.
-        // Otherwise a failed command insert could leave a session Active with no execution queued.
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
@@ -196,6 +200,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
 
         await transaction.CommitAsync(ct);
         return Result.Ok(PipelineMappers.ToDto(session));
+        });
     }
 
     private static bool IsNativeRuntime(string? workstationJson)
