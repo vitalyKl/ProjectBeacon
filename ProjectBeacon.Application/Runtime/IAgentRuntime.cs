@@ -13,7 +13,11 @@ public sealed record AgentTurnStatus(bool Ended, string? Finish, string? Error, 
 public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, double GenerationSeconds = 0);
 
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
-public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions);
+public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
+{
+    public int? ContextLimit { get; init; }
+    public int? MaxTokens { get; init; }
+}
 
 /// <summary>Readiness reported by a workstation-local agent runtime.</summary>
 public sealed record AgentRuntimeReadiness(bool Ready, string? Error, string? WorkingDirectory);

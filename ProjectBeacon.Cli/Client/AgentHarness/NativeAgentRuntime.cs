@@ -22,6 +22,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly Action<string>? _log;
+    private readonly Func<HttpClient, string, string?, IChatProvider> _providerFactory;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new(StringComparer.Ordinal);
     private volatile bool _disposed;
 
@@ -30,13 +31,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         ClientLlamaSwap llama,
         IDaemonLlamaSync llamaSync,
         Func<WorkstationSettings> loadSettings,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        Func<HttpClient, string, string?, IChatProvider>? providerFactory = null)
     {
         _controlPlane = controlPlane;
         _llama = llama;
         _llamaSync = llamaSync;
         _loadSettings = loadSettings;
         _log = log;
+        _providerFactory = providerFactory ?? ((http, url, key) => new OpenAiCompatProvider(http, url, key));
     }
 
     public bool SupportsForms => false;
@@ -53,7 +56,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             Id = Guid.NewGuid().ToString("N"),
             Title = string.IsNullOrWhiteSpace(title) ? "Chat" : title.Trim(),
             CreatedAt = DateTimeOffset.UtcNow,
-            TranscriptPath = TranscriptPath(settings, Guid.Empty, null),
             TurnStatus = new AgentTurnStatus(true, "stop", null)
         };
         state.TranscriptPath = TranscriptPath(settings, Guid.Empty, state.Id);
@@ -186,8 +188,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct) =>
         Task.FromException(new InvalidOperationException("Agent switching is not supported by the native runtime yet."));
 
-    public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct) =>
-        Task.FromResult<int?>(null);
+    public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct)
+    {
+        var limit = _sessions.Values
+            .Where(s => string.IsNullOrWhiteSpace(modelId) || string.Equals(s.LastModel, modelId, StringComparison.Ordinal))
+            .Select(s => s.ContextLimit)
+            .FirstOrDefault(value => value is > 0);
+        return Task.FromResult(limit);
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -234,13 +242,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         try
         {
             resolved = await ResolveProviderAsync(model, ct);
-            if (resolved.IsLocal)
+            if (resolved.IsLocal && _llama.UseOwnSwapper)
                 await _llamaSync.RunLockedAsync(
                     () => _llama.EnsureSwapModelAsync(resolved.Model, ct),
                     ct);
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-            var provider = new OpenAiCompatProvider(providerHttp, resolved.BaseUrl, resolved.ApiKey);
+            var provider = _providerFactory(providerHttp, resolved.BaseUrl, resolved.ApiKey);
             var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
             var tools = new JsonArray();
             var request = new ChatProviderRequest(
@@ -302,7 +310,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 throw new OperationCanceledException(ct);
 
             if (error is not null)
+            {
+                await CompleteAssistantPartsAsync(session, messageId, ct);
                 await AppendErrorAsync(session, turnNumber, messageId, error, ct);
+            }
             else if (!emittedContent)
             {
                 error = "The model returned no text.";
@@ -346,9 +357,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     GenerationSeconds = session.Usage.GenerationSeconds + elapsed
                 };
                 session.TurnStatus = new AgentTurnStatus(true, finish, error, messageId);
-                if (ReferenceEquals(session.ActiveTurn?.Token, ct))
+                if (session.ActiveTurn is { } active && active.Token == ct)
                 {
-                    session.ActiveTurn.Dispose();
+                    active.Dispose();
                     session.ActiveTurn = null;
                 }
             }
@@ -427,50 +438,41 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             var old = snapshot.Skip(1).Take(splitAt - 1).ToList();
             if (old.Count > 0)
             {
-                var compactHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-                try
-                {
-                    var summaryRequest = new ChatProviderRequest(
-                        model,
-                        new JsonArray
-                        {
-                            new JsonObject
-                            {
-                                ["role"] = "system",
-                                ["content"] = "Summarize the conversation history for continuation. Preserve the user's objective, constraints, decisions, important identifiers, completed work, unresolved questions, and exact errors. Be concise and do not invent facts."
-                            },
-                            new JsonObject
-                            {
-                                ["role"] = "user",
-                                ["content"] = new JsonArray(old.Select(m => (JsonNode?)m.DeepClone()).ToArray()).ToJsonString()
-                            }
-                        },
-                        new JsonArray(),
-                        controls?.Temperature,
-                        controls?.ReasoningEffort,
-                        controls?.MaxTokens is > 0 ? Math.Min(controls.MaxTokens.Value, 2048) : 2048);
-                    var summaryProvider = new OpenAiCompatProvider(compactHttp, GetBaseUrl(model, resolvedLocal: model.StartsWith("beacon-local/", StringComparison.OrdinalIgnoreCase), settings: _loadSettings()), null);
-                    var summary = new StringBuilder();
-                    await foreach (var item in summaryProvider.StreamAsync(summaryRequest, ct))
-                        if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
-                            summary.Append(item.Text);
-
-                    var compacted = new List<JsonObject> { snapshot[0] };
-                    if (summary.Length > 0)
-                        compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Conversation summary (preserve this as context):\n" + summary.ToString() });
-                    compacted.AddRange(keep);
-                    snapshot = compacted;
-                    lock (session.Sync)
+                var summaryRequest = new ChatProviderRequest(
+                    model,
+                    new JsonArray
                     {
-                        session.Messages.Clear();
-                        session.Messages.AddRange(snapshot.Select(m => (JsonObject)m.DeepClone()));
-                    }
-                    await PersistAsync(session, ct);
-                }
-                finally
+                        new JsonObject
+                        {
+                            ["role"] = "system",
+                            ["content"] = "Summarize the conversation history for continuation. Preserve the user's objective, constraints, decisions, important identifiers, completed work, unresolved questions, and exact errors. Be concise and do not invent facts."
+                        },
+                        new JsonObject
+                        {
+                            ["role"] = "user",
+                            ["content"] = new JsonArray(old.Select(m => (JsonNode?)m.DeepClone()).ToArray()).ToJsonString()
+                        }
+                    },
+                    new JsonArray(),
+                    controls?.Temperature,
+                    controls?.ReasoningEffort,
+                    controls?.MaxTokens is > 0 ? Math.Min(controls.MaxTokens.Value, 2048) : 2048);
+                var summary = new StringBuilder();
+                await foreach (var item in provider.StreamAsync(summaryRequest, ct))
+                    if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
+                        summary.Append(item.Text);
+
+                var compacted = new List<JsonObject> { snapshot[0] };
+                if (summary.Length > 0)
+                    compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Conversation summary (preserve this as context):\\n" + summary.ToString() });
+                compacted.AddRange(keep);
+                snapshot = compacted;
+                lock (session.Sync)
                 {
-                    compactHttp.Dispose();
+                    session.Messages.Clear();
+                    session.Messages.AddRange(snapshot.Select(m => (JsonObject)m.DeepClone()));
                 }
+                await PersistAsync(session, ct);
             }
         }
 
@@ -520,9 +522,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
         throw new InvalidOperationException($"No connection is configured for provider '{providerId}'.");
     }
-
-    private static string GetBaseUrl(string model, bool resolvedLocal, WorkstationSettings settings) =>
-        resolvedLocal ? $"http://127.0.0.1:{(settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080)}/v1" : throw new InvalidOperationException("Context compaction requires an explicit resolved provider URL.");
 
     private async Task<SessionState> GetSessionAsync(string id, CancellationToken ct)
     {
