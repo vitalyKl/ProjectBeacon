@@ -102,6 +102,10 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
         if (task is null)
             return Result.Failure<PipelineSessionDto>("Task not found.");
 
+        // Keep the session transition and its at-most-once command in the same commit.
+        // Otherwise a failed command insert could leave a session Active with no execution queued.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
             var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
@@ -190,6 +194,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             await db.SaveChangesAsync(ct);
         }
 
+        await transaction.CommitAsync(ct);
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 
