@@ -25,6 +25,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeTurns = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _abortRequested = new(StringComparer.Ordinal);
 
     public DaemonChatSession(
         DaemonDependencies deps,
@@ -63,13 +65,34 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var text = doc.RootElement.TryGetProperty("text", out var tx) ? tx.GetString() : null;
         var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
         var effort = doc.RootElement.TryGetProperty("reasoningEffort", out var eff) ? eff.GetString() : null;
+        var contextLimit = doc.RootElement.TryGetProperty("contextLimit", out var limit)
+            && limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var configuredLimit) && configuredLimit > 0
+                ? configuredLimit
+                : (int?)null;
         // Carries the session's project so the daemon's parts/idle writes are scoped to it, not the owner's default scope.
         var projectId = doc.RootElement.TryGetProperty("projectId", out var p) && p.TryGetGuid(out var pid) ? pid : Guid.Empty;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
-        return await _gate.RunExclusiveAsync(
-            () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, ct),
-            ct);
+
+        using var activeTurn = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (!_activeTurns.TryAdd(externalId, activeTurn))
+            return (false, null, "A prompt is already running for this session.");
+        try
+        {
+            return await _gate.RunExclusiveAsync(
+                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, contextLimit, activeTurn.Token),
+                activeTurn.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && activeTurn.IsCancellationRequested)
+        {
+            return (false, null, "Chat prompt was aborted.");
+        }
+        finally
+        {
+            if (_activeTurns.TryGetValue(externalId, out var current) && ReferenceEquals(current, activeTurn))
+                _activeTurns.TryRemove(externalId, out _);
+            _abortRequested.TryRemove(externalId, out _);
+        }
     }
 
     public async Task<(bool Ok, string? Result, string? Error)> AbortAsync(string payload, CancellationToken ct)
@@ -78,6 +101,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
         if (string.IsNullOrWhiteSpace(externalId))
             return (false, null, "externalSessionId is required.");
+
+        if (_activeTurns.TryGetValue(externalId, out var activeTurn))
+        {
+            _abortRequested[externalId] = 0;
+            activeTurn.Cancel();
+        }
         await _gate.Runtime.AbortAsync(externalId, ct);
         return (true, "{}", null);
     }
@@ -139,7 +168,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
-        string cwd, string externalId, Guid chatId, string text, string? model, string? effort, Guid projectId, CancellationToken ct)
+        string cwd, string externalId, Guid chatId, string text, string? model, string? effort,
+        Guid projectId, int? configuredContextLimit, CancellationToken ct)
     {
         var openCode = _gate.OpenCode;
         var runtime = _gate.Runtime;
@@ -234,7 +264,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         }
         catch (OperationCanceledException)
         {
-            try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
+            // Explicit ChatAbort sends the interrupt itself. Other cancellations (e.g. daemon
+            // shutdown) must still interrupt the remote generation before unwinding.
+            if (!_abortRequested.TryRemove(externalId, out _))
+            {
+                try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
+            }
             throw;
         }
         finally
@@ -258,7 +293,9 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             var usage = await runtime.ReadUsageAsync(externalId, ct);
-            var contextLimit = await openCode.ReadContextLimitAsync(model, ct);
+            var contextLimit = configuredContextLimit is > 0
+                ? configuredContextLimit
+                : await openCode.ReadContextLimitAsync(model, ct);
             await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new
             {
                 promptTokens = usage.PromptTokens,
