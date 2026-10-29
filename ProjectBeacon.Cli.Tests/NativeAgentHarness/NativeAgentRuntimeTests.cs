@@ -509,10 +509,13 @@ public sealed class NativeAgentRuntimeTests
             ChatProviderRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
         {
-            Started.TrySetResult();
             yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Working...");
             try
             {
+                // Signal only after the iterator resumed past the first yield and entered
+                // the cancellation handler; otherwise the test can cancel before the
+                // provider observes the token due to scheduler timing.
+                Started.TrySetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
