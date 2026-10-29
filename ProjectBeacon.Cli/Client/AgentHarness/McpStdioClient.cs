@@ -37,16 +37,16 @@ internal sealed class McpStdioClient : IAsyncDisposable
     public JsonArray OpenAiTools { get; private set; } = [];
 
     public static async Task<McpStdioClient> StartAsync(
-        string workingDirectory,
         AgentHarnessAuthorization authorization,
         CancellationToken ct)
     {
         if (authorization.ExpiresAt <= DateTime.UtcNow)
             throw new InvalidOperationException("The native harness authorization has expired.");
-        if (!Directory.Exists(workingDirectory))
+        if (string.IsNullOrWhiteSpace(authorization.WorkingDirectory)
+            || !Directory.Exists(authorization.WorkingDirectory))
             throw new DirectoryNotFoundException("The selected project directory does not exist.");
 
-        var startInfo = CreateStartInfo(workingDirectory, authorization);
+        var startInfo = CreateStartInfo(authorization.WorkingDirectory, authorization);
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         try
         {

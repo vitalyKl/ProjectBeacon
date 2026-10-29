@@ -99,6 +99,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             taskId,
                             command.Id,
                             command.Generation,
+                            resolved.Value!,
                             token.ExpiresAt);
                     }
 

@@ -22,6 +22,7 @@ public sealed record AgentHarnessAuthorization(
     Guid? TaskId,
     Guid CommandId,
     int Generation,
+    string WorkingDirectory,
     DateTime ExpiresAt);
 
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
