@@ -117,7 +117,8 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             chatSessionId = chatId,
             externalSessionId = "oc-1",
             text = "hello",
-            model = (string?)null
+            model = (string?)null,
+            contextLimit = 65536
         }));
 
         var usage = _posts.Single(p => p.Path == $"/v1/chat/sessions/{chatId}/usage");
@@ -127,7 +128,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.Equal(1, doc.RootElement.GetProperty("assistantMessages").GetInt32());
         Assert.Equal(0, doc.RootElement.GetProperty("totalCost").GetDouble());
         Assert.Equal(2.5, doc.RootElement.GetProperty("generationSeconds").GetDouble());
-        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("contextLimit").ValueKind);
+        Assert.Equal(65536, doc.RootElement.GetProperty("contextLimit").GetInt32());
         // The usage report lands before the idle marker so the UI shows totals as soon as idle arrives.
         var idle = _posts.Single(p => p.Path == $"/v1/chat/sessions/{chatId}/idle");
         Assert.True(_posts.IndexOf(usage) < _posts.IndexOf(idle));
@@ -165,6 +166,33 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.Equal(11, runtime.StatusCalls);
         Assert.DoesNotContain(_posts, x => x.Path == $"/v1/chat/sessions/{chatId}/parts");
         Assert.Single(_posts, x => x.Path == $"/v1/chat/sessions/{chatId}/idle");
+    }
+
+    [Fact]
+    public async Task Abort_CancelsActivePromptWithoutMarkingItIdle()
+    {
+        var chatId = Guid.NewGuid();
+        var runtime = new BlockingRuntime();
+        var chat = BuildSession(_openCode, runtime);
+        var promptTask = chat.PromptAsync(_dir, JsonSerializer.Serialize(new
+        {
+            chatSessionId = chatId,
+            externalSessionId = "oc-1",
+            text = "keep working",
+            model = (string?)null
+        }), CancellationToken.None);
+
+        await runtime.PromptStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var (abortOk, _, abortError) = await chat.AbortAsync(JsonSerializer.Serialize(new
+        {
+            externalSessionId = "oc-1"
+        }), CancellationToken.None);
+        Assert.True(abortOk, abortError);
+
+        var (promptOk, _, _) = await promptTask.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(promptOk);
+        Assert.DoesNotContain(_posts, post => post.Path == $"/v1/chat/sessions/{chatId}/idle");
+        Assert.True(runtime.AbortCalls > 0);
     }
 
     [Fact]
@@ -305,9 +333,9 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.Equal("externalSessionId, formId, and answerJson are required.", error);
     }
 
-    private DaemonChatSession BuildSession(ClientOpenCodeServe serve)
+    private DaemonChatSession BuildSession(ClientOpenCodeServe serve, IAgentRuntime? suppliedRuntime = null)
     {
-        var runtime = new StubRuntime();
+        var runtime = suppliedRuntime ?? new StubRuntime();
         var timing = new DaemonTiming
         {
             ChatPollInterval = TimeSpan.FromMilliseconds(1),
@@ -381,6 +409,47 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
         public Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
             => Task.FromResult(new AgentSessionUsage(1, 1, 1, 0, 2.5));
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class BlockingRuntime : IAgentRuntime
+    {
+        private int _statusCalls;
+        private int _abortCalls;
+        public TaskCompletionSource<bool> PromptStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int AbortCalls => Volatile.Read(ref _abortCalls);
+
+        public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("oc-1");
+
+        public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null)
+        {
+            PromptStarted.TrySetResult(true);
+            return Task.CompletedTask;
+        }
+
+        public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public async Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _statusCalls) == 1)
+                return new AgentTurnStatus(true, "stop", null, "baseline");
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return null;
+        }
+
+        public Task AbortAsync(string sessionId, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _abortCalls);
+            return Task.CompletedTask;
+        }
+
+        public Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
+            => Task.FromResult(new AgentSessionUsage(0, 0, 0, 0));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
