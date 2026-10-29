@@ -49,9 +49,8 @@ public sealed class OpenAiCompatProviderTests
         Assert.Contains(events, e => e.Kind == ChatProviderEventKind.Usage && e.PromptTokens == 41 && e.CompletionTokens == 9);
         Assert.Equal("tool_calls", events.First(e => e.Kind == ChatProviderEventKind.Finished).FinishReason);
 
-        Assert.NotNull(handler.LastRequest);
-        Assert.Equal("Bearer test-secret", handler.LastRequest!.Headers.Authorization!.ToString());
-        var body = JsonNode.Parse(await handler.LastRequest.Content!.ReadAsStringAsync());
+        Assert.Equal("Bearer test-secret", handler.LastAuthorization);
+        var body = JsonNode.Parse(handler.LastBody!);
         Assert.Equal("test-model", body!["model"]!.GetValue<string>());
         Assert.True(body["stream"]!.GetValue<bool>());
         Assert.Equal("medium", body["reasoning_effort"]!.GetValue<string>());
@@ -85,12 +84,14 @@ public sealed class OpenAiCompatProviderTests
 
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
-        public HttpRequestMessage? LastRequest { get; private set; }
+        public string? LastAuthorization { get; private set; }
+        public string? LastBody { get; private set; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            LastRequest = request;
-            return Task.FromResult(respond(request));
+            LastAuthorization = request.Headers.Authorization?.ToString();
+            LastBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            return respond(request);
         }
     }
 }
