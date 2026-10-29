@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using Application.Common;
@@ -7,6 +8,50 @@ using ProjectBeacon.Cli.Mcp;
 
 public sealed class McpStdioServerTests
 {
+
+    [Fact]
+    public async Task ToolsList_FiltersToolsUsingActiveSubtaskAllowlist()
+    {
+        var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var env = McpEnvironment.Of(
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        using var http = new HttpClient(new StubApiHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                $"""{"subtasks":[{"id":"{{subtaskId:D}}","status":"InProgress","allowedMcpTools":["read_file"],"allowedPaths":["src"]}]}""",
+                Encoding.UTF8,
+                "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            var toolsJson = frames[0]["result"]!["tools"]!.ToJsonString();
+            Assert.Contains("read_file", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("task_pipeline_status", toolsJson, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Fact]
     public async Task ToolsList_IncludesWrite_AndNoShell_ThenExitsWhenStdinCloses()
     {
@@ -280,6 +325,12 @@ public sealed class McpStdioServerTests
         {
             Directory.Delete(root, true);
         }
+    }
+
+    private sealed class StubApiHandler(Func<HttpRequestMessage, HttpResponseMessage> responseFactory) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(responseFactory(request));
     }
 
     private static void WriteFrame(Stream stream, string json)
