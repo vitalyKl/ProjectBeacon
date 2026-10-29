@@ -129,7 +129,8 @@ public sealed class McpStdioServerTests
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(
-                        """{"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":["read_file"],"allowedPaths":["src"]}]}"""
+                        """{"sessions":[{"id":"SESSION_ID"}],"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":["read_file"],"allowedPaths":["src"]}]}"""
+                            .Replace("SESSION_ID", sessionId.ToString("D"), StringComparison.Ordinal)
                             .Replace("SUBTASK_ID", subtaskId.ToString("D"), StringComparison.Ordinal),
                         Encoding.UTF8,
                         "application/json")

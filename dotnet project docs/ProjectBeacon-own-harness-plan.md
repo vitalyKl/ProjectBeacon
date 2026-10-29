@@ -114,12 +114,12 @@
 2. `LaunchSessionHandler` определяет native runtime в настройках рабочей станции, выбирает онлайн ProjectRuntime, готовит prompt/model/context и атомарно переводит сессию в `Active` вместе с постановкой команды в очередь. Транзакция выполняется через EF execution strategy.
 3. Клиентский `DaemonCommandExecutor` получает короткоживущий scoped harness token, создаёт native session, отправляет prompt, дожидается статуса хода и возвращает внешний ID сессии и usage.
 4. `CommandCompletions` сохраняет внешний ID сессии при корректном успешном ответе и переводит активную сессию в `Failed`, если ход завершился ошибкой либо результат не содержит корректного внешнего ID.
-5. Добавлены тесты очереди/защиты от повторного запуска, completion success/failure/malformed-result и отдельный тест dispatch через native runtime с подменённым provider/MCP-клиентом.
+5. Добавлены тесты очереди/защиты от повторного запуска, completion success/failure/malformed-result и dispatch через native runtime с подменённым provider/MCP-клиентом. Для MCP pipeline-ролей добавлены server-side tool allowlists: Planner и Reviewer имеют только свои control-plane действия и read-only workspace-инструменты; Actor не может запускать другие сессии/вердикты, а lifecycle-отчёты проверяют совпадение subtaskId. `pipeline_launch_session` сначала проверяет, что sessionId присутствует в pipeline текущей задачи.
 
 Остаётся:
 1. Дождаться и исправить CI для актуальной ревизии ветки.
 2. Подтвердить реальный end-to-end сценарий на локальной модели: Planner создаёт подзадачи через `task_create_subtask`, Actor выполняет работу и вызывает `subtask_report_result`, Reviewer ставит вердикт. Текущие тесты проверяют dispatch и completion контракт, но не этот полный живой цикл.
-3. Проверить, что роль и контекст проекта формируются теми же контрактами, что и существующий pipeline, и что переключатель runtime работает от настройки станции до выполнения команды.
+3. Проверить полный цикл runtime toggle от сохранения настройки рабочей станции до реального запуска модели; текущие проверки подтверждают dispatch и ролевые MCP-контракты, но не запуск реальной локальной модели с live API.
 
 **Acceptance:** полный цикл на локальной модели без OpenCode, включая scoped MCP-инструменты и завершение command без повторного запуска той же сессии. До подтверждения этого сценария шаг 6 не считать закрытым.
 
