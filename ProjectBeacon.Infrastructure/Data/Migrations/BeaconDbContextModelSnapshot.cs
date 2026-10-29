@@ -912,10 +912,23 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<long>("Capabilities")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("ClientKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasDefaultValue("Manual");
+
+                    b.Property<Guid?>("CommandId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DeviceId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("ExpiresAt")
@@ -932,6 +945,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -941,6 +957,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CommandId");
+
+                    b.HasIndex("DeviceId");
 
                     b.HasIndex("ProjectId");
 
@@ -2001,6 +2021,16 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Identity.ApiToken", b =>
                 {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Devices.WorkstationCommand", null)
+                        .WithMany()
+                        .HasForeignKey("CommandId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Devices.DaemonDevice", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
                         .WithMany("ApiTokens")
                         .HasForeignKey("ProjectId")
