@@ -2071,4 +2071,13 @@
   <data name="ChatAnswerFailed" xml:space="preserve">
     <value>Не удалось ответить на вопрос: {0}</value>
   </data>
+  <data name="ChatModelSettings" xml:space="preserve">
+    <value>Настройки модели</value>
+  </data>
+  <data name="ChatModelSettingsDescription" xml:space="preserve">
+    <value>Сначала выберите модель, затем настройте уровень рассуждений.</value>
+  </data>
+  <data name="ChatContextWindow" xml:space="preserve">
+    <value>Окно контекста: {0} токенов</value>
+  </data>
 </root>
