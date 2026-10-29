@@ -61,7 +61,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     {
         try
         {
-            return string.Equals(settingsLoader().AgentRuntime, "native", StringComparison.Ordinal)
+            return string.Equals(settingsLoader().AgentRuntime, "native", StringComparison.OrdinalIgnoreCase)
                 ? new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg))
                 : openCodeRuntime;
         }

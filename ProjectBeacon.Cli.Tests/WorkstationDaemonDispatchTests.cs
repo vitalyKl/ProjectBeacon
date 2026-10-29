@@ -186,7 +186,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         };
         var settings = new WorkstationSettings
         {
-            AgentRuntime = "native",
+            AgentRuntime = "Native",
             OpencodeDataDir = Path.Combine(_dir, "native-data")
         };
         await using var daemon = new WorkstationDaemon(http, llama, () => settings);

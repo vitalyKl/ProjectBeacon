@@ -86,14 +86,14 @@
 
 ## Шаг 4. Инструменты и права
 
-**Меняем.**
-1. `McpStdioClient`: запускает `beacon mcp --root <root>` дочерним процессом (ровно как OpenCode), делает `initialize`, `tools/list`, `tools/call`. Те же 9 файловых и все control-plane инструменты появляются у модели без переписывания. Внешние MCP из `McpCatalog` (Context7, Serena, кастомные) подключаются тем же клиентом. HTTP MCP по-прежнему не используется.
-2. Нативный `run_command` по решению D2.
-3. Слой прав на границе вызова: `AllowedMcpTools` и `AllowedPaths` подзадачи теперь реально применяются в харнесе. Сегодня в доках прямо сказано, что ничего в хосте не превращает их в запреты; `SubtaskScopeGuard` работает только в режиме API. Свой слой не заменяет его, а стоит перед ним.
-4. Вместо `permission: deny` в `opencode.json` нативные инструменты чтения/записи у харнеса просто не существуют: файлы только через `beacon mcp`.
-5. `BeaconToolDiscipline.Rules` добавляется в системный промпт как есть.
+**Реализовано частично; границы native pipeline дополнены server-derived scope.**
+1. `McpStdioClient` запускает `beacon mcp --root <root>` дочерним процессом и выполняет `initialize`, `tools/list`, `tools/call`. Файловые и control-plane инструменты по-прежнему идут через Beacon MCP; HTTP MCP не используется.
+2. Нативный `run_command` требует двух независимых разрешений: workstation owner должен задать `AllowedCommandPrefixes`, а Actor pipeline должен получить `run_command` в `AllowedMcpTools` своей активной подзадачи. Planner и Review не получают этот инструмент. Выполнение по-прежнему идёт без shell, с timeout/output cap и базовой проверкой путей аргументов.
+3. `McpStdioServer` применяет `AllowedMcpTools` и `AllowedPaths` на границе tool call. Planner и Reviewer получают разные белые списки; Actor не может запускать другие сессии, менять verdict или отчётиться за чужой subtask.
+4. API выдаёт pipeline harness token только после сверки payload с сохранённой активной сессией/задачей/ролью. Для Actor набор разрешённых инструментов берётся из persisted subtask, а не из payload от клиента.
+5. Настройки workstation остаются вторым уровнем ограничения; pipeline роль не может расширить локальный `AllowedCommandPrefixes`.
 
-**Acceptance.** Модель вызывает `get_tree` и `apply_patch` через MCP; вызов инструмента вне `AllowedMcpTools` отклоняется с сообщением; путь вне `AllowedPaths` отклоняется; `run_command` с префиксом не из allowlist отклоняется; тест на выход пути за корень.
+**Acceptance.** В тестах подтверждены фильтрация инструментов, запрет чужого task/subtask/session, и выдача `run_command` только Actor с явным grant. Реальное выполнение локальной команды в end-to-end pipeline ещё нужно проверить на живом локальном runtime.
 
 ## Шаг 5. Облачные провайдеры
 
@@ -107,17 +107,17 @@
 
 ## Шаг 6. Конвейер и контекст проекта
 
-**Статус на 2026-10-29: частично реализован; acceptance ещё не подтверждён.**
+**Статус: частично реализован; acceptance ещё не подтверждён.**
 
 Уже добавлено:
 1. Аддитивная команда `RunPipelineSession` в каталоге, `CommandDelivery`, `CommandLease`, `HarnessTokenCommands` и документации семантики доставки. Повторная доставка классифицирована как at-most-once.
 2. `LaunchSessionHandler` определяет native runtime в настройках рабочей станции, выбирает онлайн ProjectRuntime, готовит prompt/model/context и атомарно переводит сессию в `Active` вместе с постановкой команды в очередь. Транзакция выполняется через EF execution strategy.
 3. Клиентский `DaemonCommandExecutor` получает короткоживущий scoped harness token, создаёт native session, отправляет prompt, дожидается статуса хода и возвращает внешний ID сессии и usage.
 4. `CommandCompletions` сохраняет внешний ID сессии при корректном успешном ответе и переводит активную сессию в `Failed`, если ход завершился ошибкой либо результат не содержит корректного внешнего ID.
-5. Добавлены тесты очереди/защиты от повторного запуска, completion success/failure/malformed-result и dispatch через native runtime с подменённым provider/MCP-клиентом. Для MCP pipeline-ролей добавлены server-side tool allowlists: Planner и Reviewer имеют только свои control-plane действия и read-only workspace-инструменты; Actor не может запускать другие сессии/вердикты, а lifecycle-отчёты проверяют совпадение subtaskId. `pipeline_launch_session` сначала проверяет, что sessionId присутствует в pipeline текущей задачи.
+5. Добавлены тесты очереди/защиты от повторного запуска, completion success/failure/malformed-result, dispatch, role-based MCP permissions и task/session/subtask scoping. Для pipeline harness token API сверяет payload с сохранённой активной сессией; Actor получает список `AllowedMcpTools` из persisted subtask. Нативный `run_command` требует отдельного subtask grant и локального `AllowedCommandPrefixes`.
 
 Остаётся:
-1. Дождаться и исправить CI для актуальной ревизии ветки.
+1. Проверить зелёный CI для последнего коммита, включающего server-derived разрешения `run_command`.
 2. Подтвердить реальный end-to-end сценарий на локальной модели: Planner создаёт подзадачи через `task_create_subtask`, Actor выполняет работу и вызывает `subtask_report_result`, Reviewer ставит вердикт. Текущие тесты проверяют dispatch и completion контракт, но не этот полный живой цикл.
 3. Проверить полный цикл runtime toggle от сохранения настройки рабочей станции до реального запуска модели; текущие проверки подтверждают dispatch и ролевые MCP-контракты, но не запуск реальной локальной модели с live API.
 
