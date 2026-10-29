@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
 using Application.Persistence;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
 /// User whose selected chat backend should be returned.
@@ -80,4 +81,33 @@ public static class ChatModelSelection
         return OpencodePayload.OpenCodeId(new LocalModelBackendDto(
             backendId, kind.Name, kind.BackendType, "", 0, 0, [], userId, null, false, "", kind.OpenCodeModel));
     }
+    /// <summary>
+    /// Resolves the configured context window for the exact selected model. Prefer this value
+    /// to OpenCode's fallback catalog context when a custom model has an incomplete definition.
+    /// </summary>
+    public static async Task<int?> ResolveContextLimitAsync(
+        IBeaconDb db, Guid userId, string? resolvedModel, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(resolvedModel))
+            return null;
+
+        var backends = await db.LocalModelBackends
+            .Where(b => b.UserId == userId)
+            .Select(b => new { b.Name, b.BackendType, b.OpenCodeModel, b.ContextSize })
+            .ToListAsync(ct);
+
+        foreach (var backend in backends)
+        {
+            if (backend.ContextSize <= 0)
+                continue;
+            var modelId = backend.BackendType == ModelBackendType.LlamaCpp
+                || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
+                    ? $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(backend.Name)}"
+                    : backend.OpenCodeModel.Trim();
+            if (string.Equals(modelId, resolvedModel.Trim(), StringComparison.Ordinal))
+                return backend.ContextSize;
+        }
+        return null;
+    }
+
 }
