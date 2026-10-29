@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;

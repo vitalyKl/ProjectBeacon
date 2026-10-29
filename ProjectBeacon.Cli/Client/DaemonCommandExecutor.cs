@@ -65,10 +65,24 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     AgentHarnessAuthorization? harnessAuthorization = null;
                     if (_gate.Runtime is NativeAgentRuntime)
                     {
-                        if (command.ProjectId is not { } projectId || projectId == Guid.Empty)
-                            return (false, null, "A project is required to issue a native harness token.");
                         if (_http.BaseAddress is null)
                             return (false, null, "The daemon API base URL is not configured.");
+
+                        Guid? requestedProjectId = null;
+                        Guid? taskId = null;
+                        using (var promptDoc = JsonDocument.Parse(payload))
+                        {
+                            if (promptDoc.RootElement.TryGetProperty("projectId", out var rawProject)
+                                && rawProject.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawProject.GetString(), out var parsedProject)
+                                && parsedProject != Guid.Empty)
+                                requestedProjectId = parsedProject;
+                            if (promptDoc.RootElement.TryGetProperty("taskId", out var rawTask)
+                                && rawTask.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawTask.GetString(), out var parsedTask)
+                                && parsedTask != Guid.Empty)
+                                taskId = parsedTask;
+                        }
 
                         using var tokenResponse = await _http.PostAsJsonAsync(
                             $"/v1/commands/{command.Id:D}/harness-token",
@@ -78,24 +92,19 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
                         var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
                         if (token is null || string.IsNullOrWhiteSpace(token.Token)
-                            || token.ProjectId != projectId || token.CommandId != command.Id
-                            || token.Generation != command.Generation || token.ExpiresAt <= DateTime.UtcNow)
+                            || token.ProjectId == Guid.Empty
+                            || (requestedProjectId is { } requested && token.ProjectId != requested)
+                            || token.CommandId != command.Id
+                            || token.Generation != command.Generation
+                            || token.ExpiresAt <= DateTime.UtcNow)
                             return (false, null, "The API returned an invalid or expired harness token.");
 
-                        Guid? taskId = null;
-                        using (var promptDoc = JsonDocument.Parse(payload))
-                        {
-                            if (promptDoc.RootElement.TryGetProperty("taskId", out var rawTask)
-                                && rawTask.ValueKind == JsonValueKind.String
-                                && Guid.TryParse(rawTask.GetString(), out var parsedTask)
-                                && parsedTask != Guid.Empty)
-                                taskId = parsedTask;
-                        }
-
+                        // The API derives project scope from the claimed database command; the client
+                        // only cross-checks an optional project id carried in its payload.
                         harnessAuthorization = new AgentHarnessAuthorization(
                             _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
                             token.Token,
-                            projectId,
+                            token.ProjectId,
                             taskId,
                             command.Id,
                             command.Generation,

@@ -43,8 +43,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         _loadSettings = loadSettings;
         _log = log;
         _providerFactory = providerFactory ?? ((http, url, key) => new OpenAiCompatProvider(http, url, key));
-        _mcpClientFactory = mcpClientFactory ?? ((authorization, ct) => McpStdioClient.StartAsync(authorization, ct));
+        _mcpClientFactory = mcpClientFactory ?? StartMcpClientAsync;
     }
+
+    private static async Task<IMcpToolClient> StartMcpClientAsync(
+        AgentHarnessAuthorization authorization,
+        CancellationToken ct)
+        => await McpStdioClient.StartAsync(authorization, ct);
 
     public bool SupportsForms => false;
     public bool SupportsAgentSwitch => false;
