@@ -114,7 +114,7 @@ public record EnqueueCommandCommand(EnqueueCommandRequest Request) : ICommand<Re
 /// <summary>
 /// Device claiming its next command. Wait is how long the claim may block.
 /// </summary>
-public record ClaimNextCommandRequest(Guid DeviceId, TimeSpan? Wait);
+public record ClaimNextCommandRequest(Guid DeviceId, TimeSpan? Wait, bool ControlOnly = false);
 /// <summary>
 /// Command for claim next command.
 /// </summary>
