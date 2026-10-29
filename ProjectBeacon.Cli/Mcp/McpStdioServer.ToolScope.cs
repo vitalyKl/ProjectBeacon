@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Mcp;
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 public static partial class McpStdioServer
@@ -17,12 +18,34 @@ public static partial class McpStdioServer
 
         var allowlists = SubtaskScopeGuard.ParsePipeline(body);
         if (allowlists.Count == 0)
-            return Result(id, new JsonObject { ["tools"] = new JsonArray() });
+        {
+            // A newly started Planner has no subtasks yet. Expose the normal tool catalog
+            // only when the API explicitly confirms an empty list; malformed or incomplete
+            // pipeline responses remain fail-closed.
+            var toolsForEmptyPipeline = HasExplicitlyEmptySubtaskList(body) ? tools : new JsonArray();
+            return Result(id, new JsonObject { ["tools"] = toolsForEmptyPipeline });
+        }
 
         Guid? explicitSubtaskId = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var subtaskId)
             ? subtaskId
             : null;
         var filtered = SubtaskScopeGuard.FilterTools(tools, allowlists, explicitSubtaskId);
         return Result(id, new JsonObject { ["tools"] = filtered });
+    }
+
+    private static bool HasExplicitlyEmptySubtaskList(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("subtasks", out var subtasks)
+                && subtasks.ValueKind == JsonValueKind.Array
+                && subtasks.GetArrayLength() == 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
