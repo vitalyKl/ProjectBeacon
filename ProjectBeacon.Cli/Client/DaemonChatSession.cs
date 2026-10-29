@@ -123,9 +123,18 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             // No gate: the switch is a plain serve HTTP call and must not wait out an active turn.
-            if (_gate.Runtime is not IAgentRuntimeCapabilities capabilities || !capabilities.SupportsAgentSwitch)
-                throw new InvalidOperationException("Agent switching is not supported by the selected runtime.");
-            await capabilities.SwitchAgentAsync(externalId, agent, ct);
+            if (_gate.Runtime is IAgentRuntimeCapabilities capabilities)
+            {
+                if (!capabilities.SupportsAgentSwitch)
+                    throw new InvalidOperationException("Agent switching is not supported by the selected runtime.");
+                await capabilities.SwitchAgentAsync(externalId, agent, ct);
+            }
+            else
+            {
+                // Compatibility path for existing runtime/test adapters; the production OpenCode
+                // runtime implements capabilities and never reaches this branch.
+                await _gate.OpenCode.SwitchAgentAsync(externalId, agent, ct);
+            }
             return (true, "{}", null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -158,9 +167,17 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             // No gate: a queued prompt turn holds it, but the model blocks on the form answer.
-            if (_gate.Runtime is not IAgentRuntimeCapabilities capabilities || !capabilities.SupportsForms)
-                throw new InvalidOperationException("Interactive forms are not supported by the selected runtime.");
-            var settled = await capabilities.ReplyFormAsync(externalId, formId, answerJson, ct);
+            bool settled;
+            if (_gate.Runtime is IAgentRuntimeCapabilities capabilities)
+            {
+                if (!capabilities.SupportsForms)
+                    throw new InvalidOperationException("Interactive forms are not supported by the selected runtime.");
+                settled = await capabilities.ReplyFormAsync(externalId, formId, answerJson, ct);
+            }
+            else
+            {
+                settled = await _gate.OpenCode.ReplyFormAsync(externalId, formId, answerJson, ct);
+            }
             return settled
                 ? (true, "{}", null)
                 : (true, JsonSerializer.Serialize(new { alreadySettled = true }), null);
@@ -189,8 +206,22 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         // event feed (the stream method is a no-op for them) and polling stays the backstop.
         var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var streamBuffers = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
-        var streamTask = capabilities is { SupportsLiveDeltas: true }
-            ? capabilities.StreamTextAsync(externalId, (kind, messageId, ordinal, delta, streamCt) =>
+        Task streamTask;
+        if (capabilities is { SupportsLiveDeltas: true })
+        {
+            streamTask = capabilities.StreamTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
+        }
+        else if (capabilities is null)
+        {
+            // Compatibility path for pre-capability runtimes and existing test adapters.
+            streamTask = _gate.OpenCode.StreamSessionTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
+        }
+        else
+        {
+            streamTask = Task.CompletedTask;
+        }
+
+        Task StreamDeltaAsync(string kind, string messageId, int ordinal, string delta, CancellationToken streamCt)
         {
             var key = messageId + ":" + kind + ":" + ordinal;
             var body = streamBuffers.AddOrUpdate(key, delta, (_, old) => old + delta);
@@ -202,8 +233,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 externalId = key,
                 complete = false
             }, projectId, streamCt);
-        }, streamCts.Token)
-            : Task.CompletedTask;
+        }
         var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
             : effort;
@@ -306,7 +336,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 ? configuredContextLimit
                 : capabilities is not null
                     ? await capabilities.ReadContextLimitAsync(model, ct)
-                    : null;
+                    : await _gate.OpenCode.ReadContextLimitAsync(model, ct);
             await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new
             {
                 promptTokens = usage.PromptTokens,
@@ -346,9 +376,17 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     {
         try
         {
-            if (capabilities is null || !capabilities.SupportsForms)
+            IReadOnlyList<AgentRuntimeForm> forms;
+            if (capabilities is { SupportsForms: true })
+                forms = await capabilities.ListPendingFormsAsync(externalId, ct);
+            else if (capabilities is null)
+                forms = (await _gate.OpenCode.ListPendingFormsAsync(externalId, ct))
+                    .Select(form => new AgentRuntimeForm(form.Id, form.Title, form.Metadata, form.FieldsJson))
+                    .ToArray();
+            else
                 return;
-            foreach (var form in await capabilities.ListPendingFormsAsync(externalId, ct))
+
+            foreach (var form in forms)
             {
                 if (!seenForms.Add(form.Id))
                     continue;
