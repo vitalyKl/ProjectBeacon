@@ -46,14 +46,14 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
         var work = await db.WorkstationCommands.IgnoreQueryFilters()
             .FirstOrDefaultAsync(c => c.Id == command.CommandId && c.DeviceId == deviceId, ct);
         if (work is null
-            || work.Kind != WorkstationCommandKind.ChatPrompt
+            || work.Kind is not (WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession)
             || work.ProjectId is not { } projectId
             || work.Status != WorkstationCommandStatus.Running
             || work.StartedAt is null
             || work.LeaseExpiresAt is not { } leaseExpiresAt
             || leaseExpiresAt <= now)
         {
-            return Result.Failure<HarnessTokenDto>("The chat command is not running under an active lease.", ErrorKind.Forbidden);
+            return Result.Failure<HarnessTokenDto>("The harness command is not running under an active lease.", ErrorKind.Forbidden);
         }
 
         if (work.Attempts + 1 != command.Generation)
