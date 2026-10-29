@@ -99,24 +99,24 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             // in the same transaction. This is required by Npgsql's retrying execution strategy.
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-    
+
             var session = await db.PipelineSessions.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
             if (session is null)
                 return Result.Failure<PipelineSessionDto>("Session not found.");
-    
+
             var task = await db.Tasks.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
-    
+
             if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
             {
                 var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
                 if (entered == 0)
                     return Result.Failure<PipelineSessionDto>("Pipeline state changed while launching; retry.");
             }
-    
+
             WorkstationCommand? pipelineCommand = null;
             var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
                 .Where(r => r.ProjectId == session.ProjectId)
@@ -131,7 +131,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     .Join(devices, r => r.DeviceId, d => d.Id, (runtime, device) => new { Runtime = runtime, Device = device })
                     .Where(x => IsNativeRuntime(x.Device.WorkstationJson))
                     .ToList();
-    
+
                 if (candidates.Count > 0)
                 {
                     var now = DateTime.UtcNow;
@@ -141,14 +141,14 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         .FirstOrDefault();
                     if (selected is null)
                         return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
-    
+
                     if (session.ModelBackendId is not { } backendId)
                         return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
                     var backend = await db.LocalModelBackends
                         .FirstOrDefaultAsync(b => b.Id == backendId, ct);
                     if (backend is null)
                         return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
-    
+
                     var model = backend.BackendType == ModelBackendType.LlamaCpp || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
                         ? $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(backend.Name)}"
                         : backend.OpenCodeModel.Trim();
@@ -173,7 +173,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         selected.Device.UserId);
                 }
             }
-    
+
             try
             {
                 session.Launch();
@@ -182,7 +182,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             {
                 return Result.Failure<PipelineSessionDto>(ex.Message);
             }
-    
+
             var launched = await db.PipelineSessions
                 .Where(s => s.Id == session.Id && s.Status == SessionStatus.Ready)
                 .ExecuteUpdateAsync(s => s
@@ -191,13 +191,13 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                     .SetProperty(s => s.LaunchedAt, session.LaunchedAt), ct);
             if (launched == 0)
                 return Result.Failure<PipelineSessionDto>("Session state changed while launching; retry.");
-    
+
             if (pipelineCommand is not null)
             {
                 db.WorkstationCommands.Add(pipelineCommand);
                 await db.SaveChangesAsync(ct);
             }
-    
+
             await transaction.CommitAsync(ct);
             return Result.Ok(PipelineMappers.ToDto(session));
         });
