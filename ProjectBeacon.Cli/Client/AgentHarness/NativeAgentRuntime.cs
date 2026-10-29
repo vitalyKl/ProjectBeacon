@@ -262,6 +262,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 foreach (var tool in mcpClient.OpenAiTools)
                     mcpTools.Add(tool?.DeepClone());
             }
+            var commandPrefixes = _loadSettings().AllowedCommandPrefixes
+                .Where(prefix => !string.IsNullOrWhiteSpace(prefix))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (controls?.HarnessAuthorization is not null && commandPrefixes.Length > 0)
+                mcpTools.Add(NativeCommandRunner.ToolDefinition());
 
             var hasFinalText = false;
             var agentStep = 0;
@@ -401,6 +407,20 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             else if (!call.TryReadArguments(out var parsedArguments))
                             {
                                 toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
+                            }
+                            else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
+                            {
+                                if (controls?.HarnessAuthorization is not { } commandAuthorization || commandPrefixes.Length == 0)
+                                    toolResult = "Tool error: run_command is disabled because no command allowlist and active authorization are configured.";
+                                else
+                                {
+                                    var result = await NativeCommandRunner.ExecuteAsync(
+                                        commandAuthorization.WorkingDirectory,
+                                        parsedArguments!,
+                                        commandPrefixes,
+                                        ct);
+                                    toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                }
                             }
                             else if (mcpClient is null)
                             {
