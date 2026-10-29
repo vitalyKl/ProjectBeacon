@@ -93,6 +93,37 @@ internal static partial class McpApiTools
         return false;
     }
 
+    private static bool TryPipelineTask(McpEnvironment env, JsonObject? args, out Guid taskId, out string error)
+    {
+        var role = env.Get("BEACON_PIPELINE_ROLE");
+        var isPipelineRole =
+            string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase);
+        if (!isPipelineRole)
+            return TryTask(env, args, out taskId, out error);
+
+        var scopedRaw = env.Get("BEACON_TASK_ID");
+        if (!Guid.TryParse(scopedRaw, out taskId) || taskId == Guid.Empty)
+        {
+            taskId = Guid.Empty;
+            error = "The pipeline session has no valid BEACON_TASK_ID scope.";
+            return false;
+        }
+
+        var requestedRaw = Text(args, "taskId");
+        if (!string.IsNullOrWhiteSpace(requestedRaw)
+            && (!Guid.TryParse(requestedRaw, out var requestedId) || requestedId != taskId))
+        {
+            taskId = Guid.Empty;
+            error = "taskId must match BEACON_TASK_ID for the current pipeline session.";
+            return false;
+        }
+
+        error = "";
+        return true;
+    }
+
     private static bool TryGuid(JsonObject? args, string key, out Guid id)
         => Guid.TryParse(Text(args, key), out id);
 

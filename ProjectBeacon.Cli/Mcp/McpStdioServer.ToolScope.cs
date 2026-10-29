@@ -78,7 +78,7 @@ public static partial class McpStdioServer
     private static readonly string[] PlannerTools =
     [
         ..ReadOnlyWorkspaceTools,
-        "get_project", "get_task",
+        "get_project",
         "list_context_nodes", "get_context_node", "export_agents_md",
         "list_constraints", "list_decisions", "list_milestones", "list_labels", "match_label",
         ..PlannerSupervisorTools

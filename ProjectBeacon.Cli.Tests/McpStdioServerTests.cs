@@ -222,6 +222,66 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
+    public async Task PlannerCannotOverridePipelineTaskWithToolArguments()
+    {
+        var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var otherTaskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var subtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var apiCallCount = 0;
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Planner"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        using var http = new HttpClient(new StubApiHandler(_ =>
+        {
+            apiCallCount++;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "pipeline_start_actor",
+                    arguments = new
+                    {
+                        taskId = otherTaskId.ToString("D"),
+                        subtaskId = subtaskId.ToString("D")
+                    }
+                }
+            }));
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Equal(0, apiCallCount);
+            Assert.Contains("must match BEACON_TASK_ID", frames[0].ToJsonString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task PlannerCannotLaunchSessionOutsideCurrentTask()
     {
         var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
