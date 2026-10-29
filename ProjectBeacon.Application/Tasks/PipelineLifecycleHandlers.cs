@@ -164,42 +164,42 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                         model,
                         contextLimit = backend.ContextSize,
                         reasoningEffort = "medium"
-                });
-                pipelineCommand = WorkstationCommand.Create(
-                    selected.Device.Id,
-                    WorkstationCommandKind.RunPipelineSession,
-                    payload,
-                    session.ProjectId,
-                    selected.Device.UserId);
+                    });
+                    pipelineCommand = WorkstationCommand.Create(
+                        selected.Device.Id,
+                        WorkstationCommandKind.RunPipelineSession,
+                        payload,
+                        session.ProjectId,
+                        selected.Device.UserId);
+                }
             }
-        }
-
-        try
-        {
-            session.Launch();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineSessionDto>(ex.Message);
-        }
-
-        var launched = await db.PipelineSessions
-            .Where(s => s.Id == session.Id && s.Status == SessionStatus.Ready)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(s => s.Status, session.Status)
-                .SetProperty(s => s.ExternalSessionId, session.ExternalSessionId)
-                .SetProperty(s => s.LaunchedAt, session.LaunchedAt), ct);
-        if (launched == 0)
-            return Result.Failure<PipelineSessionDto>("Session state changed while launching; retry.");
-
-        if (pipelineCommand is not null)
-        {
-            db.WorkstationCommands.Add(pipelineCommand);
-            await db.SaveChangesAsync(ct);
-        }
-
-        await transaction.CommitAsync(ct);
-        return Result.Ok(PipelineMappers.ToDto(session));
+    
+            try
+            {
+                session.Launch();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Result.Failure<PipelineSessionDto>(ex.Message);
+            }
+    
+            var launched = await db.PipelineSessions
+                .Where(s => s.Id == session.Id && s.Status == SessionStatus.Ready)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(s => s.Status, session.Status)
+                    .SetProperty(s => s.ExternalSessionId, session.ExternalSessionId)
+                    .SetProperty(s => s.LaunchedAt, session.LaunchedAt), ct);
+            if (launched == 0)
+                return Result.Failure<PipelineSessionDto>("Session state changed while launching; retry.");
+    
+            if (pipelineCommand is not null)
+            {
+                db.WorkstationCommands.Add(pipelineCommand);
+                await db.SaveChangesAsync(ct);
+            }
+    
+            await transaction.CommitAsync(ct);
+            return Result.Ok(PipelineMappers.ToDto(session));
         });
     }
 
