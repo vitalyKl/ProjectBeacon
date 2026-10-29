@@ -45,6 +45,25 @@ public static class SubtaskScopeGuard
         }
     }
 
+    public static JsonArray FilterTools(JsonArray tools, IReadOnlyList<Allowlist> subtasks, Guid? explicitSubtaskId)
+    {
+        var active = Resolve(subtasks, explicitSubtaskId, out var error);
+        if (error is not null)
+            return [];
+
+        var filtered = new JsonArray();
+        foreach (var tool in tools)
+        {
+            if (tool is null)
+                continue;
+            var name = tool["name"]?.GetValue<string>();
+            if (active is null || active.Value.Tools.Count == 0
+                || (name is not null && ToolAllowed(active.Value.Tools, name)))
+                filtered.Add(tool.DeepClone());
+        }
+        return filtered;
+    }
+
     public static string? Reject(string tool, IReadOnlyList<string>? requestedPaths, IReadOnlyList<Allowlist> subtasks, Guid? explicitSubtaskId)
     {
         var active = Resolve(subtasks, explicitSubtaskId, out var error);
