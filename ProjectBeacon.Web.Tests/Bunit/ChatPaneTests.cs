@@ -1,4 +1,5 @@
 using ProjectBeacon.Application.Chat;
+using ProjectBeacon.Application.Agents;
 using Bunit;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Web.Features.Chat;
@@ -48,23 +49,27 @@ public sealed class ChatPaneTests : BUnitRenderBase
 
 
     [Fact]
-    public void ModelBarRendersAboveComposerWithEffortAndStatus()
+    public void ModelSettingsAndModeControlsRenderWithTheComposer()
     {
+        var backend = new LocalModelBackendDto(
+            Guid.NewGuid(), "qwen3.8-Q3-medium", ModelBackendType.LlamaCpp,
+            "llama-server -m qwen.gguf", 131072, 30, [], Guid.NewGuid(), null, false, "");
         var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
             .Add(p => p.ShowModelSelect, true)
-            .Add(p => p.Models, new List<string> { "qwen3.8-Q3-medium", "gemma small" })
+            .Add(p => p.Models, new List<LocalModelBackendDto> { backend })
             .Add(p => p.Model, "beacon-local/qwen3.8-Q3-medium")
+            .Add(p => p.SelectedContextLimit, 131072)
             .Add(p => p.ModelStatus, "switching")
             .Add(p => p.ModelStatusLabel, "Switching model: qwen3.8-Q3-medium"));
 
         Assert.Contains("beacon-chat-model-bar", cut.Markup);
-        Assert.Contains("beacon-chat-model-select", cut.Markup);
-        Assert.Contains("beacon-chat-effort-select", cut.Markup);
+        Assert.Contains("beacon-chat-config-button", cut.Markup);
+        Assert.Contains("beacon-chat-mode-toggle", cut.Markup);
         Assert.Contains("qwen3.8-Q3-medium", cut.Markup);
         Assert.Contains("beacon-chat-model-progress", cut.Markup);
         Assert.Contains("Switching model: qwen3.8-Q3-medium", cut.Markup);
         Assert.True(cut.Markup.IndexOf("beacon-chat-model-bar") < cut.Markup.IndexOf("beacon-chat-compose"),
-            "model bar must sit above the composer");
+            "model settings must sit above the composer");
     }
 
     [Fact]
