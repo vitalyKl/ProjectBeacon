@@ -61,7 +61,8 @@ public static class WorkstationCommandCatalog
             Device(WorkstationCommandKind.ConfigureOpenCode, "agent.configure-opencode", "Reconcile OpenCode runtime configuration.", OperationRetrySemantics.Reconciliation, "{revision?:integer,...}"),
             Project(WorkstationCommandKind.RunEvalTurn, "eval.run-turn", "Run one evaluation turn.", OperationRetrySemantics.AtMostOnce, "{evalRunId:guid}"),
             Device(WorkstationCommandKind.ReconcileDesired, "device.reconcile", "Reconcile workstation desired state.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
-            Project(WorkstationCommandKind.RunReviewCheck, "review.run-check", "Run the trusted project review check.", OperationRetrySemantics.AtMostOnce, "{reviewRunId:guid}")
+            Project(WorkstationCommandKind.RunReviewCheck, "review.run-check", "Run the trusted project review check.", OperationRetrySemantics.AtMostOnce, "{reviewRunId:guid}"),
+            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{sessionId:guid,taskId:guid,subtaskId?:guid,role:string,prompt:string}")
         };
 
         var byKind = descriptors.ToDictionary(descriptor => descriptor.Kind);
