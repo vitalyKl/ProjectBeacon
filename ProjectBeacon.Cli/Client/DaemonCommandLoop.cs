@@ -105,7 +105,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                     continue;
                 if (!response.IsSuccessStatusCode)
                 {
-                    await _timing.DelayAsync(_timing.CommandErrorDelay, ct);
+                    await _timing.DelayAsync(_timing.CommandErrorDelay, pollingToken);
                     continue;
                 }
 
@@ -119,7 +119,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                     await ProcessCommandAsync(command, executionToken, rejectUnexpectedControlCommand: true);
                     continue;
                 }
-                await ProcessCommandAsync(command, ct);
+                await ProcessCommandAsync(command, executionToken);
             }
             catch (OperationCanceledException) when (pollingToken.IsCancellationRequested)
             {
@@ -128,13 +128,13 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             catch (JsonException ex)
             {
                 _state.Log($"malformed control command wire: {ex.Message}");
-                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
                 catch (OperationCanceledException) { break; }
             }
             catch (Exception ex)
             {
                 _state.Log($"control lane: {ex.Message}");
-                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
                 catch (OperationCanceledException) { break; }
             }
         }
