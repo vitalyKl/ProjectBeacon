@@ -29,13 +29,8 @@ public static partial class McpStdioServer
 
         if (allowlists.Count == 0)
         {
-            // An Actor cannot exist without its subtask, and an empty API response must not
-            // expose general project tools. Only a valid, explicitly empty Planner pipeline
-            // can start with no subtasks.
-            if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
-                return Result(id, new JsonObject { ["tools"] = new JsonArray() });
-            if (HasExplicitlyEmptySubtaskList(body))
-                return Result(id, new JsonObject { ["tools"] = tools });
+            // Planner and Reviewer were handled by their explicit role allowlists above.
+            // With no valid subtask scope and no supervisor role, fail closed.
             return Result(id, new JsonObject { ["tools"] = new JsonArray() });
         }
 
@@ -197,19 +192,4 @@ public static partial class McpStdioServer
         }
     }
 
-    private static bool HasExplicitlyEmptySubtaskList(string json)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("subtasks", out var subtasks)
-                && subtasks.ValueKind == JsonValueKind.Array
-                && subtasks.GetArrayLength() == 0;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
 }
