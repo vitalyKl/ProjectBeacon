@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using ProjectBeacon.Application.Context;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
 
@@ -71,7 +72,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         state.Messages.Add(new JsonObject
         {
             ["role"] = "system",
-            ["content"] = "You are the ProjectBeacon workstation assistant. Be accurate, concise, and explicit about uncertainty. You can only use tools explicitly provided in this conversation."
+            ["content"] = "You are the ProjectBeacon workstation assistant. Be accurate, concise, and explicit about uncertainty. You can only use tools explicitly provided in this conversation." + Environment.NewLine + BeaconToolDiscipline.Rules
         });
         if (!_sessions.TryAdd(state.Id, state))
             throw new InvalidOperationException("Could not create a unique agent session.");

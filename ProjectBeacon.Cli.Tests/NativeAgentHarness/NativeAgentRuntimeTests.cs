@@ -142,6 +142,11 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal("read_file", mcp.LastToolName);
             Assert.Equal("README.md", mcp.LastArguments!["path"]!.GetValue<string>());
             Assert.Equal(2, provider.Requests.Count);
+            Assert.Contains(provider.Requests[0], message =>
+                message?["role"]?.GetValue<string>() == "system"
+                && message["content"]?.GetValue<string>()?.Contains(
+                    "Never state that a tool is unavailable without having called it in the same turn.",
+                    StringComparison.Ordinal) == true);
             Assert.Contains(provider.Requests[1], message =>
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["tool_call_id"]?.GetValue<string>() == "call-1"
