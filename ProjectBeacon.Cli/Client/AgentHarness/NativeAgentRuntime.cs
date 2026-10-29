@@ -609,9 +609,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     }
 
     private static bool IsRetryable(Exception ex) =>
-        ex is ChatProviderException { Retryable: true }
-        || ex is HttpRequestException
-        || ex is IOException;
+        ex is ChatProviderException provider
+            ? provider.Retryable
+            : ex is HttpRequestException or IOException;
 
     private static string SafeError(Exception ex) => ex switch
     {
