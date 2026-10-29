@@ -286,6 +286,88 @@ public sealed class NativeAgentRuntimeTests
         }
     }
 
+
+    [Fact]
+    public async Task NativeRuntimeAbortCancelsProviderAndEndsTurnAsAborted()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-abort-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new BlockingProvider();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider);
+        try
+        {
+            var session = await runtime.CreateSessionAsync("abort test", CancellationToken.None);
+            var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            await runtime.SendPromptAsync(
+                session,
+                "Start a long response",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null));
+
+            await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await runtime.AbortAsync(session, CancellationToken.None);
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status!.Ended);
+            Assert.Equal("aborted", status.Finish);
+            Assert.True(provider.CancellationObserved);
+            Assert.Null(status.Error);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    private sealed class BlockingProvider : IChatProvider
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool CancellationObserved { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            Started.TrySetResult();
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Working...");
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+        }
+    }
+
     private sealed class RepeatingToolProvider : IChatProvider
     {
         public int RequestCount { get; private set; }
