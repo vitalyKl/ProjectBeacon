@@ -256,6 +256,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             return (false, null, "Pipeline command requires projectId, taskId, sessionId, model, and prompt.");
         if (pipelineRole is null)
             return (false, null, "Pipeline command requires role Planner, Actor, or Review.");
+        if (string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
+            && subtaskId is null)
+            return (false, null, "Actor pipeline sessions require subtaskId.");
+        if (!string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
+            && subtaskId is not null)
+            return (false, null, "Only Actor pipeline sessions may include subtaskId.");
         if (subtaskId is not null && taskId == Guid.Empty)
             return (false, null, "A subtask-scoped pipeline session must include its parent task id.");
         if (_http.BaseAddress is null)

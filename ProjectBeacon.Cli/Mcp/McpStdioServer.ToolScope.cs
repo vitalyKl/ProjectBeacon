@@ -8,44 +8,66 @@ public static partial class McpStdioServer
     private static async Task<JsonObject> ListToolsAsync(JsonNode id, BeaconApiClient? api, McpEnvironment env)
     {
         var tools = Tools();
+        var role = env.Get("BEACON_PIPELINE_ROLE");
         if (api is null || !Guid.TryParse(env.Get("BEACON_TASK_ID"), out var taskId) || taskId == Guid.Empty)
+        {
+            if (IsPipelineRole(role))
+                return Result(id, new JsonObject { ["tools"] = new JsonArray() });
             return Result(id, new JsonObject { ["tools"] = tools });
+        }
 
         var (ok, _, body) = await api.SendAsync(
             HttpMethod.Get, $"v1/tasks/{taskId:D}/pipeline", null, CancellationToken.None);
-        if (!ok)
+        if (!ok || !HasSubtasksArray(body))
             return Result(id, new JsonObject { ["tools"] = new JsonArray() });
 
         var allowlists = SubtaskScopeGuard.ParsePipeline(body);
+        if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, PlannerTools) });
+        if (string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, ReviewerTools) });
+
         if (allowlists.Count == 0)
         {
-            // A newly started Planner has no subtasks yet. Expose the normal tool catalog
-            // only when the API explicitly confirms an empty list; malformed or incomplete
-            // pipeline responses remain fail-closed.
-            var isPlanner = string.Equals(
-                env.Get("BEACON_PIPELINE_ROLE"), "Planner", StringComparison.OrdinalIgnoreCase);
-            var toolsForEmptyPipeline = isPlanner && HasExplicitlyEmptySubtaskList(body)
-                ? tools
-                : new JsonArray();
-            return Result(id, new JsonObject { ["tools"] = toolsForEmptyPipeline });
+            // An Actor cannot exist without its subtask, and an empty API response must not
+            // expose general project tools. Only a valid, explicitly empty Planner pipeline
+            // can start with no subtasks.
+            if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+                return Result(id, new JsonObject { ["tools"] = new JsonArray() });
+            if (HasExplicitlyEmptySubtaskList(body))
+                return Result(id, new JsonObject { ["tools"] = tools });
+            return Result(id, new JsonObject { ["tools"] = new JsonArray() });
         }
 
         Guid? explicitSubtaskId = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var subtaskId)
             ? subtaskId
             : null;
         var filtered = SubtaskScopeGuard.FilterTools(tools, allowlists, explicitSubtaskId);
-        var supervisorTools = PipelineSupervisorTools(env);
-        foreach (var tool in tools)
+        filtered = FilterActorTools(filtered);
+
+        // Actors must always be able to report success or failure for their own subtask,
+        // even when the caller omitted these mandatory lifecycle tools from the allowlist.
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
         {
-            var name = tool?["name"]?.GetValue<string>();
-            if (name is not null
-                && supervisorTools.Contains(name, StringComparer.OrdinalIgnoreCase)
-                && !filtered.Any(existing => string.Equals(
-                    existing?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase)))
-                filtered.Add(tool!.DeepClone());
+            foreach (var tool in tools)
+            {
+                var name = tool?["name"]?.GetValue<string>();
+                if (name is not null
+                    && ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                    && !filtered.Any(existing => string.Equals(
+                        existing?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase)))
+                    filtered.Add(tool!.DeepClone());
+            }
         }
+
         return Result(id, new JsonObject { ["tools"] = filtered });
     }
+
+    private static readonly string[] ReadOnlyWorkspaceTools =
+    [
+        "read_file", "get_tree", "search_code", "get_changed_scope",
+        "get_signatures", "get_callers", "hash_range"
+    ];
 
     private static readonly string[] PlannerSupervisorTools =
     [
@@ -58,18 +80,122 @@ public static partial class McpStdioServer
         "task_pipeline_status", "task_review_verdict", "pipeline_approve"
     ];
 
-    private static IReadOnlyList<string> PipelineSupervisorTools(McpEnvironment env)
+    private static readonly string[] PlannerTools =
+    [
+        ..ReadOnlyWorkspaceTools,
+        "get_project", "get_task",
+        "list_context_nodes", "get_context_node", "export_agents_md",
+        "list_constraints", "list_decisions", "list_milestones", "list_labels", "match_label",
+        ..PlannerSupervisorTools
+    ];
+
+    private static readonly string[] ReviewerTools =
+    [
+        ..ReadOnlyWorkspaceTools,
+        "get_project", "get_task",
+        "list_context_nodes", "get_context_node",
+        ..ReviewerSupervisorTools
+    ];
+
+    private static readonly string[] ActorTerminalTools =
+    [
+        "subtask_report_result", "pipeline_fail_subtask"
+    ];
+
+    private static readonly string[] ActorForbiddenTools =
+    [
+        "task_create_subtask", "task_review_verdict", "task_pipeline_status",
+        "pipeline_start", "pipeline_start_actor", "pipeline_launch_session",
+        "pipeline_start_review", "pipeline_approve", "pipeline_force_close",
+        "model_bind", "model_status", "model_upsert", "model_delete", "model_unbind",
+        "proxy_reload", "proxy_unload",
+        "create_task", "update_task", "set_task_status", "set_task_substage",
+        "claim_task", "add_task_comment", "set_task_dependencies", "add_review_notes",
+        "list_task_steps", "add_task_step", "toggle_task_step", "delete_task_step", "finish_work",
+        "upsert_context_node", "delete_context_node",
+        "create_constraint", "activate_constraint", "reject_constraint",
+        "record_decision", "accept_decision", "deprecate_decision", "supersede_decision",
+        "create_milestone", "update_milestone", "delete_milestone", "close_milestone", "reopen_milestone",
+        "add_label_path", "generate_report"
+    ];
+
+    private static JsonArray FilterToolsByName(JsonArray tools, IReadOnlyList<string> names)
+    {
+        var allowed = names.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var result = new JsonArray();
+        foreach (var tool in tools)
+        {
+            var name = tool?["name"]?.GetValue<string>();
+            if (name is not null && allowed.Contains(name))
+                result.Add(tool!.DeepClone());
+        }
+        return result;
+    }
+
+    private static JsonArray FilterActorTools(JsonArray tools)
+    {
+        var result = new JsonArray();
+        foreach (var tool in tools)
+        {
+            var name = tool?["name"]?.GetValue<string>();
+            if (name is null || !IsActorToolAllowed(name))
+                continue;
+            result.Add(tool!.DeepClone());
+        }
+        return result;
+    }
+
+    private static bool IsActorToolAllowed(string tool)
+    {
+        if (ActorTerminalTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
+            return true;
+        if (ActorForbiddenTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
+            return false;
+        // Actors can use workspace tools from their subtask allowlist, but only the
+        // mandatory result/failure calls may invoke the general Beacon control plane.
+        return !McpApiTools.IsApiTool(tool);
+    }
+
+    private static bool IsPipelineRole(string? role)
+        => string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase);
+
+    private static string? ValidatePipelineRoleTool(string tool, McpEnvironment env)
     {
         var role = env.Get("BEACON_PIPELINE_ROLE");
         if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase))
-            return PlannerSupervisorTools;
+            return PlannerTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+                ? null
+                : $"Tool '{tool}' is not allowed for the Planner pipeline role.";
         if (string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
-            return ReviewerSupervisorTools;
-        return [];
+            return ReviewerTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+                ? null
+                : $"Tool '{tool}' is not allowed for the Reviewer pipeline role.";
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+            return IsActorToolAllowed(tool)
+                ? null
+                : $"Tool '{tool}' is not allowed for the Actor pipeline role.";
+        return null;
     }
 
-    private static bool IsPipelineSupervisorTool(string tool, McpEnvironment env)
-        => PipelineSupervisorTools(env).Contains(tool, StringComparer.OrdinalIgnoreCase);
+    private static bool IsActorTerminalTool(string tool)
+        => ActorTerminalTools.Contains(tool, StringComparer.OrdinalIgnoreCase);
+
+    private static bool HasSubtasksArray(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("subtasks", out var subtasks)
+                && subtasks.ValueKind == JsonValueKind.Array;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private static bool HasExplicitlyEmptySubtaskList(string json)
     {

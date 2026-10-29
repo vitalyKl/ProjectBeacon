@@ -165,10 +165,31 @@ public static partial class McpStdioServer
 
     private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
     {
-        // Planner/Reviewer control-plane calls are task-scoped by the short-lived API token.
-        // Do not apply an Actor's path/tool allowlist to these explicitly role-bound workflows.
-        if (IsPipelineSupervisorTool(tool, env))
+        var roleError = ValidatePipelineRoleTool(tool, env);
+        if (roleError is not null)
+            return roleError;
+
+        var role = env.Get("BEACON_PIPELINE_ROLE");
+        if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
             return null;
+
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            if (IsActorTerminalTool(tool))
+            {
+                if (!Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var ownedSubtaskId)
+                    || ownedSubtaskId == Guid.Empty)
+                    return "Actor pipeline sessions require an explicit subtask scope.";
+                if (!Guid.TryParse(OptArg(arguments, "subtaskId"), out var requestedSubtaskId)
+                    || requestedSubtaskId != ownedSubtaskId)
+                    return "Actor lifecycle tools can only report the current subtask.";
+                return null;
+            }
+
+            if (api is not null && McpApiTools.IsApiTool(tool))
+                return $"Tool '{tool}' is not allowed for the Actor pipeline role.";
+        }
 
         if (api is null || !TryParseScope(env, out _, out var taskId, out _) || taskId is null)
             return null;
