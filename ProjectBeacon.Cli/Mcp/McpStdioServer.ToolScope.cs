@@ -37,10 +37,16 @@ public static partial class McpStdioServer
         Guid? explicitSubtaskId = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var subtaskId)
             ? subtaskId
             : null;
-        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
-            && (explicitSubtaskId is not { } actorSubtaskId
-                || !allowlists.Any(s => s.Id == actorSubtaskId)))
-            return Result(id, new JsonObject { ["tools"] = new JsonArray() });
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            if (explicitSubtaskId is not { } actorSubtaskId)
+                return Result(id, new JsonObject { ["tools"] = new JsonArray() });
+
+            var actorSubtask = allowlists.FirstOrDefault(s => s.Id == actorSubtaskId);
+            if (actorSubtask.Id == Guid.Empty
+                || !string.Equals(actorSubtask.Status, "InProgress", StringComparison.OrdinalIgnoreCase))
+                return Result(id, new JsonObject { ["tools"] = new JsonArray() });
+        }
 
         var filtered = SubtaskScopeGuard.FilterTools(tools, allowlists, explicitSubtaskId);
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))

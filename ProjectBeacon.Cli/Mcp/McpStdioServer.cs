@@ -176,6 +176,11 @@ public static partial class McpStdioServer
 
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
         {
+            if (api is null
+                || !TryParseScope(env, out _, out var actorTaskId, out _)
+                || actorTaskId is null)
+                return "pipeline scope could not be loaded.";
+
             if (IsActorTerminalTool(tool))
             {
                 if (!Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var ownedSubtaskId)
@@ -184,11 +189,11 @@ public static partial class McpStdioServer
                 if (!Guid.TryParse(OptArg(arguments, "subtaskId"), out var requestedSubtaskId)
                     || requestedSubtaskId != ownedSubtaskId)
                     return "Actor lifecycle tools can only report the current subtask.";
-                return null;
             }
-
-            if (api is not null && McpApiTools.IsApiTool(tool))
+            else if (McpApiTools.IsApiTool(tool))
+            {
                 return $"Tool '{tool}' is not allowed for the Actor pipeline role.";
+            }
         }
 
         if (api is null || !TryParseScope(env, out _, out var taskId, out _) || taskId is null)
@@ -207,6 +212,18 @@ public static partial class McpStdioServer
 
         var paths = SubtaskScopeGuard.UsesPath(tool) ? SplitPrefixes(OptArg(arguments, "path")) : null;
         var allowlists = SubtaskScopeGuard.ParsePipeline(body);
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            if (explicitId is not { } actorSubtaskId)
+                return "Actor pipeline sessions require an explicit subtask scope.";
+
+            var actorSubtask = allowlists.FirstOrDefault(s => s.Id == actorSubtaskId);
+            if (actorSubtask.Id == Guid.Empty)
+                return "subtask not found";
+            if (!string.Equals(actorSubtask.Status, "InProgress", StringComparison.OrdinalIgnoreCase))
+                return "Actor subtask is no longer active.";
+        }
+
         var rejected = SubtaskScopeGuard.Reject(tool, paths, allowlists, explicitId);
         if (rejected is not null)
             return rejected;
