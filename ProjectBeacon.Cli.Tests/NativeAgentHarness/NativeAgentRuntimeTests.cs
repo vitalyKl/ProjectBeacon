@@ -311,12 +311,15 @@ public sealed class NativeAgentRuntimeTests
         };
         await using var llama = new ClientLlamaSwap();
         var provider = new BlockingProvider();
+        var providerCalls = 0;
         var runtime = new NativeAgentRuntime(
             control,
             llama,
             new StubLlamaSync(),
             () => WorkstationSettings.Load(settingsPath),
-            providerFactory: (_, _, _) => provider);
+            providerFactory: (_, _, _) => Interlocked.Increment(ref providerCalls) == 1
+                ? provider
+                : new StubProvider());
         try
         {
             var session = await runtime.CreateSessionAsync("abort test", CancellationToken.None);
@@ -337,6 +340,25 @@ public sealed class NativeAgentRuntimeTests
             Assert.True(provider.CancellationObserved);
             Assert.Null(status.Error);
             await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            var secondStream = new List<string>();
+            var secondStreamTask = runtime.StreamTextAsync(session, (_, _, _, delta, _) =>
+            {
+                secondStream.Add(delta);
+                return Task.CompletedTask;
+            }, CancellationToken.None);
+            await runtime.SendPromptAsync(
+                session,
+                "Start a fresh turn after abort",
+                "beacon-local/test-model",
+                CancellationToken.None);
+            await secondStreamTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            var secondStatus = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(secondStatus!.Ended);
+            Assert.Equal("stop", secondStatus.Finish);
+            Assert.Equal("Hello, world.", string.Concat(secondStream));
+            Assert.Equal(2, providerCalls);
         }
         finally
         {
