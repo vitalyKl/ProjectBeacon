@@ -267,7 +267,7 @@ internal sealed class McpStdioClient : IMcpToolClient
             throw new InvalidOperationException("The local MCP server exited before finishing the request.");
     }
 
-    private static ProcessStartInfo CreateStartInfo(string workingDirectory, AgentHarnessAuthorization authorization)
+    internal static ProcessStartInfo CreateStartInfo(string workingDirectory, AgentHarnessAuthorization authorization)
     {
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(processPath))
@@ -310,6 +310,8 @@ internal sealed class McpStdioClient : IMcpToolClient
         start.Environment["BEACON_PROJECT_ID"] = authorization.ProjectId.ToString("D");
         if (authorization.TaskId is { } taskId && taskId != Guid.Empty)
             start.Environment["BEACON_TASK_ID"] = taskId.ToString("D");
+        if (authorization.SubtaskId is { } subtaskId && subtaskId != Guid.Empty)
+            start.Environment["BEACON_SUBTASK_ID"] = subtaskId.ToString("D");
         return start;
     }
 
