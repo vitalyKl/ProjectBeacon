@@ -165,10 +165,17 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
         {
             ct.ThrowIfCancellationRequested();
             await using var db = _dbFactory.CreateDbContext();
-            var next = await db.WorkstationCommands.AsNoTracking()
-                .Where(c => c.DeviceId == command.Request.DeviceId && c.Status == WorkstationCommandStatus.Pending)
-                .OrderBy(c => c.CreatedAt)
-                .FirstOrDefaultAsync(ct);
+            var pending = db.WorkstationCommands.AsNoTracking()
+                .Where(c => c.DeviceId == command.Request.DeviceId && c.Status == WorkstationCommandStatus.Pending);
+            if (command.Request.ControlOnly)
+            {
+                // Control commands must be claimable while ChatPrompt occupies the normal lane.
+                pending = pending.Where(c =>
+                    c.Kind == WorkstationCommandKind.ChatAbort
+                    || c.Kind == WorkstationCommandKind.ChatSwitchAgent
+                    || c.Kind == WorkstationCommandKind.ChatReplyForm);
+            }
+            var next = await pending.OrderBy(c => c.CreatedAt).FirstOrDefaultAsync(ct);
             if (next is null)
             {
                 if (DateTime.UtcNow >= deadline)
