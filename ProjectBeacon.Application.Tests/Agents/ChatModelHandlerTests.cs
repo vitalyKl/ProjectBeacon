@@ -48,5 +48,7 @@ public sealed class ChatModelHandlerTests : IDisposable
         await using var db = factory.CreateDbContext();
         var resolved = await ChatModelSelection.ResolveAsync(db, userId, null, TestContext.Current.CancellationToken);
         Assert.Equal("beacon-local/qwen", resolved);
+        Assert.Equal(4096, await ChatModelSelection.ResolveContextLimitAsync(
+            db, userId, resolved, TestContext.Current.CancellationToken));
     }
 }
