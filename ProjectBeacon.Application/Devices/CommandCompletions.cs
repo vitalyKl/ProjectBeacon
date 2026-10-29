@@ -97,7 +97,9 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             return;
         }
 
-        if (!success && sessionId is { } failedId)
+        // A confirmed failure and a malformed success payload both mean the pipeline
+        // has no usable external session to continue. Do not strand it in Active.
+        if (sessionId is { } failedId)
         {
             var now = DateTime.UtcNow;
             await db.PipelineSessions.IgnoreQueryFilters()
