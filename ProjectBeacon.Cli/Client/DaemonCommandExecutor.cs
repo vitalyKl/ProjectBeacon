@@ -119,7 +119,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             command.Generation,
                             resolved.Value!,
                             token.ExpiresAt,
-                            subtaskId);
+                            subtaskId,
+            null,
+            token.AllowedMcpTools);
                     }
 
                     return await _chat.PromptAsync(resolved.Value!, payload, harnessAuthorization, ct);
@@ -297,7 +299,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot),
             token.ExpiresAt,
             subtaskId,
-            pipelineRole);
+            pipelineRole,
+            token.AllowedMcpTools);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(_timing.ChatMaxDuration);
@@ -372,7 +375,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         Guid ProjectId,
         Guid CommandId,
         int Generation,
-        DateTime ExpiresAt);
+        DateTime ExpiresAt,
+        IReadOnlyList<string>? AllowedMcpTools = null);
 
     private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
     {

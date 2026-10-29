@@ -282,7 +282,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 .Where(prefix => !string.IsNullOrWhiteSpace(prefix))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
-            if (controls?.HarnessAuthorization is not null && commandPrefixes.Length > 0)
+            if (controls?.HarnessAuthorization is { } commandAuth
+                && commandPrefixes.Length > 0
+                && IsRunCommandAuthorized(commandAuth))
                 mcpTools.Add(NativeCommandRunner.ToolDefinition());
 
             var hasFinalText = false;
@@ -449,8 +451,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             }
                             else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
                             {
-                                if (controls?.HarnessAuthorization is not { } commandAuthorization || commandPrefixes.Length == 0)
-                                    toolResult = "Tool error: run_command is disabled because no command allowlist and active authorization are configured.";
+                                if (controls?.HarnessAuthorization is not { } commandAuthorization
+                                    || commandPrefixes.Length == 0
+                                    || !IsRunCommandAuthorized(commandAuthorization))
+                                    toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
                                 else
                                 {
                                     var result = await NativeCommandRunner.ExecuteAsync(
@@ -732,6 +736,19 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             .OrderBy(call => call.Index)
             .Select(call => $"{call.Name ?? "unknown_tool"}\0{call.Arguments}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(signature)));
+    }
+
+    internal static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
+    {
+        // Legacy chat sessions are governed by workstation-local AllowedCommandPrefixes.
+        // Pipeline commands additionally require an explicit subtask grant and Actor role.
+        if (string.IsNullOrWhiteSpace(authorization.PipelineRole))
+            return true;
+        if (!string.Equals(authorization.PipelineRole, "Actor", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return authorization.AllowedMcpTools?.Any(tool =>
+            string.Equals(tool, "run_command", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(tool, "beacon_run_command", StringComparison.OrdinalIgnoreCase)) == true;
     }
 
     private async Task<ResolvedProvider> ResolveProviderAsync(string model, CancellationToken ct)

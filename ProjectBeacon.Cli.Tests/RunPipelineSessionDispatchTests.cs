@@ -109,6 +109,7 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Equal(projectRoot, capturedAuthorization.WorkingDirectory);
             Assert.Equal("test-short-lived-token", capturedAuthorization.ApiToken);
             Assert.Equal("Planner", capturedAuthorization.PipelineRole);
+            Assert.Empty(capturedAuthorization.AllowedMcpTools!);
             Assert.True(capturedAuthorization.ExpiresAt > DateTime.UtcNow);
             Assert.Equal(generation, tokenHandler.RequestedGeneration);
         }
@@ -141,7 +142,8 @@ public sealed class RunPipelineSessionDispatchTests
                     projectId,
                     commandId,
                     generation,
-                    expiresAt = DateTime.UtcNow.AddMinutes(2)
+                    expiresAt = DateTime.UtcNow.AddMinutes(2),
+                    allowedMcpTools = Array.Empty<string>()
                 }), System.Text.Encoding.UTF8, "application/json")
             };
         }

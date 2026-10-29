@@ -6,6 +6,7 @@ using Application.Authorization;
 using Application.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -261,6 +262,115 @@ public sealed partial class DeviceHandlerTests
         Assert.NotEqual(issued.Value.Token, stored.TokenHash);
         Assert.Equal(Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(issued.Value.Token))), stored.TokenHash);
+    }
+
+    [Fact]
+    public async Task HarnessToken_ForActorPipeline_ReturnsToolsFromPersistedSubtaskScope()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("Native pipeline task", project.Id);
+        var subtask = Subtask.Create(
+            "Implement and verify the requested change",
+            task.Id,
+            project.Id,
+            ["read_file", "write_file", "run_command"],
+            ["src"]);
+        subtask.Start();
+        var session = PipelineSession.Create(
+            task.Id, project.Id, PipelineRole.Actor, "Work only on the assigned subtask.", subtask.Id);
+        session.Launch();
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = task.Id,
+            subtaskId = subtask.Id,
+            sessionId = session.Id,
+            role = "Actor",
+            prompt = session.PromptContext,
+            model = "beacon-local/test-model"
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.Subtasks.Add(subtask);
+            db.PipelineSessions.Add(session);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunPipelineSession, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.True(issued.Success, issued.Error);
+        Assert.Equal(new[] { "read_file", "write_file", "run_command" }, issued.Value!.AllowedMcpTools);
+    }
+
+    [Fact]
+    public async Task HarnessToken_RejectsPipelinePayloadThatDoesNotMatchPersistedSession()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("Native pipeline task", project.Id);
+        var session = PipelineSession.Create(task.Id, project.Id, PipelineRole.Planner, "Plan the task.");
+        session.Launch();
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = task.Id,
+            sessionId = session.Id,
+            subtaskId = Guid.NewGuid(),
+            role = "Actor",
+            prompt = session.PromptContext,
+            model = "beacon-local/test-model"
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.PipelineSessions.Add(session);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunPipelineSession, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.False(issued.Success);
+        Assert.Equal(ErrorKind.Forbidden, issued.Kind);
     }
 
     [Fact]

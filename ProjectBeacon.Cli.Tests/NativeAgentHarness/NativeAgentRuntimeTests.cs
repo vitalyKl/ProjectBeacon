@@ -10,6 +10,29 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class NativeAgentRuntimeTests
 {
+    [Theory]
+    [InlineData("Planner", true, false)]
+    [InlineData("Review", true, false)]
+    [InlineData("Actor", false, false)]
+    [InlineData("Actor", true, true)]
+    public void RunCommandRequiresActorRoleAndExplicitSubtaskGrant(string role, bool grantRunCommand, bool expected)
+    {
+        var authorization = new AgentHarnessAuthorization(
+            "https://beacon.test",
+            "ephemeral-token",
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            1,
+            Path.GetTempPath(),
+            DateTime.UtcNow.AddMinutes(2),
+            Guid.NewGuid(),
+            role,
+            grantRunCommand ? ["read_file", "run_command"] : ["read_file"]);
+
+        Assert.Equal(expected, NativeAgentRuntime.IsRunCommandAuthorized(authorization));
+    }
+
     [Fact]
     public void McpChildReceivesExplicitSubtaskScopeFromHarnessAuthorization()
     {
