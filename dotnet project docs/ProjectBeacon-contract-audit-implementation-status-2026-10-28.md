@@ -1,7 +1,8 @@
 # Contract audit — implementation status
 
 **Branch:** `refactor/unified-application-contracts-2026-10-28`  
-**Date:** 2026-10-28
+**Created:** 2026-10-28  
+**Updated:** 2026-10-29 after synchronizing with current `main`
 
 This document tracks the implementation follow-up to `ProjectBeacon-contracts-and-unified-services-audit-2026-10-28.md`. It deliberately distinguishes implemented code changes from architectural decisions that need a later, runtime-validated migration.
 
@@ -30,12 +31,13 @@ This document tracks the implementation follow-up to `ProjectBeacon-contracts-an
 - The command catalog is metadata, not an authorization grant.
 - Existing API route requirements and tenant/RLS behavior remain the enforcement boundary.
 - Unknown workstation command kinds fail closed because catalog initialization verifies complete enum coverage.
+- Catalog coverage includes the `ChatSwitchAgent` and `ChatReplyForm` kinds added to `main` after the audit branch was created.
 - Operation IDs are code-first. The catalog does not enable arbitrary code execution or database-defined handlers.
 - `IBeaconDb` remains EF-shaped; no generic repository rewrite was introduced.
 
 ## Remaining work before calling the audit fully closed
 
-1. **Build and run tests.** The editing environment could not execute the .NET SDK. This is a hard release gate, not a documentation footnote.
+1. **Validate the exact merge candidate in CI.** Require successful build, migration consistency, tests and formatting on Windows, Linux and macOS for the latest PR head. Results from an older SHA do not validate a newer merge candidate.
 2. **Model provider/runtime split.** `ManualSessionSpawner` still constructs a llama-swap launch spec for each backend type, while the backend enum includes API-compatible providers. Do not enable real non-llama process spawning until provider-specific launch/execution contracts and validation are implemented.
 3. **Use `IModelBackend` consistently.** `ClientLlamaSwap` still uses concrete `LlamaServerBackend` operations for implementation-specific supervision, VRAM and port details. Extract a lifecycle/metrics contract only after deciding which metrics and supervision capabilities all implementations must provide.
 4. **Authorization parity tests.** For sensitive operations, test API and direct Application invocation and assert identical actor/capability/resource scope requirements.
@@ -48,4 +50,4 @@ This document tracks the implementation follow-up to `ProjectBeacon-contracts-an
 
 ## Verification state
 
-The source changes and GitHub diff were reviewed statically. Tests have been added, but **the test suite and build have not been executed** because the current tool environment has no `dotnet` executable and cannot clone the repository for a local build. The PR must remain Draft until CI or a developer machine validates compilation and tests.
+The synchronized branch is being validated by GitHub Actions. Check the PR's latest commit and all required platform jobs before merging; a green result on an earlier commit is not sufficient. The latest validation run is linked from the PR description.
