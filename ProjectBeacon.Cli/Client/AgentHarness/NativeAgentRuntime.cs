@@ -277,6 +277,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 mcpTools.Add(NativeCommandRunner.ToolDefinition());
 
             var hasFinalText = false;
+            string? lastToolCallFingerprint = null;
+            var consecutiveToolCallFingerprintCount = 0;
             var agentStep = 0;
             for (; agentStep < MaxAgentSteps; agentStep++)
             {
@@ -369,6 +371,23 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         break;
                     }
 
+                    var toolCallFingerprint = CreateToolCallFingerprint(toolCalls.Values);
+                    if (string.Equals(toolCallFingerprint, lastToolCallFingerprint, StringComparison.Ordinal))
+                        consecutiveToolCallFingerprintCount++;
+                    else
+                    {
+                        lastToolCallFingerprint = toolCallFingerprint;
+                        consecutiveToolCallFingerprintCount = 1;
+                    }
+
+                    if (consecutiveToolCallFingerprintCount >= 3)
+                    {
+                        finish = "error";
+                        error = "The agent repeated the same tool call with identical arguments three times; stopped to prevent a tool loop.";
+                        break;
+                    }
+
+                    var repeatedToolCall = consecutiveToolCallFingerprintCount == 2;
                     var toolCallMessages = new JsonArray();
                     foreach (var pair in toolCalls)
                     {
@@ -407,7 +426,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         string toolResult;
                         try
                         {
-                            if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
+                            if (repeatedToolCall)
+                            {
+                                toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
+                            }
+                            else if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
                             {
                                 toolResult = "Tool error: the model returned a tool call without a valid id or name.";
                             }
@@ -674,6 +697,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
         Math.Max(1, Encoding.UTF8.GetByteCount(string.Join("\n", messages.Select(m => m.ToJsonString()))) / 4);
+
+    private static string CreateToolCallFingerprint(IEnumerable<ToolCallAccumulator> calls)
+    {
+        var signature = string.Join("\n", calls
+            .OrderBy(call => call.Index)
+            .Select(call => $"{call.Name ?? "unknown_tool"}\0{call.Arguments}"));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(signature)));
+    }
 
     private async Task<ResolvedProvider> ResolveProviderAsync(string model, CancellationToken ct)
     {
