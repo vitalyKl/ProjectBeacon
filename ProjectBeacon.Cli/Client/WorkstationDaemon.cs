@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using ProjectBeacon.Cli.Client.AgentHarness;
+using ProjectBeacon.Application.Runtime;
 /// <summary>
 /// Long-polls device commands and heartbeats the control plane. Dispatches only WorkstationCommandKind values. An unknown kind throws.
 /// </summary>
