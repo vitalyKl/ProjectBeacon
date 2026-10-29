@@ -15,6 +15,28 @@ public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, i
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions);
 
+/// <summary>Readiness reported by a workstation-local agent runtime.</summary>
+public sealed record AgentRuntimeReadiness(bool Ready, string? Error, string? WorkingDirectory);
+
+/// <summary>A pending user question exposed by a runtime that supports interactive forms.</summary>
+public sealed record AgentRuntimeForm(string Id, string Title, string Metadata, string FieldsJson);
+
+/// <summary>Optional runtime operations beyond the minimum chat/session contract.</summary>
+public interface IAgentRuntimeCapabilities
+{
+    bool SupportsForms { get; }
+    bool SupportsAgentSwitch { get; }
+    bool SupportsReasoningEffort { get; }
+    bool SupportsLiveDeltas { get; }
+
+    Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct);
+    Task StreamTextAsync(string sessionId, Func<string, string, int, string, CancellationToken, Task> onDelta, CancellationToken ct);
+    Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct);
+    Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct);
+    Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct);
+    Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct);
+}
+
 /// <summary>Creates an agent session, sends a prompt, streams parts, reports turn state, aborts, and reads usage.</summary>
 public interface IAgentRuntime : IAsyncDisposable
 {

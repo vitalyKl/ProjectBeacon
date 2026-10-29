@@ -117,6 +117,7 @@ public sealed class WorkstationSettings
     public string? LlamaSwapBin { get; set; }
     public int LlamaSwapPort { get; set; } = 8080;
     public bool UseOwnSwapper { get; set; }
+    public string AgentRuntime { get; set; } = "opencode";
     public int ConcurrentPortBase { get; set; } = 9000;
     public string? OpencodeDataDir { get; set; }
     public string? ProjectsRoot { get; set; }

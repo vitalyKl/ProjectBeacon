@@ -9,10 +9,20 @@ using ProjectBeacon.Application.Runtime;
 /// </summary>
 public static class WorkstationEval
 {
+    public static Task<Result<string>> RunEvalTurnAsync(
+        string root,
+        string payloadJson,
+        IAgentRuntime runtime,
+        TimeSpan pollInterval,
+        TimeSpan idleTimeout,
+        TimeSpan maxDuration,
+        CancellationToken ct)
+        => RunEvalTurnAsync(root, payloadJson, null, runtime, pollInterval, idleTimeout, maxDuration, ct);
+
     public static async Task<Result<string>> RunEvalTurnAsync(
         string root,
         string payloadJson,
-        ClientOpenCodeServe openCode,
+        ClientOpenCodeServe? openCode,
         IAgentRuntime runtime,
         TimeSpan pollInterval,
         TimeSpan idleTimeout,
@@ -98,9 +108,22 @@ public static class WorkstationEval
                 toolPermissions = toolsElement.GetString();
         }
 
-        await openCode.TickAsync(validatedPath.Value, ct);
-        if (!openCode.Status.Healthy)
-            return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
+        if (openCode is not null)
+        {
+            await openCode.TickAsync(validatedPath.Value, ct);
+            if (!openCode.Status.Healthy)
+                return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
+        }
+        else if (runtime is IAgentRuntimeCapabilities capabilities)
+        {
+            var readiness = await capabilities.EnsureReadyAsync(validatedPath.Value, ct);
+            if (!readiness.Ready)
+                return Result.Failure<string>(readiness.Error ?? "The selected agent runtime is not ready.");
+        }
+        else
+        {
+            return Result.Failure<string>("The selected agent runtime does not expose readiness checks.");
+        }
 
         var sessionId = await runtime.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
         await runtime.SendPromptAsync(sessionId, prompt, model, ct, new AgentPromptControls(temperature, reasoningEffort, toolPermissions));

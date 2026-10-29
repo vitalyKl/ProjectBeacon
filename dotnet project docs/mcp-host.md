@@ -72,7 +72,7 @@ Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copie
 
 ## Workstation and chat boundary
 
-Device commands run only inside `beacon client` (section below). The Web host does not read the user tree and does not start the model process. Chat prompts execute on the enrolled device. File tools never leave `--root`. There is no shell tool and no HTTP MCP server.
+Device commands run only inside `beacon client` (section below). The Web host does not read the user tree and does not start the model process. Chat prompts execute on the enrolled device. File tools never leave `--root`. The ProjectBeacon MCP server exposes no shell tool, and no HTTP MCP server is included. The planned native workstation harness may add a separate, constrained `run_command` tool; it is not an MCP-server capability.
 
 `beacon client` starts its own `opencode serve` on localhost and talks to it directly. Both OpenCode 1.x and 2.x are supported and auto-detected: 1.x exposes the API at the root without auth; 2.x mounts it under `/api` with HTTP Basic auth (`opencode:<password>`). The 2.x server password is printed to serve stdout at startup, captured in memory only, and never persisted or logged. In 2.x the model is set on the session before each prompt; per-prompt temperature/reasoningEffort/tools controls are v1-only. If a model run ends in an error, the client posts the error text to the chat session as an `error` part so the Web chat shows the failure instead of an empty answer. Processes the client starts are assigned to a Windows job that is killed when the client exits, so closing the console window cannot orphan a serve or llama-swap tree and hold the client port. If the client port is already held by another process, the client reports the holder PID in the status and does not start a conflicting instance.
 
@@ -138,7 +138,7 @@ Without `BEACON_PROJECT_ID` (or without the connection configuration) the tools 
 
 For `search_code`, `get_changed_scope`, and `get_signatures`, `path` is a comma-separated list of path prefixes; an empty or omitted value means the whole tree.
 
-Paths are resolved inside the project root. `../` and other escapes are rejected. There is no shell tool.
+Paths are resolved inside the project root. `../` and other escapes are rejected. The ProjectBeacon MCP server itself has no shell tool. A native harness `run_command` is a separate client-side tool, guarded by its own allowlist and cleaned environment.
 
 ## Workstation client commands
 

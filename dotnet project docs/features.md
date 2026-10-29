@@ -18,7 +18,7 @@ Planner, actor, and review are separate sessions. The actor does not receive the
 
 ## Explicitly not shipped
 
-- A Beacon-hosted agent process.
+- A server-hosted agent process. The user-owned workstation client may run the native harness locally; API/Web/Worker never host it.
 - HTTP MCP, hosted clone, outbound WSS, `write_handoff`.
 - Learn and Files screens.
 - Hand-authored llama-swap YAML as the source of truth.

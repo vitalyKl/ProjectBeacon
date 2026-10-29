@@ -65,7 +65,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     var evalAction = await WorkstationEval.RunEvalTurnAsync(
                         command.LocalRoot,
                         payload,
-                        _gate.OpenCode,
                         _gate.Runtime,
                         _timing.ChatPollInterval,
                         _timing.ChatIdleTimeout,

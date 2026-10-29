@@ -68,6 +68,12 @@ public static class WorkstationSetup
         if (root.TryGetProperty("useOwnSwapper", out var own) &&
             (own.ValueKind == JsonValueKind.True || own.ValueKind == JsonValueKind.False))
             settings.UseOwnSwapper = own.GetBoolean();
+        if (root.TryGetProperty("agentRuntime", out var runtime) && runtime.ValueKind == JsonValueKind.String)
+        {
+            var selected = runtime.GetString();
+            if (selected is "opencode" or "native")
+                settings.AgentRuntime = selected;
+        }
         if (root.TryGetProperty("concurrentPortBase", out var cport) && cport.TryGetInt32(out var cp) && cp > 0)
             settings.ConcurrentPortBase = cp;
         if (root.TryGetProperty("opencodeDataDir", out var data) && data.ValueKind == JsonValueKind.String)
