@@ -284,9 +284,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
                 for (var attempt = 1; attempt <= MaxAttempts && !requestCompleted; attempt++)
                 {
+                    var stepEmittedContent = false;
                     try
                     {
-                        var stepEmittedContent = false;
                         await foreach (var item in provider.StreamAsync(request, ct))
                         {
                             ct.ThrowIfCancellationRequested();
@@ -366,8 +366,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             ? $"beacon-invalid-{turnNumber}-{call.Index}"
                             : call.Id;
                         call.EffectiveName = string.IsNullOrWhiteSpace(call.Name) ? "unknown_tool" : call.Name;
-                        call.TryReadArguments(out var parsedArguments);
-
                         toolCallMessages.Add(new JsonObject
                         {
                             ["id"] = call.EffectiveId,
