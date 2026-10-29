@@ -67,9 +67,10 @@ All `WorkstationCommandKind` values, complete.
 | `RunEvalTurn` | **AtMostOnce** | **no** | no | An LLM call. A duplicate run corrupts the eval scores by double-counting the turn. |
 | `ReconcileDesired` | Idempotent | yes | yes (self) | Applies the device's desired state. It is its own backstop; a lost reconcile is re-triggered by the next heartbeat. |
 | `RunReviewCheck` | **AtMostOnce** | **no** | no | Runs `checkCommand` for a `reviewRunId`. A duplicate run produces a second review run. **Defense-in-depth:** `CommandSandbox.SanitizeProjectPayload` strips payload `checkCommand` for `RunReviewCheck`; `EnqueueCommandHandler` injects `TrustedCheckCommand` only (from `RecordReviewCheckHandler`, never from body). `Actor.IsHuman` gate: human body command required; token body must be empty and resolves from `Project.ReviewCheckCommand` (400/409). |
+| `RunPipelineSession` | **AtMostOnce** | **no** | no | Starts one pipeline agent turn; re-delivery could create a duplicate session or repeat tool side effects. |
 
 Counts: **13 Idempotent**, **4 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`,
-`RunEvalTurn`, `RunReviewCheck`), **5 ReconcileBacked** (`ApplyOpencode`,
+`RunEvalTurn`, `RunReviewCheck`, `RunPipelineSession`), **5 ReconcileBacked** (`ApplyOpencode`,
 `ReloadProxy`, `SaveWorkstation`, `ConfigureOpenCode`, `ReconcileDesired`).
 
 ## Current protection for AtMostOnce
