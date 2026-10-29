@@ -51,7 +51,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 if (command.Kind == WorkstationCommandKind.ChatPrompt)
                     await ProcessPromptWithControlLaneAsync(command, ct);
                 else
-                    await ProcessCommandAsync(command, executionToken);
+                    await ProcessCommandAsync(command, ct);
             }
             catch (OperationCanceledException)
             {
@@ -60,13 +60,13 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             catch (JsonException ex)
             {
                 _state.Log($"malformed command wire: {ex.Message}");
-                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
                 catch (OperationCanceledException) { break; }
             }
             catch (Exception ex)
             {
                 _state.Log(ex.Message);
-                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
                 catch (OperationCanceledException) { break; }
             }
         }
