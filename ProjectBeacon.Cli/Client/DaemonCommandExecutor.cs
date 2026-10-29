@@ -167,6 +167,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
     private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
     {
+        if (string.Equals(_loadSettings().AgentRuntime, "native", StringComparison.Ordinal))
+            return (true, JsonSerializer.Serialize(new { runtime = "native", restarted = false }), null);
+
         var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
         if (!response.IsSuccessStatusCode)
             return (false, null, $"opencode connections {(int)response.StatusCode}");

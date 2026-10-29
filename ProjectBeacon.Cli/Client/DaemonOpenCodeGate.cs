@@ -12,6 +12,8 @@ internal interface IDaemonOpenCodeGate
         await OpenCode.TickAsync(workingDirectory, ct);
         return new AgentRuntimeReadiness(OpenCode.Status.Healthy, OpenCode.Status.Error, OpenCode.Cwd);
     }
+    object RuntimeStatusWire();
+    string? RuntimeWorkingDirectory { get; }
     Task RunExclusiveAsync(Func<Task> action, CancellationToken ct);
     Task<T> RunExclusiveAsync<T>(Func<Task<T>> action, CancellationToken ct);
     void Release();
@@ -23,11 +25,14 @@ internal interface IDaemonOpenCodeGate
 internal sealed class DaemonOpenCodeGate : IDaemonOpenCodeGate
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private AgentRuntimeReadiness? _lastReadiness;
 
-    public DaemonOpenCodeGate(DaemonDependencies deps)
+    public DaemonOpenCodeGate(DaemonDependencies deps) : this(deps, deps.Runtime) { }
+
+    public DaemonOpenCodeGate(DaemonDependencies deps, IAgentRuntime runtime)
     {
         OpenCode = deps.OpenCode;
-        Runtime = deps.Runtime;
+        Runtime = runtime;
     }
 
     public ClientOpenCodeServe OpenCode { get; }
@@ -48,12 +53,27 @@ internal sealed class DaemonOpenCodeGate : IDaemonOpenCodeGate
         }
     }
 
-    public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+    public async Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
     {
-        if (Runtime is IAgentRuntimeCapabilities capabilities)
-            return capabilities.EnsureReadyAsync(workingDirectory, ct);
-        return EnsureOpenCodeReadyAsync(workingDirectory, ct);
+        var readiness = Runtime is IAgentRuntimeCapabilities capabilities
+            ? await capabilities.EnsureReadyAsync(workingDirectory, ct)
+            : await EnsureOpenCodeReadyAsync(workingDirectory, ct);
+        _lastReadiness = readiness;
+        return readiness;
     }
+
+    public string? RuntimeWorkingDirectory => _lastReadiness?.WorkingDirectory ?? OpenCode.Cwd;
+
+    public object RuntimeStatusWire() => Runtime is OpenCodeAgentRuntime
+        ? OpenCode.StatusWire()
+        : new
+        {
+            available = true,
+            healthy = _lastReadiness?.Ready ?? true,
+            version = "native",
+            error = _lastReadiness?.Error,
+            cwd = _lastReadiness?.WorkingDirectory
+        };
 
     private async Task<AgentRuntimeReadiness> EnsureOpenCodeReadyAsync(string? workingDirectory, CancellationToken ct)
     {

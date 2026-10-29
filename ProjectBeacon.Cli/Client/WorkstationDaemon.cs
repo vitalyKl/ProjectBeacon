@@ -35,12 +35,17 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log);
         _llama.Log = message => _state.Log(message);
         _openCode.Log = message => _state.Log(message);
+        var settingsLoader = loadSettings ?? (() => WorkstationSettings.Load());
+        var openCodeRuntime = new OpenCodeAgentRuntime(_openCode);
         var deps = new DaemonDependencies(
             http,
             llama,
             _openCode,
-            new OpenCodeAgentRuntime(_openCode),
-            loadSettings ?? (() => WorkstationSettings.Load()));
+            openCodeRuntime,
+            settingsLoader,
+            llamaSync => settingsLoader().AgentRuntime == "native"
+                ? new NativeAgentRuntime(http, llama, llamaSync, settingsLoader, msg => _state.Log(msg))
+                : openCodeRuntime);
         _services = DaemonServices.Build(deps, _timing, _state);
         _gate = _services.GetRequiredService<IDaemonOpenCodeGate>();
         _llamaSync = _services.GetRequiredService<IDaemonLlamaSync>();
@@ -124,6 +129,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await _gate.Runtime.DisposeAsync();
         await _llama.DisposeAsync();
         _llamaSync.Release();
         _gate.Release();

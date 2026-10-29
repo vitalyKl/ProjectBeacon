@@ -37,13 +37,13 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
             {
                 var settings = _loadSettings();
                 await _llamaSync.SyncAsync(settings, ct);
-                // Keep the cwd the last chat used; fall back to the projects root only until serve has one.
-                await _gate.TryTickAsync(_gate.OpenCode.Cwd ?? settings.ProjectsRoot, ct);
+                // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
+                await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
                 {
                     probeJson = WorkstationProbe.ProbeJson(
-                        _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.OpenCode.StatusWire()),
+                        _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.RuntimeStatusWire()),
                     workstationJson = JsonSerializer.Serialize(settings, DaemonJson.Camel),
                     instanceId = DaemonInstance.Id
                 }, ct);

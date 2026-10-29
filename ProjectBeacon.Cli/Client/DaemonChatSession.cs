@@ -204,9 +204,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             }, projectId, streamCt);
         }, streamCts.Token)
             : Task.CompletedTask;
-        var controls = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
+        var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
-            : new AgentPromptControls(null, effort, null);
+            : effort;
+        var controls = normalizedEffort is null && configuredContextLimit is not > 0
+            ? null
+            : new AgentPromptControls(null, normalizedEffort, null) { ContextLimit = configuredContextLimit };
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var seenForms = new HashSet<string>(StringComparer.Ordinal);
