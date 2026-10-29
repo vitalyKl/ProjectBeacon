@@ -205,10 +205,22 @@ public static partial class McpStdioServer
 
         Guid? explicitId = null;
         var fromEnv = env.Get("BEACON_SUBTASK_ID");
-        if (Guid.TryParse(fromEnv, out var envId))
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            // Never let a tool argument pick the Actor's security scope. It must come
+            // from the immutable authorization created for this pipeline command.
+            if (!Guid.TryParse(fromEnv, out var actorSubtaskId) || actorSubtaskId == Guid.Empty)
+                return "Actor pipeline sessions require an explicit subtask scope.";
+            explicitId = actorSubtaskId;
+        }
+        else if (Guid.TryParse(fromEnv, out var envId))
+        {
             explicitId = envId;
+        }
         else if (Guid.TryParse(OptArg(arguments, "subtaskId"), out var argId))
+        {
             explicitId = argId;
+        }
 
         var paths = SubtaskScopeGuard.UsesPath(tool) ? SplitPrefixes(OptArg(arguments, "path")) : null;
         var allowlists = SubtaskScopeGuard.ParsePipeline(body);

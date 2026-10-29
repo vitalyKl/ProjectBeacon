@@ -582,6 +582,72 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
+    public async Task ActorCannotChooseSubtaskScopeThroughToolArguments()
+    {
+        var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var otherSubtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var apiCalls = 0;
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        using var http = new HttpClient(new StubApiHandler(_ =>
+        {
+            apiCalls++;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":["read_file"],"allowedPaths":["src"]}]}"""
+                        .Replace("SUBTASK_ID", otherSubtaskId.ToString("D"), StringComparison.Ordinal),
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(Path.Combine(root, "src"));
+        await File.WriteAllTextAsync(Path.Combine(root, "src", "note.txt"), "private");
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "read_file",
+                    arguments = new
+                    {
+                        path = "src/note.txt",
+                        subtaskId = otherSubtaskId.ToString("D")
+                    }
+                }
+            }));
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Equal(1, apiCalls);
+            Assert.Contains("explicit subtask scope", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("private", frames[0].ToJsonString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task ActorCannotReportResultForAnotherSubtask()
     {
         var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
