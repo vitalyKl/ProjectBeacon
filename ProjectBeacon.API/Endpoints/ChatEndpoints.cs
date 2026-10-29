@@ -61,7 +61,7 @@ public static class ChatEndpoints
     /// <summary>
     /// Body a device posts for the session's token totals and the active model's context limit.
     /// </summary>
-    public record UsageBody(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, int? ContextLimit = null);
+    public record UsageBody(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, int? ContextLimit = null, double GenerationSeconds = 0);
 
     public record AppendBody(
         string Role,
@@ -225,7 +225,7 @@ public static class ChatEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new ReportChatUsageCommand(new ReportChatUsageRequest(
-            id, actor.DeviceId!.Value, body.PromptTokens, body.CompletionTokens, body.AssistantMessages, body.TotalCost, body.ContextLimit)), ct);
+            id, actor.DeviceId!.Value, body.PromptTokens, body.CompletionTokens, body.AssistantMessages, body.TotalCost, body.ContextLimit, body.GenerationSeconds)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
     }
 

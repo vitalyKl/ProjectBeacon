@@ -126,6 +126,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         Assert.Equal(1, doc.RootElement.GetProperty("completionTokens").GetInt32());
         Assert.Equal(1, doc.RootElement.GetProperty("assistantMessages").GetInt32());
         Assert.Equal(0, doc.RootElement.GetProperty("totalCost").GetDouble());
+        Assert.Equal(2.5, doc.RootElement.GetProperty("generationSeconds").GetDouble());
         Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("contextLimit").ValueKind);
         // The usage report lands before the idle marker so the UI shows totals as soon as idle arrives.
         var idle = _posts.Single(p => p.Path == $"/v1/chat/sessions/{chatId}/idle");
@@ -379,7 +380,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         public Task AbortAsync(string sessionId, CancellationToken ct) => Task.CompletedTask;
 
         public Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
-            => Task.FromResult(new AgentSessionUsage(1, 1, 1, 0));
+            => Task.FromResult(new AgentSessionUsage(1, 1, 1, 0, 2.5));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

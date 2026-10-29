@@ -478,6 +478,47 @@ public sealed class OpenCodeServeTests : IDisposable
         Assert.Equal(11, usage.PromptTokens);
         Assert.Equal(7, usage.CompletionTokens);
         Assert.Equal(0.001, usage.TotalCost, 3);
+        Assert.Equal(0.0, usage.GenerationSeconds);
+    }
+
+    [Fact]
+    public async Task ReadUsage_PromptIsLatestMessage_NotSummedAcrossTurns()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (_, _) => Task.FromResult(JsonResponse("""
+                {"data":[
+                  {"id":"m1","time":{"created":100},"type":"assistant","content":[],
+                   "tokens":{"input":10,"output":2,"cache":{"read":0,"write":0}}},
+                  {"id":"m2","time":{"created":200},"type":"assistant","content":[],
+                   "tokens":{"input":30,"output":4,"cache":{"read":0,"write":0}}}
+                ],"cursor":{"previous":null,"next":null}}
+                """))
+        };
+        MarkV2(serve);
+        var usage = await serve.ReadUsageAsync("ses_1", CancellationToken.None);
+        Assert.Equal(2, usage.AssistantMessages);
+        Assert.Equal(30, usage.PromptTokens);
+        Assert.Equal(6, usage.CompletionTokens);
+    }
+
+    [Fact]
+    public async Task ReadUsage_GenerationSeconds_SumStreamedToCompleted()
+    {
+        await using var serve = new ClientOpenCodeServe
+        {
+            SendAsync = (_, _) => Task.FromResult(JsonResponse("""
+                {"data":[
+                  {"id":"m1","time":{"created":1000,"streamed":2000,"completed":5000},"type":"assistant","content":[],
+                   "tokens":{"input":10,"output":5,"cache":{"read":0,"write":0}}},
+                  {"id":"m2","time":{"created":6000,"streamed":7000,"completed":8500},"type":"assistant","content":[],
+                   "tokens":{"input":20,"output":3,"cache":{"read":0,"write":0}}}
+                ],"cursor":{"previous":null,"next":null}}
+                """))
+        };
+        MarkV2(serve);
+        var usage = await serve.ReadUsageAsync("ses_1", CancellationToken.None);
+        Assert.Equal(4.5, usage.GenerationSeconds, 3);
     }
 
     [Fact]

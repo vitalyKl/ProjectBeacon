@@ -114,7 +114,7 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
     internal static ChatSessionDto Map(ChatSession session, string? projectName = null) =>
         new(session.Id, session.ProjectId, projectName, session.DeviceId, session.ExternalSessionId, session.Title,
             session.Status, session.CreatedAt, session.UpdatedAt,
-            session.UsagePromptTokens, session.UsageCompletionTokens, session.UsageAssistantMessages, session.UsageTotalCost, session.UsageContextLimit);
+            session.UsagePromptTokens, session.UsageCompletionTokens, session.UsageAssistantMessages, session.UsageTotalCost, session.UsageContextLimit, session.UsageGenerationSeconds);
 }
 /// <summary>
 /// Lists the user's chat sessions in the current project. Archived sessions are hidden.
@@ -670,7 +670,7 @@ public class ReportChatUsageHandler : ICommandHandler<ReportChatUsageCommand, Re
         if (session is null || session.DeviceId != command.Request.DeviceId)
             return Result.Failure<ChatSessionDto>("Chat session not found.");
         session.SetUsage(command.Request.PromptTokens, command.Request.CompletionTokens,
-            command.Request.AssistantMessages, command.Request.TotalCost, command.Request.ContextLimit);
+            command.Request.AssistantMessages, command.Request.TotalCost, command.Request.ContextLimit, command.Request.GenerationSeconds);
         await db.SaveChangesAsync(ct);
         _events.Signal(session.Id);
         return Result.Ok(CreateChatSessionHandler.Map(session));

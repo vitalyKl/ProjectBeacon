@@ -265,6 +265,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 completionTokens = usage.CompletionTokens,
                 assistantMessages = usage.AssistantMessages,
                 totalCost = usage.TotalCost,
+                generationSeconds = usage.GenerationSeconds,
                 contextLimit
             }, projectId, ct);
         }

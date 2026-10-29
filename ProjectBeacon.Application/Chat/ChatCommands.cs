@@ -20,7 +20,8 @@ public record ChatSessionDto(
     int? CompletionTokens = null,
     int? AssistantMessages = null,
     double? TotalCost = null,
-    int? ContextLimit = null);
+    int? ContextLimit = null,
+    double? GenerationSeconds = null);
 
 /// <summary>
 /// One chat part: role, kind, body, optional external id, and sort order.
@@ -185,7 +186,8 @@ public record ReportChatUsageRequest(
     int CompletionTokens,
     int AssistantMessages,
     double TotalCost,
-    int? ContextLimit = null);
+    int? ContextLimit = null,
+    double GenerationSeconds = 0);
 
 /// <summary>
 /// Command for report chat usage.

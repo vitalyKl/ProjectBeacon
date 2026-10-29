@@ -507,19 +507,21 @@ public sealed class ChatHandlerTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
 
         var reported = await new ReportChatUsageHandler(factory, new ChatEventSignal()).HandleAsync(
-            new ReportChatUsageCommand(new ReportChatUsageRequest(sessionId, deviceId, 1200, 350, 4, 0.0123, 262144)), ct);
+            new ReportChatUsageCommand(new ReportChatUsageRequest(sessionId, deviceId, 1200, 350, 4, 0.0123, 262144, 12.5)), ct);
         Assert.True(reported.Success, reported.Error);
         Assert.Equal(1200, reported.Value!.PromptTokens);
         Assert.Equal(350, reported.Value!.CompletionTokens);
         Assert.Equal(4, reported.Value!.AssistantMessages);
         Assert.Equal(0.0123, reported.Value!.TotalCost);
         Assert.Equal(262144, reported.Value!.ContextLimit);
+        Assert.Equal(12.5, reported.Value!.GenerationSeconds);
 
         var fetched = await new GetChatSessionHandler(factory).HandleAsync(
             new GetChatSessionCommand(new GetChatSessionRequest(sessionId, Guid.Empty)), ct);
         Assert.True(fetched.Success, fetched.Error);
         Assert.Equal(1200, fetched.Value!.PromptTokens);
         Assert.Equal(262144, fetched.Value!.ContextLimit);
+        Assert.Equal(12.5, fetched.Value!.GenerationSeconds);
     }
 
     [Fact]

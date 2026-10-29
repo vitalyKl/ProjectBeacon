@@ -306,6 +306,9 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<int?>("UsageContextLimit")
                         .HasColumnType("integer");
 
+                    b.Property<double?>("UsageGenerationSeconds")
+                        .HasColumnType("double precision");
+
                     b.Property<int?>("UsagePromptTokens")
                         .HasColumnType("integer");
 

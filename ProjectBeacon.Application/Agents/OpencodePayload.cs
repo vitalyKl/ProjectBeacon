@@ -32,11 +32,13 @@ public static class OpencodePayload
         {
             models[ModelKey(backend.Name)] = new JsonObject
             {
-                ["name"] = backend.Name
+                ["name"] = backend.Name,
+                ["limit"] = ModelLimit(backend.ContextSize)
             };
             variantModels[ModelKey(backend.Name)] = new JsonObject
             {
                 ["name"] = backend.Name,
+                ["limit"] = ModelLimit(backend.ContextSize),
                 // Each variant sets reasoningEffort, which the OpenAI-compatible client sends as
                 // reasoning_effort, accepted per request by llama-server.
                 ["variants"] = ReasoningVariants()
@@ -151,6 +153,17 @@ public static class OpencodePayload
         var trimmed = name.Trim();
         return string.IsNullOrEmpty(trimmed) ? "model" : trimmed;
     }
+
+    // limit.context gives OpenCode the server's real context window (without it, 2.x
+    // assumes 200 000). limit.output stays at OpenCode's own 32k fallback for custom
+    // models, so only the context limit changes; the v1 provider schema requires both.
+    public const int DefaultOutputLimit = 32_000;
+
+    private static JsonObject ModelLimit(int contextSize) => new()
+    {
+        ["context"] = contextSize,
+        ["output"] = DefaultOutputLimit
+    };
 
     private static JsonArray ReasoningVariants()
     {

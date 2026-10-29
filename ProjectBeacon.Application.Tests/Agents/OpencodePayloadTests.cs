@@ -52,6 +52,20 @@ public sealed class OpencodePayloadTests
     }
 
     [Fact]
+    public void LlamaModels_CarryServerContextLimit()
+    {
+        var qwen = Backend("qwen");
+        var json = OpencodePayload.BuildApply(AgentRunMode.Solo, [qwen], qwen.Id, null, null, null);
+        using var doc = JsonDocument.Parse(json);
+        var legacy = doc.RootElement.GetProperty("provider").GetProperty("beacon-local").GetProperty("models").GetProperty("qwen");
+        Assert.Equal(4096, legacy.GetProperty("limit").GetProperty("context").GetInt32());
+        Assert.Equal(OpencodePayload.DefaultOutputLimit, legacy.GetProperty("limit").GetProperty("output").GetInt32());
+        var modern = doc.RootElement.GetProperty("providers").GetProperty("beacon-local").GetProperty("models").GetProperty("qwen");
+        Assert.Equal(4096, modern.GetProperty("limit").GetProperty("context").GetInt32());
+        Assert.Equal(OpencodePayload.DefaultOutputLimit, modern.GetProperty("limit").GetProperty("output").GetInt32());
+    }
+
+    [Fact]
     public void LlamaModelsExposeReasoningEffortVariants()
     {
         var qwen = Backend("qwen");

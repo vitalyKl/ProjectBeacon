@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 /// <summary>
 /// Token counts and cost reported by one OpenCode session.
 /// </summary>
-public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
+public sealed record OpenCodeSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, double GenerationSeconds = 0);
 /// <summary>
 /// One pending OpenCode 2.x form (a model question). Fields is the raw JSON field array.
 /// </summary>
@@ -1096,40 +1096,46 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
     }
 
+    // Each assistant message's input is the whole context sent with that message, so
+    // summing inputs across messages inflates the total. The session's prompt size is
+    // the latest assistant message's input; output, cost, and generation time accumulate.
     private static OpenCodeSessionUsage ParseUsage(JsonElement root)
     {
-        var promptTokens = 0;
-        var completionTokens = 0;
         var assistantMessages = 0;
+        var lastPromptTokens = 0;
+        var completionTokens = 0;
         var totalCost = 0.0;
+        var generationSeconds = 0.0;
         if (MessageArray(root) is { } messages)
         {
             foreach (var message in messages.EnumerateArray())
-                (assistantMessages, promptTokens, completionTokens, totalCost) = AddMessageUsage(message, assistantMessages, promptTokens, completionTokens, totalCost);
+                (assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds) =
+                    AddMessageUsage(message, assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds);
         }
-        return new OpenCodeSessionUsage(promptTokens, completionTokens, assistantMessages, totalCost);
+        return new OpenCodeSessionUsage(lastPromptTokens, completionTokens, assistantMessages, totalCost, generationSeconds);
     }
 
     private static OpenCodeSessionUsage ParseUsage(IReadOnlyList<string> rawMessages)
     {
         var assistantMessages = 0;
-        var promptTokens = 0;
+        var lastPromptTokens = 0;
         var completionTokens = 0;
         var totalCost = 0.0;
+        var generationSeconds = 0.0;
         foreach (var raw in rawMessages)
         {
             using var doc = JsonDocument.Parse(raw);
-            (assistantMessages, promptTokens, completionTokens, totalCost) =
-                AddMessageUsage(doc.RootElement, assistantMessages, promptTokens, completionTokens, totalCost);
+            (assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds) =
+                AddMessageUsage(doc.RootElement, assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds);
         }
-        return new OpenCodeSessionUsage(promptTokens, completionTokens, assistantMessages, totalCost);
+        return new OpenCodeSessionUsage(lastPromptTokens, completionTokens, assistantMessages, totalCost, generationSeconds);
     }
 
 
-    private static (int AssistantMessages, int PromptTokens, int CompletionTokens, double TotalCost) AddMessageUsage(JsonElement message, int assistantMessages, int promptTokens, int completionTokens, double totalCost)
+    private static (int AssistantMessages, int LastPromptTokens, int CompletionTokens, double TotalCost, double GenerationSeconds) AddMessageUsage(JsonElement message, int assistantMessages, int lastPromptTokens, int completionTokens, double totalCost, double generationSeconds)
     {
         if (message.ValueKind != JsonValueKind.Object)
-            return (assistantMessages, promptTokens, completionTokens, totalCost);
+            return (assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds);
         JsonElement info = default;
         if (message.TryGetProperty("info", out var infoElement) && infoElement.ValueKind == JsonValueKind.Object)
             info = infoElement;
@@ -1146,23 +1152,53 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
         if (role is null && message.TryGetProperty("role", out var topRole) && topRole.ValueKind == JsonValueKind.String)
             role = topRole.GetString();
         if (role != "assistant")
-            return (assistantMessages, promptTokens, completionTokens, totalCost);
+            return (assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds);
         assistantMessages++;
         var usageSource = info.ValueKind == JsonValueKind.Object ? info : message;
         if (usageSource.TryGetProperty("tokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object)
         {
-            promptTokens += ReadInt(tokens, "input");
-            completionTokens += ReadInt(tokens, "output");
-            completionTokens += ReadInt(tokens, "reasoning");
+            // Input is the whole context sent with this message (fresh + cached); the
+            // latest message's input is the live context size, so it replaces, not sums.
+            var input = ReadInt(tokens, "input");
             if (tokens.TryGetProperty("cache", out var cache) && cache.ValueKind == JsonValueKind.Object)
             {
-                promptTokens += ReadInt(cache, "read");
-                promptTokens += ReadInt(cache, "write");
+                input += ReadInt(cache, "read");
+                input += ReadInt(cache, "write");
             }
+            lastPromptTokens = input;
+            completionTokens += ReadInt(tokens, "output");
+            completionTokens += ReadInt(tokens, "reasoning");
         }
         if (usageSource.TryGetProperty("cost", out var cost) && cost.ValueKind == JsonValueKind.Number && cost.TryGetDouble(out var parsedCost))
             totalCost += parsedCost;
-        return (assistantMessages, promptTokens, completionTokens, totalCost);
+        generationSeconds += ReadGenerationSeconds(usageSource);
+        return (assistantMessages, lastPromptTokens, completionTokens, totalCost, generationSeconds);
+    }
+
+    // v2 assistant messages carry time.streamed (first token); v1 only time.created.
+    // Timestamps are unix milliseconds; generation runs from streamed (or created) to completed.
+    private static double ReadGenerationSeconds(JsonElement usageSource)
+    {
+        if (usageSource.TryGetProperty("time", out var time) is not true || time.ValueKind is not JsonValueKind.Object)
+            return 0.0;
+        var completed = ReadLong(time, "completed");
+        var streamed = ReadLong(time, "streamed");
+        var started = streamed > 0 ? streamed : ReadLong(time, "created");
+        if (completed <= 0 || started <= 0 || completed <= started)
+            return 0.0;
+        return (completed - started) / 1000.0;
+    }
+
+    // Unix-millisecond timestamps exceed the int range, so ReadInt cannot serve them.
+    private static long ReadLong(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+            return 0;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var parsed))
+            return parsed;
+        if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out var number))
+            return number;
+        return 0;
     }
 
     private static int ReadInt(JsonElement element, string name)

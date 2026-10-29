@@ -23,6 +23,7 @@ public class ChatSession : Entity, IProjectScoped
     public int? UsageAssistantMessages { get; private set; }
     public double? UsageTotalCost { get; private set; }
     public int? UsageContextLimit { get; private set; }
+    public double? UsageGenerationSeconds { get; private set; }
 
     public ICollection<ChatPart> Parts { get; private set; } = [];
 
@@ -63,14 +64,15 @@ public class ChatSession : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
-    /// <summary>Records the session's token totals and the active model's context limit. Nulls stay until first report.</summary>
-    public void SetUsage(int promptTokens, int completionTokens, int assistantMessages, double totalCost, int? contextLimit)
+    /// <summary>Records the session's token totals, generation time, and context limit. Nulls stay until first report.</summary>
+    public void SetUsage(int promptTokens, int completionTokens, int assistantMessages, double totalCost, int? contextLimit, double generationSeconds)
     {
         UsagePromptTokens = promptTokens;
         UsageCompletionTokens = completionTokens;
         UsageAssistantMessages = assistantMessages;
         UsageTotalCost = totalCost;
         UsageContextLimit = contextLimit;
+        UsageGenerationSeconds = generationSeconds;
         UpdatedAt = DateTime.UtcNow;
     }
 

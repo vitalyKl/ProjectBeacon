@@ -10,7 +10,7 @@ public sealed record AgentMessagePart(
 public sealed record AgentTurnStatus(bool Ended, string? Finish, string? Error, string? MessageId = null);
 
 /// <summary>Token, message, and cost totals read back from an agent session.</summary>
-public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost);
+public sealed record AgentSessionUsage(int PromptTokens, int CompletionTokens, int AssistantMessages, double TotalCost, double GenerationSeconds = 0);
 
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions);

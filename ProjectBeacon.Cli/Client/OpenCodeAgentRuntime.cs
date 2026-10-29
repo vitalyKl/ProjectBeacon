@@ -32,7 +32,7 @@ public sealed class OpenCodeAgentRuntime : IAgentRuntime
     public async Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
     {
         var usage = await _serve.ReadUsageAsync(sessionId, ct);
-        return new AgentSessionUsage(usage.PromptTokens, usage.CompletionTokens, usage.AssistantMessages, usage.TotalCost);
+        return new AgentSessionUsage(usage.PromptTokens, usage.CompletionTokens, usage.AssistantMessages, usage.TotalCost, usage.GenerationSeconds);
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
