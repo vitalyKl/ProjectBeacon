@@ -194,7 +194,7 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
-    public async Task DbTools_WithoutBeaconProjectEnv_ReturnError()
+    public async Task ControlPlaneTools_WithoutApiCredentials_ReturnError()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -214,7 +214,7 @@ public sealed class McpStdioServerTests
             {
                 var json = frame.ToJsonString();
                 Assert.Contains("\"isError\":true", json, StringComparison.OrdinalIgnoreCase);
-                Assert.Contains("BEACON_PROJECT_ID", json, StringComparison.Ordinal);
+                Assert.Contains("BEACON_API_URL and BEACON_API_TOKEN are required", json, StringComparison.Ordinal);
             }
         }
         finally
@@ -224,7 +224,7 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
-    public async Task PipelineTools_WithoutBeaconTaskEnv_ReturnError()
+    public async Task PipelineTools_WithoutApiCredentials_ReturnError()
     {
         var env = McpEnvironment.Of(("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
@@ -246,8 +246,35 @@ public sealed class McpStdioServerTests
             {
                 var json = frame.ToJsonString();
                 Assert.Contains("\"isError\":true", json, StringComparison.OrdinalIgnoreCase);
-                Assert.Contains("BEACON_TASK_ID", json, StringComparison.Ordinal);
+                Assert.Contains("BEACON_API_URL and BEACON_API_TOKEN are required", json, StringComparison.Ordinal);
             }
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task PartialApiCredentialsFailForControlPlaneButFileToolsRemainAvailable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "hello.txt"), "file tools still work");
+        try
+        {
+            var env = McpEnvironment.Of(("BEACON_API_URL", "http://localhost:5083"));
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"model_status","arguments":{}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"hello.txt"}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, null, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(2, frames.Count);
+            Assert.Contains("BEACON_API_URL and BEACON_API_TOKEN must both be set", frames[0].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("file tools still work", frames[1].ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {

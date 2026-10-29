@@ -5,19 +5,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Application;
-using Application.Agents;
 using Application.CodeIndex;
 using Application.Mcp;
-using Application.Tasks;
-using Domain.Enums;
-using Infrastructure;
-using Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 /// <summary>
-/// Stdio MCP server. File tools stay inside --root. Pipeline and model tools use the API when both BEACON_API_URL and BEACON_API_TOKEN are set, the database when neither is set, and fail when only one is set.
+/// Stdio MCP server. File tools stay inside --root. Every control-plane tool goes through the authenticated /v1 API; no direct database path is available.
 /// </summary>
 public static partial class McpStdioServer
 {
@@ -26,34 +17,20 @@ public static partial class McpStdioServer
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private static readonly JsonSerializerOptions JsonDb = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
-
-    private static readonly object DbLock = new();
-    private static ServiceProvider? _dbProvider;
-
-    private static bool _apiMisconfigured;
-
     public static Task<int> RunAsync(string root)
     {
         var env = McpEnvironment.Process;
         var resolved = BeaconApiClient.Resolve(env);
-        _apiMisconfigured = resolved.Misconfigured;
         Console.Error.WriteLine(resolved.Misconfigured
-            ? "beacon mcp: BEACON_API_URL and BEACON_API_TOKEN must both be set, or both be unset."
+            ? "beacon mcp: both BEACON_API_URL and BEACON_API_TOKEN must be set, with a valid HTTP(S) URL."
             : resolved.Client is null
-                ? "beacon mcp: local database mode."
-                : "beacon mcp: API mode.");
+                ? "beacon mcp: control-plane tools require BEACON_API_URL and BEACON_API_TOKEN; file tools remain available."
+                : "beacon mcp: authenticated API mode.");
         return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client, env);
     }
 
     public static Task<int> RunAsync(string root, Stream input, Stream output)
     {
-        _apiMisconfigured = false;
         return RunAsync(root, input, output, null, McpEnvironment.Empty);
     }
 
@@ -132,6 +109,9 @@ public static partial class McpStdioServer
 
         try
         {
+            if (IsControlPlaneTool(name) && RequireApi(id, api, env) is { } apiError)
+                return apiError;
+
             return name switch
             {
                 "read_file" => FileResult(id, workspace.ReadFile(Arg(arguments, "path"))),
@@ -177,6 +157,11 @@ public static partial class McpStdioServer
             return ToolError(id, ex.Message);
         }
     }
+
+    private static bool IsControlPlaneTool(string name) =>
+        name is "model_bind" or "model_status" or "task_create_subtask"
+            or "subtask_report_result" or "task_review_verdict" or "task_pipeline_status" or "context_compile"
+        || McpApiTools.IsApiTool(name);
 
     private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
     {

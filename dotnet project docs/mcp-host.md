@@ -45,13 +45,13 @@ These tools talk to the database and require Beacon environment:
 
 `allowedMcpTools` and `allowedPaths` are comma-separated lists.
 
-When `BEACON_API_URL` and `BEACON_API_TOKEN` are both set, these six tools call `/v1` instead of opening the database: `model_bind`, `model_status`, `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status`. When neither is set they keep the database path below. Setting only one of the two is a misconfiguration: those six tools return an error and do not open the database. A failed pipeline read on the API path denies the tool instead of skipping the allowlist.
+All six model/pipeline tools (`model_bind`, `model_status`, `task_create_subtask`, `subtask_report_result`, `task_review_verdict`, `task_pipeline_status`) use the authenticated `/v1` API exclusively. Both `BEACON_API_URL` and `BEACON_API_TOKEN` are required; if exactly one is set, the tool returns a specific configuration error. The MCP process has no direct-database fallback. A failed pipeline read denies the tool instead of skipping the subtask allowlist.
 
 ## Trust boundary
 
-A `beacon mcp` process that has neither `BEACON_API_URL` nor `BEACON_API_TOKEN` opens the local database for those six tools. That process is a trusted local user process. It is not the remote API security model: it does not apply API-token project scope, actor capabilities, or rate limits. Whoever can start the process can read and write whatever that database connection allows. Database mode still sets the Postgres tenant session (`app.tenant_project_id`) from `BEACON_PROJECT_ID`. `BEACON_ACTOR_ID` is not enforced.
+The MCP process never opens the application database. Control-plane tools fail closed when API credentials are missing, while local file/index tools remain available. This keeps ProjectBeacon authorization, project scoping, actor capabilities, rate limits and audit behavior on the same API path used by other clients.
 
-With the URL and token set, those tools go through the control plane instead. File tools stay inside `--root` either way. Do not treat a local database session as equivalent to a remote `bcn_` token.
+All control-plane requests go through the control plane. File tools stay inside `--root` and remain usable without API credentials.
 
 ## Actor and capabilities
 
@@ -68,7 +68,7 @@ On the control-plane path the caller is the authenticated principal.
 
 `beacon mcp` is not `IAgentRuntime`. `OpenCodeAgentRuntime` on `beacon client` implements that interface for workstation chat. Pipeline role sessions are still created by `ManualSessionSpawner`. Do not treat an MCP tool call as spawning an OpenCode turn.
 
-Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). In API-backed MCP mode, `SubtaskScopeGuard` also enforces these lists at the stdio tool boundary: restricted in-progress subtasks limit tool names and requested relative paths, and multiple restricted in-progress subtasks require an explicit `subtaskId`. Empty lists mean unrestricted for that dimension. Local database mode does not load a remote pipeline scope and therefore does not apply this API-mode guard.
+Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). In API-backed MCP mode, `SubtaskScopeGuard` also enforces these lists at the stdio tool boundary: restricted in-progress subtasks limit tool names and requested relative paths, and multiple restricted in-progress subtasks require an explicit `subtaskId`. Empty lists mean unrestricted for that dimension. The pipeline scope is loaded from the API and must be readable before a restricted tool call is allowed.
 
 ## Workstation and chat boundary
 
