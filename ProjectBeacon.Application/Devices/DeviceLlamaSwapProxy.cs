@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
+using Application.Common;
 using Domain.Enums;
 using Application.Persistence;
 using Application.Runtime;
@@ -11,17 +12,14 @@ using Microsoft.EntityFrameworkCore;
 public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly EnqueueCommandHandler _enqueue;
-    private readonly GetCommandHandler _getCommand;
+    private readonly ICommandDispatcher _dispatcher;
 
     public DeviceLlamaSwapProxy(
         IBeaconDbFactory dbFactory,
-        EnqueueCommandHandler enqueue,
-        GetCommandHandler getCommand)
+        ICommandDispatcher dispatcher)
     {
         _dbFactory = dbFactory;
-        _enqueue = enqueue;
-        _getCommand = getCommand;
+        _dispatcher = dispatcher;
     }
 
     public async Task<LlamaSwapStatusDto> GetStatusAsync(CancellationToken ct = default)
@@ -45,13 +43,14 @@ public sealed class DeviceLlamaSwapProxy : ILlamaSwapProxy
         var device = await FindOnlineDeviceAsync(ct);
         if (device is null)
             return false;
-        var queued = await _enqueue.HandleAsync(
+        var queued = await _dispatcher.SendAsync<Result<WorkstationCommandDto>>(
             new EnqueueCommandCommand(new EnqueueCommandRequest(device.Id, device.UserId, kind, "{}", null)), ct);
         if (!queued.Success)
             return false;
         for (var i = 0; i < 40; i++)
         {
-            var got = await _getCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, device.UserId)), ct);
+            var got = await _dispatcher.SendAsync<Result<WorkstationCommandDto>>(
+                new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, device.UserId)), ct);
             if (!got.Success)
                 return false;
             if (got.Value!.Status == WorkstationCommandStatus.Succeeded)

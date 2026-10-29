@@ -26,4 +26,25 @@ public sealed class McpCatalogTests
         Assert.Equal("https://example.com/mcp", mcp["docs"]!["url"]!.GetValue<string>());
         Assert.Equal("beacon", mcp["beacon"]!["command"]![0]!.GetValue<string>());
     }
+    [Fact]
+    public void BuildTyped_PreservesLocalArgumentBoundaries()
+    {
+        var mcp = McpCatalog.BuildTyped("/repo", false, false,
+        [
+            new LocalMcpServer("custom", "node", ["server.js", "--workspace", "/path/with spaces"]),
+            new RemoteMcpServer("remote", new Uri("https://example.com/mcp"))
+        ]);
+
+        Assert.Equal("node", mcp["custom"]!["command"]![0]!.GetValue<string>());
+        Assert.Equal("/path/with spaces", mcp["custom"]!["command"]![3]!.GetValue<string>());
+        Assert.Equal("https://example.com/mcp", mcp["remote"]!["url"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void BuildTyped_RejectsInvalidRemoteUrl()
+    {
+        Assert.Throws<ArgumentException>(() => McpCatalog.BuildTyped("/repo", false, false,
+            [new RemoteMcpServer("bad", new Uri("file:///tmp/mcp"))]));
+    }
+
 }

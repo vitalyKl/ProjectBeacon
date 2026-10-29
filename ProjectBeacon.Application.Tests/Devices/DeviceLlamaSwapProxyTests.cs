@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Persistence;
+using Application.Common;
 using Application.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Agents;
@@ -10,6 +11,7 @@ using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 public sealed class DeviceLlamaSwapProxyTests : IDisposable
 {
@@ -98,7 +100,13 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
         var tenant = new TenantContext();
         tenant.Assign(projectId, null, false);
         var factory = HandlerSqlite.Factory(_connection, tenant);
-        var proxy = new DeviceLlamaSwapProxy(factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory));
+        var services = new ServiceCollection();
+        services.AddSingleton<IBeaconDbFactory>(factory);
+        services.AddTransient<EnqueueCommandHandler>();
+        services.AddTransient<GetCommandHandler>();
+        services.AddSingleton<ICommandDispatcher, ApplicationDispatcher>();
+        using var provider = services.BuildServiceProvider();
+        var proxy = new DeviceLlamaSwapProxy(factory, provider.GetRequiredService<ICommandDispatcher>());
         var status = await proxy.GetStatusAsync(TestContext.Current.CancellationToken);
         Assert.True(status.Available);
         Assert.Equal("qwen", status.LoadedModel);
@@ -130,7 +138,13 @@ public sealed class DeviceLlamaSwapProxyTests : IDisposable
         var tenant = new TenantContext();
         tenant.Assign(projectId, null, false);
         var factory = HandlerSqlite.Factory(_connection, tenant);
-        var proxy = new DeviceLlamaSwapProxy(factory, new EnqueueCommandHandler(factory), new GetCommandHandler(factory));
+        var services = new ServiceCollection();
+        services.AddSingleton<IBeaconDbFactory>(factory);
+        services.AddTransient<EnqueueCommandHandler>();
+        services.AddTransient<GetCommandHandler>();
+        services.AddSingleton<ICommandDispatcher, ApplicationDispatcher>();
+        using var provider = services.BuildServiceProvider();
+        var proxy = new DeviceLlamaSwapProxy(factory, provider.GetRequiredService<ICommandDispatcher>());
         var status = await proxy.GetStatusAsync(TestContext.Current.CancellationToken);
         Assert.Equal("laptop", status.DeviceName);
         Assert.Equal(22, status.Host!.CpuPercent);
