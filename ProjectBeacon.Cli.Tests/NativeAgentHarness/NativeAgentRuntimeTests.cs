@@ -330,13 +330,13 @@ public sealed class NativeAgentRuntimeTests
 
             await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
             await runtime.AbortAsync(session, CancellationToken.None);
-            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
 
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
             Assert.Equal("aborted", status.Finish);
             Assert.True(provider.CancellationObserved);
             Assert.Null(status.Error);
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
         }
         finally
         {

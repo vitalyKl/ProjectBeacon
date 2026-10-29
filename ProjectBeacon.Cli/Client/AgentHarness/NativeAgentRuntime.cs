@@ -143,9 +143,16 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     {
         var session = await GetSessionAsync(sessionId, ct);
         CancellationTokenSource? active;
+        Task? activeTask;
         lock (session.Sync)
+        {
             active = session.ActiveTurn;
+            activeTask = session.ActiveTask;
+        }
+
         active?.Cancel();
+        if (activeTask is not null)
+            await activeTask.WaitAsync(ct);
     }
 
     public async Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
