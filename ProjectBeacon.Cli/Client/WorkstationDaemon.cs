@@ -44,14 +44,33 @@ public sealed class WorkstationDaemon : IAsyncDisposable
             _openCode,
             openCodeRuntime,
             settingsLoader,
-            llamaSync => settingsLoader().AgentRuntime == "native"
-                ? new NativeAgentRuntime(http, llama, llamaSync, settingsLoader, msg => _state.Log(msg))
-                : openCodeRuntime);
+            llamaSync => SelectRuntime(settingsLoader, llama, llamaSync, openCodeRuntime));
         _services = DaemonServices.Build(deps, _timing, _state);
         _gate = _services.GetRequiredService<IDaemonOpenCodeGate>();
         _llamaSync = _services.GetRequiredService<IDaemonLlamaSync>();
         _executor = _services.GetRequiredService<IDaemonCommandExecutor>();
         _loops = _services.GetServices<IDaemonLoop>().ToArray();
+    }
+
+    private IAgentRuntime SelectRuntime(
+        Func<WorkstationSettings> settingsLoader,
+        ClientLlamaSwap llama,
+        IDaemonLlamaSync llamaSync,
+        IAgentRuntime openCodeRuntime)
+    {
+        try
+        {
+            return string.Equals(settingsLoader().AgentRuntime, "native", StringComparison.Ordinal)
+                ? new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg))
+                : openCodeRuntime;
+        }
+        catch (Exception ex)
+        {
+            // Keep daemon construction alive so the heartbeat loop can report the actionable
+            // invalid-settings error instead of throwing before it starts.
+            _state.Log($"Could not select agent runtime because workstation settings could not be loaded: {ex.Message}");
+            return openCodeRuntime;
+        }
     }
 
     internal TimeSpan HeartbeatInterval
