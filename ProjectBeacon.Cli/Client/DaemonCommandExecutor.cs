@@ -228,7 +228,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var root = doc.RootElement;
         var projectId = ReadGuid(root, "projectId");
         var taskId = ReadGuid(root, "taskId");
-        var subtaskId = ReadGuid(root, "subtaskId");
+        var rawSubtaskId = ReadGuid(root, "subtaskId");
+        Guid? subtaskId = rawSubtaskId == Guid.Empty ? null : rawSubtaskId;
         var pipelineSessionId = ReadGuid(root, "sessionId");
         var prompt = root.TryGetProperty("prompt", out var promptValue) ? promptValue.GetString() : null;
         var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() : null;
@@ -244,8 +245,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         if (projectId == Guid.Empty || taskId == Guid.Empty || pipelineSessionId == Guid.Empty
             || string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(model))
             return (false, null, "Pipeline command requires projectId, taskId, sessionId, model, and prompt.");
-        if (subtaskId == Guid.Empty)
-            subtaskId = null;
         if (subtaskId is not null && taskId == Guid.Empty)
             return (false, null, "A subtask-scoped pipeline session must include its parent task id.");
         if (_http.BaseAddress is null)
