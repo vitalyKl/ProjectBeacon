@@ -145,7 +145,7 @@ public sealed class NativeAgentRuntimeTests
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
             Assert.Equal("stop", status.Finish);
-            Assert.Equal(2, mcp.CallCount);
+            Assert.Equal(1, mcp.CallCount);
         }
         finally
         {
@@ -222,7 +222,7 @@ public sealed class NativeAgentRuntimeTests
                         {
                             ["path"] = new JsonObject { ["type"] = "string" }
                         },
-                        ["required"] = new JsonArray("path")
+                        ["required"] = new JsonArray { JsonValue.Create("path") }
                     }
                 }
             }
