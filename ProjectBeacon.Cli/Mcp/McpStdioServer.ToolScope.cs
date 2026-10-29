@@ -22,7 +22,11 @@ public static partial class McpStdioServer
             // A newly started Planner has no subtasks yet. Expose the normal tool catalog
             // only when the API explicitly confirms an empty list; malformed or incomplete
             // pipeline responses remain fail-closed.
-            var toolsForEmptyPipeline = HasExplicitlyEmptySubtaskList(body) ? tools : new JsonArray();
+            var isPlanner = string.Equals(
+                env.Get("BEACON_PIPELINE_ROLE"), "Planner", StringComparison.OrdinalIgnoreCase);
+            var toolsForEmptyPipeline = isPlanner && HasExplicitlyEmptySubtaskList(body)
+                ? tools
+                : new JsonArray();
             return Result(id, new JsonObject { ["tools"] = toolsForEmptyPipeline });
         }
 
