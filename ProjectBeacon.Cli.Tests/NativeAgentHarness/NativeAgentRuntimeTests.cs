@@ -79,9 +79,9 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
-    public async Task NativeRuntimeExecutesFragmentedModelToolCallAndFeedsResultBackToModel()
+    public async Task NativeRuntimeTruncatesOversizedToolResultsBeforePersistingAndStreaming()
     {
-        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-tools-" + Guid.NewGuid().ToString("N"));
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-tool-truncation-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
         var project = Path.Combine(temp, "project");
         Directory.CreateDirectory(project);
@@ -101,8 +101,19 @@ public sealed class NativeAgentRuntimeTests
             BaseAddress = new Uri("https://beacon.test/")
         };
         await using var llama = new ClientLlamaSwap();
-        var provider = new StubToolProvider();
-        var mcp = new StubMcpToolClient();
+        var originalToolResult = new string('x', 20_000);
+        var keptCharacters = 16 * 1024;
+        string truncationMarker;
+        do
+        {
+            truncationMarker = $"\n\n[Tool result truncated: original length {originalToolResult.Length} characters; showing first {keptCharacters} characters.]";
+            keptCharacters = 16 * 1024 - truncationMarker.Length;
+        }
+        while (truncationMarker.Length + keptCharacters > 16 * 1024);
+        truncationMarker = $"\n\n[Tool result truncated: original length {originalToolResult.Length} characters; showing first {keptCharacters} characters.]";
+        var expectedToolResult = originalToolResult[..keptCharacters] + truncationMarker;
+        var provider = new StubToolProvider(expectedToolResult);
+        var mcp = new StubMcpToolClient(originalToolResult);
         var runtime = new NativeAgentRuntime(
             control,
             llama,
@@ -138,7 +149,10 @@ public sealed class NativeAgentRuntimeTests
             await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
 
             Assert.Equal("Read complete.", string.Concat(streamed.Where(item => item.Kind == "text").Select(item => item.Delta)));
-            Assert.Contains(streamed, item => item.Kind == "tool" && item.Delta == "read_file: README contents");
+            var toolDelta = Assert.Single(streamed.Where(item => item.Kind == "tool")).Delta;
+            Assert.StartsWith("read_file: ", toolDelta, StringComparison.Ordinal);
+            Assert.Contains("[Tool result truncated: original length 20000 characters;", toolDelta, StringComparison.Ordinal);
+            Assert.True(toolDelta.Length < 16 * 1024 + 20);
             Assert.Equal("read_file", mcp.LastToolName);
             Assert.Equal("README.md", mcp.LastArguments!["path"]!.GetValue<string>());
             Assert.Equal(2, provider.Requests.Count);
@@ -150,7 +164,7 @@ public sealed class NativeAgentRuntimeTests
             Assert.Contains(provider.Requests[1], message =>
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["tool_call_id"]?.GetValue<string>() == "call-1"
-                && message["content"]?.GetValue<string>() == "README contents");
+                && message["content"]?.GetValue<string>() == expectedToolResult);
             Assert.DoesNotContain("never-persist-this-token", await File.ReadAllTextAsync(
                 Path.Combine(temp, ".opencode", "sessions", session + ".json")));
 
@@ -551,7 +565,7 @@ public sealed class NativeAgentRuntimeTests
         }
     }
 
-    private sealed class StubToolProvider : IChatProvider
+    private sealed class StubToolProvider(string expectedToolContent = "README contents") : IChatProvider
     {
         private int _calls;
         public List<JsonArray> Requests { get; } = [];
@@ -576,7 +590,7 @@ public sealed class NativeAgentRuntimeTests
 
             Assert.Contains(request.Messages, message =>
                 message?["role"]?.GetValue<string>() == "tool"
-                && message["content"]?.GetValue<string>() == "README contents");
+                && message["content"]?.GetValue<string>() == expectedToolContent);
             yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Read complete.");
             yield return new ChatProviderEvent(ChatProviderEventKind.Usage, PromptTokens: 7, CompletionTokens: 2);
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
@@ -584,7 +598,7 @@ public sealed class NativeAgentRuntimeTests
         }
     }
 
-    private sealed class StubMcpToolClient : IMcpToolClient
+    private sealed class StubMcpToolClient(string resultText = "README contents") : IMcpToolClient
     {
         public JsonArray OpenAiTools { get; } = new()
         {
@@ -618,7 +632,7 @@ public sealed class NativeAgentRuntimeTests
             LastToolName = name;
             LastArguments = (JsonObject)arguments.DeepClone();
             CallCount++;
-            return Task.FromResult(new McpToolResult(false, "README contents"));
+            return Task.FromResult(new McpToolResult(false, resultText));
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
