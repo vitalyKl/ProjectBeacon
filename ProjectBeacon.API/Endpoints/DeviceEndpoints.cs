@@ -90,12 +90,13 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> ClaimCommand(
-        ClaimNextCommandHandler handler, HttpContext ctx, int? wait, CancellationToken ct)
+        ClaimNextCommandHandler handler, HttpContext ctx, int? wait, bool? controlOnly, CancellationToken ct)
     {
         var actor = ctx.GetActor();
         var seconds = wait is > 0 and <= 30 ? wait.Value : 0;
         var result = await handler.HandleAsync(
-            new ClaimNextCommandCommand(new ClaimNextCommandRequest(actor.DeviceId!.Value, TimeSpan.FromSeconds(seconds))), ct);
+            new ClaimNextCommandCommand(new ClaimNextCommandRequest(
+                actor.DeviceId!.Value, TimeSpan.FromSeconds(seconds), controlOnly == true)), ct);
         return result.Value is null ? Results.NoContent() : Results.Ok(result.Value);
     }
 
