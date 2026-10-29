@@ -120,8 +120,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             resolved.Value!,
                             token.ExpiresAt,
                             subtaskId,
-            null,
-            token.AllowedMcpTools);
+                            null,
+                            token.AllowedMcpTools);
                     }
 
                     return await _chat.PromptAsync(resolved.Value!, payload, harnessAuthorization, ct);
