@@ -257,7 +257,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     ct);
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-            var provider = _providerFactory(providerHttp, resolved.BaseUrl, resolved.ApiKey);
+            var provider = string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
+                ? new AnthropicProvider(providerHttp, resolved.BaseUrl, resolved.ApiKey)
+                : _providerFactory(providerHttp, resolved.BaseUrl, resolved.ApiKey);
             await using var mcpClient = controls?.HarnessAuthorization is { } harnessAuthorization
                 ? await _mcpClientFactory(harnessAuthorization, ct)
                 : null;
@@ -683,7 +685,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         if (providerId.Equals("beacon-local", StringComparison.OrdinalIgnoreCase))
         {
             var port = _llama.Port > 0 ? _llama.Port : _loadSettings().LlamaSwapPort;
-            return new ResolvedProvider($"http://127.0.0.1:{port}/v1", null, modelId, true);
+            return new ResolvedProvider("beacon-local", $"http://127.0.0.1:{port}/v1", null, modelId, true);
         }
 
         using var response = await _controlPlane.GetAsync("/v1/devices/me/opencode-connections", ct);
@@ -705,7 +707,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             if (string.IsNullOrWhiteSpace(baseUrl))
                 throw new InvalidOperationException($"Provider '{providerId}' has no base URL.");
             var apiKey = ReadString(row, "apiKey");
-            return new ResolvedProvider(baseUrl.TrimEnd('/'), apiKey, modelId, false);
+            return new ResolvedProvider(providerId, baseUrl.TrimEnd('/'), apiKey, modelId, false);
         }
 
         throw new InvalidOperationException($"No connection is configured for provider '{providerId}'.");
@@ -859,7 +861,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
     }
 
-    private sealed record ResolvedProvider(string BaseUrl, string? ApiKey, string Model, bool IsLocal);
+    private sealed record ResolvedProvider(string ProviderId, string BaseUrl, string? ApiKey, string Model, bool IsLocal);
 
     private sealed record NativeDelta(int TurnNumber, string Kind, string MessageId, int Ordinal, string Text, bool IsTurnEnd)
     {
