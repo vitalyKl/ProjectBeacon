@@ -95,75 +95,75 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
-        // Reset state before a strategy retry and keep reads, state transition, and command insert
-        // in the same transaction. This is required by Npgsql's retrying execution strategy.
-        db.ChangeTracker.Clear();
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
-        var session = await db.PipelineSessions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
-        if (session is null)
-            return Result.Failure<PipelineSessionDto>("Session not found.");
-
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineSessionDto>("Task not found.");
-
-        if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
-        {
-            var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
-            if (entered == 0)
-                return Result.Failure<PipelineSessionDto>("Pipeline state changed while launching; retry.");
-        }
-
-        WorkstationCommand? pipelineCommand = null;
-        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.ProjectId == session.ProjectId)
-            .ToListAsync(ct);
-        if (runtimes.Count > 0)
-        {
-            var deviceIds = runtimes.Select(r => r.DeviceId).Distinct().ToArray();
-            var devices = await db.DaemonDevices.IgnoreQueryFilters()
-                .Where(d => deviceIds.Contains(d.Id))
-                .ToListAsync(ct);
-            var candidates = runtimes
-                .Join(devices, r => r.DeviceId, d => d.Id, (runtime, device) => new { Runtime = runtime, Device = device })
-                .Where(x => IsNativeRuntime(x.Device.WorkstationJson))
-                .ToList();
-
-            if (candidates.Count > 0)
+            // Reset state before a strategy retry and keep reads, state transition, and command insert
+            // in the same transaction. This is required by Npgsql's retrying execution strategy.
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    
+            var session = await db.PipelineSessions.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
+            if (session is null)
+                return Result.Failure<PipelineSessionDto>("Session not found.");
+    
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineSessionDto>("Task not found.");
+    
+            if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
             {
-                var now = DateTime.UtcNow;
-                var selected = candidates
-                    .Where(x => x.Device.IsOnline(now))
-                    .OrderByDescending(x => x.Device.LastHeartbeatAt)
-                    .FirstOrDefault();
-                if (selected is null)
-                    return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
-
-                if (session.ModelBackendId is not { } backendId)
-                    return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
-                var backend = await db.LocalModelBackends
-                    .FirstOrDefaultAsync(b => b.Id == backendId, ct);
-                if (backend is null)
-                    return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
-
-                var model = backend.BackendType == ModelBackendType.LlamaCpp || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
-                    ? $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(backend.Name)}"
-                    : backend.OpenCodeModel.Trim();
-                var payload = JsonSerializer.Serialize(new
+                var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
+                if (entered == 0)
+                    return Result.Failure<PipelineSessionDto>("Pipeline state changed while launching; retry.");
+            }
+    
+            WorkstationCommand? pipelineCommand = null;
+            var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(r => r.ProjectId == session.ProjectId)
+                .ToListAsync(ct);
+            if (runtimes.Count > 0)
+            {
+                var deviceIds = runtimes.Select(r => r.DeviceId).Distinct().ToArray();
+                var devices = await db.DaemonDevices.IgnoreQueryFilters()
+                    .Where(d => deviceIds.Contains(d.Id))
+                    .ToListAsync(ct);
+                var candidates = runtimes
+                    .Join(devices, r => r.DeviceId, d => d.Id, (runtime, device) => new { Runtime = runtime, Device = device })
+                    .Where(x => IsNativeRuntime(x.Device.WorkstationJson))
+                    .ToList();
+    
+                if (candidates.Count > 0)
                 {
-                    projectId = session.ProjectId,
-                    taskId = session.TaskId,
-                    subtaskId = session.SubtaskId,
-                    sessionId = session.Id,
-                    role = session.Role.ToString(),
-                    title = $"{session.Role} · {task.Title}",
-                    prompt = session.PromptContext,
-                    model,
-                    contextLimit = backend.ContextSize,
-                    reasoningEffort = "medium"
+                    var now = DateTime.UtcNow;
+                    var selected = candidates
+                        .Where(x => x.Device.IsOnline(now))
+                        .OrderByDescending(x => x.Device.LastHeartbeatAt)
+                        .FirstOrDefault();
+                    if (selected is null)
+                        return Result.Failure<PipelineSessionDto>("The native pipeline workstation is offline.");
+    
+                    if (session.ModelBackendId is not { } backendId)
+                        return Result.Failure<PipelineSessionDto>("No model backend is configured for this pipeline session.");
+                    var backend = await db.LocalModelBackends
+                        .FirstOrDefaultAsync(b => b.Id == backendId, ct);
+                    if (backend is null)
+                        return Result.Failure<PipelineSessionDto>("The configured pipeline model backend was not found.");
+    
+                    var model = backend.BackendType == ModelBackendType.LlamaCpp || string.IsNullOrWhiteSpace(backend.OpenCodeModel)
+                        ? $"{OpencodePayload.ProviderId}/{OpencodePayload.ModelKey(backend.Name)}"
+                        : backend.OpenCodeModel.Trim();
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        projectId = session.ProjectId,
+                        taskId = session.TaskId,
+                        subtaskId = session.SubtaskId,
+                        sessionId = session.Id,
+                        role = session.Role.ToString(),
+                        title = $"{session.Role} · {task.Title}",
+                        prompt = session.PromptContext,
+                        model,
+                        contextLimit = backend.ContextSize,
+                        reasoningEffort = "medium"
                 });
                 pipelineCommand = WorkstationCommand.Create(
                     selected.Device.Id,
