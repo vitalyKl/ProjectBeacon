@@ -19,71 +19,71 @@ public sealed class RunPipelineSessionDispatchTests
         var projectRoot = Path.Combine(temp, "project");
         Directory.CreateDirectory(projectRoot);
 
-        var projectId = Guid.NewGuid();
-        var taskId = Guid.NewGuid();
-        var sessionId = Guid.NewGuid();
-        var commandId = Guid.NewGuid();
-        const int generation = 3;
-        AgentHarnessAuthorization? capturedAuthorization = null;
-        string? requestedModel = null;
-        var tokenHandler = new HarnessTokenHandler(projectId, commandId, generation);
-        using var http = new HttpClient(tokenHandler) { BaseAddress = new Uri("http://localhost/") };
-        await using var llama = new ClientLlamaSwap
-        {
-            SkipRealProcess = true,
-            UseOwnSwapper = false,
-            ConfigFile = Path.Combine(temp, "llamaswap.yaml")
-        };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        var settings = new WorkstationSettings
-        {
-            AgentRuntime = "native",
-            OpencodeDataDir = Path.Combine(temp, "native-data"),
-            LlamaSwapPort = 8080,
-            AllowedCommandPrefixes = []
-        };
-        Func<WorkstationSettings> settingsLoader = () => settings;
-        var deps = new DaemonDependencies(
-            http,
-            llama,
-            openCode,
-            new OpenCodeAgentRuntime(openCode),
-            settingsLoader,
-            runtimeFactory: llamaSync => new NativeAgentRuntime(
-                http,
-                llama,
-                llamaSync,
-                settingsLoader,
-                providerFactory: (_, _, _) => new StubProvider(model => requestedModel = model),
-                mcpClientFactory: (authorization, _) =>
-                {
-                    capturedAuthorization = authorization;
-                    return Task.FromResult<IMcpToolClient>(new StubMcpToolClient());
-                }));
-        var state = new DaemonRuntimeState("http://localhost", null);
-        var timing = new DaemonTiming
-        {
-            ChatPollInterval = TimeSpan.FromMilliseconds(1),
-            ChatMaxDuration = TimeSpan.FromSeconds(5)
-        };
-        await using var services = DaemonServices.Build(deps, timing, state);
-        var executor = services.GetRequiredService<IDaemonCommandExecutor>();
-
-        var payload = JsonSerializer.Serialize(new
-        {
-            projectId,
-            taskId,
-            sessionId,
-            role = "Planner",
-            title = "Native pipeline dispatch test",
-            prompt = "Respond with the completion marker.",
-            model = "beacon-local/test-model",
-            contextLimit = 4096,
-            reasoningEffort = "medium"
-        });
-
         try
         {
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var sessionId = Guid.NewGuid();
+            var commandId = Guid.NewGuid();
+            const int generation = 3;
+            AgentHarnessAuthorization? capturedAuthorization = null;
+            string? requestedModel = null;
+            var tokenHandler = new HarnessTokenHandler(projectId, commandId, generation);
+            using var http = new HttpClient(tokenHandler) { BaseAddress = new Uri("http://localhost/") };
+            await using var llama = new ClientLlamaSwap
+            {
+                SkipRealProcess = true,
+                UseOwnSwapper = false,
+                ConfigFile = Path.Combine(temp, "llamaswap.yaml")
+            };
+            await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+            var settings = new WorkstationSettings
+            {
+                AgentRuntime = "native",
+                OpencodeDataDir = Path.Combine(temp, "native-data"),
+                LlamaSwapPort = 8080,
+                AllowedCommandPrefixes = []
+            };
+            Func<WorkstationSettings> settingsLoader = () => settings;
+            var deps = new DaemonDependencies(
+                http,
+                llama,
+                openCode,
+                new OpenCodeAgentRuntime(openCode),
+                settingsLoader,
+                runtimeFactory: llamaSync => new NativeAgentRuntime(
+                    http,
+                    llama,
+                    llamaSync,
+                    settingsLoader,
+                    providerFactory: (_, _, _) => new StubProvider(model => requestedModel = model),
+                    mcpClientFactory: (authorization, _) =>
+                    {
+                        capturedAuthorization = authorization;
+                        return Task.FromResult<IMcpToolClient>(new StubMcpToolClient());
+                    }));
+            var state = new DaemonRuntimeState("http://localhost", null);
+            var timing = new DaemonTiming
+            {
+                ChatPollInterval = TimeSpan.FromMilliseconds(1),
+                ChatMaxDuration = TimeSpan.FromSeconds(5)
+            };
+            await using var services = DaemonServices.Build(deps, timing, state);
+            var executor = services.GetRequiredService<IDaemonCommandExecutor>();
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                projectId,
+                taskId,
+                sessionId,
+                role = "Planner",
+                title = "Native pipeline dispatch test",
+                prompt = "Respond with the completion marker.",
+                model = "beacon-local/test-model",
+                contextLimit = 4096,
+                reasoningEffort = "medium"
+            });
+
             var (ok, resultJson, error) = await executor.ExecuteAsync(new WorkstationDaemon.CommandWire
             {
                 Id = commandId,
