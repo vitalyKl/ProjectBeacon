@@ -208,6 +208,34 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task RunPipelineSession_RequiresExplicitScopedSessionPayload()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "pipeline-config.yaml")
+        };
+        var settings = new WorkstationSettings
+        {
+            AgentRuntime = "native",
+            OpencodeDataDir = Path.Combine(_dir, "pipeline-data")
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => settings);
+
+        var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Id = Guid.NewGuid(),
+            Kind = WorkstationCommandKind.RunPipelineSession,
+            LocalRoot = _dir,
+            PayloadJson = "{}"
+        }, CancellationToken.None);
+
+        Assert.False(ok);
+        Assert.Contains("projectId, taskId, sessionId, model, and prompt", error);
+    }
+
+    [Fact]
     public async Task ChatAbort_RequiresExternalSessionId()
     {
         await using var daemon = CreateDaemon(_dir);
