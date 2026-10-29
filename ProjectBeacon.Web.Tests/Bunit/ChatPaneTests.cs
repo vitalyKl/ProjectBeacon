@@ -156,6 +156,39 @@ public sealed class ChatPaneTests : BUnitRenderBase
         Assert.Empty(cut.FindAll(".beacon-chat-jump"));
     }
 
+    private static string QuestionBody(bool answered) => answered
+        ? """{"id":"q1","title":"Pick a tool","fields":[{"key":"choice","title":"Pick","type":"string"}],"answer":{"choice":"a"}}"""
+        : """{"id":"q1","title":"Pick a tool","fields":[{"key":"choice","title":"Pick","type":"string"}]}""";
+
+    private static ChatPartDto QuestionPart(Guid id, bool answered) =>
+        new(id, Guid.NewGuid(), "assistant", "question", QuestionBody(answered), null, 1, DateTime.UtcNow);
+
+    [Fact]
+    public void PendingQuestion_TabShownUntilAnswered()
+    {
+        var id = Guid.NewGuid();
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Parts, new List<ChatPartDto> { QuestionPart(id, false) }));
+        var tabs = cut.FindAll(".beacon-chat-question-tabs");
+        Assert.Single(tabs);
+        Assert.Contains("Pick a tool", tabs.First().InnerHtml);
+        // The part is answered in a later refresh: the tab drops off.
+        cut.SetParametersAndRender(p => p.Add(x => x.Parts, new List<ChatPartDto> { QuestionPart(id, true) }));
+        Assert.Empty(cut.FindAll(".beacon-chat-question-tabs"));
+    }
+
+    [Fact]
+    public async Task QuestionTab_Click_ScrollsToPart()
+    {
+        Bunit.JSInterop.SetupVoid("BeaconChat.scrollToPart", (_args) => true);
+        var id = Guid.NewGuid();
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Parts, new List<ChatPartDto> { QuestionPart(id, false) }));
+        cut.Find(".beacon-chat-question-tabs .mud-button").Click();
+        var inv = Bunit.JSInterop.Invocations.Single(i => i.Identifier == "BeaconChat.scrollToPart");
+        Assert.Equal(id.ToString(), (string?)inv.Arguments[1]);
+    }
+
     private static ChatSessionDto SessionDto(string tag) =>
         new(Guid.NewGuid(), Guid.NewGuid(), "Race Project", Guid.NewGuid(), "ext-" + tag, "Session " + tag,
             ChatSessionStatus.Idle, DateTime.UtcNow, null);

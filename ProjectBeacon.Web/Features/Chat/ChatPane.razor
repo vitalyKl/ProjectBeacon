@@ -1,3 +1,4 @@
+@using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Chat
@@ -29,6 +30,15 @@
 @if (_showJump)
 {
     <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowDownward" OnClick="JumpToLatest" Class="beacon-chat-jump">@L["ChatJumpToLatest"]</MudButton>
+}
+@if (_pendingQuestions.Count > 0)
+{
+    <div class="beacon-chat-question-tabs d-flex flex-wrap gap-1 mt-2">
+        @foreach (var q in _pendingQuestions)
+        {
+            <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)">@q.Title</MudButton>
+        }
+    </div>
 }
 @if (!string.IsNullOrEmpty(Phase))
 {
@@ -130,7 +140,10 @@
                 return null;
             var prompt = Session.PromptTokens!.Value;
             var tokens = Session.ContextLimit is { } limit ? $"{prompt:N0} / {limit:N0}" : $"{prompt:N0}";
-            return string.Format(L["ChatUsage"].Value, tokens, "$" + Session.TotalCost!.Value.ToString("0.####"));
+            var label = string.Format(L["ChatUsage"].Value, tokens, "$" + Session.TotalCost!.Value.ToString("0.####"));
+            if (Session is { CompletionTokens: not null, GenerationSeconds: { } seconds } && seconds > 0)
+                label += "  \u2022  " + string.Format(L["ChatUsageSpeed"].Value, Math.Round(Session.CompletionTokens!.Value / seconds, 1));
+            return label;
         }
     }
     [Parameter] public EventCallback<MouseEventArgs> Send { get; set; }
@@ -139,6 +152,8 @@
 
     private ElementReference _log;
     private bool _showJump;
+    private bool _followPending;
+    private List<(Guid Id, string Title)> _pendingQuestions = [];
     private Guid _sessionId;
     private Guid _lastPartId;
     private int _lastPartLength;
@@ -154,6 +169,7 @@
 
     protected override void OnParametersSet()
     {
+        RefreshPendingQuestions();
         var sessionId = Session?.Id ?? Guid.Empty;
         var lastPart = Parts.LastOrDefault();
         var lastPartId = lastPart?.Id ?? Guid.Empty;
@@ -179,8 +195,18 @@
             _sessionId = sessionId;
             _lastPartId = lastPartId;
             _lastPartLength = lastPartLength;
-            _ = ScrollFollowAsync();
+            // The DOM still holds the previous parts at this point; the follow must measure
+            // scrollHeight after this render commits, so it is deferred to OnAfterRenderAsync.
+            _followPending = true;
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_followPending)
+            return;
+        _followPending = false;
+        await ScrollFollowAsync();
     }
 
     private Task OnDraftChanged(string value)
@@ -275,5 +301,43 @@
             return;
         _showJump = !nearBottom;
         StateHasChanged();
+    }
+
+    // Open questions waiting for the answer: one tab per question so the user can jump
+    // straight to the form. Answered questions drop off the bar on the next refresh.
+    private void RefreshPendingQuestions()
+    {
+        _pendingQuestions = [];
+        foreach (var part in Parts)
+        {
+            if (!string.Equals(part.Kind, "question", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var (title, answered) = ReadQuestionState(part.Body);
+            if (!answered && title is not null)
+                _pendingQuestions.Add((part.Id, title));
+        }
+    }
+
+    private static (string? Title, bool Answered) ReadQuestionState(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind is not JsonValueKind.Object)
+                return (null, false);
+            var title = root.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+            var answered = root.TryGetProperty("answer", out var a) && a.ValueKind == JsonValueKind.Object;
+            return (string.IsNullOrWhiteSpace(title) ? null : title, answered);
+        }
+        catch (JsonException)
+        {
+            return (null, false);
+        }
+    }
+
+    private async Task ScrollToQuestion(Guid partId)
+    {
+        await Js.InvokeVoidAsync("BeaconChat.scrollToPart", _log, partId.ToString());
     }
 }

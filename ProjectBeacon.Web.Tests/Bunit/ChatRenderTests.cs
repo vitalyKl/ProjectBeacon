@@ -1,3 +1,4 @@
+using Bunit;
 using ProjectBeacon.Application.Chat;
 using ProjectBeacon.Web.Features.Chat;
 
@@ -49,6 +50,53 @@ public sealed class ChatRenderTests : BUnitRenderBase
         Assert.Contains("beacon-code-bar", html);
         Assert.Contains("data-beacon-code-copy", html);
         Assert.Contains("csharp", html);
+    }
+
+    private static ChatPartDto Question(string body) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), "assistant", "question", body, null, 1,
+            new DateTime(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc));
+
+    [Fact]
+    public void QuestionPart_RendersTitleDescriptionAndFields()
+    {
+        var body = """
+            {"id":"q1","title":"Pick a tool","fields":[{"key":"choice","title":"Pick","description":"Which option do you want?","type":"string","options":[{"value":"a","label":"A"},{"value":"b","label":"B"}]}]}
+            """;
+        var cut = Bunit.RenderComponent<ChatPartView>(ps => ps.Add(p => p.Part, Question(body)));
+        var html = cut.Markup;
+        Assert.Contains("beacon-chat-question", html);
+        Assert.Contains("Pick a tool", html);
+        Assert.Contains("Which option do you want?", html);
+        Assert.Contains("beacon-chat-question-text", html);
+        Assert.Contains("Pick", html);
+    }
+
+    [Fact]
+    public void QuestionPart_Answered_RendersReadOnlyView()
+    {
+        var body = """
+            {"id":"q1","title":"Pick a tool","fields":[{"key":"choice","title":"Pick","type":"string"}],"answer":{"choice":"a"}}
+            """;
+        var cut = Bunit.RenderComponent<ChatPartView>(ps => ps.Add(p => p.Part, Question(body)));
+        var html = cut.Markup;
+        Assert.Contains("beacon-chat-question", html);
+        Assert.Contains("a", html);
+        Assert.DoesNotContain("beacon-chat-question-text", html);
+    }
+
+    [Fact]
+    public void QuestionPart_KeepsDraftWhenHostRepushesSamePart()
+    {
+        var body = """
+            {"id":"q1","title":"Pick a tool","fields":[{"key":"choice","title":"Pick","type":"string"}]}
+            """;
+        var part = Question(body);
+        var cut = Bunit.RenderComponent<ChatPartView>(ps => ps.Add(p => p.Part, part));
+        cut.Find("input").Change("draft");
+        // The host re-pushes the same part (fresh dto, same id and body) on every refresh.
+        cut.SetParametersAndRender(ps => ps.Add(p => p.Part, new ChatPartDto(
+            part.Id, part.SessionId, part.Role, part.Kind, part.Body, part.ExternalId, part.SortOrder, part.CreatedAt)));
+        Assert.Equal("draft", cut.Find("input").GetAttribute("value"));
     }
 
     [Fact]

@@ -2021,6 +2021,9 @@ orthstar</value>
   <data name="ChatModelSwitching" xml:space="preserve">
     <value>Modellwechsel: {0}</value>
   </data>
+  <data name="ChatUsageSpeed" xml:space="preserve">
+    <value>{0} tok/s</value>
+  </data>
   <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Modell nicht geladen: {0}</value>
   </data>

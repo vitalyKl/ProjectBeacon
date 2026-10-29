@@ -2035,6 +2035,9 @@
   <data name="ChatModelSwitching" xml:space="preserve">
     <value>Перекление модели: {0}</value>
   </data>
+  <data name="ChatUsageSpeed" xml:space="preserve">
+    <value>{0} Вок/с</value>
+  </data>
   <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Модель не загружена: {0}</value>
   </data>

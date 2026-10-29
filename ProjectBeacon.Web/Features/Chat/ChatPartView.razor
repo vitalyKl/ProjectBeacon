@@ -8,7 +8,7 @@
 @inject ReplyChatFormHandler ReplyForm
 @inject ISnackbar Snackbar
 
-<div class="beacon-chat-part @PartClass">
+<div class="beacon-chat-part @PartClass" data-chat-part-id="@Part.Id">
     <div class="beacon-chat-part-head">
         <MudText Typo="Typo.caption">@RoleLabel</MudText>
         <MudText Typo="Typo.caption">@Part.CreatedAt.ToLocalTime().ToString("g")</MudText>
@@ -90,6 +90,10 @@
                 <MudStack Spacing="2" Class="mb-2">
                     @foreach (var f in QFields.Where(x => !x.Hidden))
                     {
+                        @if (!string.IsNullOrWhiteSpace(f.Description))
+                        {
+                            <MudText Typo="Typo.body2" Class="mb-1 beacon-chat-question-text">@f.Description</MudText>
+                        }
                         @if (f.Type == "string" && f.Options.Count > 0)
                         {
                             <MudSelect T="string?" Value="GetString(f.Key)" ValueChanged="v => SetString(f.Key, v)" Label="@FieldLabel(f)" Placeholder="@f.Placeholder" Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -200,6 +204,7 @@
     {
         public string Key = string.Empty;
         public string? Title;
+        public string? Description;
         public string Type = string.Empty;
         public string? Placeholder;
         public string? Url;
@@ -226,12 +231,19 @@
         _userId = actor.UserId ?? Guid.Empty;
     }
 
-    // The host re-pushes the part on every refresh; an "answer" object appearing in the
-    // body flips the part from the editable form to the read-only answered view.
+    // The host re-pushes the same part on every refresh; re-parsing would wipe the draft
+    // the user is filling. A changed body (a new "answer" object) flips the part to the
+    // read-only answered view and resets the draft on purpose.
+    private string _questionKey = string.Empty;
+
     protected override void OnParametersSet()
     {
         if (!IsQuestion)
             return;
+        var key = Part.Id + "\u0000" + (Part.Body ?? "");
+        if (key == _questionKey)
+            return;
+        _questionKey = key;
         QFormId = null;
         QTitle = null;
         QFields = [];
@@ -265,6 +277,7 @@
                 {
                     Key = f["key"] is JsonValue k && k.GetValueKind() == JsonValueKind.String ? k.GetValue<string>() : "",
                     Title = f["title"] is JsonValue t && t.GetValueKind() == JsonValueKind.String ? t.GetValue<string>() : null,
+                    Description = f["description"] is JsonValue dsc && dsc.GetValueKind() == JsonValueKind.String ? dsc.GetValue<string>() : null,
                     Type = f["type"] is JsonValue ty && ty.GetValueKind() == JsonValueKind.String ? ty.GetValue<string>() : "",
                     Placeholder = f["placeholder"] is JsonValue ph && ph.GetValueKind() == JsonValueKind.String ? ph.GetValue<string>() : null,
                     Url = f["url"] is JsonValue u && u.GetValueKind() == JsonValueKind.String ? u.GetValue<string>() : null,

@@ -57,6 +57,11 @@ window.BeaconChat = {
   jumpToLatest: function (el) {
     if (el)
       el.scrollTop = el.scrollHeight;
+  },
+  scrollToPart: function (log, id) {
+    var box = log && log.querySelector("[data-chat-part-id=\"" + id + "\"]");
+    if (box)
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 };
 

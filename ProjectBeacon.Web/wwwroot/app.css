@@ -1289,6 +1289,17 @@ body:has(.beacon-theme-dark) .mud-main-content {
     border-radius: var(--radius-control);
 }
 
+.beacon-chat-question-tabs .mud-button {
+    min-width: 0;
+    max-width: 240px;
+}
+
+.beacon-chat-question-tabs .mud-button-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .beacon-chat-part:not(.beacon-chat-user) {
     color: var(--color-chat-subtle);
 }
