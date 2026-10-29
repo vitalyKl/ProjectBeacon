@@ -69,13 +69,13 @@ All `WorkstationCommandKind` values, complete.
 | `RunReviewCheck` | **AtMostOnce** | **no** | no | Runs `checkCommand` for a `reviewRunId`. A duplicate run produces a second review run. **Defense-in-depth:** `CommandSandbox.SanitizeProjectPayload` strips payload `checkCommand` for `RunReviewCheck`; `EnqueueCommandHandler` injects `TrustedCheckCommand` only (from `RecordReviewCheckHandler`, never from body). `Actor.IsHuman` gate: human body command required; token body must be empty and resolves from `Project.ReviewCheckCommand` (400/409). |
 | `RunPipelineSession` | **AtMostOnce** | **no** | no | Starts one pipeline agent turn; re-delivery could create a duplicate session or repeat tool side effects. |
 
-Counts: **13 Idempotent**, **4 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`,
-`RunEvalTurn`, `RunReviewCheck`, `RunPipelineSession`), **5 ReconcileBacked** (`ApplyOpencode`,
+Counts: **13 Idempotent**, **7 AtMostOnce** (`ChatEnsureSession`, `ChatPrompt`, `ChatSwitchAgent`,
+`ChatReplyForm`, `RunEvalTurn`, `RunReviewCheck`, `RunPipelineSession`), **5 ReconcileBacked** (`ApplyOpencode`,
 `ReloadProxy`, `SaveWorkstation`, `ConfigureOpenCode`, `ReconcileDesired`).
 
 ## Current protection for AtMostOnce
 
-The four at-most-once kinds are protected from duplicate execution by the
+The seven at-most-once kinds are protected from duplicate execution by the
 combination of the following. **All of these must be preserved.**
 
 1. **Atomic claim (H4.1).** The claim is a guarded
