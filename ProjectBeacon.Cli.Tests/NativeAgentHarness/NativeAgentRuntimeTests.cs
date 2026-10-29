@@ -28,12 +28,14 @@ public sealed class NativeAgentRuntimeTests
                 1,
                 root,
                 DateTime.UtcNow.AddMinutes(2),
-                subtaskId);
+                subtaskId,
+                "Actor");
 
             var start = McpStdioClient.CreateStartInfo(root, authorization);
 
             Assert.Equal(taskId.ToString("D"), start.Environment["BEACON_TASK_ID"]);
             Assert.Equal(subtaskId.ToString("D"), start.Environment["BEACON_SUBTASK_ID"]);
+            Assert.Equal("Actor", start.Environment["BEACON_PIPELINE_ROLE"]);
             Assert.Equal("ephemeral-token", start.Environment["BEACON_API_TOKEN"]);
         }
         finally
