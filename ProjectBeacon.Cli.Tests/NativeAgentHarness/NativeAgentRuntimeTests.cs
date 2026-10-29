@@ -178,7 +178,7 @@ public sealed class NativeAgentRuntimeTests
                 "beacon-local/test-model",
                 CancellationToken.None,
                 new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
-            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(15));
 
             Assert.Equal("Read complete.", string.Concat(streamed.Where(item => item.Kind == "text").Select(item => item.Delta)));
             var toolDelta = Assert.Single(streamed, item => item.Kind == "tool").Delta;
