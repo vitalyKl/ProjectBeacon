@@ -55,6 +55,32 @@ public sealed class NativeCommandRunnerTests
         }
     }
 
+    [Theory]
+    [InlineData("--project=../outside.csproj")]
+    [InlineData("--logger:file=../../outside.log")]
+    [InlineData("--project=/outside/project.csproj")]
+    [InlineData("--project=C:\\outside\\project.csproj")]
+    public async Task EmbeddedAbsoluteAndParentTraversalArgumentsAreRejected(string argument)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var args = new JsonObject
+            {
+                ["executable"] = "dotnet",
+                ["arguments"] = new JsonArray { JsonValue.Create("test"), JsonValue.Create(argument) }
+            };
+            var result = await NativeCommandRunner.ExecuteAsync(root, args, ["dotnet test"], CancellationToken.None);
+            Assert.True(result.IsError);
+            Assert.Contains("absolute paths and parent-directory traversal", result.Text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Fact]
     public async Task AbsoluteAndParentTraversalArgumentsAreRejected()
     {

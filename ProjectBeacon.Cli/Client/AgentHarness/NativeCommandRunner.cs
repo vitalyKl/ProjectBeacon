@@ -200,8 +200,13 @@ internal static class NativeCommandRunner
             || argument.StartsWith(@"\\", StringComparison.Ordinal))
             return true;
 
+        // Arguments may embed paths in options (for example --project=../outside.csproj).
+        // Check path boundaries inside the whole argument, not only when the argument is a path.
+        if (Regex.IsMatch(argument, @"(^|[=:])([A-Za-z]:[\\/]|/|\\\\)"))
+            return true;
+
         var normalized = argument.Replace('\\', '/');
-        return normalized.Split('/').Any(segment => segment == "..");
+        return Regex.IsMatch(normalized, @"(^|[=:/])\.\.(?:/|$)");
     }
 
     private static async Task<string> ReadBoundedAsync(StreamReader reader, int maxCharacters)
