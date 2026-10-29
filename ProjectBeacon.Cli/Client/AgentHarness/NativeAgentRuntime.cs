@@ -457,6 +457,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             {
                                 toolResult = "Tool error: no scoped MCP authorization is available for this command.";
                             }
+                            else if (!IsAdvertisedMcpTool(mcpClient.OpenAiTools, call.Name!))
+                            {
+                                toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
+                            }
                             else
                             {
                                 var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
@@ -698,6 +702,19 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
         Math.Max(1, Encoding.UTF8.GetByteCount(string.Join("\n", messages.Select(m => m.ToJsonString()))) / 4);
+
+    private static bool IsAdvertisedMcpTool(JsonArray tools, string name)
+    {
+        foreach (var tool in tools)
+        {
+            if (string.Equals(
+                tool?["function"]?["name"]?.GetValue<string>(),
+                name,
+                StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
 
     private static string CreateToolCallFingerprint(IEnumerable<ToolCallAccumulator> calls)
     {

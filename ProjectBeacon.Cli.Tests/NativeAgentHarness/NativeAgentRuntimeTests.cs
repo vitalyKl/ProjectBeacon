@@ -167,6 +167,65 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeRejectsMcpToolThatWasNotAdvertised()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-unadvertised-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new UnadvertisedToolProvider();
+        var mcp = new StubMcpToolClient();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+        try
+        {
+            var session = await runtime.CreateSessionAsync("unadvertised tool test", CancellationToken.None);
+            var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test", "never-persist-this-token", Guid.NewGuid(), null,
+                Guid.NewGuid(), 1, project, DateTime.UtcNow.AddMinutes(2));
+            await runtime.SendPromptAsync(
+                session, "Call a hidden tool", "beacon-local/test-model", CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            Assert.Equal(0, mcp.CallCount);
+            Assert.Contains(provider.RequestMessages[1], message =>
+                message?["role"]?.GetValue<string>() == "tool"
+                && message["content"]?.GetValue<string>()?.Contains("was not advertised", StringComparison.Ordinal) == true);
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status!.Ended);
+            Assert.Equal("stop", status.Finish);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeStopsRepeatedIdenticalToolCalls()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-loop-" + Guid.NewGuid().ToString("N"));
@@ -249,6 +308,36 @@ public sealed class NativeAgentRuntimeTests
                 ToolIndex: 0,
                 ToolArguments: "{\"path\":\"README.md\"}");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class UnadvertisedToolProvider : IChatProvider
+    {
+        public List<JsonArray> RequestMessages { get; } = [];
+        private int _calls;
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            RequestMessages.Add((JsonArray)request.Messages.DeepClone());
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                yield return new ChatProviderEvent(
+                    ChatProviderEventKind.ToolCallDelta,
+                    ToolIndex: 0,
+                    ToolCallId: "hidden-call",
+                    ToolName: "delete_everything",
+                    ToolArguments: "{}");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
+
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "The hidden tool was blocked.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
         }
