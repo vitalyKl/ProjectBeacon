@@ -33,10 +33,16 @@ public sealed class ApiTokenAuthMiddleware
             var token = await db.ApiTokens.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(t => t.TokenHash == hash);
 
-            if (token is not null && !token.IsExpired)
+            if (token is not null && !token.IsExpired && !token.IsRevoked)
             {
-                token.RecordUsage();
-                await db.SaveChangesAsync();
+                // Throttle writes: LastUsedAt is approximate and must not turn every API
+                // request into a database write for long-running coding-agent traffic.
+                var now = DateTime.UtcNow;
+                if (token.LastUsedAt is null || token.LastUsedAt < now.AddMinutes(-5))
+                {
+                    token.RecordUsage();
+                    await db.SaveChangesAsync();
+                }
                 var identity = new ClaimsIdentity(ActorContextFactory.ApiTokenAuthType);
                 identity.AddClaim(new Claim("token_id", token.Id.ToString()));
                 identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
