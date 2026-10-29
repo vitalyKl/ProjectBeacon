@@ -191,6 +191,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ListChatPartsHandler>();
         services.AddTransient<SendChatPromptHandler>();
         services.AddTransient<AbortChatHandler>();
+        // Chat API endpoints inject these concrete handlers directly; interface scanning alone is not enough for Minimal API service inference.
+        services.AddTransient<SwitchChatAgentHandler>();
+        services.AddTransient<ReplyChatFormHandler>();
         services.AddTransient<RenameChatSessionHandler>();
         services.AddTransient<ArchiveChatSessionHandler>();
         services.AddTransient<AppendChatPartHandler>();
