@@ -868,7 +868,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         {
             marker = string.Format(
                 System.Globalization.CultureInfo.InvariantCulture,
-                "\\n\\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
+                "\n\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
                 result.Length,
                 keptCharacters);
             keptCharacters = MaxToolResultCharacters - marker.Length;
@@ -877,7 +877,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
         marker = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
-            "\\n\\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
+            "\n\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
             result.Length,
             keptCharacters);
         return result[..keptCharacters] + marker;
