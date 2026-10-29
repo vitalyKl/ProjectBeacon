@@ -6,6 +6,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
 using Domain.Enums;
+using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
