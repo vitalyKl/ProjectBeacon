@@ -50,4 +50,4 @@ This document tracks the implementation follow-up to `ProjectBeacon-contracts-an
 
 ## Verification state
 
-The synchronized branch is being validated by GitHub Actions. Check the PR's latest commit and all required platform jobs before merging; a green result on an earlier commit is not sufficient. The latest validation run is linked from the PR description.
+CI is a merge gate for the latest PR head. Before merging, require build, migration consistency, tests and formatting to pass on Windows, Linux and macOS for the same latest commit. A green result on an older SHA is not sufficient; use the current checks linked from the PR.
