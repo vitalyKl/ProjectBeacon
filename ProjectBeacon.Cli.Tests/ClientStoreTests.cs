@@ -141,4 +141,16 @@ public sealed class ClientStoreTests : IDisposable
         Assert.True(File.Exists(file));
         Assert.Empty(Directory.EnumerateFiles(_dir, Path.GetFileName(file) + ".tmp-*"));
     }
+
+    [Fact]
+    public void WorkstationSetup_SaveWorkstation_PersistsOnlySupportedAgentRuntimeValues()
+    {
+        var file = Path.Combine(_dir, "workstation.json");
+
+        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"native"}""", file);
+        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+
+        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"unknown"}""", file);
+        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+    }
 }
