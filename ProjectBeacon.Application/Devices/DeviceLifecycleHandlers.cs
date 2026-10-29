@@ -106,6 +106,11 @@ public class RevokeDeviceHandler : ICommandHandler<RevokeDeviceCommand, Result>
         if (device is null || device.UserId != command.Request.UserId)
             return Result.Failure("Device not found.");
         device.Revoke();
+        var harnessTokens = await db.ApiTokens.IgnoreQueryFilters()
+            .Where(t => t.ClientKind == ApiTokenClientKind.Harness && t.DeviceId == device.Id && t.RevokedAt == null)
+            .ToListAsync(ct);
+        foreach (var token in harnessTokens)
+            token.Revoke();
         await db.SaveChangesAsync(ct);
         return Result.Ok();
     }

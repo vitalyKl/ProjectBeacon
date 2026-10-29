@@ -286,6 +286,14 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
         if (finished == 0)
             return Result.Failure<WorkstationCommandDto>("Command state changed while completing; retry.");
 
+        // Revoke command-bound API credentials on every terminal transition. The API
+        // middleware also checks command state/lease on every request as a fail-closed backstop.
+        var harnessTokens = await db.ApiTokens.IgnoreQueryFilters()
+            .Where(t => t.ClientKind == ApiTokenClientKind.Harness && t.CommandId == row.Id && t.RevokedAt == null)
+            .ToListAsync(ct);
+        foreach (var token in harnessTokens)
+            token.Revoke();
+
         // Completion effects run only for the winning transition.
         try
         {

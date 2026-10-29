@@ -23,6 +23,7 @@ public static class DeviceEndpoints
         app.MapPost("/v1/devices/me/heartbeat", Heartbeat).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet("/v1/devices/me/commands", ClaimCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/commands/{id:guid}/complete", CompleteCommand).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/commands/{id:guid}/harness-token", IssueHarnessToken).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/devices/{id:guid}/commands", EnqueueCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/commands/{id:guid}", GetCommand).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}/runtimes", ListRuntimes).RequireAuthorization().DisableAntiforgery().RequireHuman();
@@ -50,6 +51,8 @@ public static class DeviceEndpoints
     /// and the claim generation the client received.
     /// </summary>
     public record CompleteBody(bool Success, string? ResultJson, string? Error, int? Generation = null);
+    /// <summary>Claim generation for which a short-lived harness token is requested.</summary>
+    public record HarnessTokenBody(int Generation);
     /// <summary>
     /// Body for binding a project to a device and a local root.
     /// </summary>
@@ -107,6 +110,17 @@ public static class DeviceEndpoints
         var result = await handler.HandleAsync(
             new CompleteCommandCommand(new CompleteCommandRequest(id, actor.DeviceId!.Value, body.Success, body.ResultJson, body.Error, body.Generation)), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+    }
+
+    private static async Task<IResult> IssueHarnessToken(
+        Guid id,
+        [FromBody] HarnessTokenBody body,
+        IssueHarnessTokenHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new IssueHarnessTokenCommand(id, body.Generation, ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> EnqueueCommand(

@@ -212,4 +212,94 @@ public sealed partial class DeviceHandlerTests
         Assert.False(doc.RootElement.TryGetProperty("root", out _));
         Assert.Null(queued.Value.LocalRoot);
     }
+
+    [Fact]
+    public async Task HarnessToken_IsProjectScopedShortLivedAndBoundToRunningChatCommand()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var commandId = Guid.NewGuid();
+        await using (var db = Factory().CreateDbContext())
+        {
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.ChatPrompt, """{"chatSessionId":"11111111-1111-1111-1111-111111111111"}""", project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var handler = new IssueHarnessTokenHandler(Factory());
+        var issued = await handler.HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.True(issued.Success, issued.Error);
+        Assert.Equal(project.Id, issued.Value!.ProjectId);
+        Assert.Equal(commandId, issued.Value.CommandId);
+        Assert.Equal(1, issued.Value.Generation);
+        Assert.True(issued.Value.ExpiresAt > DateTime.UtcNow);
+        Assert.True(issued.Value.ExpiresAt <= DateTime.UtcNow.AddMinutes(15));
+
+        await using var verify = Factory().CreateDbContext();
+        var stored = await verify.ApiTokens.IgnoreQueryFilters()
+            .SingleAsync(t => t.CommandId == commandId, TestContext.Current.CancellationToken);
+        Assert.Equal(ApiTokenClientKind.Harness, stored.ClientKind);
+        Assert.Equal(deviceId, stored.DeviceId);
+        Assert.Equal(project.Id, stored.ProjectId);
+        Assert.Equal(ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite, stored.Capabilities);
+        Assert.NotEqual(issued.Value.Token, stored.TokenHash);
+        Assert.Equal(Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(issued.Value.Token))), stored.TokenHash);
+    }
+
+    [Fact]
+    public async Task HarnessToken_RejectsStaleGenerationAndNonDeviceActor()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        Guid commandId;
+        await using (var db = Factory().CreateDbContext())
+        {
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(deviceId, WorkstationCommandKind.ChatPrompt, "{}", project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var handler = new IssueHarnessTokenHandler(Factory());
+        var deviceActor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var stale = await handler.HandleAsync(new IssueHarnessTokenCommand(commandId, 2, deviceActor), TestContext.Current.CancellationToken);
+        Assert.False(stale.Success);
+
+        var humanActor = new Application.Authorization.ActorContext(
+            ActorType.Human, owner.Id, false, null, null, project.Id, null, ApiTokenCapability.None);
+        var human = await handler.HandleAsync(new IssueHarnessTokenCommand(commandId, 1, humanActor), TestContext.Current.CancellationToken);
+        Assert.False(human.Success);
+
+        await using var verify = Factory().CreateDbContext();
+        Assert.Empty(await verify.ApiTokens.IgnoreQueryFilters()
+            .Where(t => t.CommandId == commandId)
+            .ToListAsync(TestContext.Current.CancellationToken));
+    }
+
 }
