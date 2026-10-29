@@ -176,6 +176,38 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task ChatEnsureSession_UsesNativeRuntimeWhenConfigured()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "native-config.yaml")
+        };
+        var settings = new WorkstationSettings
+        {
+            AgentRuntime = "native",
+            OpencodeDataDir = Path.Combine(_dir, "native-data")
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => settings);
+
+        var (ok, result, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Id = Guid.NewGuid(),
+            Kind = WorkstationCommandKind.ChatEnsureSession,
+            LocalRoot = _dir,
+            PayloadJson = JsonSerializer.Serialize(new { title = "Native runtime selection" })
+        }, CancellationToken.None);
+
+        Assert.True(ok, error);
+        using var doc = JsonDocument.Parse(result!);
+        var sessionId = doc.RootElement.GetProperty("sessionId").GetString();
+        Assert.True(Guid.TryParseExact(sessionId, "N", out _),
+            $"Expected native runtime's local session id, got '{sessionId}'.");
+        Assert.True(Directory.Exists(Path.Combine(settings.OpencodeDataDir!, "sessions")));
+    }
+
+    [Fact]
     public async Task ChatAbort_RequiresExternalSessionId()
     {
         await using var daemon = CreateDaemon(_dir);
