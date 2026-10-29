@@ -117,6 +117,15 @@ public static partial class McpStdioServer
     private static Task<JsonObject> ApiTextAsync(JsonNode id, McpToolText text) =>
         Task.FromResult(text.IsError ? ToolError(id, text.Text) : Result(id, Content(text.Text)));
 
+    private static async Task<JsonObject> ContextCompileAsync(JsonNode id, FileWorkspace workspace, CodeIndex index, BeaconApiClient api, McpEnvironment env)
+    {
+        if (!TryParseScope(env, out var projectId, out var taskId, out var error))
+            return ToolError(id, error!);
+
+        var result = await BriefPatcher.PatchCompileAsync(projectId.ToString("D"), taskId?.ToString("D"), index, api, CancellationToken.None);
+        return result.IsError ? ToolError(id, result.Text) : Result(id, Content(result.Text));
+    }
+
     private static async Task<JsonObject> ModelBindAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)
     {
         if (RequireApi(id, api, env) is { } apiError)
