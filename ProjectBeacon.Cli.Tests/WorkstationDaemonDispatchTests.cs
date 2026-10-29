@@ -204,7 +204,7 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
         var sessionId = doc.RootElement.GetProperty("sessionId").GetString();
         Assert.True(Guid.TryParseExact(sessionId, "N", out _),
             $"Expected native runtime's local session id, got '{sessionId}'.");
-        Assert.True(Directory.Exists(Path.Combine(settings.OpencodeDataDir!, "sessions")));
+        Assert.True(Directory.Exists(Path.Combine(_dir, "sessions")));
     }
 
     [Fact]
