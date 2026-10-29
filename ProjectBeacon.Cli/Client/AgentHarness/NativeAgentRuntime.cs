@@ -17,12 +17,14 @@ using ProjectBeacon.Cli.Client;
 internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilities
 {
     private const int MaxAttempts = 3;
+    private const int MaxAgentSteps = 12;
     private readonly HttpClient _controlPlane;
     private readonly ClientLlamaSwap _llama;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly Action<string>? _log;
     private readonly Func<HttpClient, string, string?, IChatProvider> _providerFactory;
+    private readonly Func<AgentHarnessAuthorization, CancellationToken, Task<IMcpToolClient>> _mcpClientFactory;
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new(StringComparer.Ordinal);
     private volatile bool _disposed;
 
@@ -32,7 +34,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         IDaemonLlamaSync llamaSync,
         Func<WorkstationSettings> loadSettings,
         Action<string>? log = null,
-        Func<HttpClient, string, string?, IChatProvider>? providerFactory = null)
+        Func<HttpClient, string, string?, IChatProvider>? providerFactory = null,
+        Func<AgentHarnessAuthorization, CancellationToken, Task<IMcpToolClient>>? mcpClientFactory = null)
     {
         _controlPlane = controlPlane;
         _llama = llama;
@@ -40,6 +43,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         _loadSettings = loadSettings;
         _log = log;
         _providerFactory = providerFactory ?? ((http, url, key) => new OpenAiCompatProvider(http, url, key));
+        _mcpClientFactory = mcpClientFactory ?? ((authorization, ct) => McpStdioClient.StartAsync(authorization, ct));
     }
 
     public bool SupportsForms => false;
@@ -249,61 +253,227 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
             var provider = _providerFactory(providerHttp, resolved.BaseUrl, resolved.ApiKey);
-            var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
-            var tools = new JsonArray();
-            var request = new ChatProviderRequest(
-                resolved.Model,
-                messages,
-                tools,
-                controls?.Temperature,
-                controls?.ReasoningEffort,
-                controls?.MaxTokens);
-
-            var completed = false;
-            for (var attempt = 1; attempt <= MaxAttempts && !completed; attempt++)
+            await using var mcpClient = controls?.HarnessAuthorization is { } harnessAuthorization
+                ? await _mcpClientFactory(harnessAuthorization, ct)
+                : null;
+            var mcpTools = new JsonArray();
+            if (mcpClient is not null)
             {
-                try
+                foreach (var tool in mcpClient.OpenAiTools)
+                    mcpTools.Add(tool?.DeepClone());
+            }
+
+            var hasFinalText = false;
+            var agentStep = 0;
+            for (; agentStep < MaxAgentSteps; agentStep++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
+                var request = new ChatProviderRequest(
+                    resolved.Model,
+                    messages,
+                    (JsonArray)mcpTools.DeepClone(),
+                    controls?.Temperature,
+                    controls?.ReasoningEffort,
+                    controls?.MaxTokens);
+
+                var stepText = new StringBuilder();
+                var toolCalls = new SortedDictionary<int, ToolCallAccumulator>();
+                var finishReason = "stop";
+                var requestCompleted = false;
+
+                for (var attempt = 1; attempt <= MaxAttempts && !requestCompleted; attempt++)
                 {
-                    await foreach (var item in provider.StreamAsync(request, ct))
+                    try
+                    {
+                        var stepEmittedContent = false;
+                        await foreach (var item in provider.StreamAsync(request, ct))
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            switch (item.Kind)
+                            {
+                                case ChatProviderEventKind.TextDelta when !string.IsNullOrEmpty(item.Text):
+                                    firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
+                                    stepEmittedContent = true;
+                                    emittedContent = true;
+                                    stepText.Append(item.Text);
+                                    responseText.Append(item.Text);
+                                    await AppendDeltaAsync(session, turnNumber, messageId, "text", item.Text, ct);
+                                    break;
+
+                                case ChatProviderEventKind.ReasoningDelta when !string.IsNullOrEmpty(item.Text):
+                                    firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
+                                    stepEmittedContent = true;
+                                    emittedContent = true;
+                                    await AppendDeltaAsync(session, turnNumber, messageId, "reasoning", item.Text, ct);
+                                    break;
+
+                                case ChatProviderEventKind.Usage:
+                                    lock (session.Sync)
+                                        session.Usage = session.Usage with
+                                        {
+                                            PromptTokens = session.Usage.PromptTokens + (item.PromptTokens ?? 0),
+                                            CompletionTokens = session.Usage.CompletionTokens + (item.CompletionTokens ?? 0)
+                                        };
+                                    break;
+
+                                case ChatProviderEventKind.Finished when item.FinishReason is not null and not "done":
+                                    finishReason = item.FinishReason;
+                                    break;
+
+                                case ChatProviderEventKind.ToolCallDelta:
+                                    stepEmittedContent = true;
+                                    emittedContent = true;
+                                    var index = item.ToolIndex ?? 0;
+                                    if (!toolCalls.TryGetValue(index, out var accumulator))
+                                    {
+                                        accumulator = new ToolCallAccumulator(index);
+                                        toolCalls.Add(index, accumulator);
+                                    }
+                                    accumulator.Append(item.ToolCallId, item.ToolName, item.ToolArguments);
+                                    break;
+                            }
+                        }
+                        requestCompleted = true;
+                    }
+                    catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts
+                        && !stepEmittedContent && !ct.IsCancellationRequested)
+                    {
+                        _log?.Invoke($"native provider request failed transiently (attempt {attempt}/{MaxAttempts}); retrying");
+                        await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), ct);
+                    }
+                }
+
+                if (!requestCompleted)
+                    throw new HttpRequestException("Chat provider did not complete the request.");
+
+                if (toolCalls.Count > 0)
+                {
+                    if (!string.Equals(finishReason, "tool_calls", StringComparison.Ordinal))
+                    {
+                        finish = "error";
+                        error = "The model returned an incomplete tool call; it was not executed.";
+                        break;
+                    }
+
+                    var toolCallMessages = new JsonArray();
+                    foreach (var pair in toolCalls)
+                    {
+                        var call = pair.Value;
+                        // Missing IDs/names and malformed arguments are never executed. A synthetic
+                        // ID is used only to return a protocol-valid error message to the model.
+                        call.EffectiveId = string.IsNullOrWhiteSpace(call.Id)
+                            ? $"beacon-invalid-{turnNumber}-{call.Index}"
+                            : call.Id;
+                        call.EffectiveName = string.IsNullOrWhiteSpace(call.Name) ? "unknown_tool" : call.Name;
+                        call.TryReadArguments(out var parsedArguments);
+
+                        toolCallMessages.Add(new JsonObject
+                        {
+                            ["id"] = call.EffectiveId,
+                            ["type"] = "function",
+                            ["function"] = new JsonObject
+                            {
+                                ["name"] = call.EffectiveName,
+                                ["arguments"] = call.Arguments.ToString()
+                            }
+                        });
+                    }
+
+                    var assistantToolMessage = new JsonObject
+                    {
+                        ["role"] = "assistant",
+                        ["content"] = stepText.Length == 0 ? null : JsonValue.Create(stepText.ToString()),
+                        ["tool_calls"] = toolCallMessages
+                    };
+                    lock (session.Sync)
+                        session.Messages.Add(assistantToolMessage);
+                    await PersistAsync(session, ct);
+
+                    foreach (var call in toolCalls.Values)
                     {
                         ct.ThrowIfCancellationRequested();
-                        switch (item.Kind)
+                        string toolResult;
+                        try
                         {
-                            case ChatProviderEventKind.TextDelta when !string.IsNullOrEmpty(item.Text):
-                                firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
-                                emittedContent = true;
-                                responseText.Append(item.Text);
-                                await AppendDeltaAsync(session, turnNumber, messageId, "text", item.Text, ct);
-                                break;
-                            case ChatProviderEventKind.ReasoningDelta when !string.IsNullOrEmpty(item.Text):
-                                firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
-                                emittedContent = true;
-                                await AppendDeltaAsync(session, turnNumber, messageId, "reasoning", item.Text, ct);
-                                break;
-                            case ChatProviderEventKind.Usage:
-                                lock (session.Sync)
-                                    session.Usage = session.Usage with
-                                    {
-                                        PromptTokens = item.PromptTokens ?? session.Usage.PromptTokens,
-                                        CompletionTokens = item.CompletionTokens ?? session.Usage.CompletionTokens
-                                    };
-                                break;
-                            case ChatProviderEventKind.Finished when item.FinishReason is not null and not "done":
-                                finish = item.FinishReason;
-                                break;
-                            case ChatProviderEventKind.ToolCallDelta:
-                                finish = "error";
-                                error = "The model requested a tool, but no tools are configured for this runtime.";
-                                break;
+                            if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
+                            {
+                                toolResult = "Tool error: the model returned a tool call without a valid id or name.";
+                            }
+                            else if (!call.TryReadArguments(out var parsedArguments))
+                            {
+                                toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
+                            }
+                            else if (mcpClient is null)
+                            {
+                                toolResult = "Tool error: no scoped MCP authorization is available for this command.";
+                            }
+                            else
+                            {
+                                var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
+                                toolResult = result.IsError
+                                    ? "Tool error: " + result.Text
+                                    : result.Text;
+                            }
                         }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            toolResult = "Tool error: " + SafeError(ex);
+                        }
+
+                        lock (session.Sync)
+                        {
+                            session.Messages.Add(new JsonObject
+                            {
+                                ["role"] = "tool",
+                                ["tool_call_id"] = call.EffectiveId,
+                                ["content"] = toolResult
+                            });
+                        }
+                        await AppendDeltaAsync(session, turnNumber, messageId, "tool", $"{call.Name ?? "unknown_tool"}: {toolResult}", ct);
+                        await PersistAsync(session, ct);
                     }
-                    completed = true;
+
+                    finish = "tool_calls";
+                    continue;
                 }
-                catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts && !emittedContent && !ct.IsCancellationRequested)
+
+                if (string.Equals(finishReason, "tool_calls", StringComparison.Ordinal))
                 {
-                    _log?.Invoke($"native provider request failed transiently (attempt {attempt}/{MaxAttempts}); retrying");
-                    await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), ct);
+                    finish = "error";
+                    error = "The model requested tool execution but did not provide a complete tool call.";
+                    break;
                 }
+
+                if (stepText.Length > 0)
+                {
+                    lock (session.Sync)
+                        session.Messages.Add(new JsonObject
+                        {
+                            ["role"] = "assistant",
+                            ["content"] = stepText.ToString()
+                        });
+                    await PersistAsync(session, ct);
+                    hasFinalText = true;
+                }
+
+                finish = finishReason;
+                break;
+            }
+
+            if (agentStep >= MaxAgentSteps && !hasFinalText && error is null)
+            {
+                finish = "error";
+                error = $"The agent reached the maximum of {MaxAgentSteps} model/tool steps without a final answer.";
+            }
+            else if (agentStep >= MaxAgentSteps && error is null)
+            {
+                finish = "error";
+                error = $"The agent reached the maximum of {MaxAgentSteps} model/tool steps.";
             }
 
             if (ct.IsCancellationRequested)
@@ -314,23 +484,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 await CompleteAssistantPartsAsync(session, messageId, ct);
                 await AppendErrorAsync(session, turnNumber, messageId, error, ct);
             }
-            else if (!emittedContent)
+            else if (!hasFinalText)
             {
-                error = "The model returned no text.";
+                error = emittedContent
+                    ? "The model completed the turn without a final text answer."
+                    : "The model returned no text.";
                 finish = "error";
+                await CompleteAssistantPartsAsync(session, messageId, ct);
                 await AppendErrorAsync(session, turnNumber, messageId, error, ct);
             }
             else
             {
                 await CompleteAssistantPartsAsync(session, messageId, ct);
-                lock (session.Sync)
-                {
-                    session.Messages.Add(new JsonObject
-                    {
-                        ["role"] = "assistant",
-                        ["content"] = responseText.ToString()
-                    });
-                }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -634,6 +799,41 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(NativeAgentRuntime));
+    }
+
+    private sealed class ToolCallAccumulator(int index)
+    {
+        public int Index { get; } = index;
+        public string? Id { get; private set; }
+        public string? Name { get; private set; }
+        public StringBuilder Arguments { get; } = new();
+        public string? EffectiveId { get; set; }
+        public string? EffectiveName { get; set; }
+
+        public void Append(string? id, string? name, string? arguments)
+        {
+            if (!string.IsNullOrEmpty(id))
+                Id = (Id ?? "") + id;
+            if (!string.IsNullOrEmpty(name))
+                Name = (Name ?? "") + name;
+            if (!string.IsNullOrEmpty(arguments))
+                Arguments.Append(arguments);
+        }
+
+        public bool TryReadArguments(out JsonObject? parsed)
+        {
+            parsed = null;
+            try
+            {
+                var raw = Arguments.Length == 0 ? "{}" : Arguments.ToString();
+                parsed = JsonNode.Parse(raw) as JsonObject;
+                return parsed is not null;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
     }
 
     private sealed record ResolvedProvider(string BaseUrl, string? ApiKey, string Model, bool IsLocal);

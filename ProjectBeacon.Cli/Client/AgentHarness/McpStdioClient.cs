@@ -12,7 +12,7 @@ using ProjectBeacon.Application.Runtime;
 /// short-lived token through its environment, never through argv. Its inherited environment is
 /// reduced to OS/runtime variables plus the explicitly scoped Beacon credentials.
 /// </summary>
-internal sealed class McpStdioClient : IAsyncDisposable
+internal sealed class McpStdioClient : IMcpToolClient
 {
     private const int MaxToolResultCharacters = 16_000;
     private static readonly string[] SafeInheritedEnvironment =
@@ -322,6 +322,12 @@ internal sealed class McpStdioClient : IAsyncDisposable
         }
         catch { }
     }
+}
+
+internal interface IMcpToolClient : IAsyncDisposable
+{
+    JsonArray OpenAiTools { get; }
+    Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct);
 }
 
 internal sealed record McpToolResult(bool IsError, string Text);
