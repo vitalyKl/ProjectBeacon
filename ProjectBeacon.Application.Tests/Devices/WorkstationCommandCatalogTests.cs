@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests.Devices;
 
+using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Devices;
 using ProjectBeacon.Domain.Enums;
 using Xunit;
