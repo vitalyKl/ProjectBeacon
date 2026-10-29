@@ -288,6 +288,66 @@ public sealed class NativeAgentRuntimeTests
 
 
     [Fact]
+    public async Task NativeRuntimeCompactsOldConversationWhenContextBudgetIsExceeded()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-context-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new ContextRecordingProvider();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider);
+        try
+        {
+            var session = await runtime.CreateSessionAsync("context test", CancellationToken.None);
+            for (var i = 1; i <= 4; i++)
+            {
+                var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+                await runtime.SendPromptAsync(
+                    session,
+                    $"User message {i}",
+                    "beacon-local/test-model",
+                    CancellationToken.None,
+                    new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
+                await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+            }
+
+            Assert.True(provider.SummaryCalls > 0);
+            var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".opencode", "sessions", session + ".json"));
+            Assert.Contains("Conversation summary (preserve this as context)", transcript, StringComparison.Ordinal);
+            Assert.Contains("User message 4", transcript, StringComparison.Ordinal);
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status!.Ended);
+            Assert.Equal("stop", status.Finish);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeAbortCancelsProviderAndEndsTurnAsAborted()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-abort-" + Guid.NewGuid().ToString("N"));
@@ -442,6 +502,33 @@ public sealed class NativeAgentRuntimeTests
 
             yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "The hidden tool was blocked.");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class ContextRecordingProvider : IChatProvider
+    {
+        public int SummaryCalls { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var isSummary = request.Messages.Any(message =>
+                message?["content"]?.GetValue<string>()?.Contains("Summarize the conversation history", StringComparison.Ordinal) == true);
+            if (isSummary)
+            {
+                SummaryCalls++;
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Preserve earlier user goals and decisions.");
+            }
+            else
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Context test response.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            }
+
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
         }
