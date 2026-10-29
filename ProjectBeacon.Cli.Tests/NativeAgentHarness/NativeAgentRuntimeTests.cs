@@ -165,8 +165,10 @@ public sealed class NativeAgentRuntimeTests
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["tool_call_id"]?.GetValue<string>() == "call-1"
                 && message["content"]?.GetValue<string>() == expectedToolResult);
-            Assert.DoesNotContain("never-persist-this-token", await File.ReadAllTextAsync(
-                Path.Combine(temp, ".opencode", "sessions", session + ".json")));
+            var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".opencode", "sessions", session + ".json"));
+            Assert.Contains("[Tool result truncated: original length 20000 characters;", transcript, StringComparison.Ordinal);
+            Assert.DoesNotContain(originalToolResult, transcript, StringComparison.Ordinal);
+            Assert.DoesNotContain("never-persist-this-token", transcript, StringComparison.Ordinal);
 
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
