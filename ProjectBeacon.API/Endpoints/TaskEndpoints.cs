@@ -51,42 +51,57 @@ public static class TaskEndpoints
         return app;
     }
 
-    private static async Task<IResult> CreateTask(Guid projectId, [FromBody] CreateTaskRequest request, HttpContext ctx, CreateTaskHandler handler)
+    private static async Task<IResult> CreateTask(
+        Guid projectId,
+        [FromBody] CreateTaskRequest request,
+        HttpContext ctx,
+        ICommandDispatcher dispatcher,
+        CancellationToken ct)
     {
         if (projectId != request.ProjectId)
             return ProblemResults.Bad("ProjectId mismatch.");
 
-        var result = await handler.HandleAsync(new CreateTaskCommand(request, ctx.GetActor()));
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(
+            new CreateTaskCommand(request, ctx.GetActor()), ct);
 
         return result.Success
             ? Results.Created($"/v1/projects/{projectId}/tasks/{result.Value!.Id}", MapTaskResponse(result.Value!))
             : result.FromResult();
     }
 
-    private static async Task<IResult> UpdateTask(Guid taskId, [FromBody] UpdateTaskRequest request, UpdateTaskHandler handler)
+    private static async Task<IResult> UpdateTask(
+        Guid taskId,
+        [FromBody] UpdateTaskRequest request,
+        ICommandDispatcher dispatcher,
+        CancellationToken ct)
     {
         if (taskId != request.TaskId)
             return ProblemResults.Bad("TaskId mismatch.");
 
-        var result = await handler.HandleAsync(new UpdateTaskCommand(request));
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(new UpdateTaskCommand(request), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> DeleteTask(Guid taskId, DeleteTaskHandler handler)
+    private static async Task<IResult> DeleteTask(
+        Guid taskId,
+        ICommandDispatcher dispatcher,
+        CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new DeleteTaskCommand(new DeleteTaskRequest(taskId)));
+        var result = await dispatcher.SendAsync<Result>(
+            new DeleteTaskCommand(new DeleteTaskRequest(taskId)), ct);
 
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> ListTasks(Guid projectId, [FromQuery] string? status, CancellationToken ct, ListProjectTasksHandler handler)
+    private static async Task<IResult> ListTasks(Guid projectId, [FromQuery] string? status, CancellationToken ct, ICommandDispatcher dispatcher)
     {
-        var result = await handler.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(projectId)), ct);
+        var result = await dispatcher.SendAsync<Result<IList<TaskItemDto>>>(
+            new ListProjectTasksCommand(new ListProjectTasksRequest(projectId)), ct);
 
         if (!result.Success)
             return result.FromResult();
@@ -100,18 +115,20 @@ public static class TaskEndpoints
         return Results.Ok(tasks.Select(MapTaskResponse));
     }
 
-    private static async Task<IResult> GetTask(Guid taskId, GetTaskHandler handler)
+    private static async Task<IResult> GetTask(Guid taskId, ICommandDispatcher dispatcher, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(
+            new GetTaskCommand(new GetTaskRequest(taskId)), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult(404);
     }
 
-    private static async Task<IResult> GetTaskInProject(Guid projectId, Guid taskId, GetTaskHandler handler)
+    private static async Task<IResult> GetTaskInProject(Guid projectId, Guid taskId, ICommandDispatcher dispatcher, CancellationToken ct)
     {
-        var result = await handler.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId, projectId)));
+        var result = await dispatcher.SendAsync<Result<TaskItemDto>>(
+            new GetTaskCommand(new GetTaskRequest(taskId, projectId)), ct);
 
         return result.Success
             ? Results.Ok(MapTaskResponse(result.Value!))
