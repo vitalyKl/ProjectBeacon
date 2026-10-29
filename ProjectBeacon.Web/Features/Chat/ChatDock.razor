@@ -16,6 +16,7 @@
 @inject GetChatModelHandler GetChatModel
 @inject GetProxyStatusHandler GetStatus
 @inject SendChatPromptHandler SendPrompt
+@inject AbortChatHandler AbortChat
 @inject CreateChatSessionHandler CreateSession
 @inject ChatEventSignal Events
 @inject ISnackbar Snackbar
@@ -53,6 +54,7 @@
                 <ChatPane
                     Session="_session"
                     ModelName="@SelectedBackendName"
+                    SelectedContextLimit="@SelectedContextLimit"
                     ShowModelSelect
                     Models="_models"
                     @bind-Model="_model"
@@ -65,7 +67,9 @@
                     PhaseLabel="@PhaseLabel"
                     @bind-Draft="_draft"
                     Busy="_busy"
-                    Send="Send" />
+                    CanAbort="_session?.Status == ChatSessionStatus.Streaming"
+                    Send="Send"
+                    Abort="Abort" />
             }
         </MudPaper>
     }
@@ -82,12 +86,13 @@
     private Guid _userId;
     private ChatSessionDto? _session;
     private List<ChatPartDto> _parts = [];
-    private List<string> _models = [];
+    private List<LocalModelBackendDto> _models = [];
     private string? _model;
     private string? _effort;
     private LlamaSwapStatusDto? _proxy;
     private string _draft = string.Empty;
     private bool _busy;
+    private bool _aborting;
     private bool _failed;
     private CancellationTokenSource? _poll;
 
@@ -104,7 +109,7 @@
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
         {
-            _models = registry.Value!.Backends.Select(b => b.Name).ToList();
+            _models = registry.Value!.Backends.ToList();
             var preferred = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
             if (preferred.Success && preferred.Value is Guid backendId)
             {
@@ -185,6 +190,26 @@
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task Abort()
+    {
+        if (_session is null || _aborting)
+            return;
+        _aborting = true;
+        try
+        {
+            var result = await AbortChat.HandleAsync(
+                new AbortChatCommand(new AbortChatRequest(_session.Id, _userId)));
+            if (result.Success)
+                _session = result.Value;
+            else
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+        }
+        finally
+        {
+            _aborting = false;
         }
     }
 
@@ -271,17 +296,15 @@
         await LoadProxyStatus();
     }
 
-    private string? SelectedBackendName
-    {
-        get
-        {
-            if (_model is null)
-                return null;
-            var i = _model.IndexOf('/');
-            var name = i < 0 ? _model : _model[(i + 1)..];
-            return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
-        }
-    }
+    private LocalModelBackendDto? SelectedBackend =>
+        _models.FirstOrDefault(backend =>
+            string.Equals(OpencodePayload.OpenCodeId(backend), _model, StringComparison.Ordinal));
+
+    private string? SelectedBackendName => SelectedBackend?.Name;
+
+    private int? SelectedContextLimit => SelectedBackend?.ContextSize is > 0
+        ? SelectedBackend.ContextSize
+        : null;
 
     private string? ModelStatus
     {
