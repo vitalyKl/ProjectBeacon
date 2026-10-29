@@ -107,10 +107,10 @@ public sealed class NativeAgentRuntimeTests
         try
         {
             var session = await runtime.CreateSessionAsync("tool test", CancellationToken.None);
-            var streamed = new List<string>();
-            var streamTask = runtime.StreamTextAsync(session, (_, _, _, delta, _) =>
+            var streamed = new List<(string Kind, string Delta)>();
+            var streamTask = runtime.StreamTextAsync(session, (kind, _, _, delta, _) =>
             {
-                streamed.Add(delta);
+                streamed.Add((kind, delta));
                 return Task.CompletedTask;
             }, CancellationToken.None);
 
@@ -131,7 +131,8 @@ public sealed class NativeAgentRuntimeTests
                 new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
             await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
 
-            Assert.Equal("Read complete.", string.Concat(streamed));
+            Assert.Equal("Read complete.", string.Concat(streamed.Where(item => item.Kind == "text").Select(item => item.Delta)));
+            Assert.Contains(streamed, item => item.Kind == "tool" && item.Delta == "read_file: README contents");
             Assert.Equal("read_file", mcp.LastToolName);
             Assert.Equal("README.md", mcp.LastArguments!["path"]!.GetValue<string>());
             Assert.Equal(2, provider.Requests.Count);

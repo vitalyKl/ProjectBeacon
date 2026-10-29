@@ -88,7 +88,8 @@ public sealed class AnthropicProviderTests
         Assert.Equal("README.md\"}", events.Last(e => e.Kind == ChatProviderEventKind.ToolCallDelta && e.ToolArguments is not null).ToolArguments);
         Assert.Contains(events, e => e.Kind == ChatProviderEventKind.Usage && e.PromptTokens == 41 && e.CompletionTokens == 9);
         Assert.Contains(events, e => e.Kind == ChatProviderEventKind.Finished && e.FinishReason == "tool_calls");
-        Assert.Equal("Bearer test-secret", handler.LastAuthorization);
+        Assert.Equal("test-secret", handler.LastApiKey);
+        Assert.Null(handler.LastAuthorization);
         Assert.Equal("2023-06-01", handler.LastAnthropicVersion);
         var body = JsonNode.Parse(handler.LastBody!);
         Assert.Equal("You are helpful.", body!["system"]!.GetValue<string>());
@@ -124,13 +125,14 @@ public sealed class AnthropicProviderTests
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         public string? LastAuthorization { get; private set; }
+        public string? LastApiKey { get; private set; }
         public string? LastAnthropicVersion { get; private set; }
         public string? LastBody { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            LastAuthorization = request.Headers.Authorization?.ToString()
-                ?? (request.Headers.TryGetValues("x-api-key", out var values) ? values.FirstOrDefault() : null);
+            LastAuthorization = request.Headers.Authorization?.ToString();
+            LastApiKey = request.Headers.TryGetValues("x-api-key", out var values) ? values.FirstOrDefault() : null;
             LastAnthropicVersion = request.Headers.TryGetValues("anthropic-version", out var versions) ? versions.FirstOrDefault() : null;
             LastBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             return respond(request);
