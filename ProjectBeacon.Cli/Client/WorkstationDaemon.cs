@@ -129,11 +129,12 @@ public sealed class WorkstationDaemon : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _gate.Runtime.DisposeAsync();
+        // Dispose the runtime before its model process and locks: an active native turn may
+        // still be streaming from a provider or coordinating a local model swap.
+        await _services.DisposeAsync();
         await _llama.DisposeAsync();
         _llamaSync.Release();
         _gate.Release();
-        await _services.DisposeAsync();
         if (_ownsOpenCode)
             await _openCode.DisposeAsync();
     }

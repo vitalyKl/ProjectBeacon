@@ -12,8 +12,8 @@ internal interface IDaemonOpenCodeGate
         await OpenCode.TickAsync(workingDirectory, ct);
         return new AgentRuntimeReadiness(OpenCode.Status.Healthy, OpenCode.Status.Error, OpenCode.Cwd);
     }
-    object RuntimeStatusWire();
-    string? RuntimeWorkingDirectory { get; }
+    object RuntimeStatusWire() => OpenCode.StatusWire();
+    string? RuntimeWorkingDirectory => OpenCode.Cwd;
     Task RunExclusiveAsync(Func<Task> action, CancellationToken ct);
     Task<T> RunExclusiveAsync<T>(Func<Task<T>> action, CancellationToken ct);
     void Release();
