@@ -10,7 +10,8 @@ public sealed class CommandDeliveryTests
     [InlineData(WorkstationCommandKind.ChatEnsureSession)]
     [InlineData(WorkstationCommandKind.ChatPrompt)]
     [InlineData(WorkstationCommandKind.RunEvalTurn)]
-    [InlineData(WorkstationCommandKind.RunReviewCheck)]
+    [InlineData(WorkstationCommandKind.RunReviewCheck,
+            WorkstationCommandKind.RunPipelineSession)]
     public void IsAtMostOnce_ExpectedKinds_ReturnsTrue(WorkstationCommandKind kind)
     {
         Assert.True(CommandDelivery.IsAtMostOnce(kind));
