@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Tests;
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Common;
 using ProjectBeacon.Cli.Mcp;
@@ -145,7 +146,17 @@ public sealed class McpStdioServerTests
         try
         {
             using var input = new MemoryStream();
-            WriteFrame(input, $"""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pipeline_launch_session","arguments":{"sessionId":"{{sessionId:D}}"}}}""");
+            WriteFrame(input, JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "pipeline_launch_session",
+                    arguments = new { sessionId = sessionId.ToString("D") }
+                }
+            }));
             input.Position = 0;
             using var output = new MemoryStream();
             await McpStdioServer.RunAsync(root, input, output, api, env);
