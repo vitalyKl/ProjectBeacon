@@ -70,6 +70,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
                         Guid? requestedProjectId = null;
                         Guid? taskId = null;
+                        Guid? subtaskId = null;
                         using (var promptDoc = JsonDocument.Parse(payload))
                         {
                             if (promptDoc.RootElement.TryGetProperty("projectId", out var rawProject)
@@ -82,6 +83,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                                 && Guid.TryParse(rawTask.GetString(), out var parsedTask)
                                 && parsedTask != Guid.Empty)
                                 taskId = parsedTask;
+                            if (promptDoc.RootElement.TryGetProperty("subtaskId", out var rawSubtask)
+                                && rawSubtask.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawSubtask.GetString(), out var parsedSubtask)
+                                && parsedSubtask != Guid.Empty)
+                                subtaskId = parsedSubtask;
                         }
 
                         using var tokenResponse = await _http.PostAsJsonAsync(
@@ -109,7 +115,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             command.Id,
                             command.Generation,
                             resolved.Value!,
-                            token.ExpiresAt);
+                            token.ExpiresAt,
+                            subtaskId);
                     }
 
                     return await _chat.PromptAsync(resolved.Value!, payload, harnessAuthorization, ct);
