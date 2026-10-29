@@ -1,0 +1,85 @@
+@namespace ProjectBeacon.Web.Features.Chat
+@using ProjectBeacon.Application.Agents
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudStack Spacing="3" Class="beacon-chat-settings-dialog">
+    <MudText Typo="Typo.body2">@L["ChatModelSettingsDescription"]</MudText>
+    <MudSelect T="string?" Value="@_model" ValueChanged="OnModelChanged"
+               Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
+        <MudSelectItem T="string?" Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
+        @foreach (var backend in _models)
+        {
+            <MudSelectItem T="string?" Value="@(OpencodePayload.OpenCodeId(backend))">@backend.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    @if (!string.IsNullOrWhiteSpace(_model))
+    {
+        <MudSelect T="string?" Value="@_effort" ValueChanged="OnEffortChanged"
+                   Label="@L["ChatReasoningEffort"]" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
+            <MudSelectItem T="string?" Value="@((string?)null)">@L["ChatEffortDefault"]</MudSelectItem>
+            @foreach (var effort in EffortOptions)
+            {
+                <MudSelectItem T="string?" Value="@((string?)effort)">@EffortLabel(effort)</MudSelectItem>
+            }
+        </MudSelect>
+        @if (SelectedBackend is { ContextSize: > 0 } backend)
+        {
+            <MudText Typo="Typo.caption">@string.Format(L["ChatContextWindow"].Value, backend.ContextSize.ToString("N0"))</MudText>
+        }
+    }
+
+    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-2">
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">@L["Save"]</MudButton>
+    </MudStack>
+</MudStack>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? Instance { get; set; }
+    [CascadingParameter] private DialogParameters? Parameters { get; set; }
+
+    private List<LocalModelBackendDto> _models = [];
+    private string? _model;
+    private string? _effort;
+    private static readonly string[] EffortOptions = ["low", "medium", "high", "xhigh"];
+
+    protected override void OnInitialized()
+    {
+        _models = Parameters?["Models"] as List<LocalModelBackendDto> ?? [];
+        _model = Parameters?["Model"] as string;
+        _effort = Parameters?["ReasoningEffort"] as string;
+    }
+
+    private LocalModelBackendDto? SelectedBackend =>
+        _models.FirstOrDefault(backend =>
+            string.Equals(OpencodePayload.OpenCodeId(backend), _model, StringComparison.Ordinal));
+
+    private Task OnModelChanged(string? value)
+    {
+        if (!string.Equals(_model, value, StringComparison.Ordinal))
+            _effort = null;
+        _model = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnEffortChanged(string? value)
+    {
+        _effort = value;
+        return Task.CompletedTask;
+    }
+
+    private string EffortLabel(string effort) => effort switch
+    {
+        "low" => L["ChatEffortLow"].Value,
+        "medium" => L["ChatEffortMedium"].Value,
+        "high" => L["ChatEffortHigh"].Value,
+        "xhigh" => L["ChatEffortXhigh"].Value,
+        _ => effort
+    };
+
+    private void Cancel() => Instance?.Cancel();
+
+    private void Save() =>
+        Instance?.Close(DialogResult.Ok(new ChatModelSettingsSelection(_model, _effort)));
+}
