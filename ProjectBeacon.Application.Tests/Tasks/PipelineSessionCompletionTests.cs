@@ -96,4 +96,27 @@ public sealed partial class PipelineHandlerTests
             Assert.NotNull(stored.ClosedAt);
         }
     }
+
+    [Fact]
+    public async Task CompletePipelineSession_SuccessWithoutExternalId_FailsSession()
+    {
+        var (projectId, session, command, deviceId) = await SeedActivePipelineCommandAsync("Native completion malformed");
+        var invalidResult = JsonSerializer.Serialize(new { pipelineSessionId = session.Id });
+        var handler = new CompleteCommandHandler(HandlerSqlite.Factory(_connection, Scope(projectId)));
+
+        var result = await handler.HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(
+                command.Id, deviceId, true, invalidResult, null, Generation: 1)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var stored = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SessionStatus.Failed, stored.Status);
+            Assert.NotNull(stored.ClosedAt);
+            Assert.Null(stored.ExternalSessionId);
+        }
+    }
 }
