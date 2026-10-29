@@ -51,7 +51,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 if (command.Kind == WorkstationCommandKind.ChatPrompt)
                     await ProcessPromptWithControlLaneAsync(command, ct);
                 else
-                    await ProcessCommandAsync(command, ct);
+                    await ProcessCommandAsync(command, executionToken);
             }
             catch (OperationCanceledException)
             {
@@ -60,13 +60,13 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             catch (JsonException ex)
             {
                 _state.Log($"malformed command wire: {ex.Message}");
-                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
                 catch (OperationCanceledException) { break; }
             }
             catch (Exception ex)
             {
                 _state.Log(ex.Message);
-                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
                 catch (OperationCanceledException) { break; }
             }
         }
@@ -80,7 +80,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
         WorkstationDaemon.CommandWire prompt, CancellationToken ct)
     {
         using var controlCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var controlTask = RunControlLaneAsync(controlCts.Token);
+        var controlTask = RunControlLaneAsync(controlCts.Token, ct);
         try
         {
             await ProcessCommandAsync(prompt, ct);
@@ -93,14 +93,14 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
         }
     }
 
-    private async Task RunControlLaneAsync(CancellationToken ct)
+    private async Task RunControlLaneAsync(CancellationToken pollingToken, CancellationToken executionToken)
     {
-        while (!ct.IsCancellationRequested)
+        while (!pollingToken.IsCancellationRequested)
         {
             try
             {
                 using var response = await _http.GetAsync(
-                    "/v1/devices/me/commands?wait=1&controlOnly=true", ct);
+                    "/v1/devices/me/commands?wait=1&controlOnly=true", pollingToken);
                 if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
                     continue;
                 if (!response.IsSuccessStatusCode)
@@ -109,19 +109,19 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                     continue;
                 }
 
-                var command = await response.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, ct);
+                var command = await response.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, pollingToken);
                 if (command is null)
                     continue;
                 if (command.Kind is not (WorkstationCommandKind.ChatAbort
                     or WorkstationCommandKind.ChatSwitchAgent
                     or WorkstationCommandKind.ChatReplyForm))
                 {
-                    await ProcessCommandAsync(command, ct, rejectUnexpectedControlCommand: true);
+                    await ProcessCommandAsync(command, executionToken, rejectUnexpectedControlCommand: true);
                     continue;
                 }
                 await ProcessCommandAsync(command, ct);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (pollingToken.IsCancellationRequested)
             {
                 break;
             }
