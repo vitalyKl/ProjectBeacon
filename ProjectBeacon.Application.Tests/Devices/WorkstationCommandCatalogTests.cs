@@ -26,7 +26,8 @@ public sealed class WorkstationCommandCatalogTests
             WorkstationCommandKind.ChatEnsureSession,
             WorkstationCommandKind.ChatPrompt,
             WorkstationCommandKind.RunEvalTurn,
-            WorkstationCommandKind.RunReviewCheck
+            WorkstationCommandKind.RunReviewCheck,
+            WorkstationCommandKind.RunPipelineSession
         };
 
         foreach (var kind in Enum.GetValues<WorkstationCommandKind>())
