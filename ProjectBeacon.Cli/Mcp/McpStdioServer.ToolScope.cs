@@ -37,8 +37,14 @@ public static partial class McpStdioServer
         Guid? explicitSubtaskId = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var subtaskId)
             ? subtaskId
             : null;
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
+            && (explicitSubtaskId is not { } actorSubtaskId
+                || !allowlists.Any(s => s.Id == actorSubtaskId)))
+            return Result(id, new JsonObject { ["tools"] = new JsonArray() });
+
         var filtered = SubtaskScopeGuard.FilterTools(tools, allowlists, explicitSubtaskId);
-        filtered = FilterActorTools(filtered);
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+            filtered = FilterActorTools(filtered, allowlists, explicitSubtaskId);
 
         // Actors must always be able to report success or failure for their own subtask,
         // even when the caller omitted these mandatory lifecycle tools from the allowlist.
@@ -127,17 +133,57 @@ public static partial class McpStdioServer
         return result;
     }
 
-    private static JsonArray FilterActorTools(JsonArray tools)
+    private static JsonArray FilterActorTools(
+        JsonArray tools,
+        IReadOnlyList<SubtaskScopeGuard.Allowlist> allowlists,
+        Guid? explicitSubtaskId)
     {
         var result = new JsonArray();
+        if (explicitSubtaskId is not { } id)
+            return result;
+
+        var active = allowlists.FirstOrDefault(s => s.Id == id);
+        if (active.Id == Guid.Empty)
+            return result;
+
         foreach (var tool in tools)
         {
             var name = tool?["name"]?.GetValue<string>();
             if (name is null || !IsActorToolAllowed(name))
                 continue;
+
+            // Empty AllowedMcpTools has historically meant "unrestricted" for generic MCP
+            // clients. Pipeline Actors have a stricter contract: only explicitly granted
+            // workspace tools are exposed, while lifecycle tools are added below.
+            if (!ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                && !IsGrantedToSubtask(active.Tools, name))
+                continue;
+
             result.Add(tool!.DeepClone());
         }
         return result;
+    }
+
+    private static bool IsGrantedToSubtask(IReadOnlyList<string> grants, string tool)
+        => grants.Any(entry =>
+            string.Equals(entry, tool, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(entry, "beacon_" + tool, StringComparison.OrdinalIgnoreCase));
+
+    private static string? RejectActorToolGrant(
+        string tool,
+        IReadOnlyList<SubtaskScopeGuard.Allowlist> allowlists,
+        Guid? explicitSubtaskId)
+    {
+        if (explicitSubtaskId is not { } id)
+            return "Actor pipeline sessions require an explicit subtask scope.";
+
+        var active = allowlists.FirstOrDefault(s => s.Id == id);
+        if (active.Id == Guid.Empty)
+            return "subtask not found";
+
+        return IsGrantedToSubtask(active.Tools, tool)
+            ? null
+            : $"tool '{tool}' is not allowed for this subtask";
     }
 
     private static bool IsActorToolAllowed(string tool)

@@ -206,7 +206,19 @@ public static partial class McpStdioServer
             explicitId = argId;
 
         var paths = SubtaskScopeGuard.UsesPath(tool) ? SplitPrefixes(OptArg(arguments, "path")) : null;
-        return SubtaskScopeGuard.Reject(tool, paths, SubtaskScopeGuard.ParsePipeline(body), explicitId);
+        var allowlists = SubtaskScopeGuard.ParsePipeline(body);
+        var rejected = SubtaskScopeGuard.Reject(tool, paths, allowlists, explicitId);
+        if (rejected is not null)
+            return rejected;
+
+        // For pipeline Actors, an empty AllowedMcpTools list must deny workspace tools,
+        // not inherit the generic MCP client's legacy "empty means unrestricted" behavior.
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
+            && !IsActorTerminalTool(tool)
+            && !McpApiTools.IsApiTool(tool))
+            return RejectActorToolGrant(tool, allowlists, explicitId);
+
+        return null;
     }
 
     private static JsonObject Content(string text) => new()

@@ -347,6 +347,117 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
+    public async Task ToolsList_ActorWithEmptyToolAllowlistExposesOnlyLifecycleTools()
+    {
+        var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var env = McpEnvironment.Of(
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        using var http = new HttpClient(new StubApiHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """{"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":[],"allowedPaths":[]}]}"""
+                    .Replace("SUBTASK_ID", subtaskId.ToString("D"), StringComparison.Ordinal),
+                Encoding.UTF8,
+                "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            var toolsJson = frames[0]["result"]!["tools"]!.ToJsonString();
+            Assert.Contains("subtask_report_result", toolsJson, StringComparison.Ordinal);
+            Assert.Contains("pipeline_fail_subtask", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("read_file", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("apply_patch", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("get_tree", toolsJson, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ActorCannotWriteFileWithoutExplicitToolGrant()
+    {
+        var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var subtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var apiCalls = 0;
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", subtaskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        using var http = new HttpClient(new StubApiHandler(_ =>
+        {
+            apiCalls++;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":[],"allowedPaths":[]}]}"""
+                        .Replace("SUBTASK_ID", subtaskId.ToString("D"), StringComparison.Ordinal),
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "note.txt");
+        await File.WriteAllTextAsync(file, "safe");
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = 1,
+                method = "tools/call",
+                @params = new
+                {
+                    name = "write_file",
+                    arguments = new { path = "note.txt", content = "overwritten" }
+                }
+            }));
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Single(frames);
+            Assert.Equal(1, apiCalls);
+            Assert.Equal("safe", await File.ReadAllTextAsync(file));
+            Assert.Contains("not allowed for this subtask", frames[0].ToJsonString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task ActorCannotLaunchAnotherPipelineSessionEvenWhenSubtaskAllowlistIsEmpty()
     {
         var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
