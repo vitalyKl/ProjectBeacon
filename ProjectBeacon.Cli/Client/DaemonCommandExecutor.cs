@@ -105,6 +105,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                             || token.ExpiresAt <= DateTime.UtcNow)
                             return (false, null, "The API returned an invalid or expired harness token.");
 
+                        if (subtaskId is not null && taskId is null)
+                            return (false, null, "A subtask-scoped prompt must include its parent task id.");
+
                         // The API derives project scope from the claimed database command; the client
                         // only cross-checks an optional project id carried in its payload.
                         harnessAuthorization = new AgentHarnessAuthorization(
