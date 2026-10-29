@@ -19,6 +19,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 {
     private const int MaxAttempts = 3;
     private const int MaxAgentSteps = 12;
+    private const int MaxToolResultCharacters = 16 * 1024;
     private readonly HttpClient _controlPlane;
     private readonly ClientLlamaSwap _llama;
     private readonly IDaemonLlamaSync _llamaSync;
@@ -485,6 +486,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             toolResult = "Tool error: " + SafeError(ex);
                         }
 
+                        toolResult = TruncateToolResult(toolResult);
+
                         lock (session.Sync)
                         {
                             session.Messages.Add(new JsonObject
@@ -852,6 +855,32 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         {
             session.Persistence.Release();
         }
+    }
+
+    private static string TruncateToolResult(string result)
+    {
+        if (result.Length <= MaxToolResultCharacters)
+            return result;
+
+        var keptCharacters = MaxToolResultCharacters;
+        string marker;
+        do
+        {
+            marker = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "\\n\\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
+                result.Length,
+                keptCharacters);
+            keptCharacters = MaxToolResultCharacters - marker.Length;
+        }
+        while (marker.Length + keptCharacters > MaxToolResultCharacters);
+
+        marker = string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "\\n\\n[Tool result truncated: original length {0} characters; showing first {1} characters.]",
+            result.Length,
+            keptCharacters);
+        return result[..keptCharacters] + marker;
     }
 
     private static bool IsRetryable(Exception ex) =>
