@@ -11,6 +11,38 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 public sealed class NativeAgentRuntimeTests
 {
     [Fact]
+    public void McpChildReceivesExplicitSubtaskScopeFromHarnessAuthorization()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-native-scope-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var taskId = Guid.NewGuid();
+        var subtaskId = Guid.NewGuid();
+        try
+        {
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test",
+                "ephemeral-token",
+                Guid.NewGuid(),
+                taskId,
+                Guid.NewGuid(),
+                1,
+                root,
+                DateTime.UtcNow.AddMinutes(2),
+                subtaskId);
+
+            var start = McpStdioClient.CreateStartInfo(root, authorization);
+
+            Assert.Equal(taskId.ToString("D"), start.Environment["BEACON_TASK_ID"]);
+            Assert.Equal(subtaskId.ToString("D"), start.Environment["BEACON_SUBTASK_ID"]);
+            Assert.Equal("ephemeral-token", start.Environment["BEACON_API_TOKEN"]);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task CreatesSessionPersistsTranscriptStreamsAndReportsTurnStatus()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-test-" + Guid.NewGuid().ToString("N"));
