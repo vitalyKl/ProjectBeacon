@@ -62,7 +62,7 @@ public static class WorkstationCommandCatalog
             Project(WorkstationCommandKind.RunEvalTurn, "eval.run-turn", "Run one evaluation turn.", OperationRetrySemantics.AtMostOnce, "{evalRunId:guid}"),
             Device(WorkstationCommandKind.ReconcileDesired, "device.reconcile", "Reconcile workstation desired state.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
             Project(WorkstationCommandKind.RunReviewCheck, "review.run-check", "Run the trusted project review check.", OperationRetrySemantics.AtMostOnce, "{reviewRunId:guid}"),
-            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{sessionId:guid,taskId:guid,subtaskId?:guid,role:string,prompt:string}")
+            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}")
         };
 
         var byKind = descriptors.ToDictionary(descriptor => descriptor.Kind);

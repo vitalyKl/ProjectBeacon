@@ -39,6 +39,18 @@ public sealed class WorkstationCommandCatalogTests
     }
 
     [Fact]
+    public void RunPipelineSession_DeclaresRequiredAndOptionalPayloadFields()
+    {
+        var descriptor = WorkstationCommandCatalog.Get(WorkstationCommandKind.RunPipelineSession);
+
+        Assert.Equal(
+            "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}",
+            descriptor.PayloadContract);
+        Assert.Equal(OperationRetrySemantics.AtMostOnce, descriptor.RetrySemantics);
+        Assert.Equal(WorkstationCommandScope.ProjectRuntime, descriptor.Scope);
+    }
+
+    [Fact]
     public void Catalog_RejectsUnknownCommandKinds()
     {
         var exception = Assert.Throws<InvalidOperationException>(
