@@ -302,9 +302,14 @@
 
     private string? SelectedBackendName => SelectedBackend?.Name;
 
-    private int? SelectedContextLimit => SelectedBackend?.ContextSize is > 0
-        ? SelectedBackend.ContextSize
-        : null;
+    private int? SelectedContextLimit
+    {
+        get
+        {
+            var size = SelectedBackend?.ContextSize;
+            return size is > 0 ? size : null;
+        }
+    }
 
     private string? ModelStatus
     {
