@@ -21,7 +21,7 @@ public sealed class McpStdioServerTests
         using var http = new HttpClient(new StubApiHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                $"""{"subtasks":[{"id":"{{subtaskId:D}}","status":"InProgress","allowedMcpTools":["read_file"],"allowedPaths":["src"]}]}""",
+                """{"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":["read_file"],"allowedPaths":["src"]}]}""".Replace("SUBTASK_ID", subtaskId.ToString("D"), StringComparison.Ordinal),
                 Encoding.UTF8,
                 "application/json")
         }))
