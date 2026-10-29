@@ -248,14 +248,19 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                     var resolved = await ProjectRuntimeResolver.ResolveAsync(db, session.ProjectId, session.DeviceId, ct);
                     if (!resolved.Success)
                         return Result.Failure<ChatSessionDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+                    var model = await ChatModelSelection.ResolveAsync(
+                        db, command.Request.UserId, command.Request.Model, ct);
+                    var contextLimit = await ChatModelSelection.ResolveContextLimitAsync(
+                        db, command.Request.UserId, model, ct);
                     var payload = JsonSerializer.Serialize(new
                     {
                         chatSessionId = session.Id,
                         externalSessionId = session.ExternalSessionId,
                         projectId = session.ProjectId,
                         text,
-                        model = await ChatModelSelection.ResolveAsync(db, command.Request.UserId, command.Request.Model, ct),
-                        reasoningEffort = command.Request.ReasoningEffort
+                        model,
+                        reasoningEffort = command.Request.ReasoningEffort,
+                        contextLimit
                     });
                     var sanitized = CommandSandbox.SanitizeProjectPayload(payload, WorkstationCommandKind.ChatPrompt);
                     if (!sanitized.Success)

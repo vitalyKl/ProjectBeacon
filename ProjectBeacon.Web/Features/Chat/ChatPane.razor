@@ -1,12 +1,14 @@
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Chat
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject IJSRuntime Js
 @inject AuthenticationStateProvider Auth
 @inject SwitchChatAgentHandler SwitchAgent
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 @if (ShowSessionHead && Session is not null)
 {
@@ -56,26 +58,13 @@
 @if (ShowModelSelect)
 {
     <div class="beacon-chat-model-bar">
-        <div class="beacon-chat-model-pair">
-            <MudSelect T="string?" Value="@Model" ValueChanged="value => OnModelChanged(value)" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-model-select">
-                <MudSelectItem Value="@((string?)null)">@L["Unbound"]</MudSelectItem>
-                @foreach (var backend in Models)
-                {
-                    <MudSelectItem Value="@($"beacon-local/{backend}")">@backend</MudSelectItem>
-                }
-            </MudSelect>
-            <MudSelect T="string?" Value="@ReasoningEffort" ValueChanged="value => OnEffortChanged(value)" Label="@L["ChatReasoningEffort"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="beacon-chat-effort-select">
-                <MudSelectItem Value="@((string?)null)">@L["ChatEffortDefault"]</MudSelectItem>
-                <MudSelectItem Value=@(" + low + ")>@L["ChatEffortLow"]</MudSelectItem>
-                <MudSelectItem Value=@(" + medium + ")>@L["ChatEffortMedium"]</MudSelectItem>
-                <MudSelectItem Value=@(" + high + ")>@L["ChatEffortHigh"]</MudSelectItem>
-                <MudSelectItem Value=@(" + xhigh + ")>@L["ChatEffortXhigh"]</MudSelectItem>
-            </MudSelect>
-            <MudSelect T="string" Value="_agent" ValueChanged="OnAgentChanged" Label="@L["ChatAgent"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="beacon-chat-agent-select">
-                <MudSelectItem Value="@("build")">@L["ChatAgentAct"]</MudSelectItem>
-                <MudSelectItem Value="@("plan")">@L["ChatAgentPlan"]</MudSelectItem>
-            </MudSelect>
-        </div>
+        <MudButton Variant="Variant.Outlined"
+                   StartIcon="@Icons.Material.Filled.Tune"
+                   Class="beacon-chat-config-button"
+                   OnClick="ConfigureModel"
+                   title="@L["ChatModelSettings"].Value">
+            @ModelSummary
+        </MudButton>
         @if (!string.IsNullOrEmpty(ModelStatus))
         {
             @if (ModelStatus == "switching")
@@ -85,18 +74,31 @@
             <MudText Typo="Typo.caption" Class="beacon-chat-model-status">@ModelStatusLabel</MudText>
         }
     </div>
-}@if (UsageLabel is { } usage)
+}
+@if (UsageLabel is { } usage)
 {
     <MudText Typo="Typo.caption" Class="beacon-chat-usage mt-2">@usage</MudText>
 }
 <form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
     <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
+        @if (ShowModelSelect)
+        {
+            <MudButton Variant="Variant.Outlined"
+                       Color="@(_agent == "plan" ? Color.Secondary : Color.Default)"
+                       Size="Size.Medium"
+                       Class="beacon-chat-mode-toggle"
+                       OnClick="ToggleAgent"
+                       Disabled="@_switchingAgent"
+                       title="@ModeShortcutTitle">
+                @(_agent == "plan" ? L["ChatAgentPlan"] : L["ChatAgentAct"])
+            </MudButton>
+        }
         <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
                       OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
         @if (CanAbort)
         {
-            <MudButton Variant="Variant.Outlined" OnClick="Abort" Disabled="@Busy">@L["Abort"]</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="OnAbortClicked" Disabled="@_aborting">@L["Abort"]</MudButton>
         }
         @if (CanRetry)
         {
@@ -116,7 +118,7 @@
     [Parameter] public string? PhaseLabel { get; set; }
     [Parameter] public Color PhaseColor { get; set; }
     [Parameter] public bool ShowModelSelect { get; set; }
-    [Parameter] public List<string> Models { get; set; } = [];
+    [Parameter] public List<LocalModelBackendDto> Models { get; set; } = [];
     [Parameter] public string? Model { get; set; }
     [Parameter] public string? ReasoningEffort { get; set; }
     [Parameter] public EventCallback<string?> ReasoningEffortChanged { get; set; }
@@ -130,6 +132,7 @@
     [Parameter] public bool CanAbort { get; set; }
     [Parameter] public bool CanRetry { get; set; }
     [Parameter] public string? ModelName { get; set; }
+    [Parameter] public int? SelectedContextLimit { get; set; }
 
     // Session totals reported by the device: prompt tokens, the model's context limit, and cost.
     private string? UsageLabel
@@ -139,7 +142,8 @@
             if (Session is not { PromptTokens: not null, TotalCost: not null })
                 return null;
             var prompt = Session.PromptTokens!.Value;
-            var tokens = Session.ContextLimit is { } limit ? $"{prompt:N0} / {limit:N0}" : $"{prompt:N0}";
+            var currentLimit = Model is null ? Session.ContextLimit : SelectedContextLimit;
+            var tokens = currentLimit is { } limit ? $"{prompt:N0} / {limit:N0}" : $"{prompt:N0}";
             var label = string.Format(L["ChatUsage"].Value, tokens, "$" + Session.TotalCost!.Value.ToString("0.####"));
             if (Session is { CompletionTokens: not null, GenerationSeconds: { } seconds } && seconds > 0)
                 label += "  \u2022  " + string.Format(L["ChatUsageSpeed"].Value, Math.Round(Session.CompletionTokens!.Value / seconds, 1));
@@ -160,6 +164,8 @@
     private bool _attached;
     private Guid _userId;
     private string _agent = "build";
+    private bool _switchingAgent;
+    private bool _aborting;
 
     protected override async Task OnInitializedAsync()
     {
@@ -227,16 +233,87 @@
         return ReasoningEffortChanged.InvokeAsync(value);
     }
 
+    private LocalModelBackendDto? SelectedBackend =>
+        Models.FirstOrDefault(backend =>
+            string.Equals(OpencodePayload.OpenCodeId(backend), Model, StringComparison.Ordinal));
+
+    private string ModelSummary
+    {
+        get
+        {
+            var modelName = SelectedBackend?.Name
+                ?? (string.IsNullOrWhiteSpace(Model) ? L["Unbound"].Value : Model);
+            var effortName = ReasoningEffort switch
+            {
+                "low" => L["ChatEffortLow"].Value,
+                "medium" => L["ChatEffortMedium"].Value,
+                "high" => L["ChatEffortHigh"].Value,
+                "xhigh" => L["ChatEffortXhigh"].Value,
+                _ => L["ChatEffortDefault"].Value
+            };
+            return $"{modelName} · {effortName}";
+        }
+    }
+
+    private string ModeShortcutTitle =>
+        $"{L["ChatAgent"].Value}: {L[_agent == "plan" ? "ChatAgentPlan" : "ChatAgentAct"].Value} (Ctrl+Shift+M)";
+
+    private async Task ConfigureModel()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Models"] = Models,
+            ["Model"] = Model,
+            ["ReasoningEffort"] = ReasoningEffort
+        };
+        var dialog = await DialogService.ShowAsync<ChatModelSettingsDialog>(
+            L["ChatModelSettings"].Value,
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is not { Canceled: false, Data: ChatModelSettingsSelection selection })
+            return;
+
+        await OnModelChanged(selection.Model);
+        await OnEffortChanged(selection.ReasoningEffort);
+    }
+
+    private Task ToggleAgent() => OnAgentChanged(_agent == "plan" ? "build" : "plan");
+
+    private async Task OnAbortClicked(MouseEventArgs e)
+    {
+        if (_aborting)
+            return;
+        _aborting = true;
+        try { await Abort.InvokeAsync(e); }
+        finally { _aborting = false; }
+    }
+
     private async Task OnAgentChanged(string value)
     {
-        _agent = value;
-        if (Session is { } session && session.Id != Guid.Empty && _userId != Guid.Empty)
+        if (value is not ("build" or "plan") || value == _agent || _switchingAgent)
+            return;
+        if (Session is not { } session || session.Id == Guid.Empty || _userId == Guid.Empty)
+            return;
+
+        _switchingAgent = true;
+        try
         {
-            var result = await SwitchAgent.HandleAsync(new SwitchChatAgentCommand(new SwitchChatAgentRequest(session.Id, _userId, value)));
+            var result = await SwitchAgent.HandleAsync(
+                new SwitchChatAgentCommand(new SwitchChatAgentRequest(session.Id, _userId, value)));
             if (result.Success)
+            {
+                _agent = value;
                 Snackbar.Add(L["ChatAgentSwitching"].Value, Severity.Info);
+            }
             else
+            {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            }
+        }
+        finally
+        {
+            _switchingAgent = false;
         }
     }
 
@@ -249,6 +326,11 @@
 
     private async Task OnKey(KeyboardEventArgs e)
     {
+        if (e.CtrlKey && e.ShiftKey && string.Equals(e.Key, "m", StringComparison.OrdinalIgnoreCase))
+        {
+            await ToggleAgent();
+            return;
+        }
         if (e.Key != "Enter")
             return;
         _shiftEnter = e.ShiftKey;

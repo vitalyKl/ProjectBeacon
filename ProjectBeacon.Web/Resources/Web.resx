@@ -2279,4 +2279,13 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatAnswerFailed" xml:space="preserve">
     <value>Could not answer the question: {0}</value>
   </data>
+  <data name="ChatModelSettings" xml:space="preserve">
+    <value>Model settings</value>
+  </data>
+  <data name="ChatModelSettingsDescription" xml:space="preserve">
+    <value>Choose a model first, then adjust reasoning effort.</value>
+  </data>
+  <data name="ChatContextWindow" xml:space="preserve">
+    <value>Context window: {0} tokens</value>
+  </data>
 </root>

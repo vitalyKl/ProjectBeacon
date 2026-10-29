@@ -1228,38 +1228,35 @@ body:has(.beacon-theme-dark) .mud-main-content {
     white-space: nowrap;
 }
 
-.beacon-chat-model-select {
-    flex: 0 0 auto;
-    width: 140px;
-    max-width: 60%;
-}
-.beacon-chat-model-pair {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    flex: 0 0 auto;
+.beacon-chat-config-button {
+    flex: 1 1 260px;
+    min-width: 0;
+    max-width: min(100%, 520px);
+    justify-content: flex-start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
+.beacon-chat-config-button .mud-button-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 .beacon-chat-model-bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-1);
+    gap: var(--space-2);
     margin-top: var(--space-2);
+    min-width: 0;
 }
 
-.beacon-chat-effort-select {
+.beacon-chat-mode-toggle {
     flex: 0 0 auto;
-    width: 120px;
-    max-width: 100%;
-}
-
-.beacon-chat-agent-select {
-    flex: 0 0 auto;
-    width: 120px;
-    max-width: 100%;
+    min-width: 78px;
+    white-space: nowrap;
 }
 
 .beacon-chat-model-status {

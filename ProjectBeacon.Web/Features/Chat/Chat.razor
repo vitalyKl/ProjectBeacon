@@ -83,6 +83,7 @@ else
                 <ChatPane
                     Session="_selected"
                     ModelName="@SelectedBackendName"
+                    SelectedContextLimit="@SelectedContextLimit"
                     ShowSessionHead
                     Parts="_parts"
                     Phase="@Phase"
@@ -115,7 +116,7 @@ else
     private List<ChatSessionDto> _sessions = [];
     private ChatSessionDto? _selected;
     private List<ChatPartDto> _parts = [];
-    private List<string> _models = [];
+    private List<LocalModelBackendDto> _models = [];
     private string? _model;
     private string? _effort;
     private LlamaSwapStatusDto? _proxy;
@@ -136,7 +137,7 @@ else
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
         {
-            _models = registry.Value!.Backends.Select(b => b.Name).ToList();
+            _models = registry.Value!.Backends.ToList();
             var preferred = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
             if (preferred.Success && preferred.Value is Guid backendId)
             {
@@ -349,15 +350,18 @@ else
         await LoadProxyStatus();
     }
 
-    private string? SelectedBackendName
+    private LocalModelBackendDto? SelectedBackend =>
+        _models.FirstOrDefault(backend =>
+            string.Equals(OpencodePayload.OpenCodeId(backend), _model, StringComparison.Ordinal));
+
+    private string? SelectedBackendName => SelectedBackend?.Name;
+
+    private int? SelectedContextLimit
     {
         get
         {
-            if (_model is null)
-                return null;
-            var i = _model.IndexOf('/');
-            var name = i < 0 ? _model : _model[(i + 1)..];
-            return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+            var size = SelectedBackend?.ContextSize;
+            return size is > 0 ? size : null;
         }
     }
 

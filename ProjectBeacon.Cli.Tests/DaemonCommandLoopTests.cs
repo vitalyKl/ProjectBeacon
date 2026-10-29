@@ -2,7 +2,9 @@ namespace ProjectBeacon.Cli.Tests;
 
 using System.Net;
 using System.Text.Json;
+using System.Collections.Concurrent;
 using ProjectBeacon.Cli.Client;
+using ProjectBeacon.Domain.Enums;
 
 public sealed class DaemonCommandLoopTests
 {
@@ -105,6 +107,31 @@ public sealed class DaemonCommandLoopTests
     }
 
     [Fact]
+    public async Task ChatPrompt_ControlLaneExecutesAbortBeforePromptCompletes()
+    {
+        var promptStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var abortHandled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var api = new ControlLaneApi(Guid.NewGuid(), Guid.NewGuid(), promptStarted, abortHandled);
+        var http = new HttpClient(api) { BaseAddress = new Uri("http://localhost/") };
+        var executor = new ControlLaneExecutor(promptStarted, abortHandled);
+        var state = new DaemonRuntimeState("http://localhost", null);
+        var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
+        var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
+        var loop = new DaemonCommandLoop(deps, executor, state, timing);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var run = loop.RunAsync(cts.Token);
+        await api.BothCompleted.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        cts.Cancel();
+        try { await run; } catch (OperationCanceledException) { }
+
+        Assert.Equal(1, executor.PromptExecutions);
+        Assert.Equal(1, executor.AbortExecutions);
+        Assert.Contains(api.RequestPaths, path => path.Contains("controlOnly=true", StringComparison.Ordinal));
+        http.Dispose();
+    }
+
+    [Fact]
     public async Task Heartbeat_IncludesInstanceId()
     {
         var api = new FakeApi(Guid.NewGuid(), _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
@@ -158,6 +185,104 @@ public sealed class DaemonCommandLoopTests
         var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
         var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
         return (new DaemonCommandLoop(deps, executor, state, timing), executor, state, api);
+    }
+
+    private sealed class ControlLaneExecutor(
+        TaskCompletionSource<bool> promptStarted,
+        TaskCompletionSource<bool> abortHandled) : IDaemonCommandExecutor
+    {
+        private int _promptExecutions;
+        private int _abortExecutions;
+        public int PromptExecutions => Volatile.Read(ref _promptExecutions);
+        public int AbortExecutions => Volatile.Read(ref _abortExecutions);
+
+        public async Task<(bool Ok, string? Result, string? Error)> ExecuteAsync(
+            WorkstationDaemon.CommandWire command, CancellationToken ct)
+        {
+            if (command.Kind == WorkstationCommandKind.ChatPrompt)
+            {
+                Interlocked.Increment(ref _promptExecutions);
+                promptStarted.TrySetResult(true);
+                await abortHandled.Task.WaitAsync(ct);
+                return (true, "{}", null);
+            }
+
+            if (command.Kind == WorkstationCommandKind.ChatAbort)
+            {
+                Interlocked.Increment(ref _abortExecutions);
+                abortHandled.TrySetResult(true);
+                return (true, "{}", null);
+            }
+
+            return (false, null, $"Unexpected command {command.Kind}.");
+        }
+    }
+
+    private sealed class ControlLaneApi(
+        Guid promptId,
+        Guid abortId,
+        TaskCompletionSource<bool> promptStarted,
+        TaskCompletionSource<bool> abortHandled) : HttpMessageHandler
+    {
+        private int _normalClaimed;
+        private int _controlClaimed;
+        private int _completions;
+        public ConcurrentQueue<string> RequestPaths { get; } = new();
+        public TaskCompletionSource<bool> BothCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(1, cancellationToken);
+            var uri = request.RequestUri!;
+            var path = uri.AbsolutePath;
+            RequestPaths.Enqueue(uri.PathAndQuery);
+
+            if (path == "/v1/devices/me/commands")
+            {
+                if (uri.Query.Contains("controlOnly=true", StringComparison.Ordinal))
+                {
+                    if (Interlocked.CompareExchange(ref _controlClaimed, 1, 0) != 0)
+                        return new HttpResponseMessage(HttpStatusCode.NoContent);
+                    await promptStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+                    return JsonResponse(new
+                    {
+                        id = abortId,
+                        kind = "ChatAbort",
+                        version = 1,
+                        generation = 1,
+                        payloadJson = "{}"
+                    });
+                }
+
+                if (Interlocked.CompareExchange(ref _normalClaimed, 1, 0) == 0)
+                {
+                    return JsonResponse(new
+                    {
+                        id = promptId,
+                        kind = "ChatPrompt",
+                        version = 1,
+                        generation = 1,
+                        payloadJson = "{}"
+                    });
+                }
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+
+            if (path.EndsWith("/complete", StringComparison.Ordinal))
+            {
+                if (Interlocked.Increment(ref _completions) == 2)
+                    BothCompleted.TrySetResult(true);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NoContent);
+        }
+
+        private static HttpResponseMessage JsonResponse(object body)
+        {
+            var content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }
     }
 
     private sealed class CountingExecutor : IDaemonCommandExecutor

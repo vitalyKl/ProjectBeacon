@@ -2057,4 +2057,13 @@ orthstar</value>
   <data name="ChatAnswerFailed" xml:space="preserve">
     <value>Die Frage konnte nicht beantwortet werden: {0}</value>
   </data>
+  <data name="ChatModelSettings" xml:space="preserve">
+    <value>Modelleinstellungen</value>
+  </data>
+  <data name="ChatModelSettingsDescription" xml:space="preserve">
+    <value>Wählen Sie zuerst ein Modell und anschließend den Reasoning-Aufwand.</value>
+  </data>
+  <data name="ChatContextWindow" xml:space="preserve">
+    <value>Kontextfenster: {0} Token</value>
+  </data>
 </root>

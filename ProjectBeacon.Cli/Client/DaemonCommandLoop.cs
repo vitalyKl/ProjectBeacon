@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using ProjectBeacon.Domain.Enums;
 
 internal interface IDaemonLoop
 {
@@ -47,16 +48,10 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 var command = await claimed.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, ct);
                 if (command is null)
                     continue;
-                var (ok, result, error) = await _executor.ExecuteAsync(command, ct);
-                await CompleteAsync(command, ok, result, error, ct);
-                _state.Publish(s => s with
-                {
-                    LastCommand = command.Kind.ToString(),
-                    LastCommandAt = DateTimeOffset.Now,
-                    LastCommandOk = ok,
-                    Error = ok ? null : error
-                });
-                _state.Log($"{command.Kind} {(ok ? "ok" : error)}");
+                if (command.Kind == WorkstationCommandKind.ChatPrompt)
+                    await ProcessPromptWithControlLaneAsync(command, ct);
+                else
+                    await ProcessCommandAsync(command, ct);
             }
             catch (OperationCanceledException)
             {
@@ -75,6 +70,98 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 catch (OperationCanceledException) { break; }
             }
         }
+    }
+
+    /// <summary>
+    /// ChatPrompt blocks while OpenCode generates. Run a narrow side poller so abort,
+    /// agent switching and form replies can be delivered without waiting for the prompt.
+    /// </summary>
+    private async Task ProcessPromptWithControlLaneAsync(
+        WorkstationDaemon.CommandWire prompt, CancellationToken ct)
+    {
+        using var controlCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var controlTask = RunControlLaneAsync(controlCts.Token, ct);
+        try
+        {
+            await ProcessCommandAsync(prompt, ct);
+        }
+        finally
+        {
+            controlCts.Cancel();
+            try { await controlTask; }
+            catch (OperationCanceledException) { }
+        }
+    }
+
+    private async Task RunControlLaneAsync(CancellationToken pollingToken, CancellationToken executionToken)
+    {
+        while (!pollingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var response = await _http.GetAsync(
+                    "/v1/devices/me/commands?wait=1&controlOnly=true", pollingToken);
+                if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+                    continue;
+                if (!response.IsSuccessStatusCode)
+                {
+                    await _timing.DelayAsync(_timing.CommandErrorDelay, pollingToken);
+                    continue;
+                }
+
+                var command = await response.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, pollingToken);
+                if (command is null)
+                    continue;
+                if (command.Kind is not (WorkstationCommandKind.ChatAbort
+                    or WorkstationCommandKind.ChatSwitchAgent
+                    or WorkstationCommandKind.ChatReplyForm))
+                {
+                    await ProcessCommandAsync(command, executionToken, rejectUnexpectedControlCommand: true);
+                    continue;
+                }
+                await ProcessCommandAsync(command, executionToken);
+            }
+            catch (OperationCanceledException) when (pollingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (JsonException ex)
+            {
+                _state.Log($"malformed control command wire: {ex.Message}");
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
+                catch (OperationCanceledException) { break; }
+            }
+            catch (Exception ex)
+            {
+                _state.Log($"control lane: {ex.Message}");
+                try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, pollingToken); }
+                catch (OperationCanceledException) { break; }
+            }
+        }
+    }
+
+    private async Task ProcessCommandAsync(
+        WorkstationDaemon.CommandWire command,
+        CancellationToken ct,
+        bool rejectUnexpectedControlCommand = false)
+    {
+        bool ok;
+        string? result;
+        string? error;
+        if (rejectUnexpectedControlCommand)
+            (ok, result, error) = (false, null, "Command is not allowed in the control-only queue.");
+        else
+            (ok, result, error) = await _executor.ExecuteAsync(command, ct);
+
+        await CompleteAsync(command, ok, result, error, ct);
+        _state.Publish(s => s with
+        {
+            LastCommand = command.Kind.ToString(),
+            LastCommandAt = DateTimeOffset.Now,
+            LastCommandOk = ok,
+            Error = ok ? null : error
+        });
+        _state.Log($"{command.Kind} {(ok ? "ok" : error)}");
     }
 
     /// <summary>
