@@ -87,7 +87,7 @@ public static partial class McpStdioServer
     private static readonly string[] ReviewerTools =
     [
         ..ReadOnlyWorkspaceTools,
-        "get_project", "get_task",
+        "get_project",
         "list_context_nodes", "get_context_node",
         ..ReviewerSupervisorTools
     ];

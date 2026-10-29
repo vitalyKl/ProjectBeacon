@@ -211,6 +211,7 @@ public sealed class McpStdioServerTests
             Assert.Contains("task_pipeline_status", toolsJson, StringComparison.Ordinal);
             Assert.Contains("task_review_verdict", toolsJson, StringComparison.Ordinal);
             Assert.Contains("pipeline_approve", toolsJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("get_task", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("task_create_subtask", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("pipeline_start_actor", toolsJson, StringComparison.Ordinal);
