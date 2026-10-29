@@ -2057,4 +2057,13 @@ orthstar</value>
   <data name="ChatAnswerFailed" xml:space="preserve">
     <value>質問に回答できませんでした：{0}</value>
   </data>
+  <data name="ChatModelSettings" xml:space="preserve">
+    <value>モデル設定</value>
+  </data>
+  <data name="ChatModelSettingsDescription" xml:space="preserve">
+    <value>最初にモデルを選択し、その後で推論の強度を設定します。</value>
+  </data>
+  <data name="ChatContextWindow" xml:space="preserve">
+    <value>コンテキストウィンドウ: {0} トークン</value>
+  </data>
 </root>
