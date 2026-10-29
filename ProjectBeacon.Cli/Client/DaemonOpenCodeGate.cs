@@ -7,7 +7,11 @@ internal interface IDaemonOpenCodeGate
     ClientOpenCodeServe OpenCode { get; }
     IAgentRuntime Runtime { get; }
     Task TryTickAsync(string? projectsRoot, CancellationToken ct);
-    Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct);
+    async Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+    {
+        await OpenCode.TickAsync(workingDirectory, ct);
+        return new AgentRuntimeReadiness(OpenCode.Status.Healthy, OpenCode.Status.Error, OpenCode.Cwd);
+    }
     Task RunExclusiveAsync(Func<Task> action, CancellationToken ct);
     Task<T> RunExclusiveAsync<T>(Func<Task<T>> action, CancellationToken ct);
     void Release();
