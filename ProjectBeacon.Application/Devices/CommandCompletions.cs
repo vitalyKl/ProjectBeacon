@@ -85,7 +85,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             }
             catch (JsonException)
             {
-                // A malformed result must not change pipeline state.
+                // Malformed results fall through to the guarded failure transition below.
             }
         }
 
