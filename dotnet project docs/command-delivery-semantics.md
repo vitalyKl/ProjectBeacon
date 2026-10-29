@@ -46,7 +46,7 @@ backstop is safe; do not assume otherwise in future code.
 
 ## Classification
 
-All 17 `WorkstationCommandKind` values, complete.
+All `WorkstationCommandKind` values, complete.
 
 | Kind | Property | Retryable | ReconcileBacked | Rationale |
 |---|---|---|---|---|
