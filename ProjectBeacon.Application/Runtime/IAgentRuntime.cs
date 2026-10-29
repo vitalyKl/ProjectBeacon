@@ -24,7 +24,8 @@ public sealed record AgentHarnessAuthorization(
     int Generation,
     string WorkingDirectory,
     DateTime ExpiresAt,
-    Guid? SubtaskId = null);
+    Guid? SubtaskId = null,
+    string? PipelineRole = null);
 
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
 {

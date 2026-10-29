@@ -312,6 +312,8 @@ internal sealed class McpStdioClient : IMcpToolClient
             start.Environment["BEACON_TASK_ID"] = taskId.ToString("D");
         if (authorization.SubtaskId is { } subtaskId && subtaskId != Guid.Empty)
             start.Environment["BEACON_SUBTASK_ID"] = subtaskId.ToString("D");
+        if (!string.IsNullOrWhiteSpace(authorization.PipelineRole))
+            start.Environment["BEACON_PIPELINE_ROLE"] = authorization.PipelineRole;
         return start;
     }
 

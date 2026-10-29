@@ -108,6 +108,7 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Equal(generation, capturedAuthorization.Generation);
             Assert.Equal(projectRoot, capturedAuthorization.WorkingDirectory);
             Assert.Equal("test-short-lived-token", capturedAuthorization.ApiToken);
+            Assert.Equal("Planner", capturedAuthorization.PipelineRole);
             Assert.True(capturedAuthorization.ExpiresAt > DateTime.UtcNow);
             Assert.Equal(generation, tokenHandler.RequestedGeneration);
         }

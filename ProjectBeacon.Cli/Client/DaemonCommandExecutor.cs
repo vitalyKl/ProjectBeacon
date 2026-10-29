@@ -228,6 +228,15 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var root = doc.RootElement;
         var projectId = ReadGuid(root, "projectId");
         var taskId = ReadGuid(root, "taskId");
+        var pipelineRole = root.TryGetProperty("role", out var roleValue) && roleValue.ValueKind == JsonValueKind.String
+            ? roleValue.GetString()?.Trim().ToLowerInvariant() switch
+            {
+                "planner" => "Planner",
+                "actor" => "Actor",
+                "review" => "Review",
+                _ => null
+            }
+            : null;
         var rawSubtaskId = ReadGuid(root, "subtaskId");
         Guid? subtaskId = rawSubtaskId == Guid.Empty ? null : rawSubtaskId;
         var pipelineSessionId = ReadGuid(root, "sessionId");
@@ -245,6 +254,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         if (projectId == Guid.Empty || taskId == Guid.Empty || pipelineSessionId == Guid.Empty
             || string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(model))
             return (false, null, "Pipeline command requires projectId, taskId, sessionId, model, and prompt.");
+        if (pipelineRole is null)
+            return (false, null, "Pipeline command requires role Planner, Actor, or Review.");
         if (subtaskId is not null && taskId == Guid.Empty)
             return (false, null, "A subtask-scoped pipeline session must include its parent task id.");
         if (_http.BaseAddress is null)
@@ -279,7 +290,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             command.Generation,
             readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot),
             token.ExpiresAt,
-            subtaskId);
+            subtaskId,
+            pipelineRole);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(_timing.ChatMaxDuration);

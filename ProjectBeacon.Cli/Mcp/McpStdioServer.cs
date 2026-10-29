@@ -165,6 +165,11 @@ public static partial class McpStdioServer
 
     private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
     {
+        // Planner/Reviewer control-plane calls are task-scoped by the short-lived API token.
+        // Do not apply an Actor's path/tool allowlist to these explicitly role-bound workflows.
+        if (IsPipelineSupervisorTool(tool, env))
+            return null;
+
         if (api is null || !TryParseScope(env, out _, out var taskId, out _) || taskId is null)
             return null;
 
