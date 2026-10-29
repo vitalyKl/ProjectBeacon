@@ -145,6 +145,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         return (false, null, reviewAction.Error);
                     return (true, reviewAction.Value, null);
                 }
+                if (kind == WorkstationCommandKind.RunPipelineSession)
+                    return await RunPipelineSessionAsync(command, payload, ct);
+
                 var projectAction = kind switch
                 {
                     WorkstationCommandKind.InitProject => WorkstationSetup.InitProject(command.LocalRoot, payload),
@@ -212,6 +215,124 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             return (false, null, ex.Message);
         }
     }
+
+    private async Task<(bool Ok, string? Result, string? Error)> RunPipelineSessionAsync(
+        WorkstationDaemon.CommandWire command,
+        string payload,
+        CancellationToken ct)
+    {
+        if (_gate.Runtime is not NativeAgentRuntime runtime)
+            return (false, null, "Pipeline sessions require AgentRuntime=native.");
+
+        using var doc = JsonDocument.Parse(payload);
+        var root = doc.RootElement;
+        var projectId = ReadGuid(root, "projectId");
+        var taskId = ReadGuid(root, "taskId");
+        var subtaskId = ReadGuid(root, "subtaskId");
+        var pipelineSessionId = ReadGuid(root, "sessionId");
+        var prompt = root.TryGetProperty("prompt", out var promptValue) ? promptValue.GetString() : null;
+        var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() : null;
+        var title = root.TryGetProperty("title", out var titleValue) ? titleValue.GetString() : "ProjectBeacon pipeline";
+        var reasoningEffort = root.TryGetProperty("reasoningEffort", out var effortValue) ? effortValue.GetString() : null;
+        var contextLimit = root.TryGetProperty("contextLimit", out var limitValue)
+            && limitValue.ValueKind == JsonValueKind.Number
+            && limitValue.TryGetInt32(out var parsedLimit)
+            && parsedLimit > 0
+                ? parsedLimit
+                : (int?)null;
+
+        if (projectId == Guid.Empty || taskId == Guid.Empty || pipelineSessionId == Guid.Empty
+            || string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(model))
+            return (false, null, "Pipeline command requires projectId, taskId, sessionId, model, and prompt.");
+        if (subtaskId == Guid.Empty)
+            subtaskId = null;
+        if (subtaskId is not null && taskId == Guid.Empty)
+            return (false, null, "A subtask-scoped pipeline session must include its parent task id.");
+        if (_http.BaseAddress is null)
+            return (false, null, "The daemon API base URL is not configured.");
+        if (string.IsNullOrWhiteSpace(command.LocalRoot))
+            return (false, null, CommandSandbox.RuntimeRequired);
+
+        var readiness = await runtime.EnsureReadyAsync(command.LocalRoot, ct);
+        if (!readiness.Ready)
+            return (false, null, readiness.Error ?? "The native agent runtime is not ready.");
+
+        using var tokenResponse = await _http.PostAsJsonAsync(
+            $"/v1/commands/{command.Id:D}/harness-token",
+            new { generation = command.Generation },
+            ct);
+        if (!tokenResponse.IsSuccessStatusCode)
+            return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
+        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+        if (token is null || string.IsNullOrWhiteSpace(token.Token)
+            || token.ProjectId != projectId
+            || token.CommandId != command.Id
+            || token.Generation != command.Generation
+            || token.ExpiresAt <= DateTime.UtcNow)
+            return (false, null, "The API returned an invalid or expired harness token.");
+
+        var authorization = new AgentHarnessAuthorization(
+            _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+            token.Token,
+            token.ProjectId,
+            taskId,
+            command.Id,
+            command.Generation,
+            readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot),
+            token.ExpiresAt,
+            subtaskId);
+        var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
+        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        turnCts.CancelAfter(_timing.ChatMaxDuration);
+        try
+        {
+            await runtime.SendPromptAsync(
+                externalSessionId,
+                prompt,
+                model,
+                turnCts.Token,
+                new AgentPromptControls(null, reasoningEffort, null)
+                {
+                    ContextLimit = contextLimit,
+                    HarnessAuthorization = authorization
+                });
+
+            AgentTurnStatus? status;
+            do
+            {
+                await Task.Delay(_timing.ChatPollInterval, turnCts.Token);
+                status = await runtime.GetTurnStatusAsync(externalSessionId, turnCts.Token);
+            }
+            while (status is null || !status.Ended);
+
+            if (!string.IsNullOrWhiteSpace(status.Error) || string.Equals(status.Finish, "error", StringComparison.OrdinalIgnoreCase))
+                return (false, null, status.Error ?? "The pipeline agent turn failed.");
+
+            var usage = await runtime.ReadUsageAsync(externalSessionId, ct);
+            return (true, JsonSerializer.Serialize(new
+            {
+                pipelineSessionId,
+                externalSessionId,
+                finish = status.Finish,
+                usage.PromptTokens,
+                usage.CompletionTokens,
+                usage.AssistantMessages
+            }), null);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
+            return (false, null, "The pipeline agent turn exceeded the workstation chat timeout.");
+        }
+    }
+
+    private static Guid ReadGuid(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && Guid.TryParse(value.GetString(), out var parsed)
+            ? parsed
+            : Guid.Empty;
 
     private async Task<(bool Ok, string? Result, string? Error)> ReconcileDesiredAsync(string payload, CancellationToken ct)
     {
