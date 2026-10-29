@@ -1,0 +1,686 @@
+namespace ProjectBeacon.Cli.Client.AgentHarness;
+
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading.Channels;
+using ProjectBeacon.Application.Runtime;
+using ProjectBeacon.Cli.Client;
+
+/// <summary>
+/// Workstation-local chat runtime. It owns session transcripts and the model/tool loop; it never
+/// executes inside the Web, API, or Worker processes.
+/// </summary>
+internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilities
+{
+    private const int MaxAttempts = 3;
+    private readonly HttpClient _controlPlane;
+    private readonly ClientLlamaSwap _llama;
+    private readonly IDaemonLlamaSync _llamaSync;
+    private readonly Func<WorkstationSettings> _loadSettings;
+    private readonly Action<string>? _log;
+    private readonly ConcurrentDictionary<string, SessionState> _sessions = new(StringComparer.Ordinal);
+    private volatile bool _disposed;
+
+    public NativeAgentRuntime(
+        HttpClient controlPlane,
+        ClientLlamaSwap llama,
+        IDaemonLlamaSync llamaSync,
+        Func<WorkstationSettings> loadSettings,
+        Action<string>? log = null)
+    {
+        _controlPlane = controlPlane;
+        _llama = llama;
+        _llamaSync = llamaSync;
+        _loadSettings = loadSettings;
+        _log = log;
+    }
+
+    public bool SupportsForms => false;
+    public bool SupportsAgentSwitch => false;
+    public bool SupportsReasoningEffort => true;
+    public bool SupportsLiveDeltas => true;
+
+    public async Task<string> CreateSessionAsync(string title, CancellationToken ct)
+    {
+        ThrowIfDisposed();
+        var settings = _loadSettings();
+        var state = new SessionState
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            Title = string.IsNullOrWhiteSpace(title) ? "Chat" : title.Trim(),
+            CreatedAt = DateTimeOffset.UtcNow,
+            TranscriptPath = TranscriptPath(settings, Guid.Empty, null),
+            TurnStatus = new AgentTurnStatus(true, "stop", null)
+        };
+        state.TranscriptPath = TranscriptPath(settings, Guid.Empty, state.Id);
+        state.Messages.Add(new JsonObject
+        {
+            ["role"] = "system",
+            ["content"] = "You are the ProjectBeacon workstation assistant. Be accurate, concise, and explicit about uncertainty. You can only use tools explicitly provided in this conversation."
+        });
+        if (!_sessions.TryAdd(state.Id, state))
+            throw new InvalidOperationException("Could not create a unique agent session.");
+        await PersistAsync(state, ct);
+        return state.Id;
+    }
+
+    public async Task SendPromptAsync(
+        string sessionId,
+        string text,
+        string? model,
+        CancellationToken ct,
+        AgentPromptControls? controls = null)
+    {
+        ThrowIfDisposed();
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("Prompt text is required.", nameof(text));
+        var session = await GetSessionAsync(sessionId, ct);
+        var selectedModel = string.IsNullOrWhiteSpace(model) ? session.LastModel : model.Trim();
+        if (string.IsNullOrWhiteSpace(selectedModel))
+            throw new InvalidOperationException("Select a model before sending a prompt.");
+
+        CancellationTokenSource turnCts;
+        int turnNumber;
+        lock (session.Sync)
+        {
+            if (session.ActiveTurn is not null)
+                throw new InvalidOperationException("A prompt is already running for this session.");
+
+            turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            session.ActiveTurn = turnCts;
+            session.LastModel = selectedModel;
+            session.ContextLimit = controls?.ContextLimit is > 0 ? controls.ContextLimit : session.ContextLimit;
+            turnNumber = ++session.TurnNumber;
+            session.TurnStatus = new AgentTurnStatus(false, null, null, session.TurnStatus?.MessageId);
+            session.Messages.Add(new JsonObject { ["role"] = "user", ["content"] = text });
+        }
+
+        await PersistAsync(session, ct);
+        var task = Task.Run(() => RunTurnAsync(session, turnNumber, selectedModel, controls, turnCts.Token), CancellationToken.None);
+        lock (session.Sync)
+            session.ActiveTask = task;
+    }
+
+    public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(
+        string sessionId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var session = await GetSessionAsync(sessionId, ct);
+        AgentMessagePart[] snapshot;
+        lock (session.Sync)
+            snapshot = session.Parts.ToArray();
+        foreach (var part in snapshot)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return part;
+        }
+    }
+
+    public async Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+    {
+        var session = await GetSessionAsync(sessionId, ct);
+        lock (session.Sync)
+            return session.TurnStatus;
+    }
+
+    public async Task AbortAsync(string sessionId, CancellationToken ct)
+    {
+        var session = await GetSessionAsync(sessionId, ct);
+        CancellationTokenSource? active;
+        lock (session.Sync)
+            active = session.ActiveTurn;
+        active?.Cancel();
+    }
+
+    public async Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
+    {
+        var session = await GetSessionAsync(sessionId, ct);
+        lock (session.Sync)
+            return session.Usage;
+    }
+
+    public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+    {
+        ThrowIfDisposed();
+        ct.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+            return Task.FromResult(new AgentRuntimeReadiness(false, "A project working directory is required.", null));
+        var fullPath = Path.GetFullPath(workingDirectory);
+        if (!Directory.Exists(fullPath))
+            return Task.FromResult(new AgentRuntimeReadiness(false, "The selected project directory does not exist.", fullPath));
+        return Task.FromResult(new AgentRuntimeReadiness(true, null, fullPath));
+    }
+
+    public async Task StreamTextAsync(
+        string sessionId,
+        Func<string, string, int, string, CancellationToken, Task> onDelta,
+        CancellationToken ct)
+    {
+        var session = await GetSessionAsync(sessionId, ct);
+        int targetTurn;
+        lock (session.Sync)
+            targetTurn = session.TurnNumber + 1;
+
+        await foreach (var item in session.Deltas.Reader.ReadAllAsync(ct))
+        {
+            if (item.TurnNumber < targetTurn)
+                continue;
+            if (item.TurnNumber > targetTurn)
+                return;
+            if (item.IsTurnEnd)
+                return;
+            await onDelta(item.Kind, item.MessageId, item.Ordinal, item.Text, ct);
+        }
+    }
+
+    public Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([]);
+
+    public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct) =>
+        Task.FromException<bool>(new InvalidOperationException("Interactive forms are not supported by the native runtime yet."));
+
+    public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct) =>
+        Task.FromException(new InvalidOperationException("Agent switching is not supported by the native runtime yet."));
+
+    public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct) =>
+        Task.FromResult<int?>(null);
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        var states = _sessions.Values.ToArray();
+        var tasks = new List<Task>();
+        foreach (var session in states)
+        {
+            lock (session.Sync)
+            {
+                session.ActiveTurn?.Cancel();
+                if (session.ActiveTask is not null)
+                    tasks.Add(session.ActiveTask);
+            }
+        }
+        try { await Task.WhenAll(tasks); } catch { }
+        foreach (var session in states)
+        {
+            lock (session.Sync)
+            {
+                session.ActiveTurn?.Dispose();
+                session.ActiveTurn = null;
+            }
+            session.Deltas.Writer.TryComplete();
+        }
+    }
+
+    private async Task RunTurnAsync(
+        SessionState session,
+        int turnNumber,
+        string model,
+        AgentPromptControls? controls,
+        CancellationToken ct)
+    {
+        var messageId = $"native:{session.Id}:{turnNumber}";
+        var generationStarted = Stopwatch.GetTimestamp();
+        var firstTokenAt = 0L;
+        var finish = "stop";
+        string? error = null;
+        var emittedContent = false;
+        var responseText = new StringBuilder();
+        ResolvedProvider? resolved = null;
+
+        try
+        {
+            resolved = await ResolveProviderAsync(model, ct);
+            if (resolved.IsLocal)
+                await _llamaSync.RunLockedAsync(
+                    () => _llama.EnsureSwapModelAsync(resolved.Model, ct),
+                    ct);
+
+            using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+            var provider = new OpenAiCompatProvider(providerHttp, resolved.BaseUrl, resolved.ApiKey);
+            var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
+            var tools = new JsonArray();
+            var request = new ChatProviderRequest(
+                resolved.Model,
+                messages,
+                tools,
+                controls?.Temperature,
+                controls?.ReasoningEffort,
+                controls?.MaxTokens);
+
+            var completed = false;
+            for (var attempt = 1; attempt <= MaxAttempts && !completed; attempt++)
+            {
+                try
+                {
+                    await foreach (var item in provider.StreamAsync(request, ct))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        switch (item.Kind)
+                        {
+                            case ChatProviderEventKind.TextDelta when !string.IsNullOrEmpty(item.Text):
+                                firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
+                                emittedContent = true;
+                                responseText.Append(item.Text);
+                                await AppendDeltaAsync(session, turnNumber, messageId, "text", item.Text, ct);
+                                break;
+                            case ChatProviderEventKind.ReasoningDelta when !string.IsNullOrEmpty(item.Text):
+                                firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
+                                emittedContent = true;
+                                await AppendDeltaAsync(session, turnNumber, messageId, "reasoning", item.Text, ct);
+                                break;
+                            case ChatProviderEventKind.Usage:
+                                lock (session.Sync)
+                                    session.Usage = session.Usage with
+                                    {
+                                        PromptTokens = item.PromptTokens ?? session.Usage.PromptTokens,
+                                        CompletionTokens = item.CompletionTokens ?? session.Usage.CompletionTokens
+                                    };
+                                break;
+                            case ChatProviderEventKind.Finished when item.FinishReason is not null and not "done":
+                                finish = item.FinishReason;
+                                break;
+                            case ChatProviderEventKind.ToolCallDelta:
+                                finish = "error";
+                                error = "The model requested a tool, but no tools are configured for this runtime.";
+                                break;
+                        }
+                    }
+                    completed = true;
+                }
+                catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts && !emittedContent && !ct.IsCancellationRequested)
+                {
+                    _log?.Invoke($"native provider request failed transiently (attempt {attempt}/{MaxAttempts}); retrying");
+                    await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), ct);
+                }
+            }
+
+            if (ct.IsCancellationRequested)
+                throw new OperationCanceledException(ct);
+
+            if (error is not null)
+                await AppendErrorAsync(session, turnNumber, messageId, error, ct);
+            else if (!emittedContent)
+            {
+                error = "The model returned no text.";
+                finish = "error";
+                await AppendErrorAsync(session, turnNumber, messageId, error, ct);
+            }
+            else
+            {
+                await CompleteAssistantPartsAsync(session, messageId, ct);
+                lock (session.Sync)
+                {
+                    session.Messages.Add(new JsonObject
+                    {
+                        ["role"] = "assistant",
+                        ["content"] = responseText.ToString()
+                    });
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            finish = "aborted";
+            error = null;
+            await CompleteAssistantPartsAsync(session, messageId, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            finish = "error";
+            error = SafeError(ex);
+            try { await AppendErrorAsync(session, turnNumber, messageId, error, CancellationToken.None); } catch { }
+            _log?.Invoke($"native agent turn failed: {error}");
+        }
+        finally
+        {
+            var elapsed = firstTokenAt == 0 ? 0 : Stopwatch.GetElapsedTime(firstTokenAt).TotalSeconds;
+            lock (session.Sync)
+            {
+                session.Usage = session.Usage with
+                {
+                    AssistantMessages = session.Usage.AssistantMessages + 1,
+                    GenerationSeconds = session.Usage.GenerationSeconds + elapsed
+                };
+                session.TurnStatus = new AgentTurnStatus(true, finish, error, messageId);
+                if (ReferenceEquals(session.ActiveTurn?.Token, ct))
+                {
+                    session.ActiveTurn.Dispose();
+                    session.ActiveTurn = null;
+                }
+            }
+            try { await PersistAsync(session, CancellationToken.None); } catch { }
+            session.Deltas.Writer.TryWrite(NativeDelta.End(turnNumber));
+        }
+    }
+
+    private async Task AppendDeltaAsync(
+        SessionState session,
+        int turnNumber,
+        string messageId,
+        string kind,
+        string delta,
+        CancellationToken ct)
+    {
+        var ordinal = 0;
+        var externalId = $"{messageId}:{kind}:{ordinal}";
+        lock (session.Sync)
+        {
+            var index = session.Parts.FindIndex(p => string.Equals(p.ExternalId, externalId, StringComparison.Ordinal));
+            if (index < 0)
+                session.Parts.Add(new AgentMessagePart("assistant", kind, delta, externalId, Complete: false));
+            else
+                session.Parts[index] = session.Parts[index] with { Body = session.Parts[index].Body + delta, Complete = false };
+        }
+        await PersistAsync(session, ct);
+        session.Deltas.Writer.TryWrite(new NativeDelta(turnNumber, kind, messageId, ordinal, delta, false));
+    }
+
+    private async Task CompleteAssistantPartsAsync(SessionState session, string messageId, CancellationToken ct)
+    {
+        lock (session.Sync)
+        {
+            for (var i = 0; i < session.Parts.Count; i++)
+            {
+                var part = session.Parts[i];
+                if (part.Role == "assistant"
+                    && part.ExternalId is not null
+                    && part.ExternalId.StartsWith(messageId + ":", StringComparison.Ordinal))
+                    session.Parts[i] = part with { Complete = true };
+            }
+        }
+        await PersistAsync(session, ct);
+    }
+
+    private async Task AppendErrorAsync(SessionState session, int turnNumber, string messageId, string message, CancellationToken ct)
+    {
+        lock (session.Sync)
+        {
+            var id = $"native-error:{session.Id}:{turnNumber}";
+            if (session.Parts.All(p => p.ExternalId != id))
+                session.Parts.Add(new AgentMessagePart("assistant", "error", message, id));
+            session.TurnStatus = new AgentTurnStatus(false, "error", message, messageId);
+        }
+        await PersistAsync(session, ct);
+    }
+
+    private async Task<JsonArray> BuildContextMessagesAsync(
+        SessionState session,
+        IChatProvider provider,
+        string model,
+        AgentPromptControls? controls,
+        CancellationToken ct)
+    {
+        List<JsonObject> snapshot;
+        lock (session.Sync)
+            snapshot = session.Messages.Select(m => (JsonObject)m.DeepClone()).ToList();
+
+        var limit = controls?.ContextLimit is > 0 ? controls.ContextLimit.Value : session.ContextLimit.GetValueOrDefault();
+        if (limit > 0 && EstimateTokens(snapshot) > (int)(limit * 0.82) && snapshot.Count > 3)
+        {
+            var preserve = Math.Min(6, snapshot.Count - 1);
+            var splitAt = snapshot.Count - preserve;
+            var keep = snapshot.Skip(splitAt).ToList();
+            var old = snapshot.Skip(1).Take(splitAt - 1).ToList();
+            if (old.Count > 0)
+            {
+                var compactHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+                try
+                {
+                    var summaryRequest = new ChatProviderRequest(
+                        model,
+                        new JsonArray
+                        {
+                            new JsonObject
+                            {
+                                ["role"] = "system",
+                                ["content"] = "Summarize the conversation history for continuation. Preserve the user's objective, constraints, decisions, important identifiers, completed work, unresolved questions, and exact errors. Be concise and do not invent facts."
+                            },
+                            new JsonObject
+                            {
+                                ["role"] = "user",
+                                ["content"] = new JsonArray(old.Select(m => (JsonNode?)m.DeepClone()).ToArray()).ToJsonString()
+                            }
+                        },
+                        new JsonArray(),
+                        controls?.Temperature,
+                        controls?.ReasoningEffort,
+                        controls?.MaxTokens is > 0 ? Math.Min(controls.MaxTokens.Value, 2048) : 2048);
+                    var summaryProvider = new OpenAiCompatProvider(compactHttp, GetBaseUrl(model, resolvedLocal: model.StartsWith("beacon-local/", StringComparison.OrdinalIgnoreCase), settings: _loadSettings()), null);
+                    var summary = new StringBuilder();
+                    await foreach (var item in summaryProvider.StreamAsync(summaryRequest, ct))
+                        if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
+                            summary.Append(item.Text);
+
+                    var compacted = new List<JsonObject> { snapshot[0] };
+                    if (summary.Length > 0)
+                        compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Conversation summary (preserve this as context):\n" + summary.ToString() });
+                    compacted.AddRange(keep);
+                    snapshot = compacted;
+                    lock (session.Sync)
+                    {
+                        session.Messages.Clear();
+                        session.Messages.AddRange(snapshot.Select(m => (JsonObject)m.DeepClone()));
+                    }
+                    await PersistAsync(session, ct);
+                }
+                finally
+                {
+                    compactHttp.Dispose();
+                }
+            }
+        }
+
+        var result = new JsonArray();
+        foreach (var message in snapshot)
+            result.Add(message.DeepClone());
+        return result;
+    }
+
+    private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
+        Math.Max(1, Encoding.UTF8.GetByteCount(string.Join("\n", messages.Select(m => m.ToJsonString()))) / 4);
+
+    private async Task<ResolvedProvider> ResolveProviderAsync(string model, CancellationToken ct)
+    {
+        var separator = model.IndexOf('/');
+        if (separator <= 0 || separator == model.Length - 1)
+            throw new InvalidOperationException("Model id must use provider/model format.");
+        var providerId = model[..separator].Trim();
+        var modelId = model[(separator + 1)..].Trim();
+        if (providerId.Equals("beacon-local", StringComparison.OrdinalIgnoreCase))
+        {
+            var port = _llama.Port > 0 ? _llama.Port : _loadSettings().LlamaSwapPort;
+            return new ResolvedProvider($"http://127.0.0.1:{port}/v1", null, modelId, true);
+        }
+
+        using var response = await _controlPlane.GetAsync("/v1/devices/me/opencode-connections", ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Could not load provider connections (HTTP {(int)response.StatusCode}).");
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("value", out var wrapped))
+            root = wrapped;
+        if (root.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("Provider connection response is not a list.");
+
+        foreach (var row in root.EnumerateArray())
+        {
+            var id = ReadString(row, "providerId");
+            if (!string.Equals(id, providerId, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var baseUrl = ReadString(row, "baseUrl");
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new InvalidOperationException($"Provider '{providerId}' has no base URL.");
+            var apiKey = ReadString(row, "apiKey");
+            return new ResolvedProvider(baseUrl.TrimEnd('/'), apiKey, modelId, false);
+        }
+
+        throw new InvalidOperationException($"No connection is configured for provider '{providerId}'.");
+    }
+
+    private static string GetBaseUrl(string model, bool resolvedLocal, WorkstationSettings settings) =>
+        resolvedLocal ? $"http://127.0.0.1:{(settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080)}/v1" : throw new InvalidOperationException("Context compaction requires an explicit resolved provider URL.");
+
+    private async Task<SessionState> GetSessionAsync(string id, CancellationToken ct)
+    {
+        if (_sessions.TryGetValue(id, out var existing))
+            return existing;
+        var path = TranscriptPath(_loadSettings(), Guid.Empty, id);
+        if (!File.Exists(path))
+            throw new InvalidOperationException("Agent session was not found.");
+        var text = await File.ReadAllTextAsync(path, ct);
+        var saved = JsonSerializer.Deserialize<PersistedSession>(text, JsonOptions)
+            ?? throw new InvalidDataException("Stored agent transcript is invalid.");
+        var state = new SessionState
+        {
+            Id = saved.Id,
+            Title = saved.Title,
+            CreatedAt = saved.CreatedAt,
+            TranscriptPath = path,
+            Messages = saved.Messages,
+            Parts = saved.Parts,
+            TurnNumber = saved.TurnNumber,
+            LastModel = saved.LastModel,
+            ContextLimit = saved.ContextLimit,
+            Usage = saved.Usage,
+            TurnStatus = saved.TurnStatus
+        };
+        lock (state.Sync)
+        {
+            if (state.TurnStatus is { Ended: false } interrupted)
+            {
+                state.TurnStatus = new AgentTurnStatus(true, "aborted", "Client restarted during the previous turn.", interrupted.MessageId);
+                state.Parts = state.Parts.Select(p => p.Complete ? p : p with { Complete = true }).ToList();
+            }
+        }
+        return _sessions.GetOrAdd(id, state);
+    }
+
+    private static string TranscriptPath(WorkstationSettings settings, Guid _, string? id)
+    {
+        var parent = string.IsNullOrWhiteSpace(settings.OpencodeDataDir)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon")
+            : Path.GetDirectoryName(Path.GetFullPath(settings.OpencodeDataDir)) ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return Path.Combine(parent, "sessions", (id ?? Guid.NewGuid().ToString("N")) + ".json");
+    }
+
+    private async Task PersistAsync(SessionState session, CancellationToken ct)
+    {
+        PersistedSession snapshot;
+        await session.Persistence.WaitAsync(ct);
+        try
+        {
+            lock (session.Sync)
+            {
+                snapshot = new PersistedSession
+                {
+                    Id = session.Id,
+                    Title = session.Title,
+                    CreatedAt = session.CreatedAt,
+                    Messages = session.Messages.Select(m => (JsonObject)m.DeepClone()).ToList(),
+                    Parts = session.Parts.ToList(),
+                    TurnNumber = session.TurnNumber,
+                    LastModel = session.LastModel,
+                    ContextLimit = session.ContextLimit,
+                    Usage = session.Usage,
+                    TurnStatus = session.TurnStatus
+                };
+            }
+            var dir = Path.GetDirectoryName(session.TranscriptPath)!;
+            Directory.CreateDirectory(dir);
+            var temp = session.TranscriptPath + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(snapshot, JsonOptions), ct);
+                File.Move(temp, session.TranscriptPath, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(temp); } catch { }
+                throw;
+            }
+        }
+        finally
+        {
+            session.Persistence.Release();
+        }
+    }
+
+    private static bool IsRetryable(Exception ex) =>
+        ex is ChatProviderException { Retryable: true }
+        || ex is HttpRequestException
+        || ex is IOException;
+
+    private static string SafeError(Exception ex) => ex switch
+    {
+        ChatProviderException provider => provider.Message,
+        HttpRequestException => "The chat provider connection failed.",
+        OperationCanceledException => "The generation was cancelled.",
+        InvalidDataException => ex.Message,
+        InvalidOperationException => ex.Message,
+        _ => "The native agent runtime encountered an unexpected error."
+    };
+
+    private static string? ReadString(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(NativeAgentRuntime));
+    }
+
+    private sealed record ResolvedProvider(string BaseUrl, string? ApiKey, string Model, bool IsLocal);
+
+    private sealed record NativeDelta(int TurnNumber, string Kind, string MessageId, int Ordinal, string Text, bool IsTurnEnd)
+    {
+        public static NativeDelta End(int turn) => new(turn, "", "", 0, "", true);
+    }
+
+    private sealed class SessionState
+    {
+        public object Sync { get; } = new();
+        public SemaphoreSlim Persistence { get; } = new(1, 1);
+        public Channel<NativeDelta> Deltas { get; } = Channel.CreateUnbounded<NativeDelta>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public DateTimeOffset CreatedAt { get; set; }
+        public string TranscriptPath { get; set; } = "";
+        public List<JsonObject> Messages { get; set; } = [];
+        public List<AgentMessagePart> Parts { get; set; } = [];
+        public int TurnNumber { get; set; }
+        public string? LastModel { get; set; }
+        public int? ContextLimit { get; set; }
+        public AgentSessionUsage Usage { get; set; } = new(0, 0, 0, 0);
+        public AgentTurnStatus? TurnStatus { get; set; }
+        public CancellationTokenSource? ActiveTurn { get; set; }
+        public Task? ActiveTask { get; set; }
+    }
+
+    private sealed class PersistedSession
+    {
+        public string Id { get; set; } = "";
+        public string Title { get; set; } = "";
+        public DateTimeOffset CreatedAt { get; set; }
+        public List<JsonObject> Messages { get; set; } = [];
+        public List<AgentMessagePart> Parts { get; set; } = [];
+        public int TurnNumber { get; set; }
+        public string? LastModel { get; set; }
+        public int? ContextLimit { get; set; }
+        public AgentSessionUsage Usage { get; set; } = new(0, 0, 0, 0);
+        public AgentTurnStatus? TurnStatus { get; set; }
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true
+    };
+}
