@@ -164,6 +164,42 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         }
     }
 
+    [Fact]
+    public async Task ControlOnlyClaim_SkipsQueuedPromptAndClaimsAbort()
+    {
+        _postgres.RequirePostgres();
+
+        Guid deviceId;
+        Guid promptId;
+        await using (var seed = _postgres.CreateContext())
+        {
+            var device = SeedDevice(seed, "control-lane");
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            deviceId = device.Id;
+
+            var prompt = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ChatPrompt);
+            var abort = WorkstationCommand.Create(device.Id, WorkstationCommandKind.ChatAbort);
+            seed.WorkstationCommands.Add(prompt);
+            seed.WorkstationCommands.Add(abort);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            promptId = prompt.Id;
+        }
+
+        var claimed = await ClaimAsync(deviceId, controlOnly: true);
+
+        Assert.True(claimed.Success, claimed.Error);
+        Assert.NotNull(claimed.Value);
+        Assert.Equal(WorkstationCommandKind.ChatAbort, claimed.Value!.Kind);
+
+        await using var check = _postgres.CreateContext();
+        using (TenantScope.EnterUnscoped())
+        {
+            var prompt = await check.WorkstationCommands.AsNoTracking()
+                .SingleAsync(c => c.Id == promptId, TestContext.Current.CancellationToken);
+            Assert.Equal(WorkstationCommandStatus.Pending, prompt.Status);
+        }
+    }
+
     private DaemonDevice SeedDevice(BeaconDbContext seed, string suffix)
     {
         var user = User.Create($"wsc-{suffix}", $"wsc-{suffix}@beacon.local", "hash");
@@ -174,13 +210,13 @@ public sealed class ClaimWorkstationCommandPostgresTests : IClassFixture<Postgre
         return device;
     }
 
-    private async Task<Application.Common.Result<WorkstationCommandDto?>> ClaimAsync(Guid deviceId)
+    private async Task<Application.Common.Result<WorkstationCommandDto?>> ClaimAsync(Guid deviceId, bool controlOnly = false)
     {
         using (TenantScope.EnterUnscoped())
         {
             var handler = new ClaimNextCommandHandler(_postgres.CreateFactory());
             return await handler.HandleAsync(
-                new ClaimNextCommandCommand(new ClaimNextCommandRequest(deviceId, TimeSpan.Zero)));
+                new ClaimNextCommandCommand(new ClaimNextCommandRequest(deviceId, TimeSpan.Zero, controlOnly)));
         }
     }
 }
