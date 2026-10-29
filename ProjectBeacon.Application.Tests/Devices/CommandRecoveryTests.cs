@@ -424,13 +424,17 @@ public sealed class CommandRecoveryTests : IDisposable
     public async Task LongStaleNativePipelineCommand_IsFailedNeverRequeuedAndFailsSession()
     {
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
-        var org = Org.Create("pipeline-recovery-" + Guid.NewGuid().ToString("N"));
-        _db.Orgs.Add(org);
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var project = Project.Create("Native pipeline recovery", null, org.Id);
-        _db.Projects.Add(project);
-        _db.ProjectMembers.Add(ProjectMember.Create(project.Id, device.UserId, MemberRole.Owner));
-        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        Project project;
+        using (TenantScope.EnterUnscoped())
+        {
+            var org = Org.Create("pipeline-recovery-" + Guid.NewGuid().ToString("N"));
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            project = Project.Create("Native pipeline recovery", null, org.Id);
+            _db.Projects.Add(project);
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, device.UserId, MemberRole.Owner));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
         var task = TaskItem.Create("Recover native pipeline command", project.Id);
         var session = PipelineSession.Create(
