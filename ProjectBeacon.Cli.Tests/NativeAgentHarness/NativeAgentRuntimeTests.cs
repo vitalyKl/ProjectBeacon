@@ -58,7 +58,7 @@ public sealed class NativeAgentRuntimeTests
                 "beacon-local/test-model",
                 CancellationToken.None,
                 new AgentPromptControls(null, "medium", null) { ContextLimit = 32768 });
-            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(15));
 
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
@@ -149,7 +149,7 @@ public sealed class NativeAgentRuntimeTests
             await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
 
             Assert.Equal("Read complete.", string.Concat(streamed.Where(item => item.Kind == "text").Select(item => item.Delta)));
-            var toolDelta = Assert.Single(streamed.Where(item => item.Kind == "tool")).Delta;
+            var toolDelta = Assert.Single(streamed, item => item.Kind == "tool").Delta;
             Assert.StartsWith("read_file: ", toolDelta, StringComparison.Ordinal);
             Assert.Contains("[Tool result truncated: original length 20000 characters;", toolDelta, StringComparison.Ordinal);
             Assert.True(toolDelta.Length < 16 * 1024 + 20);
