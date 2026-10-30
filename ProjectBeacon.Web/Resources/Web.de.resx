@@ -1462,10 +1462,10 @@
     <value>Eigentümer</value>
   </data>
   <data name="LandingHeroTitle" xml:space="preserve">
-    <value>Kontext, der die nächste Sitzung übersteht.</value>
+    <value>Mit KI-Agenten entwickeln. Die Kontrolle behalten.</value>
   </data>
   <data name="LandingHeroLead" xml:space="preserve">
-    <value>Eine Steuerungsebene für gemischte Arbeit von Menschen und lokalen Agenten. Beacon kompiliert das Briefing einmal, damit Agenten nicht erneut entdecken, was schon entschieden wurde.</value>
+    <value>ProjectBeacon vereint Projekte, KI-Agenten, Modelle und Entwicklungsabläufe in einer selbst gehosteten Steuerungsebene. Der Agentenzyklus läuft auf Ihrer Workstation; Werkzeuge und Quellcode bleiben unter Ihrer Kontrolle.</value>
   </data>
   <data name="LandingProblemTitle" xml:space="preserve">
     <value>Agenten starten kalt</value>
@@ -1477,37 +1477,37 @@
     <value>So funktioniert es</value>
   </data>
   <data name="LandingHow1" xml:space="preserve">
-    <value>Kompilieren Sie ein budgetiertes Briefing aus Kontext, Entscheidungen und Einschränkungen.</value>
+    <value>Erstellen Sie ein fokussiertes Briefing aus Projektkontext, Entscheidungen, Einschränkungen und Token-Budget. Kritische Regeln bleiben erhalten.</value>
   </data>
   <data name="LandingHow2" xml:space="preserve">
-    <value>Übernehmen Sie Arbeit auf dem Board. Status, Prüfnotizen und Pipeline bleiben an einem Ort.</value>
+    <value>Planen Sie Arbeit, weisen Sie Aufgaben zu und koordinieren Sie Agentenphasen. Menschliche Prüfung, Pipeline-Status und Ergebnisse bleiben sichtbar.</value>
   </data>
   <data name="LandingHow3" xml:space="preserve">
-    <value>Führen Sie den Agenten auf Ihrem Rechner mit beacon mcp und beacon client aus. Beacon führt den Zug nie selbst aus.</value>
+    <value>Der Workstation-Client führt Native Harness oder OpenCode aus, verbindet Modelle und ruft lokale MCP-Werkzeuge auf. Der Server führt Ihren Code nicht aus.</value>
   </data>
   <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>Was enthalten ist</value>
   </data>
   <data name="LandingFeatureContext" xml:space="preserve">
-    <value>Bereichsbezogene Briefings mit Token-Budget. Sicherheit und Definition of Done werden nie verworfen.</value>
+    <value>Kompilierte, abgegrenzte Briefings bewahren Projektwissen, Entscheidungen, Einschränkungen und Abnahmekriterien über Sitzungen hinweg.</value>
   </data>
   <data name="LandingFeatureBoard" xml:space="preserve">
-    <value>Board, Backlog und Roadmap für gemischte Arbeit von Menschen und Agenten.</value>
+    <value>Board, Backlog und Roadmap verbinden Agentenarbeit mit menschlicher Planung, Prüfung und Auslieferung.</value>
   </data>
   <data name="LandingFeatureDecisions" xml:space="preserve">
     <value>Entscheidungen tragen Folgen, damit Agenten einen Grund haben, sie zu beachten.</value>
   </data>
   <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>Solo- und Pipeline-Modelle auf Hardware, die Sie steuern. llama-swap bleibt auf dem Arbeitsplatz.</value>
+    <value>Konfigurieren Sie Benutzer-Agenten, Modell-Backends und Aufgabenrollen einmalig. Nutzen Sie Native Harness oder OpenCode.</value>
   </data>
   <data name="LandingFeatureDevices" xml:space="preserve">
-    <value>Ausgehendes HTTPS von beacon client. Der Web-Host liest Ihre Festplatte nicht.</value>
+    <value>Der Workstation-Client verbindet sich ausgehend per HTTPS. Agentenausführung, lokale Modelle und Workspace-Zugriff bleiben auf Ihrem Rechner.</value>
   </data>
   <data name="LandingFeatureMcpTitle" xml:space="preserve">
-    <value>stdio-MCP</value>
+    <value>MCP-Werkzeugkette</value>
   </data>
   <data name="LandingFeatureMcp" xml:space="preserve">
-    <value>Lokale Datei- und Pipeline-Werkzeuge über stdio. HTTP-MCP wird nicht ausgeliefert.</value>
+    <value>Lokale beacon-mcp-Werkzeuge über stdio mit rollenbasierten Berechtigungen und begrenztem Zugriff.</value>
   </data>
   <data name="LandingCompareTitle" xml:space="preserve">
     <value>Im Vergleich</value>
@@ -1559,37 +1559,37 @@ Kein von Beacon gehosteter Coding-Agent.</value>
     <value>Fragen</value>
   </data>
   <data name="LandingFaq1Q" xml:space="preserve">
-    <value>Führt Beacon den Coding-Agenten aus?</value>
+    <value>Führt ProjectBeacon Agenten in der Cloud aus?</value>
   </data>
   <data name="LandingFaq1A" xml:space="preserve">
-    <value>Nein. Beacon leitet weiter und orchestriert. Der Agentenprozess läuft immer auf Hardware, die Sie steuern.</value>
+    <value>Nein. Der Agentenzyklus läuft über beacon client auf Ihrer Workstation. Sie können Native Harness oder OpenCode verwenden. Web/API/Worker koordinieren die Arbeit, führen aber weder Ihr Modell noch Code in Ihrem Workspace aus.</value>
   </data>
   <data name="LandingFaq2Q" xml:space="preserve">
-    <value>Wo liegt der Code?</value>
+    <value>Wo laufen meine Modelle und wo liegt mein Code?</value>
   </data>
   <data name="LandingFaq2A" xml:space="preserve">
-    <value>Auf Ihrem Rechner. beacon client spricht ausgehendes HTTPS. Der Web-Host durchsucht den Arbeitsbaum nicht.</value>
+    <value>Ihr Code bleibt im Workspace auf Ihrer Workstation. Modelle können lokal über ein konfiguriertes Backend oder bei einem unterstützten Cloud-Anbieter laufen. Der Workstation-Client verbindet sich ausgehend per HTTPS mit Ihrem selbst gehosteten ProjectBeacon-Server; der Web-Host durchsucht Ihren Arbeitsbaum nicht.</value>
   </data>
   <data name="LandingFaq3Q" xml:space="preserve">
-    <value>Ist das gehostetes SaaS?</value>
+    <value>Kann ich mehrere Projekte verwenden?</value>
   </data>
   <data name="LandingFaq3A" xml:space="preserve">
-    <value>Self-Hosting ist der Weg für v1. Gehostetes Multi-Tenant bleibt eine spätere, abgeschaltete Phase.</value>
+    <value>Ja. Ihre Agenten- und Modellkonfiguration gehört zu Ihrem Benutzerkonto und kann projektübergreifend wiederverwendet werden. Jedes Projekt hat eigene Aufgaben, Kontextinformationen, Entscheidungen und ein Arbeitsverzeichnis.</value>
   </data>
   <data name="LandingFaq4Q" xml:space="preserve">
-    <value>Wie füge ich Personen hinzu?</value>
+    <value>Muss ich Native Harness verwenden?</value>
   </data>
   <data name="LandingFaq4A" xml:space="preserve">
-    <value>Offene Registrierung oder nur auf Einladung über AUTH_LOCAL_INVITE_ONLY. Laden Sie vom offenen Projekt im Dashboard ein; der Link wird einmal angezeigt.</value>
+    <value>Nein. OpenCode bleibt eine unterstützte Laufzeit. Sie wählen die Laufzeit pro Workstation; Native Harness ist eine Alternative, die den Modell-/Werkzeugzyklus lokal ausführt und die vorhandenen MCP-Werkzeuge von ProjectBeacon nutzt.</value>
   </data>
   <data name="LandingFaq5Q" xml:space="preserve">
-    <value>Wie setze ich ein Passwort zurück?</value>
+    <value>Ist ProjectBeacon ein gehostetes SaaS?</value>
   </data>
   <data name="LandingFaq5A" xml:space="preserve">
-    <value>Nutzen Sie Passwort vergessen. /recover ist der Notfallweg mit Bootstrap-Token für Administratoren, kein Benutzer-Reset.</value>
+    <value>Der aktuelle Produktweg ist Self-Hosting. Sie betreiben die Steuerungsebene selbst und verbinden Ihre Workstation. Gehosteter Multi-Tenant-Betrieb gehört nicht zum ausgelieferten Produkt.</value>
   </data>
   <data name="LandingCtaTitle" xml:space="preserve">
-    <value>Auf dem eigenen Host starten</value>
+    <value>Ihre Agenten. Ihre Hardware. Ein Arbeitsbereich.</value>
   </data>
   <data name="Project" xml:space="preserve">
     <value>Projekt</value>
@@ -2078,4 +2078,42 @@ orthstar</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Änderungen werden nach einem Neustart des Workstation-Clients wirksam.</value>
   </data>
+  <data name="LandingEyebrow" xml:space="preserve"><value>LOKALE KI-ENTWICKLUNGSPLATTFORM</value></data>
+  <data name="LandingHeroFootnote" xml:space="preserve"><value>Ihre Workstation führt den Agenten aus. Ihre Projekte bleiben Ihre.</value></data>
+  <data name="LandingOnline" xml:space="preserve"><value>WORKSTATION ONLINE</value></data>
+  <data name="LandingLocalRuntime" xml:space="preserve"><value>Lokale Laufzeit</value></data>
+  <data name="LandingWorkspaceLabel" xml:space="preserve"><value>AKTIVER ARBEITSBEREICH</value></data>
+  <data name="LandingPreviewReady" xml:space="preserve"><value>Konfiguriert</value></data>
+  <data name="LandingPreviewConnected" xml:space="preserve"><value>Verbunden</value></data>
+  <data name="LandingActiveTasks" xml:space="preserve"><value>Aktive Aufgaben</value></data>
+  <data name="LandingPreviewInProgress" xml:space="preserve"><value>In Bearbeitung</value></data>
+  <data name="LandingWorkInProgress" xml:space="preserve"><value>Laufende Arbeit</value></data>
+  <data name="LandingTaskContext" xml:space="preserve"><value>Kontextbriefing · Projektregeln</value></data>
+  <data name="LandingTaskAgent" xml:space="preserve"><value>Native Harness · Actor</value></data>
+  <data name="LandingRuntimeTitle" xml:space="preserve"><value>Agenten-Laufzeit</value></data>
+  <data name="LandingRuntimeDescription" xml:space="preserve"><value>Native Harness oder OpenCode · lokales oder Cloud-Modell</value></data>
+  <data name="LandingVisualCaption" xml:space="preserve"><value>Der gesamte Ablauf an einem Ort</value></data>
+  <data name="LandingPrinciplesTitle" xml:space="preserve"><value>Produktprinzipien</value></data>
+  <data name="LandingPrincipleLocal" xml:space="preserve"><value>Läuft auf Ihrer Workstation</value></data>
+  <data name="LandingPrincipleMulti" xml:space="preserve"><value>Eine Konfiguration, viele Projekte</value></data>
+  <data name="LandingPrincipleControl" xml:space="preserve"><value>Sie kontrollieren Modelle und Daten</value></data>
+  <data name="LandingPrincipleOpen" xml:space="preserve"><value>MCP-basierte Werkzeuge</value></data>
+  <data name="LandingFeaturesLead" xml:space="preserve"><value>Ein vernetzter Arbeitsbereich für den gesamten agentengestützten Entwicklungszyklus — nicht nur ein weiteres Chatfenster.</value></data>
+  <data name="LandingPipelineTitle" xml:space="preserve"><value>Agenten-Pipelines</value></data>
+  <data name="LandingFeaturePipeline" xml:space="preserve"><value>Koordinieren Sie Planner-, Actor- und Reviewer-Sitzungen mit begrenzten Werkzeugen, Aufgabenstatus und Prüfergebnissen.</value></data>
+  <data name="LandingHowLead" xml:space="preserve"><value>Vom gemeinsamen Projektwissen bis zum kontrollierten lokalen Agentenlauf — mit nachvollziehbarem Ergebnis.</value></data>
+  <data name="LandingFlow1Title" xml:space="preserve"><value>Den richtigen Kontext bereitstellen</value></data>
+  <data name="LandingFlow2Title" xml:space="preserve"><value>Die Arbeit koordinieren</value></data>
+  <data name="LandingFlow3Title" xml:space="preserve"><value>Lokal ausführen. Zentral prüfen.</value></data>
+  <data name="LandingArchitectureTitle" xml:space="preserve"><value>Eine Steuerungsebene. Ihre Workstation. Ihre Regeln.</value></data>
+  <data name="LandingArchitectureBody" xml:space="preserve"><value>ProjectBeacon koordiniert Identitäten, Projekte, Aufgaben, Berechtigungen und Agentensitzungen. Der Workstation-Client verwaltet die Modellausführung und lokale Werkzeuge — Quellbaum und Laufzeit bleiben auf Ihrer Hardware.</value></data>
+  <data name="LandingArchitectureControl" xml:space="preserve"><value>ProjectBeacon-Steuerungsebene</value></data>
+  <data name="LandingArchitectureControlBody" xml:space="preserve"><value>Projekte · Aufgaben · Kontext · Berechtigungen · Verlauf</value></data>
+  <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>Ihre Workstation</value></data>
+  <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon Client · Laufzeitauswahl · Modellverbindungen</value></data>
+  <data name="LandingArchitectureRuntime" xml:space="preserve"><value>Lokale Agenten-Laufzeit</value></data>
+  <data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native Harness oder OpenCode · MCP stdio · Workspace</value></data>
+  <data name="LandingCtaEyebrow" xml:space="preserve"><value>ÜBERNEHMEN SIE DIE KONTROLLE ÜBER IHREN KI-WORKFLOW</value></data>
+  <data name="LandingCtaBody" xml:space="preserve"><value>Starten Sie mit Ihrem eigenen ProjectBeacon-Host und verbinden Sie eine Workstation.</value></data>
+  <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first-Steuerungsebene für KI-gestützte Entwicklung</value></data>
 </root>
