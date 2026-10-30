@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using Application.Runtime;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 internal interface IDaemonOpenCodeGate
 {
@@ -62,19 +63,53 @@ internal sealed class DaemonOpenCodeGate : IDaemonOpenCodeGate
         return readiness;
     }
 
-    public string? RuntimeWorkingDirectory => _lastReadiness?.WorkingDirectory ?? OpenCode.Cwd;
+    public string? RuntimeWorkingDirectory => Runtime is OpenCodeAgentRuntime
+        ? _lastReadiness?.WorkingDirectory ?? OpenCode.Cwd
+        : _lastReadiness?.WorkingDirectory;
 
-    public object RuntimeStatusWire() => Runtime is OpenCodeAgentRuntime
-        ? OpenCode.StatusWire()
-        : new
+    public object RuntimeStatusWire()
+    {
+        if (Runtime is OpenCodeAgentRuntime)
         {
+            var status = OpenCode.Status;
+            return new
+            {
+                runtime = "opencode",
+                available = status.Available,
+                healthy = status.Healthy,
+                port = OpenCode.Port,
+                cwd = OpenCode.Cwd,
+                version = status.Version,
+                error = status.Error
+            };
+        }
+
+        if (Runtime is UnavailableAgentRuntime unavailable)
+        {
+            return new
+            {
+                runtime = "unavailable",
+                available = false,
+                healthy = false,
+                version = (string?)null,
+                error = unavailable.Error,
+                warning = (string?)null,
+                cwd = (string?)null
+            };
+        }
+
+        var isNative = Runtime is NativeAgentRuntime;
+        return new
+        {
+            runtime = isNative ? "native" : "custom",
             available = true,
             healthy = _lastReadiness?.Ready ?? true,
-            version = "native",
+            version = isNative ? "native" : "custom",
             error = _lastReadiness?.Error,
             warning = _lastReadiness?.Warning,
             cwd = _lastReadiness?.WorkingDirectory
         };
+    }
 
     private async Task<AgentRuntimeReadiness> EnsureOpenCodeReadyAsync(string? workingDirectory, CancellationToken ct)
     {
