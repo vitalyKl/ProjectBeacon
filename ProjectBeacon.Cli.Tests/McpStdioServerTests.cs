@@ -15,9 +15,7 @@ public sealed class McpStdioServerTests
     {
         var env = McpEnvironment.Of(
             ("BEACON_API_URL", "https://beacon.test/"),
-            ("BEACON_API_TOKEN", "test-token"),
-            ("BEACON_PIPELINE_ROLE", "Eval"),
-            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+            ("BEACON_API_TOKEN", "test-token"));
         var handler = new ConcurrentApiHandler();
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://beacon.test/") };
         var api = new BeaconApiClient(http, env);
@@ -116,20 +114,23 @@ public sealed class McpStdioServerTests
             WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
             WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"note.txt"}}}""");
             WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_create_subtask","arguments":{"instructions":"not allowed"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"model_delete","arguments":{"modelBackendId":"00000000-0000-0000-0000-000000000001"}}}""");
             input.Position = 0;
             using var output = new MemoryStream();
             await McpStdioServer.RunAsync(root, input, output, api, env);
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
 
-            Assert.Equal(3, frames.Count);
+            Assert.Equal(4, frames.Count);
             var tools = frames[0]["result"]!["tools"]!.ToJsonString();
             Assert.Contains("read_file", tools, StringComparison.Ordinal);
             Assert.Contains("write_file", tools, StringComparison.Ordinal);
             Assert.DoesNotContain("task_create_subtask", tools, StringComparison.Ordinal);
             Assert.DoesNotContain("task_review_verdict", tools, StringComparison.Ordinal);
+            Assert.DoesNotContain("model_status", tools, StringComparison.Ordinal);
             Assert.Contains("eval workspace tools are available", frames[1].ToJsonString(), StringComparison.Ordinal);
-            Assert.Contains("not allowed for the Eval", frames[2].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Eval", frames.Single(frame => frame["id"]!.GetValue<int>() == 3).ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Eval", frames.Single(frame => frame["id"]!.GetValue<int>() == 4).ToJsonString(), StringComparison.Ordinal);
             Assert.Equal(0, apiCalls);
         }
         finally

@@ -47,6 +47,7 @@ public static partial class McpStdioServer
             if (message is null)
                 break;
 
+            pending.RemoveAll(static task => task.IsCompleted);
             await requestSlots.WaitAsync();
             pending.Add(ProcessRequestAsync(message, root, output, api, env, outputGate, requestSlots));
         }

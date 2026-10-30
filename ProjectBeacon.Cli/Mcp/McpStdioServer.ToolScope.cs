@@ -10,7 +10,7 @@ public static partial class McpStdioServer
         var tools = Tools();
         var role = env.Get("BEACON_PIPELINE_ROLE");
         if (string.Equals(role, "Eval", StringComparison.OrdinalIgnoreCase))
-            return Result(id, new JsonObject { ["tools"] = FilterToolsByNameExcluding(tools, EvalForbiddenTools) });
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByName(tools, EvalAllowedTools) });
 
         if (api is null || !Guid.TryParse(env.Get("BEACON_TASK_ID"), out var taskId) || taskId == Guid.Empty)
         {
@@ -112,12 +112,14 @@ public static partial class McpStdioServer
         "subtask_report_result", "pipeline_fail_subtask"
     ];
 
-    private static readonly string[] EvalForbiddenTools =
+    private static readonly string[] EvalAllowedTools =
     [
-        "task_create_subtask", "subtask_report_result", "pipeline_fail_subtask",
-        "task_review_verdict", "task_pipeline_status", "pipeline_start",
-        "pipeline_start_actor", "pipeline_launch_session", "pipeline_start_review",
-        "pipeline_approve", "pipeline_force_close"
+        ..ReadOnlyWorkspaceTools,
+        "write_file", "apply_patch",
+        "get_project", "list_tasks", "get_task", "list_task_steps",
+        "list_context_nodes", "get_context_node", "export_agents_md",
+        "list_constraints", "list_decisions", "list_milestones", "get_milestone",
+        "list_labels", "match_label", "list_reports", "get_report"
     ];
 
     private static readonly string[] ActorForbiddenTools =
@@ -136,19 +138,6 @@ public static partial class McpStdioServer
         "create_milestone", "update_milestone", "delete_milestone", "close_milestone", "reopen_milestone",
         "add_label_path", "generate_report"
     ];
-
-    private static JsonArray FilterToolsByNameExcluding(JsonArray tools, IReadOnlyList<string> deniedNames)
-    {
-        var denied = deniedNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var result = new JsonArray();
-        foreach (var tool in tools)
-        {
-            var name = tool?["name"]?.GetValue<string>();
-            if (name is not null && !denied.Contains(name))
-                result.Add(tool!.DeepClone());
-        }
-        return result;
-    }
 
     private static JsonArray FilterToolsByName(JsonArray tools, IReadOnlyList<string> names)
     {
@@ -248,9 +237,9 @@ public static partial class McpStdioServer
                 ? null
                 : $"Tool '{tool}' is not allowed for the Actor pipeline role.";
         if (string.Equals(role, "Eval", StringComparison.OrdinalIgnoreCase))
-            return EvalForbiddenTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
-                ? $"Tool '{tool}' is not allowed for the Eval runtime scope."
-                : null;
+            return EvalAllowedTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+                ? null
+                : $"Tool '{tool}' is not allowed for the Eval runtime scope.";
         return null;
     }
 
