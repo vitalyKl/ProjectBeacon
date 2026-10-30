@@ -381,6 +381,17 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public void ProbeJson_ReportsRuntimeNeutralAgentStatusAndKeepsLegacyAlias()
+    {
+        var json = WorkstationProbe.ProbeJson(opencodeServe: new { runtime = "native", healthy = true });
+        using var doc = JsonDocument.Parse(json);
+
+        Assert.Equal("native", doc.RootElement.GetProperty("agentRuntime").GetProperty("runtime").GetString());
+        Assert.True(doc.RootElement.GetProperty("agentRuntime").GetProperty("healthy").GetBoolean());
+        Assert.Equal("native", doc.RootElement.GetProperty("opencodeServe").GetProperty("runtime").GetString());
+    }
+
+    [Fact]
     public void Install_Unknown_Throws()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => WorkstationSetup.Install("""{"id":"not-a-package"}"""));
