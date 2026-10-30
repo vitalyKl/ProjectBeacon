@@ -184,7 +184,7 @@ public sealed class WorkstationEvalRuntimeTests
 
         var result = await ProcessRunner.RunAsync(start, TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.False(result.TimedOut, $"git {string.Join(" ", arguments)} timed out: {result.StdErr}");
-        Assert.Equal(0, result.ExitCode, $"git {string.Join(" ", arguments)} failed: {result.StdErr}");
+        Assert.True(result.ExitCode == 0, $"git {string.Join(" ", arguments)} failed: {result.StdErr}");
         return result.StdOut.Trim();
     }
 
