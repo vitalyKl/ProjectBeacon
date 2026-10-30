@@ -183,14 +183,11 @@ public static class WorkstationEval
                     idle = seen.Count > 0;
                     break;
                 }
-    
-                // A quiet interval is not completion while the runtime still owns an active turn.
-                // This matters for native models that may spend time reasoning without emitting deltas.
                 if (turnStatus is { Ended: false })
                     quiet = 0;
                 else
                     quiet = added > 0 ? 0 : quiet + 1;
-    
+
                 if (turnStatus is null && quiet >= maxQuiet && seen.Count > 0)
                 {
                     idle = true;
