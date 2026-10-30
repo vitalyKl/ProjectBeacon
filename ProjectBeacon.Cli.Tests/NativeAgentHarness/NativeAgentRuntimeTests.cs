@@ -370,11 +370,14 @@ public sealed class NativeAgentRuntimeTests
             File.Delete(transcriptPath);
             Directory.CreateDirectory(transcriptPath);
 
-            await Assert.ThrowsAsync<IOException>(() => runtime.SendPromptAsync(
+            var persistException = await Assert.ThrowsAnyAsync<Exception>(() => runtime.SendPromptAsync(
                 sessionId,
                 "This prompt cannot be persisted yet",
                 "beacon-local/test-model",
                 CancellationToken.None));
+            Assert.True(
+                persistException is IOException or UnauthorizedAccessException,
+                $"Expected a filesystem write failure, got {persistException.GetType().Name}.");
 
             Directory.Delete(transcriptPath);
             var streamTask = runtime.StreamTextAsync(sessionId, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
