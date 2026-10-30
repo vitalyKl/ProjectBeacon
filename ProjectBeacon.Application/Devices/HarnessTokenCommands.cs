@@ -6,6 +6,7 @@ using System.Text.Json;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -48,7 +49,7 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
         var work = await db.WorkstationCommands.IgnoreQueryFilters()
             .FirstOrDefaultAsync(c => c.Id == command.CommandId && c.DeviceId == deviceId, ct);
         if (work is null
-            || work.Kind is not (WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession)
+            || work.Kind is not (WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession or WorkstationCommandKind.RunEvalTurn)
             || work.ProjectId is not { } projectId
             || work.Status != WorkstationCommandStatus.Running
             || work.StartedAt is null
@@ -104,6 +105,19 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
             }
         }
 
+        else if (work.Kind == WorkstationCommandKind.RunEvalTurn)
+        {
+            if (!TryReadEvalScope(work.PayloadJson, out var evalScope))
+                return Result.Failure<HarnessTokenDto>("The eval command has an invalid run scope.", ErrorKind.Forbidden);
+
+            var evalRun = await db.EvalRuns.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(run => run.Id == evalScope.EvalRunId
+                    && run.ProjectId == projectId
+                    && run.TaskId == evalScope.TaskId, ct);
+            if (evalRun is null || !string.Equals(evalRun.Runtime, "native", StringComparison.Ordinal))
+                return Result.Failure<HarnessTokenDto>("The eval run is missing, out of scope, or is not pinned to the native runtime.", ErrorKind.Forbidden);
+        }
+
         // A renewed claim must never inherit a credential from an earlier attempt.
         var previous = await db.ApiTokens.IgnoreQueryFilters()
             .Where(t => t.ClientKind == ApiTokenClientKind.Harness
@@ -132,6 +146,30 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
         await db.SaveChangesAsync(ct);
 
         return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools));
+    }
+
+    private static bool TryReadEvalScope(string payload, out EvalCommandScope scope)
+    {
+        scope = default;
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !TryReadGuid(root, "evalRunId", out var evalRunId)
+                || !TryReadGuid(root, "taskId", out var taskId)
+                || !root.TryGetProperty("runtime", out var runtime)
+                || runtime.ValueKind != JsonValueKind.String
+                || !string.Equals(runtime.GetString(), "native", StringComparison.Ordinal))
+                return false;
+
+            scope = new EvalCommandScope(evalRunId, taskId);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool TryReadPipelineScope(string payload, out PipelineCommandScope scope)
@@ -185,4 +223,6 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
 
     private readonly record struct PipelineCommandScope(
         Guid ProjectId, Guid TaskId, Guid SessionId, PipelineRole Role, Guid? SubtaskId);
+
+    private readonly record struct EvalCommandScope(Guid EvalRunId, Guid TaskId);
 }

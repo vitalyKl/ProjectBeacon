@@ -1,8 +1,10 @@
 namespace ProjectBeacon.Domain.Enums;
 
-/// <summary>Whether an eval run received the compiled context brief.</summary>
+/// <summary>How an eval run differs from its paired run.</summary>
 public enum EvalCondition
 {
     WithBrief,
-    WithoutBrief
+    WithoutBrief,
+    OpenCode,
+    Native
 }

@@ -7,8 +7,9 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Nodes;
+
 /// <summary>
-/// Pins a with-brief and without-brief eval on one device. Model, temperature, and the check command are optional here and validated by the handler.
+/// Pins either the existing with/without-brief pair or a same-prompt OpenCode/Native runtime comparison.
 /// </summary>
 public record EvalPairRequest(
     Guid ProjectId,
@@ -24,22 +25,33 @@ public record EvalPairRequest(
     string? ReasoningEffort = null,
     string? ToolPermissions = null,
     int? TimeoutSeconds = null,
-    string? RepoRevision = null);
-/// <summary>
-/// Command for eval pair.
-/// </summary>
+    string? RepoRevision = null,
+    string Runtime = "opencode",
+    bool CompareRuntimes = false);
+
+/// <summary>Command for creating paired eval runs.</summary>
 public record EvalPairCommand(EvalPairRequest Request) : ICommand<Result<EvalPairResult>>;
+
 /// <summary>
-/// The pair id and the two run ids and command ids that were enqueued.
+/// Identifiers for an enqueued eval pair. The legacy WithBrief/WithoutBrief identifiers are
+/// Guid.Empty in runtime-comparison mode; use the OpenCode/Native identifiers in that mode.
 /// </summary>
 public record EvalPairResult(
     string PairId,
     Guid WithBriefRunId,
     Guid WithoutBriefRunId,
     Guid WithBriefCommandId,
-    Guid WithoutBriefCommandId);
+    Guid WithoutBriefCommandId)
+{
+    public Guid? OpenCodeRunId { get; init; }
+    public Guid? NativeRunId { get; init; }
+    public Guid? OpenCodeCommandId { get; init; }
+    public Guid? NativeCommandId { get; init; }
+}
+
 /// <summary>
-/// Enqueues a with-brief and a without-brief eval on an online device. Model, temperature, reasoning, tools, revision, check, and timeout must be pinned.
+/// Enqueues a with/without-brief pair or an OpenCode/Native parity pair on an online device.
+/// All model, sampling, permission, repository, check, timeout, and runtime controls are pinned.
 /// </summary>
 public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairResult>>
 {
@@ -63,9 +75,12 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
     public async Task<Result<EvalPairResult>> HandleAsync(EvalPairCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
+        var runtime = request.Runtime.Trim().ToLowerInvariant();
 
         if (string.IsNullOrWhiteSpace(request.Prompt))
             return Result.Failure<EvalPairResult>("Prompt is required.");
+        if (runtime is not ("opencode" or "native"))
+            return Result.Failure<EvalPairResult>("Eval runtime must be 'opencode' or 'native'.");
         if (string.IsNullOrWhiteSpace(request.Model)
             || request.Temperature is null
             || string.IsNullOrWhiteSpace(request.ReasoningEffort)
@@ -108,31 +123,40 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
 
         var briefText = briefResult.Value!.BriefMarkdown;
         var trimmedPrompt = request.Prompt.Trim();
-
         var withBriefPrompt = string.IsNullOrWhiteSpace(briefText)
             ? trimmedPrompt
             : $"{briefText.Trim()}\n\n## Task request\n\n{trimmedPrompt}";
-
         var withoutBriefPrompt = trimmedPrompt;
-
         var pairId = Guid.NewGuid().ToString("n");
 
-        var withBrief = await _recordEvalRun.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(request.ProjectId, request.TaskId, pairId, EvalCondition.WithBrief)), ct);
-        if (!withBrief.Success)
-            return Result.Failure<EvalPairResult>(withBrief.Error ?? "Failed to record eval run.");
+        // Runtime parity uses the exact same prompt for both runs so runtime is the only
+        // changed variable. The legacy eval pair continues to compare brief vs no brief.
+        var variants = request.CompareRuntimes
+            ? new (EvalCondition Condition, string Runtime, string Prompt)[]
+            {
+                (EvalCondition.OpenCode, "opencode", withBriefPrompt),
+                (EvalCondition.Native, "native", withBriefPrompt)
+            }
+            : new (EvalCondition Condition, string Runtime, string Prompt)[]
+            {
+                (EvalCondition.WithBrief, runtime, withBriefPrompt),
+                (EvalCondition.WithoutBrief, runtime, withoutBriefPrompt)
+            };
 
-        var withoutBrief = await _recordEvalRun.HandleAsync(new RecordEvalRunCommand(
-            new RecordEvalRunRequest(request.ProjectId, request.TaskId, pairId, EvalCondition.WithoutBrief)), ct);
-        if (!withoutBrief.Success)
-            return Result.Failure<EvalPairResult>(withoutBrief.Error ?? "Failed to record eval run.");
-
-        await using (var pinDb = _dbFactory.CreateDbContext())
+        var completed = new List<(EvalCondition Condition, string Runtime, Guid RunId, Guid CommandId)>(2);
+        foreach (var variant in variants)
         {
-            var runs = await pinDb.EvalRuns.IgnoreQueryFilters()
-                .Where(r => r.Id == withBrief.Value!.Id || r.Id == withoutBrief.Value!.Id)
-                .ToListAsync(ct);
-            foreach (var run in runs)
+            var recorded = await _recordEvalRun.HandleAsync(new RecordEvalRunCommand(
+                new RecordEvalRunRequest(request.ProjectId, request.TaskId, pairId, variant.Condition)), ct);
+            if (!recorded.Success)
+                return Result.Failure<EvalPairResult>(recorded.Error ?? "Failed to record eval run.");
+
+            await using (var pinDb = _dbFactory.CreateDbContext())
+            {
+                var run = await pinDb.EvalRuns.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(item => item.Id == recorded.Value!.Id, ct);
+                if (run is null)
+                    return Result.Failure<EvalPairResult>("The newly recorded eval run could not be reloaded.");
                 run.Pin(
                     request.Model!.Trim(),
                     request.Temperature!.Value,
@@ -140,56 +164,69 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
                     request.ToolPermissions!.Trim(),
                     request.TimeoutSeconds!.Value,
                     request.RepoRevision!.Trim(),
-                    request.CheckCommand!.Trim());
-            await pinDb.SaveChangesAsync(ct);
+                    request.CheckCommand!.Trim(),
+                    variant.Runtime);
+                await pinDb.SaveChangesAsync(ct);
+            }
+
+            var enqueued = await _enqueueCommand.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
+                request.DeviceId,
+                request.ActorId,
+                WorkstationCommandKind.RunEvalTurn,
+                BuildPayload(recorded.Value!.Id, request.TaskId, taskTitle!, variant.Prompt, variant.Runtime, request),
+                request.ProjectId)), ct);
+            if (!enqueued.Success)
+                return Result.Failure<EvalPairResult>(enqueued.Error ?? "Failed to enqueue eval command.");
+
+            completed.Add((variant.Condition, variant.Runtime, recorded.Value.Id, enqueued.Value!.Id));
         }
 
-        var withBriefCommand = await _enqueueCommand.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
-            request.DeviceId, request.ActorId, WorkstationCommandKind.RunEvalTurn,
-            BuildPayload(withBrief.Value!.Id, taskTitle!, withBriefPrompt, request), request.ProjectId)), ct);
-        if (!withBriefCommand.Success)
-            return Result.Failure<EvalPairResult>(withBriefCommand.Error ?? "Failed to enqueue command.");
-
-        var withoutBriefCommand = await _enqueueCommand.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
-            request.DeviceId, request.ActorId, WorkstationCommandKind.RunEvalTurn,
-            BuildPayload(withoutBrief.Value!.Id, taskTitle!, withoutBriefPrompt, request), request.ProjectId)), ct);
-        if (!withoutBriefCommand.Success)
-            return Result.Failure<EvalPairResult>(withoutBriefCommand.Error ?? "Failed to enqueue command.");
+        if (request.CompareRuntimes)
+        {
+            var openCode = completed.Single(item => item.Condition == EvalCondition.OpenCode);
+            var native = completed.Single(item => item.Condition == EvalCondition.Native);
+            return Result.Ok(new EvalPairResult(pairId, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty)
+            {
+                OpenCodeRunId = openCode.RunId,
+                NativeRunId = native.RunId,
+                OpenCodeCommandId = openCode.CommandId,
+                NativeCommandId = native.CommandId
+            });
+        }
 
         return Result.Ok(new EvalPairResult(
             pairId,
-            withBrief.Value.Id,
-            withoutBrief.Value.Id,
-            withBriefCommand.Value!.Id,
-            withoutBriefCommand.Value!.Id));
+            completed[0].RunId,
+            completed[1].RunId,
+            completed[0].CommandId,
+            completed[1].CommandId));
     }
 
-    private static string BuildPayload(Guid runId, string taskTitle, string prompt, EvalPairRequest request)
+    private static string BuildPayload(Guid runId, Guid taskId, string taskTitle, string prompt, string runtime, EvalPairRequest request)
     {
         var payload = new JsonObject
         {
             ["evalRunId"] = runId.ToString("D"),
+            ["taskId"] = taskId.ToString("D"),
+            ["runtime"] = runtime,
             ["title"] = $"Beacon eval: {taskTitle}",
-            ["prompt"] = prompt
+            ["prompt"] = prompt,
+            ["model"] = request.Model,
+            ["checkCommand"] = request.CheckCommand,
+            ["controls"] = new JsonObject
+            {
+                ["model"] = request.Model,
+                ["temperature"] = JsonValue.Create(request.Temperature),
+                ["reasoningEffort"] = request.ReasoningEffort,
+                ["toolPermissions"] = request.ToolPermissions,
+                ["timeoutSeconds"] = request.TimeoutSeconds,
+                ["repoRevision"] = request.RepoRevision,
+                ["checkCommand"] = request.CheckCommand
+            }
         };
 
         if (!string.IsNullOrWhiteSpace(request.Path))
             payload["path"] = request.Path;
-        if (!string.IsNullOrWhiteSpace(request.Model))
-            payload["model"] = request.Model;
-        payload["model"] = request.Model;
-        payload["checkCommand"] = request.CheckCommand;
-
-        payload["controls"] = new JsonObject
-        {
-            ["model"] = request.Model,
-            ["temperature"] = JsonValue.Create(request.Temperature),
-            ["reasoningEffort"] = request.ReasoningEffort,
-            ["toolPermissions"] = request.ToolPermissions,
-            ["timeoutSeconds"] = request.TimeoutSeconds,
-            ["repoRevision"] = request.RepoRevision,
-            ["checkCommand"] = request.CheckCommand
-        };
 
         return payload.ToJsonString();
     }

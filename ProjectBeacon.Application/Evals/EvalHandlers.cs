@@ -47,7 +47,8 @@ public record EvalRunDto(
     bool? Passed,
     DateTime StartedAt,
     DateTime? CompletedAt,
-    string? TranscriptRef);
+    string? TranscriptRef,
+    string Runtime);
 /// <summary>
 /// Starts an eval run for a task under one condition.
 /// </summary>
@@ -126,7 +127,8 @@ public class ListEvalRunsHandler
                 e.Passed,
                 e.StartedAt,
                 e.CompletedAt,
-                e.TranscriptRef))
+                e.TranscriptRef,
+                e.Runtime))
             .ToListAsync(ct);
 
         return Result.Ok((IList<EvalRunDto>)items);
@@ -148,5 +150,6 @@ internal static class EvalRunMapper
             run.Passed,
             run.StartedAt,
             run.CompletedAt,
-            run.TranscriptRef);
+            run.TranscriptRef,
+            run.Runtime);
 }
