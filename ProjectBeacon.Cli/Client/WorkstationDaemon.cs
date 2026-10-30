@@ -49,6 +49,14 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _services = DaemonServices.Build(deps, _timing, _state);
         _gate = _services.GetRequiredService<IDaemonOpenCodeGate>();
         _llamaSync = _services.GetRequiredService<IDaemonLlamaSync>();
+        var activeRuntime = _gate.Runtime switch
+        {
+            NativeAgentRuntime => "native",
+            OpenCodeAgentRuntime => "opencode",
+            UnavailableAgentRuntime => "unavailable",
+            _ => "custom"
+        };
+        _state.Log($"agent runtime selected: {activeRuntime}");
         _executor = _services.GetRequiredService<IDaemonCommandExecutor>();
         _loops = _services.GetServices<IDaemonLoop>().ToArray();
     }
@@ -61,16 +69,23 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     {
         try
         {
-            return string.Equals(settingsLoader().AgentRuntime, "native", StringComparison.OrdinalIgnoreCase)
-                ? new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg))
-                : openCodeRuntime;
+            var configured = settingsLoader().AgentRuntime;
+            var selected = configured?.Trim().ToLowerInvariant();
+            return selected switch
+            {
+                "native" => new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg)),
+                "opencode" => openCodeRuntime,
+                _ => new UnavailableAgentRuntime(
+                    $"Unsupported AgentRuntime value '{configured ?? "(null)"}'. Expected 'opencode' or 'native'.")
+            };
         }
         catch (Exception ex)
         {
-            // Keep daemon construction alive so the heartbeat loop can report the actionable
-            // invalid-settings error instead of throwing before it starts.
-            _state.Log($"Could not select agent runtime because workstation settings could not be loaded: {ex.Message}");
-            return openCodeRuntime;
+            // Keep the daemon alive so heartbeat diagnostics can report the settings error,
+            // but never silently run a different harness than the user selected.
+            var error = $"Could not load workstation settings; OpenCode fallback is disabled. {ex.Message}";
+            _state.Log(error);
+            return new UnavailableAgentRuntime(error);
         }
     }
 
