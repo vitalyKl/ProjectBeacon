@@ -563,6 +563,94 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeDoesNotRecoverToolCallsWhileAnotherTurnIsStillExecuting()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-active-tool-call-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new StubToolProvider();
+        var mcp = new BlockingMcpToolClient();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+
+        try
+        {
+            var sessionId = await runtime.CreateSessionAsync("concurrent prompt test", CancellationToken.None);
+            var streamTask = runtime.StreamTextAsync(sessionId, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test",
+                "ephemeral-token",
+                Guid.NewGuid(),
+                null,
+                Guid.NewGuid(),
+                1,
+                project,
+                DateTime.UtcNow.AddMinutes(2));
+            await runtime.SendPromptAsync(
+                sessionId,
+                "Read README.md",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+
+            await mcp.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", sessionId + ".json");
+            var duringToolCall = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+            Assert.DoesNotContain(duringToolCall["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "tool");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.SendPromptAsync(
+                sessionId,
+                "Do not start this concurrent prompt",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization }));
+
+            var afterRejectedPrompt = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+            Assert.DoesNotContain(afterRejectedPrompt["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "tool");
+            Assert.DoesNotContain(afterRejectedPrompt["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "user"
+                && message["content"]?.GetValue<string>() == "Do not start this concurrent prompt");
+
+            mcp.Release.TrySetResult();
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(5));
+            var status = await runtime.GetTurnStatusAsync(sessionId, CancellationToken.None);
+            Assert.True(status!.Ended);
+            Assert.Equal("stop", status.Finish);
+            Assert.Equal(2, provider.Requests.Count);
+        }
+        finally
+        {
+            mcp.Release.TrySetResult();
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeStopsRepeatedIdenticalToolCalls()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-loop-" + Guid.NewGuid().ToString("N"));
@@ -1025,6 +1113,24 @@ public sealed class NativeAgentRuntimeTests
             LastArguments = (JsonObject)arguments.DeepClone();
             CallCount++;
             return Task.FromResult(new McpToolResult(false, resultText));
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class BlockingMcpToolClient : IMcpToolClient
+    {
+        private readonly StubMcpToolClient _tools = new();
+
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public JsonArray OpenAiTools => _tools.OpenAiTools;
+
+        public async Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
+        {
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(ct);
+            return new McpToolResult(false, "README contents");
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

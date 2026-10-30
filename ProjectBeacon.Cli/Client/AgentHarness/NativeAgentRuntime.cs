@@ -92,12 +92,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("Prompt text is required.", nameof(text));
         var session = await GetSessionAsync(sessionId, ct);
-        bool recoveredToolCalls;
-        lock (session.Sync)
-            recoveredToolCalls = RecoverInterruptedToolCalls(session);
-        if (recoveredToolCalls)
-            await PersistAsync(session, ct);
-
         var selectedModel = string.IsNullOrWhiteSpace(model) ? session.LastModel : model.Trim();
         if (string.IsNullOrWhiteSpace(selectedModel))
             throw new InvalidOperationException("Select a model before sending a prompt.");
@@ -113,6 +107,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         {
             if (session.ActiveTurn is not null)
                 throw new InvalidOperationException("A prompt is already running for this session.");
+
+            // The lock first confirms that no turn is active, then repairs any abandoned tool
+            // calls and reserves the session. A concurrent prompt must never "recover" a live turn.
+            RecoverInterruptedToolCalls(session);
 
             previousTurnNumber = session.TurnNumber;
             previousTurnStatus = session.TurnStatus;
