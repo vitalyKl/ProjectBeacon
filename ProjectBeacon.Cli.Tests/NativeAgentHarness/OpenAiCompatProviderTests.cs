@@ -60,9 +60,9 @@ public sealed class OpenAiCompatProviderTests
     public async Task PreservesMultipleToolIndexesAndUnicodeArgumentFragments()
     {
         const string stream = """
-            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-a","function":{"name":"read_file","arguments":"{\\"path\\":\\"src/"}} ,{"index":1,"id":"call-b","function":{"name":"read_file","arguments":"{\\"path\\":\\"данные/"}}]},"finish_reason":null}]}
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-a","function":{"name":"read_file","arguments":"{\"path\":\"src/"}} ,{"index":1,"id":"call-b","function":{"name":"read_file","arguments":"{\"path\":\"данные/"}}]},"finish_reason":null}]}
 
-            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"alpha.cs\\"}"}} ,{"index":1,"function":{"arguments":"файл.cs\\"}"}}]},"finish_reason":"tool_calls"}]}
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"alpha.cs\"}"}} ,{"index":1,"function":{"arguments":"файл.cs\"}"}}]},"finish_reason":"tool_calls"}]}
 
             data: [DONE]
 
@@ -79,8 +79,8 @@ public sealed class OpenAiCompatProviderTests
         var calls = events.Where(item => item.Kind == ChatProviderEventKind.ToolCallDelta).ToArray();
         Assert.Contains(calls, item => item.ToolIndex == 0 && item.ToolCallId == "call-a");
         Assert.Contains(calls, item => item.ToolIndex == 1 && item.ToolCallId == "call-b");
-        Assert.Equal("{\\"path\\":\\"src/", string.Concat(calls.Where(item => item.ToolIndex == 0).Select(item => item.ToolArguments)));
-        Assert.Equal("{\\"path\\":\\"данные/файл.cs\\"}", string.Concat(calls.Where(item => item.ToolIndex == 1).Select(item => item.ToolArguments)));
+        Assert.Equal("{\"path\":\"src/alpha.cs\"}", string.Concat(calls.Where(item => item.ToolIndex == 0).Select(item => item.ToolArguments)));
+        Assert.Equal("{\"path\":\"данные/файл.cs\"}", string.Concat(calls.Where(item => item.ToolIndex == 1).Select(item => item.ToolArguments)));
     }
 
     [Fact]

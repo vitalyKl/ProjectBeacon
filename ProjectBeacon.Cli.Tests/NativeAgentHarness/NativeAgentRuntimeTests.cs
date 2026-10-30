@@ -75,7 +75,7 @@ public sealed class NativeAgentRuntimeTests
         var project = Path.Combine(temp, "project");
         Directory.CreateDirectory(project);
         var config = Path.Combine(temp, "llama-swap.yaml");
-        await File.WriteAllTextAsync(config, "models:\\n  qwen:\\n    cmd: \\\"llama-server -m qwen.gguf --ctx-size 8192\\\"\\n");
+        await File.WriteAllTextAsync(config, "models:\n  qwen:\n    cmd: \"llama-server -m qwen.gguf --ctx-size 8192\"\n");
 
         using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
         await using var llama = new ClientLlamaSwap { ConfigFile = config };
@@ -1438,7 +1438,7 @@ public sealed class NativeAgentRuntimeTests
                 yield break;
             }
 
-            ToolResultsObserved = request.Messages.Count(message => message?[\\"role\\"]?.GetValue<string>() == "tool");
+            ToolResultsObserved = request.Messages.Count(message => message?["role"]?.GetValue<string>() == "tool");
             if (ToolResultsObserved != 2)
                 throw new InvalidOperationException("Both parallel tool results must be present before the next model step.");
             yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Both files read.");
