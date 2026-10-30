@@ -103,6 +103,15 @@
                 <MudSelectItem T="string" Value="@("native")">@L["AgentRuntimeNative"]</MudSelectItem>
             </MudSelect>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentRuntimeRestartHint"]</MudText>
+            <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @RuntimeLabel(_probeAgentRuntime)</MudText>
+            @if (_probeAgentRuntime != "-" && !string.Equals(_probeAgentRuntime, _agentRuntime, StringComparison.OrdinalIgnoreCase))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@L["AgentRuntimePendingRestart"]</MudAlert>
+            }
+            @if (_probeAgentRuntimeHealthy == false && !string.IsNullOrWhiteSpace(_probeAgentRuntimeError))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
+            }
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
             <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_historyDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
             <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
@@ -185,6 +194,9 @@
     private string _probeNode = "-";
     private string _probeDocker = "-";
     private string _probeLlamaSwap = "-";
+    private string _probeAgentRuntime = "-";
+    private bool? _probeAgentRuntimeHealthy;
+    private string? _probeAgentRuntimeError;
     private List<WorkstationCommandDto> _commands = [];
     private string? _lifecycle;
     private string? _lifecycleDetail;
@@ -227,7 +239,7 @@
         await ReloadDevices();
     }
 
-    private async Task ReloadDevices()
+    private async Task ReloadDevices(bool loadWorkstationSettings = true)
     {
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
@@ -236,7 +248,7 @@
             _wsDeviceId = _devices.FirstOrDefault(d => d.Online)?.Id ?? _devices.FirstOrDefault()?.Id;
         if (_wsDeviceId is { } id)
         {
-            LoadWorkstation(id);
+            LoadWorkstation(id, loadWorkstationSettings);
             LoadCommands(id);
         }
     }
@@ -258,12 +270,13 @@
         _commands = res.Success ? res.Value!.ToList() : [];
     }
 
-    private void LoadWorkstation(Guid deviceId)
+    private void LoadWorkstation(Guid deviceId, bool loadSettings = true)
     {
         var device = _devices.FirstOrDefault(d => d.Id == deviceId);
         if (device is null) return;
         _wsRevision = device.DesiredRevision;
         FillProbe(device.ProbeJson);
+        if (!loadSettings) return;
         try
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(device.WorkstationJson) ? "{}" : device.WorkstationJson);
@@ -283,9 +296,20 @@
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
 
+    private string RuntimeLabel(string runtime) => runtime switch
+    {
+        "native" => L["AgentRuntimeNative"].Value,
+        "opencode" => L["AgentRuntimeOpenCode"].Value,
+        "unavailable" => L["AgentRuntimeUnavailable"].Value,
+        _ => L["AgentRuntimeUnknown"].Value
+    };
+
     private void FillProbe(string probeJson)
     {
         _probeGit = _probeOpencode = _probeNode = _probeDocker = _probeLlamaSwap = "-";
+        _probeAgentRuntime = "-";
+        _probeAgentRuntimeHealthy = null;
+        _probeAgentRuntimeError = null;
         try
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
@@ -294,6 +318,25 @@
             _probeNode = Tool(doc.RootElement, "node");
             _probeDocker = Tool(doc.RootElement, "docker");
             _probeLlamaSwap = Tool(doc.RootElement, "llamaSwap");
+            var root = doc.RootElement;
+            if (root.TryGetProperty("agentRuntime", out var runtimeStatus)
+                || root.TryGetProperty("opencodeServe", out runtimeStatus))
+            {
+                if (runtimeStatus.ValueKind == JsonValueKind.Object)
+                {
+                    _probeAgentRuntime = Str(runtimeStatus, "runtime");
+                    if (string.IsNullOrWhiteSpace(_probeAgentRuntime))
+                    {
+                        _probeAgentRuntime = string.Equals(Str(runtimeStatus, "version"), "native", StringComparison.OrdinalIgnoreCase)
+                            ? "native"
+                            : "opencode";
+                    }
+                    if (runtimeStatus.TryGetProperty("healthy", out var healthy)
+                        && healthy.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                        _probeAgentRuntimeHealthy = healthy.GetBoolean();
+                    _probeAgentRuntimeError = Str(runtimeStatus, "error");
+                }
+            }
         }
         catch (JsonException)
         {
@@ -379,7 +422,9 @@
                 return;
             }
             Snackbar.Add(L["WorkstationSaved"].Value, Severity.Success);
-            await ReloadDevices();
+            // The next heartbeat reports the workstation's new settings. Refresh diagnostics
+            // now, but do not overwrite the just-saved form with the previous heartbeat snapshot.
+            await ReloadDevices(loadWorkstationSettings: false);
         }
         finally
         {
