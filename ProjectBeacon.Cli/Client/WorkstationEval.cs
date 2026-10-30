@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Runtime;
+using ProjectBeacon.Cli.Client.AgentHarness;
 /// <summary>
 /// Runs an eval turn or a review check inside a project root. Eval requires the pinned revision and a clean working tree. Review check requires reviewRunId and checkCommand.
 /// </summary>

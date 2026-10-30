@@ -75,7 +75,7 @@ public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairR
     public async Task<Result<EvalPairResult>> HandleAsync(EvalPairCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
-        var runtime = request.Runtime.Trim().ToLowerInvariant();
+        var runtime = request.Runtime?.Trim().ToLowerInvariant() ?? "";
 
         if (string.IsNullOrWhiteSpace(request.Prompt))
             return Result.Failure<EvalPairResult>("Prompt is required.");
