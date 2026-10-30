@@ -50,7 +50,7 @@ public sealed class WorkstationEvalRuntimeTests
                 "native");
 
             Assert.True(result.Success, result.Error);
-            Assert.Same(authorization, runtime.Controls!.HarnessAuthorization);
+            Assert.Equal(authorization, runtime.Controls!.HarnessAuthorization);
             Assert.Equal("beacon-local/test-model", runtime.Model);
             using var document = JsonDocument.Parse(result.Value!);
             Assert.StartsWith("native:session/", document.RootElement.GetProperty("transcriptRef").GetString());
@@ -58,7 +58,7 @@ public sealed class WorkstationEvalRuntimeTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            DeleteDirectory(root);
         }
     }
 
@@ -166,6 +166,28 @@ public sealed class WorkstationEvalRuntimeTests
         {
             Directory.Delete(root, true);
         }
+    }
+
+    private static void DeleteDirectory(string path)
+    {
+        if (!Directory.Exists(path))
+            return;
+
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+        {
+            try { File.SetAttributes(file, FileAttributes.Normal); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
+        {
+            try { File.SetAttributes(directory, FileAttributes.Normal); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        Directory.Delete(path, true);
     }
 
     private static async Task<string> GitAsync(string workingDirectory, params string[] arguments)

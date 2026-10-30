@@ -49,12 +49,14 @@ internal sealed class EvalWorktree : IAsyncDisposable
             return (null, "Could not resolve the Git repository root for the pinned eval.");
 
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
-        var relativeDirectory = Path.GetRelativePath(repositoryRoot, original);
-        if (Path.IsPathRooted(relativeDirectory)
-            || relativeDirectory == ".."
-            || relativeDirectory.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            || relativeDirectory.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
-            return (null, "The eval working directory is outside its Git repository.");
+        // --show-prefix is computed by Git from the current worktree and remains correct when
+        // the user reached the checkout through a symlink (e.g. /tmp on macOS/Linux).
+        var prefixResult = await RunGitAsync(original, ct, "rev-parse", "--show-prefix");
+        if (prefixResult.ExitCode != 0 || prefixResult.TimedOut)
+            return (null, "Could not resolve the eval working directory relative to its Git root.");
+        var relativeDirectory = prefixResult.StdOut.Trim();
+        var relativePath = relativeDirectory.Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar);
 
         var worktreesDirectory = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "eval-worktrees");
         var worktreeRoot = Path.Combine(worktreesDirectory, $"{evalRunId:N}-{Guid.NewGuid():N}");
@@ -83,9 +85,19 @@ internal sealed class EvalWorktree : IAsyncDisposable
                 : $"Could not create an isolated Git worktree for the eval: {detail.Trim()}");
         }
 
-        var targetDirectory = relativeDirectory == "."
+        var targetDirectory = string.IsNullOrWhiteSpace(relativePath)
             ? worktreeRoot
-            : Path.GetFullPath(Path.Combine(worktreeRoot, relativeDirectory));
+            : Path.GetFullPath(Path.Combine(worktreeRoot, relativePath));
+        var targetRelativePath = Path.GetRelativePath(worktreeRoot, targetDirectory);
+        if (Path.IsPathRooted(targetRelativePath)
+            || targetRelativePath == ".."
+            || targetRelativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || targetRelativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            await RemoveWorktreeAsync(repositoryRoot, worktreeRoot);
+            return (null, "The resolved eval working directory escapes its isolated worktree.");
+        }
+
         if (!Directory.Exists(targetDirectory))
         {
             await RemoveWorktreeAsync(repositoryRoot, worktreeRoot);
