@@ -1,155 +1,124 @@
-# ProjectBeacon — собственный агентский харнес (замена OpenCode)
+# ProjectBeacon — собственный workstation-native agent harness
 
-Состояние на 2026-10-30: реализация собственного workstation-native harness ведётся в ветке `feature/native-agent-harness`. Шаги 1–5 реализованы в коде; шаг 6 (pipeline) интегрирован частично и остаётся незавершённым до зелёного CI на актуальном HEAD и проверки полного цикла на реальных MCP-инструментах/локальной модели. Последний полностью зелёный CI — commit `e1e9aeb`. Последующие PR-запуски завершаются до назначения runner (`runner_id=0`, нет шагов и логов); новые изменения пока не считать CI-проверенными.
+Состояние на 2026-10-30: **все изменения, которые можно проверить без запуска реальной модели, реализованы в feature/native-agent-harness**. Остался финальный живой acceptance-прогон на workstation с локальной моделью, настоящим MCP server и полным Planner → Actor → Reviewer pipeline. OpenCode остаётся поддерживаемым альтернативным runtime; переключение default не выполняется автоматически.
 
-Цель: `beacon client` сам ведёт агентский цикл (модель → инструменты → модель) и ходит либо в локальный `llama-server` (через собственный свопер), либо в облачные API. OpenCode остаётся опцией, а не зависимостью.
+GitHub Actions должен быть зелёным на последнем commit этой ветки до начала live acceptance. CI запускается на каждый push; актуальный результат и commit смотрите в PR #5. Результаты CI на более ранних commit не считаются проверкой текущего HEAD.
 
-## Принципы неразрушения
+## Цель и границы
 
-1. Точка вставки уже есть: `IAgentRuntime` (`Application/Runtime`). Новый харнес это вторая реализация рядом с `OpenCodeAgentRuntime`, а не переделка. Контракт интерфейса не ломается, только дополняется.
-2. Переключатель в `WorkstationSettings`: `AgentRuntime = "opencode" | "native"`, default `opencode`. Тот же приём, что `UseOwnSwapper`. Откат без правок кода.
-3. Не трогать: `ClientOpenCodeServe`, `OpencodeConfig`, `OpencodePayload`, `McpCatalog`, `ClientLlamaSwap` и его контракт, очередь команд, `CommandDelivery`, RLS, авторизацию. Все 9 MCP-инструментов файлов и все control-plane инструменты остаются как есть: харнес вызывает их, а не копирует.
-4. Каждый шаг заканчивается зелёными существующими тестами плюс новыми. Postgres-тесты запускаются без `BEACON_TEST_SKIP_POSTGRES` (правило `AGENTS.md`).
-5. Каждое поведение, которое у OpenCode было «из коробки» и которое харнес берёт на себя, получает тест. Список в конце, раздел «Что OpenCode делал молча».
+beacon client выполняет агентский цикл на машине пользователя: модель → MCP-инструменты → модель. Моделью может быть локальный llama-server через ClientLlamaSwap или облачный provider. Сервер ProjectBeacon хранит задачи, права, команды и чат-сессии, но не запускает модель и не выполняет код пользователя.
 
-## Что уже есть и что не хватает
+AgentRuntime = "opencode" | "native" хранится на уровне workstation; default остаётся opencode. native не требует OpenCode для chat/agent loop. Существующие beacon mcp инструменты переиспользуются, второй независимый набор инструментов не создаётся.
 
-Есть: `IAgentRuntime` (create / send / stream / abort / usage); `DaemonChatSession` (опрашивает `StreamPartsAsync`, пишет части в `/v1/chat/sessions/{id}/parts`); собственный свопер (`UseOwnSwapper`, `LlamaServerBackend`, VRAM-учёт); хранилище подключений к провайдерам (`OpenCodeConnection`: providerId, modelId, baseUrl, секрет под `ISecretProtector`) с доставкой на устройство; `beacon mcp` (stdio) со всем контекстом, задачами, пайплайном; `AllowedMcpTools`/`AllowedPaths` на подзадачах; eval-контур (`RunEvalTurn`, закреплённая ревизия, парные прогоны).
+## Архитектурные решения
 
-Не хватает: сам цикл агента; клиенты провайдеров со стримингом и tool calls; MCP-клиент внутри харнеса; управление окном контекста; права на инструменты; выдача токена к `/v1`; запуск ролей пайплайна (`ManualSessionSpawner` помечен «реальный spawn в харнесе»).
+- **D0 — место исполнения:** agent loop работает только внутри beacon client на машине пользователя, не на API/Web/Worker.
+- **D1 — доступ к API:** короткоживущий bcn_ harness token выпускается сервером только для действующей команды. В БД хранится hash, сырой токен передаётся только в environment дочернего MCP процесса и не попадает в argv, transcript или logs. Для native eval токен выпускается только после сверки eval run, task, project и закреплённого runtime.
+- **D2 — команды ОС:** run_command запускается без shell, с аргументами процесса, рабочей директорией в корне workspace, timeout и ограничением вывода. Для pipeline Actor требуются одновременно persisted subtask grant и workstation AllowedCommandPrefixes; default allowlist пуст.
+- **D3 — transcript:** native session хранится локальными файлами в sessions/ рядом с OpencodeDataDir; сервер получает части чата, а не локальный transcript/секреты.
 
-## Шаг 0. Развилки (решить до кода)
+## Реализация по шагам
 
-**D0. Документы запрещают это сейчас.** `AGENTS.md` Non-goals: «No Beacon-hosted coding agent», «Beacon does not write application code». `features.md`: «Not shipped: A Beacon-hosted agent process». `mcp-host.md`: «There is no shell tool». Харнес живёт на рабочей станции, не на control plane, поэтому «hosted» можно читать как «на сервере». Но формулировки надо поправить явно, иначе следующий агент по этим файлам откажется делать шаг 1. Предложение: заменить на «Beacon не размещает агента на сервере; агентский цикл работает только в `beacon client` на машине владельца».
+### 1. Runtime seam и выбор
 
-**D1. Токен к `/v1` у харнеса.** В коде нет места, где `beacon mcp` получает `BEACON_API_URL`/`BEACON_API_TOKEN` (поиск по `Cli/Client` и `Application` пуст; `McpCatalog` пишет команду без env). Значит сейчас `context_compile`, `finish_work`, `pipeline_*` из чата OpenCode либо идут в режиме БД, либо не работают. Харнесу нужен токен. Рекомендация: при постановке `ChatPrompt`/pipeline-команды сервер чеканит короткоживущий `bcn_` на проект с набором `ContextRead + TaskRead + TaskWrite` (без `Admin`, без `SessionDrive`), срок равен длине сессии, токен идёт только в env дочернего MCP-процесса и не пишется в транскрипт и логи. Учесть находку H2: агент не должен получать больше прав, чем нужно.
+**Готово.**
 
-**D2. Shell у агента.** Для сборки и тестов нужен запуск команд. Рекомендация: нативный `run_command` без shell (`UseShellExecute=false`, argv), cwd внутри корня, таймаут, лимит вывода, allowlist префиксов из настроек проекта (по умолчанию пустой, то есть выключено). Подтверждение «спросить человека» отложено: оно требует обратного канала и в первую версию не входит.
+- IAgentRuntime и IAgentRuntimeCapabilities абстрагируют OpenCode и Native; DaemonServices выбирает реализацию по сохранённому WorkstationSettings.AgentRuntime.
+- Настройка доступна на странице Workstations и локализована для поддерживаемых языков. Сервер сохраняет только допустимые opencode/native; неизвестное значение не принимается.
+- Тесты проверяют сохранение настройки, выбор Native и загрузку native из файла настроек при создании нового daemon.
+- Readiness Native проверяет локальную рабочую директорию и статически диагностирует отсутствие --jinja в командах моделей llama-swap. Диагностика возвращается в runtime status; сетевой запрос к модели не выполняется, поэтому live readiness остаётся частью реального прогона.
+- Опрос статуса хода не завершает Native turn только из-за долгого периода без текстовых дельт. Abort отменяет активный provider stream.
 
-**D3. Где хранить транскрипт.** Рекомендация: файлами на устройстве (`OpencodeDataDir`-соседняя папка `sessions/`), сервер получает только части чата, как сейчас. Схема БД не меняется.
+### 2. Provider и streaming
 
-## Шаг 1. Шов: выбор рантайма без зависимости от OpenCode
+**Готово; живые endpoint smoke tests входят в оставшийся acceptance.**
 
-**Не трогать:** `OpenCodeAgentRuntime`, `ClientOpenCodeServe`.
+- OpenAI-compatible SSE provider обрабатывает текст, reasoning, indexed tool-call fragments, usage и finish reason. Проверяются несколько индексов, разорванные JSON-аргументы и Unicode, отсутствие terminal [DONE], malformed stream и HTTP 429 retryability.
+- Anthropic Messages provider поддерживает thinking, text, tool input, usage и stop reason; ошибки не раскрывают response body/секреты.
+- Native runtime повторяет transient network/HTTP 503 ошибки, если до этого не было выдано частичного output; после частичного output повтор не делается, чтобы не дублировать ответ/side effects.
+- Для llama-server readiness показывает предупреждение, когда локальные model commands не включают --jinja. Само наличие флага не гарантирует совместимость конкретного chat template — это проверяется живым tool-call прогоном.
 
-**Контекст.** `DaemonChatSession` в `EnsureAsync` и `PromptLockedAsync` вызывает `_gate.OpenCode.TickAsync` и требует `Status.Healthy`. Для нативного рантайма OpenCode-процесса нет, поэтому чат сразу вернёт «OpenCode is not running». Кроме того, завершение хода определяется тишиной: `quiet >= maxQuiet` по числу опросов без новых частей. Локальная модель с длинным рассуждением молчит дольше, чем `ChatIdleTimeout`, и ход будет считаться законченным посреди работы.
+### 3. Native agent loop и session state
 
-**Меняем.**
-1. `WorkstationSettings.AgentRuntime` (additive поле, default `opencode`).
-2. В `IDaemonOpenCodeGate` добавить `EnsureReadyAsync(cwd, ct)`: для opencode это текущий `TickAsync` + проверка `Healthy`, для native проверка, что провайдер модели достижим. `DaemonChatSession` вызывает его вместо прямого обращения к `OpenCode`.
-3. Необязательный интерфейс `IAgentRuntimeActivity { bool IsBusy(string sessionId); }`. Если рантайм его реализует и сессия занята, счётчик тишины в цикле опроса не растёт. Для OpenCode поведение не меняется.
-4. Выбор реализации в `DaemonServices` по настройке.
+**Готово.**
 
-**Acceptance.** При `AgentRuntime=opencode` существующие `DaemonCommandLoopTests`, `ClientDaemonTests`, `OpenCodeServeTests` проходят без правок. При `native` чат доходит до `StreamPartsAsync` без OpenCode-процесса. Тест: занятая сессия не завершается по тишине.
+- Создание/восстановление локальной сессии, стабильные part IDs, фоновый SendPromptAsync, streaming snapshots, abort, usage и persistence.
+- Восстановление незавершённых tool calls не повторяет потенциальный side effect: в transcript записывается явный interrupted result.
+- Контекст сжимается безопасно: tool call и связанный result не разделяются; пустой summary не удаляет исходную историю.
+- Есть лимит шагов, защита от повторения идентичного tool call и truncation больших tool results.
+- Tool calls выполняются параллельно. Результаты добавляются в transcript в порядке tool index, а не в порядке завершения задач.
+- MCP stdio transport допускает несколько одновременных JSON-RPC requests: записи сериализуются, единственный stdout reader маршрутизирует ответы по request ID. Отмена/ошибка одного запроса не должна принимать ответ другого запроса.
 
-## Шаг 2. Клиент провайдера: OpenAI-совместимый со стримингом
+### 4. MCP и permissions
 
-Закрывает и llama.cpp, и большую часть облака (OpenAI, xAI, OpenRouter, любой совместимый).
+**Готово для автоматической проверки.**
 
-**Меняем.** Новые файлы `ProjectBeacon.Cli/Client/Harness/`:
-- `IChatProvider`: `StreamAsync(ChatRequest, ct) -> IAsyncEnumerable<ChatDelta>`; дельты: текст, рассуждение, фрагмент вызова инструмента, usage, конец.
-- `OpenAiCompatProvider`: `POST {baseUrl}/chat/completions`, `stream: true`, SSE.
-- Сборка tool calls из фрагментов по `index`; параллельные вызовы; аргументы приходят кусками JSON.
-- Для локальной модели базовый адрес берётся из `ClientLlamaSwap.Port` (`http://127.0.0.1:{port}/v1`), имя модели из `beacon-local/<ModelKey>` (формат `OpencodePayload.OpenCodeId` уже существует; разбор `provider/model` повторяет `ClientOpenCodeServe.PromptAsync`).
-- Перед запросом к локальной модели: `_llama.EnsureSwapModelAsync` под `_llamaSync` (как сейчас в `DaemonChatSession`).
-- Управление: `temperature`, `reasoning_effort`, лимит ответа берутся из `AgentPromptControls`.
+- McpStdioClient запускает существующий beacon mcp --root и передаёт одноразовые credentials только через ограниченный child-process environment.
+- Pipeline token проверяется по сохранённым command lease/generation, project, task, session, role и subtask. Список Actor tools берётся из persisted subtask, а не из клиентского payload.
+- Native eval token выдаётся только для существующего EvalRun, совпадающего по project/task и закреплённого за native.
+- Planner/Reviewer/Actor имеют разные MCP allowlists. Actor не может сменить subtask/session, запускать supervisor tools или записываться за чужую подзадачу.
+- run_command требует subtask grant и workstation allowlist; shell не используется.
 
-**Тесты на записанных SSE-фикстурах** (обязательны, это известные поломки в вашем стеке):
-1. длинный `reasoning_content`, после него `tool_calls`: вызов не теряется;
-2. аргументы вызова разорваны на несколько дельт, включая разрыв внутри строки с юникодом;
-3. два параллельных вызова с разными `index`;
-4. обрыв соединения посреди потока: частичный вызов не исполняется;
-5. модель вернула вызов с невалидным JSON: ошибка возвращается модели как результат инструмента, цикл не падает.
+### 5. Cloud providers и credentials
 
-Условие со стороны llama.cpp: для tool calls у `llama-server` нужен `--jinja` и шаблон модели с поддержкой инструментов. Проверка при `EnsureReady`: если в `LaunchCommand` нет `--jinja`, диагностическое сообщение, а не молчаливая деградация.
+**Реализация и unit coverage готовы; живые запросы к реальным endpoints остаются частью live acceptance.**
 
-**Acceptance.** Один ход без инструментов против живого `llama-server` и против облачного OpenAI-совместимого эндпоинта возвращает текст; usage читается.
+- Anthropic и OpenAI-compatible provider выбираются по настройке подключения.
+- Ключи берутся из существующего workstation connection delivery, живут в памяти runtime и не включаются в transcript, файлы конфигурации, argv или logs.
+- Существующая сущность OpenCodeConnection используется повторно; отдельная миграция секретов не нужна.
 
-## Шаг 3. Цикл агента и сессии
+### 6. Pipeline orchestration
 
-**Меняем.** `AgentLoop` и `NativeAgentRuntime : IAgentRuntime`:
-- `CreateSessionAsync` создаёт файл сессии, возвращает id.
-- `SendPromptAsync` не блокирует: запускает цикл в фоне (контракт OpenCode `prompt_async` такой же), складывает части в транскрипт.
-- `StreamPartsAsync` отдаёт снимок транскрипта; `ExternalId` частей стабильный (иначе `DaemonChatSession` продублирует части).
-- `AbortAsync` отменяет токен цикла; незавершённый вызов инструмента помечается как прерванный.
-- `ReadUsageAsync` суммирует usage; `TotalCost` для локальных моделей 0, для облака по таблице цен из настроек (необязательная).
+**Код, permissions, транзакционные ограничения и тесты готовы. Остаётся только end-to-end запуск на реальной модели.**
 
-**Защита цикла** (то, чего вам не хватало с OpenCode и Qwen):
-- максимум шагов на ход;
-- обнаружение зацикливания: тот же вызов с теми же аргументами N раз подряд даёт модели жёсткое сообщение и затем останов;
-- ограничение «рассуждение без действия»: если подряд идут ответы, состоящие только из рассуждения, цикл останавливается с понятным статусом;
-- потолок размера результата инструмента (обрезка с пометкой).
+- RunPipelineSession и очередь команд используют lease/generation и at-most-once delivery.
+- Native runtime получает short-lived token и scoped authorization; command completion сохраняет external session id и переводит pipeline session в корректное terminal state.
+- Actor stage claim и создание session выполняются атомарно с учётом EF execution strategy; тестами покрыты rollback, повторная доставка, завершение/ошибка/aborted и malformed result.
+- MCP allowlists, command grants и task/session/subtask scope покрыты тестами.
+- **Не выполнено только live acceptance:** реальная модель должна выполнить Planner → task_create_subtask → Actor → файловые/разрешённые инструменты и subtask_report_result → Reviewer verdict.
 
-**Окно контекста.** Бюджет берётся из `LocalModelBackend.ContextSize` для локальных моделей и из таблицы для облачных. Первый уровень: старые результаты инструментов заменяются кратким указателем. Второй: сжатие истории отдельным запросом к той же модели. Без этого на 16 ГБ VRAM длинная сессия упрётся в предел контекста.
+### 7. Eval parity и runtime migration
 
-**Acceptance.** Сценарий «прочитать файл, изменить его, показать diff» проходит на локальной модели через ChatPrompt. Тест на зацикливание и на abort посреди вызова. Транскрипт переживает перезапуск клиента.
+**Готово.**
 
-## Шаг 4. Инструменты и права
+- Runtime selector сохранён локализованным UI, миграция AgentRuntime additive и default opencode.
+- EvalRun.Runtime добавлен отдельной миграцией с backfill/default opencode для существующих записей.
+- Существующий A/B eval WithBrief / WithoutBrief сохранён без изменения семантики.
+- CompareRuntimes=true создаёт пару OpenCode / Native на одинаковом prompt (с одним и тем же compiled brief), revision, model, temperature, reasoning effort, tools, timeout и check command. EvalRun хранит runtime, а payload каждой команды закрепляет конкретный runtime.
+- RunEvalTurn выбирает runtime по payload, а не по глобальной настройке workstation. Native eval получает отдельный scoped token. Transcript ref использует соответствующий native: или opencode: prefix.
+- Добавлены application tests на одинаковые controls/prompt обоих run, invalid runtime, persisted runtime pin, token scope и CLI test на передачу native authorization в runtime.
 
-**Реализовано частично; границы native pipeline дополнены server-derived scope.**
-1. `McpStdioClient` запускает `beacon mcp --root <root>` дочерним процессом и выполняет `initialize`, `tools/list`, `tools/call`. Файловые и control-plane инструменты по-прежнему идут через Beacon MCP; HTTP MCP не используется.
-2. Нативный `run_command` требует двух независимых разрешений: workstation owner должен задать `AllowedCommandPrefixes`, а Actor pipeline должен получить `run_command` в `AllowedMcpTools` своей активной подзадачи. Planner и Review не получают этот инструмент. Выполнение по-прежнему идёт без shell, с timeout/output cap и базовой проверкой путей аргументов.
-3. `McpStdioServer` применяет `AllowedMcpTools` и `AllowedPaths` на границе tool call. Planner и Reviewer получают разные белые списки; Actor не может запускать другие сессии, менять verdict или отчётиться за чужой subtask.
-4. API выдаёт pipeline harness token только после сверки payload с сохранённой активной сессией/задачей/ролью. Для Actor набор разрешённых инструментов берётся из persisted subtask, а не из payload от клиента.
-5. Настройки workstation остаются вторым уровнем ограничения; pipeline роль не может расширить локальный `AllowedCommandPrefixes`.
+## Обязательные автоматические проверки
 
-**Acceptance.** В тестах подтверждены фильтрация инструментов, запрет чужого task/subtask/session, и выдача `run_command` только Actor с явным grant. Реальное выполнение локальной команды в end-to-end pipeline ещё нужно проверить на живом локальном runtime.
+Эти проверки должны оставаться зелёными в CI на Windows, Linux и macOS:
 
-## Шаг 5. Облачные провайдеры
+- provider stream: reasoning + text + tool calls; multiple tool indexes; Unicode/fragmented arguments; отсутствие [DONE]; retryable HTTP 429/503; ошибки без утечки тела ответа;
+- runtime: создание и восстановление session, stable parts, truncation, compaction, защита от повторных вызовов, abort, transient retry до output и отсутствие retry после частичного output;
+- tool loop: параллельное выполнение, сохранение результатов по индексу и полный набор результатов до следующего model step;
+- MCP: allowlists, scope и выдача token только действующей команде;
+- eval: OpenCode/Native pin, миграция и транскрипт правильного runtime;
+- daemon: persisted runtime selection после reload настроек.
 
-**Меняем.**
-- `AnthropicProvider`: Messages API, стриминг, блоки `tool_use`/`tool_result`, мышление, кэш промпта.
-- Выбор адаптера по `providerId` подключения: `anthropic` → Anthropic, остальные → OpenAI-совместимый с `baseUrl`.
-- Ключи не добавляют новой таблицы: берутся из существующей доставки `GET /v1/devices/me/opencode-connections` (секрет приходит расшифрованным только на устройство). Имя сущности остаётся `OpenCodeConnection`; переименование отложено, чтобы не трогать схему.
-- Ключ живёт только в памяти клиента, не в транскрипте, не в логе, не в `opencode.json` (для native-режима `ApplyOpenCodeConnections` не вызывается).
+## Последний оставшийся этап: live acceptance на workstation
 
-**Acceptance.** Один и тот же ход идёт через Anthropic и через OpenAI-совместимый провайдер; ключ не попадает ни в один файл на диске (проверка grep по папке данных после прогона).
+До начала прогона CI на актуальном HEAD должен быть зелёным. Далее требуется один контролируемый сценарий на реальной workstation:
 
-## Шаг 6. Конвейер и контекст проекта
+1. Установить AgentRuntime=native, выбрать локальную модель и убедиться, что llama-server запускается с --jinja и поддерживает tool-call template.
+2. Выполнить обычный chat-turn и turn с реальными MCP tools; проверить streaming text/reasoning, tool results, usage и отсутствие повторного выполнения side effects.
+3. Запустить pipeline на тестовой задаче: Planner создаёт subtask; Actor выполняет разрешённую работу, при необходимости запускает только allowlisted command и отправляет subtask_report_result; Reviewer выставляет verdict. Проверить завершение command/session и отсутствие повторного запуска.
+4. Запустить runtime parity eval на одном revision: OpenCode и Native получают одинаковые закреплённые controls и prompt; сравнить check exit code/output, tokens и transcript refs.
+5. Проверить, что короткоживущий token отсутствует в transcript, логах, argv и файлах конфигурации.
+6. Если на workstation настроены облачные подключения, сделать по одному smoke turn через Anthropic и OpenAI-compatible provider; проверить отсутствие записи ключей на диск.
 
-**Статус: частично реализован; acceptance ещё не подтверждён.**
+Результат этого прогона нужно записать в PR: выбранная модель/provider, revision, успешность pipeline стадий, eval comparison и найденные ограничения. До него native остаётся opt-in; opencode остаётся default.
 
-Уже добавлено:
-1. Аддитивная команда `RunPipelineSession` в каталоге, `CommandDelivery`, `CommandLease`, `HarnessTokenCommands` и документации семантики доставки. Повторная доставка классифицирована как at-most-once.
-2. `LaunchSessionHandler` определяет native runtime в настройках рабочей станции, выбирает онлайн ProjectRuntime, готовит prompt/model/context и атомарно переводит сессию в `Active` вместе с постановкой команды в очередь. Транзакция выполняется через EF execution strategy.
-3. Клиентский `DaemonCommandExecutor` получает короткоживущий scoped harness token, создаёт native session, отправляет prompt, дожидается статуса хода и возвращает внешний ID сессии и usage.
-4. `CommandCompletions` сохраняет внешний ID сессии при корректном успешном ответе и переводит активную сессию в `Failed`, если ход завершился ошибкой либо результат не содержит корректного внешнего ID.
-5. Добавлены тесты очереди/защиты от повторного запуска, completion success/failure/malformed-result, dispatch, role-based MCP permissions и task/session/subtask scoping. Для pipeline harness token API сверяет payload с сохранённой активной сессией; Actor получает список `AllowedMcpTools` из persisted subtask. Нативный `run_command` требует отдельного subtask grant и локального `AllowedCommandPrefixes`. Pipeline dispatch теперь также трактует `aborted` и отсутствующий finish reason как ошибку команды. При пустом ответе модели на compaction summary native runtime завершает ход с явной ошибкой и сохраняет исходную историю, вместо того чтобы молча удалить старые сообщения. OpenAI-compatible provider теперь требует terminal `[DONE]`; поток, который завершился без этого маркера, возвращает ошибку, поэтому незавершённый tool-call batch не будет обработан runtime.
-6. Усилено восстановление native session: принимаются только GUID-N session IDs; отсутствующие tool results восстанавливаются как явные сообщения об interrupted operation без автоматического повтора потенциально выполненного side effect. Восстановление выполняется только после проверки, что сессия не занята другим ходом; отказ первоначальной записи транскрипта освобождает turn reservation и откатывает новый prompt.
-7. Начало Actor-сессии выполняет условный stage claim для `Executing`/`ReopenedForRevision`, claim `Pending → InProgress` и вставку `PipelineSession` в одной транзакции внутри EF execution strategy. Это закрывает окно между claim и session insert, поддерживает PostgreSQL retry-on-failure и не допускает старта Actor по устаревшему stage после закрытия pipeline. При ошибке вставки транзакция откатывает claim; тест проверяет сохранение `Pending` и `ReopenedForRevision`. Planner-start оставлен без длительной транзакции, чтобы не менять существующую concurrency-проверку с SQLite shared connection.
+## Не является блокером
 
-Остаётся:
-1. Восстановить выполнение GitHub Actions и получить зелёный CI на актуальном HEAD. Последний зелёный commit — `e1e9aeb`; запуски более новых коммитов завершались до выдачи runner и не предоставили build/test logs.
-2. Подтвердить реальный end-to-end сценарий на локальной модели: Planner создаёт подзадачи через `task_create_subtask`, Actor выполняет работу и вызывает `subtask_report_result`, Reviewer ставит вердикт. Текущие тесты проверяют dispatch и completion контракт, но не этот полный живой цикл.
-3. Проверить полный цикл runtime toggle от сохранения настройки рабочей станции до реального запуска модели; текущие проверки подтверждают dispatch и ролевые MCP-контракты, но не запуск реальной локальной модели с live API.
+- Таблица цен и расчёт TotalCost для облачных моделей: token usage уже учитывается; точное ценообразование требует отдельного версионируемого источника тарифов, поэтому не подменяется предположительными значениями.
+- Swarm/research, interactive approval risky commands, HTTP MCP и server-hosted agents — вне текущего объёма.
 
-**Acceptance:** полный цикл на локальной модели без OpenCode, включая scoped MCP-инструменты и завершение command без повторного запуска той же сессии. До подтверждения этого сценария шаг 6 не считать закрытым.
+## Важные риски
 
-## Шаг 7. Настройка, миграция, сравнение
-
-1. Переключатель рантайма на странице Workstations (строки локализации, английский ключ первым).
-2. Паритет с OpenCode проверяется вашим же eval-контуром: парные прогоны `RunEvalTurn` на закреплённой ревизии, OpenCode против native, одна и та же модель. Решение о смене default принимается по результату, не по ощущению.
-3. `opencode` остаётся рабочей опцией, пока паритет не подтверждён.
-
-## Что OpenCode делал молча (каждый пункт нужен тест у харнеса)
-
-- повтор запроса при сетевых сбоях и 429 от облака;
-- сжатие контекста при приближении к пределу;
-- обрезка огромных результатов инструментов;
-- отмена посреди стрима без потери состояния сессии;
-- трактовка `reasoning` как отдельного типа части (в чате у вас уже есть `kind=reasoning`);
-- учёт токенов и стоимости на сообщение.
-
-## Порядок и размер
-
-1 → 2 → 3 даёт рабочий чат на локальной модели (самая важная веха). 4 даёт реальную работу с кодом. 5 добавляет облако. 6 возвращает пайплайн. 7 закрывает миграцию. Шаги 2 и 5 независимы друг от друга. Ориентир: шаги 1–4 это основной объём (порядка пары недель одному человеку с агентами), 5–7 существенно меньше. Это оценка по размеру кода, не обещание.
-
-## Вне плана
-
-Swarm и research-фаза (`specs/tz-research-pipeline.md`) строятся поверх этого харнеса и в него не входят. Подтверждение рискованных команд человеком, HTTP MCP, облачный (серверный) запуск агентов не входят.
-
-## Риски
-
-- Качество tool calling у локальной модели зависит от шаблона и флагов `llama-server`, а не только от харнеса. Фикстуры шага 2 это ловят.
-- Своё окно контекста это самая тонкая часть: ошибка там выглядит как «модель забыла задачу». Нужны eval-замеры, не только юнит-тесты.
-- Токен к `/v1` (D1) затрагивает серверную авторизацию; решать вместе с `SECURITY.md` и моделью угроз M8.
+- --jinja необходим для llama-server tool calling в принятой конфигурации, но сам по себе не гарантирует корректный chat template.
+- Native runtime пока не становится default автоматически: окончательное решение принимается только после parity eval на одинаковых revision и controls.
+- Любая новая возможность MCP должна проходить через действующие server-side actor, project, task, session и subtask проверки.
