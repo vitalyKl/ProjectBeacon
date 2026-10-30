@@ -208,6 +208,39 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task ChatEnsureSession_UsesRuntimeReloadedFromPersistedWorkstationSettings()
+    {
+        var settingsPath = Path.Combine(_dir, "workstation.json");
+        var dataDirectory = Path.Combine(_dir, "native-data");
+        WorkstationSetup.SaveWorkstation(
+            JsonSerializer.Serialize(new { agentRuntime = "native", opencodeDataDir = dataDirectory }),
+            settingsPath);
+
+        using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "native-persisted-config.yaml")
+        };
+        await using var daemon = new WorkstationDaemon(http, llama, () => WorkstationSettings.Load(settingsPath));
+
+        var (ok, result, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Id = Guid.NewGuid(),
+            Kind = WorkstationCommandKind.ChatEnsureSession,
+            LocalRoot = _dir,
+            PayloadJson = JsonSerializer.Serialize(new { title = "Persisted native runtime selection" })
+        }, CancellationToken.None);
+
+        Assert.True(ok, error);
+        using var doc = JsonDocument.Parse(result!);
+        var sessionId = doc.RootElement.GetProperty("sessionId").GetString();
+        Assert.True(Guid.TryParseExact(sessionId, "N", out _), $"Expected a native local session id, got '{sessionId}'.");
+        Assert.True(File.Exists(Path.Combine(_dir, "sessions", sessionId + ".json")));
+        Assert.Equal("native", WorkstationSettings.Load(settingsPath).AgentRuntime);
+    }
+
+    [Fact]
     public async Task RunPipelineSession_RequiresExplicitScopedSessionPayload()
     {
         using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };

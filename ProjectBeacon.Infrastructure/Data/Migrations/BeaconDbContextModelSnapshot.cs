@@ -770,6 +770,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Runtime")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("CheckCommand")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

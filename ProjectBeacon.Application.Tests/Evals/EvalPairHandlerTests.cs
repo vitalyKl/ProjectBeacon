@@ -133,9 +133,79 @@ public sealed class EvalPairHandlerTests : IDisposable
 
         var stored = await _db.EvalRuns.SingleAsync(r => r.Id == value.WithBriefRunId, TestContext.Current.CancellationToken);
         Assert.Equal("opencode/test", stored.Model);
+        Assert.Equal("opencode", stored.Runtime);
         Assert.Equal(0.2, stored.Temperature);
         Assert.Equal("abc123", stored.RepoRevision);
         Assert.Equal("dotnet test", stored.CheckCommand);
+    }
+
+    [Fact]
+    public async Task Pair_CompareRuntimesPinsSamePromptAndControlsToBothRuntimes()
+    {
+        var (user, project, task, device) = await SeedAsync();
+        await MakeOnlineAsync(device, project, user);
+
+        var request = Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work") with
+        {
+            CompareRuntimes = true
+        };
+        var result = await CreateHandler().HandleAsync(new EvalPairCommand(request), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        var value = result.Value!;
+        Assert.NotNull(value.OpenCodeRunId);
+        Assert.NotNull(value.NativeRunId);
+        Assert.NotEqual(value.OpenCodeRunId, value.NativeRunId);
+        Assert.NotNull(value.OpenCodeCommandId);
+        Assert.NotNull(value.NativeCommandId);
+        Assert.Equal(Guid.Empty, value.WithBriefRunId);
+        Assert.Equal(Guid.Empty, value.WithoutBriefRunId);
+
+        var runs = await _db.EvalRuns
+            .Where(run => run.Id == value.OpenCodeRunId || run.Id == value.NativeRunId)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, runs.Count);
+        var openCode = runs.Single(run => run.Id == value.OpenCodeRunId);
+        var native = runs.Single(run => run.Id == value.NativeRunId);
+        Assert.Equal(EvalCondition.OpenCode, openCode.Condition);
+        Assert.Equal(EvalCondition.Native, native.Condition);
+        Assert.Equal("opencode", openCode.Runtime);
+        Assert.Equal("native", native.Runtime);
+        Assert.Equal(openCode.Model, native.Model);
+        Assert.Equal(openCode.Temperature, native.Temperature);
+        Assert.Equal(openCode.ReasoningEffort, native.ReasoningEffort);
+        Assert.Equal(openCode.ToolPermissions, native.ToolPermissions);
+        Assert.Equal(openCode.TimeoutSeconds, native.TimeoutSeconds);
+        Assert.Equal(openCode.RepoRevision, native.RepoRevision);
+        Assert.Equal(openCode.CheckCommand, native.CheckCommand);
+
+        var openCodeCommand = await new GetCommandHandler(Factory()).HandleAsync(
+            new GetCommandCommand(new GetCommandRequest(value.OpenCodeCommandId!.Value, user.Id)), TestContext.Current.CancellationToken);
+        var nativeCommand = await new GetCommandHandler(Factory()).HandleAsync(
+            new GetCommandCommand(new GetCommandRequest(value.NativeCommandId!.Value, user.Id)), TestContext.Current.CancellationToken);
+        Assert.True(openCodeCommand.Success, openCodeCommand.Error);
+        Assert.True(nativeCommand.Success, nativeCommand.Error);
+        var openCodePayload = JsonNode.Parse(openCodeCommand.Value!.PayloadJson)!.AsObject();
+        var nativePayload = JsonNode.Parse(nativeCommand.Value!.PayloadJson)!.AsObject();
+        Assert.Equal("opencode", openCodePayload["runtime"]!.GetValue<string>());
+        Assert.Equal("native", nativePayload["runtime"]!.GetValue<string>());
+        Assert.Equal(task.Id.ToString("D"), nativePayload["taskId"]!.GetValue<string>());
+        Assert.Equal(openCodePayload["prompt"]!.GetValue<string>(), nativePayload["prompt"]!.GetValue<string>());
+        Assert.Equal(openCodePayload["controls"]!.ToJsonString(), nativePayload["controls"]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task Pair_InvalidRuntime_FailsBeforeCreatingRuns()
+    {
+        var (user, project, task, device) = await SeedAsync();
+        await MakeOnlineAsync(device, project, user);
+        var request = Pinned(project.Id, task.Id, device.Id, user.Id, "Do the work") with { Runtime = "unknown" };
+
+        var result = await CreateHandler().HandleAsync(new EvalPairCommand(request), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Contains("runtime", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _db.EvalRuns.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

@@ -17,6 +17,7 @@ public sealed class EvalRunTests
         Assert.Equal(taskId, run.TaskId);
         Assert.Equal(pairId, run.PairId);
         Assert.Equal(EvalCondition.WithBrief, run.Condition);
+        Assert.Equal("opencode", run.Runtime);
         Assert.True(run.StartedAt > DateTime.MinValue);
         Assert.Null(run.CompletedAt);
         Assert.Null(run.Passed);
