@@ -46,8 +46,9 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 - Восстановление незавершённых tool calls не повторяет потенциальный side effect: в transcript записывается явный interrupted result.
 - Контекст сжимается безопасно: tool call и связанный result не разделяются; пустой summary не удаляет исходную историю.
 - Есть лимит шагов, защита от повторения идентичного tool call и truncation больших tool results.
-- Tool calls выполняются параллельно. Результаты добавляются в transcript в порядке tool index, а не в порядке завершения задач.
-- MCP stdio transport допускает несколько одновременных JSON-RPC requests: записи сериализуются, единственный stdout reader маршрутизирует ответы по request ID. Отмена/ошибка одного запроса не должна принимать ответ другого запроса.
+- Tool calls выполняются параллельно на стороне native runtime и внутри самого MCP stdio server. Каждый входящий MCP request получает собственный workspace/index state; responses записываются атомарно, а клиент маршрутизирует их по JSON-RPC request ID. Результаты tool calls добавляются в transcript в порядке tool index, а не в порядке завершения задач.
+- Одновременные stdio requests ограничены сервером (max 32 in-flight), чтобы не допустить неограниченного накопления запросов.
+- При timeout/cancellation eval сначала отправляет Abort и ждёт подтверждения завершения. Если runtime не подтвердил остановку, detached worktree сохраняется и путь включается в ошибку; каталог не удаляется под потенциально работающим процессом.
 
 ### 4. MCP и permissions
 
@@ -84,7 +85,7 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 - Runtime selector сохранён локализованным UI, миграция AgentRuntime additive и default opencode.
 - EvalRun.Runtime добавлен отдельной миграцией с backfill/default opencode для существующих записей.
 - Существующий A/B eval WithBrief / WithoutBrief сохранён без изменения семантики.
-- CompareRuntimes=true создаёт пару OpenCode / Native на одинаковом prompt (с одним и тем же compiled brief), revision, model, temperature, reasoning effort, tools, timeout и check command. EvalRun хранит runtime, а payload каждой команды закрепляет конкретный runtime.
+- CompareRuntimes=true создаёт пару OpenCode / Native на одинаковом prompt (с одним и тем же compiled brief), revision, model, temperature, reasoning effort, tools, timeout и check command. Каждый run выполняется в своём detached git worktree на закреплённой ревизии; рабочая копия пользователя остаётся чистой и результаты двух запусков не смешиваются. OpenCode eval использует отдельный временный OpenCode server, не перезапускает интерактивную сессию пользователя. EvalRun хранит runtime, а payload каждой команды закрепляет конкретный runtime.
 - RunEvalTurn выбирает runtime по payload, а не по глобальной настройке workstation. Native eval получает отдельный scoped token. Transcript ref использует соответствующий native: или opencode: prefix.
 - Добавлены application tests на одинаковые controls/prompt обоих run, invalid runtime, persisted runtime pin, token scope и CLI test на передачу native authorization в runtime.
 

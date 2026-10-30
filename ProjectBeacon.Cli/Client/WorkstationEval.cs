@@ -157,8 +157,10 @@ public static class WorkstationEval
         var quiet = 0;
         var idle = false;
         var turnEnded = false;
-        for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
+        try
         {
+            for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
+            {
             var parts = new List<AgentMessagePart>();
             await foreach (var part in runtime.StreamPartsAsync(sessionId, ct))
                 parts.Add(part);
@@ -194,13 +196,19 @@ public static class WorkstationEval
                 idle = true;
                 break;
             }
-            await Task.Delay(pollInterval, ct);
+                await Task.Delay(pollInterval, ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Do not let cancellation dispose the isolated checkout before the runtime has
+            // acknowledged an abort. The cancellation is rethrown after cleanup is safe.
         }
 
         // A timeout or caller cancellation must stop the provider before the isolated worktree
         // is removed. Native AbortAsync waits for the active turn; OpenCode receives its interrupt
         // request. Never delete the workspace while a turn may still be using it.
-        if (!turnEnded)
+        if (!turnEnded && !idle)
         {
             using var abortTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             using var abortCts = CancellationTokenSource.CreateLinkedTokenSource(
