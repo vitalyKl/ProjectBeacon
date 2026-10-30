@@ -506,6 +506,76 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeDoesNotExecuteToolCallsWhenProviderStreamEndsWithoutDone()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-truncated-tool-stream-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var mcp = new StubMcpToolClient();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => new TruncatedToolProvider(),
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+
+        try
+        {
+            var session = await runtime.CreateSessionAsync("truncated stream test", CancellationToken.None);
+            var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test",
+                "ephemeral-token",
+                Guid.NewGuid(),
+                null,
+                Guid.NewGuid(),
+                1,
+                project,
+                DateTime.UtcNow.AddMinutes(2));
+            await runtime.SendPromptAsync(
+                session,
+                "Read README.md",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status!.Ended);
+            Assert.Equal("error", status.Finish);
+            Assert.Contains("before [DONE]", status.Error!, StringComparison.Ordinal);
+            Assert.Equal(0, mcp.CallCount);
+            var transcript = JsonNode.Parse(await File.ReadAllTextAsync(
+                Path.Combine(temp, ".opencode", "sessions", session + ".json")))!;
+            Assert.DoesNotContain(transcript["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "tool");
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeRejectsMcpToolThatWasNotAdvertised()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-unadvertised-" + Guid.NewGuid().ToString("N"));
@@ -1028,6 +1098,24 @@ public sealed class NativeAgentRuntimeTests
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
+        }
+    }
+
+    private sealed class TruncatedToolProvider : IChatProvider
+    {
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return new ChatProviderEvent(
+                ChatProviderEventKind.ToolCallDelta,
+                ToolIndex: 0,
+                ToolCallId: "call-truncated",
+                ToolName: "read_file",
+                ToolArguments: "{\"path\":\"README.md\"}");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            throw new IOException("OpenAI-compatible stream ended before [DONE].");
         }
     }
 
