@@ -15,7 +15,8 @@ public sealed class McpStdioServerTests
     {
         var env = McpEnvironment.Of(
             ("BEACON_API_URL", "https://beacon.test/"),
-            ("BEACON_API_TOKEN", "test-token"));
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
         var handler = new ConcurrentApiHandler();
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://beacon.test/") };
         var api = new BeaconApiClient(http, env);
