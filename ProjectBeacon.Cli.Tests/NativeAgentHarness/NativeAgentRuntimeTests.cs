@@ -337,6 +337,69 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeReleasesTurnReservationWhenInitialTranscriptPersistFails()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-persist-failure-" + Guid.NewGuid().ToString("N"));
+        var dataDirectory = Path.Combine(temp, ".opencode", "data");
+        var sessionsDirectory = Path.Combine(temp, ".opencode", "sessions");
+        Directory.CreateDirectory(sessionsDirectory);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => new WorkstationSettings
+            {
+                OpencodeDataDir = dataDirectory,
+                LlamaSwapPort = 8080
+            },
+            providerFactory: (_, _, _) => new RequestRecordingProvider());
+
+        try
+        {
+            var sessionId = await runtime.CreateSessionAsync("persist failure", CancellationToken.None);
+            var transcriptPath = Path.Combine(sessionsDirectory, sessionId + ".json");
+            File.Delete(transcriptPath);
+            Directory.CreateDirectory(transcriptPath);
+
+            await Assert.ThrowsAsync<IOException>(() => runtime.SendPromptAsync(
+                sessionId,
+                "This prompt cannot be persisted yet",
+                "beacon-local/test-model",
+                CancellationToken.None));
+
+            Directory.Delete(transcriptPath);
+            var streamTask = runtime.StreamTextAsync(sessionId, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            await runtime.SendPromptAsync(
+                sessionId,
+                "Retry after fixing storage",
+                "beacon-local/test-model",
+                CancellationToken.None);
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var status = await runtime.GetTurnStatusAsync(sessionId, CancellationToken.None);
+            Assert.True(status!.Ended);
+            Assert.Equal("stop", status.Finish);
+            var saved = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+            Assert.Equal(1, saved["turnNumber"]!.GetValue<int>());
+            Assert.Equal("Retry after fixing storage", saved["messages"]!.AsArray().Last()!["content"]!.GetValue<string>());
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeTruncatesOversizedToolResultsBeforePersistingAndStreaming()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-tool-truncation-" + Guid.NewGuid().ToString("N"));

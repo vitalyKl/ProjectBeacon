@@ -104,10 +104,20 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
         CancellationTokenSource turnCts;
         int turnNumber;
+        int previousTurnNumber;
+        AgentTurnStatus? previousTurnStatus;
+        string? previousModel;
+        int? previousContextLimit;
+        JsonObject userMessage;
         lock (session.Sync)
         {
             if (session.ActiveTurn is not null)
                 throw new InvalidOperationException("A prompt is already running for this session.");
+
+            previousTurnNumber = session.TurnNumber;
+            previousTurnStatus = session.TurnStatus;
+            previousModel = session.LastModel;
+            previousContextLimit = session.ContextLimit;
 
             turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             session.ActiveTurn = turnCts;
@@ -115,10 +125,33 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             session.ContextLimit = controls?.ContextLimit is > 0 ? controls.ContextLimit : session.ContextLimit;
             turnNumber = ++session.TurnNumber;
             session.TurnStatus = new AgentTurnStatus(false, null, null, session.TurnStatus?.MessageId);
-            session.Messages.Add(new JsonObject { ["role"] = "user", ["content"] = text });
+            userMessage = new JsonObject { ["role"] = "user", ["content"] = text };
+            session.Messages.Add(userMessage);
         }
 
-        await PersistAsync(session, ct);
+        try
+        {
+            await PersistAsync(session, ct);
+        }
+        catch
+        {
+            // Do not leave the session reserved when the user prompt could not be durably stored.
+            lock (session.Sync)
+            {
+                if (ReferenceEquals(session.ActiveTurn, turnCts))
+                {
+                    session.ActiveTurn = null;
+                    session.TurnNumber = previousTurnNumber;
+                    session.TurnStatus = previousTurnStatus;
+                    session.LastModel = previousModel;
+                    session.ContextLimit = previousContextLimit;
+                    session.Messages.Remove(userMessage);
+                }
+            }
+            turnCts.Dispose();
+            throw;
+        }
+
         var task = Task.Run(() => RunTurnAsync(session, turnNumber, selectedModel, controls, turnCts.Token), CancellationToken.None);
         lock (session.Sync)
             session.ActiveTask = task;
@@ -949,7 +982,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             foreach (var call in expected)
             {
-                if (recorded.Contains(call.Id))
+                if (!recorded.Add(call.Id))
                     continue;
 
                 const string recoveryMessage =
