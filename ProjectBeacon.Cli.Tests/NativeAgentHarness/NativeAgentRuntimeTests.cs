@@ -207,13 +207,13 @@ public sealed class NativeAgentRuntimeTests
             {
                 ["id"] = "call-1",
                 ["type"] = "function",
-                ["function"] = new JsonObject { ["name"] = "read_file", ["arguments"] = "{\\"path\\":\\"README.md\\"}" }
+                ["function"] = new JsonObject { ["name"] = "read_file", ["arguments"] = new JsonObject { ["path"] = "README.md" }.ToJsonString() }
             },
             new JsonObject
             {
                 ["id"] = "call-2",
                 ["type"] = "function",
-                ["function"] = new JsonObject { ["name"] = "run_command", ["arguments"] = "{\\"command\\":\\"dotnet test\\"}" }
+                ["function"] = new JsonObject { ["name"] = "run_command", ["arguments"] = new JsonObject { ["command"] = "dotnet test" }.ToJsonString() }
             }
         };
         var transcript = new JsonObject
@@ -282,6 +282,16 @@ public sealed class NativeAgentRuntimeTests
 
         try
         {
+            var recoveredStatus = await runtime.GetTurnStatusAsync(sessionId, CancellationToken.None);
+            Assert.True(recoveredStatus!.Ended);
+            Assert.Equal("aborted", recoveredStatus.Finish);
+
+            var recoveredTranscript = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+            Assert.Equal("aborted", recoveredTranscript["turnStatus"]!["finish"]!.GetValue<string>());
+            Assert.Single(recoveredTranscript["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "tool"
+                && message["tool_call_id"]?.GetValue<string>() == "call-2");
+
             var streamTask = runtime.StreamTextAsync(sessionId, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
             await runtime.SendPromptAsync(
                 sessionId,
@@ -303,7 +313,7 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal("Continue after the restart", request.Last!["content"]!.GetValue<string>());
 
             var persisted = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
-            Assert.Equal("aborted", persisted["turnStatus"]!["finish"]!.GetValue<string>());
+            Assert.Equal("stop", persisted["turnStatus"]!["finish"]!.GetValue<string>());
             Assert.Single(persisted["messages"]!.AsArray(), message =>
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["tool_call_id"]?.GetValue<string>() == "call-2");
