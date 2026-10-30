@@ -11,6 +11,42 @@ public sealed class McpStdioServerTests
 {
 
     [Fact]
+    public async Task RunAsync_ProcessesIndependentToolCallsConcurrently()
+    {
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_PIPELINE_ROLE", "Eval"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        var handler = new ConcurrentApiHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-concurrent-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"model_status","arguments":{}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"model_status","arguments":{}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+            Assert.Equal(2, frames.Count);
+            Assert.Equal(new[] { 1, 2 }, frames.Select(frame => frame["id"]!.GetValue<int>()).Order().ToArray());
+            Assert.True(handler.MaxConcurrentModelRequests >= 2,
+                $"Expected concurrent MCP tool execution, observed max concurrency {handler.MaxConcurrentModelRequests}.");
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task ToolsList_FiltersToolsUsingActiveSubtaskAllowlist()
     {
         var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -1145,6 +1181,55 @@ public sealed class McpStdioServerTests
         finally
         {
             Directory.Delete(root, true);
+        }
+    }
+
+    private sealed class ConcurrentApiHandler : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource<bool> _bothStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _activeModelRequests;
+        private int _maxConcurrentModelRequests;
+
+        public int MaxConcurrentModelRequests => Volatile.Read(ref _maxConcurrentModelRequests);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (request.RequestUri?.AbsolutePath == "/v1/models")
+            {
+                var active = Interlocked.Increment(ref _activeModelRequests);
+                int current;
+                do
+                {
+                    current = Volatile.Read(ref _maxConcurrentModelRequests);
+                    if (active <= current) break;
+                } while (Interlocked.CompareExchange(ref _maxConcurrentModelRequests, active, current) != current);
+
+                if (active >= 2)
+                    _bothStarted.TrySetResult(true);
+                try
+                {
+                    await _bothStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+                    await Task.Delay(10, cancellationToken);
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                    };
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _activeModelRequests);
+                }
+            }
+
+            if (request.RequestUri?.AbsolutePath == "/v1/models/proxy/status")
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                };
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
     }
 

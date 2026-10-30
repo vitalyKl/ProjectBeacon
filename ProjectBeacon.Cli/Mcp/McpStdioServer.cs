@@ -36,18 +36,78 @@ public static partial class McpStdioServer
 
     internal static async Task<int> RunAsync(string root, Stream input, Stream output, BeaconApiClient? api, McpEnvironment env)
     {
-        var workspace = new FileWorkspace(root);
-        var index = new CodeIndex(root);
+        const int maxConcurrentRequests = 32;
+        using var requestSlots = new SemaphoreSlim(maxConcurrentRequests, maxConcurrentRequests);
+        using var outputGate = new SemaphoreSlim(1, 1);
+        var pending = new List<Task>();
 
         while (true)
         {
             var message = await ReadMessageAsync(input);
             if (message is null)
-                return 0;
+                break;
 
-            var response = await HandleAsync(message, workspace, index, api, env);
-            if (response is not null)
+            await requestSlots.WaitAsync();
+            pending.Add(ProcessRequestAsync(message, root, output, api, env, outputGate, requestSlots));
+        }
+
+        await Task.WhenAll(pending);
+        return 0;
+    }
+
+    private static async Task ProcessRequestAsync(
+        JsonNode message,
+        string root,
+        Stream output,
+        BeaconApiClient? api,
+        McpEnvironment env,
+        SemaphoreSlim outputGate,
+        SemaphoreSlim requestSlots)
+    {
+        try
+        {
+            // Keep request-local workspace/index state so concurrent tools do not race over
+            // mutable caches. MCP responses are correlated by id and can be written as soon
+            // as each independent request completes.
+            var response = await HandleAsync(
+                message,
+                new FileWorkspace(root),
+                new CodeIndex(root),
+                api,
+                env);
+            if (response is null)
+                return;
+
+            await outputGate.WaitAsync();
+            try
+            {
                 await WriteMessageAsync(output, response);
+            }
+            finally
+            {
+                outputGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            var id = message["id"]?.DeepClone();
+            if (id is not null)
+            {
+                var error = Error(id, -32603, "Internal error: " + ex.Message);
+                await outputGate.WaitAsync();
+                try
+                {
+                    await WriteMessageAsync(output, error);
+                }
+                finally
+                {
+                    outputGate.Release();
+                }
+            }
+        }
+        finally
+        {
+            requestSlots.Release();
         }
     }
 
