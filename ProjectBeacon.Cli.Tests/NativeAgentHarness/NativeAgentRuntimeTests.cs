@@ -1115,7 +1115,7 @@ public sealed class NativeAgentRuntimeTests
                 ToolName: "read_file",
                 ToolArguments: "{\"path\":\"README.md\"}");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
-            throw new IOException("OpenAI-compatible stream ended before [DONE].");
+            throw new ChatProviderException("OpenAI-compatible stream ended before [DONE].", (int)HttpStatusCode.BadGateway, retryable: true);
         }
     }
 

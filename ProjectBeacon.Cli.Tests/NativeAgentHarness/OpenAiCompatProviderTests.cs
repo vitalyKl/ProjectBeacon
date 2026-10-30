@@ -72,11 +72,12 @@ public sealed class OpenAiCompatProviderTests
         var provider = new OpenAiCompatProvider(http, "http://127.0.0.1:8080/v1", null);
         var request = new ChatProviderRequest("test-model", new JsonArray(), new JsonArray());
 
-        var exception = await Assert.ThrowsAsync<IOException>(async () =>
+        var exception = await Assert.ThrowsAsync<ChatProviderException>(async () =>
         {
             await foreach (var _ in provider.StreamAsync(request, CancellationToken.None)) { }
         });
 
+        Assert.True(exception.Retryable);
         Assert.Contains("before [DONE]", exception.Message, StringComparison.Ordinal);
     }
 
