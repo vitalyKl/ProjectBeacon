@@ -86,8 +86,9 @@ public static class WorkstationEval
                 var expected = revisionElement.GetString();
                 if (!string.IsNullOrWhiteSpace(expected))
                 {
+                    pinnedRevision = expected.Trim();
                     var head = GitHead(validatedPath.Value!);
-                    if (!string.Equals(head, expected.Trim(), StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(head, pinnedRevision, StringComparison.OrdinalIgnoreCase))
                         return Result.Failure<string>("Repository revision does not match the eval pin.");
                     var porcelain = GitPorcelain(validatedPath.Value!);
                     if (porcelain is null)
@@ -99,6 +100,7 @@ public static class WorkstationEval
         }
 
         double? temperature = null;
+        string? pinnedRevision = null;
         string? reasoningEffort = null;
         string? toolPermissions = null;
         if (controls.ValueKind == JsonValueKind.Object)
@@ -111,15 +113,30 @@ public static class WorkstationEval
                 toolPermissions = toolsElement.GetString();
         }
 
+        var workspaceResult = await EvalWorktree.CreateAsync(
+            validatedPath.Value!,
+            pinnedRevision,
+            evalRunId,
+            openCode,
+            ct);
+        if (workspaceResult.Workspace is null)
+            return Result.Failure<string>(workspaceResult.Error ?? "Could not prepare an isolated eval workspace.");
+
+        await using var evalWorkspace = workspaceResult.Workspace;
+        var evalDirectory = evalWorkspace.WorkingDirectory;
+        var evalAuthorization = harnessAuthorization is null
+            ? null
+            : harnessAuthorization with { WorkingDirectory = evalDirectory };
+
         if (openCode is not null)
         {
-            await openCode.TickAsync(validatedPath.Value, ct);
+            await openCode.TickAsync(evalDirectory, ct);
             if (!openCode.Status.Healthy)
                 return Result.Failure<string>(openCode.Status.Error ?? "OpenCode is not running.");
         }
         else if (runtime is IAgentRuntimeCapabilities capabilities)
         {
-            var readiness = await capabilities.EnsureReadyAsync(validatedPath.Value, ct);
+            var readiness = await capabilities.EnsureReadyAsync(evalDirectory, ct);
             if (!readiness.Ready)
                 return Result.Failure<string>(readiness.Error ?? "The selected agent runtime is not ready.");
         }
@@ -131,7 +148,7 @@ public static class WorkstationEval
         var sessionId = await runtime.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
         await runtime.SendPromptAsync(sessionId, prompt, model, ct, new AgentPromptControls(temperature, reasoningEffort, toolPermissions)
         {
-            HarnessAuthorization = harnessAuthorization
+            HarnessAuthorization = evalAuthorization
         });
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -186,7 +203,7 @@ public static class WorkstationEval
             var check = ReadCheckCommand(payload, controls);
             if (!string.IsNullOrWhiteSpace(check))
             {
-                var checkResult = EvalCheck.Execute(validatedPath.Value!, check);
+                var checkResult = EvalCheck.Execute(evalDirectory, check);
                 exitCode = checkResult.ExitCode;
                 checkOutput = checkResult.Output;
             }
