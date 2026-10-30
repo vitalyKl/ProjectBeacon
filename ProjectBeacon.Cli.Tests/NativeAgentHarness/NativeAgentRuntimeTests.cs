@@ -1431,8 +1431,8 @@ public sealed class NativeAgentRuntimeTests
         {
             if (Interlocked.Increment(ref _callCount) == 1)
             {
-                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta, ToolIndex: 0, ToolCallId: "parallel-1", ToolName: "read_file", ToolArguments: "{\\"path\\":\\"a.txt\\"}");
-                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta, ToolIndex: 1, ToolCallId: "parallel-2", ToolName: "read_file", ToolArguments: "{\\"path\\":\\"b.txt\\"}");
+                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta, ToolIndex: 0, ToolCallId: "parallel-1", ToolName: "read_file", ToolArguments: "{\"path\":\"a.txt\"}");
+                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta, ToolIndex: 1, ToolCallId: "parallel-2", ToolName: "read_file", ToolArguments: "{\"path\":\"b.txt\"}");
                 yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
                 yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
                 yield break;
