@@ -48,4 +48,5 @@ public record ApiTokenDto(
     DateTime? ExpiresAt,
     DateTime? LastUsedAt,
     DateTime CreatedAt,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Token = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Token = null,
+    ApiTokenClientKind ClientKind = ApiTokenClientKind.Manual);

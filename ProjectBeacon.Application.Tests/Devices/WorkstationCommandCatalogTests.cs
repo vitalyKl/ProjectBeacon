@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Application.Tests.Devices;
 
+using ProjectBeacon.Application.Common;
 using ProjectBeacon.Application.Devices;
 using ProjectBeacon.Domain.Enums;
 using Xunit;
@@ -26,7 +27,8 @@ public sealed class WorkstationCommandCatalogTests
             WorkstationCommandKind.ChatEnsureSession,
             WorkstationCommandKind.ChatPrompt,
             WorkstationCommandKind.RunEvalTurn,
-            WorkstationCommandKind.RunReviewCheck
+            WorkstationCommandKind.RunReviewCheck,
+            WorkstationCommandKind.RunPipelineSession
         };
 
         foreach (var kind in Enum.GetValues<WorkstationCommandKind>())
@@ -35,6 +37,18 @@ public sealed class WorkstationCommandCatalogTests
             Assert.Equal(expected.Contains(kind), scope == WorkstationCommandScope.ProjectRuntime);
             Assert.Equal(scope == WorkstationCommandScope.ProjectRuntime, CommandSandbox.IsProjectKind(kind));
         }
+    }
+
+    [Fact]
+    public void RunPipelineSession_DeclaresRequiredAndOptionalPayloadFields()
+    {
+        var descriptor = WorkstationCommandCatalog.Get(WorkstationCommandKind.RunPipelineSession);
+
+        Assert.Equal(
+            "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}",
+            descriptor.PayloadContract);
+        Assert.Equal(OperationRetrySemantics.AtMostOnce, descriptor.RetrySemantics);
+        Assert.Equal(WorkstationCommandScope.ProjectRuntime, descriptor.Scope);
     }
 
     [Fact]

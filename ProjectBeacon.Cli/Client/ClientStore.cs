@@ -117,6 +117,9 @@ public sealed class WorkstationSettings
     public string? LlamaSwapBin { get; set; }
     public int LlamaSwapPort { get; set; } = 8080;
     public bool UseOwnSwapper { get; set; }
+    public string AgentRuntime { get; set; } = "opencode";
+    /// <summary>Command prefixes the native harness may execute directly; empty disables run_command.</summary>
+    public List<string> AllowedCommandPrefixes { get; set; } = [];
     public int ConcurrentPortBase { get; set; } = 9000;
     public string? OpencodeDataDir { get; set; }
     public string? ProjectsRoot { get; set; }

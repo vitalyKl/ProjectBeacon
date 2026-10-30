@@ -16,7 +16,8 @@ public static class CommandDelivery
         or WorkstationCommandKind.ChatSwitchAgent
         or WorkstationCommandKind.ChatReplyForm
         or WorkstationCommandKind.RunEvalTurn
-        or WorkstationCommandKind.RunReviewCheck;
+        or WorkstationCommandKind.RunReviewCheck
+        or WorkstationCommandKind.RunPipelineSession;
 
     public static bool IsIdempotent(WorkstationCommandKind kind) => !IsAtMostOnce(kind);
 

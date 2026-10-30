@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Application.Authorization;
+using Domain.Enums;
 using Application.Devices;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -33,10 +34,20 @@ public sealed class ApiTokenAuthMiddleware
             var token = await db.ApiTokens.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(t => t.TokenHash == hash);
 
-            if (token is not null && !token.IsExpired)
+            var now = DateTime.UtcNow;
+            var valid = token is not null && !token.IsExpired && !token.IsRevoked;
+            if (valid && token!.ClientKind == ApiTokenClientKind.Harness)
+                valid = await IsHarnessTokenActiveAsync(db, token, now, ctx.RequestAborted);
+
+            if (valid && token is not null)
             {
-                token.RecordUsage();
-                await db.SaveChangesAsync();
+                // Throttle writes: LastUsedAt is approximate and must not turn every API
+                // request into a database write for long-running coding-agent traffic.
+                if (token.LastUsedAt is null || token.LastUsedAt < now.AddMinutes(-5))
+                {
+                    token.RecordUsage();
+                    await db.SaveChangesAsync();
+                }
                 var identity = new ClaimsIdentity(ActorContextFactory.ApiTokenAuthType);
                 identity.AddClaim(new Claim("token_id", token.Id.ToString()));
                 identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
@@ -61,6 +72,50 @@ public sealed class ApiTokenAuthMiddleware
         }
 
         await _next(ctx);
+    }
+
+    private static async Task<bool> IsHarnessTokenActiveAsync(
+        BeaconDbContext db,
+        Domain.Entities.Identity.ApiToken token,
+        DateTime utcNow,
+        CancellationToken ct)
+    {
+        var required = ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite;
+        if (token.Capabilities != required
+            || token.DeviceId is not { } deviceId
+            || token.CommandId is not { } commandId
+            || token.ProjectId == Guid.Empty)
+            return false;
+
+        var work = await db.WorkstationCommands.IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(c => c.Id == commandId && c.DeviceId == deviceId)
+            .Select(c => new
+            {
+                c.ProjectId,
+                c.Kind,
+                c.Status,
+                c.StartedAt,
+                c.LeaseExpiresAt,
+                c.ClaimInstanceId
+            })
+            .FirstOrDefaultAsync(ct);
+        if (work is null
+            || work.ProjectId != token.ProjectId
+            || work.Kind != WorkstationCommandKind.ChatPrompt
+            || work.Status != WorkstationCommandStatus.Running
+            || work.StartedAt is null
+            || token.CreatedAt < work.StartedAt.Value
+            || work.LeaseExpiresAt is not { } leaseExpiresAt
+            || leaseExpiresAt <= utcNow)
+            return false;
+
+        var device = await db.DaemonDevices.IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == deviceId, ct);
+        return device is not null
+            && device.IsOnline(utcNow)
+            && string.Equals(work.ClaimInstanceId, device.ActiveInstanceId, StringComparison.Ordinal);
     }
 }
 

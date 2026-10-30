@@ -10,6 +10,70 @@ using Microsoft.EntityFrameworkCore;
 public sealed partial class PipelineHandlerTests
 {
     [Fact]
+    public async Task StartActorSession_SessionInsertFailure_RollsBackSubtaskAndStageClaims()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        await new StartPipelineHandler(factory, new FakeSpawner())
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var sub = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+        Assert.True(sub.Success, sub.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await _db.Tasks
+                .Where(t => t.Id == task.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.PipelineStage, TaskPipelineStage.ReopenedForRevision), TestContext.Current.CancellationToken);
+        }
+
+        var resultHandler = new StartActorSessionHandler(factory, new SessionInsertFailingSpawner());
+        await Assert.ThrowsAsync<DbUpdateException>(() => resultHandler.HandleAsync(
+            new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)),
+            TestContext.Current.CancellationToken));
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var stage = await _db.Tasks.AsNoTracking()
+                .Where(t => t.Id == task.Id)
+                .Select(t => t.PipelineStage)
+                .FirstAsync(TestContext.Current.CancellationToken);
+            var status = await _db.Subtasks.AsNoTracking()
+                .Where(s => s.Id == sub.Value.Id)
+                .Select(s => s.Status)
+                .FirstAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(TaskPipelineStage.ReopenedForRevision, stage);
+            Assert.Equal(SubtaskStatus.Pending, status);
+            Assert.Equal(0, await _db.PipelineSessions.CountAsync(
+                s => s.TaskId == task.Id && s.Role == PipelineRole.Actor,
+                TestContext.Current.CancellationToken));
+        }
+    }
+
+    private sealed class SessionInsertFailingSpawner : ISessionSpawner
+    {
+        public async Task<SpawnedSession> SpawnAsync(
+            IBeaconDb db,
+            Guid projectId,
+            PipelineRole role,
+            Guid taskId,
+            CancellationToken ct)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TRIGGER fail_actor_session_insert
+                BEFORE INSERT ON PipelineSessions
+                BEGIN
+                    SELECT RAISE(FAIL, 'simulated actor session persistence failure');
+                END;
+                """,
+                ct);
+            return new SpawnedSession(null, null, null);
+        }
+    }
+
+    [Fact]
     public async Task StartActorSession_CrashWindow_NoOpenSession_DeterministicFailure_NoSpawn()
     {
         var (projectId, task) = await SeedTaskAsync("T");

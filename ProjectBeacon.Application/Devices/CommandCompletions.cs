@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using System.Text.Json;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,8 @@ internal static class CommandCompletions
         new EvalRunCompletion(),
         new ReviewCheckCompletion(),
         new DesiredStateCompletion(),
-        new ChatSessionCompletion()
+        new ChatSessionCompletion(),
+        new PipelineSessionCompletion()
     ];
 
     public static async Task ApplyAsync(
@@ -55,6 +57,57 @@ internal sealed class ChatSessionCompletion : ICommandCompletion
             .ExecuteUpdateAsync(s => s
                 .SetProperty(s => s.Status, ChatSessionStatus.Idle)
                 .SetProperty(s => s.UpdatedAt, DateTime.UtcNow), ct);
+    }
+}
+
+internal sealed class PipelineSessionCompletion : ICommandCompletion
+{
+    public async Task ApplyAsync(IBeaconDb db, WorkstationCommand row, bool success, string? resultJson, string? error, CancellationToken ct)
+    {
+        if (row.Kind != WorkstationCommandKind.RunPipelineSession || row.ProjectId is not { } projectId)
+            return;
+
+        Guid? sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
+        string? externalSessionId = null;
+        if (success && !string.IsNullOrWhiteSpace(resultJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(resultJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("pipelineSessionId", out var rawId)
+                    && rawId.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(rawId.GetString(), out var returnedId)
+                    && sessionId == returnedId
+                    && root.TryGetProperty("externalSessionId", out var rawExternal)
+                    && rawExternal.ValueKind == JsonValueKind.String)
+                    externalSessionId = rawExternal.GetString();
+            }
+            catch (JsonException)
+            {
+                // Malformed results fall through to the guarded failure transition below.
+            }
+        }
+
+        if (success && !string.IsNullOrWhiteSpace(externalSessionId) && sessionId is { } completedId)
+        {
+            await db.PipelineSessions.IgnoreQueryFilters()
+                .Where(s => s.Id == completedId && s.ProjectId == projectId && s.Status != SessionStatus.Failed)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExternalSessionId, externalSessionId), ct);
+            return;
+        }
+
+        // A confirmed failure and a malformed success payload both mean the pipeline
+        // has no usable external session to continue. Do not strand it in Active.
+        if (sessionId is { } failedId)
+        {
+            var now = DateTime.UtcNow;
+            await db.PipelineSessions.IgnoreQueryFilters()
+                .Where(s => s.Id == failedId && s.ProjectId == projectId && s.Status == SessionStatus.Active)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.Status, SessionStatus.Failed)
+                    .SetProperty(x => x.ClosedAt, now), ct);
+        }
     }
 }
 

@@ -128,5 +128,6 @@ public class ContextCostReportHandler
         run.Passed,
         run.StartedAt,
         run.CompletedAt,
-        run.TranscriptRef);
+        run.TranscriptRef,
+        run.Runtime);
 }

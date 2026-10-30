@@ -145,6 +145,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<EnqueueCommandHandler>();
         services.AddTransient<ClaimNextCommandHandler>();
         services.AddTransient<CompleteCommandHandler>();
+        // Minimal API endpoints inject this concrete handler directly, so register the concrete type for endpoint metadata inference.
+        services.AddTransient<IssueHarnessTokenHandler>();
         services.AddTransient<GetCommandHandler>();
         services.AddTransient<ListCommandsHandler>();
         services.AddTransient<AttachRuntimeHandler>();

@@ -1,6 +1,9 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Text.Json;
+using System.Net.Http.Json;
+using Application.Runtime;
+using ProjectBeacon.Cli.Client.AgentHarness;
 using Application.Common;
 using Application.Devices;
 using Domain.Enums;
@@ -56,25 +59,75 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     var resolved = WorkspacePath.ResolveInRoot(command.LocalRoot, DaemonPayload.ReadPath(payload), relativeOnly: true);
                     if (!resolved.Success)
                         return (false, null, resolved.Error);
-                    return kind == WorkstationCommandKind.ChatEnsureSession
-                        ? await _chat.EnsureAsync(resolved.Value!, payload, ct)
-                        : await _chat.PromptAsync(resolved.Value!, payload, ct);
+                    if (kind == WorkstationCommandKind.ChatEnsureSession)
+                        return await _chat.EnsureAsync(resolved.Value!, payload, ct);
+
+                    AgentHarnessAuthorization? harnessAuthorization = null;
+                    if (_gate.Runtime is NativeAgentRuntime)
+                    {
+                        if (_http.BaseAddress is null)
+                            return (false, null, "The daemon API base URL is not configured.");
+
+                        Guid? requestedProjectId = null;
+                        Guid? taskId = null;
+                        Guid? subtaskId = null;
+                        using (var promptDoc = JsonDocument.Parse(payload))
+                        {
+                            if (promptDoc.RootElement.TryGetProperty("projectId", out var rawProject)
+                                && rawProject.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawProject.GetString(), out var parsedProject)
+                                && parsedProject != Guid.Empty)
+                                requestedProjectId = parsedProject;
+                            if (promptDoc.RootElement.TryGetProperty("taskId", out var rawTask)
+                                && rawTask.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawTask.GetString(), out var parsedTask)
+                                && parsedTask != Guid.Empty)
+                                taskId = parsedTask;
+                            if (promptDoc.RootElement.TryGetProperty("subtaskId", out var rawSubtask)
+                                && rawSubtask.ValueKind == JsonValueKind.String
+                                && Guid.TryParse(rawSubtask.GetString(), out var parsedSubtask)
+                                && parsedSubtask != Guid.Empty)
+                                subtaskId = parsedSubtask;
+                        }
+
+                        using var tokenResponse = await _http.PostAsJsonAsync(
+                            $"/v1/commands/{command.Id:D}/harness-token",
+                            new { generation = command.Generation },
+                            ct);
+                        if (!tokenResponse.IsSuccessStatusCode)
+                            return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
+                        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+                        if (token is null || string.IsNullOrWhiteSpace(token.Token)
+                            || token.ProjectId == Guid.Empty
+                            || (requestedProjectId is { } requested && token.ProjectId != requested)
+                            || token.CommandId != command.Id
+                            || token.Generation != command.Generation
+                            || token.ExpiresAt <= DateTime.UtcNow)
+                            return (false, null, "The API returned an invalid or expired harness token.");
+
+                        if (subtaskId is not null && taskId is null)
+                            return (false, null, "A subtask-scoped prompt must include its parent task id.");
+
+                        // The API derives project scope from the claimed database command; the client
+                        // only cross-checks an optional project id carried in its payload.
+                        harnessAuthorization = new AgentHarnessAuthorization(
+                            _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+                            token.Token,
+                            token.ProjectId,
+                            taskId,
+                            command.Id,
+                            command.Generation,
+                            resolved.Value!,
+                            token.ExpiresAt,
+                            subtaskId,
+                            null,
+                            token.AllowedMcpTools);
+                    }
+
+                    return await _chat.PromptAsync(resolved.Value!, payload, harnessAuthorization, ct);
                 }
                 if (kind == WorkstationCommandKind.RunEvalTurn)
-                {
-                    var evalAction = await WorkstationEval.RunEvalTurnAsync(
-                        command.LocalRoot,
-                        payload,
-                        _gate.OpenCode,
-                        _gate.Runtime,
-                        _timing.ChatPollInterval,
-                        _timing.ChatIdleTimeout,
-                        _timing.ChatMaxDuration,
-                        ct);
-                    if (!evalAction.Success)
-                        return (false, null, evalAction.Error);
-                    return (true, evalAction.Value, null);
-                }
+                    return await RunEvalTurnAsync(command, payload, ct);
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
                     var reviewAction = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
@@ -82,6 +135,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                         return (false, null, reviewAction.Error);
                     return (true, reviewAction.Value, null);
                 }
+                if (kind == WorkstationCommandKind.RunPipelineSession)
+                    return await RunPipelineSessionAsync(command, payload, ct);
+
                 var projectAction = kind switch
                 {
                     WorkstationCommandKind.InitProject => WorkstationSetup.InitProject(command.LocalRoot, payload),
@@ -150,6 +206,276 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         }
     }
 
+
+    private async Task<(bool Ok, string? Result, string? Error)> RunEvalTurnAsync(
+        WorkstationDaemon.CommandWire command,
+        string payload,
+        CancellationToken ct)
+    {
+        using var document = JsonDocument.Parse(payload);
+        var root = document.RootElement;
+        var requestedRuntime = root.TryGetProperty("runtime", out var runtimeElement)
+            && runtimeElement.ValueKind == JsonValueKind.String
+                ? runtimeElement.GetString()?.Trim().ToLowerInvariant()
+                : _loadSettings().AgentRuntime.Trim().ToLowerInvariant();
+        if (requestedRuntime is not ("opencode" or "native"))
+            return (false, null, "Eval runtime must be 'opencode' or 'native'.");
+        if (string.IsNullOrWhiteSpace(command.LocalRoot))
+            return (false, null, CommandSandbox.RuntimeRequired);
+
+        ClientOpenCodeServe? evalOpenCode = null;
+        Dictionary<string, string>? evalProviderEnvironment = null;
+        AgentHarnessAuthorization? authorization = null;
+        IAgentRuntime runtime;
+        var ownsRuntime = false;
+        if (requestedRuntime == "native")
+        {
+            runtime = _gate.Runtime is NativeAgentRuntime
+                ? _gate.Runtime
+                : new NativeAgentRuntime(_http, _llama, _llamaSync, _loadSettings);
+            ownsRuntime = !ReferenceEquals(runtime, _gate.Runtime);
+        }
+        else
+        {
+            // Eval runs use a private OpenCode server because they execute in a detached git
+            // worktree. Never restart the user's interactive OpenCode server into a temporary cwd.
+            evalOpenCode = new ClientOpenCodeServe();
+            runtime = new OpenCodeAgentRuntime(evalOpenCode);
+            ownsRuntime = true;
+        }
+
+        try
+        {
+            if (requestedRuntime == "opencode")
+            {
+                var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
+                if (!response.IsSuccessStatusCode)
+                    return (false, null, $"opencode connections {(int)response.StatusCode}");
+                var body = await response.Content.ReadAsStringAsync(ct);
+                var applied = OpencodeConfig.ApplyOpenCodeConnections(body);
+                evalProviderEnvironment = new Dictionary<string, string>(applied.Environment, StringComparer.Ordinal);
+            }
+
+            if (_http.BaseAddress is null)
+                return (false, null, "The daemon API base URL is not configured.");
+
+            var taskId = ReadGuid(root, "taskId");
+            var evalRunId = ReadGuid(root, "evalRunId");
+            if (taskId == Guid.Empty || evalRunId == Guid.Empty)
+                return (false, null, "Eval requires taskId and evalRunId.");
+
+            using var tokenResponse = await _http.PostAsJsonAsync(
+                $"/v1/commands/{command.Id:D}/harness-token",
+                new { generation = command.Generation },
+                ct);
+            if (!tokenResponse.IsSuccessStatusCode)
+                return (false, null, $"Could not issue the short-lived eval harness token (HTTP {(int)tokenResponse.StatusCode}).");
+            var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+            if (token is null
+                || string.IsNullOrWhiteSpace(token.Token)
+                || token.ProjectId == Guid.Empty
+                || token.CommandId != command.Id
+                || token.Generation != command.Generation
+                || token.ExpiresAt <= DateTime.UtcNow)
+                return (false, null, "The API returned an invalid or expired eval harness token.");
+
+            authorization = new AgentHarnessAuthorization(
+                _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+                token.Token,
+                token.ProjectId,
+                taskId,
+                command.Id,
+                command.Generation,
+                Path.GetFullPath(command.LocalRoot),
+                token.ExpiresAt,
+                null,
+                "Eval",
+                token.AllowedMcpTools);
+
+            if (requestedRuntime == "opencode")
+            {
+                var evalEnvironment = evalProviderEnvironment
+                    ?? new Dictionary<string, string>(StringComparer.Ordinal);
+                evalEnvironment["BEACON_API_URL"] = _http.BaseAddress.AbsoluteUri.TrimEnd('/');
+                evalEnvironment["BEACON_API_TOKEN"] = token.Token;
+                evalEnvironment["BEACON_PROJECT_ID"] = token.ProjectId.ToString("D");
+                evalEnvironment["BEACON_TASK_ID"] = taskId.ToString("D");
+                evalEnvironment["BEACON_PIPELINE_ROLE"] = "Eval";
+                evalEnvironment.Remove("BEACON_SUBTASK_ID");
+                evalEnvironment.Remove("BEACON_PIPELINE_SESSION_ID");
+                evalOpenCode!.SetEnvironment(evalEnvironment);
+            }
+
+            var evalAction = await WorkstationEval.RunEvalTurnAsync(
+                command.LocalRoot,
+                payload,
+                evalOpenCode,
+                runtime,
+                _timing.ChatPollInterval,
+                _timing.ChatIdleTimeout,
+                _timing.ChatMaxDuration,
+                ct,
+                authorization,
+                requestedRuntime);
+            if (!evalAction.Success)
+                return (false, null, evalAction.Error);
+            return (true, evalAction.Value, null);
+        }
+        finally
+        {
+            if (ownsRuntime)
+                await runtime.DisposeAsync();
+            if (evalOpenCode is not null)
+                await evalOpenCode.DisposeAsync();
+        }
+    }
+
+
+    private async Task<(bool Ok, string? Result, string? Error)> RunPipelineSessionAsync(
+        WorkstationDaemon.CommandWire command,
+        string payload,
+        CancellationToken ct)
+    {
+        if (_gate.Runtime is not NativeAgentRuntime runtime)
+            return (false, null, "Pipeline sessions require AgentRuntime=native.");
+
+        using var doc = JsonDocument.Parse(payload);
+        var root = doc.RootElement;
+        var projectId = ReadGuid(root, "projectId");
+        var taskId = ReadGuid(root, "taskId");
+        var pipelineRole = root.TryGetProperty("role", out var roleValue) && roleValue.ValueKind == JsonValueKind.String
+            ? roleValue.GetString()?.Trim().ToLowerInvariant() switch
+            {
+                "planner" => "Planner",
+                "actor" => "Actor",
+                "review" => "Review",
+                _ => null
+            }
+            : null;
+        var rawSubtaskId = ReadGuid(root, "subtaskId");
+        Guid? subtaskId = rawSubtaskId == Guid.Empty ? null : rawSubtaskId;
+        var pipelineSessionId = ReadGuid(root, "sessionId");
+        var prompt = root.TryGetProperty("prompt", out var promptValue) ? promptValue.GetString() : null;
+        var model = root.TryGetProperty("model", out var modelValue) ? modelValue.GetString() : null;
+        var title = root.TryGetProperty("title", out var titleValue) ? titleValue.GetString() : "ProjectBeacon pipeline";
+        var reasoningEffort = root.TryGetProperty("reasoningEffort", out var effortValue) ? effortValue.GetString() : null;
+        var contextLimit = root.TryGetProperty("contextLimit", out var limitValue)
+            && limitValue.ValueKind == JsonValueKind.Number
+            && limitValue.TryGetInt32(out var parsedLimit)
+            && parsedLimit > 0
+                ? parsedLimit
+                : (int?)null;
+
+        if (projectId == Guid.Empty || taskId == Guid.Empty || pipelineSessionId == Guid.Empty
+            || string.IsNullOrWhiteSpace(prompt) || string.IsNullOrWhiteSpace(model))
+            return (false, null, "Pipeline command requires projectId, taskId, sessionId, model, and prompt.");
+        if (pipelineRole is null)
+            return (false, null, "Pipeline command requires role Planner, Actor, or Review.");
+        if (string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
+            && subtaskId is null)
+            return (false, null, "Actor pipeline sessions require subtaskId.");
+        if (!string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
+            && subtaskId is not null)
+            return (false, null, "Only Actor pipeline sessions may include subtaskId.");
+        if (subtaskId is not null && taskId == Guid.Empty)
+            return (false, null, "A subtask-scoped pipeline session must include its parent task id.");
+        if (_http.BaseAddress is null)
+            return (false, null, "The daemon API base URL is not configured.");
+        if (string.IsNullOrWhiteSpace(command.LocalRoot))
+            return (false, null, CommandSandbox.RuntimeRequired);
+
+        var readiness = await runtime.EnsureReadyAsync(command.LocalRoot, ct);
+        if (!readiness.Ready)
+            return (false, null, readiness.Error ?? "The native agent runtime is not ready.");
+
+        using var tokenResponse = await _http.PostAsJsonAsync(
+            $"/v1/commands/{command.Id:D}/harness-token",
+            new { generation = command.Generation },
+            ct);
+        if (!tokenResponse.IsSuccessStatusCode)
+            return (false, null, $"Could not issue the short-lived harness token (HTTP {(int)tokenResponse.StatusCode}).");
+        var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+        if (token is null || string.IsNullOrWhiteSpace(token.Token)
+            || token.ProjectId != projectId
+            || token.CommandId != command.Id
+            || token.Generation != command.Generation
+            || token.ExpiresAt <= DateTime.UtcNow)
+            return (false, null, "The API returned an invalid or expired harness token.");
+
+        var authorization = new AgentHarnessAuthorization(
+            _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+            token.Token,
+            token.ProjectId,
+            taskId,
+            command.Id,
+            command.Generation,
+            readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot),
+            token.ExpiresAt,
+            subtaskId,
+            pipelineRole,
+            token.AllowedMcpTools);
+        var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
+        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        turnCts.CancelAfter(_timing.ChatMaxDuration);
+        try
+        {
+            await runtime.SendPromptAsync(
+                externalSessionId,
+                prompt,
+                model,
+                turnCts.Token,
+                new AgentPromptControls(null, reasoningEffort, null)
+                {
+                    ContextLimit = contextLimit,
+                    HarnessAuthorization = authorization
+                });
+
+            AgentTurnStatus? status;
+            do
+            {
+                await Task.Delay(_timing.ChatPollInterval, turnCts.Token);
+                status = await runtime.GetTurnStatusAsync(externalSessionId, turnCts.Token);
+            }
+            while (status is null || !status.Ended);
+
+            if (!string.IsNullOrWhiteSpace(status.Error)
+                || string.Equals(status.Finish, "error", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(status.Finish))
+            {
+                var failure = status.Error
+                    ?? (string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
+                        ? "The pipeline agent turn was aborted."
+                        : "The pipeline agent turn failed.");
+                return (false, null, failure);
+            }
+
+            var usage = await runtime.ReadUsageAsync(externalSessionId, ct);
+            return (true, JsonSerializer.Serialize(new
+            {
+                pipelineSessionId,
+                externalSessionId,
+                finish = status.Finish,
+                usage.PromptTokens,
+                usage.CompletionTokens,
+                usage.AssistantMessages
+            }), null);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
+            return (false, null, "The pipeline agent turn exceeded the workstation chat timeout.");
+        }
+    }
+
+    private static Guid ReadGuid(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && Guid.TryParse(value.GetString(), out var parsed)
+            ? parsed
+            : Guid.Empty;
+
     private async Task<(bool Ok, string? Result, string? Error)> ReconcileDesiredAsync(string payload, CancellationToken ct)
     {
         await _llamaSync.SyncAsync(_loadSettings(), ct);
@@ -166,8 +492,19 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         return (true, JsonSerializer.Serialize(new { revision }), null);
     }
 
+    private sealed record HarnessTokenWire(
+        string Token,
+        Guid ProjectId,
+        Guid CommandId,
+        int Generation,
+        DateTime ExpiresAt,
+        IReadOnlyList<string>? AllowedMcpTools = null);
+
     private async Task<(bool Ok, string? Result, string? Error)> ConfigureOpenCodeAsync(CancellationToken ct)
     {
+        if (string.Equals(_loadSettings().AgentRuntime, "native", StringComparison.Ordinal))
+            return (true, JsonSerializer.Serialize(new { runtime = "native", restarted = false }), null);
+
         var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
         if (!response.IsSuccessStatusCode)
             return (false, null, $"opencode connections {(int)response.StatusCode}");

@@ -76,55 +76,56 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartActorSessionCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineSessionDto>("Task not found.");
-
-        var subtask = await db.Subtasks.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
-        if (subtask is null)
-            return Result.Failure<PipelineSessionDto>("Subtask not found.");
-        if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
-            return Result.Failure<PipelineSessionDto>("Subtask is already finished.");
-
-        if (subtask.Status == SubtaskStatus.InProgress)
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            // The subtask was already claimed. An open actor session means an earlier start
-            // won it; return that session instead of spawning a second one.
-            var open = (await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct))
-                .FirstOrDefault(s => s.SubtaskId == subtask.Id);
-            if (open is not null)
-                return Result.Ok(PipelineMappers.ToDto(open));
-            // No open session: a crash between the claim commit and the session insert left
-            // the subtask stuck. Failing deterministically avoids a double spawn; recover by
-            // failing the subtask and reopening it through a review verdict.
-            return Result.Failure<PipelineSessionDto>(
-                "Subtask is in progress without an open session. Fail and reopen it to retry.");
-        }
+            db.ChangeTracker.Clear();
 
-        var claimedStage = false;
-        if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
-        {
-            try
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var subtask = await db.Subtasks.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId && s.TaskId == task.Id, ct);
+            if (subtask is null)
+                return Result.Failure<PipelineSessionDto>("Subtask not found.");
+            if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
+                return Result.Failure<PipelineSessionDto>("Subtask is already finished.");
+
+            if (subtask.Status == SubtaskStatus.InProgress)
             {
-                task.EnterExecuting();
+                // A retry after an ambiguous commit returns the session created by the first attempt.
+                var open = (await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct))
+                    .FirstOrDefault(s => s.SubtaskId == subtask.Id);
+                if (open is not null)
+                    return Result.Ok(PipelineMappers.ToDto(open));
+                return Result.Failure<PipelineSessionDto>(
+                    "Subtask is in progress without an open session. Fail and reopen it to retry.");
             }
-            catch (InvalidOperationException ex)
+
+            if (task.PipelineStage is not (TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision))
+                return Result.Failure<PipelineSessionDto>($"Cannot start actor session in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
+
+            // Retry the stage claim, subtask claim, and session insert as one unit. The
+            // conditional stage update also prevents a stale read from starting work after close.
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
             {
-                return Result.Failure<PipelineSessionDto>(ex.Message);
+                try
+                {
+                    task.EnterExecuting();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Result.Failure<PipelineSessionDto>(ex.Message);
+                }
             }
+
             var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
             if (entered == 0)
                 return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting session; retry.");
-            claimedStage = true;
-        }
-        if (task.PipelineStage != TaskPipelineStage.Executing)
-            return Result.Failure<PipelineSessionDto>($"Cannot start actor session in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
 
-        var claimedSubtask = false;
-        if (subtask.Status == SubtaskStatus.Pending)
-        {
             subtask.Start();
             var started = await db.Subtasks
                 .Where(s => s.Id == subtask.Id && s.Status == SubtaskStatus.Pending)
@@ -133,41 +134,30 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
                     .SetProperty(s => s.UpdatedAt, subtask.UpdatedAt), ct);
             if (started == 0)
                 return Result.Failure<PipelineSessionDto>("Subtask state changed while starting session; retry.");
-            claimedSubtask = true;
-        }
 
-        SpawnedSession? spawned = null;
-        Exception? spawnFailure = null;
-        try
-        {
-            spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Actor, task.Id, ct);
-        }
-        catch (Exception ex)
-        {
-            spawnFailure = ex;
-        }
-        if (spawnFailure is not null)
-        {
-            if (claimedSubtask)
-                await db.Subtasks
-                    .Where(s => s.Id == subtask.Id && s.Status == SubtaskStatus.InProgress)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(s => s.Status, SubtaskStatus.Pending)
-                        .SetProperty(s => s.UpdatedAt, DateTime.UtcNow), ct);
-            if (claimedStage)
-                await PipelineSupport.RollbackStageAsync(db, task.Id, TaskPipelineStage.Executing, TaskPipelineStage.ReopenedForRevision, ct);
-            if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
-                throw canceled;
-            return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
-        }
+            SpawnedSession spawned;
+            try
+            {
+                spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Actor, task.Id, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure<PipelineSessionDto>(ex.Message);
+            }
 
-        var session = PipelineSession.Create(
-            task.Id, task.ProjectId, PipelineRole.Actor,
-            SessionPrompts.Actor(subtask), subtask.Id, spawned!.ModelBackendId, spawned.LaunchSpec);
-        db.PipelineSessions.Add(session);
-        await db.SaveChangesAsync(ct);
+            var session = PipelineSession.Create(
+                task.Id, task.ProjectId, PipelineRole.Actor,
+                SessionPrompts.Actor(subtask), subtask.Id, spawned.ModelBackendId, spawned.LaunchSpec);
+            db.PipelineSessions.Add(session);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
 
-        return Result.Ok(PipelineMappers.ToDto(session));
+            return Result.Ok(PipelineMappers.ToDto(session));
+        });
     }
 }
 /// <summary>

@@ -2,9 +2,12 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
+using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -212,4 +215,352 @@ public sealed partial class DeviceHandlerTests
         Assert.False(doc.RootElement.TryGetProperty("root", out _));
         Assert.Null(queued.Value.LocalRoot);
     }
+
+    [Fact]
+    public async Task HarnessToken_IsProjectScopedShortLivedAndBoundToRunningChatCommand()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var commandId = Guid.NewGuid();
+        await using (var db = Factory().CreateDbContext())
+        {
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.ChatPrompt, """{"chatSessionId":"11111111-1111-1111-1111-111111111111"}""", project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var handler = new IssueHarnessTokenHandler(Factory());
+        var issued = await handler.HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.True(issued.Success, issued.Error);
+        Assert.Equal(project.Id, issued.Value!.ProjectId);
+        Assert.Equal(commandId, issued.Value.CommandId);
+        Assert.Equal(1, issued.Value.Generation);
+        Assert.True(issued.Value.ExpiresAt > DateTime.UtcNow);
+        Assert.True(issued.Value.ExpiresAt <= DateTime.UtcNow.AddMinutes(15));
+
+        await using var verify = Factory().CreateDbContext();
+        var stored = await verify.ApiTokens.IgnoreQueryFilters()
+            .SingleAsync(t => t.CommandId == commandId, TestContext.Current.CancellationToken);
+        Assert.Equal(ApiTokenClientKind.Harness, stored.ClientKind);
+        Assert.Equal(deviceId, stored.DeviceId);
+        Assert.Equal(project.Id, stored.ProjectId);
+        Assert.Equal(ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead | ApiTokenCapability.TaskWrite, stored.Capabilities);
+        Assert.NotEqual(issued.Value.Token, stored.TokenHash);
+        Assert.Equal(Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(issued.Value.Token))), stored.TokenHash);
+    }
+
+    [Fact]
+    public async Task HarnessToken_ForNativeEvalRequiresPersistedNativeRunScope()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "eval-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("Native eval task", project.Id);
+        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.Native);
+        run.Pin("beacon-local/test", 0.2, "low", "read", 120, "revision", "dotnet test", "native");
+        var payload = JsonSerializer.Serialize(new
+        {
+            evalRunId = run.Id,
+            taskId = task.Id,
+            runtime = "native",
+            prompt = "Use the workspace tools."
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.EvalRuns.Add(run);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunEvalTurn, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.True(issued.Success, issued.Error);
+        Assert.Equal(project.Id, issued.Value!.ProjectId);
+        Assert.Equal(commandId, issued.Value.CommandId);
+        Assert.Null(issued.Value.AllowedMcpTools);
+    }
+
+    [Fact]
+    public async Task HarnessToken_ForOpenCodeEvalRequiresMatchingPersistedRuntime()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("opencode-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "eval-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("OpenCode eval task", project.Id);
+        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.OpenCode);
+        run.Pin("opencode/test", 0.2, "low", "read", 120, "revision", "dotnet test", "opencode");
+        var payload = JsonSerializer.Serialize(new
+        {
+            evalRunId = run.Id,
+            taskId = task.Id,
+            runtime = "opencode",
+            prompt = "Inspect the workspace."
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.EvalRuns.Add(run);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunEvalTurn, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.True(issued.Success, issued.Error);
+        Assert.Equal(project.Id, issued.Value!.ProjectId);
+        Assert.Null(issued.Value.AllowedMcpTools);
+
+        using var dbCheck = Factory().CreateDbContext();
+        var stored = await dbCheck.ApiTokens.IgnoreQueryFilters()
+            .SingleAsync(token => token.CommandId == commandId, TestContext.Current.CancellationToken);
+        Assert.Equal(ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead, stored.Capabilities);
+    }
+
+    [Fact]
+    public async Task HarnessToken_RejectsEvalRunThatIsNotPinnedToNativeRuntime()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("opencode-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "eval-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("OpenCode eval task", project.Id);
+        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.OpenCode);
+        run.Pin("opencode/test", 0.2, "low", "read", 120, "revision", "dotnet test", "opencode");
+        var payload = JsonSerializer.Serialize(new
+        {
+            evalRunId = run.Id,
+            taskId = task.Id,
+            runtime = "native",
+            prompt = "Try to use native tools."
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.EvalRuns.Add(run);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunEvalTurn, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.False(issued.Success);
+        Assert.Equal(ErrorKind.Forbidden, issued.Kind);
+    }
+
+    [Fact]
+    public async Task HarnessToken_ForActorPipeline_ReturnsToolsFromPersistedSubtaskScope()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("Native pipeline task", project.Id);
+        var subtask = Subtask.Create(
+            "Implement and verify the requested change",
+            task.Id,
+            project.Id,
+            ["read_file", "write_file", "run_command"],
+            ["src"]);
+        subtask.Start();
+        var session = PipelineSession.Create(
+            task.Id, project.Id, PipelineRole.Actor, "Work only on the assigned subtask.", subtask.Id);
+        session.Launch();
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = task.Id,
+            subtaskId = subtask.Id,
+            sessionId = session.Id,
+            role = "Actor",
+            prompt = session.PromptContext,
+            model = "beacon-local/test-model"
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.Subtasks.Add(subtask);
+            db.PipelineSessions.Add(session);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunPipelineSession, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.True(issued.Success, issued.Error);
+        Assert.Equal(new[] { "read_file", "write_file", "run_command" }, issued.Value!.AllowedMcpTools);
+    }
+
+    [Fact]
+    public async Task HarnessToken_RejectsPipelinePayloadThatDoesNotMatchPersistedSession()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        var task = TaskItem.Create("Native pipeline task", project.Id);
+        var session = PipelineSession.Create(task.Id, project.Id, PipelineRole.Planner, "Plan the task.");
+        session.Launch();
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = task.Id,
+            sessionId = session.Id,
+            subtaskId = Guid.NewGuid(),
+            role = "Actor",
+            prompt = session.PromptContext,
+            model = "beacon-local/test-model"
+        });
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            await using var db = Factory().CreateDbContext();
+            db.Tasks.Add(task);
+            db.PipelineSessions.Add(session);
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
+                deviceId, WorkstationCommandKind.RunPipelineSession, payload, project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var actor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+            new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
+
+        Assert.False(issued.Success);
+        Assert.Equal(ErrorKind.Forbidden, issued.Kind);
+    }
+
+    [Fact]
+    public async Task HarnessToken_RejectsStaleGenerationAndNonDeviceActor()
+    {
+        var (owner, _, project) = await SeedOwnerAndMemberAsync();
+        var device = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("native-test", "harness-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = device.Value!.Id;
+        var instanceId = "harness-instance-" + Guid.NewGuid().ToString("N");
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
+            TestContext.Current.CancellationToken);
+
+        Guid commandId;
+        await using (var db = Factory().CreateDbContext())
+        {
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(deviceId, WorkstationCommandKind.ChatPrompt, "{}", project.Id, owner.Id);
+            work.Claim(TimeSpan.FromMinutes(10), instanceId);
+            db.WorkstationCommands.Add(work);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            commandId = work.Id;
+        }
+
+        var handler = new IssueHarnessTokenHandler(Factory());
+        var deviceActor = new Application.Authorization.ActorContext(
+            ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
+        var stale = await handler.HandleAsync(new IssueHarnessTokenCommand(commandId, 2, deviceActor), TestContext.Current.CancellationToken);
+        Assert.False(stale.Success);
+
+        var humanActor = new Application.Authorization.ActorContext(
+            ActorType.Human, owner.Id, false, null, null, project.Id, null, ApiTokenCapability.None);
+        var human = await handler.HandleAsync(new IssueHarnessTokenCommand(commandId, 1, humanActor), TestContext.Current.CancellationToken);
+        Assert.False(human.Success);
+
+        await using var verify = Factory().CreateDbContext();
+        Assert.Empty(await verify.ApiTokens.IgnoreQueryFilters()
+            .Where(t => t.CommandId == commandId)
+            .ToListAsync(TestContext.Current.CancellationToken));
+    }
+
 }

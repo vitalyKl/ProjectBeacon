@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 /// <summary>
 /// Enforces a subtask allowlist on MCP tools. An empty tool list does not restrict tools. An empty path list does not restrict paths. Several limited in-progress subtasks require an explicit subtask id.
 /// </summary>
@@ -44,6 +45,25 @@ public static class SubtaskScopeGuard
         }
     }
 
+    public static JsonArray FilterTools(JsonArray tools, IReadOnlyList<Allowlist> subtasks, Guid? explicitSubtaskId)
+    {
+        var active = Resolve(subtasks, explicitSubtaskId, out var error);
+        if (error is not null)
+            return [];
+
+        var filtered = new JsonArray();
+        foreach (var tool in tools)
+        {
+            if (tool is null)
+                continue;
+            var name = tool["name"]?.GetValue<string>();
+            if (active is null || active.Value.Tools.Count == 0
+                || (name is not null && ToolAllowed(active.Value.Tools, name)))
+                filtered.Add(tool.DeepClone());
+        }
+        return filtered;
+    }
+
     public static string? Reject(string tool, IReadOnlyList<string>? requestedPaths, IReadOnlyList<Allowlist> subtasks, Guid? explicitSubtaskId)
     {
         var active = Resolve(subtasks, explicitSubtaskId, out var error);
@@ -55,10 +75,10 @@ public static class SubtaskScopeGuard
         if (active.Value.Tools.Count > 0 && !ToolAllowed(active.Value.Tools, tool))
             return $"tool '{tool}' is not allowed for this subtask";
 
-        if (active.Value.Paths.Count == 0 || requestedPaths is null)
+        if (active.Value.Paths.Count == 0 || !UsesPath(tool))
             return null;
 
-        if (requestedPaths.Count == 0)
+        if (requestedPaths is null || requestedPaths.Count == 0)
             return "path is outside the subtask allowlist";
 
         foreach (var path in requestedPaths)

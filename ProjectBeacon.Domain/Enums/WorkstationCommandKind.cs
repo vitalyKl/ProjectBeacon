@@ -24,5 +24,6 @@ public enum WorkstationCommandKind
     ConfigureOpenCode,
     RunEvalTurn,
     ReconcileDesired,
-    RunReviewCheck
+    RunReviewCheck,
+    RunPipelineSession
 }

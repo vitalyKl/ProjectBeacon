@@ -3,6 +3,8 @@ namespace ProjectBeacon.Cli.Client;
 using System.Net.Http.Headers;
 using Domain.Enums;
 using Microsoft.Extensions.DependencyInjection;
+using ProjectBeacon.Cli.Client.AgentHarness;
+using ProjectBeacon.Application.Runtime;
 /// <summary>
 /// Long-polls device commands and heartbeats the control plane. Dispatches only WorkstationCommandKind values. An unknown kind throws.
 /// </summary>
@@ -35,17 +37,41 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log);
         _llama.Log = message => _state.Log(message);
         _openCode.Log = message => _state.Log(message);
+        var settingsLoader = loadSettings ?? (() => WorkstationSettings.Load());
+        var openCodeRuntime = new OpenCodeAgentRuntime(_openCode);
         var deps = new DaemonDependencies(
             http,
             llama,
             _openCode,
-            new OpenCodeAgentRuntime(_openCode),
-            loadSettings ?? (() => WorkstationSettings.Load()));
+            openCodeRuntime,
+            settingsLoader,
+            llamaSync => SelectRuntime(settingsLoader, llama, llamaSync, openCodeRuntime));
         _services = DaemonServices.Build(deps, _timing, _state);
         _gate = _services.GetRequiredService<IDaemonOpenCodeGate>();
         _llamaSync = _services.GetRequiredService<IDaemonLlamaSync>();
         _executor = _services.GetRequiredService<IDaemonCommandExecutor>();
         _loops = _services.GetServices<IDaemonLoop>().ToArray();
+    }
+
+    private IAgentRuntime SelectRuntime(
+        Func<WorkstationSettings> settingsLoader,
+        ClientLlamaSwap llama,
+        IDaemonLlamaSync llamaSync,
+        IAgentRuntime openCodeRuntime)
+    {
+        try
+        {
+            return string.Equals(settingsLoader().AgentRuntime, "native", StringComparison.OrdinalIgnoreCase)
+                ? new NativeAgentRuntime(_http, llama, llamaSync, settingsLoader, msg => _state.Log(msg))
+                : openCodeRuntime;
+        }
+        catch (Exception ex)
+        {
+            // Keep daemon construction alive so the heartbeat loop can report the actionable
+            // invalid-settings error instead of throwing before it starts.
+            _state.Log($"Could not select agent runtime because workstation settings could not be loaded: {ex.Message}");
+            return openCodeRuntime;
+        }
     }
 
     internal TimeSpan HeartbeatInterval
@@ -124,10 +150,12 @@ public sealed class WorkstationDaemon : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Dispose the runtime before its model process and locks: an active native turn may
+        // still be streaming from a provider or coordinating a local model swap.
+        await _services.DisposeAsync();
         await _llama.DisposeAsync();
         _llamaSync.Release();
         _gate.Release();
-        await _services.DisposeAsync();
         if (_ownsOpenCode)
             await _openCode.DisposeAsync();
     }

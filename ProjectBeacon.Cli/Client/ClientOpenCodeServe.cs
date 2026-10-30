@@ -44,6 +44,7 @@ public sealed class ClientOpenCodeServe : IAsyncDisposable
     public OpenCodeServeStatus Status { get; private set; } = OpenCodeServeStatus.Missing("opencode is not started on this device.");
     public int Port => _port;
     public string? Cwd => _cwd;
+    internal bool SupportsV2Api => SkipRealProcess || IsV2;
     internal int StartCount { get; private set; }
     internal bool SkipRealProcess { get; set; }
     internal Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? SendAsync { get; set; }

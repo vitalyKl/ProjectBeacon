@@ -1,11 +1,14 @@
 namespace ProjectBeacon.Application.Tests;
 
+using System.Text.Json;
 using Application.Common;
 using Application.Devices;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
+using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -415,6 +418,69 @@ public sealed class CommandRecoveryTests : IDisposable
         using var check = TenantScope.EnterUnscoped();
         var fresh = await _db.ChatSessions.AsNoTracking().SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
         Assert.Equal(ChatSessionStatus.Idle, fresh.Status);
+    }
+
+    [Fact]
+    public async Task LongStaleNativePipelineCommand_IsFailedNeverRequeuedAndFailsSession()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        Project project;
+        using (TenantScope.EnterUnscoped())
+        {
+            var org = Org.Create("pipeline-recovery-" + Guid.NewGuid().ToString("N"));
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            project = Project.Create("Native pipeline recovery", null, org.Id);
+            _db.Projects.Add(project);
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, device.UserId, MemberRole.Owner));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var task = TaskItem.Create("Recover native pipeline command", project.Id);
+        var session = PipelineSession.Create(
+            task.Id, project.Id, PipelineRole.Planner, "Plan the assigned task.");
+        session.Launch();
+        var payload = JsonSerializer.Serialize(new
+        {
+            projectId = project.Id,
+            taskId = task.Id,
+            subtaskId = (Guid?)null,
+            sessionId = session.Id,
+            role = "Planner",
+            prompt = session.PromptContext,
+            model = "beacon-local/recovery-test"
+        });
+        var command = WorkstationCommand.Create(
+            device.Id, WorkstationCommandKind.RunPipelineSession, payload, project.Id, device.UserId);
+        command.Claim(Lease, "inst-1");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Tasks.Add(task);
+            _db.PipelineSessions.Add(session);
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var now = t0.AddSeconds(30).AddMinutes(CommandRecovery.LongStaleGraceMinutes + 1);
+        await SetHeartbeatAsync(device.Id, now.AddSeconds(-10));
+
+        var recovered = await CommandRecovery.RecoverAsync(_db, now, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, recovered);
+        var row = await SnapshotAsync(command.Id);
+        Assert.Equal(WorkstationCommandStatus.Failed, row.Status);
+        Assert.Equal(CommandRecovery.AtMostOnceExpiredError, row.Error);
+        Assert.Equal(0, row.Attempts);
+        Assert.NotNull(row.CompletedAt);
+        using var check = TenantScope.EnterUnscoped();
+        var freshSession = await _db.PipelineSessions.AsNoTracking()
+            .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(SessionStatus.Failed, freshSession.Status);
+        Assert.NotNull(freshSession.ClosedAt);
+        Assert.Equal(1, await _db.WorkstationCommands.AsNoTracking()
+            .CountAsync(c => c.Id == command.Id && c.Status == WorkstationCommandStatus.Failed,
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]

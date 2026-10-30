@@ -97,6 +97,12 @@
             <FolderPicker DeviceId="_wsDeviceId" UserId="_userId" RootKind="projects" AdvancedPath="true"
                           Path="@_projectsRoot" PathChanged="OnProjectsRootChanged" Label="@L["ProjectsLocation"]"
                           Disabled="_busy || !WorkstationOnline" />
+            <MudSelect T="string" @bind-Value="_agentRuntime" Label="@L["AgentRuntime"]" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-4" Disabled="_busy">
+                <MudSelectItem T="string" Value="@("opencode")">@L["AgentRuntimeOpenCode"]</MudSelectItem>
+                <MudSelectItem T="string" Value="@("native")">@L["AgentRuntimeNative"]</MudSelectItem>
+            </MudSelect>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentRuntimeRestartHint"]</MudText>
             <MudText Typo="Typo.subtitle2" Class="mt-4">@L["AgentDataLocation"]</MudText>
             <MudText Typo="Typo.body2" Class="mb-2">@(string.IsNullOrWhiteSpace(_historyDir) ? L["NoFolderSelected"].Value : _historyDir)</MudText>
             <MudExpansionPanels Elevation="0" Class="beacon-expand mt-2">
@@ -170,6 +176,7 @@
     private string _modelsRoot = string.Empty;
     private string _historyDir = string.Empty;
     private string _projectsRoot = string.Empty;
+    private string _agentRuntime = "opencode";
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
@@ -264,6 +271,7 @@
             _modelsRoot = Str(root, "modelsRoot");
             _historyDir = Str(root, "opencodeDataDir");
             _projectsRoot = Str(root, "projectsRoot");
+            _agentRuntime = Str(root, "agentRuntime") == "native" ? "native" : "opencode";
             _llamaSwapBin = Str(root, "llamaSwapBin");
             _llamaCppBin = Str(root, "llamaCppBin");
         }
@@ -353,6 +361,7 @@
                 modelsRoot = _modelsRoot,
                 opencodeDataDir = _historyDir,
                 projectsRoot = _projectsRoot,
+                agentRuntime = _agentRuntime,
                 llamaSwapBin = _llamaSwapBin,
                 llamaCppBin = _llamaCppBin
             });

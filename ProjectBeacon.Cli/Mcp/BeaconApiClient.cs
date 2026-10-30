@@ -30,7 +30,8 @@ internal sealed class BeaconApiClient
             return new Resolution(null, true);
         if (!hasUrl)
             return new Resolution(null, false);
-        if (!Uri.TryCreate(url!.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var baseUri))
+        if (!Uri.TryCreate(url!.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var baseUri)
+            || baseUri.Scheme is not ("http" or "https"))
             return new Resolution(null, true);
 
         var http = new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromSeconds(60) };

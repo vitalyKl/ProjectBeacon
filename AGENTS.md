@@ -15,7 +15,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 
 ## Non-goals
 
-- Beacon does not write application code. Users bring their own agents.
+- The server/API/Web/Worker do not execute user project code or host coding agents. The local `beacon client` may run the native agent harness only on the workstation owner's machine.
 - Embeddings / RAG are not the primary code retrieval path.
 - Hosted clone (`ff.hosted_clone`) and outbound WSS sidecar tunnel stay flagged off.
 - Bidirectional watch-sync of `AGENTS.md` is a non-goal. Do not treat the checked-in file as the living source after Context has a brief.
@@ -24,7 +24,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 - `write_handoff` stays closed. Use `finish_work`.
 - GitHub two-way sync stays flagged off. Import-only is the v1 forge path.
 - Do not invent a new UI kit. Web uses MudBlazor directly.
-- No Beacon-hosted coding agent.
+- No server-hosted coding agent. Local execution is confined to `beacon client` on the enrolled workstation.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ ProjectBeacon is a project operating system for mixed human + agent development.
 Four pieces (per architecture):
 - **API** — thin `/v1` endpoints; handlers live in Application. Mapped on the Web host (`:5083`) and on the API project for tests.
 - **Web** — human-facing UI. Invokes Application handlers in-process; Razor must not inject `BeaconDbContext`.
-- **Local workstation client** — `beacon client` on the developer's machine. Outbound HTTPS to the API (enroll, heartbeat, long-poll commands). Owns the working tree, OpenCode config, and the model process (`UseOwnSwapper` or external llama-swap). Not a WSS tunnel and not a hosted clone. Pipeline session spawn is still `ManualSessionSpawner`. `OpenCodeAgentRuntime` on the client is the chat/workstation harness, not the pipeline spawner.
+- **Local workstation client** — `beacon client` on the developer's machine. Outbound HTTPS to the API (enroll, heartbeat, long-poll commands). Owns the working tree, agent runtime and model process (`UseOwnSwapper` or external llama-swap). OpenCode integration is a transitional compatibility option, not a server dependency. Not a WSS tunnel and not a hosted clone. Pipeline session spawn is still `ManualSessionSpawner`. `OpenCodeAgentRuntime` on the client is the chat/workstation harness, not the pipeline spawner.
 - **Worker** — background jobs (`ProjectBeacon.Worker`, Generic Host). Today it only expires sessions, API tokens, password-reset tokens, and invites. It authenticates as the database role and runs unscoped across projects. It does not run workstation commands, llama-swap, or GitHub sync.
 
 ## Structure

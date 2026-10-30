@@ -21,10 +21,24 @@ public class ApiToken : Entity, IProjectScoped
     public DateTime? ExpiresAt { get; private set; }
     public DateTime? LastUsedAt { get; private set; }
     public DateTime CreatedAt { get; private set; }
+    public ApiTokenClientKind ClientKind { get; private set; } = ApiTokenClientKind.Manual;
+    public Guid? DeviceId { get; private set; }
+    public Guid? CommandId { get; private set; }
+    public DateTime? RevokedAt { get; private set; }
 
     public Project Project { get; private set; } = null!;
 
-    public static ApiToken Create(string name, string tokenHash, string tokenPrefix, Guid projectId, ApiTokenCapability capabilities, DateTime? expiresAt, Guid? createdByUserId)
+    public static ApiToken Create(
+        string name,
+        string tokenHash,
+        string tokenPrefix,
+        Guid projectId,
+        ApiTokenCapability capabilities,
+        DateTime? expiresAt,
+        Guid? createdByUserId,
+        ApiTokenClientKind clientKind = ApiTokenClientKind.Manual,
+        Guid? deviceId = null,
+        Guid? commandId = null)
     {
         var token = Entity.New<ApiToken>();
         token.Name = name;
@@ -35,6 +49,9 @@ public class ApiToken : Entity, IProjectScoped
         token.ExpiresAt = expiresAt;
         token.CreatedByUserId = createdByUserId;
         token.CreatedAt = DateTime.UtcNow;
+        token.ClientKind = clientKind;
+        token.DeviceId = deviceId;
+        token.CommandId = commandId;
         return token;
     }
 
@@ -44,6 +61,12 @@ public class ApiToken : Entity, IProjectScoped
     }
 
     public bool IsExpired => ExpiresAt.HasValue && ExpiresAt.Value < DateTime.UtcNow;
+    public bool IsRevoked => RevokedAt.HasValue;
+
+    public void Revoke()
+    {
+        RevokedAt ??= DateTime.UtcNow;
+    }
 
     /// <summary>True when every flag in <paramref name="capability"/> is set.</summary>
     public bool HasCapability(ApiTokenCapability capability)

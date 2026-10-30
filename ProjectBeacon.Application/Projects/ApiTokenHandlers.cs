@@ -63,7 +63,8 @@ public class CreateApiTokenHandler : ICommandHandler<CreateApiTokenCommand, Resu
             token.ExpiresAt,
             token.LastUsedAt,
             token.CreatedAt,
-            tokenValue));
+            tokenValue,
+            token.ClientKind));
     }
 
     private static string GenerateToken()
@@ -114,11 +115,11 @@ public class RevokeApiTokenHandler : ICommandHandler<RevokeApiTokenCommand, Resu
             return Result.Failure(auth);
 
         var token = await db.ApiTokens
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TokenId && t.ProjectId == projectId, ct);
+            .FirstOrDefaultAsync(t => t.Id == command.Request.TokenId && t.ProjectId == projectId && t.RevokedAt == null, ct);
         if (token is null)
             return Result.Failure("API token not found.");
 
-        db.ApiTokens.Remove(token);
+        token.Revoke();
         await db.SaveChangesAsync(ct);
 
         return Result.Ok();
@@ -160,7 +161,8 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
             return Result.Forbidden<ApiTokenDto>();
 
         var token = await db.ApiTokens
-            .FirstOrDefaultAsync(t => t.Id == tokenId && t.ProjectId == projectId, ct);
+            .FirstOrDefaultAsync(t => t.Id == tokenId && t.ProjectId == projectId
+                && t.ClientKind != ApiTokenClientKind.Harness && t.RevokedAt == null, ct);
         if (token is null)
             return Result.Failure<ApiTokenDto>("API token not found.");
 
@@ -172,7 +174,9 @@ public class GetApiTokenHandler : ICommandHandler<GetApiTokenCommand, Result<Api
             token.Capabilities,
             token.ExpiresAt,
             token.LastUsedAt,
-            token.CreatedAt));
+            token.CreatedAt,
+            null,
+            token.ClientKind));
     }
 }
 /// <summary>
@@ -198,7 +202,8 @@ public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result
             return Result.Forbidden<IList<ApiTokenDto>>();
 
         var tokens = await db.ApiTokens
-            .Where(t => t.ProjectId == command.Request.ProjectId)
+            .Where(t => t.ProjectId == command.Request.ProjectId
+                && t.ClientKind != ApiTokenClientKind.Harness && t.RevokedAt == null)
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new ApiTokenDto(
                 t.Id,
@@ -209,7 +214,8 @@ public class ListApiTokensHandler : ICommandHandler<ListApiTokensCommand, Result
                 t.ExpiresAt,
                 t.LastUsedAt,
                 t.CreatedAt,
-                null))
+                null,
+                t.ClientKind))
             .ToListAsync(ct);
         return Result.Ok((IList<ApiTokenDto>)tokens);
     }

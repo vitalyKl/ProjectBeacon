@@ -13,13 +13,15 @@ internal sealed class DaemonDependencies
         ClientLlamaSwap llama,
         ClientOpenCodeServe openCode,
         IAgentRuntime runtime,
-        Func<WorkstationSettings> loadSettings)
+        Func<WorkstationSettings> loadSettings,
+        Func<IDaemonLlamaSync, IAgentRuntime>? runtimeFactory = null)
     {
         Http = http;
         Llama = llama;
         OpenCode = openCode;
         Runtime = runtime;
         LoadSettings = loadSettings;
+        RuntimeFactory = runtimeFactory;
     }
 
     public HttpClient Http { get; }
@@ -27,6 +29,7 @@ internal sealed class DaemonDependencies
     public ClientOpenCodeServe OpenCode { get; }
     public IAgentRuntime Runtime { get; }
     public Func<WorkstationSettings> LoadSettings { get; }
+    public Func<IDaemonLlamaSync, IAgentRuntime>? RuntimeFactory { get; }
 }
 
 internal static class DaemonServices
@@ -37,8 +40,10 @@ internal static class DaemonServices
         services.AddSingleton(deps);
         services.AddSingleton(timing);
         services.AddSingleton(state);
-        services.AddSingleton<IDaemonOpenCodeGate, DaemonOpenCodeGate>();
         services.AddSingleton<IDaemonLlamaSync, DaemonLlamaSync>();
+        services.AddSingleton<IAgentRuntime>(sp =>
+            deps.RuntimeFactory?.Invoke(sp.GetRequiredService<IDaemonLlamaSync>()) ?? deps.Runtime);
+        services.AddSingleton<IDaemonOpenCodeGate, DaemonOpenCodeGate>();
         services.AddSingleton<IDaemonChatSession, DaemonChatSession>();
         services.AddSingleton<IDaemonCommandExecutor, DaemonCommandExecutor>();
         services.AddSingleton<IDaemonLoop, DaemonHeartbeatLoop>();

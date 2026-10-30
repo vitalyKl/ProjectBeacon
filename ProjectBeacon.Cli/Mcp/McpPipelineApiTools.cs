@@ -26,14 +26,14 @@ internal static partial class McpApiTools
 
     private static async Task<McpToolText> PipelineStart(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(env, args, out var taskId, out var error))
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/start", new JsonObject { ["taskId"] = taskId.ToString("D") }, ct);
     }
 
     private static async Task<McpToolText> PipelineActor(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(env, args, out var taskId, out var error))
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "subtaskId", out var subtaskId))
             return new McpToolText(true, "missing or invalid 'subtaskId'");
@@ -43,14 +43,41 @@ internal static partial class McpApiTools
 
     private static async Task<McpToolText> PipelineLaunch(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
+        if (!TryPipelineTask(env, args, out var taskId, out var taskError))
+            return new McpToolText(true, taskError);
         if (!TryGuid(args, "sessionId", out var sessionId))
             return new McpToolText(true, "missing or invalid 'sessionId'");
+
+        // The launch endpoint is session-id scoped, not task-id scoped. Verify membership
+        // against the current task before sending the command so a Planner cannot launch
+        // an unrelated session in the same project with its short-lived project token.
+        var pipeline = await PipelineStatusAsync(taskId, api, ct);
+        if (pipeline.IsError)
+            return new McpToolText(true, pipeline.Text);
+        try
+        {
+            using var doc = JsonDocument.Parse(pipeline.Text);
+            if (!doc.RootElement.TryGetProperty("sessions", out var sessions)
+                || sessions.ValueKind != JsonValueKind.Array
+                || !sessions.EnumerateArray().Any(session =>
+                    session.ValueKind == JsonValueKind.Object
+                    && session.TryGetProperty("id", out var id)
+                    && id.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(id.GetString(), out var parsed)
+                    && parsed == sessionId))
+                return new McpToolText(true, "sessionId does not belong to the current pipeline task.");
+        }
+        catch (JsonException)
+        {
+            return new McpToolText(true, "Could not verify that sessionId belongs to the current pipeline task.");
+        }
+
         return await SendAsync(api, HttpMethod.Post, $"v1/sessions/{sessionId:D}/launch", new JsonObject { ["sessionId"] = sessionId.ToString("D") }, ct);
     }
 
     private static async Task<McpToolText> PipelineFail(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(env, args, out var taskId, out var error))
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         if (!TryGuid(args, "subtaskId", out var subtaskId))
             return new McpToolText(true, "missing or invalid 'subtaskId'");
@@ -68,14 +95,14 @@ internal static partial class McpApiTools
 
     private static async Task<McpToolText> PipelineReview(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(env, args, out var taskId, out var error))
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         return await SendAsync(api, HttpMethod.Post, $"v1/tasks/{taskId:D}/pipeline/review/start", new JsonObject { ["taskId"] = taskId.ToString("D") }, ct);
     }
 
     private static async Task<McpToolText> PipelineApprove(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(env, args, out var taskId, out var error))
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "note", Text(args, "note"));
@@ -84,7 +111,7 @@ internal static partial class McpApiTools
 
     private static async Task<McpToolText> PipelineForceClose(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
     {
-        if (!TryTask(env, args, out var taskId, out var error))
+        if (!TryPipelineTask(env, args, out var taskId, out var error))
             return new McpToolText(true, error);
         var body = new JsonObject { ["taskId"] = taskId.ToString("D") };
         Put(body, "reason", Text(args, "reason"));

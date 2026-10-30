@@ -5,19 +5,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Application;
-using Application.Agents;
 using Application.CodeIndex;
 using Application.Mcp;
-using Application.Tasks;
-using Domain.Enums;
-using Infrastructure;
-using Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 /// <summary>
-/// Stdio MCP server. File tools stay inside --root. Pipeline and model tools use the API when both BEACON_API_URL and BEACON_API_TOKEN are set, the database when neither is set, and fail when only one is set.
+/// Stdio MCP server. File tools stay inside --root. Every control-plane tool goes through the authenticated /v1 API; no direct database path is available.
 /// </summary>
 public static partial class McpStdioServer
 {
@@ -26,51 +17,98 @@ public static partial class McpStdioServer
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private static readonly JsonSerializerOptions JsonDb = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
-
-    private static readonly object DbLock = new();
-    private static ServiceProvider? _dbProvider;
-
-    private static bool _apiMisconfigured;
-
     public static Task<int> RunAsync(string root)
     {
         var env = McpEnvironment.Process;
         var resolved = BeaconApiClient.Resolve(env);
-        _apiMisconfigured = resolved.Misconfigured;
         Console.Error.WriteLine(resolved.Misconfigured
-            ? "beacon mcp: BEACON_API_URL and BEACON_API_TOKEN must both be set, or both be unset."
+            ? "beacon mcp: both BEACON_API_URL and BEACON_API_TOKEN must be set, with a valid HTTP(S) URL."
             : resolved.Client is null
-                ? "beacon mcp: local database mode."
-                : "beacon mcp: API mode.");
+                ? "beacon mcp: control-plane tools require BEACON_API_URL and BEACON_API_TOKEN; file tools remain available."
+                : "beacon mcp: authenticated API mode.");
         return RunAsync(root, Console.OpenStandardInput(), Console.OpenStandardOutput(), resolved.Client, env);
     }
 
     public static Task<int> RunAsync(string root, Stream input, Stream output)
     {
-        _apiMisconfigured = false;
         return RunAsync(root, input, output, null, McpEnvironment.Empty);
     }
 
     internal static async Task<int> RunAsync(string root, Stream input, Stream output, BeaconApiClient? api, McpEnvironment env)
     {
-        var workspace = new FileWorkspace(root);
-        var index = new CodeIndex(root);
+        const int maxConcurrentRequests = 32;
+        using var requestSlots = new SemaphoreSlim(maxConcurrentRequests, maxConcurrentRequests);
+        using var outputGate = new SemaphoreSlim(1, 1);
+        var pending = new List<Task>();
 
         while (true)
         {
             var message = await ReadMessageAsync(input);
             if (message is null)
-                return 0;
+                break;
 
-            var response = await HandleAsync(message, workspace, index, api, env);
-            if (response is not null)
+            pending.RemoveAll(static task => task.IsCompleted);
+            await requestSlots.WaitAsync();
+            pending.Add(ProcessRequestAsync(message, root, output, api, env, outputGate, requestSlots));
+        }
+
+        await Task.WhenAll(pending);
+        return 0;
+    }
+
+    private static async Task ProcessRequestAsync(
+        JsonNode message,
+        string root,
+        Stream output,
+        BeaconApiClient? api,
+        McpEnvironment env,
+        SemaphoreSlim outputGate,
+        SemaphoreSlim requestSlots)
+    {
+        try
+        {
+            // Keep request-local workspace/index state so concurrent tools do not race over
+            // mutable caches. MCP responses are correlated by id and can be written as soon
+            // as each independent request completes.
+            var response = await HandleAsync(
+                message,
+                new FileWorkspace(root),
+                new CodeIndex(root),
+                api,
+                env);
+            if (response is null)
+                return;
+
+            await outputGate.WaitAsync();
+            try
+            {
                 await WriteMessageAsync(output, response);
+            }
+            finally
+            {
+                outputGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            var id = message["id"]?.DeepClone();
+            if (id is not null)
+            {
+                var error = Error(id, -32603, "Internal error: " + ex.Message);
+                await outputGate.WaitAsync();
+                try
+                {
+                    await WriteMessageAsync(output, error);
+                }
+                finally
+                {
+                    outputGate.Release();
+                }
+            }
+        }
+        finally
+        {
+            requestSlots.Release();
         }
     }
 
@@ -96,7 +134,7 @@ public static partial class McpStdioServer
                 ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
                 ["serverInfo"] = new JsonObject { ["name"] = "beacon", ["version"] = AssemblyVersion() }
             }),
-            "tools/list" => Result(id, new JsonObject { ["tools"] = Tools() }),
+            "tools/list" => await ListToolsAsync(id, api, env),
             "tools/call" => await CallToolAsync(id, message["params"], workspace, index, api, env),
             "ping" => Result(id, new JsonObject()),
             _ => Error(id, -32601, $"Unknown method: {method}")
@@ -132,6 +170,9 @@ public static partial class McpStdioServer
 
         try
         {
+            if (IsControlPlaneTool(name) && RequireApi(id, api, env) is { } apiError)
+                return apiError;
+
             return name switch
             {
                 "read_file" => FileResult(id, workspace.ReadFile(Arg(arguments, "path"))),
@@ -178,8 +219,47 @@ public static partial class McpStdioServer
         }
     }
 
+    private static bool IsControlPlaneTool(string name) =>
+        name is "model_bind" or "model_status" or "task_create_subtask"
+            or "subtask_report_result" or "task_review_verdict" or "task_pipeline_status" or "context_compile"
+        || McpApiTools.IsApiTool(name);
+
     private static async Task<string?> EnforceSubtaskScopeAsync(string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
     {
+        var roleError = ValidatePipelineRoleTool(tool, env);
+        if (roleError is not null)
+            return roleError;
+
+        var role = env.Get("BEACON_PIPELINE_ROLE");
+        if (string.Equals(role, "Planner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (string.Equals(role, "Eval", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            if (api is null
+                || !TryParseScope(env, out _, out var actorTaskId, out _)
+                || actorTaskId is null)
+                return "pipeline scope could not be loaded.";
+
+            if (IsActorTerminalTool(tool))
+            {
+                if (!Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var ownedSubtaskId)
+                    || ownedSubtaskId == Guid.Empty)
+                    return "Actor pipeline sessions require an explicit subtask scope.";
+                if (!Guid.TryParse(OptArg(arguments, "subtaskId"), out var requestedSubtaskId)
+                    || requestedSubtaskId != ownedSubtaskId)
+                    return "Actor lifecycle tools can only report the current subtask.";
+            }
+            else if (McpApiTools.IsApiTool(tool))
+            {
+                return $"Tool '{tool}' is not allowed for the Actor pipeline role.";
+            }
+        }
+
         if (api is null || !TryParseScope(env, out _, out var taskId, out _) || taskId is null)
             return null;
 
@@ -189,13 +269,49 @@ public static partial class McpStdioServer
 
         Guid? explicitId = null;
         var fromEnv = env.Get("BEACON_SUBTASK_ID");
-        if (Guid.TryParse(fromEnv, out var envId))
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            // Never let a tool argument pick the Actor's security scope. It must come
+            // from the immutable authorization created for this pipeline command.
+            if (!Guid.TryParse(fromEnv, out var actorSubtaskId) || actorSubtaskId == Guid.Empty)
+                return "Actor pipeline sessions require an explicit subtask scope.";
+            explicitId = actorSubtaskId;
+        }
+        else if (Guid.TryParse(fromEnv, out var envId))
+        {
             explicitId = envId;
+        }
         else if (Guid.TryParse(OptArg(arguments, "subtaskId"), out var argId))
+        {
             explicitId = argId;
+        }
 
         var paths = SubtaskScopeGuard.UsesPath(tool) ? SplitPrefixes(OptArg(arguments, "path")) : null;
-        return SubtaskScopeGuard.Reject(tool, paths, SubtaskScopeGuard.ParsePipeline(body), explicitId);
+        var allowlists = SubtaskScopeGuard.ParsePipeline(body);
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
+        {
+            if (explicitId is not { } actorSubtaskId)
+                return "Actor pipeline sessions require an explicit subtask scope.";
+
+            var actorSubtask = allowlists.FirstOrDefault(s => s.Id == actorSubtaskId);
+            if (actorSubtask.Id == Guid.Empty)
+                return "subtask not found";
+            if (!string.Equals(actorSubtask.Status, "InProgress", StringComparison.OrdinalIgnoreCase))
+                return "Actor subtask is no longer active.";
+        }
+
+        var rejected = SubtaskScopeGuard.Reject(tool, paths, allowlists, explicitId);
+        if (rejected is not null)
+            return rejected;
+
+        // For pipeline Actors, an empty AllowedMcpTools list must deny workspace tools,
+        // not inherit the generic MCP client's legacy "empty means unrestricted" behavior.
+        if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase)
+            && !IsActorTerminalTool(tool)
+            && !McpApiTools.IsApiTool(tool))
+            return RejectActorToolGrant(tool, allowlists, explicitId);
+
+        return null;
     }
 
     private static JsonObject Content(string text) => new()

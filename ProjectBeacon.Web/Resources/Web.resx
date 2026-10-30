@@ -2288,4 +2288,16 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatContextWindow" xml:space="preserve">
     <value>Context window: {0} tokens</value>
   </data>
+  <data name="AgentRuntime" xml:space="preserve">
+    <value>Agent runtime</value>
+  </data>
+  <data name="AgentRuntimeOpenCode" xml:space="preserve">
+    <value>OpenCode (default)</value>
+  </data>
+  <data name="AgentRuntimeNative" xml:space="preserve">
+    <value>Native harness (experimental)</value>
+  </data>
+  <data name="AgentRuntimeRestartHint" xml:space="preserve">
+    <value>Runtime changes take effect after restarting the workstation client.</value>
+  </data>
 </root>

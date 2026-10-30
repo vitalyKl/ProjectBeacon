@@ -12,6 +12,10 @@ internal interface IDaemonChatSession
 {
     Task<(bool Ok, string? Result, string? Error)> EnsureAsync(string cwd, string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct);
+
+    Task<(bool Ok, string? Result, string? Error)> PromptAsync(
+        string cwd, string payload, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
+        => PromptAsync(cwd, payload, ct);
     Task<(bool Ok, string? Result, string? Error)> AbortAsync(string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> SwitchAgentAsync(string payload, CancellationToken ct);
     Task<(bool Ok, string? Result, string? Error)> ReplyFormAsync(string payload, CancellationToken ct);
@@ -49,15 +53,19 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var title = doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() ?? "Chat" : "Chat";
         return await _gate.RunExclusiveAsync(async () =>
         {
-            await _gate.OpenCode.TickAsync(cwd, ct);
-            if (!_gate.OpenCode.Status.Healthy)
-                return (false, (string?)null, _gate.OpenCode.Status.Error ?? "OpenCode is not running.");
+            var readiness = await _gate.EnsureReadyAsync(cwd, ct);
+            if (!readiness.Ready)
+                return (false, (string?)null, readiness.Error ?? "The selected agent runtime is not ready.");
             var id = await _gate.Runtime.CreateSessionAsync(title, ct);
-            return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = _gate.OpenCode.Cwd }), (string?)null);
+            return (true, JsonSerializer.Serialize(new { sessionId = id, cwd = readiness.WorkingDirectory ?? Path.GetFullPath(cwd) }), (string?)null);
         }, ct);
     }
 
-    public async Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct)
+    public Task<(bool Ok, string? Result, string? Error)> PromptAsync(string cwd, string payload, CancellationToken ct)
+        => PromptAsync(cwd, payload, null, ct);
+
+    public async Task<(bool Ok, string? Result, string? Error)> PromptAsync(
+        string cwd, string payload, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
     {
         using var doc = JsonDocument.Parse(payload);
         var externalId = doc.RootElement.TryGetProperty("externalSessionId", out var e) ? e.GetString() : null;
@@ -80,7 +88,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             return await _gate.RunExclusiveAsync(
-                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, contextLimit, activeTurn.Token),
+                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, contextLimit, harnessAuthorization, activeTurn.Token),
                 activeTurn.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && activeTurn.IsCancellationRequested)
@@ -123,7 +131,18 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             // No gate: the switch is a plain serve HTTP call and must not wait out an active turn.
-            await _gate.OpenCode.SwitchAgentAsync(externalId, agent, ct);
+            if (_gate.Runtime is IAgentRuntimeCapabilities capabilities)
+            {
+                if (!capabilities.SupportsAgentSwitch)
+                    throw new InvalidOperationException("Agent switching is not supported by the selected runtime.");
+                await capabilities.SwitchAgentAsync(externalId, agent, ct);
+            }
+            else
+            {
+                // Compatibility path for existing runtime/test adapters; the production OpenCode
+                // runtime implements capabilities and never reaches this branch.
+                await _gate.OpenCode.SwitchAgentAsync(externalId, agent, ct);
+            }
             return (true, "{}", null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -156,7 +175,17 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             // No gate: a queued prompt turn holds it, but the model blocks on the form answer.
-            var settled = await _gate.OpenCode.ReplyFormAsync(externalId, formId, answerJson, ct);
+            bool settled;
+            if (_gate.Runtime is IAgentRuntimeCapabilities capabilities)
+            {
+                if (!capabilities.SupportsForms)
+                    throw new InvalidOperationException("Interactive forms are not supported by the selected runtime.");
+                settled = await capabilities.ReplyFormAsync(externalId, formId, answerJson, ct);
+            }
+            else
+            {
+                settled = await _gate.OpenCode.ReplyFormAsync(externalId, formId, answerJson, ct);
+            }
             return settled
                 ? (true, "{}", null)
                 : (true, JsonSerializer.Serialize(new { alreadySettled = true }), null);
@@ -169,13 +198,13 @@ internal sealed class DaemonChatSession : IDaemonChatSession
 
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
         string cwd, string externalId, Guid chatId, string text, string? model, string? effort,
-        Guid projectId, int? configuredContextLimit, CancellationToken ct)
+        Guid projectId, int? configuredContextLimit, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
     {
-        var openCode = _gate.OpenCode;
         var runtime = _gate.Runtime;
-        await openCode.TickAsync(cwd, ct);
-        if (!openCode.Status.Healthy)
-            return (false, null, openCode.Status.Error ?? "OpenCode is not running.");
+        var capabilities = runtime as IAgentRuntimeCapabilities;
+        var readiness = await _gate.EnsureReadyAsync(cwd, ct);
+        if (!readiness.Ready)
+            return (false, null, readiness.Error ?? "The selected agent runtime is not ready.");
         if (_llama.UseOwnSwapper && model is not null)
             await _llamaSync.RunLockedAsync(() => _llama.EnsureSwapModelAsync(DaemonPayload.ExtractSwapName(model), ct), ct);
         // Baseline: the last assistant message before the prompt; an ended turn from an
@@ -185,7 +214,22 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         // event feed (the stream method is a no-op for them) and polling stays the backstop.
         var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var streamBuffers = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
-        var streamTask = openCode.StreamSessionTextAsync(externalId, (kind, messageId, ordinal, delta, streamCt) =>
+        Task streamTask;
+        if (capabilities is { SupportsLiveDeltas: true })
+        {
+            streamTask = capabilities.StreamTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
+        }
+        else if (capabilities is null)
+        {
+            // Compatibility path for pre-capability runtimes and existing test adapters.
+            streamTask = _gate.OpenCode.StreamSessionTextAsync(externalId, StreamDeltaAsync, streamCts.Token);
+        }
+        else
+        {
+            streamTask = Task.CompletedTask;
+        }
+
+        Task StreamDeltaAsync(string kind, string messageId, int ordinal, string delta, CancellationToken streamCt)
         {
             var key = messageId + ":" + kind + ":" + ordinal;
             var body = streamBuffers.AddOrUpdate(key, delta, (_, old) => old + delta);
@@ -197,10 +241,17 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 externalId = key,
                 complete = false
             }, projectId, streamCt);
-        }, streamCts.Token);
-        var controls = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
+        }
+        var normalizedEffort = string.IsNullOrWhiteSpace(effort) || string.Equals(effort, "default", StringComparison.OrdinalIgnoreCase)
             ? null
-            : new AgentPromptControls(null, effort, null);
+            : effort;
+        var controls = normalizedEffort is null && configuredContextLimit is not > 0 && harnessAuthorization is null
+            ? null
+            : new AgentPromptControls(null, normalizedEffort, null)
+            {
+                ContextLimit = configuredContextLimit,
+                HarnessAuthorization = harnessAuthorization
+            };
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var seenForms = new HashSet<string>(StringComparer.Ordinal);
@@ -243,7 +294,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 // Surface model questions: v2 forms live outside the message list, so poll them
                 // while the turn runs instead of waiting for the durable parts.
                 if (i % 8 == 0)
-                    await SurfacePendingFormsAsync(openCode, externalId, chatId, projectId, seenForms, ct);
+                    await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
                 quiet = added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
                 // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
@@ -295,7 +346,9 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             var usage = await runtime.ReadUsageAsync(externalId, ct);
             var contextLimit = configuredContextLimit is > 0
                 ? configuredContextLimit
-                : await openCode.ReadContextLimitAsync(model, ct);
+                : capabilities is not null
+                    ? await capabilities.ReadContextLimitAsync(model, ct)
+                    : await _gate.OpenCode.ReadContextLimitAsync(model, ct);
             await PostChatAsync($"/v1/chat/sessions/{chatId}/usage", new
             {
                 promptTokens = usage.PromptTokens,
@@ -331,11 +384,21 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     }
 
     private async Task SurfacePendingFormsAsync(
-        ClientOpenCodeServe openCode, string externalId, Guid chatId, Guid projectId, HashSet<string> seenForms, CancellationToken ct)
+        IAgentRuntimeCapabilities? capabilities, string externalId, Guid chatId, Guid projectId, HashSet<string> seenForms, CancellationToken ct)
     {
         try
         {
-            foreach (var form in await openCode.ListPendingFormsAsync(externalId, ct))
+            IReadOnlyList<AgentRuntimeForm> forms;
+            if (capabilities is { SupportsForms: true })
+                forms = await capabilities.ListPendingFormsAsync(externalId, ct);
+            else if (capabilities is null)
+                forms = (await _gate.OpenCode.ListPendingFormsAsync(externalId, ct))
+                    .Select(form => new AgentRuntimeForm(form.Id, form.Title, form.Metadata, form.FieldsJson))
+                    .ToArray();
+            else
+                return;
+
+            foreach (var form in forms)
             {
                 if (!seenForms.Add(form.Id))
                     continue;
