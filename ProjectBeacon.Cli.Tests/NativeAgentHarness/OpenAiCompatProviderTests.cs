@@ -60,7 +60,7 @@ public sealed class OpenAiCompatProviderTests
     public async Task RejectsStreamThatEndsAfterToolCallFinishWithoutDoneSentinel()
     {
         const string stream = """
-            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}"}}]},"finish_reason":null}]}
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"README.md\"}"}}]},"finish_reason":null}]}
 
             data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
 
