@@ -207,6 +207,22 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal(2, client.CallCount);
             Assert.Equal(2, client.MaxConcurrentCalls);
             Assert.Equal(2, provider.ToolResultsObserved);
+
+            var parts = await CollectRuntimePartsAsync(runtime, session);
+            var toolParts = parts.Where(part => part.Kind == "tool").OrderBy(part => part.ExternalId, StringComparer.Ordinal).ToArray();
+            Assert.Equal(2, toolParts.Length);
+            Assert.All(toolParts, part =>
+            {
+                Assert.Equal("read_file", part.Tool);
+                Assert.Equal("completed", part.ToolStatus);
+                Assert.False(string.IsNullOrWhiteSpace(part.ToolInput));
+                Assert.False(string.IsNullOrWhiteSpace(part.ToolResult));
+                Assert.True(part.DurationMs >= 0);
+                Assert.True(part.Complete);
+            });
+            Assert.Contains(toolParts, part => part.ToolInput!.Contains("a.txt", StringComparison.Ordinal) && part.ToolResult == "a.txt");
+            Assert.Contains(toolParts, part => part.ToolInput!.Contains("b.txt", StringComparison.Ordinal) && part.ToolResult == "b.txt");
+            Assert.Equal(2, toolParts.Select(part => part.ExternalId).Distinct(StringComparer.Ordinal).Count());
         }
         finally
         {

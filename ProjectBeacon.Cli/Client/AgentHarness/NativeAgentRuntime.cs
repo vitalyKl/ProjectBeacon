@@ -334,6 +334,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             string? lastToolCallFingerprint = null;
             var consecutiveToolCallFingerprintCount = 0;
             var agentStep = 0;
+            var nextToolOrdinal = 0;
             for (; agentStep < MaxAgentSteps; agentStep++)
             {
                 ct.ThrowIfCancellationRequested();
@@ -477,19 +478,24 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     var executedTools = await Task.WhenAll(toolCalls.Values.Select(async call =>
                     {
                         ct.ThrowIfCancellationRequested();
+                        var startedAt = Stopwatch.GetTimestamp();
+                        var isError = false;
                         string toolResult;
                         try
                         {
                             if (repeatedToolCall)
                             {
+                                isError = true;
                                 toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
                             }
                             else if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
                             {
+                                isError = true;
                                 toolResult = "Tool error: the model returned a tool call without a valid id or name.";
                             }
                             else if (!call.TryReadArguments(out var parsedArguments))
                             {
+                                isError = true;
                                 toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
                             }
                             else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
@@ -497,7 +503,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 if (controls?.HarnessAuthorization is not { } commandAuthorization
                                     || commandPrefixes.Length == 0
                                     || !IsRunCommandAuthorized(commandAuthorization))
+                                {
+                                    isError = true;
                                     toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
+                                }
                                 else
                                 {
                                     var result = await NativeCommandRunner.ExecuteAsync(
@@ -505,20 +514,24 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                         parsedArguments!,
                                         commandPrefixes,
                                         ct);
+                                    isError = result.IsError;
                                     toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                                 }
                             }
                             else if (mcpClient is null)
                             {
+                                isError = true;
                                 toolResult = "Tool error: no scoped MCP authorization is available for this command.";
                             }
                             else if (!IsAdvertisedMcpTool(mcpClient.OpenAiTools, call.Name!))
                             {
+                                isError = true;
                                 toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
                             }
                             else
                             {
                                 var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
+                                isError = result.IsError;
                                 toolResult = result.IsError
                                     ? "Tool error: " + result.Text
                                     : result.Text;
@@ -530,10 +543,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         }
                         catch (Exception ex)
                         {
+                            isError = true;
                             toolResult = "Tool error: " + SafeError(ex);
                         }
 
-                        return (Call: call, Result: TruncateToolResult(toolResult));
+                        var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                        return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs);
                     }));
 
                     // Execute calls concurrently, but append their results in the model's index
@@ -551,8 +566,17 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 ["content"] = toolResult
                             });
                         }
-                        await AppendDeltaAsync(session, turnNumber, messageId, "tool", $"{call.Name ?? "unknown_tool"}: {toolResult}", ct);
-                        await PersistAsync(session, ct);
+                        await AppendToolPartAsync(
+                            session,
+                            turnNumber,
+                            messageId,
+                            nextToolOrdinal++,
+                            call.Name ?? "unknown_tool",
+                            call.Arguments.Length == 0 ? "{}" : call.Arguments.ToString(),
+                            toolResult,
+                            executed.IsError,
+                            executed.DurationMs,
+                            ct);
                     }
 
                     finish = "tool_calls";
@@ -670,6 +694,44 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
         await PersistAsync(session, ct);
         session.Deltas.Writer.TryWrite(new NativeDelta(turnNumber, kind, messageId, ordinal, delta, false));
+    }
+
+    private async Task AppendToolPartAsync(
+        SessionState session,
+        int turnNumber,
+        string messageId,
+        int ordinal,
+        string tool,
+        string input,
+        string result,
+        bool isError,
+        int durationMs,
+        CancellationToken ct)
+    {
+        var body = $"{tool}: {result}";
+        var externalId = $"{messageId}:tool:{ordinal}";
+        var part = new AgentMessagePart(
+            "assistant",
+            "tool",
+            body,
+            externalId,
+            Complete: true,
+            Tool: tool,
+            ToolStatus: isError ? "error" : "completed",
+            ToolInput: input,
+            ToolResult: result,
+            DurationMs: durationMs);
+        lock (session.Sync)
+        {
+            var existing = session.Parts.FindIndex(item => string.Equals(item.ExternalId, externalId, StringComparison.Ordinal));
+            if (existing < 0)
+                session.Parts.Add(part);
+            else
+                session.Parts[existing] = part;
+        }
+
+        await PersistAsync(session, ct);
+        session.Deltas.Writer.TryWrite(new NativeDelta(turnNumber, "tool", messageId, ordinal, body, false));
     }
 
     private async Task CompleteAssistantPartsAsync(SessionState session, string messageId, CancellationToken ct)
