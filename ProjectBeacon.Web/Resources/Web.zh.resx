@@ -1462,10 +1462,10 @@
     <value>所有者</value>
   </data>
   <data name="LandingHeroTitle" xml:space="preserve">
-    <value>能留到下一次会话的上下文。</value>
+    <value>借助 AI 代理开发，同时掌控整个过程。</value>
   </data>
   <data name="LandingHeroLead" xml:space="preserve">
-    <value>面向人与本地代理混合工作的控制面。Beacon 只编译一次简报，代理不必再去重新发现已经决定的事。</value>
+    <value>ProjectBeacon 将项目、AI 代理、模型和开发工作流整合到一个自托管控制平面中。代理执行循环运行在你自己的工作站上，工具和源代码始终由你掌控。</value>
   </data>
   <data name="LandingProblemTitle" xml:space="preserve">
     <value>代理从空白开始</value>
@@ -1477,37 +1477,37 @@
     <value>如何工作</value>
   </data>
   <data name="LandingHow1" xml:space="preserve">
-    <value>从上下文、决策和约束编译一份有预算的简报。</value>
+    <value>从项目上下文、决策、约束和 token 预算编译精简简报，确保关键规则始终保留。</value>
   </data>
   <data name="LandingHow2" xml:space="preserve">
-    <value>在看板上认领工作。状态、复查备注和流水线留在同一处。</value>
+    <value>规划工作、分配任务并协调代理阶段。人工审查、流水线状态和结果始终清晰可见。</value>
   </data>
   <data name="LandingHow3" xml:space="preserve">
-    <value>用 beacon mcp 和 beacon client 在你的机器上运行代理。Beacon 从不执行这一回合。</value>
+    <value>工作站客户端运行 Native harness 或 OpenCode，连接模型并调用本地 MCP 工具。服务器不会执行你的代码。</value>
   </data>
   <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>包含的内容</value>
   </data>
   <data name="LandingFeatureContext" xml:space="preserve">
-    <value>带令牌预算的范围简报。安全和完成定义永不丢弃。</value>
+    <value>编译后的范围简报可在不同会话间保留项目知识、决策、约束和验收标准。</value>
   </data>
   <data name="LandingFeatureBoard" xml:space="preserve">
-    <value>面向人与代理混合工作的看板、待办列表和路线图。</value>
+    <value>看板、待办和路线图将代理工作与人工规划、审查和交付连接起来。</value>
   </data>
   <data name="LandingFeatureDecisions" xml:space="preserve">
     <value>决策带有后果，代理才有理由遵守它们。</value>
   </data>
   <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>在你控制的硬件上使用单代理和流水线模型。llama-swap 留在工作站上。</value>
+    <value>一次配置用户级代理、模型后端和任务角色。可使用 Native harness 或 OpenCode。</value>
   </data>
   <data name="LandingFeatureDevices" xml:space="preserve">
-    <value>beacon client 主动发起 HTTPS。Web 主机不读取你的磁盘。</value>
+    <value>工作站客户端通过出站 HTTPS 连接。代理执行、本地模型和工作区访问都留在你的机器上。</value>
   </data>
   <data name="LandingFeatureMcpTitle" xml:space="preserve">
-    <value>stdio MCP</value>
+    <value>MCP 工具链</value>
   </data>
   <data name="LandingFeatureMcp" xml:space="preserve">
-    <value>本地文件工具和流水线工具走 stdio。不提供 HTTP MCP。</value>
+    <value>通过 stdio 复用本地 beacon mcp 工具，并应用基于角色的权限和范围限制。</value>
   </data>
   <data name="LandingCompareTitle" xml:space="preserve">
     <value>对比</value>
@@ -1559,37 +1559,37 @@
     <value>问题</value>
   </data>
   <data name="LandingFaq1Q" xml:space="preserve">
-    <value>Beacon 会运行编码代理吗？</value>
+    <value>ProjectBeacon 会在云端运行代理吗？</value>
   </data>
   <data name="LandingFaq1A" xml:space="preserve">
-    <value>不会。Beacon 只转发和编排。代理进程始终在你控制的硬件上运行。</value>
+    <value>不会。代理执行循环通过 beacon client 在你的工作站运行。你可以选择 Native harness 或 OpenCode。Web/API/Worker 服务负责协调工作，不会运行你的模型或执行工作区代码。</value>
   </data>
   <data name="LandingFaq2Q" xml:space="preserve">
-    <value>代码在哪里？</value>
+    <value>我的模型在哪里运行，代码存放在哪里？</value>
   </data>
   <data name="LandingFaq2A" xml:space="preserve">
-    <value>在你的机器上。beacon client 主动发起 HTTPS。Web 主机不浏览工作树。</value>
+    <value>代码保留在工作站的工作区中。模型可以通过配置的后端在本地运行，也可以使用受支持的云服务商。工作站客户端通过出站 HTTPS 连接到你自托管的 ProjectBeacon 服务器；Web 主机不会浏览工作树。</value>
   </data>
   <data name="LandingFaq3Q" xml:space="preserve">
-    <value>这是托管 SaaS 吗？</value>
+    <value>可以使用多个项目吗？</value>
   </data>
   <data name="LandingFaq3A" xml:space="preserve">
-    <value>v1 的路径是自托管。托管多租户是以后才会打开的阶段。</value>
+    <value>可以。代理和模型配置属于你的用户账户，可在多个项目间复用。每个项目都有自己的任务、上下文、决策和工作目录。</value>
   </data>
   <data name="LandingFaq4Q" xml:space="preserve">
-    <value>如何加人？</value>
+    <value>必须使用 Native harness 吗？</value>
   </data>
   <data name="LandingFaq4A" xml:space="preserve">
-    <value>开放注册，或通过 AUTH_LOCAL_INVITE_ONLY 仅限邀请。在仪表板的当前项目中邀请；链接只显示一次。</value>
+    <value>不必。OpenCode 仍然受支持。你可以为工作站选择运行时；Native harness 是一种本地执行模型/工具循环并复用 ProjectBeacon 现有 MCP 工具的替代方案。</value>
   </data>
   <data name="LandingFaq5Q" xml:space="preserve">
-    <value>如何重置密码？</value>
+    <value>ProjectBeacon 是托管 SaaS 吗？</value>
   </data>
   <data name="LandingFaq5A" xml:space="preserve">
-    <value>使用忘记密码。/recover 是用初始化令牌的管理员应急入口，不是用户重置。</value>
+    <value>当前产品路线是自托管。你自行运行控制平面并连接自己的工作站。托管式多租户服务不属于当前已发布产品。</value>
   </data>
   <data name="LandingCtaTitle" xml:space="preserve">
-    <value>在你自己的主机上开始</value>
+    <value>你的代理、你的硬件、一个工作空间。</value>
   </data>
   <data name="Project" xml:space="preserve">
     <value>项目</value>
@@ -2078,4 +2078,42 @@ orthstar</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>重启工作站客户端后，运行时更改才会生效。</value>
   </data>
+  <data name="LandingEyebrow" xml:space="preserve"><value>本地优先的 AI 开发平台</value></data>
+  <data name="LandingHeroFootnote" xml:space="preserve"><value>代理在你的工作站运行，项目始终属于你。</value></data>
+  <data name="LandingOnline" xml:space="preserve"><value>工作站已连接</value></data>
+  <data name="LandingLocalRuntime" xml:space="preserve"><value>本地运行环境</value></data>
+  <data name="LandingWorkspaceLabel" xml:space="preserve"><value>当前工作空间</value></data>
+  <data name="LandingPreviewReady" xml:space="preserve"><value>已配置</value></data>
+  <data name="LandingPreviewConnected" xml:space="preserve"><value>已连接</value></data>
+  <data name="LandingActiveTasks" xml:space="preserve"><value>活动任务</value></data>
+  <data name="LandingPreviewInProgress" xml:space="preserve"><value>进行中</value></data>
+  <data name="LandingWorkInProgress" xml:space="preserve"><value>正在进行的工作</value></data>
+  <data name="LandingTaskContext" xml:space="preserve"><value>上下文简报 · 项目规则</value></data>
+  <data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
+  <data name="LandingRuntimeTitle" xml:space="preserve"><value>代理运行环境</value></data>
+  <data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness 或 OpenCode · 本地或云端模型</value></data>
+  <data name="LandingVisualCaption" xml:space="preserve"><value>在一个地方管理完整工作流</value></data>
+  <data name="LandingPrinciplesTitle" xml:space="preserve"><value>产品原则</value></data>
+  <data name="LandingPrincipleLocal" xml:space="preserve"><value>在你的工作站运行</value></data>
+  <data name="LandingPrincipleMulti" xml:space="preserve"><value>一次配置，多个项目</value></data>
+  <data name="LandingPrincipleControl" xml:space="preserve"><value>模型和数据由你掌控</value></data>
+  <data name="LandingPrincipleOpen" xml:space="preserve"><value>基于 MCP 的工具</value></data>
+  <data name="LandingFeaturesLead" xml:space="preserve"><value>连接完整代理开发循环的工作空间，而不是另一个聊天窗口。</value></data>
+  <data name="LandingPipelineTitle" xml:space="preserve"><value>代理流水线</value></data>
+  <data name="LandingFeaturePipeline" xml:space="preserve"><value>通过受限工具、任务状态和审查结果协调 Planner、Actor 与 Reviewer 会话。</value></data>
+  <data name="LandingHowLead" xml:space="preserve"><value>从共享项目知识到受控的本地代理运行，并获得可追踪的结果。</value></data>
+  <data name="LandingFlow1Title" xml:space="preserve"><value>提供正确的上下文</value></data>
+  <data name="LandingFlow2Title" xml:space="preserve"><value>协调工作</value></data>
+  <data name="LandingFlow3Title" xml:space="preserve"><value>本地执行，集中审查</value></data>
+  <data name="LandingArchitectureTitle" xml:space="preserve"><value>控制平面、你的工作站、你的规则。</value></data>
+  <data name="LandingArchitectureBody" xml:space="preserve"><value>ProjectBeacon 协调身份、项目、任务、权限和代理会话。工作站客户端负责模型执行和本地工具，因此源代码树和运行环境始终位于你控制的硬件上。</value></data>
+  <data name="LandingArchitectureControl" xml:space="preserve"><value>ProjectBeacon 控制平面</value></data>
+  <data name="LandingArchitectureControlBody" xml:space="preserve"><value>项目 · 任务 · 上下文 · 权限 · 历史</value></data>
+  <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>你的工作站</value></data>
+  <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · 运行时选择 · 模型连接</value></data>
+  <data name="LandingArchitectureRuntime" xml:space="preserve"><value>本地代理运行环境</value></data>
+  <data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness 或 OpenCode · MCP stdio · 工作区</value></data>
+  <data name="LandingCtaEyebrow" xml:space="preserve"><value>掌控你的 AI 工作流</value></data>
+  <data name="LandingCtaBody" xml:space="preserve"><value>启动自己的 ProjectBeacon 主机并连接工作站。</value></data>
+  <data name="LandingFooterTagline" xml:space="preserve"><value>面向 AI 辅助开发的本地优先控制平面</value></data>
 </root>

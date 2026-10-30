@@ -1453,10 +1453,10 @@
     <value>Владелец</value>
   </data>
   <data name="LandingHeroTitle" xml:space="preserve">
-    <value>Контекст, который доживает до следующей сессии.</value>
+    <value>Разрабатывайте с AI-агентами. Контролируйте весь процесс.</value>
   </data>
   <data name="LandingHeroLead" xml:space="preserve">
-    <value>Пульт для совместной работы людей и локальных агентов. Beacon один раз собирает бриф, и агенты не ищут заново то, что уже решено.</value>
+    <value>ProjectBeacon объединяет проекты, AI-агентов, модели и процесс разработки в единой self-hosted системе управления. Агентский цикл выполняется на вашей рабочей станции, а инструменты и исходный код остаются под вашим контролем.</value>
   </data>
   <data name="LandingProblemTitle" xml:space="preserve">
     <value>Агенты начинают с нуля</value>
@@ -1468,37 +1468,37 @@
     <value>Как это работает</value>
   </data>
   <data name="LandingHow1" xml:space="preserve">
-    <value>Соберите бриф с бюджетом из контекста, решений и ограничений.</value>
+    <value>Соберите целевой бриф из контекста проекта, решений, ограничений и бюджета токенов. Важные правила останутся в контексте.</value>
   </data>
   <data name="LandingHow2" xml:space="preserve">
-    <value>Возьмите работу с доски. Статус, заметки ревью и пайплайн остаются в одном месте.</value>
+    <value>Планируйте работу, назначайте задачи и координируйте этапы агентов. Ревью человеком, состояние пайплайна и результаты остаются видимыми.</value>
   </data>
   <data name="LandingHow3" xml:space="preserve">
-    <value>Запускайте агента на своей машине через beacon mcp и beacon client. Сам Beacon ход не выполняет.</value>
+    <value>Клиент рабочей станции запускает native harness или OpenCode, подключает модели и вызывает локальные MCP-инструменты. Сервер не выполняет ваш код.</value>
   </data>
   <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>Что входит</value>
   </data>
   <data name="LandingFeatureContext" xml:space="preserve">
-    <value>Брифы с бюджетом токенов. Безопасность и критерий готовности не выбрасываются.</value>
+    <value>Собранные брифы сохраняют знания о проекте, решения, ограничения и критерии приёмки между сессиями.</value>
   </data>
   <data name="LandingFeatureBoard" xml:space="preserve">
-    <value>Доска, бэклог и дорожная карта для людей и агентов.</value>
+    <value>Доска, бэклог и дорожная карта связывают работу агентов с планированием, ревью и поставкой.</value>
   </data>
   <data name="LandingFeatureDecisions" xml:space="preserve">
     <value>У решений есть последствия, поэтому агентам есть на что опираться.</value>
   </data>
   <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>Одиночные и пайплайн-модели на вашем железе. llama-swap остаётся на рабочей станции.</value>
+    <value>Настраивайте пользовательских агентов, модели и роли задач один раз. Используйте native harness или OpenCode.</value>
   </data>
   <data name="LandingFeatureDevices" xml:space="preserve">
-    <value>Исходящий HTTPS от beacon client. Веб-хост не читает ваш диск.</value>
+    <value>Клиент рабочей станции подключается по исходящему HTTPS. Агенты, локальные модели и доступ к проекту остаются на вашей машине.</value>
   </data>
   <data name="LandingFeatureMcpTitle" xml:space="preserve">
-    <value>stdio MCP</value>
+    <value>Инструменты MCP</value>
   </data>
   <data name="LandingFeatureMcp" xml:space="preserve">
-    <value>Локальные файловые и пайплайн-инструменты по stdio. HTTP MCP не входит в поставку.</value>
+    <value>Локальные инструменты beacon mcp через stdio с разрешениями по ролям и ограниченной областью доступа.</value>
   </data>
   <data name="LandingCompareTitle" xml:space="preserve">
     <value>В сравнении</value>
@@ -1550,37 +1550,37 @@
     <value>Вопросы</value>
   </data>
   <data name="LandingFaq1Q" xml:space="preserve">
-    <value>Beacon сам запускает агента?</value>
+    <value>ProjectBeacon запускает агента в облаке?</value>
   </data>
   <data name="LandingFaq1A" xml:space="preserve">
-    <value>Нет. Beacon передаёт и оркестрирует. Процесс агента всегда идёт на железе, которым вы управляете.</value>
+    <value>Нет. Агентский цикл выполняется на вашей рабочей станции через beacon client. Можно выбрать native harness или OpenCode. Web/API/Worker координируют работу, но не запускают вашу модель и не исполняют код проекта.</value>
   </data>
   <data name="LandingFaq2Q" xml:space="preserve">
-    <value>Где лежит код?</value>
+    <value>Где работают модели и хранится мой код?</value>
   </data>
   <data name="LandingFaq2A" xml:space="preserve">
-    <value>На вашей машине. beacon client ходит наружу по HTTPS. Веб-хост не читает рабочее дерево.</value>
+    <value>Код остаётся в рабочей папке на вашей машине. Модели могут работать локально через настроенный backend или использовать поддерживаемого облачного провайдера. Клиент подключается к вашему self-hosted серверу ProjectBeacon по исходящему HTTPS; веб-хост не читает рабочее дерево.</value>
   </data>
   <data name="LandingFaq3Q" xml:space="preserve">
-    <value>Это облачный сервис?</value>
+    <value>Можно работать с несколькими проектами?</value>
   </data>
   <data name="LandingFaq3A" xml:space="preserve">
-    <value>В первой версии путь — свой хост. Общий хостинг остаётся отдельной закрытой фазой.</value>
+    <value>Да. Настройки агентов и моделей принадлежат вашей учётной записи и повторно используются в разных проектах. У каждого проекта свои задачи, контекст, решения и рабочая папка.</value>
   </data>
   <data name="LandingFaq4Q" xml:space="preserve">
-    <value>Как добавить людей?</value>
+    <value>Обязательно использовать native harness?</value>
   </data>
   <data name="LandingFaq4A" xml:space="preserve">
-    <value>Открытая регистрация или только по приглашению, если включён AUTH_LOCAL_INVITE_ONLY. Приглашение создаётся у открытого проекта на панели управления, ссылка показывается один раз.</value>
+    <value>Нет. OpenCode остаётся поддерживаемой средой выполнения. Runtime выбирается для рабочей станции; native harness — альтернатива, которая выполняет цикл модели и инструментов локально и использует существующие MCP-инструменты ProjectBeacon.</value>
   </data>
   <data name="LandingFaq5Q" xml:space="preserve">
-    <value>Как сбросить пароль?</value>
+    <value>ProjectBeacon — это облачный SaaS?</value>
   </data>
   <data name="LandingFaq5A" xml:space="preserve">
-    <value>Используйте «Забыли пароль». Страница /recover сбрасывает пароль администратора по токену инициализации, это не обычный сброс.</value>
+    <value>Текущий путь продукта — self-hosted. Вы разворачиваете систему управления у себя и подключаете собственную рабочую станцию. Hosted multi-tenant не входит в поставляемую версию.</value>
   </data>
   <data name="LandingCtaTitle" xml:space="preserve">
-    <value>Запуск на своём хосте</value>
+    <value>Ваши агенты. Ваше оборудование. Единая рабочая среда.</value>
   </data>
   <data name="Project" xml:space="preserve">
     <value>Проект</value>
@@ -2092,4 +2092,42 @@
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Изменение вступит в силу после перезапуска клиента рабочей станции.</value>
   </data>
+  <data name="LandingEyebrow" xml:space="preserve"><value>ЛОКАЛЬНАЯ СРЕДА AI-РАЗРАБОТКИ</value></data>
+  <data name="LandingHeroFootnote" xml:space="preserve"><value>Агент работает на вашей машине. Проекты остаются вашими.</value></data>
+  <data name="LandingOnline" xml:space="preserve"><value>РАБОЧАЯ СТАНЦИЯ В СЕТИ</value></data>
+  <data name="LandingLocalRuntime" xml:space="preserve"><value>Локальная среда</value></data>
+  <data name="LandingWorkspaceLabel" xml:space="preserve"><value>АКТИВНОЕ РАБОЧЕЕ ПРОСТРАНСТВО</value></data>
+  <data name="LandingPreviewReady" xml:space="preserve"><value>Настроено</value></data>
+  <data name="LandingPreviewConnected" xml:space="preserve"><value>Подключена</value></data>
+  <data name="LandingActiveTasks" xml:space="preserve"><value>Активные задачи</value></data>
+  <data name="LandingPreviewInProgress" xml:space="preserve"><value>В работе</value></data>
+  <data name="LandingWorkInProgress" xml:space="preserve"><value>Текущая работа</value></data>
+  <data name="LandingTaskContext" xml:space="preserve"><value>Контекст задачи · правила проекта</value></data>
+  <data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
+  <data name="LandingRuntimeTitle" xml:space="preserve"><value>Среда агентов</value></data>
+  <data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness или OpenCode · локальная или облачная модель</value></data>
+  <data name="LandingVisualCaption" xml:space="preserve"><value>Весь процесс разработки в одном месте</value></data>
+  <data name="LandingPrinciplesTitle" xml:space="preserve"><value>Принципы продукта</value></data>
+  <data name="LandingPrincipleLocal" xml:space="preserve"><value>Работа на вашей машине</value></data>
+  <data name="LandingPrincipleMulti" xml:space="preserve"><value>Одна настройка для многих проектов</value></data>
+  <data name="LandingPrincipleControl" xml:space="preserve"><value>Ваш контроль над моделями и данными</value></data>
+  <data name="LandingPrincipleOpen" xml:space="preserve"><value>Инструменты через MCP</value></data>
+  <data name="LandingFeaturesLead" xml:space="preserve"><value>Единая среда для полного цикла разработки с агентами — а не ещё одно окно чата.</value></data>
+  <data name="LandingPipelineTitle" xml:space="preserve"><value>Пайплайны агентов</value></data>
+  <data name="LandingFeaturePipeline" xml:space="preserve"><value>Координация Planner, Actor и Reviewer с разграниченными инструментами, состояниями задач и результатами ревью.</value></data>
+  <data name="LandingHowLead" xml:space="preserve"><value>От общих знаний о проекте до контролируемого запуска локального агента и проверяемого результата.</value></data>
+  <data name="LandingFlow1Title" xml:space="preserve"><value>Передайте агенту нужный контекст</value></data>
+  <data name="LandingFlow2Title" xml:space="preserve"><value>Скоординируйте работу</value></data>
+  <data name="LandingFlow3Title" xml:space="preserve"><value>Выполняйте локально. Контролируйте централизованно.</value></data>
+  <data name="LandingArchitectureTitle" xml:space="preserve"><value>Единая система управления. Ваша рабочая станция. Ваши правила.</value></data>
+  <data name="LandingArchitectureBody" xml:space="preserve"><value>ProjectBeacon координирует пользователей, проекты, задачи, права и сессии агентов. Клиент рабочей станции отвечает за запуск моделей и локальные инструменты — исходный код и среда выполнения остаются на вашем оборудовании.</value></data>
+  <data name="LandingArchitectureControl" xml:space="preserve"><value>Система управления ProjectBeacon</value></data>
+  <data name="LandingArchitectureControlBody" xml:space="preserve"><value>Проекты · задачи · контекст · права · история</value></data>
+  <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>Ваша рабочая станция</value></data>
+  <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · выбор runtime · подключения моделей</value></data>
+  <data name="LandingArchitectureRuntime" xml:space="preserve"><value>Локальная среда агентов</value></data>
+  <data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness или OpenCode · MCP stdio · рабочая папка</value></data>
+  <data name="LandingCtaEyebrow" xml:space="preserve"><value>ВОЗЬМИТЕ AI-ПРОЦЕСС ПОД СВОЙ КОНТРОЛЬ</value></data>
+  <data name="LandingCtaBody" xml:space="preserve"><value>Разверните собственный сервер ProjectBeacon и подключите рабочую станцию.</value></data>
+  <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 </root>
