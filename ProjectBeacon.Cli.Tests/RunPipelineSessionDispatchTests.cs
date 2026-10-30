@@ -119,6 +119,86 @@ public sealed class RunPipelineSessionDispatchTests
         }
     }
 
+    [Fact]
+    public async Task RunPipelineSession_ReturnsFailureWhenNativeTurnWasAborted()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-aborted-" + Guid.NewGuid().ToString("N"));
+        var projectRoot = Path.Combine(temp, "project");
+        Directory.CreateDirectory(projectRoot);
+
+        try
+        {
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var sessionId = Guid.NewGuid();
+            var commandId = Guid.NewGuid();
+            const int generation = 1;
+            var tokenHandler = new HarnessTokenHandler(projectId, commandId, generation);
+            using var http = new HttpClient(tokenHandler) { BaseAddress = new Uri("http://localhost/") };
+            await using var llama = new ClientLlamaSwap
+            {
+                SkipRealProcess = true,
+                UseOwnSwapper = false,
+                ConfigFile = Path.Combine(temp, "llamaswap.yaml")
+            };
+            await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+            var settings = new WorkstationSettings
+            {
+                AgentRuntime = "native",
+                OpencodeDataDir = Path.Combine(temp, "native-data"),
+                LlamaSwapPort = 8080
+            };
+            Func<WorkstationSettings> settingsLoader = () => settings;
+            var deps = new DaemonDependencies(
+                http,
+                llama,
+                openCode,
+                new OpenCodeAgentRuntime(openCode),
+                settingsLoader,
+                runtimeFactory: llamaSync => new NativeAgentRuntime(
+                    http,
+                    llama,
+                    llamaSync,
+                    settingsLoader,
+                    providerFactory: (_, _, _) => new StubProvider(_ => { }, "aborted")));
+            var state = new DaemonRuntimeState("http://localhost", null);
+            var timing = new DaemonTiming
+            {
+                ChatPollInterval = TimeSpan.FromMilliseconds(1),
+                ChatMaxDuration = TimeSpan.FromSeconds(5)
+            };
+            await using var services = DaemonServices.Build(deps, timing, state);
+            var executor = services.GetRequiredService<IDaemonCommandExecutor>();
+            var payload = JsonSerializer.Serialize(new
+            {
+                projectId,
+                taskId,
+                sessionId,
+                role = "Planner",
+                title = "Aborted pipeline dispatch test",
+                prompt = "Start and abort.",
+                model = "beacon-local/test-model"
+            });
+
+            var (ok, resultJson, error) = await executor.ExecuteAsync(new WorkstationDaemon.CommandWire
+            {
+                Id = commandId,
+                Kind = WorkstationCommandKind.RunPipelineSession,
+                Generation = generation,
+                LocalRoot = projectRoot,
+                PayloadJson = payload
+            }, TestContext.Current.CancellationToken);
+
+            Assert.False(ok);
+            Assert.Null(resultJson);
+            Assert.Contains("aborted", error!, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try { Directory.Delete(temp, true); } catch { }
+        }
+    }
+
     private sealed class HarnessTokenHandler(Guid projectId, Guid commandId, int generation) : HttpMessageHandler
     {
         public int? RequestedGeneration { get; private set; }
@@ -149,7 +229,7 @@ public sealed class RunPipelineSessionDispatchTests
         }
     }
 
-    private sealed class StubProvider(Action<string> setModel) : IChatProvider
+    private sealed class StubProvider(Action<string> setModel, string finishReason = "stop") : IChatProvider
     {
         public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
             ChatProviderRequest request,
@@ -159,7 +239,7 @@ public sealed class RunPipelineSessionDispatchTests
             setModel(request.Model);
             yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Pipeline agent completed.");
             yield return new ChatProviderEvent(ChatProviderEventKind.Usage, PromptTokens: 12, CompletionTokens: 7);
-            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: finishReason);
             await Task.CompletedTask;
         }
     }

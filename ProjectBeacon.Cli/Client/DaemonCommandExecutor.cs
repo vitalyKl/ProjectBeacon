@@ -325,8 +325,17 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             }
             while (status is null || !status.Ended);
 
-            if (!string.IsNullOrWhiteSpace(status.Error) || string.Equals(status.Finish, "error", StringComparison.OrdinalIgnoreCase))
-                return (false, null, status.Error ?? "The pipeline agent turn failed.");
+            if (!string.IsNullOrWhiteSpace(status.Error)
+                || string.Equals(status.Finish, "error", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(status.Finish))
+            {
+                var failure = status.Error
+                    ?? (string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
+                        ? "The pipeline agent turn was aborted."
+                        : "The pipeline agent turn failed.");
+                return (false, null, failure);
+            }
 
             var usage = await runtime.ReadUsageAsync(externalSessionId, ct);
             return (true, JsonSerializer.Serialize(new
