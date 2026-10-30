@@ -210,9 +210,11 @@ public static class WorkstationEval
             {
                 await runtime.AbortAsync(sessionId, abortCts.Token);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException || abortTimeout.IsCancellationRequested)
+            catch (Exception ex)
             {
-                return Result.Failure<string>($"Eval turn could not be stopped before workspace cleanup: {ex.Message}");
+                evalWorkspace.Preserve();
+                return Result.Failure<string>(
+                    $"Eval turn could not be stopped. Its isolated workspace was preserved at '{evalDirectory}' for safe recovery. {ex.Message}");
             }
 
             var stopDeadline = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * 10);
@@ -224,11 +226,22 @@ public static class WorkstationEval
                     turnEnded = true;
                     break;
                 }
-                await Task.Delay(pollInterval, abortTimeout.Token);
+                try
+                {
+                    await Task.Delay(pollInterval, abortTimeout.Token);
+                }
+                catch (OperationCanceledException) when (abortTimeout.IsCancellationRequested)
+                {
+                    break;
+                }
             }
 
             if (!turnEnded)
-                return Result.Failure<string>("Eval turn did not acknowledge abort; isolated workspace was not considered safe to reuse.");
+            {
+                evalWorkspace.Preserve();
+                return Result.Failure<string>(
+                    $"Eval turn did not acknowledge abort. Its isolated workspace was preserved at '{evalDirectory}' for safe recovery.");
+            }
         }
 
         ct.ThrowIfCancellationRequested();

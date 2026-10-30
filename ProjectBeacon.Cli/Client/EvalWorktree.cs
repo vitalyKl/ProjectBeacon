@@ -12,6 +12,7 @@ internal sealed class EvalWorktree : IAsyncDisposable
     private readonly string? _repositoryRoot;
     private readonly string? _worktreeRoot;
     private readonly ClientOpenCodeServe? _openCode;
+    private bool _preserve;
 
     private EvalWorktree(
         string originalWorkingDirectory,
@@ -28,6 +29,9 @@ internal sealed class EvalWorktree : IAsyncDisposable
     }
 
     public string WorkingDirectory { get; }
+
+    /// <summary>Keep the detached worktree when an agent failed to stop, avoiding deletion under a live process.</summary>
+    public void Preserve() => _preserve = true;
 
     public static async Task<(EvalWorktree? Workspace, string? Error)> CreateAsync(
         string workingDirectory,
@@ -93,7 +97,7 @@ internal sealed class EvalWorktree : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_worktreeRoot is null || _repositoryRoot is null)
+        if (_worktreeRoot is null || _repositoryRoot is null || _preserve)
             return;
 
         // OpenCode can keep the eval directory as its process working directory. Move it back
