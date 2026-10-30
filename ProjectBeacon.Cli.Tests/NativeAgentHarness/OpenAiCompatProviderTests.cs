@@ -57,6 +57,30 @@ public sealed class OpenAiCompatProviderTests
     }
 
     [Fact]
+    public async Task RejectsStreamThatEndsAfterToolCallFinishWithoutDoneSentinel()
+    {
+        const string stream = """
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"read_file","arguments":"{\\"path\\":\\"README.md\\"}"}}]},"finish_reason":null}]}
+
+            data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+
+            """;
+        using var http = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(stream, Encoding.UTF8, "text/event-stream")
+        }));
+        var provider = new OpenAiCompatProvider(http, "http://127.0.0.1:8080/v1", null);
+        var request = new ChatProviderRequest("test-model", new JsonArray(), new JsonArray());
+
+        var exception = await Assert.ThrowsAsync<IOException>(async () =>
+        {
+            await foreach (var _ in provider.StreamAsync(request, CancellationToken.None)) { }
+        });
+
+        Assert.Contains("before [DONE]", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RejectsNonHttpUrlBeforeSending()
     {
         using var http = new HttpClient(new StubHandler(_ => throw new InvalidOperationException("request should not run")));

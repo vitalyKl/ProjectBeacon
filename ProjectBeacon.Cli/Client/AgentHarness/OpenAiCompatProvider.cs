@@ -140,6 +140,10 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
             await foreach (var item in ParseEventAsync(data.ToString(), ct))
                 yield return item;
         }
+
+        // A finish_reason is not sufficient proof that the HTTP stream completed: a dropped
+        // connection can occur after the final delta but before the protocol's [DONE] sentinel.
+        throw new IOException("OpenAI-compatible stream ended before [DONE].");
     }
 
     private static async IAsyncEnumerable<ChatProviderEvent> ParseEventAsync(
