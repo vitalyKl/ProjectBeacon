@@ -361,6 +361,55 @@ public sealed class NativeAgentRuntimeTests
 
 
     [Fact]
+    public void ContextCompactionKeepsToolCallAndResultsTogether()
+    {
+        var messages = new List<JsonObject>
+        {
+            new() { ["role"] = "system", ["content"] = "system" },
+            new() { ["role"] = "user", ["content"] = "request" },
+            new()
+            {
+                ["role"] = "assistant",
+                ["tool_calls"] = new JsonArray
+                {
+                    new JsonObject { ["id"] = "call-1" },
+                    new JsonObject { ["id"] = "call-2" }
+                }
+            },
+            new() { ["role"] = "tool", ["tool_call_id"] = "call-1", ["content"] = "first" },
+            new() { ["role"] = "tool", ["tool_call_id"] = "call-2", ["content"] = "second" },
+            new() { ["role"] = "user", ["content"] = "follow-up" }
+        };
+
+        Assert.Equal(5, NativeAgentRuntime.FindSafeContextSplitIndex(messages, 3));
+        Assert.Equal(2, NativeAgentRuntime.FindSafeContextSplitIndex(messages, 2));
+        Assert.Equal(5, NativeAgentRuntime.FindSafeContextSplitIndex(messages, 5));
+    }
+
+    [Fact]
+    public void ContextCompactionKeepsIncompleteToolCallGroupOnTheSameSideOfBoundary()
+    {
+        var messages = new List<JsonObject>
+        {
+            new() { ["role"] = "system", ["content"] = "system" },
+            new() { ["role"] = "user", ["content"] = "request" },
+            new()
+            {
+                ["role"] = "assistant",
+                ["tool_calls"] = new JsonArray
+                {
+                    new JsonObject { ["id"] = "call-1" },
+                    new JsonObject { ["id"] = "call-2" }
+                }
+            },
+            new() { ["role"] = "tool", ["tool_call_id"] = "call-1", ["content"] = "first" },
+            new() { ["role"] = "user", ["content"] = "interrupted" }
+        };
+
+        Assert.Equal(2, NativeAgentRuntime.FindSafeContextSplitIndex(messages, 3));
+    }
+
+    [Fact]
     public async Task NativeRuntimeCompactsOldConversationWhenContextBudgetIsExceeded()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-context-" + Guid.NewGuid().ToString("N"));
