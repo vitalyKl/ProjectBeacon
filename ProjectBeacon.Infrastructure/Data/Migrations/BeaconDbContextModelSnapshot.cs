@@ -773,6 +773,7 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<string>("Runtime")
                         .IsRequired()
                         .HasMaxLength(32)
+                        .HasDefaultValue("opencode")
                         .HasColumnType("character varying(32)");
 
                     b.Property<string>("CheckCommand")

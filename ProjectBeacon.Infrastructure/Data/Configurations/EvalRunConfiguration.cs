@@ -17,7 +17,7 @@ public class EvalRunConfiguration : IEntityTypeConfiguration<EvalRun>
         entity.Property(e => e.CompletionTokens).IsRequired();
         entity.Property(e => e.TurnCount).IsRequired();
         entity.Property(e => e.Model).HasMaxLength(200);
-        entity.Property(e => e.Runtime).HasMaxLength(32).IsRequired();
+        entity.Property(e => e.Runtime).HasMaxLength(32).IsRequired().HasDefaultValue("opencode");
         entity.Property(e => e.ReasoningEffort).HasMaxLength(50);
         entity.Property(e => e.ToolPermissions).HasMaxLength(500);
         entity.Property(e => e.RepoRevision).HasMaxLength(100);
