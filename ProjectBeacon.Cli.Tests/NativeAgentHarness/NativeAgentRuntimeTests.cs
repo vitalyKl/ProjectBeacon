@@ -141,6 +141,7 @@ public sealed class NativeAgentRuntimeTests
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-session-path-" + Guid.NewGuid().ToString("N"));
         var dataDirectory = Path.Combine(temp, ".opencode", "data");
         var outsideTranscript = Path.Combine(temp, ".opencode", "outside.json");
+        Directory.CreateDirectory(Path.Combine(temp, ".opencode", "sessions"));
         Directory.CreateDirectory(Path.GetDirectoryName(outsideTranscript)!);
         await File.WriteAllTextAsync(outsideTranscript, new JsonObject
         {
