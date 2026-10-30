@@ -496,7 +496,7 @@ public sealed class ChatHandlerTests : IDisposable
                 "m1:tool:0",
                 Tool: "read_file",
                 ToolStatus: "completed",
-                ToolInput: "{\\"path\\":\\"README.md\\"}",
+                ToolInput: """{"path":"README.md"}""",
                 ToolResult: "README content",
                 DurationMs: 24,
                 Complete: true)), ct);
@@ -505,7 +505,7 @@ public sealed class ChatHandlerTests : IDisposable
         Assert.True(final.Value.Complete);
         Assert.Equal("read_file", final.Value.Tool);
         Assert.Equal("completed", final.Value.ToolStatus);
-        Assert.Equal("{\\"path\\":\\"README.md\\"}", final.Value.ToolInput);
+        Assert.Equal("""{"path":"README.md"}""", final.Value.ToolInput);
         Assert.Equal("README content", final.Value.ToolResult);
         Assert.Equal(24, final.Value.DurationMs);
 
@@ -517,7 +517,7 @@ public sealed class ChatHandlerTests : IDisposable
         Assert.True(late.Value.Complete);
         Assert.Equal("read_file", late.Value.Tool);
         Assert.Equal("completed", late.Value.ToolStatus);
-        Assert.Equal("{\\"path\\":\\"README.md\\"}", late.Value.ToolInput);
+        Assert.Equal("""{"path":"README.md"}""", late.Value.ToolInput);
         Assert.Equal("README content", late.Value.ToolResult);
         Assert.Equal(24, late.Value.DurationMs);
 
