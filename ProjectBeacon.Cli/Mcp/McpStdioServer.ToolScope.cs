@@ -247,6 +247,10 @@ public static partial class McpStdioServer
             return IsActorToolAllowed(tool)
                 ? null
                 : $"Tool '{tool}' is not allowed for the Actor pipeline role.";
+        if (string.Equals(role, "Eval", StringComparison.OrdinalIgnoreCase))
+            return EvalForbiddenTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+                ? $"Tool '{tool}' is not allowed for the Eval runtime scope."
+                : null;
         return null;
     }
 
