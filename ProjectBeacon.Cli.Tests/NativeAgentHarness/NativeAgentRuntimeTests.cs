@@ -635,7 +635,7 @@ public sealed class NativeAgentRuntimeTests
                 message?["role"]?.GetValue<string>() == "user"
                 && message["content"]?.GetValue<string>() == "Do not start this concurrent prompt");
 
-            mcp.Release.TrySetResult();
+            mcp.Release.TrySetResult(true);
             await streamTask.WaitAsync(TimeSpan.FromSeconds(5));
             var status = await runtime.GetTurnStatusAsync(sessionId, CancellationToken.None);
             Assert.True(status!.Ended);
@@ -916,7 +916,7 @@ public sealed class NativeAgentRuntimeTests
                 // Signal only after the iterator resumed past the first yield and entered
                 // the cancellation handler; otherwise the test can cancel before the
                 // provider observes the token due to scheduler timing.
-                Started.TrySetResult();
+                Started.TrySetResult(true);
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -1122,8 +1122,8 @@ public sealed class NativeAgentRuntimeTests
     {
         private readonly StubMcpToolClient _tools = new();
 
-        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public JsonArray OpenAiTools => _tools.OpenAiTools;
 
         public async Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
