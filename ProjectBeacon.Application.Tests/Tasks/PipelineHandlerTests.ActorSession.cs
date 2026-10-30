@@ -62,7 +62,7 @@ public sealed partial class PipelineHandlerTests
         {
             await db.Database.ExecuteSqlRawAsync(
                 """
-                CREATE TRIGGER fail_pipeline_session_insert
+                CREATE TRIGGER fail_actor_session_insert
                 BEFORE INSERT ON PipelineSessions
                 BEGIN
                     SELECT RAISE(FAIL, 'simulated actor session persistence failure');

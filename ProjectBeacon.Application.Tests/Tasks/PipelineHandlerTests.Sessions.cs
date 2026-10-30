@@ -14,31 +14,6 @@ using Microsoft.Data.Sqlite;
 public sealed partial class PipelineHandlerTests
 {
     [Fact]
-    public async Task StartPipeline_SessionInsertFailure_RollsBackPipelineStageClaim()
-    {
-        var (projectId, task) = await SeedTaskAsync("T");
-        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
-
-        await Assert.ThrowsAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(() =>
-            new StartPipelineHandler(factory, new SessionInsertFailingSpawner())
-                .HandleAsync(
-                    new StartPipelineCommand(new StartPipelineRequest(task.Id)),
-                    TestContext.Current.CancellationToken));
-
-        using (TenantScope.EnterUnscoped())
-        {
-            var stage = await _db.Tasks.AsNoTracking()
-                .Where(t => t.Id == task.Id)
-                .Select(t => t.PipelineStage)
-                .FirstAsync(TestContext.Current.CancellationToken);
-            Assert.Null(stage);
-            Assert.Equal(0, await _db.PipelineSessions.CountAsync(
-                s => s.TaskId == task.Id && s.Role == PipelineRole.Planner,
-                TestContext.Current.CancellationToken));
-        }
-    }
-
-    [Fact]
     public async Task SelfReportedPass_DoesNotProve()
     {
         var (projectId, task) = await SeedTaskAsync("Check");
