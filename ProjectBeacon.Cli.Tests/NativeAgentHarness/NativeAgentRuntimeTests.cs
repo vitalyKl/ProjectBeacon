@@ -136,6 +136,196 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeRejectsSessionIdsThatCouldEscapeTranscriptDirectory()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-session-path-" + Guid.NewGuid().ToString("N"));
+        var dataDirectory = Path.Combine(temp, ".opencode", "data");
+        var outsideTranscript = Path.Combine(temp, ".opencode", "outside.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(outsideTranscript)!);
+        await File.WriteAllTextAsync(outsideTranscript, new JsonObject
+        {
+            ["id"] = "../outside",
+            ["title"] = "outside",
+            ["createdAt"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["messages"] = new JsonArray(),
+            ["parts"] = new JsonArray(),
+            ["turnNumber"] = 0,
+            ["usage"] = new JsonObject
+            {
+                ["promptTokens"] = 0,
+                ["completionTokens"] = 0,
+                ["assistantMessages"] = 0,
+                ["totalCost"] = 0,
+                ["generationSeconds"] = 0
+            },
+            ["turnStatus"] = new JsonObject { ["ended"] = true, ["finish"] = "stop" }
+        }.ToJsonString());
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => new WorkstationSettings
+            {
+                OpencodeDataDir = dataDirectory,
+                LlamaSwapPort = 8080
+            });
+
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => runtime.GetTurnStatusAsync("../outside", CancellationToken.None));
+            Assert.Contains("../outside", await File.ReadAllTextAsync(outsideTranscript), StringComparison.Ordinal);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
+    public async Task NativeRuntimeRecoversUnrecordedToolResultsAfterRestartWithoutReplayingTools()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-tool-recovery-" + Guid.NewGuid().ToString("N"));
+        var dataDirectory = Path.Combine(temp, ".opencode", "data");
+        var sessionsDirectory = Path.Combine(temp, ".opencode", "sessions");
+        Directory.CreateDirectory(sessionsDirectory);
+        var sessionId = Guid.NewGuid().ToString("N");
+        var transcriptPath = Path.Combine(sessionsDirectory, sessionId + ".json");
+        var toolCalls = new JsonArray
+        {
+            new JsonObject
+            {
+                ["id"] = "call-1",
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "read_file", ["arguments"] = "{\\"path\\":\\"README.md\\"}" }
+            },
+            new JsonObject
+            {
+                ["id"] = "call-2",
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "run_command", ["arguments"] = "{\\"command\\":\\"dotnet test\\"}" }
+            }
+        };
+        var transcript = new JsonObject
+        {
+            ["id"] = sessionId,
+            ["title"] = "interrupted session",
+            ["createdAt"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["messages"] = new JsonArray
+            {
+                new JsonObject { ["role"] = "system", ["content"] = "system prompt" },
+                new JsonObject { ["role"] = "user", ["content"] = "inspect and test the project" },
+                new JsonObject
+                {
+                    ["role"] = "assistant",
+                    ["content"] = null,
+                    ["tool_calls"] = toolCalls
+                },
+                new JsonObject
+                {
+                    ["role"] = "tool",
+                    ["tool_call_id"] = "call-1",
+                    ["content"] = "README contents"
+                }
+            },
+            ["parts"] = new JsonArray(),
+            ["turnNumber"] = 1,
+            ["lastModel"] = "beacon-local/test-model",
+            ["contextLimit"] = 8192,
+            ["usage"] = new JsonObject
+            {
+                ["promptTokens"] = 10,
+                ["completionTokens"] = 4,
+                ["assistantMessages"] = 1,
+                ["totalCost"] = 0,
+                ["generationSeconds"] = 1
+            },
+            ["turnStatus"] = new JsonObject
+            {
+                ["ended"] = false,
+                ["finish"] = null,
+                ["error"] = null,
+                ["messageId"] = "native:" + sessionId + ":1"
+            }
+        };
+        await File.WriteAllTextAsync(transcriptPath, transcript.ToJsonString());
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new RequestRecordingProvider();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => new WorkstationSettings
+            {
+                OpencodeDataDir = dataDirectory,
+                LlamaSwapPort = 8080
+            },
+            providerFactory: (_, _, _) => provider);
+
+        try
+        {
+            var streamTask = runtime.StreamTextAsync(sessionId, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            await runtime.SendPromptAsync(
+                sessionId,
+                "Continue after the restart",
+                "beacon-local/test-model",
+                CancellationToken.None);
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var request = Assert.IsType<JsonArray>(provider.RequestMessages);
+            Assert.Contains(request, message =>
+                message?["role"]?.GetValue<string>() == "tool"
+                && message["tool_call_id"]?.GetValue<string>() == "call-1"
+                && message["content"]?.GetValue<string>() == "README contents");
+            var recovered = Assert.Single(request, message =>
+                message?["role"]?.GetValue<string>() == "tool"
+                && message["tool_call_id"]?.GetValue<string>() == "call-2");
+            Assert.Contains("may or may not have completed", recovered!["content"]!.GetValue<string>(), StringComparison.Ordinal);
+            Assert.Contains("not replayed automatically", recovered["content"]!.GetValue<string>(), StringComparison.Ordinal);
+            Assert.Equal("Continue after the restart", request.Last!["content"]!.GetValue<string>());
+
+            var persisted = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+            Assert.Equal("aborted", persisted["turnStatus"]!["finish"]!.GetValue<string>());
+            Assert.Single(persisted["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "tool"
+                && message["tool_call_id"]?.GetValue<string>() == "call-2");
+            Assert.Contains(await CollectRuntimePartsAsync(runtime, sessionId), part =>
+                part.ExternalId == $"native-recovery:{sessionId}:call-2" && part.ToolStatus == "error");
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    private static async Task<List<AgentMessagePart>> CollectRuntimePartsAsync(NativeAgentRuntime runtime, string sessionId)
+    {
+        var parts = new List<AgentMessagePart>();
+        await foreach (var part in runtime.StreamPartsAsync(sessionId, CancellationToken.None))
+            parts.Add(part);
+        return parts;
+    }
+
+    [Fact]
     public async Task NativeRuntimeTruncatesOversizedToolResultsBeforePersistingAndStreaming()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-tool-truncation-" + Guid.NewGuid().ToString("N"));
@@ -654,6 +844,23 @@ public sealed class NativeAgentRuntimeTests
                 yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             }
 
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class RequestRecordingProvider : IChatProvider
+    {
+        public JsonArray? RequestMessages { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            RequestMessages = (JsonArray)request.Messages.DeepClone();
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Recovered context accepted.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
         }
