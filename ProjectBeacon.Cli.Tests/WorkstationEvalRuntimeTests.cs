@@ -63,6 +63,45 @@ public sealed class WorkstationEvalRuntimeTests
     }
 
     [Fact]
+    public async Task RunEvalTurn_AbortsRuntimeWhenMaximumDurationExpires()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-eval-timeout-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var runtime = new CapturingRuntime(waitUntilAbort: true);
+
+        try
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                evalRunId = Guid.NewGuid(),
+                prompt = "Keep working until interrupted.",
+                path = ".",
+                model = "beacon-local/test-model",
+                runtime = "native"
+            });
+            var result = await WorkstationEval.RunEvalTurnAsync(
+                root,
+                payload,
+                null,
+                runtime,
+                TimeSpan.FromMilliseconds(1),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromMilliseconds(1),
+                TestContext.Current.CancellationToken,
+                runtimeName: "native");
+
+            Assert.True(result.Success, result.Error);
+            Assert.Equal(1, runtime.AbortCount);
+            using var document = JsonDocument.Parse(result.Value!);
+            Assert.True(document.RootElement.GetProperty("interrupted").GetBoolean());
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task RunEvalTurn_UsesIsolatedWorktreeAndDoesNotModifyOriginalCheckout()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-eval-worktree-" + Guid.NewGuid().ToString("N"));
@@ -152,8 +191,15 @@ public sealed class WorkstationEvalRuntimeTests
     private sealed class CapturingRuntime : IAgentRuntime, IAgentRuntimeCapabilities
     {
         private readonly bool _writeEvalFile;
+        private readonly bool _waitUntilAbort;
+        private bool _aborted;
 
-        public CapturingRuntime(bool writeEvalFile = false) => _writeEvalFile = writeEvalFile;
+        public CapturingRuntime(bool writeEvalFile = false, bool waitUntilAbort = false)
+        {
+            _writeEvalFile = writeEvalFile;
+            _waitUntilAbort = waitUntilAbort;
+        }
+        public int AbortCount { get; private set; }
         public AgentPromptControls? Controls { get; private set; }
         public string? Model { get; private set; }
         public string? CapturedWorkingDirectory => Controls?.HarnessAuthorization?.WorkingDirectory;
@@ -185,9 +231,18 @@ public sealed class WorkstationEvalRuntimeTests
         }
 
         public Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
-            => Task.FromResult<AgentTurnStatus?>(new AgentTurnStatus(true, "stop", null, "assistant-part-1"));
+            => Task.FromResult<AgentTurnStatus?>(new AgentTurnStatus(
+                !_waitUntilAbort || _aborted,
+                _aborted ? "aborted" : _waitUntilAbort ? "running" : "stop",
+                null,
+                "assistant-part-1"));
 
-        public Task AbortAsync(string sessionId, CancellationToken ct) => Task.CompletedTask;
+        public Task AbortAsync(string sessionId, CancellationToken ct)
+        {
+            AbortCount++;
+            _aborted = true;
+            return Task.CompletedTask;
+        }
 
         public Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
             => Task.FromResult(new AgentSessionUsage(10, 5, 1, 0));
