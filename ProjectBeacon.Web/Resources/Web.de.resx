@@ -2078,4 +2078,16 @@ orthstar</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Änderungen werden nach einem Neustart des Workstation-Clients wirksam.</value>
   </data>
+  <data name="AgentRuntimeActive" xml:space="preserve">
+    <value>Aktive Laufzeit</value>
+  </data>
+  <data name="AgentRuntimePendingRestart" xml:space="preserve">
+    <value>Die ausgewählte Laufzeit unterscheidet sich von der derzeit auf dieser Workstation ausgeführten Laufzeit. Starten Sie den Workstation-Client neu, um die Auswahl anzuwenden.</value>
+  </data>
+  <data name="AgentRuntimeUnavailable" xml:space="preserve">
+    <value>Nicht verfügbar</value>
+  </data>
+  <data name="AgentRuntimeUnknown" xml:space="preserve">
+    <value>Unbekannt (warte auf Workstation-Heartbeat)</value>
+  </data>
 </root>
