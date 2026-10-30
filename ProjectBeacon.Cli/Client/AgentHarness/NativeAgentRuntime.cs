@@ -731,9 +731,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
                         summary.Append(item.Text);
 
+                if (summary.Length == 0)
+                    throw new InvalidOperationException(
+                        "The conversation exceeded its context budget, but the model returned an empty summary. The existing history was preserved.");
+
                 var compacted = new List<JsonObject> { snapshot[0] };
-                if (summary.Length > 0)
-                    compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Conversation summary (preserve this as context):\\n" + summary.ToString() });
+                compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Conversation summary (preserve this as context):\\n" + summary.ToString() });
                 compacted.AddRange(keep);
                 snapshot = compacted;
                 lock (session.Sync)

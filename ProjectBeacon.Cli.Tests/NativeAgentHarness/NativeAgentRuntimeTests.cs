@@ -824,6 +824,81 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeDoesNotDiscardHistoryWhenContextSummaryIsEmpty()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-empty-summary-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new EmptySummaryProvider();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider);
+
+        try
+        {
+            var session = await runtime.CreateSessionAsync("empty summary test", CancellationToken.None);
+            for (var i = 1; i <= 4; i++)
+            {
+                var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+                await runtime.SendPromptAsync(
+                    session,
+                    $"User message {i}",
+                    "beacon-local/test-model",
+                    CancellationToken.None,
+                    new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
+                await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+                var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                Assert.True(status!.Ended);
+                if (i < 4)
+                    Assert.Equal("stop", status.Finish);
+                else
+                {
+                    Assert.Equal("error", status.Finish);
+                    Assert.Contains("empty summary", status.Error!, StringComparison.Ordinal);
+                }
+            }
+
+            Assert.Equal(1, provider.SummaryCalls);
+            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+            var transcript = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+            var messages = transcript["messages"]!.AsArray();
+            foreach (var i in Enumerable.Range(1, 4))
+                Assert.Contains(messages, message =>
+                    message?["role"]?.GetValue<string>() == "user"
+                    && message["content"]?.GetValue<string>() == $"User message {i}");
+            Assert.DoesNotContain(messages, message =>
+                message?["content"]?.GetValue<string>()?.Contains(
+                    "Conversation summary (preserve this as context)", StringComparison.Ordinal) == true);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeAbortCancelsProviderAndEndsTurnAsAborted()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-abort-" + Guid.NewGuid().ToString("N"));
@@ -981,6 +1056,33 @@ public sealed class NativeAgentRuntimeTests
 
             yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "The hidden tool was blocked.");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class EmptySummaryProvider : IChatProvider
+    {
+        public int SummaryCalls { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var isSummary = request.Messages.Any(message =>
+                message?["content"]?.GetValue<string>()?.Contains(
+                    "Summarize the conversation history", StringComparison.Ordinal) == true);
+            if (isSummary)
+            {
+                SummaryCalls++;
+            }
+            else
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Context test response.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            }
+
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
         }
