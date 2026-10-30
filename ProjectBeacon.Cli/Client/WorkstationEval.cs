@@ -161,41 +161,41 @@ public static class WorkstationEval
         {
             for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
             {
-            var parts = new List<AgentMessagePart>();
-            await foreach (var part in runtime.StreamPartsAsync(sessionId, ct))
-                parts.Add(part);
-            var added = 0;
-            foreach (var part in parts)
-            {
-                if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                var key = part.ExternalId ?? $"{part.Role}|{part.Kind}|{part.Body}";
-                if (seen.Add(key))
-                    added++;
-            }
-            var turnStatus = await runtime.GetTurnStatusAsync(sessionId, ct);
-            if (turnStatus is { Ended: true })
-            {
-                turnEnded = true;
-                if (string.Equals(turnStatus.Finish, "error", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(turnStatus.Finish, "aborted", StringComparison.OrdinalIgnoreCase))
-                    return Result.Failure<string>(turnStatus.Error ?? $"Eval agent turn ended with '{turnStatus.Finish}'.");
-                idle = seen.Count > 0;
-                break;
-            }
-
-            // A quiet interval is not completion while the runtime still owns an active turn.
-            // This matters for native models that may spend time reasoning without emitting deltas.
-            if (turnStatus is { Ended: false })
-                quiet = 0;
-            else
-                quiet = added > 0 ? 0 : quiet + 1;
-
-            if (turnStatus is null && quiet >= maxQuiet && seen.Count > 0)
-            {
-                idle = true;
-                break;
-            }
+                var parts = new List<AgentMessagePart>();
+                await foreach (var part in runtime.StreamPartsAsync(sessionId, ct))
+                    parts.Add(part);
+                var added = 0;
+                foreach (var part in parts)
+                {
+                    if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var key = part.ExternalId ?? $"{part.Role}|{part.Kind}|{part.Body}";
+                    if (seen.Add(key))
+                        added++;
+                }
+                var turnStatus = await runtime.GetTurnStatusAsync(sessionId, ct);
+                if (turnStatus is { Ended: true })
+                {
+                    turnEnded = true;
+                    if (string.Equals(turnStatus.Finish, "error", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(turnStatus.Finish, "aborted", StringComparison.OrdinalIgnoreCase))
+                        return Result.Failure<string>(turnStatus.Error ?? $"Eval agent turn ended with '{turnStatus.Finish}'.");
+                    idle = seen.Count > 0;
+                    break;
+                }
+    
+                // A quiet interval is not completion while the runtime still owns an active turn.
+                // This matters for native models that may spend time reasoning without emitting deltas.
+                if (turnStatus is { Ended: false })
+                    quiet = 0;
+                else
+                    quiet = added > 0 ? 0 : quiet + 1;
+    
+                if (turnStatus is null && quiet >= maxQuiet && seen.Count > 0)
+                {
+                    idle = true;
+                    break;
+                }
                 await Task.Delay(pollInterval, ct);
             }
         }

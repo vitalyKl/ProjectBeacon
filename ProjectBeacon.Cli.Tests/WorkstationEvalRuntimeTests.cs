@@ -164,7 +164,9 @@ public sealed class WorkstationEvalRuntimeTests
         }
         finally
         {
-            Directory.Delete(root, true);
+            try { await GitAsync(root, "worktree", "prune"); }
+            catch { /* Cleanup below still resets read-only Git metadata on Windows. */ }
+            DeleteDirectory(root);
         }
     }
 
