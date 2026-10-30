@@ -43,7 +43,9 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
             return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
-        // Guarded stage claim before the spawn: only takes effect if the pipeline is not started.
+        // The stage claim and initial Planner session must commit together. The spawner only
+        // resolves configuration; no external process is started inside this transaction.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var claimed = await db.Tasks
             .Where(t => t.Id == task.Id && t.PipelineStage == null && t.Status == expectedStatus)
             .ExecuteUpdateAsync(s => s
@@ -52,30 +54,27 @@ public class StartPipelineHandler : ICommandHandler<StartPipelineCommand, Result
         if (claimed == 0)
             return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting; retry.");
 
-        SpawnedSession? spawned = null;
-        Exception? spawnFailure = null;
+        SpawnedSession spawned;
         try
         {
             spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Planner, task.Id, ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            spawnFailure = ex;
-        }
-        if (spawnFailure is not null)
-        {
-            await PipelineSupport.RollbackStageAsync(db, task.Id, TaskPipelineStage.Planning, null, ct);
-            if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
-                throw canceled;
-            return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
+            return Result.Failure<PipelineSessionDto>(ex.Message);
         }
 
         var projectName = await PipelineSupport.ProjectNameAsync(db, task.ProjectId, ct);
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Planner,
-            SessionPrompts.Planner(task, projectName), null, spawned!.ModelBackendId, spawned.LaunchSpec);
+            SessionPrompts.Planner(task, projectName), null, spawned.ModelBackendId, spawned.LaunchSpec);
         db.PipelineSessions.Add(session);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return Result.Ok(PipelineMappers.ToDto(session));
     }
