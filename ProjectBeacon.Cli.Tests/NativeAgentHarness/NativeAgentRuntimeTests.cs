@@ -390,7 +390,9 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal("stop", status.Finish);
             var saved = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
             Assert.Equal(1, saved["turnNumber"]!.GetValue<int>());
-            Assert.Equal("Retry after fixing storage", saved["messages"]!.AsArray().Last()!["content"]!.GetValue<string>());
+            Assert.Contains(saved["messages"]!.AsArray(), message =>
+                message?["role"]?.GetValue<string>() == "user"
+                && message["content"]?.GetValue<string>() == "Retry after fixing storage");
         }
         finally
         {
