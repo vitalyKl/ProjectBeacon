@@ -301,7 +301,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 _timing.ChatIdleTimeout,
                 _timing.ChatMaxDuration,
                 ct,
-                authorization);
+                authorization,
+                requestedRuntime);
             if (!evalAction.Success)
                 return (false, null, evalAction.Error);
             return (true, evalAction.Value, null);

@@ -43,7 +43,8 @@ public sealed class WorkstationEvalRuntimeTests
                 TimeSpan.FromSeconds(1),
                 TimeSpan.FromSeconds(5),
                 TestContext.Current.CancellationToken,
-                authorization);
+                authorization,
+                "native");
 
             Assert.True(result.Success, result.Error);
             Assert.Same(authorization, runtime.Controls!.HarnessAuthorization);

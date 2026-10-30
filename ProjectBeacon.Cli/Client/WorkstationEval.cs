@@ -29,7 +29,8 @@ public static class WorkstationEval
         TimeSpan idleTimeout,
         TimeSpan maxDuration,
         CancellationToken ct,
-        AgentHarnessAuthorization? harnessAuthorization = null)
+        AgentHarnessAuthorization? harnessAuthorization = null,
+        string? runtimeName = null)
     {
         if (string.IsNullOrWhiteSpace(root))
             return Result.Failure<string>("root is required.");
@@ -190,6 +191,14 @@ public static class WorkstationEval
                 checkOutput = checkResult.Output;
             }
         }
+        var selectedRuntime = runtimeName
+            ?? (payload.TryGetProperty("runtime", out var runtimeElement) && runtimeElement.ValueKind == JsonValueKind.String
+                ? runtimeElement.GetString()
+                : null)
+            ?? (runtime is NativeAgentRuntime ? "native" : "opencode");
+        if (selectedRuntime is not ("native" or "opencode"))
+            return Result.Failure<string>("Eval runtime must be 'native' or 'opencode'.");
+
         var result = new
         {
             evalRunId,
@@ -200,7 +209,7 @@ public static class WorkstationEval
             exitCode,
             checkOutput,
             interrupted = !idle,
-            transcriptRef = $"{(runtime is NativeAgentRuntime ? "native" : "opencode")}:session/{sessionId}"
+            transcriptRef = $"{selectedRuntime}:session/{sessionId}"
         };
         return Result.Ok(JsonSerializer.Serialize(result));
     }
