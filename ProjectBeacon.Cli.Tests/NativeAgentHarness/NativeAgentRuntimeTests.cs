@@ -311,7 +311,7 @@ public sealed class NativeAgentRuntimeTests
                 && message["tool_call_id"]?.GetValue<string>() == "call-2");
             Assert.Contains("may or may not have completed", recovered!["content"]!.GetValue<string>(), StringComparison.Ordinal);
             Assert.Contains("not replayed automatically", recovered["content"]!.GetValue<string>(), StringComparison.Ordinal);
-            Assert.Equal("Continue after the restart", request.Last!["content"]!.GetValue<string>());
+            Assert.Equal("Continue after the restart", request.Last()!["content"]!.GetValue<string>());
 
             var persisted = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
             Assert.Equal("stop", persisted["turnStatus"]!["finish"]!.GetValue<string>());
@@ -716,7 +716,7 @@ public sealed class NativeAgentRuntimeTests
         }
         finally
         {
-            mcp.Release.TrySetResult();
+            mcp.Release.TrySetResult(true);
             await runtime.DisposeAsync();
             Directory.Delete(temp, true);
         }
@@ -1063,7 +1063,7 @@ public sealed class NativeAgentRuntimeTests
                 // Signal only after the iterator resumed past the first yield and entered
                 // the cancellation handler; otherwise the test can cancel before the
                 // provider observes the token due to scheduler timing.
-                Started.TrySetResult(true);
+                Started.TrySetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -1320,7 +1320,7 @@ public sealed class NativeAgentRuntimeTests
 
         public async Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
         {
-            Started.TrySetResult();
+            Started.TrySetResult(true);
             await Release.Task.WaitAsync(ct);
             return new McpToolResult(false, "README contents");
         }
