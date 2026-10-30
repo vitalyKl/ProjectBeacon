@@ -745,10 +745,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             // Keep the assistant tool-call message and all matching results together. If a crash
             // left the group incomplete, retain the whole unfinished group rather than sending
             // an invalid orphaned tool call to the provider after compaction.
-            if (splitAt > i && splitAt < groupEnd)
-                splitAt = groupEnd;
-            else if (splitAt == i + 1 && pendingIds.Count > 0)
+            if (pendingIds.Count > 0 && splitAt > i && splitAt < groupEnd)
                 splitAt = i;
+            else if (pendingIds.Count > 0 && splitAt == i + 1)
+                splitAt = i;
+            else if (pendingIds.Count == 0 && splitAt > i && splitAt < groupEnd)
+                splitAt = groupEnd;
         }
 
         return Math.Clamp(splitAt, 1, messages.Count);
