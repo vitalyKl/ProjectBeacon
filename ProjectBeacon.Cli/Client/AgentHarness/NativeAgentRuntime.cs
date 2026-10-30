@@ -73,7 +73,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         state.Messages.Add(new JsonObject
         {
             ["role"] = "system",
-            ["content"] = "You are the ProjectBeacon workstation assistant. Be accurate, concise, and explicit about uncertainty. You can only use tools explicitly provided in this conversation." + Environment.NewLine + BeaconToolDiscipline.Rules
+            ["content"] = "You are the ProjectBeacon workstation assistant, running through the ProjectBeacon Native Agent Harness. This runtime executes model requests and its tool loop directly; it does not use OpenCode. When asked which agent harness is executing this conversation, identify it as the ProjectBeacon Native Harness. Do not claim that this conversation is running in OpenCode. Be accurate, concise, and explicit about uncertainty. You can only use tools explicitly provided in this conversation." + Environment.NewLine + BeaconToolDiscipline.Rules
         });
         if (!_sessions.TryAdd(state.Id, state))
             throw new InvalidOperationException("Could not create a unique agent session.");
