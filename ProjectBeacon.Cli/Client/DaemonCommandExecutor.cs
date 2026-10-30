@@ -251,7 +251,16 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return (false, null, $"opencode connections {(int)response.StatusCode}");
                 var body = await response.Content.ReadAsStringAsync(ct);
                 var applied = OpencodeConfig.ApplyOpenCodeConnections(body);
-                evalOpenCode!.SetEnvironment(applied.Environment);
+                var evalEnvironment = new Dictionary<string, string>(applied.Environment, StringComparer.Ordinal)
+                {
+                    ["BEACON_PIPELINE_ROLE"] = "Eval"
+                };
+                var evalTaskId = ReadGuid(root, "taskId");
+                if (evalTaskId == Guid.Empty)
+                    return (false, null, "OpenCode eval requires taskId.");
+                evalEnvironment["BEACON_TASK_ID"] = evalTaskId.ToString("D");
+                evalEnvironment.Remove("BEACON_SUBTASK_ID");
+                evalOpenCode!.SetEnvironment(evalEnvironment);
             }
 
             AgentHarnessAuthorization? authorization = null;
