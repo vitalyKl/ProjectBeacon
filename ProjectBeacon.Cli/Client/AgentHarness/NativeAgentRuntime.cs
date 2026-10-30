@@ -92,6 +92,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("Prompt text is required.", nameof(text));
         var session = await GetSessionAsync(sessionId, ct);
+        bool recoveredToolCalls;
+        lock (session.Sync)
+            recoveredToolCalls = RecoverInterruptedToolCalls(session);
+        if (recoveredToolCalls)
+            await PersistAsync(session, ct);
+
         var selectedModel = string.IsNullOrWhiteSpace(model) ? session.LastModel : model.Trim();
         if (string.IsNullOrWhiteSpace(selectedModel))
             throw new InvalidOperationException("Select a model before sending a prompt.");
@@ -833,17 +839,22 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private async Task<SessionState> GetSessionAsync(string id, CancellationToken ct)
     {
-        if (_sessions.TryGetValue(id, out var existing))
+        var normalizedId = NormalizeSessionId(id);
+        if (_sessions.TryGetValue(normalizedId, out var existing))
             return existing;
-        var path = TranscriptPath(_loadSettings(), Guid.Empty, id);
+
+        var path = TranscriptPath(_loadSettings(), Guid.Empty, normalizedId);
         if (!File.Exists(path))
             throw new InvalidOperationException("Agent session was not found.");
         var text = await File.ReadAllTextAsync(path, ct);
         var saved = JsonSerializer.Deserialize<PersistedSession>(text, JsonOptions)
             ?? throw new InvalidDataException("Stored agent transcript is invalid.");
+        if (!string.Equals(saved.Id, normalizedId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Stored agent transcript does not match the requested session.");
+
         var state = new SessionState
         {
-            Id = saved.Id,
+            Id = normalizedId,
             Title = saved.Title,
             CreatedAt = saved.CreatedAt,
             TranscriptPath = path,
@@ -855,15 +866,118 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             Usage = saved.Usage,
             TurnStatus = saved.TurnStatus
         };
+        var changed = false;
         lock (state.Sync)
         {
             if (state.TurnStatus is { Ended: false } interrupted)
             {
                 state.TurnStatus = new AgentTurnStatus(true, "aborted", "Client restarted during the previous turn.", interrupted.MessageId);
                 state.Parts = state.Parts.Select(p => p.Complete ? p : p with { Complete = true }).ToList();
+                changed = true;
+            }
+            changed |= RecoverInterruptedToolCalls(state);
+        }
+
+        if (!_sessions.TryAdd(normalizedId, state))
+            return _sessions[normalizedId];
+
+        if (changed)
+        {
+            try
+            {
+                await PersistAsync(state, ct);
+            }
+            catch
+            {
+                _sessions.TryRemove(normalizedId, out _);
+                throw;
             }
         }
-        return _sessions.GetOrAdd(id, state);
+
+        return state;
+    }
+
+    private static string NormalizeSessionId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)
+            || !Guid.TryParseExact(id, "N", out var parsed)
+            || parsed == Guid.Empty)
+            throw new InvalidOperationException("Agent session id is invalid.");
+
+        return parsed.ToString("N");
+    }
+
+    /// <summary>
+    /// Repairs interrupted tool-call batches without replaying operations whose execution result
+    /// was not durably recorded. A tool may have completed just before a workstation crash, so the
+    /// recovery result explicitly tells the model to inspect state before attempting the action again.
+    /// Must be called while holding the session lock.
+    /// </summary>
+    private static bool RecoverInterruptedToolCalls(SessionState session)
+    {
+        var changed = false;
+        for (var i = 0; i < session.Messages.Count; i++)
+        {
+            var assistant = session.Messages[i];
+            if (!string.Equals(assistant["role"]?.GetValue<string>(), "assistant", StringComparison.Ordinal)
+                || assistant["tool_calls"] is not JsonArray calls
+                || calls.Count == 0)
+                continue;
+
+            var expected = new List<(string Id, string Name)>();
+            foreach (var call in calls)
+            {
+                var id = call?["id"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(id))
+                    continue;
+                var name = call?["function"]?["name"]?.GetValue<string>();
+                expected.Add((id, string.IsNullOrWhiteSpace(name) ? "unknown_tool" : name));
+            }
+            if (expected.Count == 0)
+                continue;
+
+            var recorded = new HashSet<string>(StringComparer.Ordinal);
+            var insertAt = i + 1;
+            while (insertAt < session.Messages.Count
+                && string.Equals(session.Messages[insertAt]["role"]?.GetValue<string>(), "tool", StringComparison.Ordinal))
+            {
+                var resultId = session.Messages[insertAt]["tool_call_id"]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(resultId))
+                    recorded.Add(resultId);
+                insertAt++;
+            }
+
+            foreach (var call in expected)
+            {
+                if (recorded.Contains(call.Id))
+                    continue;
+
+                const string recoveryMessage =
+                    "Tool execution was interrupted before its result was durably recorded. The operation may or may not have completed. " +
+                    "It was not replayed automatically to avoid duplicating side effects. Inspect the current state before retrying.";
+
+                session.Messages.Insert(insertAt++, new JsonObject
+                {
+                    ["role"] = "tool",
+                    ["tool_call_id"] = call.Id,
+                    ["content"] = recoveryMessage
+                });
+                session.Parts.Add(new AgentMessagePart(
+                    "assistant",
+                    "tool",
+                    $"{call.Name}: {recoveryMessage}",
+                    $"native-recovery:{session.Id}:{call.Id}",
+                    Complete: true,
+                    Tool: call.Name,
+                    ToolStatus: "error",
+                    ToolResult: recoveryMessage));
+                changed = true;
+            }
+
+            i = insertAt - 1;
+        }
+
+        return changed;
     }
 
     private static string TranscriptPath(WorkstationSettings settings, Guid _, string? id)
