@@ -174,6 +174,14 @@ public static partial class McpStdioServer
             || string.Equals(role, "Review", StringComparison.OrdinalIgnoreCase))
             return null;
 
+        // Non-pipeline chat/eval commands are project-scoped by their short-lived API token.
+        // A task id alone must not accidentally turn an ordinary task eval into an Actor session
+        // or make its tool list disappear when the task has no subtasks.
+        var hasExplicitSubtaskScope = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var scopedSubtaskId)
+            && scopedSubtaskId != Guid.Empty;
+        if (!IsPipelineRole(role) && !hasExplicitSubtaskScope)
+            return null;
+
         if (string.Equals(role, "Actor", StringComparison.OrdinalIgnoreCase))
         {
             if (api is null

@@ -9,6 +9,11 @@ public static partial class McpStdioServer
     {
         var tools = Tools();
         var role = env.Get("BEACON_PIPELINE_ROLE");
+        var hasExplicitSubtaskScope = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var scopedSubtaskId)
+            && scopedSubtaskId != Guid.Empty;
+        if (!IsPipelineRole(role) && !hasExplicitSubtaskScope)
+            return Result(id, new JsonObject { ["tools"] = tools });
+
         if (api is null || !Guid.TryParse(env.Get("BEACON_TASK_ID"), out var taskId) || taskId == Guid.Empty)
         {
             if (IsPipelineRole(role))
