@@ -239,7 +239,9 @@
         await ReloadDevices();
     }
 
-    private async Task ReloadDevices(bool loadWorkstationSettings = true)
+    private Task ReloadDevices() => ReloadDevices(loadWorkstationSettings: true);
+
+    private async Task ReloadDevices(bool loadWorkstationSettings)
     {
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
