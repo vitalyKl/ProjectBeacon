@@ -223,6 +223,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         if (string.IsNullOrWhiteSpace(command.LocalRoot))
             return (false, null, CommandSandbox.RuntimeRequired);
 
+        ClientOpenCodeServe? evalOpenCode = null;
         IAgentRuntime runtime;
         var ownsRuntime = false;
         if (requestedRuntime == "native")
@@ -234,22 +235,23 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         }
         else
         {
-            runtime = _gate.Runtime is OpenCodeAgentRuntime
-                ? _gate.Runtime
-                : new OpenCodeAgentRuntime(_gate.OpenCode);
-            ownsRuntime = !ReferenceEquals(runtime, _gate.Runtime);
+            // Eval runs use a private OpenCode server because they execute in a detached git
+            // worktree. Never restart the user's interactive OpenCode server into a temporary cwd.
+            evalOpenCode = new ClientOpenCodeServe();
+            runtime = new OpenCodeAgentRuntime(evalOpenCode);
+            ownsRuntime = true;
         }
 
         try
         {
-            if (requestedRuntime == "opencode" && !ReferenceEquals(runtime, _gate.Runtime))
+            if (requestedRuntime == "opencode")
             {
                 var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
                 if (!response.IsSuccessStatusCode)
                     return (false, null, $"opencode connections {(int)response.StatusCode}");
                 var body = await response.Content.ReadAsStringAsync(ct);
                 var applied = OpencodeConfig.ApplyOpenCodeConnections(body);
-                _gate.OpenCode.SetEnvironment(applied.Environment);
+                evalOpenCode!.SetEnvironment(applied.Environment);
             }
 
             AgentHarnessAuthorization? authorization = null;
@@ -295,7 +297,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             var evalAction = await WorkstationEval.RunEvalTurnAsync(
                 command.LocalRoot,
                 payload,
-                requestedRuntime == "opencode" ? _gate.OpenCode : null,
+                evalOpenCode,
                 runtime,
                 _timing.ChatPollInterval,
                 _timing.ChatIdleTimeout,
@@ -311,8 +313,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             if (ownsRuntime)
                 await runtime.DisposeAsync();
+            if (evalOpenCode is not null)
+                await evalOpenCode.DisposeAsync();
         }
     }
+
 
     private async Task<(bool Ok, string? Result, string? Error)> RunPipelineSessionAsync(
         WorkstationDaemon.CommandWire command,
