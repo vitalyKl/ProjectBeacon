@@ -2066,4 +2066,16 @@ orthstar</value>
   <data name="ChatContextWindow" xml:space="preserve">
     <value>コンテキストウィンドウ: {0} トークン</value>
   </data>
+  <data name="AgentRuntime" xml:space="preserve">
+    <value>エージェントランタイム</value>
+  </data>
+  <data name="AgentRuntimeOpenCode" xml:space="preserve">
+    <value>OpenCode（既定）</value>
+  </data>
+  <data name="AgentRuntimeNative" xml:space="preserve">
+    <value>ネイティブハーネス（実験的）</value>
+  </data>
+  <data name="AgentRuntimeRestartHint" xml:space="preserve">
+    <value>ランタイムの変更はワークステーション クライアントの再起動後に反映されます。</value>
+  </data>
 </root>

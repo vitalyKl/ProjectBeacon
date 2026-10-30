@@ -147,6 +147,19 @@ public sealed class WorkstationActionsTests : IDisposable
     }
 
     [Fact]
+    public void SaveWorkstation_PersistsNativeRuntime_AndRejectsUnknownValues()
+    {
+        var file = Path.Combine(_dir, "workstation-runtime.json");
+        Assert.Equal("opencode", new WorkstationSettings().AgentRuntime);
+
+        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"native"}""", file);
+        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+
+        WorkstationSetup.SaveWorkstation("""{"agentRuntime":"future-runtime"}""", file);
+        Assert.Equal("native", WorkstationSettings.Load(file).AgentRuntime);
+    }
+
+    [Fact]
     public void SaveWorkstation_OverInvalidExistingFile_UsesDefaultsAndSaves()
     {
         var file = Path.Combine(_dir, "workstation.json");

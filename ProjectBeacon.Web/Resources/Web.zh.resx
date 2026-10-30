@@ -2066,4 +2066,16 @@ orthstar</value>
   <data name="ChatContextWindow" xml:space="preserve">
     <value>上下文窗口：{0} 个 token</value>
   </data>
+  <data name="AgentRuntime" xml:space="preserve">
+    <value>代理运行时</value>
+  </data>
+  <data name="AgentRuntimeOpenCode" xml:space="preserve">
+    <value>OpenCode（默认）</value>
+  </data>
+  <data name="AgentRuntimeNative" xml:space="preserve">
+    <value>原生代理执行框架（实验性）</value>
+  </data>
+  <data name="AgentRuntimeRestartHint" xml:space="preserve">
+    <value>重启工作站客户端后，运行时更改才会生效。</value>
+  </data>
 </root>
