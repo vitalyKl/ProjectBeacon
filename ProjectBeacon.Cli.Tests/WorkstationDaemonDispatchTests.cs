@@ -241,6 +241,38 @@ public sealed class WorkstationDaemonDispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task ChatEnsureSession_DoesNotFallBackToOpenCodeWhenWorkstationSettingsCannotBeLoaded()
+    {
+        var settingsPath = Path.Combine(_dir, "workstation-invalid.json");
+        File.WriteAllText(settingsPath, "<html>invalid workstation settings</html>");
+
+        using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
+        await using var llama = new ClientLlamaSwap
+        {
+            SkipRealProcess = true,
+            ConfigFile = Path.Combine(_dir, "invalid-settings-config.yaml")
+        };
+        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
+        await using var daemon = new WorkstationDaemon(
+            http,
+            llama,
+            () => WorkstationSettings.Load(settingsPath),
+            openCode: openCode);
+
+        var (ok, _, error) = await daemon.ExecuteAsync(new WorkstationDaemon.CommandWire
+        {
+            Id = Guid.NewGuid(),
+            Kind = WorkstationCommandKind.ChatEnsureSession,
+            LocalRoot = _dir,
+            PayloadJson = JsonSerializer.Serialize(new { title = "Do not silently switch runtimes" })
+        }, CancellationToken.None);
+
+        Assert.False(ok);
+        Assert.Contains("Could not load workstation settings", error);
+        Assert.Equal(0, openCode.StartCount);
+    }
+
+    [Fact]
     public async Task RunPipelineSession_RequiresExplicitScopedSessionPayload()
     {
         using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
