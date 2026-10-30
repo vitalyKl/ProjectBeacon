@@ -225,6 +225,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
 
         ClientOpenCodeServe? evalOpenCode = null;
         Dictionary<string, string>? evalProviderEnvironment = null;
+        AgentHarnessAuthorization? authorization = null;
         IAgentRuntime runtime;
         var ownsRuntime = false;
         if (requestedRuntime == "native")

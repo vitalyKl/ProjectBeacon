@@ -344,7 +344,7 @@ public sealed partial class DeviceHandlerTests
             await using var db = Factory().CreateDbContext();
             db.Tasks.Add(task);
             db.EvalRuns.Add(run);
-            var work = WorkstationCommand.Create(
+            var work = Domain.Entities.Devices.WorkstationCommand.Create(
                 deviceId, WorkstationCommandKind.RunEvalTurn, payload, project.Id, owner.Id);
             work.Claim(TimeSpan.FromMinutes(10), instanceId);
             db.WorkstationCommands.Add(work);
