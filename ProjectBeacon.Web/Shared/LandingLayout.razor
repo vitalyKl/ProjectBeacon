@@ -8,32 +8,41 @@
 @inject NavigationManager Navigation
 @inject Microsoft.Extensions.Configuration.IConfiguration Config
 
-<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="false" ObserveSystemDarkModeChange="false" />
+<MudThemeProvider Theme="BeaconTheme.Theme" IsDarkMode="true" ObserveSystemDarkModeChange="false" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 <MudPopoverProvider />
 
 <div class="landing-shell">
     <header class="landing-nav">
-        <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
-        <MudSpacer />
-        <LanguageSwitcher />
-        @if (!_inviteOnly)
-        {
-            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/register">@L["Register"]</MudButton>
-        }
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">@L["Login"]</MudButton>
+        <a class="landing-brand" href="/" aria-label="ProjectBeacon home">
+            <span class="landing-brand-symbol"></span>
+            <span>Project<span>Beacon</span></span>
+        </a>
+        <nav class="landing-nav-links" aria-label="Main navigation">
+            <a href="/#capabilities">@L["LandingFeaturesTitle"]</a>
+            <a href="/#workflow">@L["LandingHowTitle"]</a>
+            <a href="/#questions">@L["LandingFaqTitle"]</a>
+        </nav>
+        <div class="landing-nav-actions">
+            <LanguageSwitcher />
+            @if (!_inviteOnly)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="/register">@L["Register"]</MudButton>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">@L["Login"]</MudButton>
+        </div>
     </header>
     <main class="landing-main">
         @Body
     </main>
     <footer class="landing-footer">
-        <MudText Typo="Typo.caption">@AppVersion.Informational</MudText>
-        <MudStack Row="true" Spacing="2">
-            <MudButton Variant="Variant.Text" Size="Size.Small" Href="/login">@L["Login"]</MudButton>
+        <div class="landing-footer-brand"><span class="landing-brand-symbol"></span><strong>ProjectBeacon</strong><span>·</span><span>@L["LandingFooterTagline"]</span></div>
+        <div class="landing-footer-meta">
+            <MudText Typo="Typo.caption">v @AppVersion.Informational</MudText>
             <MudButton Variant="Variant.Text" Size="Size.Small" Href="/forgot">@L["ForgotPassword"]</MudButton>
             <MudButton Variant="Variant.Text" Size="Size.Small" Href="/recover">@L["RecoverPassword"]</MudButton>
-        </MudStack>
+        </div>
     </footer>
 </div>
 
