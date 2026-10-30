@@ -54,12 +54,13 @@ public sealed class McpStdioServerTests
     }
 
     [Fact]
-    public async Task TaskScopedChatWithoutPipelineRoleRetainsGeneralTools()
+    public async Task ToolsList_EvalRoleKeepsWorkspaceToolsButHidesPipelineLifecycleTools()
     {
         var taskId = Guid.NewGuid();
         var apiCalls = 0;
         var env = McpEnvironment.Of(
             ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Eval"),
             ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
         using var http = new HttpClient(new StubApiHandler(_ =>
         {
@@ -74,22 +75,25 @@ public sealed class McpStdioServerTests
         Directory.CreateDirectory(root);
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(root, "note.txt"), "task-scoped chat still works");
+            await File.WriteAllTextAsync(Path.Combine(root, "note.txt"), "eval workspace tools are available");
             using var input = new MemoryStream();
             WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
             WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"read_file","arguments":{"path":"note.txt"}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_create_subtask","arguments":{"instructions":"not allowed"}}}""");
             input.Position = 0;
             using var output = new MemoryStream();
             await McpStdioServer.RunAsync(root, input, output, api, env);
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
 
-            Assert.Equal(2, frames.Count);
+            Assert.Equal(3, frames.Count);
             var tools = frames[0]["result"]!["tools"]!.ToJsonString();
             Assert.Contains("read_file", tools, StringComparison.Ordinal);
             Assert.Contains("write_file", tools, StringComparison.Ordinal);
-            Assert.Contains("task_create_subtask", tools, StringComparison.Ordinal);
-            Assert.Contains("task-scoped chat still works", frames[1].ToJsonString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("task_create_subtask", tools, StringComparison.Ordinal);
+            Assert.DoesNotContain("task_review_verdict", tools, StringComparison.Ordinal);
+            Assert.Contains("eval workspace tools are available", frames[1].ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains("not allowed for the Eval", frames[2].ToJsonString(), StringComparison.Ordinal);
             Assert.Equal(0, apiCalls);
         }
         finally

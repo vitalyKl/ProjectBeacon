@@ -22,7 +22,9 @@ public sealed class WorkstationEvalRuntimeTests
             Guid.NewGuid(),
             1,
             root,
-            DateTime.UtcNow.AddMinutes(2));
+            DateTime.UtcNow.AddMinutes(2),
+            null,
+            "Eval");
 
         try
         {

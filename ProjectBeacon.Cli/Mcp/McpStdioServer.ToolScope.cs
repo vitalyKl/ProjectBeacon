@@ -9,10 +9,8 @@ public static partial class McpStdioServer
     {
         var tools = Tools();
         var role = env.Get("BEACON_PIPELINE_ROLE");
-        var hasExplicitSubtaskScope = Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var scopedSubtaskId)
-            && scopedSubtaskId != Guid.Empty;
-        if (!IsPipelineRole(role) && !hasExplicitSubtaskScope)
-            return Result(id, new JsonObject { ["tools"] = tools });
+        if (string.Equals(role, "Eval", StringComparison.OrdinalIgnoreCase))
+            return Result(id, new JsonObject { ["tools"] = FilterToolsByNameExcluding(tools, EvalForbiddenTools) });
 
         if (api is null || !Guid.TryParse(env.Get("BEACON_TASK_ID"), out var taskId) || taskId == Guid.Empty)
         {
@@ -114,6 +112,14 @@ public static partial class McpStdioServer
         "subtask_report_result", "pipeline_fail_subtask"
     ];
 
+    private static readonly string[] EvalForbiddenTools =
+    [
+        "task_create_subtask", "subtask_report_result", "pipeline_fail_subtask",
+        "task_review_verdict", "task_pipeline_status", "pipeline_start",
+        "pipeline_start_actor", "pipeline_launch_session", "pipeline_start_review",
+        "pipeline_approve", "pipeline_force_close"
+    ];
+
     private static readonly string[] ActorForbiddenTools =
     [
         "task_create_subtask", "task_review_verdict", "task_pipeline_status",
@@ -130,6 +136,19 @@ public static partial class McpStdioServer
         "create_milestone", "update_milestone", "delete_milestone", "close_milestone", "reopen_milestone",
         "add_label_path", "generate_report"
     ];
+
+    private static JsonArray FilterToolsByNameExcluding(JsonArray tools, IReadOnlyList<string> deniedNames)
+    {
+        var denied = deniedNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var result = new JsonArray();
+        foreach (var tool in tools)
+        {
+            var name = tool?["name"]?.GetValue<string>();
+            if (name is not null && !denied.Contains(name))
+                result.Add(tool!.DeepClone());
+        }
+        return result;
+    }
 
     private static JsonArray FilterToolsByName(JsonArray tools, IReadOnlyList<string> names)
     {

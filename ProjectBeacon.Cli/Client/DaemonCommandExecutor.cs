@@ -290,7 +290,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     Path.GetFullPath(command.LocalRoot),
                     token.ExpiresAt,
                     null,
-                    null,
+                    "Eval",
                     token.AllowedMcpTools);
             }
 
