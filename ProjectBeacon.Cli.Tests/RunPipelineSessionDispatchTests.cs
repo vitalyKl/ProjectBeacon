@@ -160,7 +160,8 @@ public sealed class RunPipelineSessionDispatchTests
                     llama,
                     llamaSync,
                     settingsLoader,
-                    providerFactory: (_, _, _) => new StubProvider(_ => { }, "aborted")));
+                    providerFactory: (_, _, _) => new StubProvider(_ => { }, "aborted"),
+                    mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(new StubMcpToolClient())));
             var state = new DaemonRuntimeState("http://localhost", null);
             var timing = new DaemonTiming
             {
