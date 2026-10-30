@@ -665,7 +665,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         if (limit > 0 && EstimateTokens(snapshot) > (int)(limit * 0.82) && snapshot.Count > 3)
         {
             var preserve = Math.Min(6, snapshot.Count - 1);
-            var splitAt = snapshot.Count - preserve;
+            var splitAt = FindSafeContextSplitIndex(snapshot, snapshot.Count - preserve);
             var keep = snapshot.Skip(splitAt).ToList();
             var old = snapshot.Skip(1).Take(splitAt - 1).ToList();
             if (old.Count > 0)
@@ -712,6 +712,46 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         foreach (var message in snapshot)
             result.Add(message.DeepClone());
         return result;
+    }
+
+    internal static int FindSafeContextSplitIndex(IReadOnlyList<JsonObject> messages, int requestedIndex)
+    {
+        if (messages.Count <= 1)
+            return messages.Count;
+
+        var splitAt = Math.Clamp(requestedIndex, 1, messages.Count);
+        for (var i = 1; i < messages.Count; i++)
+        {
+            var message = messages[i];
+            if (!string.Equals(message["role"]?.GetValue<string>(), "assistant", StringComparison.Ordinal)
+                || message["tool_calls"] is not JsonArray calls
+                || calls.Count == 0)
+                continue;
+
+            var pendingIds = calls
+                .Select(call => call?["id"]?.GetValue<string>())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+            var groupEnd = i + 1;
+            while (groupEnd < messages.Count
+                && string.Equals(messages[groupEnd]["role"]?.GetValue<string>(), "tool", StringComparison.Ordinal))
+            {
+                var toolCallId = messages[groupEnd]["tool_call_id"]?.GetValue<string>();
+                if (toolCallId is null || !pendingIds.Remove(toolCallId))
+                    break;
+                groupEnd++;
+            }
+
+            // Keep the assistant tool-call message and all matching results together. If a crash
+            // left the group incomplete, retain the whole unfinished group rather than sending
+            // an invalid orphaned tool call to the provider after compaction.
+            if (splitAt > i && splitAt < groupEnd)
+                splitAt = groupEnd;
+            else if (splitAt == i + 1 && pendingIds.Count > 0)
+                splitAt = i;
+        }
+
+        return Math.Clamp(splitAt, 1, messages.Count);
     }
 
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
