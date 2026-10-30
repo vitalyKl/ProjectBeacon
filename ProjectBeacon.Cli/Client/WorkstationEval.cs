@@ -66,6 +66,7 @@ public static class WorkstationEval
 
         var model = payload.TryGetProperty("model", out var modelElement) ? modelElement.GetString() : null;
         var title = payload.TryGetProperty("title", out var titleElement) ? titleElement.GetString() : "Beacon eval";
+        string? pinnedRevision = null;
         var controls = payload.TryGetProperty("controls", out var controlsElement) && controlsElement.ValueKind == JsonValueKind.Object
             ? controlsElement
             : default;
@@ -100,7 +101,6 @@ public static class WorkstationEval
         }
 
         double? temperature = null;
-        string? pinnedRevision = null;
         string? reasoningEffort = null;
         string? toolPermissions = null;
         if (controls.ValueKind == JsonValueKind.Object)
