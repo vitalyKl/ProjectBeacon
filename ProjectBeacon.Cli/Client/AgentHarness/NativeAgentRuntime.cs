@@ -474,7 +474,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         session.Messages.Add(assistantToolMessage);
                     await PersistAsync(session, ct);
 
-                    foreach (var call in toolCalls.Values)
+                    var executedTools = await Task.WhenAll(toolCalls.Values.Select(async call =>
                     {
                         ct.ThrowIfCancellationRequested();
                         string toolResult;
@@ -533,8 +533,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             toolResult = "Tool error: " + SafeError(ex);
                         }
 
-                        toolResult = TruncateToolResult(toolResult);
+                        return (Call: call, Result: TruncateToolResult(toolResult));
+                    }));
 
+                    // Execute calls concurrently, but append their results in the model's index
+                    // order so the transcript remains deterministic and every tool_call_id matches.
+                    foreach (var executed in executedTools.OrderBy(item => item.Call.Index))
+                    {
+                        var call = executed.Call;
+                        var toolResult = executed.Result;
                         lock (session.Sync)
                         {
                             session.Messages.Add(new JsonObject

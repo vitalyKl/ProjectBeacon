@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
@@ -24,13 +25,16 @@ internal sealed class McpStdioClient : IMcpToolClient
     ];
 
     private readonly Process _process;
-    private readonly SemaphoreSlim _protocol = new(1, 1);
+    private readonly SemaphoreSlim _write = new(1, 1);
+    private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonObject>> _pending = new();
+    private readonly Task _readerTask;
     private int _nextId;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     private McpStdioClient(Process process)
     {
         _process = process;
+        _readerTask = ReadResponsesAsync();
         _ = DrainStandardErrorAsync(process);
     }
 
@@ -137,8 +141,9 @@ internal sealed class McpStdioClient : IMcpToolClient
             try { _process.Kill(entireProcessTree: true); } catch { }
             try { await _process.WaitForExitAsync(CancellationToken.None); } catch { }
         }
+        try { await _readerTask.WaitAsync(TimeSpan.FromSeconds(2)); } catch { }
         _process.Dispose();
-        _protocol.Dispose();
+        _write.Dispose();
     }
 
     private async Task InitializeAsync(CancellationToken ct)
@@ -188,26 +193,53 @@ internal sealed class McpStdioClient : IMcpToolClient
 
     private async Task<JsonObject> RequestAsync(string method, JsonObject parameters, CancellationToken ct)
     {
-        await _protocol.WaitAsync(ct);
+        ThrowIfUnavailable();
+        var id = Interlocked.Increment(ref _nextId);
+        var completion = new TaskCompletionSource<JsonObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_pending.TryAdd(id, completion))
+            throw new InvalidOperationException("Could not reserve an MCP request id.");
+
         try
         {
-            ThrowIfUnavailable();
-            var id = Interlocked.Increment(ref _nextId);
-            var request = new JsonObject
+            await _write.WaitAsync(ct);
+            try
             {
-                ["jsonrpc"] = "2.0",
-                ["id"] = id,
-                ["method"] = method,
-                ["params"] = parameters
-            };
-            await _process.StandardInput.WriteLineAsync(request.ToJsonString().AsMemory(), ct);
-            await _process.StandardInput.FlushAsync(ct);
+                ThrowIfUnavailable();
+                var request = new JsonObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = id,
+                    ["method"] = method,
+                    ["params"] = parameters
+                };
+                await _process.StandardInput.WriteLineAsync(request.ToJsonString().AsMemory(), ct);
+                await _process.StandardInput.FlushAsync(ct);
+            }
+            finally
+            {
+                _write.Release();
+            }
 
+            // One stdout reader correlates responses by JSON-RPC id. Requests can therefore
+            // overlap without consuming one another's responses or blocking behind a tool call.
+            return await completion.Task.WaitAsync(ct);
+        }
+        finally
+        {
+            _pending.TryRemove(id, out _);
+        }
+    }
+
+    private async Task ReadResponsesAsync()
+    {
+        Exception? terminalError = null;
+        try
+        {
             while (true)
             {
-                var line = await _process.StandardOutput.ReadLineAsync(ct);
+                var line = await _process.StandardOutput.ReadLineAsync();
                 if (line is null)
-                    throw new EndOfStreamException("The local MCP server closed its output stream.");
+                    break;
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
@@ -221,27 +253,45 @@ internal sealed class McpStdioClient : IMcpToolClient
                     throw new InvalidDataException("The local MCP server returned invalid JSON-RPC data.", ex);
                 }
 
-                if (response is null || response["id"]?.GetValue<int>() != id)
-                    continue; // Ignore notifications and any unrelated message without exposing stderr.
+                if (response is null
+                    || response["id"] is not JsonValue idValue
+                    || !idValue.TryGetValue<int>(out var id)
+                    || !_pending.TryRemove(id, out var completion))
+                    continue; // Ignore notifications and responses for cancelled requests.
 
                 if (response["error"] is { } error)
                 {
                     var code = error["code"]?.ToJsonString() ?? "unknown";
-                    throw new InvalidDataException($"The local MCP request '{method}' failed (code {code}).");
+                    completion.TrySetException(new InvalidDataException($"The local MCP request failed (code {code})."));
+                    continue;
                 }
-                return response["result"] as JsonObject
-                    ?? throw new InvalidDataException($"The local MCP request '{method}' returned no result.");
+
+                if (response["result"] is JsonObject result)
+                    completion.TrySetResult(result);
+                else
+                    completion.TrySetException(new InvalidDataException("The local MCP request returned no result."));
             }
+
+            terminalError = new EndOfStreamException("The local MCP server closed its output stream.");
+        }
+        catch (Exception ex)
+        {
+            terminalError = ex;
         }
         finally
         {
-            _protocol.Release();
+            var failure = terminalError ?? new IOException("The local MCP response stream stopped.");
+            foreach (var pending in _pending)
+            {
+                if (_pending.TryRemove(pending.Key, out var completion))
+                    completion.TrySetException(failure);
+            }
         }
     }
 
     private async Task WriteNotificationAsync(string method, JsonObject parameters, CancellationToken ct)
     {
-        await _protocol.WaitAsync(ct);
+        await _write.WaitAsync(ct);
         try
         {
             ThrowIfUnavailable();
@@ -256,7 +306,7 @@ internal sealed class McpStdioClient : IMcpToolClient
         }
         finally
         {
-            _protocol.Release();
+            _write.Release();
         }
     }
 

@@ -163,6 +163,137 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeExecutesMultipleToolCallsConcurrently()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-parallel-tools-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var client = new ConcurrentMcpToolClient();
+        var provider = new ConcurrentToolProvider();
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(client));
+        try
+        {
+            var session = await runtime.CreateSessionAsync("parallel tools", CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test", "ephemeral", Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+                1, project, DateTime.UtcNow.AddMinutes(2));
+            await runtime.SendPromptAsync(
+                session,
+                "Read two files.",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+
+            AgentTurnStatus? status = null;
+            for (var i = 0; i < 200; i++)
+            {
+                status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                if (status?.Ended == true)
+                    break;
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            }
+
+            Assert.True(status?.Ended, status?.Error ?? "The parallel tool turn did not finish.");
+            Assert.Equal("stop", status!.Finish);
+            Assert.Equal(2, client.CallCount);
+            Assert.Equal(2, client.MaxConcurrentCalls);
+            Assert.Equal(2, provider.ToolResultsObserved);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
+    public async Task NativeRuntimeRetriesTransientProviderFailureBeforeAnyOutput()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-retry-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var provider = new TransientThenSuccessProvider();
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control, llama, new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            providerFactory: (_, _, _) => provider);
+        try
+        {
+            var session = await runtime.CreateSessionAsync("retry", CancellationToken.None);
+            await runtime.SendPromptAsync(session, "Retry once.", "beacon-local/test-model", CancellationToken.None);
+            AgentTurnStatus? status = null;
+            for (var i = 0; i < 200; i++)
+            {
+                status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                if (status?.Ended == true) break;
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            }
+
+            Assert.True(status?.Ended);
+            Assert.Equal("stop", status!.Finish);
+            Assert.Equal(2, provider.CallCount);
+            var parts = new List<AgentMessagePart>();
+            await foreach (var part in runtime.StreamPartsAsync(session, CancellationToken.None)) parts.Add(part);
+            Assert.Contains(parts, part => part.Kind == "text" && part.Body == "Retry succeeded.");
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
+    public async Task NativeRuntimeDoesNotRetryTransientFailureAfterPartialOutput()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-partial-retry-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var provider = new PartialThenFailureProvider();
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control, llama, new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            providerFactory: (_, _, _) => provider);
+        try
+        {
+            var session = await runtime.CreateSessionAsync("partial failure", CancellationToken.None);
+            await runtime.SendPromptAsync(session, "Do not duplicate the partial response.", "beacon-local/test-model", CancellationToken.None);
+            AgentTurnStatus? status = null;
+            for (var i = 0; i < 200; i++)
+            {
+                status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                if (status?.Ended == true) break;
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+            }
+
+            Assert.True(status?.Ended);
+            Assert.Equal("error", status!.Finish);
+            Assert.Equal(1, provider.CallCount);
+            Assert.Contains("HTTP 503", status.Error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeRejectsSessionIdsThatCouldEscapeTranscriptDirectory()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-session-path-" + Guid.NewGuid().ToString("N"));
@@ -1248,6 +1379,116 @@ public sealed class NativeAgentRuntimeTests
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
         }
+    }
+
+    private sealed class TransientThenSuccessProvider : IChatProvider
+    {
+        private int _callCount;
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                await Task.Yield();
+                throw new ChatProviderException("provider HTTP 503", (int)HttpStatusCode.ServiceUnavailable, retryable: true);
+            }
+
+            ct.ThrowIfCancellationRequested();
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Retry succeeded.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+        }
+    }
+
+    private sealed class PartialThenFailureProvider : IChatProvider
+    {
+        private int _callCount;
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            Interlocked.Increment(ref _callCount);
+            ct.ThrowIfCancellationRequested();
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Partial output.");
+            await Task.Yield();
+            throw new ChatProviderException("provider HTTP 503", (int)HttpStatusCode.ServiceUnavailable, retryable: true);
+        }
+    }
+
+    private sealed class ConcurrentToolProvider : IChatProvider
+    {
+        private int _callCount;
+        public int ToolResultsObserved { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta, ToolIndex: 0, ToolCallId: "parallel-1", ToolName: "read_file", ToolArguments: "{\\"path\\":\\"a.txt\\"}");
+                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta, ToolIndex: 1, ToolCallId: "parallel-2", ToolName: "read_file", ToolArguments: "{\\"path\\":\\"b.txt\\"}");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
+
+            ToolResultsObserved = request.Messages.Count(message => message?[\\"role\\"]?.GetValue<string>() == "tool");
+            if (ToolResultsObserved != 2)
+                throw new InvalidOperationException("Both parallel tool results must be present before the next model step.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Both files read.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class ConcurrentMcpToolClient : IMcpToolClient
+    {
+        private readonly TaskCompletionSource<bool> _bothStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _callCount;
+        private int _activeCalls;
+        private int _maxConcurrentCalls;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+        public int MaxConcurrentCalls => Volatile.Read(ref _maxConcurrentCalls);
+        public JsonArray OpenAiTools => new()
+        {
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject
+                {
+                    ["name"] = "read_file",
+                    ["description"] = "Read a file.",
+                    ["parameters"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject { ["path"] = new JsonObject { ["type"] = "string" } } }
+                }
+            }
+        };
+
+        public async Task<McpToolResult> CallToolAsync(string name, JsonObject arguments, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _callCount);
+            var active = Interlocked.Increment(ref _activeCalls);
+            int observed;
+            do
+            {
+                observed = Volatile.Read(ref _maxConcurrentCalls);
+                if (active <= observed) break;
+            } while (Interlocked.CompareExchange(ref _maxConcurrentCalls, active, observed) != observed);
+            if (CallCount >= 2) _bothStarted.TrySetResult(true);
+            await _bothStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+            await Task.Delay(20, ct);
+            Interlocked.Decrement(ref _activeCalls);
+            return new McpToolResult(false, arguments["path"]?.GetValue<string>() ?? "ok");
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class StubProvider : IChatProvider

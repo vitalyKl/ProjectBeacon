@@ -57,6 +57,33 @@ public sealed class OpenAiCompatProviderTests
     }
 
     [Fact]
+    public async Task PreservesMultipleToolIndexesAndUnicodeArgumentFragments()
+    {
+        const string stream = """
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-a","function":{"name":"read_file","arguments":"{\\"path\\":\\"src/"}} ,{"index":1,"id":"call-b","function":{"name":"read_file","arguments":"{\\"path\\":\\"данные/"}}]},"finish_reason":null}]}
+
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"alpha.cs\\"}"}} ,{"index":1,"function":{"arguments":"файл.cs\\"}"}}]},"finish_reason":"tool_calls"}]}
+
+            data: [DONE]
+
+            """;
+        using var http = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(stream, Encoding.UTF8, "text/event-stream")
+        }));
+        var provider = new OpenAiCompatProvider(http, "http://127.0.0.1:8080/v1", null);
+        var events = new List<ChatProviderEvent>();
+        await foreach (var item in provider.StreamAsync(new ChatProviderRequest("model", new JsonArray(), new JsonArray()), CancellationToken.None))
+            events.Add(item);
+
+        var calls = events.Where(item => item.Kind == ChatProviderEventKind.ToolCallDelta).ToArray();
+        Assert.Contains(calls, item => item.ToolIndex == 0 && item.ToolCallId == "call-a");
+        Assert.Contains(calls, item => item.ToolIndex == 1 && item.ToolCallId == "call-b");
+        Assert.Equal("{\\"path\\":\\"src/", string.Concat(calls.Where(item => item.ToolIndex == 0).Select(item => item.ToolArguments)));
+        Assert.Equal("{\\"path\\":\\"данные/файл.cs\\"}", string.Concat(calls.Where(item => item.ToolIndex == 1).Select(item => item.ToolArguments)));
+    }
+
+    [Fact]
     public async Task RejectsStreamThatEndsAfterToolCallFinishWithoutDoneSentinel()
     {
         const string stream = """
