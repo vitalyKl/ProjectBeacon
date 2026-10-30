@@ -224,6 +224,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             return (false, null, CommandSandbox.RuntimeRequired);
 
         ClientOpenCodeServe? evalOpenCode = null;
+        Dictionary<string, string>? evalProviderEnvironment = null;
         IAgentRuntime runtime;
         var ownsRuntime = false;
         if (requestedRuntime == "native")
@@ -251,56 +252,57 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return (false, null, $"opencode connections {(int)response.StatusCode}");
                 var body = await response.Content.ReadAsStringAsync(ct);
                 var applied = OpencodeConfig.ApplyOpenCodeConnections(body);
-                var evalEnvironment = new Dictionary<string, string>(applied.Environment, StringComparer.Ordinal)
-                {
-                    ["BEACON_PIPELINE_ROLE"] = "Eval"
-                };
-                var evalTaskId = ReadGuid(root, "taskId");
-                if (evalTaskId == Guid.Empty)
-                    return (false, null, "OpenCode eval requires taskId.");
-                evalEnvironment["BEACON_TASK_ID"] = evalTaskId.ToString("D");
-                evalEnvironment.Remove("BEACON_SUBTASK_ID");
-                evalOpenCode!.SetEnvironment(evalEnvironment);
+                evalProviderEnvironment = new Dictionary<string, string>(applied.Environment, StringComparer.Ordinal);
             }
 
-            AgentHarnessAuthorization? authorization = null;
-            if (requestedRuntime == "native")
+            if (_http.BaseAddress is null)
+                return (false, null, "The daemon API base URL is not configured.");
+
+            var taskId = ReadGuid(root, "taskId");
+            var evalRunId = ReadGuid(root, "evalRunId");
+            if (taskId == Guid.Empty || evalRunId == Guid.Empty)
+                return (false, null, "Eval requires taskId and evalRunId.");
+
+            using var tokenResponse = await _http.PostAsJsonAsync(
+                $"/v1/commands/{command.Id:D}/harness-token",
+                new { generation = command.Generation },
+                ct);
+            if (!tokenResponse.IsSuccessStatusCode)
+                return (false, null, $"Could not issue the short-lived eval harness token (HTTP {(int)tokenResponse.StatusCode}).");
+            var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+            if (token is null
+                || string.IsNullOrWhiteSpace(token.Token)
+                || token.ProjectId == Guid.Empty
+                || token.CommandId != command.Id
+                || token.Generation != command.Generation
+                || token.ExpiresAt <= DateTime.UtcNow)
+                return (false, null, "The API returned an invalid or expired eval harness token.");
+
+            authorization = new AgentHarnessAuthorization(
+                _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+                token.Token,
+                token.ProjectId,
+                taskId,
+                command.Id,
+                command.Generation,
+                Path.GetFullPath(command.LocalRoot),
+                token.ExpiresAt,
+                null,
+                "Eval",
+                token.AllowedMcpTools);
+
+            if (requestedRuntime == "opencode")
             {
-                if (_http.BaseAddress is null)
-                    return (false, null, "The daemon API base URL is not configured.");
-
-                var taskId = ReadGuid(root, "taskId");
-                var evalRunId = ReadGuid(root, "evalRunId");
-                if (taskId == Guid.Empty || evalRunId == Guid.Empty)
-                    return (false, null, "Native eval requires taskId and evalRunId.");
-
-                using var tokenResponse = await _http.PostAsJsonAsync(
-                    $"/v1/commands/{command.Id:D}/harness-token",
-                    new { generation = command.Generation },
-                    ct);
-                if (!tokenResponse.IsSuccessStatusCode)
-                    return (false, null, $"Could not issue the short-lived eval harness token (HTTP {(int)tokenResponse.StatusCode}).");
-                var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
-                if (token is null
-                    || string.IsNullOrWhiteSpace(token.Token)
-                    || token.ProjectId == Guid.Empty
-                    || token.CommandId != command.Id
-                    || token.Generation != command.Generation
-                    || token.ExpiresAt <= DateTime.UtcNow)
-                    return (false, null, "The API returned an invalid or expired eval harness token.");
-
-                authorization = new AgentHarnessAuthorization(
-                    _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
-                    token.Token,
-                    token.ProjectId,
-                    taskId,
-                    command.Id,
-                    command.Generation,
-                    Path.GetFullPath(command.LocalRoot),
-                    token.ExpiresAt,
-                    null,
-                    "Eval",
-                    token.AllowedMcpTools);
+                var evalEnvironment = evalProviderEnvironment
+                    ?? new Dictionary<string, string>(StringComparer.Ordinal);
+                evalEnvironment["BEACON_API_URL"] = _http.BaseAddress.AbsoluteUri.TrimEnd('/');
+                evalEnvironment["BEACON_API_TOKEN"] = token.Token;
+                evalEnvironment["BEACON_PROJECT_ID"] = token.ProjectId.ToString("D");
+                evalEnvironment["BEACON_TASK_ID"] = taskId.ToString("D");
+                evalEnvironment["BEACON_PIPELINE_ROLE"] = "Eval";
+                evalEnvironment.Remove("BEACON_SUBTASK_ID");
+                evalEnvironment.Remove("BEACON_PIPELINE_SESSION_ID");
+                evalOpenCode!.SetEnvironment(evalEnvironment);
             }
 
             var evalAction = await WorkstationEval.RunEvalTurnAsync(

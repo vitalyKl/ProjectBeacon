@@ -114,8 +114,8 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
                 .FirstOrDefaultAsync(run => run.Id == evalScope.EvalRunId
                     && run.ProjectId == projectId
                     && run.TaskId == evalScope.TaskId, ct);
-            if (evalRun is null || !string.Equals(evalRun.Runtime, "native", StringComparison.Ordinal))
-                return Result.Failure<HarnessTokenDto>("The eval run is missing, out of scope, or is not pinned to the native runtime.", ErrorKind.Forbidden);
+            if (evalRun is null || !string.Equals(evalRun.Runtime, evalScope.Runtime, StringComparison.Ordinal))
+                return Result.Failure<HarnessTokenDto>("The eval run is missing, out of scope, or its pinned runtime does not match the command.", ErrorKind.Forbidden);
         }
 
         // A renewed claim must never inherit a credential from an earlier attempt.
@@ -130,12 +130,15 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
         var rawToken = "bcn_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
         var tokenHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
         var tokenPrefix = rawToken[..Math.Min(8, rawToken.Length)];
+        var tokenCapabilities = work.Kind == WorkstationCommandKind.RunEvalTurn
+            ? ApiTokenCapability.ContextRead | ApiTokenCapability.TaskRead
+            : HarnessCapabilities;
         var tokenRow = ApiToken.Create(
             $"harness:{work.Id:N}",
             tokenHash,
             tokenPrefix,
             projectId,
-            HarnessCapabilities,
+            tokenCapabilities,
             leaseExpiresAt,
             device.UserId,
             ApiTokenClientKind.Harness,
@@ -159,11 +162,14 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
                 || !TryReadGuid(root, "evalRunId", out var evalRunId)
                 || !TryReadGuid(root, "taskId", out var taskId)
                 || !root.TryGetProperty("runtime", out var runtime)
-                || runtime.ValueKind != JsonValueKind.String
-                || !string.Equals(runtime.GetString(), "native", StringComparison.Ordinal))
+                || runtime.ValueKind != JsonValueKind.String)
                 return false;
 
-            scope = new EvalCommandScope(evalRunId, taskId);
+            var runtimeName = runtime.GetString()?.Trim().ToLowerInvariant();
+            if (runtimeName is not ("native" or "opencode"))
+                return false;
+
+            scope = new EvalCommandScope(evalRunId, taskId, runtimeName);
             return true;
         }
         catch (JsonException)
@@ -224,5 +230,5 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
     private readonly record struct PipelineCommandScope(
         Guid ProjectId, Guid TaskId, Guid SessionId, PipelineRole Role, Guid? SubtaskId);
 
-    private readonly record struct EvalCommandScope(Guid EvalRunId, Guid TaskId);
+    private readonly record struct EvalCommandScope(Guid EvalRunId, Guid TaskId, string Runtime);
 }
