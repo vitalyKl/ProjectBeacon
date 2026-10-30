@@ -470,6 +470,68 @@ public sealed class ChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AppendPart_FinalToolSnapshotUpdatesStructuredFieldsAndIgnoresLateStream()
+    {
+        var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+        var append = new AppendChatPartHandler(factory, new ChatEventSignal());
+
+        var streamed = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(
+                sessionId, deviceId, "assistant", "tool", "read_file: loading", "m1:tool:0")), ct);
+        Assert.True(streamed.Success, streamed.Error);
+        Assert.False(streamed.Value!.Complete);
+        Assert.Null(streamed.Value.Tool);
+
+        var final = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(
+                sessionId,
+                deviceId,
+                "assistant",
+                "tool",
+                "read_file: README content",
+                "m1:tool:0",
+                Tool: "read_file",
+                ToolStatus: "completed",
+                ToolInput: "{\\"path\\":\\"README.md\\"}",
+                ToolResult: "README content",
+                DurationMs: 24,
+                Complete: true)), ct);
+        Assert.True(final.Success, final.Error);
+        Assert.Equal(streamed.Value.Id, final.Value!.Id);
+        Assert.True(final.Value.Complete);
+        Assert.Equal("read_file", final.Value.Tool);
+        Assert.Equal("completed", final.Value.ToolStatus);
+        Assert.Equal("{\\"path\\":\\"README.md\\"}", final.Value.ToolInput);
+        Assert.Equal("README content", final.Value.ToolResult);
+        Assert.Equal(24, final.Value.DurationMs);
+
+        var late = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(
+                sessionId, deviceId, "assistant", "tool", "read_file: stale snapshot", "m1:tool:0")), ct);
+        Assert.True(late.Success, late.Error);
+        Assert.Equal(final.Value.Id, late.Value!.Id);
+        Assert.True(late.Value.Complete);
+        Assert.Equal("read_file", late.Value.Tool);
+        Assert.Equal("completed", late.Value.ToolStatus);
+        Assert.Equal("{\\"path\\":\\"README.md\\"}", late.Value.ToolInput);
+        Assert.Equal("README content", late.Value.ToolResult);
+        Assert.Equal(24, late.Value.DurationMs);
+
+        var listed = await new ListChatPartsHandler(factory).HandleAsync(
+            new ListChatPartsCommand(new ListChatPartsRequest(sessionId, Guid.Empty)), ct);
+        Assert.True(listed.Success, listed.Error);
+        var part = Assert.Single(listed.Value!);
+        Assert.Equal(final.Value.Id, part.Id);
+        Assert.Equal("read_file", part.Tool);
+        Assert.Equal("README content", part.ToolResult);
+        Assert.True(part.Complete);
+    }
+
+    [Fact]
     public async Task AppendPart_LateStreamedSnapshotDoesNotClobberFinalPart()
     {
         var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();

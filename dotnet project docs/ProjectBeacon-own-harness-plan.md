@@ -47,6 +47,7 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 - Контекст сжимается безопасно: tool call и связанный result не разделяются; пустой summary не удаляет исходную историю.
 - Есть лимит шагов, защита от повторения идентичного tool call и truncation больших tool results.
 - Tool calls выполняются параллельно на стороне native runtime и внутри самого MCP stdio server. Каждый входящий MCP request получает собственный workspace/index state; responses записываются атомарно, а клиент маршрутизирует их по JSON-RPC request ID. Результаты tool calls добавляются в transcript в порядке tool index, а не в порядке завершения задач.
+- Native tool calls сохраняются отдельными структурированными chat parts со стабильным external ID, именем инструмента, input, result, статусом и длительностью; финальная запись обновляет streaming snapshot, а запоздавшая дельта не затирает завершённую карточку.
 - Одновременные stdio requests ограничены сервером (max 32 in-flight), чтобы не допустить неограниченного накопления запросов.
 - При timeout/cancellation eval сначала отправляет Abort и ждёт подтверждения завершения. Если runtime не подтвердил остановку, detached worktree сохраняется и путь включается в ошибку; каталог не удаляется под потенциально работающим процессом.
 
@@ -96,6 +97,7 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 - provider stream: reasoning + text + tool calls; multiple tool indexes; Unicode/fragmented arguments; отсутствие [DONE]; retryable HTTP 429/503; ошибки без утечки тела ответа;
 - runtime: создание и восстановление session, stable parts, truncation, compaction, защита от повторных вызовов, abort, transient retry до output и отсутствие retry после частичного output;
 - tool loop: параллельное выполнение, сохранение результатов по индексу и полный набор результатов до следующего model step;
+- tool UI parts: раздельные Native tool cards, server-side upsert streaming → final metadata и защита завершённой карточки от запоздавшей streaming-дельты;
 - MCP: allowlists, scope и выдача token только действующей команде;
 - eval: OpenCode/Native pin, миграция и транскрипт правильного runtime;
 - daemon: persisted runtime selection после reload настроек.

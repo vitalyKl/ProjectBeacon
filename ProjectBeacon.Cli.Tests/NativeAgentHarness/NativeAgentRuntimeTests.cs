@@ -803,6 +803,13 @@ public sealed class NativeAgentRuntimeTests
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
             Assert.Equal("stop", status.Finish);
+            var blockedTool = Assert.Single(await CollectRuntimePartsAsync(runtime, session), part => part.Kind == "tool");
+            Assert.Equal("delete_everything", blockedTool.Tool);
+            Assert.Equal("error", blockedTool.ToolStatus);
+            Assert.Equal("{}", blockedTool.ToolInput);
+            Assert.Contains("was not advertised", blockedTool.ToolResult, StringComparison.Ordinal);
+            Assert.True(blockedTool.DurationMs is >= 0);
+            Assert.True(blockedTool.Complete);
         }
         finally
         {
