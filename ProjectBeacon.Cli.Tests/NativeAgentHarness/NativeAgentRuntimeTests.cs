@@ -68,6 +68,33 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeReadinessWarnsWhenLocalModelCommandOmitsJinja()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-readiness-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var config = Path.Combine(temp, "llama-swap.yaml");
+        await File.WriteAllTextAsync(config, "models:\\n  qwen:\\n    cmd: \\\"llama-server -m qwen.gguf --ctx-size 8192\\\"\\n");
+
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap { ConfigFile = config };
+        var runtime = new NativeAgentRuntime(control, llama, new StubLlamaSync(), () => new WorkstationSettings());
+        try
+        {
+            var readiness = await runtime.EnsureReadyAsync(project, CancellationToken.None);
+            Assert.True(readiness.Ready);
+            Assert.Contains("--jinja", readiness.Warning, StringComparison.Ordinal);
+            Assert.Contains("qwen", readiness.Warning, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task CreatesSessionPersistsTranscriptStreamsAndReportsTurnStatus()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-test-" + Guid.NewGuid().ToString("N"));

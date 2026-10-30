@@ -72,6 +72,7 @@ internal sealed class DaemonOpenCodeGate : IDaemonOpenCodeGate
             healthy = _lastReadiness?.Ready ?? true,
             version = "native",
             error = _lastReadiness?.Error,
+            warning = _lastReadiness?.Warning,
             cwd = _lastReadiness?.WorkingDirectory
         };
 

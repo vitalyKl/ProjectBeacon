@@ -209,7 +209,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         var fullPath = Path.GetFullPath(workingDirectory);
         if (!Directory.Exists(fullPath))
             return Task.FromResult(new AgentRuntimeReadiness(false, "The selected project directory does not exist.", fullPath));
-        return Task.FromResult(new AgentRuntimeReadiness(true, null, fullPath));
+        // Provider reachability is intentionally checked on the first request: this readiness
+        // probe must not make a live network call or reject cloud providers because the local
+        // llama-server is currently unloaded.
+        var warning = _llama.NativeToolCallingWarning();
+        if (!string.IsNullOrWhiteSpace(warning))
+            _log?.Invoke(warning);
+        return Task.FromResult(new AgentRuntimeReadiness(true, null, fullPath, warning));
     }
 
     public async Task StreamTextAsync(

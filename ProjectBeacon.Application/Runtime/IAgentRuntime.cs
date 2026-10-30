@@ -36,7 +36,7 @@ public sealed record AgentPromptControls(double? Temperature, string? ReasoningE
 }
 
 /// <summary>Readiness reported by a workstation-local agent runtime.</summary>
-public sealed record AgentRuntimeReadiness(bool Ready, string? Error, string? WorkingDirectory);
+public sealed record AgentRuntimeReadiness(bool Ready, string? Error, string? WorkingDirectory, string? Warning = null);
 
 /// <summary>A pending user question exposed by a runtime that supports interactive forms.</summary>
 public sealed record AgentRuntimeForm(string Id, string Title, string Metadata, string FieldsJson);

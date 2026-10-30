@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Application.Runtime;
 using ModelSwapping;
+using ProjectBeacon.Infrastructure.LlamaSwap;
 /// <summary>
 /// Starts the model process on this machine. UseOwnSwapper runs llama-server in-process. Otherwise this launches external llama-swap and rewrites its config when the catalog changes.
 /// </summary>
@@ -26,6 +27,39 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         new(false, false, null, null, null, "llama-swap is not started on this device.");
 
     public int Port => _port;
+
+    /// <summary>Returns a static warning when configured llama-server commands omit tool-call template support.</summary>
+    internal string? NativeToolCallingWarning()
+    {
+        var yaml = _ownLastYaml;
+        if (string.IsNullOrWhiteSpace(yaml) && File.Exists(ConfigFile))
+        {
+            try { yaml = File.ReadAllText(ConfigFile); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return $"Could not inspect the local llama-swap configuration: {ex.Message}";
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(yaml))
+            return null;
+
+        IReadOnlyList<LlamaSwapModelSpec> models;
+        try { models = LlamaSwapConfigParser.Parse(yaml); }
+        catch (Exception ex) when (ex is FormatException or InvalidDataException)
+        {
+            return "The local llama-swap configuration could not be parsed; native tool calling may not work.";
+        }
+
+        var missing = models
+            .Where(model => string.IsNullOrWhiteSpace(model.LaunchCommand)
+                || !model.LaunchCommand.Contains("--jinja", StringComparison.OrdinalIgnoreCase))
+            .Select(model => model.Name)
+            .ToArray();
+        return missing.Length == 0
+            ? null
+            : $"Local model command(s) {string.Join(", ", missing)} do not include --jinja. llama-server needs --jinja and a tool-capable chat template for native tool calls.";
+    }
 
     internal int StartCount { get; private set; }
     internal bool SkipRealProcess { get; set; }
