@@ -156,6 +156,7 @@ public static class WorkstationEval
         var maxIterations = Math.Max(1, (int)Math.Ceiling(maxDuration / pollInterval));
         var quiet = 0;
         var idle = false;
+        var turnEnded = false;
         for (var i = 0; i < maxIterations && !ct.IsCancellationRequested; i++)
         {
             var parts = new List<AgentMessagePart>();
@@ -173,6 +174,7 @@ public static class WorkstationEval
             var turnStatus = await runtime.GetTurnStatusAsync(sessionId, ct);
             if (turnStatus is { Ended: true })
             {
+                turnEnded = true;
                 if (string.Equals(turnStatus.Finish, "error", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(turnStatus.Finish, "aborted", StringComparison.OrdinalIgnoreCase))
                     return Result.Failure<string>(turnStatus.Error ?? $"Eval agent turn ended with '{turnStatus.Finish}'.");
@@ -195,7 +197,42 @@ public static class WorkstationEval
             await Task.Delay(pollInterval, ct);
         }
 
-        var usage = await runtime.ReadUsageAsync(sessionId, ct);
+        // A timeout or caller cancellation must stop the provider before the isolated worktree
+        // is removed. Native AbortAsync waits for the active turn; OpenCode receives its interrupt
+        // request. Never delete the workspace while a turn may still be using it.
+        if (!turnEnded)
+        {
+            using var abortTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            using var abortCts = CancellationTokenSource.CreateLinkedTokenSource(
+                CancellationToken.None,
+                abortTimeout.Token);
+            try
+            {
+                await runtime.AbortAsync(sessionId, abortCts.Token);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || abortTimeout.IsCancellationRequested)
+            {
+                return Result.Failure<string>($"Eval turn could not be stopped before workspace cleanup: {ex.Message}");
+            }
+
+            var stopDeadline = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * 10);
+            while (Stopwatch.GetTimestamp() < stopDeadline)
+            {
+                var status = await runtime.GetTurnStatusAsync(sessionId, CancellationToken.None);
+                if (status is { Ended: true })
+                {
+                    turnEnded = true;
+                    break;
+                }
+                await Task.Delay(pollInterval, abortTimeout.Token);
+            }
+
+            if (!turnEnded)
+                return Result.Failure<string>("Eval turn did not acknowledge abort; isolated workspace was not considered safe to reuse.");
+        }
+
+        ct.ThrowIfCancellationRequested();
+        var usage = await runtime.ReadUsageAsync(sessionId, CancellationToken.None);
         int? exitCode = null;
         string? checkOutput = null;
         if (idle && seen.Count > 0)
