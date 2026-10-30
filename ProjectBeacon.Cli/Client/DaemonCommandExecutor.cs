@@ -127,19 +127,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     return await _chat.PromptAsync(resolved.Value!, payload, harnessAuthorization, ct);
                 }
                 if (kind == WorkstationCommandKind.RunEvalTurn)
-                {
-                    var evalAction = await WorkstationEval.RunEvalTurnAsync(
-                        command.LocalRoot,
-                        payload,
-                        _gate.Runtime,
-                        _timing.ChatPollInterval,
-                        _timing.ChatIdleTimeout,
-                        _timing.ChatMaxDuration,
-                        ct);
-                    if (!evalAction.Success)
-                        return (false, null, evalAction.Error);
-                    return (true, evalAction.Value, null);
-                }
+                    return await RunEvalTurnAsync(command, payload, ct);
                 if (kind == WorkstationCommandKind.RunReviewCheck)
                 {
                     var reviewAction = WorkstationEval.RunReviewCheck(command.LocalRoot, payload);
@@ -215,6 +203,113 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         catch (Exception ex)
         {
             return (false, null, ex.Message);
+        }
+    }
+
+
+    private async Task<(bool Ok, string? Result, string? Error)> RunEvalTurnAsync(
+        WorkstationDaemon.CommandWire command,
+        string payload,
+        CancellationToken ct)
+    {
+        using var document = JsonDocument.Parse(payload);
+        var root = document.RootElement;
+        var requestedRuntime = root.TryGetProperty("runtime", out var runtimeElement)
+            && runtimeElement.ValueKind == JsonValueKind.String
+                ? runtimeElement.GetString()?.Trim().ToLowerInvariant()
+                : _loadSettings().AgentRuntime.Trim().ToLowerInvariant();
+        if (requestedRuntime is not ("opencode" or "native"))
+            return (false, null, "Eval runtime must be 'opencode' or 'native'.");
+        if (string.IsNullOrWhiteSpace(command.LocalRoot))
+            return (false, null, CommandSandbox.RuntimeRequired);
+
+        IAgentRuntime runtime;
+        var ownsRuntime = false;
+        if (requestedRuntime == "native")
+        {
+            runtime = _gate.Runtime is NativeAgentRuntime
+                ? _gate.Runtime
+                : new NativeAgentRuntime(_http, _llama, _llamaSync, _loadSettings);
+            ownsRuntime = !ReferenceEquals(runtime, _gate.Runtime);
+        }
+        else
+        {
+            runtime = _gate.Runtime is OpenCodeAgentRuntime
+                ? _gate.Runtime
+                : new OpenCodeAgentRuntime(_gate.OpenCode);
+            ownsRuntime = !ReferenceEquals(runtime, _gate.Runtime);
+        }
+
+        try
+        {
+            if (requestedRuntime == "opencode" && !ReferenceEquals(runtime, _gate.Runtime))
+            {
+                var response = await _http.GetAsync("/v1/devices/me/opencode-connections", ct);
+                if (!response.IsSuccessStatusCode)
+                    return (false, null, $"opencode connections {(int)response.StatusCode}");
+                var body = await response.Content.ReadAsStringAsync(ct);
+                var applied = OpencodeConfig.ApplyOpenCodeConnections(body);
+                _gate.OpenCode.SetEnvironment(applied.Environment);
+            }
+
+            AgentHarnessAuthorization? authorization = null;
+            if (requestedRuntime == "native")
+            {
+                if (_http.BaseAddress is null)
+                    return (false, null, "The daemon API base URL is not configured.");
+
+                var taskId = ReadGuid(root, "taskId");
+                var evalRunId = ReadGuid(root, "evalRunId");
+                if (taskId == Guid.Empty || evalRunId == Guid.Empty)
+                    return (false, null, "Native eval requires taskId and evalRunId.");
+
+                using var tokenResponse = await _http.PostAsJsonAsync(
+                    $"/v1/commands/{command.Id:D}/harness-token",
+                    new { generation = command.Generation },
+                    ct);
+                if (!tokenResponse.IsSuccessStatusCode)
+                    return (false, null, $"Could not issue the short-lived eval harness token (HTTP {(int)tokenResponse.StatusCode}).");
+                var token = await tokenResponse.Content.ReadFromJsonAsync<HarnessTokenWire>(ct);
+                if (token is null
+                    || string.IsNullOrWhiteSpace(token.Token)
+                    || token.ProjectId == Guid.Empty
+                    || token.CommandId != command.Id
+                    || token.Generation != command.Generation
+                    || token.ExpiresAt <= DateTime.UtcNow)
+                    return (false, null, "The API returned an invalid or expired eval harness token.");
+
+                authorization = new AgentHarnessAuthorization(
+                    _http.BaseAddress.AbsoluteUri.TrimEnd('/'),
+                    token.Token,
+                    token.ProjectId,
+                    taskId,
+                    command.Id,
+                    command.Generation,
+                    Path.GetFullPath(command.LocalRoot),
+                    token.ExpiresAt,
+                    null,
+                    null,
+                    token.AllowedMcpTools);
+            }
+
+            var evalAction = await WorkstationEval.RunEvalTurnAsync(
+                command.LocalRoot,
+                payload,
+                requestedRuntime == "opencode" ? _gate.OpenCode : null,
+                runtime,
+                _timing.ChatPollInterval,
+                _timing.ChatIdleTimeout,
+                _timing.ChatMaxDuration,
+                ct,
+                authorization);
+            if (!evalAction.Success)
+                return (false, null, evalAction.Error);
+            return (true, evalAction.Value, null);
+        }
+        finally
+        {
+            if (ownsRuntime)
+                await runtime.DisposeAsync();
         }
     }
 

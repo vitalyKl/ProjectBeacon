@@ -17,7 +17,7 @@ public static class WorkstationEval
         TimeSpan idleTimeout,
         TimeSpan maxDuration,
         CancellationToken ct)
-        => RunEvalTurnAsync(root, payloadJson, null, runtime, pollInterval, idleTimeout, maxDuration, ct);
+        => RunEvalTurnAsync(root, payloadJson, null, runtime, pollInterval, idleTimeout, maxDuration, ct, null);
 
     public static async Task<Result<string>> RunEvalTurnAsync(
         string root,
@@ -27,7 +27,8 @@ public static class WorkstationEval
         TimeSpan pollInterval,
         TimeSpan idleTimeout,
         TimeSpan maxDuration,
-        CancellationToken ct)
+        CancellationToken ct,
+        AgentHarnessAuthorization? harnessAuthorization = null)
     {
         if (string.IsNullOrWhiteSpace(root))
             return Result.Failure<string>("root is required.");
@@ -126,7 +127,10 @@ public static class WorkstationEval
         }
 
         var sessionId = await runtime.CreateSessionAsync(string.IsNullOrWhiteSpace(title) ? "Beacon eval" : title, ct);
-        await runtime.SendPromptAsync(sessionId, prompt, model, ct, new AgentPromptControls(temperature, reasoningEffort, toolPermissions));
+        await runtime.SendPromptAsync(sessionId, prompt, model, ct, new AgentPromptControls(temperature, reasoningEffort, toolPermissions)
+        {
+            HarnessAuthorization = harnessAuthorization
+        });
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(idleTimeout / pollInterval));
@@ -147,8 +151,24 @@ public static class WorkstationEval
                 if (seen.Add(key))
                     added++;
             }
-            quiet = added > 0 ? 0 : quiet + 1;
-            if (quiet >= maxQuiet && seen.Count > 0)
+            var turnStatus = await runtime.GetTurnStatusAsync(sessionId, ct);
+            if (turnStatus is { Ended: true })
+            {
+                if (string.Equals(turnStatus.Finish, "error", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(turnStatus.Finish, "aborted", StringComparison.OrdinalIgnoreCase))
+                    return Result.Failure<string>(turnStatus.Error ?? $"Eval agent turn ended with '{turnStatus.Finish}'.");
+                idle = seen.Count > 0;
+                break;
+            }
+
+            // A quiet interval is not completion while the runtime still owns an active turn.
+            // This matters for native models that may spend time reasoning without emitting deltas.
+            if (turnStatus is { Ended: false })
+                quiet = 0;
+            else
+                quiet = added > 0 ? 0 : quiet + 1;
+
+            if (turnStatus is null && quiet >= maxQuiet && seen.Count > 0)
             {
                 idle = true;
                 break;
@@ -179,7 +199,7 @@ public static class WorkstationEval
             exitCode,
             checkOutput,
             interrupted = !idle,
-            transcriptRef = $"opencode:session/{sessionId}"
+            transcriptRef = $"{(runtime is NativeAgentRuntime ? "native" : "opencode")}:session/{sessionId}"
         };
         return Result.Ok(JsonSerializer.Serialize(result));
     }
