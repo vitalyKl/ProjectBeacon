@@ -1462,10 +1462,10 @@
     <value>オーナー</value>
   </data>
   <data name="LandingHeroTitle" xml:space="preserve">
-    <value>次のセッションまで残るコンテキスト。</value>
+    <value>AIエージェントで開発し、作業の主導権を保つ。</value>
   </data>
   <data name="LandingHeroLead" xml:space="preserve">
-    <value>人とローカルエージェントが混ざる作業のためのコントロールプレーン。Beacon はブリーフを一度コンパイルし、決まったことをエージェントが毎回探し直さなくて済むようにします。</value>
+    <value>ProjectBeacon はプロジェクト、AIエージェント、モデル、開発ワークフローをセルフホスト型のコントロールプレーンに統合します。エージェントの実行ループは自分のワークステーションで動き、ツールとソースコードは自分の管理下に置かれます。</value>
   </data>
   <data name="LandingProblemTitle" xml:space="preserve">
     <value>エージェントは冷たい状態から始まる</value>
@@ -1477,37 +1477,37 @@
     <value>仕組み</value>
   </data>
   <data name="LandingHow1" xml:space="preserve">
-    <value>コンテキスト、決定、制約から予算付きブリーフをコンパイルします。</value>
+    <value>プロジェクトのコンテキスト、決定、制約、トークン予算から焦点を絞ったブリーフを作成。重要なルールを保持します。</value>
   </data>
   <data name="LandingHow2" xml:space="preserve">
-    <value>ボードで作業を引き受けます。状態、レビューメモ、パイプラインは一か所に残ります。</value>
+    <value>作業を計画し、タスクを割り当て、エージェントの段階を調整。人間のレビュー、パイプライン状態、結果を可視化します。</value>
   </data>
   <data name="LandingHow3" xml:space="preserve">
-    <value>エージェントは自分のマシンで beacon mcp と beacon client を使って動かします。Beacon 自体はターンを実行しません。</value>
+    <value>ワークステーションクライアントが Native harness または OpenCode を実行し、モデルを接続してローカル MCP ツールを呼び出します。サーバーはコードを実行しません。</value>
   </data>
   <data name="LandingFeaturesTitle" xml:space="preserve">
     <value>含まれるもの</value>
   </data>
   <data name="LandingFeatureContext" xml:space="preserve">
-    <value>トークン予算付きのスコープブリーフ。セキュリティと完了の定義は捨てません。</value>
+    <value>コンパイルされた範囲付きブリーフが、プロジェクト知識、決定、制約、受け入れ条件をセッション間で保持します。</value>
   </data>
   <data name="LandingFeatureBoard" xml:space="preserve">
-    <value>人とエージェントが混ざる作業のためのボード、バックログ、ロードマップ。</value>
+    <value>ボード、バックログ、ロードマップで、エージェントの作業と人間の計画・レビュー・リリースをつなぎます。</value>
   </data>
   <data name="LandingFeatureDecisions" xml:space="preserve">
     <value>決定には影響が付くので、エージェントがそれを尊重する理由があります。</value>
   </data>
   <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>自分のハードウェア上のソロとパイプラインのモデル。llama-swap はワークステーションに残ります。</value>
+    <value>ユーザー単位のエージェント、モデルバックエンド、タスクロールを一度設定。Native harness または OpenCode を利用できます。</value>
   </data>
   <data name="LandingFeatureDevices" xml:space="preserve">
-    <value>beacon client からの発信 HTTPS。Web ホストはディスクを読みません。</value>
+    <value>ワークステーションクライアントは外向きHTTPSで接続。エージェント実行、ローカルモデル、ワークスペースへのアクセスは自分のマシンに残ります。</value>
   </data>
   <data name="LandingFeatureMcpTitle" xml:space="preserve">
-    <value>stdio MCP</value>
+    <value>MCPツールチェーン</value>
   </data>
   <data name="LandingFeatureMcp" xml:space="preserve">
-    <value>ローカルのファイルツールとパイプラインツールは stdio 経由です。HTTP MCP は提供しません。</value>
+    <value>既存の beacon mcp ローカルツールを stdio 経由で再利用し、役割ベースの権限と範囲制限を適用します。</value>
   </data>
   <data name="LandingCompareTitle" xml:space="preserve">
     <value>比較</value>
@@ -1559,37 +1559,37 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>質問</value>
   </data>
   <data name="LandingFaq1Q" xml:space="preserve">
-    <value>Beacon はコーディングエージェントを実行しますか？</value>
+    <value>ProjectBeacon はクラウドでエージェントを実行しますか？</value>
   </data>
   <data name="LandingFaq1A" xml:space="preserve">
-    <value>いいえ。Beacon は中継と編成だけです。エージェントのプロセスは常に自分の制御するハードウェアで動きます。</value>
+    <value>いいえ。エージェントの実行ループは beacon client を通じて自分のワークステーションで動きます。Native harness または OpenCode を選べます。Web/API/Worker は作業を調整しますが、モデルやワークスペース内のコードは実行しません。</value>
   </data>
   <data name="LandingFaq2Q" xml:space="preserve">
-    <value>コードはどこにありますか？</value>
+    <value>モデルはどこで動き、コードはどこにありますか？</value>
   </data>
   <data name="LandingFaq2A" xml:space="preserve">
-    <value>自分のマシンです。beacon client は発信 HTTPS で話します。Web ホストは作業ツリーを参照しません。</value>
+    <value>コードはワークステーションのワークスペースに残ります。モデルは設定したバックエンドでローカル実行するか、対応するクラウドプロバイダーを利用できます。クライアントはセルフホストの ProjectBeacon サーバーへ外向きHTTPSで接続し、Webホストは作業ツリーを参照しません。</value>
   </data>
   <data name="LandingFaq3Q" xml:space="preserve">
-    <value>これはホスト型 SaaS ですか？</value>
+    <value>複数のプロジェクトを使えますか？</value>
   </data>
   <data name="LandingFaq3A" xml:space="preserve">
-    <value>v1 の道はセルフホストです。ホスト型マルチテナントは後の、フラグで閉じた段階です。</value>
+    <value>はい。エージェントとモデルの設定はユーザーアカウントに属し、複数プロジェクトで再利用できます。各プロジェクトは独自のタスク、コンテキスト、決定、作業ディレクトリを持ちます。</value>
   </data>
   <data name="LandingFaq4Q" xml:space="preserve">
-    <value>人をどう追加しますか？</value>
+    <value>Native harness を使う必要がありますか？</value>
   </data>
   <data name="LandingFaq4A" xml:space="preserve">
-    <value>公開登録、または AUTH_LOCAL_INVITE_ONLY による招待のみ。ダッシュボードの開いているプロジェクトから招待します。リンクは一度だけ表示されます。</value>
+    <value>いいえ。OpenCode も引き続きサポートされます。ワークステーションごとにランタイムを選択できます。Native harness はモデルとツールのループをローカルで実行し、ProjectBeacon の既存MCPツールを使う代替手段です。</value>
   </data>
   <data name="LandingFaq5Q" xml:space="preserve">
-    <value>パスワードはどうリセットしますか？</value>
+    <value>ProjectBeacon はホスト型SaaSですか？</value>
   </data>
   <data name="LandingFaq5A" xml:space="preserve">
-    <value>パスワードを忘れたを使います。/recover は初期設定トークンによる管理者の非常手段で、ユーザーのリセットではありません。</value>
+    <value>現在の製品方針はセルフホストです。コントロールプレーンを自分で運用し、自分のワークステーションを接続します。ホスト型マルチテナント運用はリリース済み製品には含まれません。</value>
   </data>
   <data name="LandingCtaTitle" xml:space="preserve">
-    <value>自分のホストで始める</value>
+    <value>自分のエージェント。自分のハードウェア。一つの作業環境。</value>
   </data>
   <data name="Project" xml:space="preserve">
     <value>プロジェクト</value>
@@ -2078,4 +2078,42 @@ orthstar</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>ランタイムの変更はワークステーション クライアントの再起動後に反映されます。</value>
   </data>
+  <data name="LandingEyebrow" xml:space="preserve"><value>ローカルファーストのAI開発環境</value></data>
+  <data name="LandingHeroFootnote" xml:space="preserve"><value>エージェントは自分のマシンで実行。プロジェクトは自分のもの。</value></data>
+  <data name="LandingOnline" xml:space="preserve"><value>ワークステーション接続中</value></data>
+  <data name="LandingLocalRuntime" xml:space="preserve"><value>ローカルランタイム</value></data>
+  <data name="LandingWorkspaceLabel" xml:space="preserve"><value>アクティブなワークスペース</value></data>
+  <data name="LandingPreviewReady" xml:space="preserve"><value>設定済み</value></data>
+  <data name="LandingPreviewConnected" xml:space="preserve"><value>接続済み</value></data>
+  <data name="LandingActiveTasks" xml:space="preserve"><value>進行中のタスク</value></data>
+  <data name="LandingPreviewInProgress" xml:space="preserve"><value>進行中</value></data>
+  <data name="LandingWorkInProgress" xml:space="preserve"><value>作業中</value></data>
+  <data name="LandingTaskContext" xml:space="preserve"><value>コンテキストブリーフ · プロジェクトルール</value></data>
+  <data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
+  <data name="LandingRuntimeTitle" xml:space="preserve"><value>エージェントランタイム</value></data>
+  <data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness または OpenCode · ローカルまたはクラウドモデル</value></data>
+  <data name="LandingVisualCaption" xml:space="preserve"><value>ワークフロー全体を一か所で管理</value></data>
+  <data name="LandingPrinciplesTitle" xml:space="preserve"><value>製品の原則</value></data>
+  <data name="LandingPrincipleLocal" xml:space="preserve"><value>自分のワークステーションで実行</value></data>
+  <data name="LandingPrincipleMulti" xml:space="preserve"><value>一度の設定で複数プロジェクト</value></data>
+  <data name="LandingPrincipleControl" xml:space="preserve"><value>モデルとデータを自分で管理</value></data>
+  <data name="LandingPrincipleOpen" xml:space="preserve"><value>MCPツール連携</value></data>
+  <data name="LandingFeaturesLead" xml:space="preserve"><value>単なるチャット画面ではなく、エージェント開発サイクル全体をつなぐワークスペース。</value></data>
+  <data name="LandingPipelineTitle" xml:space="preserve"><value>エージェントパイプライン</value></data>
+  <data name="LandingFeaturePipeline" xml:space="preserve"><value>権限を限定したツール、タスク状態、レビュー結果を使って Planner、Actor、Reviewer のセッションを調整します。</value></data>
+  <data name="LandingHowLead" xml:space="preserve"><value>共有されたプロジェクト知識から、管理されたローカルエージェント実行と追跡可能な結果まで。</value></data>
+  <data name="LandingFlow1Title" xml:space="preserve"><value>適切なコンテキストを渡す</value></data>
+  <data name="LandingFlow2Title" xml:space="preserve"><value>作業を調整する</value></data>
+  <data name="LandingFlow3Title" xml:space="preserve"><value>ローカルで実行し、中央で確認する</value></data>
+  <data name="LandingArchitectureTitle" xml:space="preserve"><value>コントロールプレーン。自分のワークステーション。自分のルール。</value></data>
+  <data name="LandingArchitectureBody" xml:space="preserve"><value>ProjectBeacon はID、プロジェクト、タスク、権限、エージェントセッションを調整します。モデル実行とローカルツールはワークステーションが担当し、ソースツリーとランタイムは自分の管理するハードウェアに残ります。</value></data>
+  <data name="LandingArchitectureControl" xml:space="preserve"><value>ProjectBeacon コントロールプレーン</value></data>
+  <data name="LandingArchitectureControlBody" xml:space="preserve"><value>プロジェクト · タスク · コンテキスト · 権限 · 履歴</value></data>
+  <data name="LandingArchitectureWorkstation" xml:space="preserve"><value>自分のワークステーション</value></data>
+  <data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · ランタイム選択 · モデル接続</value></data>
+  <data name="LandingArchitectureRuntime" xml:space="preserve"><value>ローカルエージェントランタイム</value></data>
+  <data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness または OpenCode · MCP stdio · ワークスペース</value></data>
+  <data name="LandingCtaEyebrow" xml:space="preserve"><value>AIワークフローを自分の手に</value></data>
+  <data name="LandingCtaBody" xml:space="preserve"><value>自分の ProjectBeacon ホストを用意し、ワークステーションを接続してください。</value></data>
+  <data name="LandingFooterTagline" xml:space="preserve"><value>AI開発のためのローカルファーストなコントロールプレーン</value></data>
 </root>
