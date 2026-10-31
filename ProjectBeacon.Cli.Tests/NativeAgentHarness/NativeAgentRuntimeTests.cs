@@ -146,6 +146,14 @@ public sealed class NativeAgentRuntimeTests
         => Assert.Equal(expected, NativeAgentRuntime.IsPlanToolAllowed(tool));
 
     [Fact]
+    public void PlanModeBlocksSpecialRunCommandExecutionEvenWhenModelRequestsIt()
+    {
+        Assert.True(NativeAgentRuntime.IsPlanModeRunCommandBlocked("plan", "run_command"));
+        Assert.False(NativeAgentRuntime.IsPlanModeRunCommandBlocked("build", "run_command"));
+        Assert.False(NativeAgentRuntime.IsPlanModeRunCommandBlocked("plan", "read_file"));
+    }
+
+    [Fact]
     public async Task CreatesSessionPersistsTranscriptStreamsAndReportsTurnStatus()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-test-" + Guid.NewGuid().ToString("N"));

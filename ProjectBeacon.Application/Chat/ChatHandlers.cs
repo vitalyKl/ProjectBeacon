@@ -372,6 +372,8 @@ public class SwitchChatAgentHandler : ICommandHandler<SwitchChatAgentCommand, Re
             .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
         if (session is null)
             return Result.Failure<ChatSessionDto>("Chat session not found.");
+        if (session.Status == ChatSessionStatus.Streaming)
+            return Result.Failure<ChatSessionDto>("Wait for the current response to finish before switching agent mode.", ErrorKind.Conflict);
         if (string.IsNullOrWhiteSpace(session.ExternalSessionId))
             return Result.Failure<ChatSessionDto>("Chat session has no device session yet.");
         if (string.Equals(session.AgentMode, agent, StringComparison.Ordinal))

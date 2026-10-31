@@ -510,7 +510,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         string toolResult;
                         try
                         {
-                            if (repeatedToolCall)
+                            if (IsPlanModeRunCommandBlocked(agentMode, call.Name))
+                            {
+                                isError = true;
+                                toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
+                            }
+                            else if (repeatedToolCall)
                             {
                                 isError = true;
                                 toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
@@ -929,6 +934,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     };
 
     internal static bool IsPlanToolAllowed(string name) => PlanAllowedTools.Contains(name);
+
+    internal static bool IsPlanModeRunCommandBlocked(string agentMode, string? toolName)
+        => string.Equals(agentMode, "plan", StringComparison.Ordinal)
+            && string.Equals(toolName, "run_command", StringComparison.Ordinal);
 
     private static JsonArray FilterPlanTools(JsonArray tools)
     {

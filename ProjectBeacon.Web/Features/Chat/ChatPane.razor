@@ -88,7 +88,7 @@
                        Size="Size.Medium"
                        Class="beacon-chat-mode-toggle"
                        OnClick="ToggleAgent"
-                       Disabled="@_switchingAgent"
+                       Disabled="@(_switchingAgent || Busy)"
                        title="@ModeShortcutTitle">
                 @(_agent == "plan" ? L["ChatAgentPlan"] : L["ChatAgentAct"])
             </MudButton>

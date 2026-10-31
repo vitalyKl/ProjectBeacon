@@ -50,6 +50,29 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Prompt_AppliesPersistedAgentModeBeforeSending()
+    {
+        var chatId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var runtime = new AgentSwitchRuntime();
+        var chat = BuildSession(_openCode, runtime);
+
+        var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
+        {
+            chatSessionId = chatId,
+            externalSessionId = "oc-1",
+            projectId,
+            text = "outline the changes",
+            model = (string?)null,
+            agentMode = "plan"
+        }), CancellationToken.None);
+
+        Assert.True(ok, error);
+        Assert.Equal("plan", runtime.SwitchedAgent);
+        Assert.Equal("plan", runtime.AgentAtPrompt);
+    }
+
+    [Fact]
     public async Task Prompt_WithoutProject_OmitsHeader()
     {
         var chatId = Guid.NewGuid();
@@ -392,7 +415,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
 
         public Task<string> CreateSessionAsync(string title, CancellationToken ct) => Task.FromResult("oc-1");
 
-        public Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null) => Task.CompletedTask;
+        public virtual Task SendPromptAsync(string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null) => Task.CompletedTask;
 
         public virtual async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
         {
@@ -411,6 +434,47 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             => Task.FromResult(new AgentSessionUsage(1, 1, 1, 0, 2.5));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class AgentSwitchRuntime : StubRuntime, IAgentRuntimeCapabilities
+    {
+        public string? SwitchedAgent { get; private set; }
+        public string? AgentAtPrompt { get; private set; }
+        public bool SupportsForms => false;
+        public bool SupportsAgentSwitch => true;
+        public bool SupportsReasoningEffort => true;
+        public bool SupportsLiveDeltas => false;
+
+        public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+            => Task.FromResult(new AgentRuntimeReadiness(true, null, workingDirectory));
+
+        public Task StreamTextAsync(
+            string sessionId,
+            Func<string, string, int, string, CancellationToken, Task> onDelta,
+            CancellationToken ct)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([]);
+
+        public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct)
+            => Task.FromResult(false);
+
+        public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
+        {
+            SwitchedAgent = agent;
+            return Task.CompletedTask;
+        }
+
+        public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct)
+            => Task.FromResult<int?>(null);
+
+        public override Task SendPromptAsync(
+            string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null)
+        {
+            AgentAtPrompt = SwitchedAgent;
+            return base.SendPromptAsync(sessionId, text, model, ct, controls);
+        }
     }
 
     private sealed class BlockingRuntime : IAgentRuntime
@@ -536,6 +600,10 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         public ClientOpenCodeServe OpenCode { get; }
         public IAgentRuntime Runtime { get; }
         public Task TryTickAsync(string? projectsRoot, CancellationToken ct) => Task.CompletedTask;
+        public Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct)
+            => Runtime is IAgentRuntimeCapabilities capabilities
+                ? capabilities.EnsureReadyAsync(workingDirectory, ct)
+                : Task.FromResult(new AgentRuntimeReadiness(true, null, workingDirectory));
         public Task RunExclusiveAsync(Func<Task> action, CancellationToken ct) => action();
         public Task<T> RunExclusiveAsync<T>(Func<Task<T>> action, CancellationToken ct) => action();
         public void Release() { }

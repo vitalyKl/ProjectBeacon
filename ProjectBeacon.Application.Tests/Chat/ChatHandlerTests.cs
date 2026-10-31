@@ -233,6 +233,33 @@ public sealed class ChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task SwitchChatAgent_RejectsWhilePromptIsStreaming()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        await using (var db = factory.CreateDbContext())
+        {
+            var session = await db.ChatSessions.SingleAsync(item => item.Id == sessionId, ct);
+            session.SetStreaming();
+            await db.SaveChangesAsync(ct);
+        }
+
+        var handler = new SwitchChatAgentHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal());
+        var switched = await handler.HandleAsync(
+            new SwitchChatAgentCommand(new SwitchChatAgentRequest(sessionId, userId, "plan")), ct);
+
+        Assert.False(switched.Success);
+        Assert.Equal("Wait for the current response to finish before switching agent mode.", switched.Error);
+        await using var check = factory.CreateDbContext();
+        Assert.Empty(await check.WorkstationCommands
+            .Where(command => command.ProjectId == projectId && command.Kind == WorkstationCommandKind.ChatSwitchAgent)
+            .ToListAsync(ct));
+    }
+
+    [Fact]
     public async Task ReplyChatForm_RecordsAnswerAndEnqueues()
     {
         var (projectId, userId, _, deviceId, sessionId) = await SeedSendableAsync();

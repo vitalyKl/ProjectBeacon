@@ -20,7 +20,7 @@ public sealed class ChatDialogParameterTests : BUnitRenderBase
             .Add(p => p.ReasoningEffort, "medium"));
 
         Assert.Contains("dialog-model", cut.Markup);
-        Assert.Contains("8,192", cut.Markup);
+        Assert.Contains(backend.ContextSize.ToString("N0"), cut.Markup);
     }
 
     [Fact]
