@@ -939,7 +939,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         => string.Equals(agentMode, "plan", StringComparison.Ordinal)
             && string.Equals(toolName, "run_command", StringComparison.Ordinal);
 
-    private static JsonArray FilterPlanTools(JsonArray tools)
+    internal static JsonArray FilterPlanTools(JsonArray tools)
     {
         var filtered = new JsonArray();
         foreach (var tool in tools)
@@ -951,7 +951,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         return filtered;
     }
 
-    private static bool IsAdvertisedMcpTool(JsonArray tools, string name)
+    internal static bool IsAdvertisedMcpTool(JsonArray tools, string name)
     {
         foreach (var tool in tools)
         {

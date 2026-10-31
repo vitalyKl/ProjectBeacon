@@ -146,6 +146,35 @@ public sealed class NativeAgentRuntimeTests
         => Assert.Equal(expected, NativeAgentRuntime.IsPlanToolAllowed(tool));
 
     [Fact]
+    public void PlanModeOnlyExecutesToolsThatWereAdvertisedAfterFiltering()
+    {
+        var tools = new JsonArray
+        {
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "read_file" }
+            },
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "write_file" }
+            },
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "apply_patch" }
+            }
+        };
+
+        var advertised = NativeAgentRuntime.FilterPlanTools(tools);
+
+        Assert.True(NativeAgentRuntime.IsAdvertisedMcpTool(advertised, "read_file"));
+        Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(advertised, "write_file"));
+        Assert.False(NativeAgentRuntime.IsAdvertisedMcpTool(advertised, "apply_patch"));
+    }
+
+    [Fact]
     public void PlanModeBlocksSpecialRunCommandExecutionEvenWhenModelRequestsIt()
     {
         Assert.True(NativeAgentRuntime.IsPlanModeRunCommandBlocked("plan", "run_command"));
