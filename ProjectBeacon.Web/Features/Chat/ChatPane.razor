@@ -187,13 +187,14 @@
             _sessionId = sessionId;
             _lastPartId = lastPartId;
             _lastPartLength = lastPartLength;
+            _agent = string.Equals(Session?.AgentMode, "plan", StringComparison.OrdinalIgnoreCase) ? "plan" : "build";
             _attached = true;
             return;
         }
-        // A restored conversation starts at the default agent; the selector must not keep
-        // showing a switch made in another session.
+        // Agent mode is persisted with the chat session, so switching conversations restores
+        // the correct Plan/Act selection instead of silently resetting it to Act.
         if (sessionId != _sessionId)
-            _agent = "build";
+            _agent = string.Equals(Session?.AgentMode, "plan", StringComparison.OrdinalIgnoreCase) ? "plan" : "build";
         // The hosts push a sliding window of the latest parts, and streaming upserts reuse
         // the same part id while its body grows: follow on the newest part id or its size.
         if (sessionId != _sessionId || lastPartId != _lastPartId || lastPartLength != _lastPartLength)

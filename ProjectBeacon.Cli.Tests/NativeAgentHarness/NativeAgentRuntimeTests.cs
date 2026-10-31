@@ -95,6 +95,57 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeAgentModeSwitchPersistsAcrossTranscriptReload()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-agent-mode-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control, llama, new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") });
+        try
+        {
+            var session = await runtime.CreateSessionAsync("agent mode", CancellationToken.None);
+            await runtime.SwitchAgentAsync(session, "plan", CancellationToken.None);
+
+            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+            using (var transcript = JsonDocument.Parse(await File.ReadAllTextAsync(transcriptPath)))
+            {
+                Assert.Equal("plan", transcript.RootElement.GetProperty("agentMode").GetString());
+                var systemPrompt = transcript.RootElement.GetProperty("messages")[0].GetProperty("content").GetString();
+                Assert.Contains("Current mode: PLAN", systemPrompt, StringComparison.Ordinal);
+                Assert.Contains("strictly read-only", systemPrompt, StringComparison.Ordinal);
+            }
+
+            await runtime.SwitchAgentAsync(session, "build", CancellationToken.None);
+            using var actTranscript = JsonDocument.Parse(await File.ReadAllTextAsync(transcriptPath));
+            Assert.Equal("build", actTranscript.RootElement.GetProperty("agentMode").GetString());
+            Assert.Contains("Current mode: ACT",
+                actTranscript.RootElement.GetProperty("messages")[0].GetProperty("content").GetString(),
+                StringComparison.Ordinal);
+            Assert.True(((IAgentRuntimeCapabilities)runtime).SupportsAgentSwitch);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("read_file", true)]
+    [InlineData("get_project", true)]
+    [InlineData("context_compile", true)]
+    [InlineData("write_file", false)]
+    [InlineData("apply_patch", false)]
+    [InlineData("run_command", false)]
+    [InlineData("task_create_subtask", false)]
+    [InlineData("pipeline_approve", false)]
+    public void PlanModeOnlyAllowsReadOnlyTools(string tool, bool expected)
+        => Assert.Equal(expected, NativeAgentRuntime.IsPlanToolAllowed(tool));
+
+    [Fact]
     public async Task CreatesSessionPersistsTranscriptStreamsAndReportsTurnStatus()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-test-" + Guid.NewGuid().ToString("N"));
@@ -131,8 +182,9 @@ public sealed class NativeAgentRuntimeTests
             using (var transcript = JsonDocument.Parse(await File.ReadAllTextAsync(transcriptPath)))
             {
                 var systemPrompt = transcript.RootElement.GetProperty("messages")[0].GetProperty("content").GetString();
-                Assert.Contains("ProjectBeacon Native Agent Harness", systemPrompt, StringComparison.Ordinal);
-                Assert.Contains("does not use OpenCode", systemPrompt, StringComparison.Ordinal);
+                Assert.Contains("ProjectBeacon workstation assistant", systemPrompt, StringComparison.Ordinal);
+                Assert.DoesNotContain("Native Agent Harness", systemPrompt, StringComparison.Ordinal);
+                Assert.DoesNotContain("OpenCode", systemPrompt, StringComparison.Ordinal);
             }
             var ready = await runtime.EnsureReadyAsync(project, CancellationToken.None);
             Assert.True(ready.Ready);

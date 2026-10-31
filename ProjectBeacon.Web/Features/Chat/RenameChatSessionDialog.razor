@@ -14,21 +14,20 @@
 
 @code {
     [CascadingParameter] private IMudDialogInstance? Instance { get; set; }
-    [CascadingParameter] private DialogParameters? Parameters { get; set; }
+    [Parameter] public ChatSessionDto? Session { get; set; }
 
     private string? _title;
 
     protected override void OnInitialized()
     {
-        var session = Parameters?["Session"] as ChatSessionDto;
-        _title = session?.Title ?? string.Empty;
+        _title = Session?.Title ?? string.Empty;
     }
 
     private void Cancel() => Instance?.Cancel();
 
     private async Task Save()
     {
-        var session = Parameters?["Session"] as ChatSessionDto;
+        var session = Session;
         var actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         if (session is null || actor.UserId is null)
         {

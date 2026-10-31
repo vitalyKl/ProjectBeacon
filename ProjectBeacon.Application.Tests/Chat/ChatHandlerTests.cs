@@ -206,6 +206,9 @@ public sealed class ChatHandlerTests : IDisposable
         Assert.Equal(sessionId, payload.RootElement.GetProperty("chatSessionId").GetGuid());
         Assert.Equal(projectId, payload.RootElement.GetProperty("projectId").GetGuid());
         Assert.Equal("plan", payload.RootElement.GetProperty("agent").GetString());
+        Assert.Equal("plan", switched.Value!.AgentMode);
+        var stored = await check.ChatSessions.SingleAsync(session => session.Id == sessionId, ct);
+        Assert.Equal("plan", stored.AgentMode);
     }
 
     [Fact]
@@ -221,7 +224,7 @@ public sealed class ChatHandlerTests : IDisposable
         var blank = await handler.HandleAsync(
             new SwitchChatAgentCommand(new SwitchChatAgentRequest(sessionId, userId, "   ")), ct);
         Assert.False(blank.Success);
-        Assert.Equal("Agent is required.", blank.Error);
+        Assert.Equal("Agent must be 'build' or 'plan'.", blank.Error);
 
         var unknown = await handler.HandleAsync(
             new SwitchChatAgentCommand(new SwitchChatAgentRequest(Guid.NewGuid(), userId, "plan")), ct);

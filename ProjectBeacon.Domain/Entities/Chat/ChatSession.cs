@@ -12,6 +12,7 @@ public class ChatSession : Entity, IProjectScoped
     public Guid DeviceId { get; private set; }
     public string ExternalSessionId { get; private set; } = "";
     public string Title { get; private set; } = "";
+    public string AgentMode { get; private set; } = "build";
     public string LocalRoot { get; private set; } = "";
     public ChatSessionStatus Status { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -49,6 +50,15 @@ public class ChatSession : Entity, IProjectScoped
     {
         if (!string.IsNullOrWhiteSpace(title))
             Title = title.Trim();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetAgentMode(string agentMode)
+    {
+        var normalized = agentMode?.Trim().ToLowerInvariant();
+        if (normalized is not ("build" or "plan"))
+            throw new ArgumentOutOfRangeException(nameof(agentMode), "Agent mode must be build or plan.");
+        AgentMode = normalized;
         UpdatedAt = DateTime.UtcNow;
     }
 

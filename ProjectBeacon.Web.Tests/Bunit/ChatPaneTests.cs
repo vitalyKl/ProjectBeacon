@@ -73,6 +73,18 @@ public sealed class ChatPaneTests : BUnitRenderBase
     }
 
     [Fact]
+    public void RestoredSessionDisplaysPersistedPlanMode()
+    {
+        var session = SessionDto("Plan session") with { AgentMode = "plan" };
+        var expected = Bunit.Services.GetRequiredService<Microsoft.Extensions.Localization.IStringLocalizer<Web>>()["ChatAgentPlan"].Value;
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Session, session)
+            .Add(p => p.ShowModelSelect, true));
+
+        Assert.Contains(expected, cut.Markup);
+    }
+
+    [Fact]
     public void ModelBarHiddenWithoutShowModelSelect()
     {
         var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters

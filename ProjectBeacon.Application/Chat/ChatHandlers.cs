@@ -114,7 +114,7 @@ public class CreateChatSessionHandler : ICommandHandler<CreateChatSessionCommand
     internal static ChatSessionDto Map(ChatSession session, string? projectName = null) =>
         new(session.Id, session.ProjectId, projectName, session.DeviceId, session.ExternalSessionId, session.Title,
             session.Status, session.CreatedAt, session.UpdatedAt,
-            session.UsagePromptTokens, session.UsageCompletionTokens, session.UsageAssistantMessages, session.UsageTotalCost, session.UsageContextLimit, session.UsageGenerationSeconds);
+            session.UsagePromptTokens, session.UsageCompletionTokens, session.UsageAssistantMessages, session.UsageTotalCost, session.UsageContextLimit, session.UsageGenerationSeconds, session.AgentMode);
 }
 /// <summary>
 /// Lists the user's chat sessions in the current project. Archived sessions are hidden.
@@ -364,9 +364,9 @@ public class SwitchChatAgentHandler : ICommandHandler<SwitchChatAgentCommand, Re
 
     public async Task<Result<ChatSessionDto>> HandleAsync(SwitchChatAgentCommand command, CancellationToken ct = default)
     {
-        var agent = command.Request.Agent?.Trim() ?? "";
-        if (agent.Length == 0)
-            return Result.Failure<ChatSessionDto>("Agent is required.");
+        var agent = command.Request.Agent?.Trim().ToLowerInvariant() ?? "";
+        if (agent is not ("build" or "plan"))
+            return Result.Failure<ChatSessionDto>("Agent must be 'build' or 'plan'.");
         await using var db = _dbFactory.CreateDbContext();
         var session = await db.ChatSessions
             .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId && s.ArchivedAt == null, ct);
@@ -374,11 +374,14 @@ public class SwitchChatAgentHandler : ICommandHandler<SwitchChatAgentCommand, Re
             return Result.Failure<ChatSessionDto>("Chat session not found.");
         if (string.IsNullOrWhiteSpace(session.ExternalSessionId))
             return Result.Failure<ChatSessionDto>("Chat session has no device session yet.");
+        if (string.Equals(session.AgentMode, agent, StringComparison.Ordinal))
+            return Result.Ok(CreateChatSessionHandler.Map(session));
         var queued = await _enqueue.HandleAsync(new EnqueueCommandCommand(new EnqueueCommandRequest(
             session.DeviceId, command.Request.UserId, WorkstationCommandKind.ChatSwitchAgent,
             JsonSerializer.Serialize(new { externalSessionId = session.ExternalSessionId, chatSessionId = session.Id, projectId = session.ProjectId, agent }), session.ProjectId)), ct);
         if (!queued.Success)
             return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
+        session.SetAgentMode(agent);
         await db.SaveChangesAsync(ct);
         _events.Signal(session.Id);
         return Result.Ok(CreateChatSessionHandler.Map(session));
