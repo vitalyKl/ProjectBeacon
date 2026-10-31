@@ -126,7 +126,14 @@ public sealed class NativeAgentRuntimeTests
         try
         {
             var session = await runtime.CreateSessionAsync("test", CancellationToken.None);
-            Assert.True(File.Exists(Path.Combine(temp, ".opencode", "sessions", session + ".json")));
+            var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+            Assert.True(File.Exists(transcriptPath));
+            using (var transcript = JsonDocument.Parse(await File.ReadAllTextAsync(transcriptPath)))
+            {
+                var systemPrompt = transcript.RootElement.GetProperty("messages")[0].GetProperty("content").GetString();
+                Assert.Contains("ProjectBeacon Native Agent Harness", systemPrompt, StringComparison.Ordinal);
+                Assert.Contains("does not use OpenCode", systemPrompt, StringComparison.Ordinal);
+            }
             var ready = await runtime.EnsureReadyAsync(project, CancellationToken.None);
             Assert.True(ready.Ready);
 

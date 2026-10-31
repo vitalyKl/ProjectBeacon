@@ -240,19 +240,24 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
-    public async Task Daemon_Heartbeat_InvalidSettingsFile_ReportsActionableError()
+    public async Task Daemon_Heartbeat_InvalidSettingsFile_KeepsHeartbeatAliveAndReportsUnavailableRuntime()
     {
         var badSettings = Path.Combine(_dir, "bad-workstation.json");
         File.WriteAllText(badSettings, "<html></html>");
+        string? heartbeatPayload = null;
         var handler = new RouteHandler
         {
+            CommandsHold = TimeSpan.FromMilliseconds(20),
             Impl = req =>
             {
                 var path = req.RequestUri!.AbsolutePath;
                 if (path.Contains("llamaswap-config", StringComparison.Ordinal))
                     return new HttpResponseMessage(HttpStatusCode.NotFound);
                 if (path.Contains("heartbeat", StringComparison.Ordinal))
+                {
+                    heartbeatPayload = req.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
                     return Json(new { id = Guid.Empty });
+                }
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             }
         };
@@ -267,10 +272,20 @@ public sealed class ClientDaemonTests : IDisposable
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         try { await daemon.RunAsync(cts.Token); }
         catch (OperationCanceledException) { }
-        Assert.False(daemon.Snapshot.Connected);
-        Assert.NotNull(daemon.Snapshot.Error);
-        Assert.Contains(badSettings, daemon.Snapshot.Error!);
-        Assert.Contains("Delete the file", daemon.Snapshot.Error!);
+
+        Assert.True(handler.Heartbeats >= 1);
+        Assert.True(daemon.Snapshot.Connected);
+        Assert.NotNull(heartbeatPayload);
+        using var heartbeat = JsonDocument.Parse(heartbeatPayload);
+        Assert.Equal(JsonValueKind.Null, heartbeat.RootElement.GetProperty("workstationJson").ValueKind);
+        var probeJson = heartbeat.RootElement.GetProperty("probeJson").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(probeJson));
+        using var probe = JsonDocument.Parse(probeJson!);
+        var runtime = probe.RootElement.GetProperty("agentRuntime");
+        Assert.Equal("unavailable", runtime.GetProperty("runtime").GetString());
+        Assert.False(runtime.GetProperty("healthy").GetBoolean());
+        Assert.Contains(badSettings, runtime.GetProperty("error").GetString());
+        Assert.Contains("Delete the file", runtime.GetProperty("error").GetString());
     }
 
     [Fact]

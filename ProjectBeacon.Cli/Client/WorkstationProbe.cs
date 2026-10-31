@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 /// <summary>
-/// Builds heartbeat probeJson: tool paths, clientVersion from the assembly informational version, plus optional llama-swap, host load, and OpenCode status.
+/// Builds heartbeat probeJson: tool paths, clientVersion from the assembly informational version, plus optional llama-swap, host load, and active agent-runtime status.
 /// </summary>
 public static class WorkstationProbe
 {
@@ -30,7 +30,11 @@ public static class WorkstationProbe
         if (hostLoad is not null)
             probe["hostLoad"] = hostLoad;
         if (opencodeServe is not null)
+        {
+            // New name is runtime-neutral. Keep the old key for clients that still read it.
+            probe["agentRuntime"] = opencodeServe;
             probe["opencodeServe"] = opencodeServe;
+        }
         return JsonSerializer.Serialize(probe);
     }
 

@@ -2300,4 +2300,16 @@ No Beacon-hosted coding agent.</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Runtime changes take effect after restarting the workstation client.</value>
   </data>
+  <data name="AgentRuntimeActive" xml:space="preserve">
+    <value>Currently active runtime</value>
+  </data>
+  <data name="AgentRuntimePendingRestart" xml:space="preserve">
+    <value>The selected runtime differs from the runtime currently running on this workstation. Restart the workstation client to apply the selection.</value>
+  </data>
+  <data name="AgentRuntimeUnavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="AgentRuntimeUnknown" xml:space="preserve">
+    <value>Unknown (waiting for workstation heartbeat)</value>
+  </data>
 </root>

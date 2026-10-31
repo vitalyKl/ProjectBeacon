@@ -2092,4 +2092,16 @@
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Изменение вступит в силу после перезапуска клиента рабочей станции.</value>
   </data>
+  <data name="AgentRuntimeActive" xml:space="preserve">
+    <value>Фактически запущенный харнес</value>
+  </data>
+  <data name="AgentRuntimePendingRestart" xml:space="preserve">
+    <value>Выбранный харнес отличается от запущенного на этой рабочей станции. Перезапустите клиент рабочей станции, чтобы применить выбор.</value>
+  </data>
+  <data name="AgentRuntimeUnavailable" xml:space="preserve">
+    <value>Недоступен</value>
+  </data>
+  <data name="AgentRuntimeUnknown" xml:space="preserve">
+    <value>Неизвестен (ожидание heartbeat рабочей станции)</value>
+  </data>
 </root>

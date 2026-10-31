@@ -35,16 +35,30 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
         {
             try
             {
-                var settings = _loadSettings();
-                await _llamaSync.SyncAsync(settings, ct);
+                WorkstationSettings? settings;
+                try
+                {
+                    settings = _loadSettings();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Keep heartbeats flowing so the Web UI can show the unavailable runtime.
+                    // A null workstationJson leaves the last successfully reported settings intact.
+                    settings = null;
+                    _state.Log($"workstation settings unavailable; skipping settings sync: {ex.Message}");
+                }
+
+                if (settings is not null)
+                    await _llamaSync.SyncAsync(settings, ct);
+
                 // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
-                await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings.ProjectsRoot, ct);
+                await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings?.ProjectsRoot, ct);
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync("/v1/devices/me/heartbeat", new
                 {
                     probeJson = WorkstationProbe.ProbeJson(
                         _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.RuntimeStatusWire()),
-                    workstationJson = JsonSerializer.Serialize(settings, DaemonJson.Camel),
+                    workstationJson = settings is null ? null : JsonSerializer.Serialize(settings, DaemonJson.Camel),
                     instanceId = DaemonInstance.Id
                 }, ct);
                 var code = (int)heartbeat.StatusCode;
