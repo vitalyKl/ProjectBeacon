@@ -13,6 +13,7 @@ public class ChatSessionConfiguration : IEntityTypeConfiguration<ChatSession>
         entity.HasKey(e => e.Id);
         entity.Property(e => e.ExternalSessionId).IsRequired().HasMaxLength(200);
         entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+        entity.Property(e => e.AgentMode).IsRequired().HasMaxLength(16);
         entity.Property(e => e.LocalRoot).IsRequired().HasMaxLength(1000);
         entity.Property(e => e.Status).HasConversion<string>().IsRequired();
         entity.Property(e => e.CreatedAt).IsRequired();

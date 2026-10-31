@@ -54,7 +54,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         => await McpStdioClient.StartAsync(authorization, ct);
 
     public bool SupportsForms => false;
-    public bool SupportsAgentSwitch => false;
+    public bool SupportsAgentSwitch => true;
     public bool SupportsReasoningEffort => true;
     public bool SupportsLiveDeltas => true;
 
@@ -73,7 +73,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         state.Messages.Add(new JsonObject
         {
             ["role"] = "system",
-            ["content"] = "You are the ProjectBeacon workstation assistant, running through the ProjectBeacon Native Agent Harness. This runtime executes model requests and its tool loop directly; it does not use OpenCode. When asked which agent harness is executing this conversation, identify it as the ProjectBeacon Native Harness. Do not claim that this conversation is running in OpenCode. Be accurate, concise, and explicit about uncertainty. You can only use tools explicitly provided in this conversation." + Environment.NewLine + BeaconToolDiscipline.Rules
+            ["content"] = BuildSystemPrompt(state.AgentMode)
         });
         if (!_sessions.TryAdd(state.Id, state))
             throw new InvalidOperationException("Could not create a unique agent session.");
@@ -246,8 +246,27 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct) =>
         Task.FromException<bool>(new InvalidOperationException("Interactive forms are not supported by the native runtime yet."));
 
-    public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct) =>
-        Task.FromException(new InvalidOperationException("Agent switching is not supported by the native runtime yet."));
+    public async Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
+    {
+        var mode = agent?.Trim().ToLowerInvariant();
+        if (mode is not ("build" or "plan"))
+            throw new ArgumentException("Agent mode must be 'build' or 'plan'.", nameof(agent));
+
+        var session = await GetSessionAsync(sessionId, ct);
+        lock (session.Sync)
+        {
+            if (session.ActiveTurn is not null)
+                throw new InvalidOperationException("The agent mode cannot be changed while a response is running.");
+
+            session.AgentMode = mode;
+            if (session.Messages.Count == 0)
+                session.Messages.Add(new JsonObject { ["role"] = "system" });
+            session.Messages[0]["role"] = "system";
+            session.Messages[0]["content"] = BuildSystemPrompt(mode);
+        }
+
+        await PersistAsync(session, ct);
+    }
 
     public Task<int?> ReadContextLimitAsync(string? modelId, CancellationToken ct)
     {
@@ -292,6 +311,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         CancellationToken ct)
     {
         var messageId = $"native:{session.Id}:{turnNumber}";
+        string agentMode;
+        lock (session.Sync)
+            agentMode = session.AgentMode;
         var generationStarted = Stopwatch.GetTimestamp();
         var firstTokenAt = 0L;
         var finish = "stop";
@@ -329,6 +351,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 && commandPrefixes.Length > 0
                 && IsRunCommandAuthorized(commandAuth))
                 mcpTools.Add(NativeCommandRunner.ToolDefinition());
+
+            // Plan mode is read-only by construction. The model cannot invoke mutating MCP
+            // tools even if the general chat server advertises them.
+            if (string.Equals(agentMode, "plan", StringComparison.Ordinal))
+                mcpTools = FilterPlanTools(mcpTools);
 
             var hasFinalText = false;
             string? lastToolCallFingerprint = null;
@@ -483,7 +510,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         string toolResult;
                         try
                         {
-                            if (repeatedToolCall)
+                            if (IsPlanModeRunCommandBlocked(agentMode, call.Name))
+                            {
+                                isError = true;
+                                toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
+                            }
+                            else if (repeatedToolCall)
                             {
                                 isError = true;
                                 toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
@@ -523,7 +555,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 isError = true;
                                 toolResult = "Tool error: no scoped MCP authorization is available for this command.";
                             }
-                            else if (!IsAdvertisedMcpTool(mcpClient.OpenAiTools, call.Name!))
+                            else if (!IsAdvertisedMcpTool(mcpTools, call.Name!))
                             {
                                 isError = true;
                                 toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
@@ -874,7 +906,52 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
         Math.Max(1, Encoding.UTF8.GetByteCount(string.Join("\n", messages.Select(m => m.ToJsonString()))) / 4);
 
-    private static bool IsAdvertisedMcpTool(JsonArray tools, string name)
+    private static string BuildSystemPrompt(string agentMode)
+    {
+        const string common =
+            "You are the ProjectBeacon workstation assistant. Help the user with software engineering and project tasks. " +
+            "Use only tools explicitly provided in this conversation. Be concise, factual, and explicit about uncertainty. " +
+            "Never claim that files or remote project state changed unless a tool confirmed the change.";
+
+        var mode = string.Equals(agentMode, "plan", StringComparison.Ordinal)
+            ? "Current mode: PLAN. Inspect and reason, then return a concrete implementation plan with relevant files, " +
+              "ordered steps, risks, and verification. This mode is strictly read-only: do not modify files, run commands, " +
+              "or create, update, or delete remote resources. Use only read-only tools. Do not claim implementation work is complete."
+            : "Current mode: ACT. Carry out the requested work using the available tools, verify important changes, " +
+              "and report what was actually completed.";
+
+        return common + Environment.NewLine + mode + Environment.NewLine + BeaconToolDiscipline.Rules;
+    }
+
+    private static readonly HashSet<string> PlanAllowedTools = new(StringComparer.Ordinal)
+    {
+        "read_file", "get_tree", "search_code", "get_changed_scope", "get_signatures", "get_callers", "hash_range",
+        "get_project", "list_tasks", "get_task", "list_task_steps",
+        "list_context_nodes", "get_context_node", "export_agents_md",
+        "list_constraints", "list_decisions", "list_milestones", "get_milestone",
+        "list_labels", "match_label", "list_reports", "get_report",
+        "task_pipeline_status", "context_compile", "model_status"
+    };
+
+    internal static bool IsPlanToolAllowed(string name) => PlanAllowedTools.Contains(name);
+
+    internal static bool IsPlanModeRunCommandBlocked(string agentMode, string? toolName)
+        => string.Equals(agentMode, "plan", StringComparison.Ordinal)
+            && string.Equals(toolName, "run_command", StringComparison.Ordinal);
+
+    internal static JsonArray FilterPlanTools(JsonArray tools)
+    {
+        var filtered = new JsonArray();
+        foreach (var tool in tools)
+        {
+            var name = tool?["function"]?["name"]?.GetValue<string>();
+            if (name is not null && IsPlanToolAllowed(name))
+                filtered.Add(tool!.DeepClone());
+        }
+        return filtered;
+    }
+
+    internal static bool IsAdvertisedMcpTool(JsonArray tools, string name)
     {
         foreach (var tool in tools)
         {
@@ -966,6 +1043,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             Id = normalizedId,
             Title = saved.Title,
             CreatedAt = saved.CreatedAt,
+            AgentMode = string.Equals(saved.AgentMode, "plan", StringComparison.OrdinalIgnoreCase) ? "plan" : "build",
             TranscriptPath = path,
             Messages = saved.Messages,
             Parts = saved.Parts,
@@ -978,6 +1056,19 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         var changed = false;
         lock (state.Sync)
         {
+            // Older transcripts contained a verbose runtime-identity instruction. Replace it
+            // during load so restored chats use the same neutral, task-focused prompt as new chats.
+            if (state.Messages.Count == 0 || state.Messages[0]["role"]?.GetValue<string>() != "system")
+            {
+                state.Messages.Insert(0, new JsonObject { ["role"] = "system", ["content"] = BuildSystemPrompt(state.AgentMode) });
+                changed = true;
+            }
+            else if (!string.Equals(state.Messages[0]["content"]?.GetValue<string>(), BuildSystemPrompt(state.AgentMode), StringComparison.Ordinal))
+            {
+                state.Messages[0]["content"] = BuildSystemPrompt(state.AgentMode);
+                changed = true;
+            }
+
             if (state.TurnStatus is { Ended: false } interrupted)
             {
                 state.TurnStatus = new AgentTurnStatus(true, "aborted", "Client restarted during the previous turn.", interrupted.MessageId);
@@ -1110,6 +1201,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     Id = session.Id,
                     Title = session.Title,
                     CreatedAt = session.CreatedAt,
+                    AgentMode = session.AgentMode,
                     Messages = session.Messages.Select(m => (JsonObject)m.DeepClone()).ToList(),
                     Parts = session.Parts.ToList(),
                     TurnNumber = session.TurnNumber,
@@ -1242,6 +1334,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public Channel<NativeDelta> Deltas { get; } = Channel.CreateUnbounded<NativeDelta>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         public string Id { get; set; } = "";
         public string Title { get; set; } = "";
+        public string AgentMode { get; set; } = "build";
         public DateTimeOffset CreatedAt { get; set; }
         public string TranscriptPath { get; set; } = "";
         public List<JsonObject> Messages { get; set; } = [];
@@ -1260,6 +1353,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public string Id { get; set; } = "";
         public string Title { get; set; } = "";
         public DateTimeOffset CreatedAt { get; set; }
+        public string AgentMode { get; set; } = "build";
         public List<JsonObject> Messages { get; set; } = [];
         public List<AgentMessagePart> Parts { get; set; } = [];
         public int TurnNumber { get; set; }

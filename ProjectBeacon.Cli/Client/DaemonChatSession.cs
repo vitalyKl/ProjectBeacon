@@ -73,6 +73,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var text = doc.RootElement.TryGetProperty("text", out var tx) ? tx.GetString() : null;
         var model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
         var effort = doc.RootElement.TryGetProperty("reasoningEffort", out var eff) ? eff.GetString() : null;
+        var agentMode = doc.RootElement.TryGetProperty("agentMode", out var mode) ? mode.GetString() : null;
         var contextLimit = doc.RootElement.TryGetProperty("contextLimit", out var limit)
             && limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var configuredLimit) && configuredLimit > 0
                 ? configuredLimit
@@ -88,7 +89,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         try
         {
             return await _gate.RunExclusiveAsync(
-                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, projectId, contextLimit, harnessAuthorization, activeTurn.Token),
+                () => PromptLockedAsync(cwd, externalId, chatId, text, model, effort, agentMode, projectId, contextLimit, harnessAuthorization, activeTurn.Token),
                 activeTurn.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && activeTurn.IsCancellationRequested)
@@ -197,7 +198,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     }
 
     private async Task<(bool Ok, string? Result, string? Error)> PromptLockedAsync(
-        string cwd, string externalId, Guid chatId, string text, string? model, string? effort,
+        string cwd, string externalId, Guid chatId, string text, string? model, string? effort, string? agentMode,
         Guid projectId, int? configuredContextLimit, AgentHarnessAuthorization? harnessAuthorization, CancellationToken ct)
     {
         var runtime = _gate.Runtime;
@@ -252,6 +253,17 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 ContextLimit = configuredContextLimit,
                 HarnessAuthorization = harnessAuthorization
             };
+        var normalizedAgentMode = agentMode?.Trim().ToLowerInvariant();
+        if (normalizedAgentMode is "build" or "plan")
+        {
+            if (capabilities is { SupportsAgentSwitch: true })
+                await capabilities.SwitchAgentAsync(externalId, normalizedAgentMode, ct);
+            else if (capabilities is null)
+                await _gate.OpenCode.SwitchAgentAsync(externalId, normalizedAgentMode, ct);
+            else if (normalizedAgentMode == "plan")
+                return (false, null, "The selected agent runtime cannot enforce Plan mode.");
+        }
+
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var seenForms = new HashSet<string>(StringComparer.Ordinal);

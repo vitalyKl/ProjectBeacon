@@ -50,12 +50,16 @@ public sealed class DaemonCommandLoopTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var run = loop.RunAsync(cts.Token);
         await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        // The fake signals when the HTTP request is sent, before the command loop has
+        // received the 4xx response and emitted its terminal (non-retry) log entry.
+        // Wait for that observable outcome before cancelling the loop; otherwise slower
+        // runners can cancel between the callback and response processing.
+        AssertLogEventually(state, "not retrying");
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
         Assert.Equal(1, executor.Executed);
         Assert.Equal(1, api.CompleteRequests);
-        AssertLogEventually(state, "not retrying");
     }
 
     [Fact]

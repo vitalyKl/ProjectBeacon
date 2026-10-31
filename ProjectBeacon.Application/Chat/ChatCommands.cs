@@ -21,7 +21,8 @@ public record ChatSessionDto(
     int? AssistantMessages = null,
     double? TotalCost = null,
     int? ContextLimit = null,
-    double? GenerationSeconds = null);
+    double? GenerationSeconds = null,
+    string AgentMode = "build");
 
 /// <summary>
 /// One chat part: role, kind, body, optional external id, and sort order.

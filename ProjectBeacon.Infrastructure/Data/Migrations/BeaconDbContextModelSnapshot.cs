@@ -263,6 +263,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AgentMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<DateTime?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone");
 
