@@ -332,6 +332,15 @@ public sealed class ApiTokenAuthMiddleware
 
         if (role == PipelineRole.Actor)
         {
+            // MCP needs the pinned task snapshot to derive the Actor's persisted tool allowlist
+            // and re-check that its subtask is still active before every tool call.
+            if (method == HttpMethods.Get
+                && segments.Length == 4
+                && segments[1] == "tasks"
+                && GuidSegmentEquals(segments, 2, scopedTaskId)
+                && segments[3] == "pipeline")
+                return true;
+
             return method == HttpMethods.Post
                 && segments.Length == 6
                 && segments[1] == "tasks"

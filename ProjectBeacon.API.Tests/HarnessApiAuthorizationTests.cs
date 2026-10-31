@@ -17,6 +17,10 @@ public sealed class HarnessApiAuthorizationTests
         var failPath = $"/v1/tasks/{_taskId:D}/subtasks/{_subtaskId:D}/fail";
 
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/pipeline", _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/pipeline", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Post, resultPath, _taskId, _subtaskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Post, failPath, _taskId, _subtaskId));
@@ -137,12 +141,17 @@ public sealed class HarnessApiAuthorizationTests
     [Fact]
     public void PlannerContextCompileMustStayPinnedToItsPipelineTask()
     {
-        Assert.True(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(
-            $"""{"taskId":"{{_taskId:D}}","includeHandoff":false}""", _taskId));
-        Assert.False(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(
-            $"""{"taskId":"{{Guid.NewGuid():D}}"}""", _taskId));
-        Assert.False(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(
-            """{"includeHandoff":false}""", _taskId));
+        var matchingTask = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            taskId = _taskId,
+            includeHandoff = false
+        });
+        var differentTask = System.Text.Json.JsonSerializer.Serialize(new { taskId = Guid.NewGuid() });
+        var taskOmitted = System.Text.Json.JsonSerializer.Serialize(new { includeHandoff = false });
+
+        Assert.True(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(matchingTask, _taskId));
+        Assert.False(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(differentTask, _taskId));
+        Assert.False(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(taskOmitted, _taskId));
     }
 
     [Fact]
