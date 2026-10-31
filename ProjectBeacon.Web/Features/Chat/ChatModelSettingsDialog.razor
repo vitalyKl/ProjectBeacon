@@ -37,7 +37,9 @@
 
 @code {
     [CascadingParameter] private IMudDialogInstance? Instance { get; set; }
-    [CascadingParameter] private DialogParameters? Parameters { get; set; }
+    [Parameter] public List<LocalModelBackendDto> Models { get; set; } = [];
+    [Parameter] public string? Model { get; set; }
+    [Parameter] public string? ReasoningEffort { get; set; }
 
     private List<LocalModelBackendDto> _models = [];
     private string? _model;
@@ -46,9 +48,9 @@
 
     protected override void OnInitialized()
     {
-        _models = Parameters?["Models"] as List<LocalModelBackendDto> ?? [];
-        _model = Parameters?["Model"] as string;
-        _effort = Parameters?["ReasoningEffort"] as string;
+        _models = Models ?? [];
+        _model = Model;
+        _effort = ReasoningEffort;
     }
 
     private LocalModelBackendDto? SelectedBackend =>

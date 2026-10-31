@@ -73,6 +73,17 @@ public sealed class ChatPaneTests : BUnitRenderBase
     }
 
     [Fact]
+    public void RestoredSessionDisplaysPersistedPlanMode()
+    {
+        var session = SessionDto("Plan session") with { AgentMode = "plan" };
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Session, session)
+            .Add(p => p.ShowModelSelect, true));
+
+        Assert.Equal("Plan", cut.Find(".beacon-chat-mode-toggle").TextContent.Trim());
+    }
+
+    [Fact]
     public void ModelBarHiddenWithoutShowModelSelect()
     {
         var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters

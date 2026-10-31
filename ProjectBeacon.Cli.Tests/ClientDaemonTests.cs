@@ -269,8 +269,13 @@ public sealed class ClientDaemonTests : IDisposable
             HeartbeatInterval = TimeSpan.Zero,
             CommandErrorDelay = TimeSpan.Zero
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        try { await daemon.RunAsync(cts.Token); }
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var run = daemon.RunAsync(cts.Token);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while ((!daemon.Snapshot.Connected || handler.Heartbeats < 1) && DateTime.UtcNow < deadline)
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        cts.Cancel();
+        try { await run; }
         catch (OperationCanceledException) { }
 
         Assert.True(handler.Heartbeats >= 1);

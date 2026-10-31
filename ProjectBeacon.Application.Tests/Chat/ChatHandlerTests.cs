@@ -206,6 +206,9 @@ public sealed class ChatHandlerTests : IDisposable
         Assert.Equal(sessionId, payload.RootElement.GetProperty("chatSessionId").GetGuid());
         Assert.Equal(projectId, payload.RootElement.GetProperty("projectId").GetGuid());
         Assert.Equal("plan", payload.RootElement.GetProperty("agent").GetString());
+        Assert.Equal("plan", switched.Value!.AgentMode);
+        var stored = await check.ChatSessions.SingleAsync(session => session.Id == sessionId, ct);
+        Assert.Equal("plan", stored.AgentMode);
     }
 
     [Fact]
@@ -221,12 +224,39 @@ public sealed class ChatHandlerTests : IDisposable
         var blank = await handler.HandleAsync(
             new SwitchChatAgentCommand(new SwitchChatAgentRequest(sessionId, userId, "   ")), ct);
         Assert.False(blank.Success);
-        Assert.Equal("Agent is required.", blank.Error);
+        Assert.Equal("Agent must be 'build' or 'plan'.", blank.Error);
 
         var unknown = await handler.HandleAsync(
             new SwitchChatAgentCommand(new SwitchChatAgentRequest(Guid.NewGuid(), userId, "plan")), ct);
         Assert.False(unknown.Success);
         Assert.Equal("Chat session not found.", unknown.Error);
+    }
+
+    [Fact]
+    public async Task SwitchChatAgent_RejectsWhilePromptIsStreaming()
+    {
+        var (projectId, userId, _, _, sessionId) = await SeedSendableAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        await using (var db = factory.CreateDbContext())
+        {
+            var session = await db.ChatSessions.SingleAsync(item => item.Id == sessionId, ct);
+            session.SetStreaming();
+            await db.SaveChangesAsync(ct);
+        }
+
+        var handler = new SwitchChatAgentHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal());
+        var switched = await handler.HandleAsync(
+            new SwitchChatAgentCommand(new SwitchChatAgentRequest(sessionId, userId, "plan")), ct);
+
+        Assert.False(switched.Success);
+        Assert.Equal("Wait for the current response to finish before switching agent mode.", switched.Error);
+        await using var check = factory.CreateDbContext();
+        Assert.Empty(await check.WorkstationCommands
+            .Where(command => command.ProjectId == projectId && command.Kind == WorkstationCommandKind.ChatSwitchAgent)
+            .ToListAsync(ct));
     }
 
     [Fact]
