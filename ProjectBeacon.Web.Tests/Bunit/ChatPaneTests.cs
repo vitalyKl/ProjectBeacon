@@ -1,3 +1,4 @@
+using System.Globalization;
 using ProjectBeacon.Application.Chat;
 using ProjectBeacon.Application.Agents;
 using Bunit;
@@ -12,6 +13,11 @@ namespace ProjectBeacon.Web.Tests.Bunit;
 /// </summary>
 public sealed class ChatPaneTests : BUnitRenderBase
 {
+    public ChatPaneTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en");
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
+    }
     private static ChatPartDto Part(int order, string role, string body) =>
         new(Guid.NewGuid(), Guid.NewGuid(), role, "text", body, null, order, DateTime.UtcNow);
 
