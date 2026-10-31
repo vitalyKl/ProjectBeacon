@@ -555,7 +555,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 isError = true;
                                 toolResult = "Tool error: no scoped MCP authorization is available for this command.";
                             }
-                            else if (!IsAdvertisedMcpTool(mcpClient.OpenAiTools, call.Name!))
+                            else if (!IsAdvertisedMcpTool(mcpTools, call.Name!))
                             {
                                 isError = true;
                                 toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
