@@ -2078,4 +2078,16 @@ orthstar</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>ランタイムの変更はワークステーション クライアントの再起動後に反映されます。</value>
   </data>
+  <data name="AgentRuntimeActive" xml:space="preserve">
+    <value>現在アクティブなランタイム</value>
+  </data>
+  <data name="AgentRuntimePendingRestart" xml:space="preserve">
+    <value>選択したランタイムがこのワークステーションで現在実行中のランタイムと異なります。選択を適用するには、ワークステーションクライアントを再起動してください。</value>
+  </data>
+  <data name="AgentRuntimeUnavailable" xml:space="preserve">
+    <value>利用不可</value>
+  </data>
+  <data name="AgentRuntimeUnknown" xml:space="preserve">
+    <value>不明（ワークステーションのハートビート待ち）</value>
+  </data>
 </root>

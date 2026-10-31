@@ -2078,4 +2078,16 @@ orthstar</value>
   <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>重启工作站客户端后，运行时更改才会生效。</value>
   </data>
+  <data name="AgentRuntimeActive" xml:space="preserve">
+    <value>当前活动的运行时</value>
+  </data>
+  <data name="AgentRuntimePendingRestart" xml:space="preserve">
+    <value>所选运行时与当前在该工作站上运行的运行时不同。重启工作站客户端以应用此选择。</value>
+  </data>
+  <data name="AgentRuntimeUnavailable" xml:space="preserve">
+    <value>不可用</value>
+  </data>
+  <data name="AgentRuntimeUnknown" xml:space="preserve">
+    <value>未知（等待工作站心跳）</value>
+  </data>
 </root>
