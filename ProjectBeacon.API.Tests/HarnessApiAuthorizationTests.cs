@@ -135,6 +135,17 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void PlannerContextCompileMustStayPinnedToItsPipelineTask()
+    {
+        Assert.True(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(
+            $"""{"taskId":"{{_taskId:D}}","includeHandoff":false}""", _taskId));
+        Assert.False(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(
+            $"""{"taskId":"{{Guid.NewGuid():D}}"}""", _taskId));
+        Assert.False(ApiTokenAuthMiddleware.IsContextCompileBodyScoped(
+            """{"includeHandoff":false}""", _taskId));
+    }
+
+    [Fact]
     public void AllHarnessRequestsAreBoundToTheTokenProject()
     {
         Assert.False(ApiTokenAuthMiddleware.IsHarnessRequestAllowed(

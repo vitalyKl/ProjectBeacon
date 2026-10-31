@@ -161,7 +161,7 @@ public sealed class ApiTokenAuthMiddleware
             launchSessionStatus = launched.Status;
         }
 
-        return IsHarnessRequestAllowed(
+        var allowed = IsHarnessRequestAllowed(
             work.Kind,
             scope.Role,
             token.ProjectId,
@@ -172,6 +172,18 @@ public sealed class ApiTokenAuthMiddleware
             launchSessionTaskId,
             launchSessionRole,
             launchSessionStatus);
+        if (!allowed)
+            return false;
+
+        // context_compile is a POST for transport reasons, but it is still a read operation.
+        // Its taskId is part of the body, so pin it explicitly to the command's task rather
+        // than relying on the client-provided tool arguments.
+        if (work.Kind == WorkstationCommandKind.RunPipelineSession
+            && scope.Role == PipelineRole.Planner
+            && IsContextCompileRequest(context.Request.Method, context.Request.Path.Value))
+            return await IsContextCompileBodyScopedAsync(context.Request, scope.TaskId, ct);
+
+        return true;
     }
 
     private static async Task<HarnessCommandScope?> ResolveCommandScopeAsync(
@@ -447,6 +459,63 @@ public sealed class ApiTokenAuthMiddleware
 
         // Milestone details are tenant-scoped by RLS and used by Eval's get_milestone tool.
         return segments.Length == 3 && segments[1] == "milestones" && Guid.TryParse(segments[2], out _);
+    }
+
+    private static bool IsContextCompileRequest(string method, string? path)
+    {
+        var segments = (path ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return method == HttpMethods.Post
+            && segments.Length == 5
+            && segments[0] == "v1"
+            && segments[1] == "projects"
+            && Guid.TryParse(segments[2], out _)
+            && segments[3] == "context"
+            && segments[4] == "compile";
+    }
+
+    private static async Task<bool> IsContextCompileBodyScopedAsync(
+        HttpRequest request,
+        Guid? scopedTaskId,
+        CancellationToken ct)
+    {
+        if (scopedTaskId is not { } expectedTaskId || expectedTaskId == Guid.Empty
+            || request.ContentLength is > 64 * 1024)
+            return false;
+
+        request.EnableBuffering();
+        try
+        {
+            using var document = await JsonDocument.ParseAsync(request.Body, cancellationToken: ct);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && TryReadGuid(document.RootElement, "taskId", out var requestedTaskId)
+                && requestedTaskId == expectedTaskId;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (request.Body.CanSeek)
+                request.Body.Position = 0;
+        }
+    }
+
+    internal static bool IsContextCompileBodyScoped(string payloadJson, Guid scopedTaskId)
+    {
+        if (scopedTaskId == Guid.Empty)
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && TryReadGuid(document.RootElement, "taskId", out var requestedTaskId)
+                && requestedTaskId == scopedTaskId;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool IsLaunchSessionRequest(string method, string? path)
