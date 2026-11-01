@@ -43,7 +43,9 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         Bunit.Services.GetRequiredService<NavigationManager>().NavigateTo("/dashboard");
         var cut = Bunit.RenderComponent<ChatDock>(parameters => parameters
             .Add(p => p.PollSafetyNet, TimeSpan.FromMilliseconds(150)));
-        cut.Find(".beacon-chat-fab").Click(new MouseEventArgs());
+        // The safety-net poll re-renders on its own clock; keep Find and Click in one
+        // InvokeAsync hop so a re-render cannot invalidate the handler in between.
+        await cut.InvokeAsync(() => cut.Find(".beacon-chat-fab").Click(new MouseEventArgs()));
         cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
         Assert.Contains("recovered-marker", cut.Markup);
     }
@@ -75,9 +77,14 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
         // guaranteed to land mid-flight; then wait for the fetch to complete so the poll
         // guards have run before asserting.
         await handler.FetchStarted.WaitAsync(TimeSpan.FromSeconds(10));
-        var target = cut.FindAll("div.beacon-session-main")
-            .Single(e => e.TextContent.Contains("Session B"));
-        target.Click(new MouseEventArgs());
+        // The in-flight poll re-renders on its own clock; keep Find and Click in one
+        // InvokeAsync hop so the re-render cannot invalidate the handler in between.
+        await cut.InvokeAsync(() =>
+        {
+            var target = cut.FindAll("div.beacon-session-main")
+                .Single(e => e.TextContent.Contains("Session B"));
+            target.Click(new MouseEventArgs());
+        });
         await handler.FetchCompleted.WaitAsync(TimeSpan.FromSeconds(10));
         cut.WaitForAssertion(() => Assert.Contains("Session B", cut.Find(".beacon-chat-session-head").TextContent), TimeSpan.FromSeconds(10));
     }

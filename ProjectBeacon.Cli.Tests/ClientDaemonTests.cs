@@ -266,12 +266,16 @@ public sealed class ClientDaemonTests : IDisposable
         await using var daemon = new WorkstationDaemon(http, llama, () => WorkstationSettings.Load(badSettings))
         {
             DelayAsync = (_, ct) => Task.Delay(1, ct),
-            HeartbeatInterval = TimeSpan.Zero,
+            // A real (non-zero) interval keeps the daemon from spawning a fresh nvidia-smi
+            // process every loop turn, which would starve the polling below on loaded hosts.
+            HeartbeatInterval = TimeSpan.FromMilliseconds(150),
             CommandErrorDelay = TimeSpan.Zero
         };
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        // The first heartbeat may take up to ~55 s on a loaded host (eleven bounded
+        // `where` launches in WorkstationProbe), so wait past that instead of 10 s.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
         var run = daemon.RunAsync(cts.Token);
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var deadline = DateTime.UtcNow.AddSeconds(90);
         while ((!daemon.Snapshot.Connected || handler.Heartbeats < 1) && DateTime.UtcNow < deadline)
             await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();
