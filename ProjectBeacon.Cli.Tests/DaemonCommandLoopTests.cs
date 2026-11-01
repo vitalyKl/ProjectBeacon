@@ -22,9 +22,9 @@ public sealed class DaemonCommandLoopTests
             if (n == 2) done.TrySetResult(true);
         };
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -47,9 +47,9 @@ public sealed class DaemonCommandLoopTests
             _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
         api.OnCompleteRequest = _ => done.TrySetResult(true);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         // The fake signals when the HTTP request is sent, before the command loop has
         // received the 4xx response and emitted its terminal (non-retry) log entry.
         // Wait for that observable outcome before cancelling the loop; otherwise slower
@@ -76,15 +76,17 @@ public sealed class DaemonCommandLoopTests
             if (n == 2) done.TrySetResult(true);
         };
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
         Assert.Equal(1, executor.Executed);
         Assert.Equal(2, api.CompleteRequests);
-        Assert.Contains(state.Snapshot.Log, line => line.Contains("retrying"));
+        // The fake signals when the retry request is sent, before the loop has written
+        // its "retrying" verdict; poll like the other retry tests.
+        AssertLogEventually(state, "retrying");
     }
 
     [Fact]
@@ -99,9 +101,9 @@ public sealed class DaemonCommandLoopTests
             if (n == 5) done.TrySetResult(true);
         };
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var run = loop.RunAsync(cts.Token);
-        await done.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -123,9 +125,9 @@ public sealed class DaemonCommandLoopTests
         var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
         var loop = new DaemonCommandLoop(deps, executor, state, timing);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         var run = loop.RunAsync(cts.Token);
-        await api.BothCompleted.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await api.BothCompleted.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         cts.Cancel();
         try { await run; } catch (OperationCanceledException) { }
 
@@ -169,11 +171,12 @@ public sealed class DaemonCommandLoopTests
 
     /// <summary>
     /// The fake signals completion a few thread-pool hops before the loop writes its
-    /// verdict log line; on loaded hosts the snapshot can lag, so poll briefly.
+    /// verdict log line; loaded CI hosts have starved the continuation past 5 s, so poll
+    /// long enough to stay under the test's cancellation guard.
     /// </summary>
     private static void AssertLogEventually(DaemonRuntimeState state, string fragment)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline && !state.Snapshot.Log.Any(l => l.Contains(fragment, StringComparison.Ordinal)))
             Thread.Sleep(10);
         Assert.Contains(state.Snapshot.Log, l => l.Contains(fragment, StringComparison.Ordinal));
