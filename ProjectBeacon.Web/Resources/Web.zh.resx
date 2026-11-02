@@ -2129,4 +2129,16 @@ orthstar</value>
 <data name="LandingCtaBody" xml:space="preserve"><value>启动自己的 ProjectBeacon 主机并连接工作站。</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>面向 AI 辅助开发的本地优先控制平面</value></data>
 
+  <data name="AgentModeHint" xml:space="preserve">
+    <value>用于设置工作站交互式聊天所使用的 OpenCode 配置。任务流水线的默认模型请在“任务类型”中单独配置。</value>
+  </data>
+  <data name="AgentTemplateModelsScopeHint" xml:space="preserve">
+    <value>这些是工作站级别的角色默认设置和 OpenCode 配置。只有当任务的相应阶段未指定专用模型时，流水线会话才会使用这些角色绑定。</value>
+  </data>
+  <data name="PipelineStartHint" xml:space="preserve">
+    <value>启动 Planner 分析此任务并准备执行计划。</value>
+  </data>
+  <data name="TaskKindModelsScopeHint" xml:space="preserve">
+    <value>这些是任务流水线的模型设置。对于已配置的任务阶段，决策模型、执行模型默认值以及阶段专用模型的优先级高于工作站角色绑定。</value>
+  </data>
 </root>
