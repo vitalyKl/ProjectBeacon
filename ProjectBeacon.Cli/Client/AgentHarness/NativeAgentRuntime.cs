@@ -940,8 +940,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         summary.Append(item.Text);
 
                 if (summary.Length == 0)
-                    throw new InvalidOperationException(
-                        "The conversation exceeded its context budget, but the model returned an empty summary. The existing history was preserved.");
+                {
+                    // A failed/empty model summary must not terminate the user's task. Preserve
+                    // a deterministic structured checkpoint from the recent transcript and tool journal.
+                    summary.Append(BuildFallbackCheckpoint(old, toolJournal));
+                    _log?.Invoke("native context compaction used a deterministic fallback checkpoint");
+                }
 
                 var compacted = new List<JsonObject> { snapshot[0] };
                 compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Continuation checkpoint (internal state; preserve and follow it):\\n" + summary.ToString() });
@@ -1002,6 +1006,42 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
 
         return Math.Clamp(splitAt, 1, messages.Count);
+    }
+
+    private static string BuildFallbackCheckpoint(
+        IReadOnlyList<JsonObject> olderMessages,
+        IReadOnlyList<ToolJournalEntry> toolJournal)
+    {
+        var recentUserMessages = olderMessages
+            .Where(message => string.Equals(message["role"]?.GetValue<string>(), "user", StringComparison.Ordinal))
+            .Select(message => message["content"]?.ToString() ?? "")
+            .Where(content => !string.IsNullOrWhiteSpace(content))
+            .TakeLast(6)
+            .ToArray();
+        var recentAssistantNotes = olderMessages
+            .Where(message => string.Equals(message["role"]?.GetValue<string>(), "assistant", StringComparison.Ordinal)
+                && message["tool_calls"] is not JsonArray)
+            .Select(message => message["content"]?.ToString() ?? "")
+            .Where(content => !string.IsNullOrWhiteSpace(content))
+            .TakeLast(4)
+            .ToArray();
+
+        return new JsonObject
+        {
+            ["goal"] = recentUserMessages.LastOrDefault() ?? "Continue the user's current request from the retained conversation.",
+            ["constraints"] = new JsonArray(),
+            ["completed"] = JsonSerializer.SerializeToNode(recentAssistantNotes, JsonOptions),
+            ["inProgress"] = new JsonArray(),
+            ["remaining"] = new JsonArray(),
+            ["decisions"] = new JsonArray(),
+            ["importantIdentifiers"] = new JsonArray(),
+            ["importantFiles"] = new JsonArray(),
+            ["toolResults"] = JsonSerializer.SerializeToNode(toolJournal, JsonOptions),
+            ["unresolvedQuestions"] = new JsonArray(),
+            ["recentUserMessages"] = JsonSerializer.SerializeToNode(recentUserMessages, JsonOptions),
+            ["nextAction"] = "Continue from the retained recent messages. Consult toolResults before repeating an operation.",
+            ["fallback"] = true
+        }.ToJsonString();
     }
 
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
