@@ -64,6 +64,36 @@ else
                 </div>
             }
         </MudPaper>
+        <div class="beacon-chat-mobile-session-bar">
+            <select class="beacon-chat-mobile-session-select"
+                    aria-label="@L["Chat"]"
+                    value="@(_selected?.Id.ToString() ?? string.Empty)"
+                    @onchange="OnMobileSessionChanged">
+                @foreach (var session in _sessions)
+                {
+                    <option value="@session.Id.ToString()">@session.Title</option>
+                }
+            </select>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add" Class="beacon-chat-mobile-new"
+                       OnClick="NewChat" Disabled="_busy">
+                @L["NewChat"]
+            </MudButton>
+            @if (_selected is not null)
+            {
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Dense="true">
+                    <ActivatorContent>
+                        <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Medium"
+                                       Class="beacon-chat-mobile-more" title="@L["Menu"].Value"
+                                       aria-label="@L["Menu"].Value" @onclick="context.ToggleAsync" />
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => Rename(_selected!))">@L["ChatRename"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Archive" OnClick="@(() => Archive(_selected!))">@L["ChatArchive"]</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            }
+        </div>
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-chat-pane">
             @if (_block == "folder")
             {
@@ -167,6 +197,16 @@ else
         if (_selected?.Id != session.Id)
             return;
         _parts = parts.Success ? parts.Value!.ToList() : [];
+    }
+
+    private async Task OnMobileSessionChanged(ChangeEventArgs args)
+    {
+        if (!Guid.TryParse(args.Value?.ToString(), out var id))
+            return;
+
+        var session = _sessions.FirstOrDefault(item => item.Id == id);
+        if (session is not null && _selected?.Id != session.Id)
+            await Select(session);
     }
 
     private async Task NewChat()
