@@ -36,6 +36,8 @@ public static class CommandLease
         WorkstationCommandKind.RunEvalTurn => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.ReconcileDesired => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.RunReviewCheck => TimeSpan.FromMinutes(Minutes),
-        WorkstationCommandKind.RunPipelineSession => TimeSpan.FromMinutes(Minutes)
+        WorkstationCommandKind.RunPipelineSession => TimeSpan.FromMinutes(Minutes),
+        WorkstationCommandKind.CheckClientUpdate => TimeSpan.FromMinutes(Minutes),
+        WorkstationCommandKind.UpdateClient => TimeSpan.FromMinutes(Minutes)
     };
 }
