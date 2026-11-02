@@ -116,7 +116,7 @@ jobs:
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
 
   client:
-    needs: tests
+    needs: [tests, scan]
     runs-on: ubuntu-latest
     permissions:
       contents: write
