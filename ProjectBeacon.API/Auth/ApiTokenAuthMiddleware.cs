@@ -35,33 +35,56 @@ public sealed class ApiTokenAuthMiddleware
         var header = ctx.Request.Headers.Authorization.ToString();
         if (header.StartsWith("Bearer bcn_", StringComparison.OrdinalIgnoreCase))
         {
-            var raw = header["Bearer ".Length..].Trim();
-            var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
-            var token = await db.ApiTokens.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(t => t.TokenHash == hash, ctx.RequestAborted);
-
-            var now = DateTime.UtcNow;
-            var valid = token is not null && !token.IsExpired && !token.IsRevoked;
-            if (valid && token!.ClientKind == ApiTokenClientKind.Harness)
-                valid = await IsHarnessTokenActiveAsync(db, token, ctx, now, ctx.RequestAborted);
-
-            if (valid && token is not null)
+            // ApiTokens is FORCE-RLS protected. Authentication runs before TenantIsolationMiddleware,
+            // because the token's project claim is needed to establish that tenant scope. Bootstrap
+            // this single hash lookup under an explicit unscoped GUC, then fail closed again before
+            // handing the request to the remaining middleware. IgnoreQueryFilters alone does not
+            // bypass PostgreSQL RLS.
+            ClaimsPrincipal? apiPrincipal = null;
+            try
             {
-                // LastUsedAt is approximate: avoid a database write for every agent API call.
-                if (token.LastUsedAt is null || token.LastUsedAt < now.AddMinutes(-5))
+                using (TenantScope.EnterUnscoped())
                 {
-                    token.RecordUsage();
-                    await db.SaveChangesAsync(ctx.RequestAborted);
-                }
+                    await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
 
-                var identity = new ClaimsIdentity(ActorContextFactory.ApiTokenAuthType);
-                identity.AddClaim(new Claim("token_id", token.Id.ToString()));
-                identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
-                identity.AddClaim(new Claim("capabilities", ((long)token.Capabilities).ToString()));
-                if (token.CreatedByUserId.HasValue)
-                    identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, token.CreatedByUserId.Value.ToString()));
-                ctx.User = new ClaimsPrincipal(identity);
+                    var raw = header["Bearer ".Length..].Trim();
+                    var hash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
+                    var token = await db.ApiTokens.IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(t => t.TokenHash == hash, ctx.RequestAborted);
+
+                    var now = DateTime.UtcNow;
+                    var valid = token is not null && !token.IsExpired && !token.IsRevoked;
+                    if (valid && token!.ClientKind == ApiTokenClientKind.Harness)
+                        valid = await IsHarnessTokenActiveAsync(db, token, ctx, now, ctx.RequestAborted);
+
+                    if (valid && token is not null)
+                    {
+                        // LastUsedAt is approximate: avoid a database write for every agent API call.
+                        if (token.LastUsedAt is null || token.LastUsedAt < now.AddMinutes(-5))
+                        {
+                            token.RecordUsage();
+                            await db.SaveChangesAsync(ctx.RequestAborted);
+                        }
+
+                        var identity = new ClaimsIdentity(ActorContextFactory.ApiTokenAuthType);
+                        identity.AddClaim(new Claim("token_id", token.Id.ToString()));
+                        identity.AddClaim(new Claim("project_id", token.ProjectId.ToString()));
+                        identity.AddClaim(new Claim("capabilities", ((long)token.Capabilities).ToString()));
+                        if (token.CreatedByUserId.HasValue)
+                            identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, token.CreatedByUserId.Value.ToString()));
+                        apiPrincipal = new ClaimsPrincipal(identity);
+                    }
+                }
             }
+            finally
+            {
+                // The request's actual scope is resolved by TenantIsolationMiddleware immediately
+                // after this middleware. Do not leave the connection's RLS GUC in bootstrap mode.
+                await TenantRlsSession.ApplyAsync(db, null, null, unscoped: false);
+            }
+
+            if (apiPrincipal is not null)
+                ctx.User = apiPrincipal;
         }
         else if (header.StartsWith("Bearer bcd_", StringComparison.OrdinalIgnoreCase))
         {

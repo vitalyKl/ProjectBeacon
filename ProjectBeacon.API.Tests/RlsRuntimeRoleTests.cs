@@ -1,12 +1,16 @@
 namespace ProjectBeacon.API.Tests;
 
+using System.Security.Cryptography;
+using System.Text;
 using Domain.Entities.Context;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using ProjectBeacon.API.Auth;
 using Npgsql;
 
 /// <summary>
@@ -27,6 +31,7 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
     private static string s_appConn = string.Empty;
     private static Guid s_projectA, s_projectB, s_taskA1, s_taskA2, s_taskB;
     private static Guid s_user, s_commentA, s_commentB, s_depOwn, s_depCross, s_decisionA, s_decisionB;
+    private static string s_apiToken = string.Empty;
 
     private readonly PostgresFixture _postgres;
     private string _adminConn = string.Empty;
@@ -86,6 +91,22 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
                     var user = User.Create("rls-runtime-user", "rls-runtime-user@example.test", "rls-test-password-hash");
                     seed.Users.Add(user);
                     await seed.SaveChangesAsync();
+
+                    // ApiTokens is FORCE-RLS protected. This known token lets the test run the
+                    // actual bootstrap middleware as beacon_app, without depending on JWT auth.
+                    const string rawApiToken = "bcn_rls_bootstrap_test_token";
+                    var apiTokenHash = Convert.ToBase64String(
+                        SHA256.HashData(Encoding.UTF8.GetBytes(rawApiToken)));
+                    seed.ApiTokens.Add(ApiToken.Create(
+                        "RLS bootstrap test",
+                        apiTokenHash,
+                        rawApiToken[..8],
+                        projA.Id,
+                        ApiTokenCapability.TaskRead,
+                        DateTime.UtcNow.AddHours(1),
+                        user.Id));
+                    await seed.SaveChangesAsync();
+                    s_apiToken = rawApiToken;
 
                     var commentA = TaskComment.Create("own-tenant comment", tA1.Id, user.Id);
                     var commentB = TaskComment.Create("foreign-tenant comment", tB.Id, user.Id);
@@ -165,6 +186,43 @@ public sealed class RlsRuntimeRoleTests : IClassFixture<PostgresFixture>, IAsync
         await using var cmd = new NpgsqlCommand("SELECT count(*) FROM \"Tasks\"", conn);
         var count = Convert.ToInt64(await cmd.ExecuteScalarAsync(cancellationToken: TestContext.Current.CancellationToken)!);
         Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task ApiTokenAuthMiddleware_LoadsApiTokenUnderRlsBootstrapScope_ThenFailsClosed()
+    {
+        _postgres.RequirePostgres();
+
+        await using var db = new BeaconDbContext(NewAppOptions(_appConn));
+        var context = new DefaultHttpContext();
+        context.Request.Headers.Authorization = $"Bearer {s_apiToken}";
+        var nextCalled = false;
+        var middleware = new ApiTokenAuthMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, db);
+
+        Assert.True(nextCalled);
+        Assert.True(context.User.Identity?.IsAuthenticated);
+        Assert.Equal("ApiToken", context.User.Identity?.AuthenticationType);
+        Assert.Equal(_projectA.ToString(), context.User.FindFirst("project_id")?.Value);
+
+        // The middleware must reset the bootstrap RLS GUC before later middleware runs.
+        // With no tenant scope the same runtime role must still see no project rows.
+        Assert.Empty(await db.Tasks.ToListAsync(TestContext.Current.CancellationToken));
+
+        // A normal tenant scope applied afterwards must still work on the already-open
+        // request connection, proving that the bootstrap GUC did not stick.
+        using (TenantScope.EnterProjectScope(_projectA))
+        {
+            await TenantRlsSession.ApplyAsync(db, _projectA, null, unscoped: false);
+            var tasks = await db.Tasks.ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, tasks.Count);
+            Assert.DoesNotContain(tasks, task => task.Id == _taskB);
+        }
     }
 
     [Fact]
