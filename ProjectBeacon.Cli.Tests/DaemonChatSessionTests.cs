@@ -683,5 +683,6 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         public DaemonStatus Snapshot => new();
         public void Log(string message) { }
         public void Publish(Func<DaemonStatus, DaemonStatus> update) { }
+        public void RequestStop() { }
     }
 }
