@@ -58,2135 +58,2135 @@
   <data name="AnErrorOccurred" xml:space="preserve">
     <value>An error has occurred.</value>
   </data>
-  <data name="Back" xml:space="preserve">
+<data name="Back" xml:space="preserve">
     <value>Back</value>
   </data>
-  <data name="BootstrapAlreadyCompleted" xml:space="preserve">
+<data name="BootstrapAlreadyCompleted" xml:space="preserve">
     <value>Bootstrap already completed.</value>
   </data>
-  <data name="Cancel" xml:space="preserve">
+<data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
-  <data name="Close" xml:space="preserve">
+<data name="Close" xml:space="preserve">
     <value>Close</value>
   </data>
-  <data name="Confirm" xml:space="preserve">
+<data name="Confirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
-  <data name="Create" xml:space="preserve">
+<data name="Create" xml:space="preserve">
     <value>Create</value>
   </data>
-  <data name="Dashboard" xml:space="preserve">
+<data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>
-  <data name="Delete" xml:space="preserve">
+<data name="Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
-  <data name="Edit" xml:space="preserve">
+<data name="Edit" xml:space="preserve">
     <value>Edit</value>
   </data>
-  <data name="Error" xml:space="preserve">
+<data name="Error" xml:space="preserve">
     <value>Error</value>
   </data>
-  <data name="First" xml:space="preserve">
+<data name="First" xml:space="preserve">
     <value>First</value>
   </data>
-  <data name="Healthy" xml:space="preserve">
+<data name="Healthy" xml:space="preserve">
     <value>Healthy</value>
   </data>
-  <data name="Language" xml:space="preserve">
+<data name="Language" xml:space="preserve">
     <value>Language</value>
   </data>
-  <data name="Last" xml:space="preserve">
+<data name="Last" xml:space="preserve">
     <value>Last</value>
   </data>
-  <data name="Loading" xml:space="preserve">
+<data name="Loading" xml:space="preserve">
     <value>Loading...</value>
   </data>
-  <data name="Next" xml:space="preserve">
+<data name="Next" xml:space="preserve">
     <value>Next</value>
   </data>
-  <data name="NoData" xml:space="preserve">
+<data name="NoData" xml:space="preserve">
     <value>No data available</value>
   </data>
-  <data name="Page" xml:space="preserve">
+<data name="Page" xml:space="preserve">
     <value>Page</value>
   </data>
-  <data name="PageNotFound" xml:space="preserve">
+<data name="PageNotFound" xml:space="preserve">
     <value>Page not found</value>
   </data>
-  <data name="Previous" xml:space="preserve">
+<data name="Previous" xml:space="preserve">
     <value>Previous</value>
   </data>
-  <data name="ProjectBeacon" xml:space="preserve">
+<data name="ProjectBeacon" xml:space="preserve">
     <value>ProjectBeacon</value>
   </data>
-  <data name="Projects" xml:space="preserve">
+<data name="Projects" xml:space="preserve">
     <value>Projects</value>
   </data>
-  <data name="Save" xml:space="preserve">
+<data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
-  <data name="Search" xml:space="preserve">
+<data name="Search" xml:space="preserve">
     <value>Search</value>
   </data>
-  <data name="Settings" xml:space="preserve">
+<data name="Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
-  <data name="SettingsLead" xml:space="preserve">
+<data name="SettingsLead" xml:space="preserve">
     <value>Account, this machine, and agent models. The project folder, members, and labels stay with the project.</value>
   </data>
-  <data name="Appearance" xml:space="preserve">
+<data name="Appearance" xml:space="preserve">
     <value>Appearance</value>
   </data>
-  <data name="ThemeDark" xml:space="preserve">
+<data name="ThemeDark" xml:space="preserve">
     <value>Dark</value>
   </data>
-  <data name="ThemeLight" xml:space="preserve">
+<data name="ThemeLight" xml:space="preserve">
     <value>Light</value>
   </data>
-  <data name="ThemeSystem" xml:space="preserve">
+<data name="ThemeSystem" xml:space="preserve">
     <value>System</value>
   </data>
-  <data name="ThemeToLight" xml:space="preserve">
+<data name="ThemeToLight" xml:space="preserve">
     <value>Switch to light</value>
   </data>
-  <data name="ThemeToDark" xml:space="preserve">
+<data name="ThemeToDark" xml:space="preserve">
     <value>Switch to dark</value>
   </data>
-  <data name="ProductVersion" xml:space="preserve">
+<data name="ProductVersion" xml:space="preserve">
     <value>Beacon v{0}</value>
   </data>
-  <data name="ThisProject" xml:space="preserve">
+<data name="ThisProject" xml:space="preserve">
     <value>This project</value>
   </data>
-  <data name="ThisProjectLead" xml:space="preserve">
+<data name="ThisProjectLead" xml:space="preserve">
     <value>Folder, members, and labels for the open project.</value>
   </data>
-  <data name="AgentTemplates" xml:space="preserve">
+<data name="AgentTemplates" xml:space="preserve">
     <value>Templates</value>
   </data>
-  <data name="AgentTemplatesLead" xml:space="preserve">
+<data name="AgentTemplatesLead" xml:space="preserve">
     <value>Saved ways to use your models. The model list stays with this account.</value>
   </data>
-  <data name="AgentTemplateNew" xml:space="preserve">
+<data name="AgentTemplateNew" xml:space="preserve">
     <value>New template</value>
   </data>
-  <data name="AgentTemplateName" xml:space="preserve">
+<data name="AgentTemplateName" xml:space="preserve">
     <value>Template name</value>
   </data>
-  <data name="TemplateSaved" xml:space="preserve">
+<data name="TemplateSaved" xml:space="preserve">
     <value>Template saved.</value>
   </data>
-  <data name="DeleteTemplateConfirm" xml:space="preserve">
+<data name="DeleteTemplateConfirm" xml:space="preserve">
     <value>Delete this template?</value>
   </data>
-  <data name="ModelNote" xml:space="preserve">
+<data name="ModelNote" xml:space="preserve">
     <value>Note</value>
   </data>
-  <data name="ModelNoteHint" xml:space="preserve">
+<data name="ModelNoteHint" xml:space="preserve">
     <value>For you. The launch command is unchanged.</value>
   </data>
-  <data name="ChatModel" xml:space="preserve">
+<data name="ChatModel" xml:space="preserve">
     <value>Chat model</value>
   </data>
-  <data name="ChatModelHint" xml:space="preserve">
+<data name="ChatModelHint" xml:space="preserve">
     <value>Used by the app chat when a message does not name another model. Saving tells the running client to refresh the agent runtime.</value>
   </data>
-  <data name="OpenCodeModel" xml:space="preserve">
+<data name="OpenCodeModel" xml:space="preserve">
     <value>Agent model</value>
   </data>
-  <data name="OpenCodeModelHint" xml:space="preserve">
+<data name="OpenCodeModelHint" xml:space="preserve">
     <value>Provider and model OpenCode already knows, like xai/grok-3. A saved connection can supply the key; otherwise sign in on the machine with opencode auth login.</value>
   </data>
-  <data name="OpenCodeConnections" xml:space="preserve">
+<data name="OpenCodeConnections" xml:space="preserve">
     <value>Model connections</value>
   </data>
-  <data name="OpenCodeConnectionsLead" xml:space="preserve">
+<data name="OpenCodeConnectionsLead" xml:space="preserve">
     <value>Tell OpenCode which online model to use. A local llama.cpp model is added separately, under Agents.</value>
   </data>
-  <data name="OpenCodeStepPick" xml:space="preserve">
+<data name="OpenCodeStepPick" xml:space="preserve">
     <value>Pick a service, or type provider/model yourself.</value>
   </data>
-  <data name="OpenCodeStepKey" xml:space="preserve">
+<data name="OpenCodeStepKey" xml:space="preserve">
     <value>Paste an API key only if you have not already signed in on that computer.</value>
   </data>
-  <data name="OpenCodeStepSave" xml:space="preserve">
+<data name="OpenCodeStepSave" xml:space="preserve">
     <value>Save. The running beacon client updates OpenCode and restarts it.</value>
   </data>
-  <data name="OpenCodeOwnServer" xml:space="preserve">
+<data name="OpenCodeOwnServer" xml:space="preserve">
     <value>Own server</value>
   </data>
-  <data name="OpenCodeOnePerService" xml:space="preserve">
+<data name="OpenCodeOnePerService" xml:space="preserve">
     <value>Each service keeps one model. Saving it again replaces that model.</value>
   </data>
-  <data name="OpenCodeModelExample" xml:space="preserve">
+<data name="OpenCodeModelExample" xml:space="preserve">
     <value>Write it as provider/model, for example xai/grok-3.</value>
   </data>
-  <data name="OpenCodeBaseUrlHint" xml:space="preserve">
+<data name="OpenCodeBaseUrlHint" xml:space="preserve">
     <value>Address of your own OpenAI-compatible server.</value>
   </data>
-  <data name="OpenCodeKeySaved" xml:space="preserve">
+<data name="OpenCodeKeySaved" xml:space="preserve">
     <value>Key saved</value>
   </data>
-  <data name="OpenCodeProvider" xml:space="preserve">
+<data name="OpenCodeProvider" xml:space="preserve">
     <value>Provider</value>
   </data>
-  <data name="OpenCodeBaseUrl" xml:space="preserve">
+<data name="OpenCodeBaseUrl" xml:space="preserve">
     <value>Base URL</value>
   </data>
-  <data name="OpenCodeApiKey" xml:space="preserve">
+<data name="OpenCodeApiKey" xml:space="preserve">
     <value>API key</value>
   </data>
-  <data name="OpenCodeApiKeyHint" xml:space="preserve">
+<data name="OpenCodeApiKeyHint" xml:space="preserve">
     <value>Optional. Leave blank if this computer is already signed in, or to keep a key you saved earlier.</value>
   </data>
-  <data name="OpenCodeConnectionSaved" xml:space="preserve">
+<data name="OpenCodeConnectionSaved" xml:space="preserve">
     <value>Saved. If beacon client is running, it will update OpenCode now.</value>
   </data>
-  <data name="NoOpenCodeConnections" xml:space="preserve">
+<data name="NoOpenCodeConnections" xml:space="preserve">
     <value>No connections yet.</value>
   </data>
-  <data name="DangerZone" xml:space="preserve">
+<data name="DangerZone" xml:space="preserve">
     <value>Danger zone</value>
   </data>
-  <data name="DangerZoneLead" xml:space="preserve">
+<data name="DangerZoneLead" xml:space="preserve">
     <value>A new agent is a token for the machine where beacon client runs. Turn on an authenticator before adding one.</value>
   </data>
-  <data name="Authenticator" xml:space="preserve">
+<data name="Authenticator" xml:space="preserve">
     <value>Authenticator</value>
   </data>
-  <data name="AuthenticatorOn" xml:space="preserve">
+<data name="AuthenticatorOn" xml:space="preserve">
     <value>Authenticator is on. Adding an agent asks for a code.</value>
   </data>
-  <data name="AuthenticatorOff" xml:space="preserve">
+<data name="AuthenticatorOff" xml:space="preserve">
     <value>Authenticator is off. Turn it on, scan the QR in Aegis, Authy or a similar app, then enter the 6-digit code.</value>
   </data>
-  <data name="AuthenticatorScan" xml:space="preserve">
+<data name="AuthenticatorScan" xml:space="preserve">
     <value>Scan this code with the authenticator app. Then enter the 6-digit code it shows.</value>
   </data>
-  <data name="AuthenticatorQr" xml:space="preserve">
+<data name="AuthenticatorQr" xml:space="preserve">
     <value>QR code for the authenticator app</value>
   </data>
-  <data name="AuthenticatorManual" xml:space="preserve">
+<data name="AuthenticatorManual" xml:space="preserve">
     <value>If the camera cannot scan it, type this key into the app.</value>
   </data>
-  <data name="AuthenticatorCode" xml:space="preserve">
+<data name="AuthenticatorCode" xml:space="preserve">
     <value>Authenticator code</value>
   </data>
-  <data name="TurnOnAuthenticator" xml:space="preserve">
+<data name="TurnOnAuthenticator" xml:space="preserve">
     <value>Turn on authenticator</value>
   </data>
-  <data name="TurnOffAuthenticator" xml:space="preserve">
+<data name="TurnOffAuthenticator" xml:space="preserve">
     <value>Turn off authenticator</value>
   </data>
-  <data name="ChatModelSaved" xml:space="preserve">
+<data name="ChatModelSaved" xml:space="preserve">
     <value>Chat model saved.</value>
   </data>
-  <data name="TaskKinds" xml:space="preserve">
+<data name="TaskKinds" xml:space="preserve">
     <value>Task kinds</value>
   </data>
-  <data name="TaskKindsLead" xml:space="preserve">
+<data name="TaskKindsLead" xml:space="preserve">
     <value>A kind is how the work is done. The decision model plans and reviews. The worker model handles short slices, such as one screenshot.</value>
   </data>
-  <data name="TaskKindNew" xml:space="preserve">
+<data name="TaskKindNew" xml:space="preserve">
     <value>New kind</value>
   </data>
-  <data name="TaskKindName" xml:space="preserve">
+<data name="TaskKindName" xml:space="preserve">
     <value>Name</value>
   </data>
-  <data name="TaskKindHint" xml:space="preserve">
+<data name="TaskKindHint" xml:space="preserve">
     <value>The kind copies its phases onto this task.</value>
   </data>
-  <data name="BuiltInKind" xml:space="preserve">
+<data name="BuiltInKind" xml:space="preserve">
     <value>Default</value>
   </data>
-  <data name="DecisionModel" xml:space="preserve">
+<data name="DecisionModel" xml:space="preserve">
     <value>Decision model</value>
   </data>
-  <data name="DecisionModelHint" xml:space="preserve">
+<data name="DecisionModelHint" xml:space="preserve">
     <value>Plans the work and reads the slice reviews.</value>
   </data>
-  <data name="WorkerModel" xml:space="preserve">
+<data name="WorkerModel" xml:space="preserve">
     <value>Worker model</value>
   </data>
-  <data name="WorkerModelHint" xml:space="preserve">
+<data name="WorkerModelHint" xml:space="preserve">
     <value>Used when a phase is split into subtasks. Empty means the decision model.</value>
   </data>
-  <data name="PhaseTitle" xml:space="preserve">
+<data name="PhaseTitle" xml:space="preserve">
     <value>Phase</value>
   </data>
-  <data name="PhaseInstruction" xml:space="preserve">
+<data name="PhaseInstruction" xml:space="preserve">
     <value>Instruction</value>
   </data>
-  <data name="PhaseModel" xml:space="preserve">
+<data name="PhaseModel" xml:space="preserve">
     <value>Model</value>
   </data>
-  <data name="FanOut" xml:space="preserve">
+<data name="FanOut" xml:space="preserve">
     <value>Split this phase into subtasks</value>
   </data>
-  <data name="AddPhase" xml:space="preserve">
+<data name="AddPhase" xml:space="preserve">
     <value>Add phase</value>
   </data>
-  <data name="ResetKind" xml:space="preserve">
+<data name="ResetKind" xml:space="preserve">
     <value>Reset default</value>
   </data>
-  <data name="KindSaved" xml:space="preserve">
+<data name="KindSaved" xml:space="preserve">
     <value>Task kind saved.</value>
   </data>
-  <data name="DeleteKindConfirm" xml:space="preserve">
+<data name="DeleteKindConfirm" xml:space="preserve">
     <value>Delete this task kind?</value>
   </data>
-  <data name="Phase_understand" xml:space="preserve">
+<data name="Phase_understand" xml:space="preserve">
     <value>Understand the task</value>
   </data>
-  <data name="Phase_do" xml:space="preserve">
+<data name="Phase_do" xml:space="preserve">
     <value>Do the work</value>
   </data>
-  <data name="Phase_check" xml:space="preserve">
+<data name="Phase_check" xml:space="preserve">
     <value>Check the result</value>
   </data>
-  <data name="Submit" xml:space="preserve">
+<data name="Submit" xml:space="preserve">
     <value>Submit</value>
   </data>
-  <data name="Clear" xml:space="preserve">
+<data name="Clear" xml:space="preserve">
     <value>Clear</value>
   </data>
-  <data name="Yes" xml:space="preserve">
+<data name="Yes" xml:space="preserve">
     <value>Yes</value>
   </data>
-  <data name="No" xml:space="preserve">
+<data name="No" xml:space="preserve">
     <value>No</value>
   </data>
-  <data name="of" xml:space="preserve">
+<data name="of" xml:space="preserve">
     <value>of</value>
   </data>
-  <data name="WelcomeBack" xml:space="preserve">
+<data name="WelcomeBack" xml:space="preserve">
     <value>Welcome back.</value>
   </data>
-  <data name="Lang_en" xml:space="preserve">
+<data name="Lang_en" xml:space="preserve">
     <value>English</value>
   </data>
-  <data name="Lang_ru" xml:space="preserve">
+<data name="Lang_ru" xml:space="preserve">
     <value>Русский</value>
   </data>
-  <data name="Lang_de" xml:space="preserve">
+<data name="Lang_de" xml:space="preserve">
     <value>Deutsch</value>
   </data>
-  <data name="Lang_fr" xml:space="preserve">
+<data name="Lang_fr" xml:space="preserve">
     <value>Français</value>
   </data>
-  <data name="Lang_es" xml:space="preserve">
+<data name="Lang_es" xml:space="preserve">
     <value>Español</value>
   </data>
-  <data name="Lang_it" xml:space="preserve">
+<data name="Lang_it" xml:space="preserve">
     <value>Italiano</value>
   </data>
-  <data name="Lang_pt" xml:space="preserve">
+<data name="Lang_pt" xml:space="preserve">
     <value>Português</value>
   </data>
-  <data name="Lang_nl" xml:space="preserve">
+<data name="Lang_nl" xml:space="preserve">
     <value>Nederlands</value>
   </data>
-  <data name="Lang_pl" xml:space="preserve">
+<data name="Lang_pl" xml:space="preserve">
     <value>Polski</value>
   </data>
-  <data name="Lang_cs" xml:space="preserve">
+<data name="Lang_cs" xml:space="preserve">
     <value>Čeština</value>
   </data>
-  <data name="Lang_hu" xml:space="preserve">
+<data name="Lang_hu" xml:space="preserve">
     <value>Magyar</value>
   </data>
-  <data name="Lang_ro" xml:space="preserve">
+<data name="Lang_ro" xml:space="preserve">
     <value>Română</value>
   </data>
-  <data name="Lang_bg" xml:space="preserve">
+<data name="Lang_bg" xml:space="preserve">
     <value>Български</value>
   </data>
-  <data name="Lang_hr" xml:space="preserve">
+<data name="Lang_hr" xml:space="preserve">
     <value>Hrvatski</value>
   </data>
-  <data name="Lang_sk" xml:space="preserve">
+<data name="Lang_sk" xml:space="preserve">
     <value>Slovenčina</value>
   </data>
-  <data name="Lang_sl" xml:space="preserve">
+<data name="Lang_sl" xml:space="preserve">
     <value>Slovenščina</value>
   </data>
-  <data name="Lang_lt" xml:space="preserve">
+<data name="Lang_lt" xml:space="preserve">
     <value>Lietuvių</value>
   </data>
-  <data name="Lang_lv" xml:space="preserve">
+<data name="Lang_lv" xml:space="preserve">
     <value>Latviešu</value>
   </data>
-  <data name="Lang_et" xml:space="preserve">
+<data name="Lang_et" xml:space="preserve">
     <value>Eesti</value>
   </data>
-  <data name="Lang_fi" xml:space="preserve">
+<data name="Lang_fi" xml:space="preserve">
     <value>Suomi</value>
   </data>
-  <data name="Lang_sv" xml:space="preserve">
+<data name="Lang_sv" xml:space="preserve">
     <value>Svenska</value>
   </data>
-  <data name="Lang_no" xml:space="preserve">
+<data name="Lang_no" xml:space="preserve">
     <value>Norsk</value>
   </data>
-  <data name="Lang_da" xml:space="preserve">
+<data name="Lang_da" xml:space="preserve">
     <value>Dansk</value>
   </data>
-  <data name="Lang_el" xml:space="preserve">
+<data name="Lang_el" xml:space="preserve">
     <value>Ελληνικά</value>
   </data>
-  <data name="Lang_tr" xml:space="preserve">
+<data name="Lang_tr" xml:space="preserve">
     <value>Türkçe</value>
   </data>
-  <data name="Lang_zh" xml:space="preserve">
+<data name="Lang_zh" xml:space="preserve">
     <value>中文</value>
   </data>
-  <data name="Lang_ja" xml:space="preserve">
+<data name="Lang_ja" xml:space="preserve">
     <value>日本語</value>
   </data>
-  <data name="Lang_ko" xml:space="preserve">
+<data name="Lang_ko" xml:space="preserve">
     <value>한국어</value>
   </data>
-  <data name="Lang_ar" xml:space="preserve">
+<data name="Lang_ar" xml:space="preserve">
     <value>العربية</value>
   </data>
-  <data name="Lang_hi" xml:space="preserve">
+<data name="Lang_hi" xml:space="preserve">
     <value>हिन्दī</value>
   </data>
-  <data name="Lang_th" xml:space="preserve">
+<data name="Lang_th" xml:space="preserve">
     <value>ไทย</value>
   </data>
-  <data name="Lang_vi" xml:space="preserve">
+<data name="Lang_vi" xml:space="preserve">
     <value>Tiếng Việt</value>
   </data>
-  <data name="Lang_id" xml:space="preserve">
+<data name="Lang_id" xml:space="preserve">
     <value>Bahasa Indonesia</value>
   </data>
-  <data name="Lang_ms" xml:space="preserve">
+<data name="Lang_ms" xml:space="preserve">
     <value>Bahasa Melayu</value>
   </data>
-  <data name="Lang_tl" xml:space="preserve">
+<data name="Lang_tl" xml:space="preserve">
     <value>Filipino</value>
   </data>
-  <data name="Lang_uk" xml:space="preserve">
+<data name="Lang_uk" xml:space="preserve">
     <value>Українська</value>
   </data>
-  <data name="Lang_be" xml:space="preserve">
+<data name="Lang_be" xml:space="preserve">
     <value>Беларуская</value>
   </data>
-  <data name="Lang_mk" xml:space="preserve">
+<data name="Lang_mk" xml:space="preserve">
     <value>Македонски</value>
   </data>
-  <data name="Lang_sr" xml:space="preserve">
+<data name="Lang_sr" xml:space="preserve">
     <value>Српски</value>
   </data>
-  <data name="Lang_bs" xml:space="preserve">
+<data name="Lang_bs" xml:space="preserve">
     <value>Bosanski</value>
   </data>
-  <data name="Lang_ca" xml:space="preserve">
+<data name="Lang_ca" xml:space="preserve">
     <value>Català</value>
   </data>
-  <data name="Lang_gl" xml:space="preserve">
+<data name="Lang_gl" xml:space="preserve">
     <value>Galego</value>
   </data>
-  <data name="Lang_eu" xml:space="preserve">
+<data name="Lang_eu" xml:space="preserve">
     <value>Euskara</value>
   </data>
-  <data name="Lang_is" xml:space="preserve">
+<data name="Lang_is" xml:space="preserve">
     <value>Íslenska</value>
   </data>
-  <data name="Lang_ga" xml:space="preserve">
+<data name="Lang_ga" xml:space="preserve">
     <value>Gaeilge</value>
   </data>
-  <data name="Lang_cy" xml:space="preserve">
+<data name="Lang_cy" xml:space="preserve">
     <value>Cymraeg</value>
   </data>
-  <data name="Login" xml:space="preserve">
+<data name="Login" xml:space="preserve">
     <value>Login</value>
   </data>
-  <data name="Password" xml:space="preserve">
+<data name="Password" xml:space="preserve">
     <value>Password</value>
   </data>
-  <data name="Account" xml:space="preserve">
+<data name="Account" xml:space="preserve">
     <value>Account</value>
   </data>
-  <data name="Logout" xml:space="preserve">
+<data name="Logout" xml:space="preserve">
     <value>Logout</value>
   </data>
-  <data name="InvalidCredentials" xml:space="preserve">
+<data name="InvalidCredentials" xml:space="preserve">
     <value>Invalid login or password.</value>
   </data>
-  <data name="Bootstrap" xml:space="preserve">
+<data name="Bootstrap" xml:space="preserve">
     <value>Bootstrap</value>
   </data>
-  <data name="BootstrapDescription" xml:space="preserve">
+<data name="BootstrapDescription" xml:space="preserve">
     <value>Create the initial administrator account. This can only be done once.</value>
   </data>
-  <data name="BootstrapSuccess" xml:space="preserve">
+<data name="BootstrapSuccess" xml:space="preserve">
     <value>Admin account created. Save this password — it will not be shown again.</value>
   </data>
-  <data name="ClickToCopy" xml:space="preserve">
+<data name="ClickToCopy" xml:space="preserve">
     <value>Click to copy</value>
   </data>
-  <data name="GoToLogin" xml:space="preserve">
+<data name="GoToLogin" xml:space="preserve">
     <value>Go to Login</value>
   </data>
-  <data name="Tasks" xml:space="preserve">
+<data name="Tasks" xml:space="preserve">
     <value>Tasks</value>
   </data>
-  <data name="Board" xml:space="preserve">
+<data name="Board" xml:space="preserve">
     <value>Board</value>
   </data>
-  <data name="Backlog" xml:space="preserve">
+<data name="Backlog" xml:space="preserve">
     <value>Backlog</value>
   </data>
-  <data name="GoToBoard" xml:space="preserve">
+<data name="GoToBoard" xml:space="preserve">
     <value>Go to Board</value>
   </data>
-  <data name="ProjectBeaconWelcome" xml:space="preserve">
+<data name="ProjectBeaconWelcome" xml:space="preserve">
     <value>Welcome to ProjectBeacon.</value>
   </data>
-  <data name="Roadmap" xml:space="preserve">
+<data name="Roadmap" xml:space="preserve">
     <value>Roadmap</value>
   </data>
-  <data name="Status" xml:space="preserve">
+<data name="Status" xml:space="preserve">
     <value>Status</value>
   </data>
-  <data name="Priority" xml:space="preserve">
+<data name="Priority" xml:space="preserve">
     <value>Priority</value>
   </data>
-  <data name="Type" xml:space="preserve">
+<data name="Type" xml:space="preserve">
     <value>Type</value>
   </data>
-  <data name="SubStage" xml:space="preserve">
+<data name="SubStage" xml:space="preserve">
     <value>Sub-stage</value>
   </data>
-  <data name="Milestone" xml:space="preserve">
+<data name="Milestone" xml:space="preserve">
     <value>Milestone</value>
   </data>
-  <data name="Todo" xml:space="preserve">
+<data name="Todo" xml:space="preserve">
     <value>To Do</value>
   </data>
-  <data name="InProgress" xml:space="preserve">
+<data name="InProgress" xml:space="preserve">
     <value>In Progress</value>
   </data>
-  <data name="Done" xml:space="preserve">
+<data name="Done" xml:space="preserve">
     <value>Done</value>
   </data>
-  <data name="Low" xml:space="preserve">
+<data name="Low" xml:space="preserve">
     <value>Low</value>
   </data>
-  <data name="Medium" xml:space="preserve">
+<data name="Medium" xml:space="preserve">
     <value>Medium</value>
   </data>
-  <data name="High" xml:space="preserve">
+<data name="High" xml:space="preserve">
     <value>High</value>
   </data>
-  <data name="Critical" xml:space="preserve">
+<data name="Critical" xml:space="preserve">
     <value>Critical</value>
   </data>
-  <data name="Feature" xml:space="preserve">
+<data name="Feature" xml:space="preserve">
     <value>Feature</value>
   </data>
-  <data name="Bug" xml:space="preserve">
+<data name="Bug" xml:space="preserve">
     <value>Bug</value>
   </data>
-  <data name="Improvement" xml:space="preserve">
+<data name="Improvement" xml:space="preserve">
     <value>Improvement</value>
   </data>
-  <data name="Task" xml:space="preserve">
+<data name="Task" xml:space="preserve">
     <value>Task</value>
   </data>
-  <data name="TaskMoved" xml:space="preserve">
+<data name="TaskMoved" xml:space="preserve">
     <value>Task moved to {0}</value>
   </data>
-  <data name="StatusChangeFailed" xml:space="preserve">
+<data name="StatusChangeFailed" xml:space="preserve">
     <value>Could not change status.</value>
   </data>
-  <data name="RequirementGathering" xml:space="preserve">
+<data name="RequirementGathering" xml:space="preserve">
     <value>Requirements</value>
   </data>
-  <data name="Estimation" xml:space="preserve">
+<data name="Estimation" xml:space="preserve">
     <value>Estimation</value>
   </data>
-  <data name="IntermediateResult" xml:space="preserve">
+<data name="IntermediateResult" xml:space="preserve">
     <value>Progress</value>
   </data>
-  <data name="Review" xml:space="preserve">
+<data name="Review" xml:space="preserve">
     <value>Review</value>
   </data>
-  <data name="Corrections" xml:space="preserve">
+<data name="Corrections" xml:space="preserve">
     <value>Fixes</value>
   </data>
-  <data name="ReviewCorrections" xml:space="preserve">
+<data name="ReviewCorrections" xml:space="preserve">
     <value>Review Fixes</value>
   </data>
-  <data name="Complete" xml:space="preserve">
+<data name="Complete" xml:space="preserve">
     <value>Complete</value>
   </data>
-  <data name="CreateTask" xml:space="preserve">
+<data name="CreateTask" xml:space="preserve">
     <value>Create Task</value>
   </data>
-  <data name="UpdateTask" xml:space="preserve">
+<data name="UpdateTask" xml:space="preserve">
     <value>Update Task</value>
   </data>
-  <data name="DeleteTask" xml:space="preserve">
+<data name="DeleteTask" xml:space="preserve">
     <value>Delete Task</value>
   </data>
-  <data name="Menu" xml:space="preserve">
+<data name="Menu" xml:space="preserve">
     <value>Menu</value>
   </data>
-  <data name="CreateMilestone" xml:space="preserve">
+<data name="CreateMilestone" xml:space="preserve">
     <value>Create Milestone</value>
   </data>
-  <data name="UpdateMilestone" xml:space="preserve">
+<data name="UpdateMilestone" xml:space="preserve">
     <value>Update Milestone</value>
   </data>
-  <data name="DeleteMilestone" xml:space="preserve">
+<data name="DeleteMilestone" xml:space="preserve">
     <value>Delete Milestone</value>
   </data>
-  <data name="ReviewNotes" xml:space="preserve">
+<data name="ReviewNotes" xml:space="preserve">
     <value>Review Notes</value>
   </data>
-  <data name="Comments" xml:space="preserve">
+<data name="Comments" xml:space="preserve">
     <value>Comments</value>
   </data>
-  <data name="Dependencies" xml:space="preserve">
+<data name="Dependencies" xml:space="preserve">
     <value>Dependencies</value>
   </data>
-  <data name="AddTask" xml:space="preserve">
+<data name="AddTask" xml:space="preserve">
     <value>Add Task</value>
   </data>
-  <data name="AddComment" xml:space="preserve">
+<data name="AddComment" xml:space="preserve">
     <value>Add Comment</value>
   </data>
-  <data name="AddDependency" xml:space="preserve">
+<data name="AddDependency" xml:space="preserve">
     <value>Add Dependency</value>
   </data>
-  <data name="TaskCreated" xml:space="preserve">
+<data name="TaskCreated" xml:space="preserve">
     <value>Task created successfully.</value>
   </data>
-  <data name="TaskUpdated" xml:space="preserve">
+<data name="TaskUpdated" xml:space="preserve">
     <value>Task updated successfully.</value>
   </data>
-  <data name="TaskDeleted" xml:space="preserve">
+<data name="TaskDeleted" xml:space="preserve">
     <value>Task deleted successfully.</value>
   </data>
-  <data name="TaskClaimed" xml:space="preserve">
+<data name="TaskClaimed" xml:space="preserve">
     <value>Task claimed successfully.</value>
   </data>
-  <data name="MilestoneCreated" xml:space="preserve">
+<data name="MilestoneCreated" xml:space="preserve">
     <value>Milestone created successfully.</value>
   </data>
-  <data name="MilestoneUpdated" xml:space="preserve">
+<data name="MilestoneUpdated" xml:space="preserve">
     <value>Milestone updated successfully.</value>
   </data>
-  <data name="MilestoneDeleted" xml:space="preserve">
+<data name="MilestoneDeleted" xml:space="preserve">
     <value>Milestone deleted successfully.</value>
   </data>
-  <data name="TaskTitle" xml:space="preserve">
+<data name="TaskTitle" xml:space="preserve">
     <value>Title</value>
   </data>
-  <data name="Description" xml:space="preserve">
+<data name="Description" xml:space="preserve">
     <value>Description</value>
   </data>
-  <data name="SaveChanges" xml:space="preserve">
+<data name="SaveChanges" xml:space="preserve">
     <value>Save Changes</value>
   </data>
-  <data name="NoTasks" xml:space="preserve">
+<data name="NoTasks" xml:space="preserve">
     <value>No tasks found.</value>
   </data>
-  <data name="NoMilestones" xml:space="preserve">
+<data name="NoMilestones" xml:space="preserve">
     <value>No milestones defined yet.</value>
   </data>
-  <data name="NewTask" xml:space="preserve">
+<data name="NewTask" xml:space="preserve">
     <value>New Task</value>
   </data>
-  <data name="NewMilestone" xml:space="preserve">
+<data name="NewMilestone" xml:space="preserve">
     <value>New Milestone</value>
   </data>
-  <data name="TaskDetail" xml:space="preserve">
+<data name="TaskDetail" xml:space="preserve">
     <value>Task Detail</value>
   </data>
-  <data name="BackToBoard" xml:space="preserve">
+<data name="BackToBoard" xml:space="preserve">
     <value>Back to Board</value>
   </data>
-  <data name="BackToBacklog" xml:space="preserve">
+<data name="BackToBacklog" xml:space="preserve">
     <value>Back to Backlog</value>
   </data>
-  <data name="TaskNotFound" xml:space="preserve">
+<data name="TaskNotFound" xml:space="preserve">
     <value>Task not found.</value>
   </data>
-  <data name="MilestoneName" xml:space="preserve">
+<data name="MilestoneName" xml:space="preserve">
     <value>Name</value>
   </data>
-  <data name="TaskCount" xml:space="preserve">
+<data name="TaskCount" xml:space="preserve">
     <value>Tasks</value>
   </data>
-  <data name="Order" xml:space="preserve">
+<data name="Order" xml:space="preserve">
     <value>Order</value>
   </data>
-  <data name="CreatedBy" xml:space="preserve">
+<data name="CreatedBy" xml:space="preserve">
     <value>Created By</value>
   </data>
-  <data name="CreatedAt" xml:space="preserve">
+<data name="CreatedAt" xml:space="preserve">
     <value>Created At</value>
   </data>
-  <data name="Updated" xml:space="preserve">
+<data name="Updated" xml:space="preserve">
     <value>Updated</value>
   </data>
-  <data name="FilterByStatus" xml:space="preserve">
+<data name="FilterByStatus" xml:space="preserve">
     <value>Filter by status</value>
   </data>
-  <data name="FilterByPriority" xml:space="preserve">
+<data name="FilterByPriority" xml:space="preserve">
     <value>Filter by priority</value>
   </data>
-  <data name="SortBy" xml:space="preserve">
+<data name="SortBy" xml:space="preserve">
     <value>Sort by</value>
   </data>
-  <data name="SortByCreated" xml:space="preserve">
+<data name="SortByCreated" xml:space="preserve">
     <value>Created date</value>
   </data>
-  <data name="SortByPriority" xml:space="preserve">
+<data name="SortByPriority" xml:space="preserve">
     <value>Priority</value>
   </data>
-  <data name="SortByTitle" xml:space="preserve">
+<data name="SortByTitle" xml:space="preserve">
     <value>Title</value>
   </data>
-  <data name="Content" xml:space="preserve">
+<data name="Content" xml:space="preserve">
     <value>Content</value>
   </data>
-  <data name="WriteAComment" xml:space="preserve">
+<data name="WriteAComment" xml:space="preserve">
     <value>Write a comment...</value>
   </data>
-  <data name="NoCommentsYet" xml:space="preserve">
+<data name="NoCommentsYet" xml:space="preserve">
     <value>No comments yet.</value>
   </data>
-  <data name="NoProjectAvailable" xml:space="preserve">
+<data name="NoProjectAvailable" xml:space="preserve">
     <value>No project available. Create a project first.</value>
   </data>
-  <data name="Context" xml:space="preserve">
+<data name="Context" xml:space="preserve">
     <value>Context</value>
   </data>
-  <data name="Agents" xml:space="preserve">
+<data name="Agents" xml:space="preserve">
     <value>Agents</value>
   </data>
-  <data name="Reports" xml:space="preserve">
+<data name="Reports" xml:space="preserve">
     <value>Reports</value>
   </data>
-  <data name="CompiledBrief" xml:space="preserve">
+<data name="CompiledBrief" xml:space="preserve">
     <value>Compiled brief</value>
   </data>
-  <data name="CompileBrief" xml:space="preserve">
+<data name="CompileBrief" xml:space="preserve">
     <value>Compile brief</value>
   </data>
-  <data name="TokenBudget" xml:space="preserve">
+<data name="TokenBudget" xml:space="preserve">
     <value>Token budget</value>
   </data>
-  <data name="CreateProject" xml:space="preserve">
+<data name="CreateProject" xml:space="preserve">
     <value>Create project</value>
   </data>
-  <data name="OrgName" xml:space="preserve">
+<data name="OrgName" xml:space="preserve">
     <value>Organization name</value>
   </data>
-  <data name="ProjectName" xml:space="preserve">
+<data name="ProjectName" xml:space="preserve">
     <value>Project name</value>
   </data>
-  <data name="ProjectCreated" xml:space="preserve">
+<data name="ProjectCreated" xml:space="preserve">
     <value>Project created.</value>
   </data>
-  <data name="ProjectManageLead" xml:space="preserve">
+<data name="ProjectManageLead" xml:space="preserve">
     <value>Create a project, rename the open one, or remove a project you administer.</value>
   </data>
-  <data name="DeleteProject" xml:space="preserve">
+<data name="DeleteProject" xml:space="preserve">
     <value>Delete project</value>
   </data>
-  <data name="DeleteProjectConfirm" xml:space="preserve">
+<data name="DeleteProjectConfirm" xml:space="preserve">
     <value>Delete {0}? Its tasks, context, and members are removed.</value>
   </data>
-  <data name="ProjectRenamed" xml:space="preserve">
+<data name="ProjectRenamed" xml:space="preserve">
     <value>Project saved.</value>
   </data>
-  <data name="ProjectDeleted" xml:space="preserve">
+<data name="ProjectDeleted" xml:space="preserve">
     <value>Project deleted.</value>
   </data>
-  <data name="ProjectNameRequired" xml:space="preserve">
+<data name="ProjectNameRequired" xml:space="preserve">
     <value>Project name is required.</value>
   </data>
-  <data name="OpenProject" xml:space="preserve">
+<data name="OpenProject" xml:space="preserve">
     <value>Open</value>
   </data>
-  <data name="Saved" xml:space="preserve">
+<data name="Saved" xml:space="preserve">
     <value>Saved.</value>
   </data>
-  <data name="Section" xml:space="preserve">
+<data name="Section" xml:space="preserve">
     <value>Section</value>
   </data>
-  <data name="Sections" xml:space="preserve">
+<data name="Sections" xml:space="preserve">
     <value>Sections</value>
   </data>
-  <data name="Title" xml:space="preserve">
+<data name="Title" xml:space="preserve">
     <value>Title</value>
   </data>
-  <data name="Labels" xml:space="preserve">
+<data name="Labels" xml:space="preserve">
     <value>Labels</value>
   </data>
-  <data name="ModelRegistry" xml:space="preserve">
+<data name="ModelRegistry" xml:space="preserve">
     <value>Model registry</value>
   </data>
-  <data name="ModelsAdd" xml:space="preserve">
+<data name="ModelsAdd" xml:space="preserve">
     <value>Add model</value>
   </data>
-  <data name="ModelsEdit" xml:space="preserve">
+<data name="ModelsEdit" xml:space="preserve">
     <value>Edit model</value>
   </data>
-  <data name="ModelName" xml:space="preserve">
+<data name="ModelName" xml:space="preserve">
     <value>Name</value>
   </data>
-  <data name="LaunchCommand" xml:space="preserve">
+<data name="LaunchCommand" xml:space="preserve">
     <value>Launch command</value>
   </data>
-  <data name="LaunchCommandHint" xml:space="preserve">
+<data name="LaunchCommandHint" xml:space="preserve">
     <value>Command line used to start the model backend.</value>
   </data>
-  <data name="ContextSize" xml:space="preserve">
+<data name="ContextSize" xml:space="preserve">
     <value>Context size</value>
   </data>
-  <data name="Ttl" xml:space="preserve">
+<data name="Ttl" xml:space="preserve">
     <value>TTL (seconds)</value>
   </data>
-  <data name="ExtraFlags" xml:space="preserve">
+<data name="ExtraFlags" xml:space="preserve">
     <value>Extra flags</value>
   </data>
-  <data name="NoModels" xml:space="preserve">
+<data name="NoModels" xml:space="preserve">
     <value>No model backends registered yet.</value>
   </data>
-  <data name="BackendFreeToken" xml:space="preserve">
+<data name="BackendFreeToken" xml:space="preserve">
     <value>free-token</value>
   </data>
-  <data name="BackendLlamaCpp" xml:space="preserve">
+<data name="BackendLlamaCpp" xml:space="preserve">
     <value>llama.cpp</value>
   </data>
-  <data name="BackendOpenAiCompatible" xml:space="preserve">
+<data name="BackendOpenAiCompatible" xml:space="preserve">
     <value>OpenAI compatible</value>
   </data>
-  <data name="RoleBindings" xml:space="preserve">
+<data name="RoleBindings" xml:space="preserve">
     <value>Role bindings</value>
   </data>
-  <data name="RoleBindingPlanner" xml:space="preserve">
+<data name="RoleBindingPlanner" xml:space="preserve">
     <value>Planner</value>
   </data>
-  <data name="RoleBindingActor" xml:space="preserve">
+<data name="RoleBindingActor" xml:space="preserve">
     <value>Actor</value>
   </data>
-  <data name="Unbound" xml:space="preserve">
+<data name="Unbound" xml:space="preserve">
     <value>Unbound</value>
   </data>
-  <data name="BindingSaved" xml:space="preserve">
+<data name="BindingSaved" xml:space="preserve">
     <value>Role binding saved.</value>
   </data>
-  <data name="BindingRemoved" xml:space="preserve">
+<data name="BindingRemoved" xml:space="preserve">
     <value>Role binding removed.</value>
   </data>
-  <data name="ModelSaved" xml:space="preserve">
+<data name="ModelSaved" xml:space="preserve">
     <value>Model saved.</value>
   </data>
-  <data name="ModelDeleted" xml:space="preserve">
+<data name="ModelDeleted" xml:space="preserve">
     <value>Model deleted.</value>
   </data>
-  <data name="DeleteModelConfirm" xml:space="preserve">
+<data name="DeleteModelConfirm" xml:space="preserve">
     <value>Delete this model backend?</value>
   </data>
-  <data name="ProxyStatus" xml:space="preserve">
+<data name="ProxyStatus" xml:space="preserve">
     <value>Proxy status</value>
   </data>
-  <data name="Unavailable" xml:space="preserve">
+<data name="Unavailable" xml:space="preserve">
     <value>Unavailable</value>
   </data>
-  <data name="Unhealthy" xml:space="preserve">
+<data name="Unhealthy" xml:space="preserve">
     <value>Unhealthy</value>
   </data>
-  <data name="LoadedModel" xml:space="preserve">
+<data name="LoadedModel" xml:space="preserve">
     <value>Loaded model</value>
   </data>
-  <data name="LoadedModels" xml:space="preserve">
+<data name="LoadedModels" xml:space="preserve">
     <value>Loaded models</value>
   </data>
-  <data name="LoadWithOthers" xml:space="preserve">
+<data name="LoadWithOthers" xml:space="preserve">
     <value>Load with others</value>
   </data>
-  <data name="LoadWithOthersHint" xml:space="preserve">
+<data name="LoadWithOthersHint" xml:space="preserve">
     <value>Keep this model loaded alongside others (llama-swap group, swap: false). Launch command must use ${PORT}.</value>
   </data>
-  <data name="Cpu" xml:space="preserve">
+<data name="Cpu" xml:space="preserve">
     <value>CPU</value>
   </data>
-  <data name="Ram" xml:space="preserve">
+<data name="Ram" xml:space="preserve">
     <value>RAM</value>
   </data>
-  <data name="Gpu" xml:space="preserve">
+<data name="Gpu" xml:space="preserve">
     <value>GPU</value>
   </data>
-  <data name="Vram" xml:space="preserve">
+<data name="Vram" xml:space="preserve">
     <value>VRAM</value>
   </data>
-  <data name="ReportedAt" xml:space="preserve">
+<data name="ReportedAt" xml:space="preserve">
     <value>As of {0}</value>
   </data>
-  <data name="Memory" xml:space="preserve">
+<data name="Memory" xml:space="preserve">
     <value>Memory</value>
   </data>
-  <data name="LastSwap" xml:space="preserve">
+<data name="LastSwap" xml:space="preserve">
     <value>Last swap</value>
   </data>
-  <data name="Reload" xml:space="preserve">
+<data name="Reload" xml:space="preserve">
     <value>Reload</value>
   </data>
-  <data name="Unload" xml:space="preserve">
+<data name="Unload" xml:space="preserve">
     <value>Unload</value>
   </data>
-  <data name="Refresh" xml:space="preserve">
+<data name="Refresh" xml:space="preserve">
     <value>Refresh</value>
   </data>
-  <data name="ProxyReloaded" xml:space="preserve">
+<data name="ProxyReloaded" xml:space="preserve">
     <value>Proxy reloaded.</value>
   </data>
-  <data name="ProxyUnloaded" xml:space="preserve">
+<data name="ProxyUnloaded" xml:space="preserve">
     <value>Proxy unloaded.</value>
   </data>
-  <data name="ReportsEmpty" xml:space="preserve">
+<data name="ReportsEmpty" xml:space="preserve">
     <value>No reports yet. Generate a board snapshot.</value>
   </data>
-  <data name="GenerateReport" xml:space="preserve">
+<data name="GenerateReport" xml:space="preserve">
     <value>Generate report</value>
   </data>
-  <data name="ContextCostReport" xml:space="preserve">
+<data name="ContextCostReport" xml:space="preserve">
     <value>Context cost</value>
   </data>
-  <data name="ContextCostNoTasks" xml:space="preserve">
+<data name="ContextCostNoTasks" xml:space="preserve">
     <value>No tasks are available for this project.</value>
   </data>
-  <data name="ContextCostNoPairs" xml:space="preserve">
+<data name="ContextCostNoPairs" xml:space="preserve">
     <value>No paired evaluation runs are available yet.</value>
   </data>
-  <data name="ContextCostWithBrief" xml:space="preserve">
+<data name="ContextCostWithBrief" xml:space="preserve">
     <value>With brief</value>
   </data>
-  <data name="ContextCostWithoutBrief" xml:space="preserve">
+<data name="ContextCostWithoutBrief" xml:space="preserve">
     <value>Without brief</value>
   </data>
-  <data name="ContextCostPromptDelta" xml:space="preserve">
+<data name="ContextCostPromptDelta" xml:space="preserve">
     <value>Δ prompt tokens</value>
   </data>
-  <data name="ContextCostCompletionDelta" xml:space="preserve">
+<data name="ContextCostCompletionDelta" xml:space="preserve">
     <value>Δ completion tokens</value>
   </data>
-  <data name="ContextCostTotalDelta" xml:space="preserve">
+<data name="ContextCostTotalDelta" xml:space="preserve">
     <value>Δ total tokens</value>
   </data>
-  <data name="ContextCostTurnDelta" xml:space="preserve">
+<data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ turns</value>
   </data>
-  <data name="Pair" xml:space="preserve">
+<data name="Pair" xml:space="preserve">
     <value>Pair</value>
   </data>
-  <data name="Passed" xml:space="preserve">
+<data name="Passed" xml:space="preserve">
     <value>passed</value>
   </data>
-  <data name="EvalFailed" xml:space="preserve">
+<data name="EvalFailed" xml:space="preserve">
     <value>failed</value>
   </data>
-  <data name="Decisions" xml:space="preserve">
+<data name="Decisions" xml:space="preserve">
     <value>Decisions</value>
   </data>
-  <data name="Constraints" xml:space="preserve">
+<data name="Constraints" xml:space="preserve">
     <value>Constraints</value>
   </data>
-  <data name="Activate" xml:space="preserve">
+<data name="Activate" xml:space="preserve">
     <value>Activate</value>
   </data>
-  <data name="Reject" xml:space="preserve">
+<data name="Reject" xml:space="preserve">
     <value>Reject</value>
   </data>
-  <data name="Accept" xml:space="preserve">
+<data name="Accept" xml:space="preserve">
     <value>Accept</value>
   </data>
-  <data name="Kind" xml:space="preserve">
+<data name="Kind" xml:space="preserve">
     <value>Kind</value>
   </data>
-  <data name="Consequences" xml:space="preserve">
+<data name="Consequences" xml:space="preserve">
     <value>Consequences</value>
   </data>
-  <data name="CloseMilestone" xml:space="preserve">
+<data name="CloseMilestone" xml:space="preserve">
     <value>Close</value>
   </data>
-  <data name="ReopenMilestone" xml:space="preserve">
+<data name="ReopenMilestone" xml:space="preserve">
     <value>Reopen</value>
   </data>
-  <data name="OrphanWarning" xml:space="preserve">
+<data name="OrphanWarning" xml:space="preserve">
     <value>Closed milestone still has {0} open task(s).</value>
   </data>
-  <data name="ConstraintBody" xml:space="preserve">
+<data name="ConstraintBody" xml:space="preserve">
     <value>Constraint</value>
   </data>
-  <data name="Username" xml:space="preserve">
+<data name="Username" xml:space="preserve">
     <value>Username</value>
   </data>
-  <data name="Completed" xml:space="preserve">
+<data name="Completed" xml:space="preserve">
     <value>Completed</value>
   </data>
-  <data name="Created" xml:space="preserve">
+<data name="Created" xml:space="preserve">
     <value>Created</value>
   </data>
-  <data name="KindMust" xml:space="preserve">
+<data name="KindMust" xml:space="preserve">
     <value>Must</value>
   </data>
-  <data name="KindMustNot" xml:space="preserve">
+<data name="KindMustNot" xml:space="preserve">
     <value>Must not</value>
   </data>
-  <data name="KindSecurity" xml:space="preserve">
+<data name="KindSecurity" xml:space="preserve">
     <value>Security</value>
   </data>
-  <data name="KindCompliance" xml:space="preserve">
+<data name="KindCompliance" xml:space="preserve">
     <value>Compliance</value>
   </data>
-  <data name="BootstrapToken" xml:space="preserve">
+<data name="BootstrapToken" xml:space="preserve">
     <value>Bootstrap token</value>
   </data>
-  <data name="RecoverPassword" xml:space="preserve">
+<data name="RecoverPassword" xml:space="preserve">
     <value>Recover password</value>
   </data>
-  <data name="RecoverDescription" xml:space="preserve">
+<data name="RecoverDescription" xml:space="preserve">
     <value>Enter the bootstrap token to reset the administrator password. The new password is shown once.</value>
   </data>
-  <data name="RecoverSuccess" xml:space="preserve">
+<data name="RecoverSuccess" xml:space="preserve">
     <value>Admin password reset. Save this password — it will not be shown again.</value>
   </data>
-  <data name="NewPassword" xml:space="preserve">
+<data name="NewPassword" xml:space="preserve">
     <value>New password</value>
   </data>
-  <data name="MyProjects" xml:space="preserve">
+<data name="MyProjects" xml:space="preserve">
     <value>My projects</value>
   </data>
-  <data name="NoProjectsYet" xml:space="preserve">
+<data name="NoProjectsYet" xml:space="preserve">
     <value>No projects yet. Create one to get started.</value>
   </data>
-  <data name="NoProjects" xml:space="preserve">
+<data name="NoProjects" xml:space="preserve">
     <value>No projects</value>
   </data>
-  <data name="RecentActivity" xml:space="preserve">
+<data name="RecentActivity" xml:space="preserve">
     <value>Recent activity</value>
   </data>
-  <data name="NoRecentActivity" xml:space="preserve">
+<data name="NoRecentActivity" xml:space="preserve">
     <value>No recent activity.</value>
   </data>
-  <data name="LastActivity" xml:space="preserve">
+<data name="LastActivity" xml:space="preserve">
     <value>Last activity</value>
   </data>
-  <data name="Active" xml:space="preserve">
+<data name="Active" xml:space="preserve">
     <value>Active</value>
   </data>
-  <data name="SwitchProject" xml:space="preserve">
+<data name="SwitchProject" xml:space="preserve">
     <value>Switch project</value>
   </data>
-  <data name="Pipeline" xml:space="preserve">
+<data name="Pipeline" xml:space="preserve">
     <value>Pipeline</value>
   </data>
-  <data name="PipelineNotStarted" xml:space="preserve">
+<data name="PipelineNotStarted" xml:space="preserve">
     <value>Pipeline not started.</value>
   </data>
-  <data name="StagePlanning" xml:space="preserve">
+<data name="StagePlanning" xml:space="preserve">
     <value>Planning</value>
   </data>
-  <data name="StageExecuting" xml:space="preserve">
+<data name="StageExecuting" xml:space="preserve">
     <value>Executing</value>
   </data>
-  <data name="StageReviewing" xml:space="preserve">
+<data name="StageReviewing" xml:space="preserve">
     <value>Reviewing</value>
   </data>
-  <data name="StageApproved" xml:space="preserve">
+<data name="StageApproved" xml:space="preserve">
     <value>Approved</value>
   </data>
-  <data name="StageReopenedForRevision" xml:space="preserve">
+<data name="StageReopenedForRevision" xml:space="preserve">
     <value>Reopened for revision</value>
   </data>
-  <data name="Subtasks" xml:space="preserve">
+<data name="Subtasks" xml:space="preserve">
     <value>Subtasks</value>
   </data>
-  <data name="NoSubtasksYet" xml:space="preserve">
+<data name="NoSubtasksYet" xml:space="preserve">
     <value>No subtasks yet.</value>
   </data>
-  <data name="Instructions" xml:space="preserve">
+<data name="Instructions" xml:space="preserve">
     <value>Instructions</value>
   </data>
-  <data name="DiffRef" xml:space="preserve">
+<data name="DiffRef" xml:space="preserve">
     <value>Diff ref</value>
   </data>
-  <data name="Summary" xml:space="preserve">
+<data name="Summary" xml:space="preserve">
     <value>Summary</value>
   </data>
-  <data name="Reopens" xml:space="preserve">
+<data name="Reopens" xml:space="preserve">
     <value>Reopens</value>
   </data>
-  <data name="Pending" xml:space="preserve">
+<data name="Pending" xml:space="preserve">
     <value>Pending</value>
   </data>
-  <data name="Failed" xml:space="preserve">
+<data name="Failed" xml:space="preserve">
     <value>Failed</value>
   </data>
-  <data name="Sessions" xml:space="preserve">
+<data name="Sessions" xml:space="preserve">
     <value>Sessions</value>
   </data>
-  <data name="NoSessionsYet" xml:space="preserve">
+<data name="NoSessionsYet" xml:space="preserve">
     <value>No sessions yet.</value>
   </data>
-  <data name="Ready" xml:space="preserve">
+<data name="Ready" xml:space="preserve">
     <value>Ready</value>
   </data>
-  <data name="Closed" xml:space="preserve">
+<data name="Closed" xml:space="preserve">
     <value>Closed</value>
   </data>
-  <data name="Launched" xml:space="preserve">
+<data name="Launched" xml:space="preserve">
     <value>Launched</value>
   </data>
-  <data name="Verdicts" xml:space="preserve">
+<data name="Verdicts" xml:space="preserve">
     <value>Verdicts</value>
   </data>
-  <data name="NoVerdictsYet" xml:space="preserve">
+<data name="NoVerdictsYet" xml:space="preserve">
     <value>No verdicts yet.</value>
   </data>
-  <data name="VerdictApprove" xml:space="preserve">
+<data name="VerdictApprove" xml:space="preserve">
     <value>Approve</value>
   </data>
-  <data name="VerdictReopenSubtask" xml:space="preserve">
+<data name="VerdictReopenSubtask" xml:space="preserve">
     <value>Reopen subtask</value>
   </data>
-  <data name="StartPipeline" xml:space="preserve">
+<data name="StartPipeline" xml:space="preserve">
     <value>Start pipeline</value>
   </data>
-  <data name="CreateSubtask" xml:space="preserve">
+<data name="CreateSubtask" xml:space="preserve">
     <value>Create subtask</value>
   </data>
-  <data name="StartActorSession" xml:space="preserve">
+<data name="StartActorSession" xml:space="preserve">
     <value>Start actor session</value>
   </data>
-  <data name="LaunchSession" xml:space="preserve">
+<data name="LaunchSession" xml:space="preserve">
     <value>Launch</value>
   </data>
-  <data name="ReportResult" xml:space="preserve">
+<data name="ReportResult" xml:space="preserve">
     <value>Report result</value>
   </data>
-  <data name="FailSubtask" xml:space="preserve">
+<data name="FailSubtask" xml:space="preserve">
     <value>Fail</value>
   </data>
-  <data name="StartReview" xml:space="preserve">
+<data name="StartReview" xml:space="preserve">
     <value>Start review</value>
   </data>
-  <data name="Approve" xml:space="preserve">
+<data name="Approve" xml:space="preserve">
     <value>Approve</value>
   </data>
-  <data name="ReopenSubtask" xml:space="preserve">
+<data name="ReopenSubtask" xml:space="preserve">
     <value>Reopen subtask</value>
   </data>
-  <data name="ConfirmClose" xml:space="preserve">
+<data name="ConfirmClose" xml:space="preserve">
     <value>Confirm close</value>
   </data>
-  <data name="ConfirmCloseHint" xml:space="preserve">
+<data name="ConfirmCloseHint" xml:space="preserve">
     <value>Optional. Falls back to the latest approve verdict note.</value>
   </data>
-  <data name="ForceClose" xml:space="preserve">
+<data name="ForceClose" xml:space="preserve">
     <value>Force close</value>
   </data>
-  <data name="ForceCloseWarning" xml:space="preserve">
+<data name="ForceCloseWarning" xml:space="preserve">
     <value>This closes the pipeline without a review verdict and cannot be undone.</value>
   </data>
-  <data name="Reason" xml:space="preserve">
+<data name="Reason" xml:space="preserve">
     <value>Reason</value>
   </data>
-  <data name="Note" xml:space="preserve">
+<data name="Note" xml:space="preserve">
     <value>Note</value>
   </data>
-  <data name="Subtask" xml:space="preserve">
+<data name="Subtask" xml:space="preserve">
     <value>Subtask</value>
   </data>
-  <data name="PipelineStarted" xml:space="preserve">
+<data name="PipelineStarted" xml:space="preserve">
     <value>Pipeline started.</value>
   </data>
-  <data name="SubtaskCreated" xml:space="preserve">
+<data name="SubtaskCreated" xml:space="preserve">
     <value>Subtask created.</value>
   </data>
-  <data name="SessionStarted" xml:space="preserve">
+<data name="SessionStarted" xml:space="preserve">
     <value>Session started.</value>
   </data>
-  <data name="SessionLaunched" xml:space="preserve">
+<data name="SessionLaunched" xml:space="preserve">
     <value>Session launched.</value>
   </data>
-  <data name="ResultReported" xml:space="preserve">
+<data name="ResultReported" xml:space="preserve">
     <value>Result reported.</value>
   </data>
-  <data name="SubtaskFailedMsg" xml:space="preserve">
+<data name="SubtaskFailedMsg" xml:space="preserve">
     <value>Subtask failed.</value>
   </data>
-  <data name="ReviewStarted" xml:space="preserve">
+<data name="ReviewStarted" xml:space="preserve">
     <value>Review started.</value>
   </data>
-  <data name="VerdictRecorded" xml:space="preserve">
+<data name="VerdictRecorded" xml:space="preserve">
     <value>Verdict recorded.</value>
   </data>
-  <data name="SubtaskReopened" xml:space="preserve">
+<data name="SubtaskReopened" xml:space="preserve">
     <value>Subtask reopened for revision.</value>
   </data>
-  <data name="PipelineClosed" xml:space="preserve">
+<data name="PipelineClosed" xml:space="preserve">
     <value>Pipeline closed.</value>
   </data>
-  <data name="SectionGoals" xml:space="preserve">
+<data name="SectionGoals" xml:space="preserve">
     <value>Goals</value>
   </data>
-  <data name="SectionNonGoals" xml:space="preserve">
+<data name="SectionNonGoals" xml:space="preserve">
     <value>Non-goals</value>
   </data>
-  <data name="SectionSecurity" xml:space="preserve">
+<data name="SectionSecurity" xml:space="preserve">
     <value>Security</value>
   </data>
-  <data name="SectionDefinitionOfDone" xml:space="preserve">
+<data name="SectionDefinitionOfDone" xml:space="preserve">
     <value>Definition of done</value>
   </data>
-  <data name="SectionArchitecture" xml:space="preserve">
+<data name="SectionArchitecture" xml:space="preserve">
     <value>Architecture</value>
   </data>
-  <data name="SectionConventions" xml:space="preserve">
+<data name="SectionConventions" xml:space="preserve">
     <value>Conventions</value>
   </data>
-  <data name="Proposed" xml:space="preserve">
+<data name="Proposed" xml:space="preserve">
     <value>Proposed</value>
   </data>
-  <data name="Accepted" xml:space="preserve">
+<data name="Accepted" xml:space="preserve">
     <value>Accepted</value>
   </data>
-  <data name="Superseded" xml:space="preserve">
+<data name="Superseded" xml:space="preserve">
     <value>Superseded</value>
   </data>
-  <data name="Deprecated" xml:space="preserve">
+<data name="Deprecated" xml:space="preserve">
     <value>Deprecated</value>
   </data>
-  <data name="Rejected" xml:space="preserve">
+<data name="Rejected" xml:space="preserve">
     <value>Rejected</value>
   </data>
-  <data name="NoDecisionsYet" xml:space="preserve">
+<data name="NoDecisionsYet" xml:space="preserve">
     <value>No decisions yet.</value>
   </data>
-  <data name="NoLabelsYet" xml:space="preserve">
+<data name="NoLabelsYet" xml:space="preserve">
     <value>No labels yet.</value>
   </data>
-  <data name="NoSectionsYet" xml:space="preserve">
+<data name="NoSectionsYet" xml:space="preserve">
     <value>No sections yet.</value>
   </data>
-  <data name="Devices" xml:space="preserve">
+<data name="Devices" xml:space="preserve">
     <value>Devices</value>
   </data>
-  <data name="AddDevice" xml:space="preserve">
+<data name="AddDevice" xml:space="preserve">
     <value>Add device</value>
   </data>
-  <data name="DeviceName" xml:space="preserve">
+<data name="DeviceName" xml:space="preserve">
     <value>Device name</value>
   </data>
-  <data name="NoDevicesYet" xml:space="preserve">
+<data name="NoDevicesYet" xml:space="preserve">
     <value>No devices yet. Add one and run beacon client with the token.</value>
   </data>
-  <data name="Commands" xml:space="preserve">
+<data name="Commands" xml:space="preserve">
     <value>Commands</value>
   </data>
-  <data name="NoCommands" xml:space="preserve">
+<data name="NoCommands" xml:space="preserve">
     <value>No commands yet.</value>
   </data>
-  <data name="DeviceOffline" xml:space="preserve">
+<data name="DeviceOffline" xml:space="preserve">
     <value>Not connected</value>
   </data>
-  <data name="DeviceOnline" xml:space="preserve">
+<data name="DeviceOnline" xml:space="preserve">
     <value>Connected</value>
   </data>
-  <data name="DeviceTokenOnce" xml:space="preserve">
+<data name="DeviceTokenOnce" xml:space="preserve">
     <value>Save this token. It is shown once. Run: beacon client --url {0} --token {1}</value>
   </data>
-  <data name="DeviceCreated" xml:space="preserve">
+<data name="DeviceCreated" xml:space="preserve">
     <value>Device created.</value>
   </data>
-  <data name="DeviceRevoked" xml:space="preserve">
+<data name="DeviceRevoked" xml:space="preserve">
     <value>Device revoked.</value>
   </data>
-  <data name="RevokeDeviceConfirm" xml:space="preserve">
+<data name="RevokeDeviceConfirm" xml:space="preserve">
     <value>Revoke this device? The client will stop receiving commands.</value>
   </data>
-  <data name="LastSeen" xml:space="preserve">
+<data name="LastSeen" xml:space="preserve">
     <value>Last seen</value>
   </data>
-  <data name="RuntimeDevice" xml:space="preserve">
+<data name="RuntimeDevice" xml:space="preserve">
     <value>Runtime device</value>
   </data>
-  <data name="ProjectDirectory" xml:space="preserve">
+<data name="ProjectDirectory" xml:space="preserve">
     <value>Project directory</value>
   </data>
-  <data name="Browse" xml:space="preserve">
+<data name="Browse" xml:space="preserve">
     <value>Browse</value>
   </data>
-  <data name="InitializeOnDevice" xml:space="preserve">
+<data name="InitializeOnDevice" xml:space="preserve">
     <value>Initialize on device (.gitignore, opencode.json)</value>
   </data>
-  <data name="ParentDirectory" xml:space="preserve">
+<data name="ParentDirectory" xml:space="preserve">
     <value>Up</value>
   </data>
-  <data name="SelectFolder" xml:space="preserve">
+<data name="SelectFolder" xml:space="preserve">
     <value>Select this folder</value>
   </data>
-  <data name="DeviceRequiredForBrowse" xml:space="preserve">
+<data name="DeviceRequiredForBrowse" xml:space="preserve">
     <value>Connect a device to browse folders.</value>
   </data>
-  <data name="McpServers" xml:space="preserve">
+<data name="McpServers" xml:space="preserve">
     <value>MCP servers</value>
   </data>
-  <data name="AgentMode" xml:space="preserve">
+<data name="AgentMode" xml:space="preserve">
     <value>Agent mode</value>
   </data>
-  <data name="AgentModeSolo" xml:space="preserve">
+<data name="AgentModeSolo" xml:space="preserve">
     <value>Solo</value>
   </data>
-  <data name="AgentModePipeline" xml:space="preserve">
+<data name="AgentModePipeline" xml:space="preserve">
     <value>Pipeline</value>
   </data>
-  <data name="ApplyOnDevice" xml:space="preserve">
+<data name="ApplyOnDevice" xml:space="preserve">
     <value>Apply on device</value>
   </data>
-  <data name="ModelsRoot" xml:space="preserve">
+<data name="ModelsRoot" xml:space="preserve">
     <value>Local models directory</value>
   </data>
-  <data name="ApplyOnDeviceDone" xml:space="preserve">
+<data name="ApplyOnDeviceDone" xml:space="preserve">
     <value>Agent config applied on the device.</value>
   </data>
-  <data name="PickGguf" xml:space="preserve">
+<data name="PickGguf" xml:space="preserve">
     <value>Pick GGUF</value>
   </data>
-  <data name="NoGgufFiles" xml:space="preserve">
+<data name="NoGgufFiles" xml:space="preserve">
     <value>No .gguf files in the device models directory.</value>
   </data>
-  <data name="SoloModel" xml:space="preserve">
+<data name="SoloModel" xml:space="preserve">
     <value>Solo model</value>
   </data>
-  <data name="Workstation" xml:space="preserve">
+<data name="Workstation" xml:space="preserve">
     <value>Workstation</value>
   </data>
-  <data name="LlamaSwapBin" xml:space="preserve">
+<data name="LlamaSwapBin" xml:space="preserve">
     <value>llama-swap binary</value>
   </data>
-  <data name="LlamaCppBin" xml:space="preserve">
+<data name="LlamaCppBin" xml:space="preserve">
     <value>llama-server binary</value>
   </data>
-  <data name="HistoryDir" xml:space="preserve">
+<data name="HistoryDir" xml:space="preserve">
     <value>OpenCode history directory</value>
   </data>
-  <data name="ProjectsRoot" xml:space="preserve">
+<data name="ProjectsRoot" xml:space="preserve">
     <value>Projects root</value>
   </data>
-  <data name="SaveWorkstation" xml:space="preserve">
+<data name="SaveWorkstation" xml:space="preserve">
     <value>Save on device</value>
   </data>
-  <data name="WorkstationSaved" xml:space="preserve">
+<data name="WorkstationSaved" xml:space="preserve">
     <value>Workstation settings saved on the device.</value>
   </data>
-  <data name="Probe" xml:space="preserve">
+<data name="Probe" xml:space="preserve">
     <value>Installed tools</value>
   </data>
-  <data name="Install" xml:space="preserve">
+<data name="Install" xml:space="preserve">
     <value>Install</value>
   </data>
-  <data name="InstallConfirm" xml:space="preserve">
+<data name="InstallConfirm" xml:space="preserve">
     <value>Install {0} on the selected device via winget?</value>
   </data>
-  <data name="InstallQueued" xml:space="preserve">
+<data name="InstallQueued" xml:space="preserve">
     <value>Install command sent to the device.</value>
   </data>
-  <data name="ProjectBrief" xml:space="preserve">
+<data name="ProjectBrief" xml:space="preserve">
     <value>Project brief</value>
   </data>
-  <data name="EditInContext" xml:space="preserve">
+<data name="EditInContext" xml:space="preserve">
     <value>Edit in Context</value>
   </data>
-  <data name="NoBrief" xml:space="preserve">
+<data name="NoBrief" xml:space="preserve">
     <value>No Goals or Definition of Done yet. Open Context to write those sections.</value>
   </data>
-  <data name="Queue" xml:space="preserve">
+<data name="Queue" xml:space="preserve">
     <value>Queue</value>
   </data>
-  <data name="NoReadyTasks" xml:space="preserve">
+<data name="NoReadyTasks" xml:space="preserve">
     <value>No ready tasks. Move a card to Todo and an agent can call start_work.</value>
   </data>
-  <data name="OpenMilestones" xml:space="preserve">
+<data name="OpenMilestones" xml:space="preserve">
     <value>{0} open</value>
   </data>
-  <data name="NoOpenMilestones" xml:space="preserve">
+<data name="NoOpenMilestones" xml:space="preserve">
     <value>No open milestones yet.</value>
   </data>
-  <data name="AgentsActive" xml:space="preserve">
+<data name="AgentsActive" xml:space="preserve">
     <value>{0} active</value>
   </data>
-  <data name="NoAgentSessions" xml:space="preserve">
+<data name="NoAgentSessions" xml:space="preserve">
     <value>No active agent sessions.</value>
   </data>
-  <data name="None" xml:space="preserve">
+<data name="None" xml:space="preserve">
     <value>None</value>
   </data>
-  <data name="EditTask" xml:space="preserve">
+<data name="EditTask" xml:space="preserve">
     <value>Edit task</value>
   </data>
-  <data name="PathPrefix" xml:space="preserve">
+<data name="PathPrefix" xml:space="preserve">
     <value>Path prefix</value>
   </data>
-  <data name="DeleteLabelConfirm" xml:space="preserve">
+<data name="DeleteLabelConfirm" xml:space="preserve">
     <value>Delete this label? Tasks keep their other fields.</value>
   </data>
-  <data name="ExportAgentsMd" xml:space="preserve">
+<data name="ExportAgentsMd" xml:space="preserve">
     <value>Export AGENTS.md</value>
   </data>
-  <data name="Deprecate" xml:space="preserve">
+<data name="Deprecate" xml:space="preserve">
     <value>Deprecate</value>
   </data>
-  <data name="Supersede" xml:space="preserve">
+<data name="Supersede" xml:space="preserve">
     <value>Supersede</value>
   </data>
-  <data name="Replacement" xml:space="preserve">
+<data name="Replacement" xml:space="preserve">
     <value>Replacement</value>
   </data>
-  <data name="ProbeGit" xml:space="preserve">
+<data name="ProbeGit" xml:space="preserve">
     <value>git</value>
   </data>
-  <data name="ProbeOpencode" xml:space="preserve">
+<data name="ProbeOpencode" xml:space="preserve">
     <value>opencode</value>
   </data>
-  <data name="ProbeNode" xml:space="preserve">
+<data name="ProbeNode" xml:space="preserve">
     <value>node</value>
   </data>
-  <data name="ProbeDocker" xml:space="preserve">
+<data name="ProbeDocker" xml:space="preserve">
     <value>docker</value>
   </data>
-  <data name="ProbeLlamaSwap" xml:space="preserve">
+<data name="ProbeLlamaSwap" xml:space="preserve">
     <value>llama-swap</value>
   </data>
-  <data name="Register" xml:space="preserve">
+<data name="Register" xml:space="preserve">
     <value>Create account</value>
   </data>
-  <data name="Email" xml:space="preserve">
+<data name="Email" xml:space="preserve">
     <value>Email</value>
   </data>
-  <data name="ForgotPassword" xml:space="preserve">
+<data name="ForgotPassword" xml:space="preserve">
     <value>Forgot password</value>
   </data>
-  <data name="ForgotDescription" xml:space="preserve">
+<data name="ForgotDescription" xml:space="preserve">
     <value>Enter your email. If an account exists, a reset link will be sent.</value>
   </data>
-  <data name="ForgotSuccess" xml:space="preserve">
+<data name="ForgotSuccess" xml:space="preserve">
     <value>If that email is registered, a reset link is on its way.</value>
   </data>
-  <data name="ResetPasswordTitle" xml:space="preserve">
+<data name="ResetPasswordTitle" xml:space="preserve">
     <value>Set a new password</value>
   </data>
-  <data name="ResetSuccess" xml:space="preserve">
+<data name="ResetSuccess" xml:space="preserve">
     <value>Password updated. You can log in now.</value>
   </data>
-  <data name="InviteTitle" xml:space="preserve">
+<data name="InviteTitle" xml:space="preserve">
     <value>Invitation</value>
   </data>
-  <data name="InviteDescription" xml:space="preserve">
+<data name="InviteDescription" xml:space="preserve">
     <value>You were invited to {0} as {1}.</value>
   </data>
-  <data name="InviteAccept" xml:space="preserve">
+<data name="InviteAccept" xml:space="preserve">
     <value>Accept invitation</value>
   </data>
-  <data name="InviteAccepted" xml:space="preserve">
+<data name="InviteAccepted" xml:space="preserve">
     <value>Invitation accepted.</value>
   </data>
-  <data name="AlreadyHaveAccount" xml:space="preserve">
+<data name="AlreadyHaveAccount" xml:space="preserve">
     <value>Already have an account? Log in, then reopen this link.</value>
   </data>
-  <data name="Members" xml:space="preserve">
+<data name="Members" xml:space="preserve">
     <value>Members</value>
   </data>
-  <data name="InviteMember" xml:space="preserve">
+<data name="InviteMember" xml:space="preserve">
     <value>Invite</value>
   </data>
-  <data name="PendingInvites" xml:space="preserve">
+<data name="PendingInvites" xml:space="preserve">
     <value>Pending invites</value>
   </data>
-  <data name="InviteSent" xml:space="preserve">
+<data name="InviteSent" xml:space="preserve">
     <value>Invite created. Save this link — it is shown once.</value>
   </data>
-  <data name="RevokeInvite" xml:space="preserve">
+<data name="RevokeInvite" xml:space="preserve">
     <value>Revoke</value>
   </data>
-  <data name="ChangePassword" xml:space="preserve">
+<data name="ChangePassword" xml:space="preserve">
     <value>Change password</value>
   </data>
-  <data name="CurrentPassword" xml:space="preserve">
+<data name="CurrentPassword" xml:space="preserve">
     <value>Current password</value>
   </data>
-  <data name="PasswordChanged" xml:space="preserve">
+<data name="PasswordChanged" xml:space="preserve">
     <value>Password changed.</value>
   </data>
-  <data name="Role" xml:space="preserve">
+<data name="Role" xml:space="preserve">
     <value>Role</value>
   </data>
-  <data name="NoMembersYet" xml:space="preserve">
+<data name="NoMembersYet" xml:space="preserve">
     <value>No members yet.</value>
   </data>
-  <data name="RoleMember" xml:space="preserve">
+<data name="RoleMember" xml:space="preserve">
     <value>Member</value>
   </data>
-  <data name="RoleAdmin" xml:space="preserve">
+<data name="RoleAdmin" xml:space="preserve">
     <value>Admin</value>
   </data>
-  <data name="RoleOwner" xml:space="preserve">
+<data name="RoleOwner" xml:space="preserve">
     <value>Owner</value>
   </data>
-  <data name="LandingHeroTitle" xml:space="preserve">
-    <value>Context that survives the next session.</value>
+<data name="LandingHeroTitle" xml:space="preserve">
+    <value>Build with AI agents. Keep control of the work.</value>
   </data>
-  <data name="LandingHeroLead" xml:space="preserve">
-    <value>A control plane for mixed human + local-agent work. Beacon compiles the brief once so agents stop rediscovering what was already decided.</value>
+<data name="LandingHeroLead" xml:space="preserve">
+    <value>ProjectBeacon brings your projects, AI agents, models and development workflow into one self-hosted control plane. Run the agent loop on your own workstation, with the tools and code staying under your control.</value>
   </data>
-  <data name="LandingProblemTitle" xml:space="preserve">
+<data name="LandingProblemTitle" xml:space="preserve">
     <value>Agents start cold</value>
   </data>
-  <data name="LandingProblemBody" xml:space="preserve">
+<data name="LandingProblemBody" xml:space="preserve">
     <value>Every new session, an agent greps around for decisions, constraints, and the files that matter. Beacon is the system of record that hands over a budgeted brief instead.</value>
   </data>
-  <data name="LandingHowTitle" xml:space="preserve">
+<data name="LandingHowTitle" xml:space="preserve">
     <value>How it works</value>
   </data>
-  <data name="LandingHow1" xml:space="preserve">
-    <value>Compile a budgeted brief from context, decisions, and constraints.</value>
+<data name="LandingHow1" xml:space="preserve">
+    <value>Compile a focused brief from project context, decisions, constraints and a token budget. Keep critical rules in scope.</value>
   </data>
-  <data name="LandingHow2" xml:space="preserve">
-    <value>Claim work on the board. Status, review notes, and pipeline stay in one place.</value>
+<data name="LandingHow2" xml:space="preserve">
+    <value>Plan work, assign tasks and coordinate agent stages. Human review, pipeline state and outcomes remain visible.</value>
   </data>
-  <data name="LandingHow3" xml:space="preserve">
-    <value>Run the agent on your machine with beacon mcp and beacon client. Beacon never executes the turn.</value>
+<data name="LandingHow3" xml:space="preserve">
+    <value>The workstation client runs the native harness or OpenCode, connects models and invokes local MCP tools. The server never executes your code.</value>
   </data>
-  <data name="LandingFeaturesTitle" xml:space="preserve">
+<data name="LandingFeaturesTitle" xml:space="preserve">
     <value>What ships</value>
   </data>
-  <data name="LandingFeatureContext" xml:space="preserve">
-    <value>Scoped briefs with a token budget. Never-drop security and definition of done.</value>
+<data name="LandingFeatureContext" xml:space="preserve">
+    <value>Compiled, scoped briefs preserve project knowledge, decisions, constraints and acceptance criteria across sessions.</value>
   </data>
-  <data name="LandingFeatureBoard" xml:space="preserve">
-    <value>Board, backlog, and roadmap for mixed human and agent work.</value>
+<data name="LandingFeatureBoard" xml:space="preserve">
+    <value>Board, backlog and roadmap connect agent work with human planning, review and delivery.</value>
   </data>
-  <data name="LandingFeatureDecisions" xml:space="preserve">
+<data name="LandingFeatureDecisions" xml:space="preserve">
     <value>Decisions carry consequences, so agents have a reason to respect them.</value>
   </data>
-  <data name="LandingFeatureAgents" xml:space="preserve">
-    <value>Solo and pipeline models on hardware you control. llama-swap stays on the workstation.</value>
+<data name="LandingFeatureAgents" xml:space="preserve">
+    <value>Configure user-level agents, model backends and task roles once. Use the native harness or keep OpenCode as your runtime.</value>
   </data>
-  <data name="LandingFeatureDevices" xml:space="preserve">
-    <value>Outbound HTTPS from beacon client. The Web host does not read your disk.</value>
+<data name="LandingFeatureDevices" xml:space="preserve">
+    <value>The workstation client connects outbound over HTTPS. Agent execution, local models and workspace access stay on your machine.</value>
   </data>
-  <data name="LandingFeatureMcpTitle" xml:space="preserve">
-    <value>stdio MCP</value>
+<data name="LandingFeatureMcpTitle" xml:space="preserve">
+    <value>MCP toolchain</value>
   </data>
-  <data name="LandingFeatureMcp" xml:space="preserve">
-    <value>Local file tools and pipeline tools over stdio. HTTP MCP is not shipped.</value>
+<data name="LandingFeatureMcp" xml:space="preserve">
+    <value>Reuse your local beacon mcp tools over stdio, with role-based permissions and scoped access.</value>
   </data>
-  <data name="LandingCompareTitle" xml:space="preserve">
+<data name="LandingCompareTitle" xml:space="preserve">
     <value>Compared with</value>
   </data>
-  <data name="LandingCompareChat" xml:space="preserve">
+<data name="LandingCompareChat" xml:space="preserve">
     <value>Chat-only agent</value>
   </data>
-  <data name="LandingCompareCloud" xml:space="preserve">
+<data name="LandingCompareCloud" xml:space="preserve">
     <value>Hosted coding cloud</value>
   </data>
-  <data name="LandingCompareBrief" xml:space="preserve">
+<data name="LandingCompareBrief" xml:space="preserve">
     <value>Persistent brief</value>
   </data>
-  <data name="LandingCompareHardware" xml:space="preserve">
+<data name="LandingCompareHardware" xml:space="preserve">
     <value>Your hardware</value>
   </data>
-  <data name="LandingCompareRecord" xml:space="preserve">
+<data name="LandingCompareRecord" xml:space="preserve">
     <value>System of record</value>
   </data>
-  <data name="LandingCompareExecutes" xml:space="preserve">
+<data name="LandingCompareExecutes" xml:space="preserve">
     <value>Executes the agent turn</value>
   </data>
-  <data name="LandingYes" xml:space="preserve">
+<data name="LandingYes" xml:space="preserve">
     <value>Yes</value>
   </data>
-  <data name="LandingNo" xml:space="preserve">
+<data name="LandingNo" xml:space="preserve">
     <value>No</value>
   </data>
-  <data name="LandingMaybe" xml:space="preserve">
+<data name="LandingMaybe" xml:space="preserve">
     <value>Maybe</value>
   </data>
-  <data name="LandingVisualTitle" xml:space="preserve">
+<data name="LandingVisualTitle" xml:space="preserve">
     <value>Board and brief, together</value>
   </data>
-  <data name="LandingMockTodo" xml:space="preserve">
+<data name="LandingMockTodo" xml:space="preserve">
     <value>Compile the task brief</value>
   </data>
-  <data name="LandingMockDoing" xml:space="preserve">
+<data name="LandingMockDoing" xml:space="preserve">
     <value>Claim and implement</value>
   </data>
-  <data name="LandingMockBrief" xml:space="preserve">
+<data name="LandingMockBrief" xml:space="preserve">
     <value>## Goals
 Keep context current for mixed human + agent work.
 
 ## Non-goals
 No Beacon-hosted coding agent.</value>
   </data>
-  <data name="LandingFaqTitle" xml:space="preserve">
+<data name="LandingFaqTitle" xml:space="preserve">
     <value>Questions</value>
   </data>
-  <data name="LandingFaq1Q" xml:space="preserve">
-    <value>Does Beacon run the coding agent?</value>
+<data name="LandingFaq1Q" xml:space="preserve">
+    <value>Does ProjectBeacon run the agent in the cloud?</value>
   </data>
-  <data name="LandingFaq1A" xml:space="preserve">
-    <value>No. Beacon relays and orchestrates. The agent process always runs on hardware you control.</value>
+<data name="LandingFaq1A" xml:space="preserve">
+    <value>No. The agent loop runs on your workstation through beacon client. You can use the native harness or OpenCode. The Web/API/Worker services coordinate work but do not run your model or execute code in your workspace.</value>
   </data>
-  <data name="LandingFaq2Q" xml:space="preserve">
-    <value>Where does the code live?</value>
+<data name="LandingFaq2Q" xml:space="preserve">
+    <value>Where do my code and models run?</value>
   </data>
-  <data name="LandingFaq2A" xml:space="preserve">
-    <value>On your machine. beacon client talks outbound HTTPS. The Web host does not browse the working tree.</value>
+<data name="LandingFaq2A" xml:space="preserve">
+    <value>Your code stays in the workspace on your workstation. Models can run locally through a configured backend or use a supported cloud provider. The workstation client connects outbound to your self-hosted ProjectBeacon server; the Web host does not browse your working tree.</value>
   </data>
-  <data name="LandingFaq3Q" xml:space="preserve">
-    <value>Is this hosted SaaS?</value>
+<data name="LandingFaq3Q" xml:space="preserve">
+    <value>Can I use more than one project?</value>
   </data>
-  <data name="LandingFaq3A" xml:space="preserve">
-    <value>Self-host is the v1 path. Hosted multi-tenant stays a later, gated phase.</value>
+<data name="LandingFaq3A" xml:space="preserve">
+    <value>Yes. Your agent and model configuration belongs to your user account and can be reused across projects. Each project keeps its own tasks, context, decisions and working directory.</value>
   </data>
-  <data name="LandingFaq4Q" xml:space="preserve">
-    <value>How do I add people?</value>
+<data name="LandingFaq4Q" xml:space="preserve">
+    <value>Do I have to use the native harness?</value>
   </data>
-  <data name="LandingFaq4A" xml:space="preserve">
-    <value>Open registration, or invite-only via AUTH_LOCAL_INVITE_ONLY. Invite from the open project on the dashboard; the link is shown once.</value>
+<data name="LandingFaq4A" xml:space="preserve">
+    <value>No. OpenCode remains a supported runtime. You can choose the runtime for a workstation; the native harness is an alternative that runs the model/tool loop locally and uses ProjectBeacon's existing MCP tools.</value>
   </data>
-  <data name="LandingFaq5Q" xml:space="preserve">
-    <value>How do I reset a password?</value>
+<data name="LandingFaq5Q" xml:space="preserve">
+    <value>Is ProjectBeacon a hosted SaaS?</value>
   </data>
-  <data name="LandingFaq5A" xml:space="preserve">
-    <value>Use Forgot password. /recover is bootstrap-token admin break-glass, not user reset.</value>
+<data name="LandingFaq5A" xml:space="preserve">
+    <value>The current product path is self-hosted. You run the control plane and connect your own workstation. Hosted multi-tenant operation is not part of the shipped product.</value>
   </data>
-  <data name="LandingCtaTitle" xml:space="preserve">
-    <value>Start on your own host</value>
+<data name="LandingCtaTitle" xml:space="preserve">
+    <value>Your agents. Your hardware. One place to work.</value>
   </data>
-  <data name="Project" xml:space="preserve">
+<data name="Project" xml:space="preserve">
     <value>Project</value>
   </data>
-  <data name="CreateProjectStepNames" xml:space="preserve">
+<data name="CreateProjectStepNames" xml:space="preserve">
     <value>Name the project</value>
   </data>
-  <data name="CreateProjectStepDevice" xml:space="preserve">
+<data name="CreateProjectStepDevice" xml:space="preserve">
     <value>Pick the workstation running beacon client</value>
   </data>
-  <data name="CreateProjectStepFolder" xml:space="preserve">
+<data name="CreateProjectStepFolder" xml:space="preserve">
     <value>Choose the folder on that machine</value>
   </data>
-  <data name="OrgNameHint" xml:space="preserve">
+<data name="OrgNameHint" xml:space="preserve">
     <value>Leave blank to reuse the project name.</value>
   </data>
-  <data name="RuntimeDeviceHint" xml:space="preserve">
+<data name="RuntimeDeviceHint" xml:space="preserve">
     <value>This is the PC where beacon.exe is running, not the browser.</value>
   </data>
-  <data name="NoDeviceForProject" xml:space="preserve">
+<data name="NoDeviceForProject" xml:space="preserve">
     <value>No workstation yet. Add a device in Settings and start beacon.exe.</value>
   </data>
-  <data name="DeviceOfflineHint" xml:space="preserve">
+<data name="DeviceOfflineHint" xml:space="preserve">
     <value>This device is offline. Start artifacts/daemon-win-x64/beacon.exe (or beacon client) and wait until it shows Connected.</value>
   </data>
-  <data name="BrowseOnDeviceHint" xml:space="preserve">
+<data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>Browse lists folders on the selected workstation, not in this browser.</value>
   </data>
-  <data name="FolderOptionalHint" xml:space="preserve">
+<data name="FolderOptionalHint" xml:space="preserve">
     <value>You can skip the folder now and attach it later on the dashboard.</value>
   </data>
-  <data name="InitializeOnDeviceHint" xml:space="preserve">
+<data name="InitializeOnDeviceHint" xml:space="preserve">
     <value>Writes .gitignore and opencode.json into that folder on the workstation.</value>
   </data>
-  <data name="ProjectFolder" xml:space="preserve">
+<data name="ProjectFolder" xml:space="preserve">
     <value>Project folder</value>
   </data>
-  <data name="AttachFolder" xml:space="preserve">
+<data name="AttachFolder" xml:space="preserve">
     <value>Save folder</value>
   </data>
-  <data name="ProjectFolderSaved" xml:space="preserve">
+<data name="ProjectFolderSaved" xml:space="preserve">
     <value>Project folder saved on this device.</value>
   </data>
-  <data name="HowToAddModel" xml:space="preserve">
+<data name="HowToAddModel" xml:space="preserve">
     <value>Llama.cpp: put GGUF files in Settings → Local models directory, then Pick GGUF. Other types need a model id under Advanced. Save registers the model; Apply on device writes the agent config.</value>
   </data>
-  <data name="ModelSaveHint" xml:space="preserve">
+<data name="ModelSaveHint" xml:space="preserve">
     <value>llama-swap picks up the registry on the next client heartbeat. Apply on device is required for the agent to see the model. Neither starts a task.</value>
   </data>
-  <data name="LaunchCommandRequired" xml:space="preserve">
+<data name="LaunchCommandRequired" xml:space="preserve">
     <value>Launch command is required for this backend type.</value>
   </data>
-  <data name="PickGgufFirst" xml:space="preserve">
+<data name="PickGgufFirst" xml:space="preserve">
     <value>Pick a GGUF file (or paste a llama-server command with --port ${PORT}).</value>
   </data>
-  <data name="NeedProjectFolderForGguf" xml:space="preserve">
+<data name="NeedProjectFolderForGguf" xml:space="preserve">
     <value>Attach a project folder on the dashboard so this page can scan GGUF files on the device.</value>
   </data>
-  <data name="NextStepTodo" xml:space="preserve">
+<data name="NextStepTodo" xml:space="preserve">
     <value>Nothing runs by itself. Attach a folder on the dashboard, add a model in Settings, then Start Pipeline (manual stages) or complete the task via MCP finish_work.</value>
   </data>
-  <data name="NextStepCreateSubtask" xml:space="preserve">
+<data name="NextStepCreateSubtask" xml:space="preserve">
     <value>Create a subtask, then Start Actor Session. Launch Session only marks the session Active in Beacon — it does not start the agent.</value>
   </data>
-  <data name="LaunchSessionHint" xml:space="preserve">
+<data name="LaunchSessionHint" xml:space="preserve">
     <value>Launch Session updates status in the database. It does not spawn the agent.</value>
   </data>
-  <data name="NoAgentSessionsHint" xml:space="preserve">
+<data name="NoAgentSessionsHint" xml:space="preserve">
     <value>No active pipeline sessions. Models do not start tasks; open a task and Start Pipeline, or use MCP.</value>
   </data>
-  <data name="WorkstationLoad" xml:space="preserve">
+<data name="WorkstationLoad" xml:space="preserve">
     <value>Workstation</value>
   </data>
-  <data name="StartClientHint" xml:space="preserve">
+<data name="StartClientHint" xml:space="preserve">
     <value>Start beacon.exe on this PC to see CPU, RAM, and GPU.</value>
   </data>
-  <data name="CpuHistory" xml:space="preserve">
+<data name="CpuHistory" xml:space="preserve">
     <value>CPU</value>
   </data>
-  <data name="RamHistory" xml:space="preserve">
+<data name="RamHistory" xml:space="preserve">
     <value>RAM</value>
   </data>
-  <data name="GpuHistory" xml:space="preserve">
+<data name="GpuHistory" xml:space="preserve">
     <value>GPU</value>
   </data>
-  <data name="TaskSteps" xml:space="preserve">
+<data name="TaskSteps" xml:space="preserve">
     <value>Steps</value>
   </data>
-  <data name="AddStep" xml:space="preserve">
+<data name="AddStep" xml:space="preserve">
     <value>Add step</value>
   </data>
-  <data name="StepTitle" xml:space="preserve">
+<data name="StepTitle" xml:space="preserve">
     <value>Step</value>
   </data>
-  <data name="NoStepsYet" xml:space="preserve">
+<data name="NoStepsYet" xml:space="preserve">
     <value>No custom steps yet.</value>
   </data>
-  <data name="Chat" xml:space="preserve">
+<data name="Chat" xml:space="preserve">
     <value>Chat</value>
   </data>
-  <data name="NewChat" xml:space="preserve">
+<data name="NewChat" xml:space="preserve">
     <value>New chat</value>
   </data>
-  <data name="NoChatsYet" xml:space="preserve">
+<data name="NoChatsYet" xml:space="preserve">
     <value>No chats yet.</value>
   </data>
-  <data name="ChatEmptyHint" xml:space="preserve">
+<data name="ChatEmptyHint" xml:space="preserve">
     <value>Start a chat. The agent runs on the workstation via beacon client.</value>
   </data>
-  <data name="Message" xml:space="preserve">
+<data name="Message" xml:space="preserve">
     <value>Message</value>
   </data>
-  <data name="Send" xml:space="preserve">
+<data name="Send" xml:space="preserve">
     <value>Send</value>
   </data>
-  <data name="Abort" xml:space="preserve">
+<data name="Abort" xml:space="preserve">
     <value>Stop</value>
   </data>
-  <data name="NavWork" xml:space="preserve">
+<data name="NavWork" xml:space="preserve">
     <value>Work</value>
   </data>
-  <data name="NavKnowledge" xml:space="preserve">
+<data name="NavKnowledge" xml:space="preserve">
     <value>Knowledge</value>
   </data>
-  <data name="NavAgents" xml:space="preserve">
+<data name="NavAgents" xml:space="preserve">
     <value>Agents</value>
   </data>
-  <data name="NavProject" xml:space="preserve">
+<data name="NavProject" xml:space="preserve">
     <value>Project</value>
   </data>
-  <data name="NavAccount" xml:space="preserve">
+<data name="NavAccount" xml:space="preserve">
     <value>Account</value>
   </data>
-  <data name="ProjectSettings" xml:space="preserve">
+<data name="ProjectSettings" xml:space="preserve">
     <value>Project Settings</value>
   </data>
-  <data name="Connections" xml:space="preserve">
+<data name="Connections" xml:space="preserve">
     <value>Connections</value>
   </data>
-  <data name="Workstations" xml:space="preserve">
+<data name="Workstations" xml:space="preserve">
     <value>Workstations</value>
   </data>
-  <data name="FolderExample" xml:space="preserve">
+<data name="FolderExample" xml:space="preserve">
     <value>C:\work\northstar</value>
   </data>
-  <data name="ChatNeedsFolder" xml:space="preserve">
+<data name="ChatNeedsFolder" xml:space="preserve">
     <value>Attach a project folder on the dashboard before chatting.</value>
   </data>
-  <data name="ChatNeedsClient" xml:space="preserve">
+<data name="ChatNeedsClient" xml:space="preserve">
     <value>Start beacon client on this workstation, then open chat again.</value>
   </data>
-  <data name="ModelsLocation" xml:space="preserve">
+<data name="ModelsLocation" xml:space="preserve">
     <value>Models location</value>
   </data>
-  <data name="ProjectsLocation" xml:space="preserve">
+<data name="ProjectsLocation" xml:space="preserve">
     <value>Projects location</value>
   </data>
-  <data name="AgentDataLocation" xml:space="preserve">
+<data name="AgentDataLocation" xml:space="preserve">
     <value>Agent data location</value>
   </data>
-  <data name="RuntimeExecutable" xml:space="preserve">
+<data name="RuntimeExecutable" xml:space="preserve">
     <value>Runtime executable</value>
   </data>
-  <data name="AdvancedDiagnostics" xml:space="preserve">
+<data name="AdvancedDiagnostics" xml:space="preserve">
     <value>Advanced</value>
   </data>
-  <data name="NoFolderSelected" xml:space="preserve">
+<data name="NoFolderSelected" xml:space="preserve">
     <value>No folder selected</value>
   </data>
-  <data name="ScopeAccountHint" xml:space="preserve">
+<data name="ScopeAccountHint" xml:space="preserve">
     <value>Your agent setup. Saved on your account and shared by your projects.</value>
   </data>
-  <data name="ScopeProjectHint" xml:space="preserve">
+<data name="ScopeProjectHint" xml:space="preserve">
     <value>This project on the workstation you select.</value>
   </data>
-  <data name="ScopeWorkstationHint" xml:space="preserve">
+<data name="ScopeWorkstationHint" xml:space="preserve">
     <value>This workstation. Not copied onto a project.</value>
   </data>
-  <data name="CommandQueued" xml:space="preserve">
+<data name="CommandQueued" xml:space="preserve">
     <value>Queued</value>
   </data>
-  <data name="CommandRunning" xml:space="preserve">
+<data name="CommandRunning" xml:space="preserve">
     <value>Running</value>
   </data>
-  <data name="CommandSucceeded" xml:space="preserve">
+<data name="CommandSucceeded" xml:space="preserve">
     <value>Completed</value>
   </data>
-  <data name="CommandFailed" xml:space="preserve">
+<data name="CommandFailed" xml:space="preserve">
     <value>Failed</value>
   </data>
-  <data name="CommandCancelled" xml:space="preserve">
+<data name="CommandCancelled" xml:space="preserve">
     <value>Cancelled</value>
   </data>
-  <data name="CommandTimedOut" xml:space="preserve">
+<data name="CommandTimedOut" xml:space="preserve">
     <value>Timed out</value>
   </data>
-  <data name="RuntimeOffline" xml:space="preserve">
+<data name="RuntimeOffline" xml:space="preserve">
     <value>Offline</value>
   </data>
-  <data name="RuntimeStarting" xml:space="preserve">
+<data name="RuntimeStarting" xml:space="preserve">
     <value>Starting</value>
   </data>
-  <data name="RuntimeReady" xml:space="preserve">
+<data name="RuntimeReady" xml:space="preserve">
     <value>Ready</value>
   </data>
-  <data name="RuntimeBusy" xml:space="preserve">
+<data name="RuntimeBusy" xml:space="preserve">
     <value>Busy</value>
   </data>
-  <data name="RuntimeDegraded" xml:space="preserve">
+<data name="RuntimeDegraded" xml:space="preserve">
     <value>Degraded</value>
   </data>
-  <data name="RuntimeStopping" xml:space="preserve">
+<data name="RuntimeStopping" xml:space="preserve">
     <value>Stopping</value>
   </data>
-  <data name="RuntimeFailed" xml:space="preserve">
+<data name="RuntimeFailed" xml:space="preserve">
     <value>Failed</value>
   </data>
-  <data name="RuntimeReadyHint" xml:space="preserve">
+<data name="RuntimeReadyHint" xml:space="preserve">
     <value>The model runtime is ready.</value>
   </data>
-  <data name="RuntimeOfflineHint" xml:space="preserve">
+<data name="RuntimeOfflineHint" xml:space="preserve">
     <value>This workstation is not connected.</value>
   </data>
-  <data name="RuntimeFailedHint" xml:space="preserve">
+<data name="RuntimeFailedHint" xml:space="preserve">
     <value>The model runtime failed.</value>
   </data>
-  <data name="RuntimeDegradedHint" xml:space="preserve">
+<data name="RuntimeDegradedHint" xml:space="preserve">
     <value>The runtime is up, but something needs attention.</value>
   </data>
-  <data name="RuntimeBusyHint" xml:space="preserve">
+<data name="RuntimeBusyHint" xml:space="preserve">
     <value>A model is busy. Wait before unloading.</value>
   </data>
-  <data name="RuntimeStartingHint" xml:space="preserve">
+<data name="RuntimeStartingHint" xml:space="preserve">
     <value>The runtime is starting.</value>
   </data>
-  <data name="RuntimeStoppingHint" xml:space="preserve">
+<data name="RuntimeStoppingHint" xml:space="preserve">
     <value>The runtime is stopping.</value>
   </data>
-  <data name="CurrentModel" xml:space="preserve">
+<data name="CurrentModel" xml:space="preserve">
     <value>Current model</value>
   </data>
-  <data name="Retry" xml:space="preserve">
+<data name="Retry" xml:space="preserve">
     <value>Retry</value>
   </data>
-  <data name="Overview" xml:space="preserve">
+<data name="Overview" xml:space="preserve">
     <value>Overview</value>
   </data>
-  <data name="Work" xml:space="preserve">
+<data name="Work" xml:space="preserve">
     <value>Work</value>
   </data>
-  <data name="Discussion" xml:space="preserve">
+<data name="Discussion" xml:space="preserve">
     <value>Discussion</value>
   </data>
-  <data name="RuntimeDiagnostics" xml:space="preserve">
+<data name="RuntimeDiagnostics" xml:space="preserve">
     <value>Runtime</value>
   </data>
-  <data name="Advanced" xml:space="preserve">
+<data name="Advanced" xml:space="preserve">
     <value>Advanced</value>
   </data>
-  <data name="ScopeUserLevel" xml:space="preserve">
+<data name="ScopeUserLevel" xml:space="preserve">
     <value>User-level</value>
   </data>
-  <data name="ScopeContextual" xml:space="preserve">
+<data name="ScopeContextual" xml:space="preserve">
     <value>Contextual</value>
   </data>
-  <data name="Connect" xml:space="preserve">
+<data name="Connect" xml:space="preserve">
     <value>Connect</value>
   </data>
-  <data name="Diagnostics" xml:space="preserve">
+<data name="Diagnostics" xml:space="preserve">
     <value>Diagnostics</value>
   </data>
-  <data name="MoveTo" xml:space="preserve">
+<data name="MoveTo" xml:space="preserve">
     <value>Move to</value>
   </data>
-  <data name="RoleBindingReview" xml:space="preserve">
+<data name="RoleBindingReview" xml:space="preserve">
     <value>Review</value>
   </data>
-  <data name="McpLocal" xml:space="preserve">
+<data name="McpLocal" xml:space="preserve">
     <value>Local</value>
   </data>
-  <data name="McpRemote" xml:space="preserve">
+<data name="McpRemote" xml:space="preserve">
     <value>Remote</value>
   </data>
-  <data name="McpUrl" xml:space="preserve">
+<data name="McpUrl" xml:space="preserve">
     <value>URL</value>
   </data>
-  <data name="McpCommand" xml:space="preserve">
+<data name="McpCommand" xml:space="preserve">
     <value>Command</value>
   </data>
-  <data name="NoTemplateSelected" xml:space="preserve">
+<data name="NoTemplateSelected" xml:space="preserve">
     <value>No template selected.</value>
   </data>
-  <data name="ModelsCount" xml:space="preserve">
+<data name="ModelsCount" xml:space="preserve">
     <value>{0} models</value>
   </data>
-  <data name="ChatGenerating" xml:space="preserve">
+<data name="ChatGenerating" xml:space="preserve">
     <value>Generating</value>
   </data>
-  <data name="ChatUsingTool" xml:space="preserve">
+<data name="ChatUsingTool" xml:space="preserve">
     <value>Using tool</value>
   </data>
-  <data name="ChatWaitingRuntime" xml:space="preserve">
+<data name="ChatWaitingRuntime" xml:space="preserve">
     <value>Waiting for runtime</value>
   </data>
-  <data name="ChatCompleted" xml:space="preserve">
+<data name="ChatCompleted" xml:space="preserve">
     <value>Completed</value>
   </data>
-  <data name="ChatAborted" xml:space="preserve">
+<data name="ChatAborted" xml:space="preserve">
     <value>Aborted</value>
   </data>
-  <data name="ChatThinking" xml:space="preserve">
+<data name="ChatThinking" xml:space="preserve">
     <value>Thinking</value>
   </data>
-  <data name="ChatTool" xml:space="preserve">
+<data name="ChatTool" xml:space="preserve">
     <value>Tool</value>
   </data>
-  <data name="ChatOpenFull" xml:space="preserve">
+<data name="ChatOpenFull" xml:space="preserve">
     <value>Open full chat</value>
   </data>
-  <data name="ChatYou" xml:space="preserve">
+<data name="ChatYou" xml:space="preserve">
     <value>You</value>
   </data>
-  <data name="Revision" xml:space="preserve">
+<data name="Revision" xml:space="preserve">
     <value>Revision</value>
   </data>
-  <data name="CompiledHash" xml:space="preserve">
+<data name="CompiledHash" xml:space="preserve">
     <value>Hash</value>
   </data>
-  <data name="BudgetOverflow" xml:space="preserve">
+<data name="BudgetOverflow" xml:space="preserve">
     <value>Over budget</value>
   </data>
-  <data name="DroppedSections" xml:space="preserve">
+<data name="DroppedSections" xml:space="preserve">
     <value>Dropped</value>
   </data>
-  <data name="Open" xml:space="preserve">
+<data name="Open" xml:space="preserve">
     <value>Open</value>
   </data>
-  <data name="NoDecisions" xml:space="preserve">
+<data name="NoDecisions" xml:space="preserve">
     <value>No decisions yet.</value>
   </data>
-  <data name="NoReports" xml:space="preserve">
+<data name="NoReports" xml:space="preserve">
     <value>No reports yet.</value>
   </data>
-  <data name="ServerCompileNoTree" xml:space="preserve">
+<data name="ServerCompileNoTree" xml:space="preserve">
     <value>Server compile does not include the working tree. The agent brief is filled on the workstation.</value>
   </data>
-  <data name="MilestoneCounts" xml:space="preserve">
+<data name="MilestoneCounts" xml:space="preserve">
     <value>{0} open milestones / {1} closed</value>
   </data>
-  <data name="ReportTaskCount" xml:space="preserve">
+<data name="ReportTaskCount" xml:space="preserve">
     <value>{0} tasks</value>
   </data>
-  <data name="SubtaskReported" xml:space="preserve">
+<data name="SubtaskReported" xml:space="preserve">
     <value>Reported</value>
   </data>
-  <data name="MoreTasks" xml:space="preserve">
+<data name="MoreTasks" xml:space="preserve">
     <value>+{0} more</value>
   </data>
-  <data name="Actions" xml:space="preserve">
+<data name="Actions" xml:space="preserve">
     <value>Actions</value>
   </data>
-  <data name="Scope" xml:space="preserve">
+<data name="Scope" xml:space="preserve">
     <value>Scope</value>
   </data>
-  <data name="Generated" xml:space="preserve">
+<data name="Generated" xml:space="preserve">
     <value>Generated</value>
   </data>
-  <data name="DeleteTaskConfirm" xml:space="preserve">
+<data name="DeleteTaskConfirm" xml:space="preserve">
     <value>Delete this task? This cannot be undone.</value>
   </data>
-  <data name="DeleteMilestoneConfirm" xml:space="preserve">
+<data name="DeleteMilestoneConfirm" xml:space="preserve">
     <value>Delete this milestone? Tasks stay on the board.</value>
   </data>
-  <data name="DeleteConnectionConfirm" xml:space="preserve">
+<data name="DeleteConnectionConfirm" xml:space="preserve">
     <value>Remove this connection?</value>
   </data>
-  <data name="Owner" xml:space="preserve">
+<data name="Owner" xml:space="preserve">
     <value>Owner</value>
   </data>
-  <data name="Admin" xml:space="preserve">
+<data name="Admin" xml:space="preserve">
     <value>Admin</value>
   </data>
-  <data name="Member" xml:space="preserve">
+<data name="Member" xml:space="preserve">
     <value>Member</value>
   </data>
-  <data name="Viewer" xml:space="preserve">
+<data name="Viewer" xml:space="preserve">
     <value>Viewer</value>
   </data>
-  <data name="Revoked" xml:space="preserve">
+<data name="Revoked" xml:space="preserve">
     <value>Revoked</value>
   </data>
-  <data name="NavOperate" xml:space="preserve">
+<data name="NavOperate" xml:space="preserve">
     <value>Operate</value>
   </data>
-  <data name="NavIntelligence" xml:space="preserve">
+<data name="NavIntelligence" xml:space="preserve">
     <value>Intelligence</value>
   </data>
-  <data name="NavGovern" xml:space="preserve">
+<data name="NavGovern" xml:space="preserve">
     <value>Govern</value>
   </data>
-  <data name="Reviews" xml:space="preserve">
+<data name="Reviews" xml:space="preserve">
     <value>Reviews</value>
   </data>
-  <data name="AgentChat" xml:space="preserve">
+<data name="AgentChat" xml:space="preserve">
     <value>Agent chat</value>
   </data>
-  <data name="SearchOrCommand" xml:space="preserve">
+<data name="SearchOrCommand" xml:space="preserve">
     <value>Search or run a command</value>
   </data>
-  <data name="CommandPalette" xml:space="preserve">
+<data name="CommandPalette" xml:space="preserve">
     <value>Command palette</value>
   </data>
-  <data name="CommandPalettePlaceholder" xml:space="preserve">
+<data name="CommandPalettePlaceholder" xml:space="preserve">
     <value>Search pages</value>
   </data>
-  <data name="CommandPaletteEmpty" xml:space="preserve">
+<data name="CommandPaletteEmpty" xml:space="preserve">
     <value>No matching commands</value>
   </data>
-  <data name="FleetOperational" xml:space="preserve">
+<data name="FleetOperational" xml:space="preserve">
     <value>Fleet operational</value>
   </data>
-  <data name="FleetDegraded" xml:space="preserve">
+<data name="FleetDegraded" xml:space="preserve">
     <value>Fleet needs attention</value>
   </data>
-  <data name="FleetOffline" xml:space="preserve">
+<data name="FleetOffline" xml:space="preserve">
     <value>Fleet offline</value>
   </data>
-  <data name="FleetEmpty" xml:space="preserve">
+<data name="FleetEmpty" xml:space="preserve">
     <value>No workstations</value>
   </data>
-  <data name="FleetCounts" xml:space="preserve">
+<data name="FleetCounts" xml:space="preserve">
     <value>{0} workstations · {1} online</value>
   </data>
-  <data name="ShellHintOverview" xml:space="preserve">
+<data name="ShellHintOverview" xml:space="preserve">
     <value>Current project at a glance</value>
   </data>
-  <data name="ShellHintBoard" xml:space="preserve">
+<data name="ShellHintBoard" xml:space="preserve">
     <value>Work on the board</value>
   </data>
-  <data name="ShellHintBacklog" xml:space="preserve">
+<data name="ShellHintBacklog" xml:space="preserve">
     <value>Tasks not on the board</value>
   </data>
-  <data name="ShellHintRoadmap" xml:space="preserve">
+<data name="ShellHintRoadmap" xml:space="preserve">
     <value>Milestones</value>
   </data>
-  <data name="ShellHintContext" xml:space="preserve">
+<data name="ShellHintContext" xml:space="preserve">
     <value>Project knowledge</value>
   </data>
-  <data name="ShellHintDecisions" xml:space="preserve">
+<data name="ShellHintDecisions" xml:space="preserve">
     <value>Recorded decisions</value>
   </data>
-  <data name="ShellHintReports" xml:space="preserve">
+<data name="ShellHintReports" xml:space="preserve">
     <value>Board snapshots</value>
   </data>
-  <data name="ShellHintChat" xml:space="preserve">
+<data name="ShellHintChat" xml:space="preserve">
     <value>Agent session</value>
   </data>
-  <data name="ShellHintAgents" xml:space="preserve">
+<data name="ShellHintAgents" xml:space="preserve">
     <value>Agent setup</value>
   </data>
-  <data name="ShellHintWorkstations" xml:space="preserve">
+<data name="ShellHintWorkstations" xml:space="preserve">
     <value>Devices that run agents</value>
   </data>
-  <data name="ShellHintProject" xml:space="preserve">
+<data name="ShellHintProject" xml:space="preserve">
     <value>This project</value>
   </data>
-  <data name="ShellHintSettings" xml:space="preserve">
+<data name="ShellHintSettings" xml:space="preserve">
     <value>Account</value>
   </data>
-  <data name="ShellHintConnections" xml:space="preserve">
+<data name="ShellHintConnections" xml:space="preserve">
     <value>Model connections</value>
   </data>
-  <data name="ShellHintTask" xml:space="preserve">
+<data name="ShellHintTask" xml:space="preserve">
     <value>Task</value>
   </data>
-  <data name="ShellHintNewProject" xml:space="preserve">
+<data name="ShellHintNewProject" xml:space="preserve">
     <value>Create a project</value>
   </data>
-  <data name="AttentionCount" xml:space="preserve">
+<data name="AttentionCount" xml:space="preserve">
     <value>{0} items need attention</value>
   </data>
-  <data name="CurrentlyRunning" xml:space="preserve">
+<data name="CurrentlyRunning" xml:space="preserve">
     <value>Currently running</value>
   </data>
-  <data name="NoRunningWork" xml:space="preserve">
+<data name="NoRunningWork" xml:space="preserve">
     <value>Nothing is in progress.</value>
   </data>
-  <data name="NeedsAttention" xml:space="preserve">
+<data name="NeedsAttention" xml:space="preserve">
     <value>Needs attention</value>
   </data>
-  <data name="NoAttention" xml:space="preserve">
+<data name="NoAttention" xml:space="preserve">
     <value>Nothing needs attention.</value>
   </data>
-  <data name="SystemLoad" xml:space="preserve">
+<data name="SystemLoad" xml:space="preserve">
     <value>System load</value>
   </data>
-  <data name="NoHostLoad" xml:space="preserve">
+<data name="NoHostLoad" xml:space="preserve">
     <value>No workstation has reported CPU, memory, or GPU load yet.</value>
   </data>
-  <data name="FleetHealth" xml:space="preserve">
+<data name="FleetHealth" xml:space="preserve">
     <value>Fleet health</value>
   </data>
-  <data name="NextStep" xml:space="preserve">
+<data name="NextStep" xml:space="preserve">
     <value>Next step</value>
   </data>
-  <data name="ReviewSeparate" xml:space="preserve">
+<data name="ReviewSeparate" xml:space="preserve">
     <value>Verification is separate from execution. Approving finishes the review, not the work log.</value>
   </data>
-  <data name="CurrentProject" xml:space="preserve">
+<data name="CurrentProject" xml:space="preserve">
     <value>Current project</value>
   </data>
-  <data name="Goal" xml:space="preserve">
+<data name="Goal" xml:space="preserve">
     <value>Goal</value>
   </data>
 <data name="ChatRename" xml:space="preserve">
@@ -2219,97 +2219,136 @@ No Beacon-hosted coding agent.</value>
 <data name="ChatJumpToLatest" xml:space="preserve">
     <value>Jump to latest</value>
   </data>
-  <data name="ChatReasoningEffort" xml:space="preserve">
+<data name="ChatReasoningEffort" xml:space="preserve">
     <value>Reasoning effort</value>
   </data>
-  <data name="ChatEffortDefault" xml:space="preserve">
+<data name="ChatEffortDefault" xml:space="preserve">
     <value>Default</value>
   </data>
-  <data name="ChatEffortLow" xml:space="preserve">
+<data name="ChatEffortLow" xml:space="preserve">
     <value>Low</value>
   </data>
-  <data name="ChatEffortMedium" xml:space="preserve">
+<data name="ChatEffortMedium" xml:space="preserve">
     <value>Medium</value>
   </data>
-  <data name="ChatEffortHigh" xml:space="preserve">
+<data name="ChatEffortHigh" xml:space="preserve">
     <value>High</value>
   </data>
-  <data name="ChatEffortXhigh" xml:space="preserve">
+<data name="ChatEffortXhigh" xml:space="preserve">
     <value>XHigh</value>
   </data>
-  <data name="ChatModelReady" xml:space="preserve">
+<data name="ChatModelReady" xml:space="preserve">
     <value>Model ready: {0}</value>
   </data>
-  <data name="ChatModelSwitching" xml:space="preserve">
+<data name="ChatModelSwitching" xml:space="preserve">
     <value>Switching model: {0}</value>
   </data>
-  <data name="ChatUsage" xml:space="preserve">
+<data name="ChatUsage" xml:space="preserve">
     <value>{0} tokens · {1}</value>
   </data>
-  <data name="ChatUsageSpeed" xml:space="preserve">
+<data name="ChatUsageSpeed" xml:space="preserve">
     <value>{0} tok/s</value>
   </data>
-  <data name="ChatModelNotLoaded" xml:space="preserve">
+<data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Model not loaded: {0}</value>
   </data>
-  <data name="ChatAgent" xml:space="preserve">
+<data name="ChatAgent" xml:space="preserve">
     <value>Agent</value>
   </data>
-  <data name="ChatAgentAct" xml:space="preserve">
+<data name="ChatAgentAct" xml:space="preserve">
     <value>Act</value>
   </data>
-  <data name="ChatAgentPlan" xml:space="preserve">
+<data name="ChatAgentPlan" xml:space="preserve">
     <value>Plan</value>
   </data>
-  <data name="ChatAgentSwitching" xml:space="preserve">
+<data name="ChatAgentSwitching" xml:space="preserve">
     <value>Switching agent…</value>
   </data>
-  <data name="ChatQuestion" xml:space="preserve">
+<data name="ChatQuestion" xml:space="preserve">
     <value>Question</value>
   </data>
-  <data name="ChatQuestionAnswered" xml:space="preserve">
+<data name="ChatQuestionAnswered" xml:space="preserve">
     <value>Answered</value>
   </data>
-  <data name="ChatAnswer" xml:space="preserve">
+<data name="ChatAnswer" xml:space="preserve">
     <value>Send answer</value>
   </data>
-  <data name="ChatAnswered" xml:space="preserve">
+<data name="ChatAnswered" xml:space="preserve">
     <value>Answer sent.</value>
   </data>
-  <data name="ChatAnswerFailed" xml:space="preserve">
+<data name="ChatAnswerFailed" xml:space="preserve">
     <value>Could not answer the question: {0}</value>
   </data>
-  <data name="ChatModelSettings" xml:space="preserve">
+<data name="ChatModelSettings" xml:space="preserve">
     <value>Model settings</value>
   </data>
-  <data name="ChatModelSettingsDescription" xml:space="preserve">
+<data name="ChatModelSettingsDescription" xml:space="preserve">
     <value>Choose a model first, then adjust reasoning effort.</value>
   </data>
-  <data name="ChatContextWindow" xml:space="preserve">
+<data name="ChatContextWindow" xml:space="preserve">
     <value>Context window: {0} tokens</value>
   </data>
-  <data name="AgentRuntime" xml:space="preserve">
+<data name="AgentRuntime" xml:space="preserve">
     <value>Agent runtime</value>
   </data>
-  <data name="AgentRuntimeOpenCode" xml:space="preserve">
+<data name="AgentRuntimeOpenCode" xml:space="preserve">
     <value>OpenCode (default)</value>
   </data>
-  <data name="AgentRuntimeNative" xml:space="preserve">
+<data name="AgentRuntimeNative" xml:space="preserve">
     <value>Native harness (experimental)</value>
   </data>
-  <data name="AgentRuntimeRestartHint" xml:space="preserve">
+<data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Runtime changes take effect after restarting the workstation client.</value>
   </data>
-  <data name="AgentRuntimeActive" xml:space="preserve">
+<data name="AgentRuntimeActive" xml:space="preserve">
     <value>Currently active runtime</value>
   </data>
-  <data name="AgentRuntimePendingRestart" xml:space="preserve">
+<data name="AgentRuntimePendingRestart" xml:space="preserve">
     <value>The selected runtime differs from the runtime currently running on this workstation. Restart the workstation client to apply the selection.</value>
   </data>
-  <data name="AgentRuntimeUnavailable" xml:space="preserve">
+<data name="AgentRuntimeUnavailable" xml:space="preserve">
     <value>Unavailable</value>
   </data>
-  <data name="AgentRuntimeUnknown" xml:space="preserve">
+<data name="AgentRuntimeUnknown" xml:space="preserve">
     <value>Unknown (waiting for workstation heartbeat)</value>
   </data>
+<data name="LandingEyebrow" xml:space="preserve"><value>LOCAL-FIRST AI DEVELOPMENT PLATFORM</value></data>
+<data name="LandingHeroFootnote" xml:space="preserve"><value>Your workstation runs the agent. Your projects stay yours.</value></data>
+<data name="LandingOnline" xml:space="preserve"><value>WORKSTATION ONLINE</value></data>
+<data name="LandingLocalRuntime" xml:space="preserve"><value>Local runtime</value></data>
+<data name="LandingWorkspaceLabel" xml:space="preserve"><value>ACTIVE WORKSPACE</value></data>
+<data name="LandingPreviewReady" xml:space="preserve"><value>Configured</value></data>
+<data name="LandingPreviewConnected" xml:space="preserve"><value>Connected</value></data>
+<data name="LandingActiveTasks" xml:space="preserve"><value>Active tasks</value></data>
+<data name="LandingPreviewInProgress" xml:space="preserve"><value>In progress</value></data>
+<data name="LandingWorkInProgress" xml:space="preserve"><value>Work in progress</value></data>
+<data name="LandingTaskContext" xml:space="preserve"><value>Context brief · project rules</value></data>
+<data name="LandingTaskAgent" xml:space="preserve"><value>Native harness · Actor</value></data>
+<data name="LandingRuntimeTitle" xml:space="preserve"><value>Agent runtime</value></data>
+<data name="LandingRuntimeDescription" xml:space="preserve"><value>Native harness or OpenCode · local or cloud model</value></data>
+<data name="LandingVisualCaption" xml:space="preserve"><value>One place to operate the whole workflow</value></data>
+<data name="LandingPrinciplesTitle" xml:space="preserve"><value>Product principles</value></data>
+<data name="LandingPrincipleLocal" xml:space="preserve"><value>Runs on your workstation</value></data>
+<data name="LandingPrincipleMulti" xml:space="preserve"><value>One setup, many projects</value></data>
+<data name="LandingPrincipleControl" xml:space="preserve"><value>You control models and data</value></data>
+<data name="LandingPrincipleOpen" xml:space="preserve"><value>MCP-powered tools</value></data>
+<data name="LandingFeaturesLead" xml:space="preserve"><value>A connected workspace for the complete agent-driven development loop — not another chat window.</value></data>
+<data name="LandingPipelineTitle" xml:space="preserve"><value>Agent pipelines</value></data>
+<data name="LandingFeaturePipeline" xml:space="preserve"><value>Coordinate Planner, Actor and Reviewer sessions with scoped tools, task state and review outcomes.</value></data>
+<data name="LandingHowLead" xml:space="preserve"><value>From shared project knowledge to a controlled local agent run — with a traceable result.</value></data>
+<data name="LandingFlow1Title" xml:space="preserve"><value>Give agents the right context</value></data>
+<data name="LandingFlow2Title" xml:space="preserve"><value>Coordinate work</value></data>
+<data name="LandingFlow3Title" xml:space="preserve"><value>Run locally. Review centrally.</value></data>
+<data name="LandingArchitectureTitle" xml:space="preserve"><value>A control plane. Your workstation. Your rules.</value></data>
+<data name="LandingArchitectureBody" xml:space="preserve"><value>ProjectBeacon coordinates identity, projects, tasks, permissions and agent sessions. The workstation client owns model execution and local tools — so your source tree and runtime stay on hardware you control.</value></data>
+<data name="LandingArchitectureControl" xml:space="preserve"><value>ProjectBeacon control plane</value></data>
+<data name="LandingArchitectureControlBody" xml:space="preserve"><value>Projects · tasks · context · permissions · history</value></data>
+<data name="LandingArchitectureWorkstation" xml:space="preserve"><value>Your workstation</value></data>
+<data name="LandingArchitectureWorkstationBody" xml:space="preserve"><value>Beacon client · runtime selection · model connections</value></data>
+<data name="LandingArchitectureRuntime" xml:space="preserve"><value>Local agent runtime</value></data>
+<data name="LandingArchitectureRuntimeBody" xml:space="preserve"><value>Native harness or OpenCode · MCP stdio · workspace</value></data>
+<data name="LandingCtaEyebrow" xml:space="preserve"><value>TAKE CONTROL OF YOUR AI WORKFLOW</value></data>
+<data name="LandingCtaBody" xml:space="preserve"><value>Start with your own ProjectBeacon host and connect a workstation.</value></data>
+<data name="LandingFooterTagline" xml:space="preserve"><value>Local-first control plane for AI-assisted development</value></data>
+
 </root>
