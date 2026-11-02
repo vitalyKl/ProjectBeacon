@@ -11,6 +11,7 @@ using ProjectBeacon.Application.Runtime;
 public sealed class WorkstationDaemon : IAsyncDisposable
 {
     private readonly HttpClient _http;
+    private readonly CancellationTokenSource _shutdown = new();
     private readonly ClientLlamaSwap _llama;
     private readonly ClientOpenCodeServe _openCode;
     private readonly bool _ownsOpenCode;
@@ -34,7 +35,7 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         _ownsOpenCode = openCode is null;
         _openCode = openCode ?? new ClientOpenCodeServe();
         _timing = new DaemonTiming();
-        _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log);
+        _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log, _shutdown.Cancel);
         _llama.Log = message => _state.Log(message);
         _openCode.Log = message => _state.Log(message);
         var settingsLoader = loadSettings ?? (() => WorkstationSettings.Load());
@@ -136,7 +137,13 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     public Task RunAsync(CancellationToken ct)
     {
         _state.Log($"connected to {_state.Snapshot.Url}");
-        return Task.WhenAll(_loops.Select(loop => loop.RunAsync(ct)));
+        return RunLoopsAsync(ct);
+    }
+
+    private async Task RunLoopsAsync(CancellationToken ct)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdown.Token);
+        await Task.WhenAll(_loops.Select(loop => loop.RunAsync(linked.Token)));
     }
 
     public Task ReloadLlamaAsync(CancellationToken ct) => _llamaSync.ReloadAsync(ct);
@@ -167,12 +174,14 @@ public sealed class WorkstationDaemon : IAsyncDisposable
     {
         // Dispose the runtime before its model process and locks: an active native turn may
         // still be streaming from a provider or coordinating a local model swap.
+        _shutdown.Cancel();
         await _services.DisposeAsync();
         await _llama.DisposeAsync();
         _llamaSync.Release();
         _gate.Release();
         if (_ownsOpenCode)
             await _openCode.DisposeAsync();
+        _shutdown.Dispose();
     }
 
     /// <summary>
