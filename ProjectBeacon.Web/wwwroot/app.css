@@ -2823,12 +2823,14 @@ body:has(.beacon-theme-dark) .mud-main-content {
     }
 
     .mud-main-content:has(.beacon-chat-page) {
+        box-sizing: border-box;
         height: var(--beacon-visual-viewport-height, 100dvh);
         min-height: 0;
         overflow: hidden;
     }
 
     .beacon-main:has(.beacon-chat-page) {
+        box-sizing: border-box;
         height: calc(var(--beacon-visual-viewport-height, 100dvh) - 56px);
         min-height: 0;
         padding: 0;
