@@ -22,7 +22,7 @@ public sealed class ClientOptions
             Login = Arg(args, "--login"),
             Password = Arg(args, "--password"),
             Name = Arg(args, "--name"),
-            StorePath = Arg(args, "--store"),
+            StorePath = EnvOrArg(args, "--store", "BEACON_CLIENT_STORE"),
             Enroll = args.Length > 1 && string.Equals(args[1], "enroll", StringComparison.OrdinalIgnoreCase)
                 || (!string.IsNullOrWhiteSpace(Arg(args, "--login")) && !string.IsNullOrWhiteSpace(Arg(args, "--password"))),
             Headless = Has(args, "--headless")
