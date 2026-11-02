@@ -2749,3 +2749,29 @@ body:has(.beacon-theme-dark) .mud-main-content {
     .mud-table-container { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .mud-paper, .mud-card, .beacon-panel { min-width: 0; }
 }
+
+
+/* Reduce fixed chrome on narrow screens so page content gets the space. */
+@media (max-width: 959.98px) {
+    .beacon-appbar.mud-appbar,
+    .beacon-appbar.mud-appbar .mud-toolbar-appbar {
+        height: 56px;
+        min-height: 56px;
+    }
+
+    .mud-main-content {
+        padding-top: 56px;
+    }
+
+    .beacon-mobile-nav {
+        height: 56px;
+        padding-block: var(--space-1);
+        padding-bottom: max(var(--space-1), env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (max-width: 767px) {
+    .beacon-chat-page {
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - 56px - 56px - 80px);
+    }
+}
