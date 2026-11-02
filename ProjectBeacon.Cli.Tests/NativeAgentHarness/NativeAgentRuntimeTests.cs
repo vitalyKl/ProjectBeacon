@@ -1187,7 +1187,10 @@ public sealed class NativeAgentRuntimeTests
         using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("[]", Encoding.UTF8, "application/json")
-        })) { BaseAddress = new Uri("https://beacon.test/") };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
         await using var llama = new ClientLlamaSwap();
         var provider = new MoreThanTwelveToolCyclesProvider(13);
         var mcp = new StubMcpToolClient();
