@@ -11,7 +11,7 @@
     top: 0;
     z-index: 20;
     min-height: 72px;
-    padding: 0 clamp(20px, 5vw, 76px);
+    padding: 0 clamp(20px, 5vw, var(--space-20));
     background: color-mix(in srgb, var(--color-sidebar) 86%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
     backdrop-filter: blur(18px);
@@ -77,9 +77,9 @@
     display: grid;
     grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
     align-items: center;
-    gap: clamp(40px, 6vw, 86px);
+    gap: clamp(40px, 6vw, var(--space-20));
     min-height: 640px;
-    padding: 76px 0 var(--space-16);
+    padding: var(--space-20) 0 var(--space-16);
 }
 .landing-hero-copy { position: relative; z-index: 2; max-width: 570px; }
 .landing-eyebrow, .landing-section-kicker {
@@ -234,7 +234,7 @@
 .landing-final-cta .landing-section-kicker { margin-bottom: var(--space-3); }
 .landing-final-cta .mud-typography-body1 { margin-top: var(--space-3); color: var(--color-text-secondary); font-size: 13px; }
 .landing-final-cta .landing-hero-actions { flex: 0 0 auto; margin: 0; }
-.landing-footer { padding: var(--space-6) clamp(20px, 5vw, 76px); border-top: 1px solid color-mix(in srgb, var(--color-text-secondary) 13%, transparent); background: var(--color-sidebar); }
+.landing-footer { padding: var(--space-6) clamp(20px, 5vw, var(--space-20)); border-top: 1px solid color-mix(in srgb, var(--color-text-secondary) 13%, transparent); background: var(--color-sidebar); }
 .landing-footer-brand, .landing-footer-meta { display: flex; align-items: center; gap: var(--space-3); }
 .landing-footer-brand { color: var(--color-text-secondary); font-size: 11px; }
 .landing-footer-brand strong { color: var(--color-text-primary); font-size: 12px; }
