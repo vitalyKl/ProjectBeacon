@@ -1216,16 +1216,65 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-chat-log {
     overflow-y: auto;
-    flex: 1 1 auto;
+    overscroll-behavior: contain;
+    flex: 1 1 0;
+    min-height: 0;
     max-height: 48vh;
+}
+
+.beacon-chat-controls {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.beacon-chat-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-width: 0;
+    padding-block: var(--space-2);
+}
+
+.beacon-chat-phase {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    padding-top: var(--space-1);
+}
+
+.beacon-chat-phase-progress {
+    flex: 1 1 80px;
+    max-width: 140px;
 }
 
 .beacon-chat-compose {
     flex-shrink: 0;
+    align-items: flex-end;
+    min-width: 0;
 }
 
 .beacon-chat-compose-form {
     flex-shrink: 0;
+    min-width: 0;
+}
+
+.beacon-chat-message-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.beacon-chat-message-input textarea {
+    min-height: 72px;
+    resize: vertical;
+}
+
+.beacon-chat-send-actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: var(--space-1);
 }
 
 .beacon-chat-session-title {
@@ -2293,8 +2342,9 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-chat-page {
     display: flex;
     gap: var(--space-3);
-    height: calc(100vh - 200px);
+    height: calc(100dvh - 200px);
     min-height: 420px;
+    min-width: 0;
 }
 
 .beacon-chat-sessions {
@@ -2465,15 +2515,119 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 @media (max-width: 767px) {
-    .beacon-chat-page {
+    .beacon-main:has(.beacon-chat-page) {
+        padding: var(--space-2) var(--space-3) 0;
+    }
+
+    .beacon-main:has(.beacon-chat-page) .beacon-content-max {
+        display: flex;
         flex-direction: column;
-        height: auto;
+        min-height: 0;
+    }
+
+    .beacon-chat-page {
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: var(--space-2);
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - var(--mud-appbar-height, 64px) - 61px - 92px);
+        min-height: 300px;
     }
 
     .beacon-chat-sessions {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: var(--space-2);
         width: 100%;
-        max-height: 220px;
+        max-height: 68px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: var(--space-1) var(--space-2);
+        white-space: nowrap;
+        scrollbar-width: none;
     }
+
+    .beacon-chat-sessions::-webkit-scrollbar { display: none; }
+    .beacon-chat-project { display: none; }
+    .beacon-new-chat { flex: 0 0 auto; margin: 0; }
+
+    .beacon-session-item {
+        flex: 0 0 auto;
+        width: min(52vw, 190px);
+        min-width: 0;
+        padding: var(--space-1) var(--space-2);
+    }
+
+    .beacon-session-main { overflow: hidden; }
+    .beacon-session-main .mud-typography-caption,
+    .beacon-session-item > div:last-child { display: none; }
+
+    .beacon-chat-page .beacon-chat-pane {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 0;
+        overflow: hidden;
+        padding: var(--space-2);
+    }
+
+    .beacon-chat-page .beacon-chat-log {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .beacon-chat-controls {
+        padding-top: var(--space-2);
+        border-top: var(--border-hairline) solid var(--color-border);
+        background: var(--color-surface-2);
+    }
+
+    .beacon-chat-toolbar { gap: var(--space-1); padding-block: var(--space-1); }
+
+    .beacon-chat-config-button {
+        flex: 1 1 150px;
+        max-width: none;
+        min-height: 36px;
+        font-size: var(--type-caption);
+    }
+
+    .beacon-chat-mode-toggle {
+        min-width: 58px;
+        min-height: 36px;
+        padding-inline: var(--space-2);
+    }
+
+    .beacon-chat-model-status {
+        flex: 1 1 100%;
+        font-size: var(--type-caption);
+        line-height: 1.25;
+    }
+
+    .beacon-chat-usage {
+        flex: 1 1 100%;
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.2;
+    }
+
+    .beacon-chat-compose-form {
+        position: relative;
+        padding-bottom: max(var(--space-1), env(safe-area-inset-bottom, 0px));
+    }
+
+    .beacon-chat-compose { gap: var(--space-2); }
+    .beacon-chat-message-input textarea { min-height: 76px; max-height: 30dvh; }
+    .beacon-chat-send-actions .mud-button-root { min-width: 64px; padding-inline: var(--space-2); }
+
+    .beacon-chat-part {
+        margin-bottom: var(--space-2) !important;
+        padding: var(--space-2) !important;
+    }
+
+    .beacon-chat-part-head { font-size: 11px; }
+    .beacon-chat-session-head { margin-bottom: var(--space-1); }
 }
 /* Chat dock: on mobile it becomes a bottom sheet / near-full-screen panel instead of a
    fixed desktop-style box (ui-ux review roadmap Phase 6). Declared after the mobile-nav

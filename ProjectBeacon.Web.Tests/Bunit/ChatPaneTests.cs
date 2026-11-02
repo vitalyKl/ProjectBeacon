@@ -24,7 +24,7 @@ public sealed class ChatPaneTests : BUnitRenderBase
     [Fact]
     public void RendersPartsPhaseAndComposer()
     {
-        var parts = new List<ChatPartDto> { Part(1, "user", "hello pane"), Part(2, "assistant", "world pane") };
+        var parts = new List<ChatPartDto> { Part(2, "assistant", "world pane"), Part(1, "user", "hello pane") };
 
         var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
             .Add(p => p.Parts, parts)
@@ -33,7 +33,9 @@ public sealed class ChatPaneTests : BUnitRenderBase
 
         Assert.Equal(2, cut.FindAll(".beacon-chat-part").Count);
         Assert.Contains("world pane", cut.Markup);
+        Assert.True(cut.Markup.IndexOf("hello pane", StringComparison.Ordinal) < cut.Markup.IndexOf("world pane", StringComparison.Ordinal));
         Assert.Contains("beacon-chat-compose", cut.Markup);
+        Assert.Contains("textarea", cut.Markup);
     }
 
     [Fact]
