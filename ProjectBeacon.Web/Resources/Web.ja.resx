@@ -892,13 +892,10 @@
     <value>ブリーフなし</value>
   </data>
 <data name="ContextCostPromptDelta" xml:space="preserve">
-    <value>Δ プロンプトトークン</value>
+    <value>Δ 入力トークン</value>
   </data>
 <data name="ContextCostCompletionDelta" xml:space="preserve">
-    <value>Δ 完了トークン</value>
-  </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ 合計トークン</value>
+    <value>Δ 出力トークン</value>
   </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ ターン</value>

@@ -65,7 +65,7 @@ public sealed class ContextCostHttpTests
         Assert.Equal(pairId, pair.GetProperty("pairId").GetString());
         Assert.Equal(50, pair.GetProperty("promptTokensDelta").GetInt32());
         Assert.Equal(100, pair.GetProperty("completionTokensDelta").GetInt32());
-        Assert.Equal(150, pair.GetProperty("totalTokensDelta").GetInt32());
+        Assert.False(pair.TryGetProperty("totalTokensDelta", out _));
         Assert.Equal(2, pair.GetProperty("turnCountDelta").GetInt32());
         Assert.True(pair.GetProperty("withBriefPassed").GetBoolean());
         Assert.False(pair.GetProperty("withoutBriefPassed").GetBoolean());

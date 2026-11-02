@@ -112,7 +112,6 @@ public sealed class ContextCostReportTests : IDisposable
 
         Assert.Equal(50, pair.PromptTokensDelta);
         Assert.Equal(100, pair.CompletionTokensDelta);
-        Assert.Equal(150, pair.TotalTokensDelta);
         Assert.Equal(2, pair.TurnCountDelta);
     }
 
@@ -158,7 +157,6 @@ public sealed class ContextCostReportTests : IDisposable
         Assert.NotNull(pair.WithoutBrief);
         Assert.Null(pair.PromptTokensDelta);
         Assert.Null(pair.CompletionTokensDelta);
-        Assert.Null(pair.TotalTokensDelta);
         Assert.Null(pair.TurnCountDelta);
     }
 
@@ -214,7 +212,6 @@ public sealed class ContextCostReportTests : IDisposable
         Assert.NotNull(pair.WithoutBrief);
         Assert.Null(pair.PromptTokensDelta);
         Assert.Null(pair.CompletionTokensDelta);
-        Assert.Null(pair.TotalTokensDelta);
         Assert.Null(pair.TurnCountDelta);
     }
 }

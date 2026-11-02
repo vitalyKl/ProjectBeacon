@@ -33,7 +33,6 @@ else
                 <MudTh>@L["ContextCostWithoutBrief"]</MudTh>
                 <MudTh>@L["ContextCostPromptDelta"]</MudTh>
                 <MudTh>@L["ContextCostCompletionDelta"]</MudTh>
-                <MudTh>@L["ContextCostTotalDelta"]</MudTh>
                 <MudTh>@L["ContextCostTurnDelta"]</MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -42,7 +41,6 @@ else
                 <MudTd DataLabel="@L["ContextCostWithoutBrief"]">@FormatRun(context.WithoutBrief)</MudTd>
                 <MudTd DataLabel="@L["ContextCostPromptDelta"]">@FormatDelta(context.PromptTokensDelta)</MudTd>
                 <MudTd DataLabel="@L["ContextCostCompletionDelta"]">@FormatDelta(context.CompletionTokensDelta)</MudTd>
-                <MudTd DataLabel="@L["ContextCostTotalDelta"]">@FormatDelta(context.TotalTokensDelta)</MudTd>
                 <MudTd DataLabel="@L["ContextCostTurnDelta"]">@FormatDelta(context.TurnCountDelta)</MudTd>
             </RowTemplate>
         </MudTable>

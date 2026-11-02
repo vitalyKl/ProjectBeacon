@@ -892,13 +892,10 @@
     <value>无简报</value>
   </data>
 <data name="ContextCostPromptDelta" xml:space="preserve">
-    <value>Δ 提示令牌</value>
+    <value>Δ 输入令牌</value>
   </data>
 <data name="ContextCostCompletionDelta" xml:space="preserve">
-    <value>Δ 完成令牌</value>
-  </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ 令牌合计</value>
+    <value>Δ 输出令牌</value>
   </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ 回合</value>

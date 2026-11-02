@@ -977,13 +977,10 @@
     <value>Without brief</value>
   </data>
 <data name="ContextCostPromptDelta" xml:space="preserve">
-    <value>Δ prompt tokens</value>
+    <value>Δ input tokens</value>
   </data>
 <data name="ContextCostCompletionDelta" xml:space="preserve">
-    <value>Δ completion tokens</value>
-  </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ total tokens</value>
+    <value>Δ output tokens</value>
   </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ turns</value>
