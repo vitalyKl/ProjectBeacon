@@ -315,19 +315,19 @@ public static class ClientUpdater
                     Remove-Item $backup -Force -ErrorAction SilentlyContinue
                 } catch {
                     Write-UpdateLog "Update failed: $($_.Exception.Message)"
-                    if (Test-Path $backup) {
-                        try {
+                    try {
+                        if (Test-Path $backup) {
                             Copy-Item $backup $target -Force
-                            if ($restartMode -eq 'interactive') {
-                                $rollback = Start-Process -FilePath $target -ArgumentList $arguments -WorkingDirectory (Split-Path $target -Parent) -PassThru -NoNewWindow
-                            } else {
-                                $rollback = Start-Process -FilePath $target -ArgumentList $arguments -WorkingDirectory (Split-Path $target -Parent) -PassThru -WindowStyle Hidden
-                            }
-                            Write-UpdateLog "Previous client restored and restarted with PID $($rollback.Id)."
                             Remove-Item $backup -Force -ErrorAction SilentlyContinue
-                        } catch {
-                            Write-UpdateLog "Rollback failed: $($_.Exception.Message)"
                         }
+                        if ($restartMode -eq 'interactive') {
+                            $rollback = Start-Process -FilePath $target -ArgumentList $arguments -WorkingDirectory (Split-Path $target -Parent) -PassThru -NoNewWindow
+                        } else {
+                            $rollback = Start-Process -FilePath $target -ArgumentList $arguments -WorkingDirectory (Split-Path $target -Parent) -PassThru -WindowStyle Hidden
+                        }
+                        Write-UpdateLog "Previous client restarted with PID $($rollback.Id)."
+                    } catch {
+                        Write-UpdateLog "Rollback failed: $($_.Exception.Message)"
                     }
                     throw
                 } finally {
@@ -379,14 +379,24 @@ public static class ClientUpdater
                 while kill -0 "$target_pid" 2>/dev/null; do sleep 1; done
 
                 backup="$target.bak"
-                cp -p "$target" "$backup"
+                if ! cp -p "$target" "$backup"; then
+                    log_line "Could not back up the existing executable; restarting the current client."
+                    restart_client >/dev/null 2>&1 || true
+                    exit 1
+                fi
                 log_line "Replacing client executable."
                 if ! cp "$source" "$target"; then
                     mv "$backup" "$target"
                     log_line "Copy failed; previous client binary restored."
+                    restart_client >/dev/null 2>&1 || true
                     exit 1
                 fi
-                chmod 755 "$target"
+                if ! chmod 755 "$target"; then
+                    mv "$backup" "$target"
+                    log_line "Could not set executable permissions; previous client binary restored."
+                    restart_client >/dev/null 2>&1 || true
+                    exit 1
+                fi
 
                 new_pid="$(restart_client)"
                 sleep 3
