@@ -132,6 +132,38 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Prompt_PublishesIncompleteToolPartAndUpdatesItWhenComplete()
+    {
+        var chatId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var runtime = new ToolLifecycleRuntime();
+        var timing = new DaemonTiming
+        {
+            ChatPollInterval = TimeSpan.FromMilliseconds(1),
+            ChatIdleTimeout = TimeSpan.FromSeconds(5),
+            DelayAsync = (_, ct) => Task.CompletedTask
+        };
+        var chat = new DaemonChatSession(
+            new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
+            new StubGate(_openCode, runtime), new StubLlamaSync(), new StubState(), timing);
+        var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
+        {
+            chatSessionId = chatId, externalSessionId = "oc-1", projectId, text = "run a tool", model = (string?)null
+        }), CancellationToken.None);
+        Assert.True(ok, error);
+        var posts = _posts.Where(p => p.Path == $"/v1/chat/sessions/{chatId}/parts").ToList();
+        Assert.Equal(2, posts.Count);
+        using var started = JsonDocument.Parse(posts[0].Body!);
+        using var completed = JsonDocument.Parse(posts[1].Body!);
+        Assert.Equal("tool-1", started.RootElement.GetProperty("externalId").GetString());
+        Assert.Equal("running", started.RootElement.GetProperty("toolStatus").GetString());
+        Assert.False(started.RootElement.GetProperty("complete").GetBoolean());
+        Assert.Equal("tool-1", completed.RootElement.GetProperty("externalId").GetString());
+        Assert.Equal("completed", completed.RootElement.GetProperty("toolStatus").GetString());
+        Assert.True(completed.RootElement.GetProperty("complete").GetBoolean());
+    }
+
+    [Fact]
     public async Task Prompt_PostsSessionUsageBeforeIdle()
     {
         var chatId = Guid.NewGuid();
@@ -423,7 +455,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         }
 
         // The first call is the pre-prompt baseline; later calls report a new finished message.
-        public Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+        public virtual Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
             => Task.FromResult<AgentTurnStatus?>(Interlocked.Increment(ref _statusCalls) == 1
                 ? new AgentTurnStatus(true, "stop", null, "m1")
                 : new AgentTurnStatus(true, "stop", null, "m2"));
@@ -516,6 +548,26 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
             => Task.FromResult(new AgentSessionUsage(0, 0, 0, 0));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class ToolLifecycleRuntime : StubRuntime
+    {
+        private int _streamCalls;
+        private int _statusCalls;
+        public override async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(string sessionId, CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            var complete = Interlocked.Increment(ref _streamCalls) > 1;
+            yield return new AgentMessagePart("assistant", "tool", "", "tool-1", complete,
+                "shell", complete ? "completed" : "running", "dotnet test", complete ? "passed" : null);
+        }
+        public override Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+        {
+            var call = Interlocked.Increment(ref _statusCalls);
+            return Task.FromResult<AgentTurnStatus?>(call < 3
+                ? new AgentTurnStatus(false, null, null, "m1")
+                : new AgentTurnStatus(true, "stop", null, "m2"));
+        }
     }
 
     private sealed class FinalPartRuntime : StubRuntime

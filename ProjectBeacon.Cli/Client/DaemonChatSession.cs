@@ -266,6 +266,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
 
         await runtime.SendPromptAsync(externalId, text, model, ct, controls);
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var publishedSnapshots = new Dictionary<string, string>(StringComparer.Ordinal);
         var seenForms = new HashSet<string>(StringComparer.Ordinal);
         var maxQuiet = Math.Max(1, (int)Math.Ceiling(_timing.ChatIdleTimeout / _timing.ChatPollInterval));
         var maxIterations = Math.Max(1, (int)Math.Ceiling(_timing.ChatMaxDuration / _timing.ChatPollInterval));
@@ -281,27 +282,29 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 var added = 0;
                 foreach (var part in parts)
                 {
-                    if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase) || !part.Complete)
+                    if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
                         continue;
                     var key = part.ExternalId ?? $"{part.Role}:{part.Kind}:{part.Body}";
-                    if (!seen.Add(key))
+                    var snapshot = JsonSerializer.Serialize(new
+                    {
+                        part.Role, part.Kind, part.Body, part.Tool, part.ToolStatus,
+                        part.ToolInput, part.ToolResult, part.DurationMs, part.Complete
+                    });
+                    if (publishedSnapshots.TryGetValue(key, out var previous) && previous == snapshot)
                         continue;
-                    added++;
                     await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
                     {
-                        role = part.Role,
-                        kind = part.Kind,
-                        body = part.Body,
-                        externalId = part.ExternalId,
-                        tool = part.Tool,
-                        toolStatus = part.ToolStatus,
-                        toolInput = part.ToolInput,
-                        toolResult = part.ToolResult,
-                        durationMs = part.DurationMs,
-                        complete = part.Complete
+                        role = part.Role, kind = part.Kind, body = part.Body, externalId = part.ExternalId,
+                        tool = part.Tool, toolStatus = part.ToolStatus, toolInput = part.ToolInput,
+                        toolResult = part.ToolResult, durationMs = part.DurationMs, complete = part.Complete
                     }, projectId, ct);
-                    if (string.Equals(part.Role, "assistant", StringComparison.OrdinalIgnoreCase))
-                        assistantParts++;
+                    publishedSnapshots[key] = snapshot;
+                    if (part.Complete && seen.Add(key))
+                    {
+                        added++;
+                        if (string.Equals(part.Role, "assistant", StringComparison.OrdinalIgnoreCase))
+                            assistantParts++;
+                    }
                 }
                 // Surface model questions: v2 forms live outside the message list, so poll them
                 // while the turn runs instead of waiting for the durable parts.
