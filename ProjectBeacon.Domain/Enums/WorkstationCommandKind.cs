@@ -25,5 +25,7 @@ public enum WorkstationCommandKind
     RunEvalTurn,
     ReconcileDesired,
     RunReviewCheck,
-    RunPipelineSession
+    RunPipelineSession,
+    CheckClientUpdate,
+    UpdateClient
 }
