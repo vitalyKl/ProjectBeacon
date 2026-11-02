@@ -19,6 +19,9 @@ public sealed record LlamaSwapModelSpec(
 public static class LlamaSwapConfigGenerator
 {
     private static readonly Regex PlainKey = new("^[A-Za-z0-9_.-]+$", RegexOptions.Compiled);
+    private static readonly Regex ExecutableToken = new(@"^\s*(?:""(?<double>[^""]+)""|'(?<single>[^']+)'|(?<bare>\S+))", RegexOptions.Compiled);
+    private static readonly Regex JinjaFlag = new(@"(?<!\S)--jinja(?!\S)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex NoJinjaFlag = new(@"(?<!\S)--no-jinja(?!\S)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static string Generate(IReadOnlyList<LlamaSwapModelSpec> models)
     {
@@ -68,7 +71,8 @@ public static class LlamaSwapConfigGenerator
 
     public static string BuildCommand(LlamaSwapModelSpec model)
     {
-        var parts = new List<string> { model.LaunchCommand.Trim() };
+        var command = EnsureJinjaForLlamaServer(model.LaunchCommand.Trim());
+        var parts = new List<string> { command };
         if (model.ContextSize > 0 &&
             !model.LaunchCommand.Contains("--ctx-size", StringComparison.OrdinalIgnoreCase))
         {
@@ -79,6 +83,44 @@ public static class LlamaSwapConfigGenerator
             .Select(f => f.Trim()));
         return string.Join(" ", parts);
     }
+
+
+    /// <summary>True when the launch command starts the llama.cpp HTTP server.</summary>
+    public static bool IsLlamaServerCommand(string? command)
+    {
+        var token = ExecutableToken.Match(command ?? string.Empty);
+        if (!token.Success)
+            return false;
+
+        var executable = ExecutableValue(token).Replace('\\', '/');
+        var fileName = executable[(executable.LastIndexOf('/') + 1)..];
+        if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            fileName = fileName[..^4];
+        return string.Equals(fileName, "llama-server", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Checks the effective Jinja setting, including an explicit --no-jinja.</summary>
+    public static bool HasJinjaEnabled(string? command)
+    {
+        var value = command ?? string.Empty;
+        return JinjaFlag.IsMatch(value) && !NoJinjaFlag.IsMatch(value);
+    }
+
+    private static string EnsureJinjaForLlamaServer(string command)
+    {
+        if (!IsLlamaServerCommand(command) || HasJinjaEnabled(command) || NoJinjaFlag.IsMatch(command))
+            return command;
+
+        // Place the flag immediately after the executable so it precedes options such as
+        // --chat-template, for which llama.cpp requires Jinja to be enabled first.
+        var token = ExecutableToken.Match(command);
+        return token.Success ? command.Insert(token.Index + token.Length, " --jinja") : command;
+    }
+
+    private static string ExecutableValue(Match token) =>
+        token.Groups["double"].Success ? token.Groups["double"].Value
+        : token.Groups["single"].Success ? token.Groups["single"].Value
+        : token.Groups["bare"].Value;
 
     private static string ResolveKey(string name, IDictionary<string, int> used)
     {
