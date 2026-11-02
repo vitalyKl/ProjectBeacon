@@ -115,6 +115,52 @@ jobs:
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
 
+  client:
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.402
+      - name: Publish self-contained workstation clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p release-assets
+          for rid in win-x64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
+            publish_dir="$PWD/publish/$rid"
+            rm -rf "$publish_dir"
+            dotnet publish ProjectBeacon.Cli/ProjectBeacon.Cli.csproj \
+              --configuration Release \
+              --runtime "$rid" \
+              --self-contained true \
+              -p:PublishSingleFile=true \
+              -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:IncludeAllContentForSelfExtract=true \
+              -p:Version="$version" \
+              --output "$publish_dir"
+            executable="$publish_dir/beacon"
+            if [[ "$rid" == win-* ]]; then executable="$executable.exe"; fi
+            test -f "$executable"
+            zip -j "release-assets/beacon-client-$rid.zip" "$executable"
+          done
+          (cd release-assets && sha256sum beacon-client-*.zip > SHA256SUMS.txt)
+      - name: Publish client archives to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi
+          gh release upload "$GITHUB_REF_NAME" release-assets/beacon-client-*.zip release-assets/SHA256SUMS.txt --clobber
+
   image:
     needs: tests
     runs-on: ubuntu-latest
