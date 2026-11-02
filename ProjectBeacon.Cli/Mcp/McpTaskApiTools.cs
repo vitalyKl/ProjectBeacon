@@ -89,7 +89,57 @@ internal static partial class McpApiTools
         Put(body, "labelId", Text(args, "labelId"));
         Put(body, "milestoneId", Text(args, "milestoneId"));
         Put(body, "path", Text(args, "path"));
-        return await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/tasks", body, ct);
+
+        var created = await SendAsync(api, HttpMethod.Post, $"v1/projects/{projectId:D}/tasks", body, ct);
+        // A task created from an ordinary chat becomes the active task context for the
+        // remainder of this MCP process. This lets task_pipeline_status and pipeline_start
+        // work without asking the model or user to copy a GUID into BEACON_TASK_ID.
+        if (!created.IsError && TryReadCreatedTaskId(created.Text, out var createdTaskId))
+            env.Set("BEACON_TASK_ID", createdTaskId.ToString("D"));
+        return created;
+    }
+
+    private static bool TryReadCreatedTaskId(string json, out Guid taskId)
+    {
+        taskId = Guid.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return FindTaskId(document.RootElement, out taskId);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool FindTaskId(JsonElement element, out Guid taskId)
+    {
+        taskId = Guid.Empty;
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if ((string.Equals(property.Name, "id", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(property.Name, "taskId", StringComparison.OrdinalIgnoreCase))
+                    && property.Value.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(property.Value.GetString(), out taskId))
+                    return true;
+            }
+
+            foreach (var property in element.EnumerateObject())
+                if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+                    && FindTaskId(property.Value, out taskId))
+                    return true;
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+                if (FindTaskId(item, out taskId))
+                    return true;
+        }
+
+        return false;
     }
 
     private static async Task<McpToolText> TaskUpdate(JsonObject? args, BeaconApiClient api, McpEnvironment env, CancellationToken ct)
