@@ -21,6 +21,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
         Assert.Contains("beacon-task-hero", html);
         Assert.Contains("beacon-task-grid", html);
         Assert.Contains("beacon-state", html);
+        Assert.Contains("Start task", html);
     }
 
     [Fact]
