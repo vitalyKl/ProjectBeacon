@@ -111,9 +111,9 @@ public sealed class CommandDeliveryTests
         var idempotent = all.Where(CommandDelivery.IsIdempotent).ToHashSet();
         var reconcile = all.Where(CommandDelivery.IsReconcileBacked).ToHashSet();
 
-        Assert.Equal(20, all.Length);
-        Assert.Equal(7, atMostOnce.Count);
-        Assert.Equal(13, idempotent.Count);
+        Assert.Equal(22, all.Length);
+        Assert.Equal(8, atMostOnce.Count);
+        Assert.Equal(14, idempotent.Count);
         Assert.Equal(5, reconcile.Count);
 
         Assert.Empty(atMostOnce.Intersect(idempotent));
