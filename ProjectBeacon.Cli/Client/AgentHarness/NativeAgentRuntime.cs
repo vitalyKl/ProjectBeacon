@@ -547,99 +547,99 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             }
                             else
                             {
-                            if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
-                                || IsPlanModeRunShellBlocked(agentMode, call.Name))
-                            {
-                                isError = true;
-                                toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
-                            }
-                            else if (repeatedToolCall)
-                            {
-                                isError = true;
-                                toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
-                            }
-                            else if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
-                            {
-                                isError = true;
-                                toolResult = "Tool error: the model returned a tool call without a valid id or name.";
-                            }
-                            else if (!hasArguments)
-                            {
-                                isError = true;
-                                toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
-                            }
-                            else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
-                            {
-                                if (controls?.HarnessAuthorization is not { } commandAuthorization
-                                    || commandPrefixes.Length == 0
-                                    || !IsRunCommandAuthorized(commandAuthorization))
+                                if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
+                                    || IsPlanModeRunShellBlocked(agentMode, call.Name))
                                 {
                                     isError = true;
-                                    toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
+                                    toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
                                 }
-                                else if (IsInteractiveChatAuthorization(commandAuthorization)
-                                    && !await RequestTerminalPermissionAsync(
-                                        session, call.Name!, commandAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                else if (repeatedToolCall)
                                 {
                                     isError = true;
-                                    toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                    toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
+                                }
+                                else if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: the model returned a tool call without a valid id or name.";
+                                }
+                                else if (!hasArguments)
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
+                                }
+                                else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { } commandAuthorization
+                                        || commandPrefixes.Length == 0
+                                        || !IsRunCommandAuthorized(commandAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
+                                    }
+                                    else if (IsInteractiveChatAuthorization(commandAuthorization)
+                                        && !await RequestTerminalPermissionAsync(
+                                            session, call.Name!, commandAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                    }
+                                    else
+                                    {
+                                        var result = await NativeCommandRunner.ExecuteAsync(
+                                            commandAuthorization.WorkingDirectory,
+                                            parsedArguments!,
+                                            commandPrefixes,
+                                            ct);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (string.Equals(call.Name, "run_shell", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { } shellAuthorization
+                                        || !IsRunShellAuthorized(shellAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: run_shell is not authorized for this execution role.";
+                                    }
+                                    else if (IsInteractiveChatAuthorization(shellAuthorization)
+                                        && !await RequestTerminalPermissionAsync(
+                                            session, call.Name!, shellAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                    }
+                                    else
+                                    {
+                                        var result = await NativeShellRunner.ExecuteAsync(
+                                            shellAuthorization.WorkingDirectory,
+                                            parsedArguments!,
+                                            ct);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (mcpClient is null)
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: no scoped MCP authorization is available for this command.";
+                                }
+                                else if (!IsAdvertisedMcpTool(mcpTools, call.Name!))
+                                {
+                                    isError = true;
+                                    toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
                                 }
                                 else
                                 {
-                                    var result = await NativeCommandRunner.ExecuteAsync(
-                                        commandAuthorization.WorkingDirectory,
-                                        parsedArguments!,
-                                        commandPrefixes,
-                                        ct);
+                                    var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
                                     isError = result.IsError;
-                                    toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    toolResult = result.IsError
+                                        ? "Tool error: " + result.Text
+                                        : result.Text;
                                 }
-                            }
-                            else if (string.Equals(call.Name, "run_shell", StringComparison.Ordinal))
-                            {
-                                if (controls?.HarnessAuthorization is not { } shellAuthorization
-                                    || !IsRunShellAuthorized(shellAuthorization))
-                                {
-                                    isError = true;
-                                    toolResult = "Tool error: run_shell is not authorized for this execution role.";
-                                }
-                                else if (IsInteractiveChatAuthorization(shellAuthorization)
-                                    && !await RequestTerminalPermissionAsync(
-                                        session, call.Name!, shellAuthorization.WorkingDirectory, parsedArguments!, ct))
-                                {
-                                    isError = true;
-                                    toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
-                                }
-                                else
-                                {
-                                    var result = await NativeShellRunner.ExecuteAsync(
-                                        shellAuthorization.WorkingDirectory,
-                                        parsedArguments!,
-                                        ct);
-                                    isError = result.IsError;
-                                    toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
-                                }
-                            }
-                            else if (mcpClient is null)
-                            {
-                                isError = true;
-                                toolResult = "Tool error: no scoped MCP authorization is available for this command.";
-                            }
-                            else if (!IsAdvertisedMcpTool(mcpTools, call.Name!))
-                            {
-                                isError = true;
-                                toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
-                            }
-                            else
-                            {
-                                var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
-                                isError = result.IsError;
-                                toolResult = result.IsError
-                                    ? "Tool error: " + result.Text
-                                    : result.Text;
-                            }
-                            if (cacheKey is not null && !isError)
-                                toolResultCache.TryAdd(cacheKey, new McpToolResult(false, toolResult));
+                                if (cacheKey is not null && !isError)
+                                    toolResultCache.TryAdd(cacheKey, new McpToolResult(false, toolResult));
                             }
                         }
                         catch (OperationCanceledException) when (ct.IsCancellationRequested)
