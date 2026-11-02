@@ -57,7 +57,7 @@
     {
         <MudAlert Severity="Severity.Error" Dense="true" Class="beacon-chat-phase-error">@PhaseLabel</MudAlert>
     }
-    <div class="beacon-chat-toolbar beacon-chat-model-bar">
+    <div class="beacon-chat-toolbar @(ShowModelSelect ? "beacon-chat-model-bar" : null)">
         @if (ShowModelSelect)
         {
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune"
@@ -320,35 +320,15 @@
     }
 
 
-    // Enter handling: KeyboardEventArgs has no PreventDefault, so on one Enter both the
-    // keydown handler and the native form submit fire. SendOnce serializes them into a
-    // single send; _shiftEnter keeps Shift+Enter from sending via the implicit submit.
     private bool _sending;
-    private bool _shiftEnter;
 
     private async Task OnKey(KeyboardEventArgs e)
     {
         if (e.CtrlKey && e.ShiftKey && string.Equals(e.Key, "m", StringComparison.OrdinalIgnoreCase))
-        {
             await ToggleAgent();
-            return;
-        }
-        if (e.Key != "Enter")
-            return;
-        _shiftEnter = e.ShiftKey;
-        if (!e.ShiftKey)
-            await SendOnce();
     }
 
-    private Task OnSendSubmit()
-    {
-        if (_shiftEnter)
-        {
-            _shiftEnter = false;
-            return Task.CompletedTask;
-        }
-        return SendOnce();
-    }
+    private Task OnSendSubmit() => SendOnce();
 
     private async Task SendOnce()
     {
