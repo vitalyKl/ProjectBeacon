@@ -296,3 +296,7 @@
 @media (prefers-reduced-motion: reduce) {
     .landing-nav-links a { transition: none; }
 }
+
+/* Shared lighthouse identity */
+.landing-brand-mark { display: inline-block; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; box-shadow: 0 3px 16px rgb(0 119 255 / 22%); }
+.landing-footer-brand .landing-brand-mark { width: 26px; height: 26px; flex-basis: 26px; border-radius: 8px; }
