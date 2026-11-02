@@ -2365,4 +2365,6 @@ No Beacon-hosted coding agent.</value>
 <data name="DaemonUpdateRequiresOnline" xml:space="preserve"><value>The workstation must be online to check for or install updates.</value></data>
 <data name="UpdateDaemonConfirm" xml:space="preserve"><value>Install workstation client version {0}? The daemon will restart automatically.</value></data>
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Update verified and scheduled. The workstation client is restarting.</value></data>
+<data name="CheckClientUpdate" xml:space="preserve"><value>Check daemon updates</value></data>
+<data name="UpdateClient" xml:space="preserve"><value>Update daemon</value></data>
 </root>
