@@ -12,11 +12,15 @@ public static class ClientHost
     public static async Task<int> RunAsync(string[] args, CancellationToken ct = default)
     {
         var opts = ClientOptions.Parse(args);
+        if (!string.IsNullOrWhiteSpace(opts.StorePath))
+            Environment.SetEnvironmentVariable("BEACON_CLIENT_STORE", opts.StorePath);
         var store = ClientStore.Load(opts.StorePath);
         if (!string.IsNullOrWhiteSpace(opts.Url))
             store.Url = opts.Url.TrimEnd('/');
         if (!string.IsNullOrWhiteSpace(opts.Token))
             store.Token = opts.Token;
+        if (!string.IsNullOrWhiteSpace(opts.Url) || !string.IsNullOrWhiteSpace(opts.Token))
+            store.Save(opts.StorePath);
 
         if (opts.Enroll)
         {
