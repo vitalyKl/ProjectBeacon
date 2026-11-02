@@ -53,7 +53,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             if (kind == WorkstationCommandKind.CheckClientUpdate)
                 return (true, JsonSerializer.Serialize(await ClientUpdater.CheckAsync(ct)), null);
             if (kind == WorkstationCommandKind.UpdateClient)
-                return (true, JsonSerializer.Serialize(await ClientUpdater.DownloadAndScheduleAsync(ct)), null);
+            {
+                var update = await ClientUpdater.DownloadAndScheduleAsync(ct);
+                return update.UpdateAvailable
+                    ? (true, JsonSerializer.Serialize(update), null)
+                    : (false, null, "The workstation client is already up to date.");
+            }
             if (CommandSandbox.IsProjectKind(kind))
             {
                 if (string.IsNullOrWhiteSpace(command.LocalRoot))
