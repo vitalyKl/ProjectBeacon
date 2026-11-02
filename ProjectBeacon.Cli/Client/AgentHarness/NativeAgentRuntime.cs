@@ -24,6 +24,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private readonly ClientLlamaSwap _llama;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly Func<WorkstationSettings> _loadSettings;
+    private readonly Action<WorkstationSettings> _saveSettings;
     private readonly Action<string>? _log;
     private readonly Func<HttpClient, string, string?, IChatProvider> _providerFactory;
     private readonly Func<AgentHarnessAuthorization, CancellationToken, Task<IMcpToolClient>> _mcpClientFactory;
@@ -37,12 +38,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         Func<WorkstationSettings> loadSettings,
         Action<string>? log = null,
         Func<HttpClient, string, string?, IChatProvider>? providerFactory = null,
-        Func<AgentHarnessAuthorization, CancellationToken, Task<IMcpToolClient>>? mcpClientFactory = null)
+        Func<AgentHarnessAuthorization, CancellationToken, Task<IMcpToolClient>>? mcpClientFactory = null,
+        Action<WorkstationSettings>? saveSettings = null)
     {
         _controlPlane = controlPlane;
         _llama = llama;
         _llamaSync = llamaSync;
         _loadSettings = loadSettings;
+        _saveSettings = saveSettings ?? (settings => settings.Save());
         _log = log;
         _providerFactory = providerFactory ?? ((http, url, key) => new OpenAiCompatProvider(http, url, key));
         _mcpClientFactory = mcpClientFactory ?? StartMcpClientAsync;
@@ -53,7 +56,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         CancellationToken ct)
         => await McpStdioClient.StartAsync(authorization, ct);
 
-    public bool SupportsForms => false;
+    public bool SupportsForms => true;
     public bool SupportsAgentSwitch => true;
     public bool SupportsReasoningEffort => true;
     public bool SupportsLiveDeltas => true;
@@ -240,11 +243,33 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
     }
 
-    public Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([]);
+    public async Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct)
+    {
+        var session = await GetSessionAsync(sessionId, ct);
+        return session.PendingForms.Values
+            .Select(pending => pending.Form)
+            .OrderBy(form => form.Id, StringComparer.Ordinal)
+            .ToArray();
+    }
 
-    public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct) =>
-        Task.FromException<bool>(new InvalidOperationException("Interactive forms are not supported by the native runtime yet."));
+    public async Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(answerJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(answerJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        var session = await GetSessionAsync(sessionId, ct);
+        return session.PendingForms.TryGetValue(formId, out var pending)
+            && pending.Completion.TrySetResult(answerJson);
+    }
 
     public async Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
     {
@@ -544,6 +569,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     isError = true;
                                     toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
                                 }
+                                else if (IsInteractiveChatAuthorization(commandAuthorization)
+                                    && !await RequestTerminalPermissionAsync(
+                                        session, call.Name!, commandAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                }
                                 else
                                 {
                                     var result = await NativeCommandRunner.ExecuteAsync(
@@ -562,6 +594,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 {
                                     isError = true;
                                     toolResult = "Tool error: run_shell is not authorized for this execution role.";
+                                }
+                                else if (IsInteractiveChatAuthorization(shellAuthorization)
+                                    && !await RequestTerminalPermissionAsync(
+                                        session, call.Name!, shellAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
                                 }
                                 else
                                 {
@@ -929,12 +968,139 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
         Math.Max(1, Encoding.UTF8.GetByteCount(string.Join("\n", messages.Select(m => m.ToJsonString()))) / 4);
 
+    private async Task<bool> RequestTerminalPermissionAsync(
+        SessionState session,
+        string toolName,
+        string workingDirectory,
+        JsonObject arguments,
+        CancellationToken ct)
+    {
+        await session.TerminalPermissionGate.WaitAsync(ct);
+        try
+        {
+            if (session.TerminalPermissionGranted || _loadSettings().AllowTerminalExecution)
+                return true;
+            var formId = "terminal-permission:" + Guid.NewGuid().ToString("N");
+            var form = CreateTerminalPermissionForm(formId, toolName, workingDirectory, arguments);
+            var pending = new PendingFormState(form,
+                new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
+            if (!session.PendingForms.TryAdd(formId, pending))
+                throw new InvalidOperationException("Could not register the terminal permission request.");
+            try
+            {
+                var answerJson = await pending.Completion.Task.WaitAsync(ct);
+                switch (ParseTerminalPermissionDecision(answerJson))
+                {
+                    case "once":
+                        return true;
+                    case "session":
+                        session.TerminalPermissionGranted = true;
+                        return true;
+                    case "always":
+                        var settings = _loadSettings();
+                        settings.AllowTerminalExecution = true;
+                        try
+                        {
+                            _saveSettings(settings);
+                            return true;
+                        }
+                        catch (Exception ex)
+                        {
+                            _log?.Invoke($"could not persist workstation terminal permission: {ex.GetType().Name}");
+                            return false;
+                        }
+                    default:
+                        return false;
+                }
+            }
+            finally
+            {
+                session.PendingForms.TryRemove(formId, out _);
+            }
+        }
+        finally
+        {
+            session.TerminalPermissionGate.Release();
+        }
+    }
+
+    internal static AgentRuntimeForm CreateTerminalPermissionForm(
+        string formId,
+        string toolName,
+        string workingDirectory,
+        JsonObject arguments)
+    {
+        var commandDetails = toolName switch
+        {
+            "run_shell" => arguments["command"] is JsonValue commandValue
+                && commandValue.TryGetValue<string>(out var command) ? command : "(command missing)",
+            "run_command" => $"Executable: {arguments["executable"]?.ToString() ?? "(missing)"}"
+                + Environment.NewLine
+                + $"Arguments: {arguments["arguments"]?.ToJsonString() ?? "[]"}",
+            _ => arguments.ToJsonString()
+        };
+        var directory = string.IsNullOrWhiteSpace(workingDirectory) ? "(unknown)" : Path.GetFullPath(workingDirectory);
+        var description =
+            $"Requested tool: {toolName}{Environment.NewLine}{Environment.NewLine}" +
+            $"Command:{Environment.NewLine}{commandDetails}{Environment.NewLine}{Environment.NewLine}" +
+            $"Working directory: {directory}{Environment.NewLine}{Environment.NewLine}" +
+            "Security warning: terminal commands run as your signed-in workstation user. " +
+            "They can read or modify files outside this project and may access programs, credentials, and network resources available to that user. " +
+            "ProjectBeacon applies this approval gate but does not sandbox the command.";
+        var fields = new JsonArray
+        {
+            new JsonObject
+            {
+                ["key"] = "decision",
+                ["title"] = "Permission",
+                ["description"] = description,
+                ["type"] = "string",
+                ["options"] = new JsonArray
+                {
+                    new JsonObject { ["value"] = "once", ["label"] = "Allow this command once" },
+                    new JsonObject { ["value"] = "session", ["label"] = "Allow terminal commands for this chat session" },
+                    new JsonObject { ["value"] = "always", ["label"] = "Always allow terminal commands on this workstation" },
+                    new JsonObject { ["value"] = "deny", ["label"] = "Deny" }
+                }
+            }
+        };
+        return new AgentRuntimeForm(formId, "Terminal access requested",
+            "The agent is waiting for your permission before running a workstation command.",
+            fields.ToJsonString());
+    }
+
+    internal static string ParseTerminalPermissionDecision(string? answerJson)
+    {
+        if (string.IsNullOrWhiteSpace(answerJson))
+            return "deny";
+        try
+        {
+            using var document = JsonDocument.Parse(answerJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("decision", out var decision)
+                || decision.ValueKind != JsonValueKind.String)
+                return "deny";
+            return decision.GetString()?.Trim().ToLowerInvariant() switch
+            {
+                "once" => "once",
+                "session" => "session",
+                "always" => "always",
+                _ => "deny"
+            };
+        }
+        catch (JsonException)
+        {
+            return "deny";
+        }
+    }
+
     private static string BuildSystemPrompt(string agentMode)
     {
         const string common =
             "You are the ProjectBeacon workstation assistant. Help the user with software engineering and project tasks. " +
             "Use only tools explicitly provided in this conversation. Be concise, factual, and explicit about uncertainty. " +
-            "Never claim that files or remote project state changed unless a tool confirmed the change.";
+            "Never claim that files or remote project state changed unless a tool confirmed the change. " +
+            "Interactive terminal commands require explicit user approval; wait for the approval form and never repeat a denied command to bypass the decision.";
 
         var mode = string.Equals(agentMode, "plan", StringComparison.Ordinal)
             ? "Current mode: PLAN. Inspect and reason, then return a concrete implementation plan with relevant files, " +
@@ -994,6 +1160,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             .Select(call => $"{call.Name ?? "unknown_tool"}\0{call.Arguments}"));
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(signature)));
     }
+
+    internal static bool IsInteractiveChatAuthorization(AgentHarnessAuthorization authorization)
+        => authorization.PipelineRole is null && authorization.TaskId is null;
 
     internal static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
     {
@@ -1365,10 +1534,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public static NativeDelta End(int turn) => new(turn, "", "", 0, "", true);
     }
 
+    private sealed record PendingFormState(AgentRuntimeForm Form, TaskCompletionSource<string> Completion);
+
     private sealed class SessionState
     {
         public object Sync { get; } = new();
         public SemaphoreSlim Persistence { get; } = new(1, 1);
+        public SemaphoreSlim TerminalPermissionGate { get; } = new(1, 1);
+        public ConcurrentDictionary<string, PendingFormState> PendingForms { get; } = new(StringComparer.Ordinal);
+        public bool TerminalPermissionGranted { get; set; }
         public Channel<NativeDelta> Deltas { get; } = Channel.CreateUnbounded<NativeDelta>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         public string Id { get; set; } = "";
         public string Title { get; set; } = "";

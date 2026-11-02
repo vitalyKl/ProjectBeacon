@@ -10,6 +10,84 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class NativeAgentRuntimeTests
 {
+    [Fact]
+    public async Task NativeRuntimeWaitsForChatApprovalBeforeRunningShellAndResumesAfterReply()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-shell-approval-" + Guid.NewGuid().ToString("N"));
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new ShellApprovalProvider();
+        var mcp = new StubMcpToolClient();
+        var runtime = new NativeAgentRuntime(
+            control, llama, new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+        try
+        {
+            var session = await runtime.CreateSessionAsync("terminal approval", CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test", "ephemeral-token", Guid.NewGuid(), null, Guid.NewGuid(),
+                1, project, DateTime.UtcNow.AddMinutes(2));
+            await runtime.SendPromptAsync(session, "Run the diagnostic.", "beacon-local/test-model",
+                CancellationToken.None, new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+
+            var capabilities = (IAgentRuntimeCapabilities)runtime;
+            IReadOnlyList<AgentRuntimeForm> forms = [];
+            for (var i = 0; i < 100 && forms.Count == 0; i++)
+            {
+                forms = await capabilities.ListPendingFormsAsync(session, CancellationToken.None);
+                if (forms.Count == 0)
+                    await Task.Delay(20, TestContext.Current.CancellationToken);
+            }
+            var approval = Assert.Single(forms);
+            Assert.Equal("Terminal access requested", approval.Title);
+            Assert.Equal(0, provider.FinalRequests);
+            using (var form = JsonDocument.Parse(approval.FieldsJson))
+            {
+                var description = form.RootElement[0].GetProperty("description").GetString();
+                Assert.Contains("echo beacon-approved", description, StringComparison.Ordinal);
+                Assert.Contains(Path.GetFullPath(project), description, StringComparison.Ordinal);
+            }
+
+            Assert.True(await capabilities.ReplyFormAsync(session, approval.Id,
+                """{"decision":"once"}""", CancellationToken.None));
+
+            AgentTurnStatus? status = null;
+            for (var i = 0; i < 200; i++)
+            {
+                status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                if (status?.Ended == true)
+                    break;
+                await Task.Delay(20, TestContext.Current.CancellationToken);
+            }
+            Assert.True(status?.Ended, status?.Error ?? "The approved shell turn did not finish.");
+            Assert.Equal("stop", status!.Finish);
+            Assert.Equal(1, provider.FinalRequests);
+            Assert.Empty(await capabilities.ListPendingFormsAsync(session, CancellationToken.None));
+            Assert.Contains("beacon-approved", provider.LastToolResult, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
+    public void TerminalApprovalIsRestrictedToInteractiveChatNotEvalOrPipeline()
+    {
+        AgentHarnessAuthorization Auth(string? role, Guid? taskId)
+            => new("https://beacon.test", "token", Guid.NewGuid(), taskId, Guid.NewGuid(),
+                1, Path.GetTempPath(), DateTime.UtcNow.AddMinutes(2), PipelineRole: role);
+        Assert.True(NativeAgentRuntime.IsInteractiveChatAuthorization(Auth(null, null)));
+        Assert.False(NativeAgentRuntime.IsInteractiveChatAuthorization(Auth("Eval", Guid.NewGuid())));
+        Assert.False(NativeAgentRuntime.IsInteractiveChatAuthorization(Auth("Actor", Guid.NewGuid())));
+        Assert.False(NativeAgentRuntime.IsInteractiveChatAuthorization(Auth("Planner", Guid.NewGuid())));
+    }
+
     [Theory]
     [InlineData("Planner", true, false)]
     [InlineData("Review", true, false)]
@@ -1639,6 +1717,36 @@ public sealed class NativeAgentRuntimeTests
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class ShellApprovalProvider : IChatProvider
+    {
+        private int _requests;
+        public int FinalRequests { get; private set; }
+        public string LastToolResult { get; private set; } = "";
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (Interlocked.Increment(ref _requests) == 1)
+            {
+                Assert.Contains(request.Tools, tool => tool?["function"]?["name"]?.GetValue<string>() == "run_shell");
+                yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta,
+                    ToolIndex: 0, ToolCallId: "shell-approval", ToolName: "run_shell",
+                    ToolArguments: "{\"command\":\"echo beacon-approved\"}");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
+            FinalRequests++;
+            var toolMessage = Assert.Single(request.Messages, message => message?["role"]?.GetValue<string>() == "tool");
+            LastToolResult = toolMessage!["content"]!.GetValue<string>();
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Terminal command completed.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            await Task.CompletedTask;
+        }
     }
 
     private sealed class StubProvider : IChatProvider

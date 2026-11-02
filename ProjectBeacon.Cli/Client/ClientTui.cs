@@ -190,6 +190,10 @@ public static class ClientTui
         settings.OpencodeDataDir = PromptOptional("OpenCode history dir", settings.OpencodeDataDir);
         settings.BeaconPath = PromptOptional("beacon executable", settings.BeaconPath ?? Environment.ProcessPath);
         settings.LlamaSwapPort = AnsiConsole.Ask("llama-swap port:", settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080);
+        AnsiConsole.MarkupLine("[grey]Terminal commands run as your workstation user and can access files and credentials available to that user.[/]");
+        settings.AllowTerminalExecution = AnsiConsole.Confirm(
+            "Allow terminal commands without asking each time on this workstation?",
+            settings.AllowTerminalExecution);
         settings.Save();
         AnsiConsole.MarkupLine("[green]Saved workstation.json[/]");
     }

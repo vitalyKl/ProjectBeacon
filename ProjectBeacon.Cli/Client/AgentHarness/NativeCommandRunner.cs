@@ -29,7 +29,7 @@ internal static class NativeCommandRunner
         ["function"] = new JsonObject
         {
             ["name"] = "run_command",
-            ["description"] = "Run an allowlisted command directly (no shell) in the current project directory. The workstation owner must configure AllowedCommandPrefixes; each call has a timeout and output limit.",
+            ["description"] = "Run an allowlisted command directly (no shell) in the current project directory. The workstation owner must configure AllowedCommandPrefixes. Interactive chat asks the user to approve execution unless terminal access was already granted for the chat or workstation. Each call has a timeout and output limit.",
             ["parameters"] = new JsonObject
             {
                 ["type"] = "object",

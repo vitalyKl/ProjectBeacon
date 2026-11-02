@@ -305,8 +305,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 }
                 // Surface model questions: v2 forms live outside the message list, so poll them
                 // while the turn runs instead of waiting for the durable parts.
-                if (i % 8 == 0)
-                    await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
+                await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
                 quiet = added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
                 // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
