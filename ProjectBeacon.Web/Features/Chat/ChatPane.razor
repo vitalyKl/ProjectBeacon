@@ -149,6 +149,7 @@
     private ElementReference _log;
     private bool _showJump;
     private bool _followPending;
+    private bool _initialScrollPending;
     private List<(Guid Id, string Title)> _pendingQuestions = [];
     private Guid _sessionId;
     private Guid _lastPartId;
@@ -186,6 +187,7 @@
             _partsSignature = partsSignature;
             _agent = string.Equals(Session?.AgentMode, "plan", StringComparison.OrdinalIgnoreCase) ? "plan" : "build";
             _attached = true;
+            _initialScrollPending = orderedParts.Count > 0;
             return;
         }
         // Agent mode is persisted with the chat session, so switching conversations restores
@@ -209,6 +211,12 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_initialScrollPending)
+        {
+            _initialScrollPending = false;
+            await Js.InvokeVoidAsync("BeaconChat.jumpToLatest", _log);
+            return;
+        }
         if (!_followPending)
             return;
         _followPending = false;
