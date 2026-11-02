@@ -437,6 +437,85 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public async Task NativeRuntimeKeepsTextReasoningAndToolPartsInProviderOrderAcrossToolCycles()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-transcript-order-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var provider = new InterleavedTranscriptProvider();
+        var mcp = new StubMcpToolClient();
+        using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+        try
+        {
+            var session = await runtime.CreateSessionAsync("transcript order", CancellationToken.None);
+            var streamedPartIds = new List<string>();
+            var streamTask = runtime.StreamTextAsync(
+                session,
+                (kind, messageId, ordinal, delta, streamCt) =>
+                {
+                    streamedPartIds.Add($"{messageId}:{kind}:{ordinal}");
+                    return Task.CompletedTask;
+                },
+                CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test", "ephemeral", Guid.NewGuid(), null,
+                Guid.NewGuid(), 1, project, DateTime.UtcNow.AddMinutes(2));
+
+            await runtime.SendPromptAsync(
+                session,
+                "Inspect two files and explain the result.",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status?.Ended, status?.Error ?? "The transcript-order turn did not finish.");
+            Assert.Equal("stop", status!.Finish);
+            Assert.Equal(3, provider.RequestCount);
+            Assert.Equal(2, mcp.CallCount);
+
+            var parts = await CollectRuntimePartsAsync(runtime, session);
+            Assert.Equal(
+                new[] { "reasoning", "text", "tool", "text", "reasoning", "tool", "reasoning", "text" },
+                parts.Select(part => part.Kind));
+            Assert.Equal(
+                new[]
+                {
+                    "Thinking before the first tool.",
+                    "I will inspect the first file.",
+                    "read_file: README contents",
+                    "The first result needs a second check.",
+                    "Thinking before the second tool.",
+                    "read_file: README contents",
+                    "Final reasoning.",
+                    "Here is the final answer."
+                },
+                parts.Select(part => part.Body));
+            Assert.All(parts, part => Assert.True(part.Complete));
+            Assert.Equal(parts.Select(part => part.ExternalId).ToArray(), streamedPartIds.ToArray());
+            Assert.Equal(parts.Count, parts.Select(part => part.ExternalId).Distinct(StringComparer.Ordinal).Count());
+            Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:0:reasoning:0");
+            Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:1:text:0");
+            Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:2:reasoning:0");
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeRetriesTransientProviderFailureBeforeAnyOutput()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-retry-" + Guid.NewGuid().ToString("N"));
@@ -1882,6 +1961,57 @@ public sealed class NativeAgentRuntimeTests
             yield return new ChatProviderEvent(ChatProviderEventKind.Usage, PromptTokens: 7, CompletionTokens: 2);
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+        }
+    }
+
+    private sealed class InterleavedTranscriptProvider : IChatProvider
+    {
+        private int _requestCount;
+        public int RequestCount => Volatile.Read(ref _requestCount);
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var requestNumber = Interlocked.Increment(ref _requestCount);
+            if (requestNumber > 1)
+                Assert.Equal(requestNumber - 1, request.Messages.Count(message => message?["role"]?.GetValue<string>() == "tool"));
+
+            if (requestNumber == 1)
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.ReasoningDelta, Text: "Thinking before the first tool.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "I will inspect the first file.");
+                yield return new ChatProviderEvent(
+                    ChatProviderEventKind.ToolCallDelta,
+                    ToolIndex: 0,
+                    ToolCallId: "order-tool-1",
+                    ToolName: "read_file",
+                    ToolArguments: """{"path":"first.txt"}""");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            }
+            else if (requestNumber == 2)
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "The first result needs a second check.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.ReasoningDelta, Text: "Thinking before the second tool.");
+                yield return new ChatProviderEvent(
+                    ChatProviderEventKind.ToolCallDelta,
+                    ToolIndex: 0,
+                    ToolCallId: "order-tool-2",
+                    ToolName: "read_file",
+                    ToolArguments: """{"path":"second.txt"}""");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            }
+            else
+            {
+                Assert.Equal(3, requestNumber);
+                yield return new ChatProviderEvent(ChatProviderEventKind.ReasoningDelta, Text: "Final reasoning.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Here is the final answer.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+            }
+
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
         }
     }
 
