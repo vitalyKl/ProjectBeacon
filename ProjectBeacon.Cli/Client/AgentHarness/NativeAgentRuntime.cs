@@ -398,6 +398,20 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 // Reusing one id across tool cycles merges the final answer into text emitted before
                 // the tool call, which makes the UI display the content in the wrong order.
                 var stepMessageId = $"{messageId}:step:{stepOrdinal}";
+                var partOrdinals = new Dictionary<string, int>(StringComparer.Ordinal);
+                string? currentPartKind = null;
+                var currentPartOrdinal = -1;
+
+                int GetPartOrdinal(string kind)
+                {
+                    if (string.Equals(currentPartKind, kind, StringComparison.Ordinal))
+                        return currentPartOrdinal;
+                    currentPartKind = kind;
+                    currentPartOrdinal = partOrdinals.TryGetValue(kind, out var previous) ? previous + 1 : 0;
+                    partOrdinals[kind] = currentPartOrdinal;
+                    return currentPartOrdinal;
+                }
+
                 var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
                 var request = new ChatProviderRequest(
                     resolved.Model,
@@ -428,14 +442,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     emittedContent = true;
                                     stepText.Append(item.Text);
                                     responseText.Append(item.Text);
-                                    await AppendDeltaAsync(session, turnNumber, stepMessageId, "text", item.Text, ct);
+                                    await AppendDeltaAsync(session, turnNumber, stepMessageId, "text", GetPartOrdinal("text"), item.Text, ct);
                                     break;
 
                                 case ChatProviderEventKind.ReasoningDelta when !string.IsNullOrEmpty(item.Text):
                                     firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
                                     stepEmittedContent = true;
                                     emittedContent = true;
-                                    await AppendDeltaAsync(session, turnNumber, stepMessageId, "reasoning", item.Text, ct);
+                                    await AppendDeltaAsync(session, turnNumber, stepMessageId, "reasoning", GetPartOrdinal("reasoning"), item.Text, ct);
                                     break;
 
                                 case ChatProviderEventKind.Usage:
@@ -801,10 +815,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         int turnNumber,
         string messageId,
         string kind,
+        int ordinal,
         string delta,
         CancellationToken ct)
     {
-        var ordinal = 0;
         var externalId = $"{messageId}:{kind}:{ordinal}";
         lock (session.Sync)
         {
