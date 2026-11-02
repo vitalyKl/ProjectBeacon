@@ -916,10 +916,10 @@
     <value>Без брифа</value>
   </data>
 <data name="ContextCostPromptDelta" xml:space="preserve">
-    <value>Δ токенов запроса</value>
+    <value>Δ входных токенов</value>
   </data>
 <data name="ContextCostCompletionDelta" xml:space="preserve">
-    <value>Δ токенов ответа</value>
+    <value>Δ выходных токенов</value>
   </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ ходов</value>

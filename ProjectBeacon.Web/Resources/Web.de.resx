@@ -892,10 +892,10 @@
     <value>Ohne Briefing</value>
   </data>
 <data name="ContextCostPromptDelta" xml:space="preserve">
-    <value>Δ Prompt-Token</value>
+    <value>Δ Eingabe-Tokens</value>
   </data>
 <data name="ContextCostCompletionDelta" xml:space="preserve">
-    <value>Δ Antwort-Token</value>
+    <value>Δ Ausgabe-Tokens</value>
   </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ Züge</value>
