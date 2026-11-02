@@ -75,6 +75,16 @@ window.BeaconChat = {
   }
 };
 
+document.addEventListener("keydown", function (e) {
+  var input = e.target.closest(".beacon-chat-message-input textarea");
+  if (!input || e.key !== "Enter" || e.shiftKey || e.isComposing)
+    return;
+  e.preventDefault();
+  var form = input.closest("form");
+  if (form && typeof form.requestSubmit === "function")
+    form.requestSubmit();
+});
+
 document.addEventListener("click", function (e) {
   var copy = e.target.closest("[data-beacon-code-copy]");
   if (copy) {
