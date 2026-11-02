@@ -1,13 +1,19 @@
 // Chat helpers: delegated handlers for code-block buttons, auto-scroll, and jump-to-latest.
 (function () {
   function syncViewportHeight() {
-    var height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    var viewport = window.visualViewport;
+    var height = viewport ? viewport.height : window.innerHeight;
     document.documentElement.style.setProperty("--beacon-visual-viewport-height", height + "px");
   }
+
   syncViewportHeight();
   window.addEventListener("resize", syncViewportHeight, { passive: true });
-  if (window.visualViewport)
+  window.addEventListener("orientationchange", syncViewportHeight, { passive: true });
+  if (window.visualViewport) {
+    // Mobile browsers resize the visual viewport when the software keyboard opens.
+    // Track the resize without listening to high-frequency scroll events.
     window.visualViewport.addEventListener("resize", syncViewportHeight, { passive: true });
+  }
 })();
 window.BeaconChat = {
   copyCode: function (btn) {

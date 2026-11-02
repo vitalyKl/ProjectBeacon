@@ -63,7 +63,11 @@
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune"
                        Class="beacon-chat-config-button" OnClick="ConfigureModel" Disabled="@Busy"
                        title="@L["ChatModelSettings"].Value">
-                @ModelSummary · @L[_agent == "plan" ? "ChatAgentPlan" : "ChatAgentAct"]
+                @ModelSummary
+            </MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="beacon-chat-mode-toggle"
+                       OnClick="ToggleAgent" Disabled="@(Busy || _switchingAgent)" title="@ModeShortcutTitle">
+                @L[_agent == "plan" ? "ChatAgentPlan" : "ChatAgentAct"]
             </MudButton>
         }
         @if (!string.IsNullOrEmpty(ModelStatus))
@@ -85,14 +89,27 @@
                           Variant="Variant.Outlined" Margin="Margin.Dense" Class="beacon-chat-message-input"
                           Lines="3" OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
             <div class="beacon-chat-send-actions">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="beacon-chat-send-desktop"
+                           OnClick="SendOnce" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary" Size="Size.Large"
+                               Class="beacon-chat-send-mobile" OnClick="SendOnce"
+                               Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))"
+                               title="@L["Send"].Value" aria-label="@L["Send"].Value" />
                 @if (CanAbort)
                 {
-                    <MudButton Variant="Variant.Outlined" OnClick="OnAbortClicked" Disabled="@_aborting">@L["Abort"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Class="beacon-chat-abort-desktop"
+                               OnClick="OnAbortClicked" Disabled="@_aborting">@L["Abort"]</MudButton>
+                    <MudIconButton Icon="@Icons.Material.Filled.Stop" Size="Size.Large" Class="beacon-chat-action-mobile"
+                                   OnClick="OnAbortClicked" Disabled="@_aborting"
+                                   title="@L["Abort"].Value" aria-label="@L["Abort"].Value" />
                 }
                 @if (CanRetry)
                 {
-                    <MudButton Variant="Variant.Outlined" OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Class="beacon-chat-retry-desktop"
+                               OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Large" Class="beacon-chat-action-mobile"
+                                   OnClick="Retry" Disabled="@Busy"
+                                   title="@L["Retry"].Value" aria-label="@L["Retry"].Value" />
                 }
             </div>
         </MudStack>

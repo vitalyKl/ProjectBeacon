@@ -65,6 +65,41 @@ test('chat page renders the seeded session; a DB-inserted part appears without a
   expect(docLoads, 'no full document reload is allowed while the part appears').toBe(loadsBeforeInsert);
 });
 
+
+test('mobile chat keeps the transcript scrollable and the composer reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, fx.login, fx.password);
+  await page.goto('/chat');
+
+  const sessionPicker = page.locator('.beacon-chat-mobile-session-select');
+  await expect(sessionPicker).toBeVisible({ timeout: 20000 });
+  await expect(sessionPicker).toHaveValue(fx.sessionId);
+  await expect(page.locator('.beacon-chat-sessions')).toBeHidden();
+  await expect(page.locator('.beacon-mobile-nav')).toBeHidden();
+  await expect(page.locator('.beacon-chat-send-mobile')).toBeVisible();
+  await expect(page.locator('.beacon-chat-send-desktop')).toBeHidden();
+
+  const pane = await page.locator('.beacon-chat-pane').boundingBox();
+  const transcript = await page.locator('.beacon-chat-log').boundingBox();
+  const controls = await page.locator('.beacon-chat-controls').boundingBox();
+  expect(pane, 'chat pane must occupy the remaining phone viewport').not.toBeNull();
+  expect(transcript, 'transcript must retain its own scroll area').not.toBeNull();
+  expect(controls, 'composer controls must remain visible').not.toBeNull();
+  expect(transcript.height, 'messages must have meaningful scroll space').toBeGreaterThan(100);
+  expect(controls.y + controls.height, 'composer must stay inside the chat pane')
+    .toBeLessThanOrEqual(pane.y + pane.height + 1);
+
+  const dimensions = await page.evaluate(() => ({
+    viewportWidth: document.documentElement.clientWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.documentWidth, 'mobile chat must not create horizontal page scrolling')
+    .toBeLessThanOrEqual(dimensions.viewportWidth);
+
+  await sessionPicker.selectOption(fx.sessionId);
+  await expect(page.getByText(fx.partOneText)).toBeVisible();
+});
+
 test('SSE events endpoint delivers the ready event from a real browser', async ({ page }) => {
   await login(page, fx.login, fx.password);
   await page.goto('/chat');
