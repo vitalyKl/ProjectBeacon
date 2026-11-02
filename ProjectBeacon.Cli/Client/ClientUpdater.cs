@@ -223,7 +223,9 @@ public static class ClientUpdater
             var start = new ProcessStartInfo("/bin/sh") { UseShellExecute = false, CreateNoWindow = true };
             foreach (var arg in new[] { scriptPath, Environment.ProcessId.ToString(), target, source, workDir })
                 start.ArgumentList.Add(arg);
-            Process.Start(start) ?? throw new InvalidOperationException("Could not start the update helper process.");
+            var helper = Process.Start(start);
+            if (helper is null)
+                throw new InvalidOperationException("Could not start the update helper process.");
         }
     }
 }
