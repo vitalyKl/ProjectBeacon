@@ -566,8 +566,7 @@
                 Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            _clientCurrentVersion = _clientLatestVersion;
-            _clientUpdateAvailable = false;
+            _clientUpdateAvailable = null;
             Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
         }
         catch (Exception ex)
