@@ -127,13 +127,14 @@ public sealed class McpApiToolsTests
             using var input = new MemoryStream();
             WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"create_task","arguments":{"title":"Created from chat"}}}""");
             WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"task_pipeline_status","arguments":{}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pipeline_start","arguments":{}}}""");
             input.Position = 0;
             using var output = new MemoryStream();
             await McpStdioServer.RunAsync(root, input, output, api, env);
             output.Position = 0;
             var frames = await ReadAllFramesAsync(output);
 
-            Assert.Equal(2, frames.Count);
+            Assert.Equal(3, frames.Count);
             Assert.All(frames, frame => Assert.DoesNotContain(
                 "\"isError\":true", frame.ToJsonString(), StringComparison.OrdinalIgnoreCase));
             Assert.Equal(taskId.ToString("D"), env.Get("BEACON_TASK_ID"));
@@ -141,6 +142,8 @@ public sealed class McpApiToolsTests
                 call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/tasks");
             Assert.Contains(handler.Calls, call =>
                 call.Method == "GET" && call.Path == $"/v1/tasks/{taskId:D}/pipeline");
+            Assert.Contains(handler.Calls, call =>
+                call.Method == "POST" && call.Path == $"/v1/tasks/{taskId:D}/pipeline/start");
         }
         finally
         {

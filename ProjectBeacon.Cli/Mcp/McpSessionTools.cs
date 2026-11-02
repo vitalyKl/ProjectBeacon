@@ -19,7 +19,7 @@ public static partial class McpStdioServer
             Props(("subtaskId", "string", true), ("diffRef", "string", true), ("summary", "string", true))),
         Tool("task_review_verdict", "Record a review verdict (approve, reopen_subtask) on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("verdict", "string", true), ("note", "string", true), ("subtaskId", "string", false))),
-        Tool("task_pipeline_status", "Show the pipeline state (subtasks, sessions, verdicts) of the task linked to this MCP session. A task created with create_task is linked automatically; otherwise start the chat from an existing task context.",
+        Tool("task_pipeline_status", "Show the pipeline state (subtasks, sessions, verdicts) for the task linked to this chat. After create_task in this chat, it automatically targets the new task; no BEACON_TASK_ID setup or manual GUID copy is needed.",
             Props())
     ];
 

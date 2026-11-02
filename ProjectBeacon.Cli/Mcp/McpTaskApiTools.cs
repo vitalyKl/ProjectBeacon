@@ -14,7 +14,7 @@ internal static partial class McpApiTools
             () => Props(("projectId", "string", false), ("status", "string", false)), TasksList),
         new("get_task", "Get one task, including comments and dependencies.",
             () => Props(("taskId", "string", false), ("projectId", "string", false)), TaskGet),
-        new("create_task", "Create a task. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
+        new("create_task", "Create a task in the current project. The new task becomes the active task context for this chat, so task_pipeline_status and pipeline_start can be called next without a task ID. priority: Low, Medium, High, Critical. type: Feature, Bug, Improvement, Task.",
             () => Props(("title", "string", true), ("description", "string", false), ("priority", "string", false),
                 ("type", "string", false), ("labelId", "string", false), ("milestoneId", "string", false),
                 ("path", "string", false), ("projectId", "string", false)), TaskCreate),

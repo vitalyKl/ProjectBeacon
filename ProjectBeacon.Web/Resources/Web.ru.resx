@@ -2146,4 +2146,5 @@
 <data name="LandingCtaBody" xml:space="preserve"><value>Разверните собственный сервер ProjectBeacon и подключите рабочую станцию.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 
+<data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
 </root>

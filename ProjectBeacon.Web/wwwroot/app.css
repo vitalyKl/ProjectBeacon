@@ -2617,3 +2617,57 @@ body:has(.beacon-theme-dark) .mud-main-content {
         min-height: 0;
     }
 }
+
+
+/* Chat layout safeguards: keep the transcript scrollable inside the available flex height. */
+.beacon-chat-pane,
+.beacon-chat-page,
+.beacon-chat-dock,
+.beacon-chat-log,
+.beacon-chat-part,
+.beacon-chat-part > *,
+.beacon-tool-panel,
+.beacon-tool-panel > * { min-width: 0; }
+.beacon-chat-page { min-height: 0; }
+.beacon-chat-page .beacon-chat-pane { min-height: 0; overflow: hidden; }
+.beacon-chat-log { min-height: 0; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.beacon-chat-part { max-width: 100%; overflow-wrap: anywhere; word-break: normal; }
+.beacon-chat-part .mud-typography,
+.beacon-chat-part .mud-button-label,
+.beacon-chat-part .mud-select,
+.beacon-chat-part .mud-input-control,
+.beacon-tool-panel,
+.beacon-tool-panel pre,
+.beacon-tool-panel code,
+.beacon-markdown,
+.beacon-markdown p,
+.beacon-markdown li,
+.beacon-markdown a { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.beacon-markdown pre,
+.beacon-pre-clip { max-width: 100%; overflow-x: auto; white-space: pre; }
+.beacon-chat-part.beacon-chat-assistant,
+.beacon-chat-part.beacon-chat-user { color: var(--color-text-primary); }
+.beacon-chat-part.beacon-chat-tool,
+.beacon-chat-part.beacon-chat-reasoning,
+.beacon-chat-part.beacon-chat-subtle { color: var(--color-chat-subtle); }
+.beacon-chat-compose .mud-button-root,
+.beacon-chat-compose .mud-input-control,
+.beacon-chat-model-bar .mud-button-root { min-height: 40px; }
+.beacon-chat-compose .mud-input-outlined { min-height: 40px; }
+.beacon-chat-compose .mud-button-root,
+.beacon-chat-model-bar .mud-button-root { height: 40px; }
+.beacon-chat-compose .mud-input-control { flex: 1 1 180px; min-width: 0; }
+.beacon-chat-compose .mud-button-root { flex: 0 0 auto; }
+.beacon-chat-model-bar > * { min-width: 0; max-width: 100%; }
+.beacon-chat-config-button { flex: 1 1 220px; }
+.beacon-pipeline-start-hint { max-width: 24rem; }
+@media (max-width: 767px) {
+    .beacon-chat-page { height: calc(100dvh - var(--layout-appbar-height, 72px) - 24px); min-height: 0; }
+    .beacon-chat-page .beacon-chat-pane { width: 100%; flex: 1 1 auto; }
+    .beacon-chat-page .beacon-chat-log { flex: 1 1 0; max-height: none; min-height: 120px; }
+    .beacon-chat-compose { align-items: stretch; }
+    .beacon-chat-compose .mud-input-control { flex-basis: 100%; order: -1; }
+    .beacon-chat-compose .mud-button-root { flex: 1 1 auto; }
+    .beacon-chat-model-bar { align-items: stretch; }
+    .beacon-chat-config-button { flex-basis: 100%; max-width: 100%; }
+}

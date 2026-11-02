@@ -65,6 +65,7 @@ else
     <MudTabPanel Text="@L["AgentTemplates"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeUserLevel"] · @L["AgentTemplatesLead"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["AgentTemplateModelsScopeHint"]</MudText>
         <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mb-3">
             <MudSelect T="Guid?" Value="_templateId" ValueChanged="SelectTemplate" Label="@L["AgentTemplates"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="flex-grow-1">
                 @foreach (var template in _templates)

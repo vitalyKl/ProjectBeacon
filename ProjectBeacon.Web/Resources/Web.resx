@@ -2354,4 +2354,5 @@ No Beacon-hosted coding agent.</value>
 <data name="LandingCtaBody" xml:space="preserve"><value>Start with your own ProjectBeacon host and connect a workstation.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first control plane for AI-assisted development</value></data>
 
+<data name="PipelineStartHint" xml:space="preserve"><value>Starts the Planner to analyse this task and prepare an execution plan.</value></data>
 </root>
