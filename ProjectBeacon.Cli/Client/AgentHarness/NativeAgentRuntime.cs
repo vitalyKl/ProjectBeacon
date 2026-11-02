@@ -541,12 +541,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         {
                             if (cacheKey is not null && toolResultCache.TryGetValue(cacheKey, out var cachedResult))
                             {
+                                _log?.Invoke($"native tool cache hit: {call.Name}");
                                 cacheHit = true;
                                 isError = cachedResult.IsError;
                                 toolResult = "[Cached result from an earlier identical read-only call]\n" + cachedResult.Text;
                             }
                             else
                             {
+                                if (cacheKey is not null)
+                                    _log?.Invoke($"native tool cache miss: {call.Name}");
                                 if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
                                     || IsPlanModeRunShellBlocked(agentMode, call.Name))
                                 {
