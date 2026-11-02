@@ -94,7 +94,7 @@ else
                     </ActivatorContent>
                     <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => Rename(_selected!))">@L["ChatRename"]</MudMenuItem>
-                        <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="@(() => Archive(_selected!))">@L["ChatDelete"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="@(() => DeleteChat(_selected!))">@L["ChatDelete"]</MudMenuItem>
                     </ChildContent>
                 </MudMenu>
             }
