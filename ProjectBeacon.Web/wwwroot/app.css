@@ -231,7 +231,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .mud-main-content {
-    padding-top: var(--mud-appbar-height, 64px);
+    padding-top: var(--mud-appbar-height, var(--space-16));
 }
 
 .beacon-content-max {
@@ -369,14 +369,14 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .mud-button-root:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .mud-button-filled-error:focus-visible,
 .mud-button-outlined-error:focus-visible,
 .mud-button-text-error:focus-visible {
     outline-color: var(--color-danger);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 24%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-danger) 24%, transparent);
 }
 
 .mud-button-root.mud-button.mud-button-filled:disabled,
@@ -464,7 +464,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     color: var(--color-sidebar-text);
     background-color: transparent;
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: var(--space-2) 10px;
     margin: 1px 0;
     font-size: var(--type-body);
     font-weight: 500;
@@ -543,7 +543,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-card-interactive:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .beacon-card-interactive:focus-within {
@@ -572,7 +572,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-panel {
     background-color: var(--color-surface-2);
     border-radius: var(--radius-small);
-    padding: 12px 14px;
+    padding: var(--space-3) 14px;
 }
 
 .beacon-ops-panel.beacon-panel,
@@ -709,7 +709,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-run-row { grid-template-columns: auto 1.2fr 1fr auto; }
-.beacon-health-row { grid-template-columns: 8px 1fr 120px; }
+.beacon-health-row { grid-template-columns: var(--space-2) 1fr 120px; }
 .beacon-attention-item { grid-template-columns: 5px 1fr; }
 .beacon-activity-row { grid-template-columns: auto 1fr auto; }
 .beacon-activity-row .beacon-state { font-size: var(--type-secondary); }
@@ -850,7 +850,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-main .mud-table-cell {
-    padding: 8px 12px;
+    padding: var(--space-2) 12px;
     font-size: var(--type-body);
 }
 
@@ -1015,11 +1015,11 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .kanban-zone {
     min-height: calc(var(--space-16) + var(--space-12));
     height: 100%;
-    padding: 8px 10px;
+    padding: var(--space-2) 10px;
 }
 
 .beacon-nav-label {
-    padding: 8px 10px 5px;
+    padding: var(--space-2) 10px 5px;
     font-size: var(--type-caption);
     font-weight: 600;
     letter-spacing: 0.12em;
@@ -1421,18 +1421,18 @@ body:has(.beacon-theme-dark) .mud-main-content {
     height: 42px;
     min-height: 42px;
     padding-block: 0 !important;
-    padding-inline: 12px !important;
+    padding-inline: var(--space-3) !important;
     font-size: var(--type-body);
     line-height: 42px;
     color: var(--color-text-primary);
 }
 
 .mud-input.mud-input-outlined.mud-input-adorned-end > .mud-input-slot {
-    padding-inline-end: 40px !important;
+    padding-inline-end: var(--space-10) !important;
 }
 
 .mud-input.mud-input-outlined.mud-input-adorned-start > .mud-input-slot {
-    padding-inline-start: 40px !important;
+    padding-inline-start: var(--space-10) !important;
 }
 
 .mud-select .mud-input.mud-input-outlined > div.mud-input-slot {
@@ -1458,7 +1458,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     display: block;
     height: auto;
     min-height: 88px;
-    padding: 8px 12px !important;
+    padding: var(--space-2) var(--space-3) !important;
     line-height: 1.45;
 }
 
@@ -1532,7 +1532,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .mud-popover .mud-list-item {
     min-height: 40px;
-    padding: 8px 12px;
+    padding: var(--space-2) 12px;
     border-radius: 4px;
     color: var(--color-text-primary);
 }
@@ -1621,7 +1621,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-command-trigger:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .beacon-command-trigger span {
@@ -1661,7 +1661,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-avatar:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .beacon-avatar {
@@ -1680,11 +1680,11 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-project-switcher {
-    width: calc(100% - 24px);
-    margin: 0 12px 14px;
+    width: calc(100% - var(--space-6));
+    margin: 0 var(--space-3) 14px;
     padding: 9px;
     display: grid;
-    grid-template-columns: 32px 1fr auto;
+    grid-template-columns: var(--space-8) 1fr auto;
     align-items: center;
     gap: 9px;
     border: var(--border-hairline) solid var(--color-sidebar-line);
@@ -1747,7 +1747,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     display: flex;
     align-items: center;
     gap: 9px;
-    padding: 12px 16px;
+    padding: var(--space-3) 16px;
     color: inherit;
     text-decoration: none;
 }
@@ -1785,7 +1785,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-fleet-orbit.is-up i {
     background: var(--color-success);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 15%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-success) 15%, transparent);
 }
 
 .beacon-fleet-orbit.is-down i {
@@ -1812,7 +1812,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 4px 8px;
+    padding: var(--space-1) 8px;
     border: 0;
     border-radius: 6px;
     background: transparent;
@@ -1855,7 +1855,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-version {
     display: block;
     margin: 0;
-    padding: 8px 16px 12px;
+    padding: var(--space-2) var(--space-4) 12px;
     border-top: var(--border-hairline) solid var(--color-sidebar-line);
     font-family: var(--font-mono);
     font-size: var(--type-caption);
@@ -1892,7 +1892,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-appearance-option:focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 24%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .beacon-command-backdrop {
@@ -1914,7 +1914,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     border: var(--border-hairline) solid var(--color-border-strong);
     border-radius: var(--radius-panel);
     background: var(--color-surface-2);
-    box-shadow: 0 30px 80px color-mix(in srgb, var(--color-sidebar) 35%, transparent);
+    box-shadow: 0 30px var(--space-20) color-mix(in srgb, var(--color-sidebar) 35%, transparent);
 }
 
 .beacon-command-input {
@@ -1952,7 +1952,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     width: 100%;
     height: 45px;
     display: grid;
-    grid-template-columns: 24px 1fr auto;
+    grid-template-columns: var(--space-6) 1fr auto;
     align-items: center;
     gap: 8px;
     border: 0;
@@ -2004,7 +2004,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
         right: 0;
         bottom: 0;
         height: 61px;
-        padding: 4px 5px max(4px, env(safe-area-inset-bottom));
+        padding: var(--space-1) 5px max(var(--space-1), env(safe-area-inset-bottom));
         display: flex;
         align-items: center;
         justify-content: space-around;
@@ -2066,7 +2066,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-next-action {
     margin-bottom: 14px;
-    padding: 12px 14px;
+    padding: var(--space-3) 14px;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -2087,7 +2087,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-quiet .beacon-pre {
-    margin: 8px 0 16px;
+    margin: var(--space-2) 0 16px;
     white-space: pre-wrap;
 }
 
@@ -2131,7 +2131,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-task-goal {
     max-width: 68ch;
-    margin: 8px 0 0;
+    margin: var(--space-2) 0 0;
     color: var(--color-text-secondary);
     font-size: var(--type-body);
 }
@@ -2176,7 +2176,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-subtask {
-    padding: 12px 14px;
+    padding: var(--space-3) 14px;
     border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
@@ -2245,7 +2245,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .beacon-expand .mud-expand-panel-header,
 .beacon-expand .mud-expand-panel-header.mud-expand-panel-header-gutters {
     min-height: 40px;
-    padding: 8px 12px;
+    padding: var(--space-2) 12px;
 }
 
 .beacon-expand .mud-expand-panel-text {
@@ -2256,7 +2256,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-expand .mud-expand-panel-content,
 .beacon-expand .mud-expand-panel-content.mud-expand-panel-gutters {
-    padding: 0 12px 12px;
+    padding: 0 var(--space-3) 12px;
 }
 
 @media (max-width: 767px) {
