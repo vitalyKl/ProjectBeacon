@@ -2512,3 +2512,8 @@ body:has(.beacon-theme-dark) .mud-main-content {
     border-radius: var(--radius-small);
     object-fit: contain;
 }
+
+
+.beacon-step-title-done {
+    text-decoration: line-through;
+}

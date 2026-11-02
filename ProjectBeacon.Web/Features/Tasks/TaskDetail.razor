@@ -235,7 +235,7 @@ else
                     {
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
                             <MudCheckBox T="bool" Value="step.IsDone" ValueChanged="done => OnToggleStep(step, done)" Dense="true" />
-                            <MudText Typo="Typo.body2" Class="grow" Style="@(step.IsDone ? "text-decoration:line-through" : null)">@step.Title</MudText>
+                            <MudText Typo="Typo.body2" Class="grow @(step.IsDone ? "beacon-step-title-done" : null)">@step.Title</MudText>
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => OnDeleteStep(step)">@L["Delete"]</MudButton>
                         </MudStack>
                     }
