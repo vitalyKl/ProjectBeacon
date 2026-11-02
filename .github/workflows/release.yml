@@ -9,7 +9,7 @@ permissions:
   contents: read
   packages: write
 
-# Gate chain (no bypass): tests -> image -> scan -> deploy.
+# Gate chain (no bypass): tests -> client assets + image -> scan -> deploy.
 # Only this workflow publishes images; ci.yml never pushes to the registry.
 
 jobs:
@@ -285,7 +285,7 @@ jobs:
   deploy:
     # Deploy the exact digest verified by the scan to the production VPS.
     # The VPS runs the existing fail-closed Compose upgrade script.
-    needs: [image, scan]
+    needs: [image, scan, client]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: production
