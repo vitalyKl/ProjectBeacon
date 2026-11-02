@@ -660,10 +660,11 @@ public sealed class ClientDaemonTests : IDisposable
             },
             CancellationToken.None);
         Assert.True(ok, error);
-        Assert.Equal(2, capture.PartBodies.Count);
+        Assert.Equal(3, capture.PartBodies.Count);
         Assert.Contains("thinking", capture.PartBodies[0]);
-        Assert.Contains("the answer", capture.PartBodies[1]);
-        Assert.DoesNotContain("partial", string.Join("|", capture.PartBodies));
+        Assert.Contains("partial", capture.PartBodies[1]);
+        Assert.Contains("the answer", capture.PartBodies[2]);
+        Assert.DoesNotContain("\"kind\":\"error\"", string.Join("|", capture.PartBodies));
         Assert.Equal(1, capture.IdlePosts);
         Assert.Contains("\"interrupted\":false", result);
         Assert.Contains("idle", string.Join("\n", logs));
@@ -834,8 +835,9 @@ public sealed class ClientDaemonTests : IDisposable
             },
             CancellationToken.None);
         Assert.True(ok, error);
-        Assert.Single(capture.PartBodies);
-        Assert.Contains("the answer", capture.PartBodies[0]);
+        Assert.Equal(2, capture.PartBodies.Count);
+        Assert.Contains("partial", capture.PartBodies[0]);
+        Assert.Contains("the answer", capture.PartBodies[1]);
         Assert.DoesNotContain("Step interrupted", string.Join("|", capture.PartBodies));
         Assert.DoesNotContain("\"kind\":\"error\"", string.Join("|", capture.PartBodies));
         Assert.Equal(1, capture.IdlePosts);

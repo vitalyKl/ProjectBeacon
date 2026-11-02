@@ -1,4 +1,14 @@
 // Chat helpers: delegated handlers for code-block buttons, auto-scroll, and jump-to-latest.
+(function () {
+  function syncViewportHeight() {
+    var height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--beacon-visual-viewport-height", height + "px");
+  }
+  syncViewportHeight();
+  window.addEventListener("resize", syncViewportHeight, { passive: true });
+  if (window.visualViewport)
+    window.visualViewport.addEventListener("resize", syncViewportHeight, { passive: true });
+})();
 window.BeaconChat = {
   copyCode: function (btn) {
     var box = btn.closest(".beacon-code");
@@ -64,6 +74,16 @@ window.BeaconChat = {
       box.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 };
+
+document.addEventListener("keydown", function (e) {
+  var input = e.target.closest(".beacon-chat-message-input textarea");
+  if (!input || e.key !== "Enter" || e.shiftKey || e.isComposing)
+    return;
+  e.preventDefault();
+  var form = input.closest("form");
+  if (form && typeof form.requestSubmit === "function")
+    form.requestSubmit();
+});
 
 document.addEventListener("click", function (e) {
   var copy = e.target.closest("[data-beacon-code-copy]");

@@ -2699,3 +2699,79 @@ body:has(.beacon-theme-dark) .mud-main-content {
         text-align: left;
     }
 }
+
+
+/* Mobile chat workspace: keep the transcript scrollable and the composer anchored. */
+@media (max-width: 767px) {
+    .beacon-main:has(.beacon-chat-page) { padding: var(--space-2) var(--space-3) 0; }
+    .beacon-main:has(.beacon-chat-page) .beacon-content-max { display: flex; flex-direction: column; min-height: 0; }
+    .beacon-chat-page {
+        flex: 1 1 auto; flex-direction: column; gap: var(--space-2);
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - var(--mud-appbar-height, 64px) - 61px - 92px);
+        min-height: 300px;
+    }
+    .beacon-chat-sessions {
+        display: flex; flex: 0 0 auto; align-items: center; gap: var(--space-2);
+        width: 100%; max-height: 68px; overflow-x: auto; overflow-y: hidden;
+        padding: var(--space-1) var(--space-2); white-space: nowrap; scrollbar-width: none;
+    }
+    .beacon-chat-sessions::-webkit-scrollbar { display: none; }
+    .beacon-chat-project { display: none; }
+    .beacon-new-chat { flex: 0 0 auto; margin: 0; }
+    .beacon-session-item { flex: 0 0 auto; width: min(52vw, 190px); min-width: 0; padding: var(--space-1) var(--space-2); }
+    .beacon-session-main { overflow: hidden; }
+    .beacon-session-main .mud-typography-caption, .beacon-session-item > div:last-child { display: none; }
+    .beacon-chat-page .beacon-chat-pane { flex: 1 1 auto; min-height: 0; height: 0; overflow: hidden; padding: var(--space-2); }
+    .beacon-chat-page .beacon-chat-log {
+        flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .beacon-chat-controls {
+        padding-top: var(--space-2); border-top: var(--border-hairline) solid var(--color-border);
+        background: var(--color-surface-2);
+    }
+    .beacon-chat-toolbar { gap: var(--space-1); padding-block: var(--space-1); }
+    .beacon-chat-config-button { flex: 1 1 150px; max-width: none; min-height: 36px; font-size: var(--type-caption); }
+    .beacon-chat-model-status { flex: 1 1 100%; font-size: var(--type-caption); line-height: 1.25; }
+    .beacon-chat-usage { flex: 1 1 100%; margin: 0; font-size: 11px; line-height: 1.2; }
+    .beacon-chat-compose-form { position: relative; padding-bottom: max(var(--space-1), env(safe-area-inset-bottom, 0px)); }
+    .beacon-chat-compose { gap: var(--space-2); }
+    .beacon-chat-message-input textarea { min-height: 76px; max-height: 30dvh; }
+    .beacon-chat-send-actions { display: flex; flex: 0 0 auto; flex-direction: column; gap: var(--space-1); }
+    .beacon-chat-send-actions .mud-button-root { min-width: 64px; padding-inline: var(--space-2); }
+    .beacon-chat-part { margin-bottom: var(--space-2) !important; padding: var(--space-2) !important; }
+    .beacon-chat-part-head { font-size: 11px; }
+    .beacon-chat-session-head { margin-bottom: var(--space-1); }
+}
+@media (max-width: 959.98px) {
+    .beacon-main { padding: var(--space-3) var(--space-3) calc(68px + env(safe-area-inset-bottom, 0px)); }
+    .beacon-content-max, .beacon-main, .mud-main-content { min-width: 0; max-width: 100%; }
+    .beacon-form { max-width: none; }
+    .mud-table-container { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .mud-paper, .mud-card, .beacon-panel { min-width: 0; }
+}
+
+
+/* Reduce fixed chrome on narrow screens so page content gets the space. */
+@media (max-width: 959.98px) {
+    .beacon-appbar.mud-appbar,
+    .beacon-appbar.mud-appbar .mud-toolbar-appbar {
+        height: 56px;
+        min-height: 56px;
+    }
+
+    .mud-main-content {
+        padding-top: 56px;
+    }
+
+    .beacon-mobile-nav {
+        height: 56px;
+        padding-block: var(--space-1);
+        padding-bottom: max(var(--space-1), env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (max-width: 767px) {
+    .beacon-chat-page {
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - 56px - 56px - 80px);
+    }
+}

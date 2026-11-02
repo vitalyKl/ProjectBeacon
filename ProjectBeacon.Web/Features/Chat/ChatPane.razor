@@ -24,47 +24,48 @@
     </div>
 }
 <div class="beacon-chat-log" @ref="_log">
-    @foreach (var part in Parts)
+    @foreach (var part in Parts.OrderBy(part => part.SortOrder).ThenBy(part => part.CreatedAt))
     {
         <ChatPartView Part="part" ModelName="@ModelName" />
     }
 </div>
-@if (_showJump)
-{
-    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowDownward" OnClick="JumpToLatest" Class="beacon-chat-jump">@L["ChatJumpToLatest"]</MudButton>
-}
-@if (_pendingQuestions.Count > 0)
-{
-    <div class="beacon-chat-question-tabs d-flex flex-wrap gap-1 mt-2">
-        @foreach (var q in _pendingQuestions)
-        {
-            <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)">@q.Title</MudButton>
-        }
-    </div>
-}
-@if (!string.IsNullOrEmpty(Phase))
-{
-    <MudText Typo="Typo.caption" Class="mt-2">@PhaseLabel</MudText>
-    @if (Phase is "Generating" or "UsingTool" or "Waiting")
+<div class="beacon-chat-controls">
+    @if (_showJump)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-2" />
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.ArrowDownward" OnClick="JumpToLatest" Class="beacon-chat-jump">@L["ChatJumpToLatest"]</MudButton>
     }
-}
-@if (Phase is "Failed" or "Aborted")
-{
-    <MudAlert Severity="Severity.Error" Class="mt-2">@PhaseLabel</MudAlert>
-}
-
-@if (ShowModelSelect)
-{
-    <div class="beacon-chat-model-bar">
-        <MudButton Variant="Variant.Outlined"
-                   StartIcon="@Icons.Material.Filled.Tune"
-                   Class="beacon-chat-config-button"
-                   OnClick="ConfigureModel"
-                   title="@L["ChatModelSettings"].Value">
-            @ModelSummary
-        </MudButton>
+    @if (_pendingQuestions.Count > 0)
+    {
+        <div class="beacon-chat-question-tabs d-flex flex-wrap gap-1">
+            @foreach (var q in _pendingQuestions)
+            {
+                <MudButton Class="beacon-chat-question-tab" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Help" OnClick="() => ScrollToQuestion(q.Id)">@q.Title</MudButton>
+            }
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Phase))
+    {
+        <div class="beacon-chat-phase">
+            <StatusChip Color="@PhaseColor" Label="@PhaseLabel" />
+            @if (Phase is "Generating" or "UsingTool" or "Waiting")
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="beacon-chat-phase-progress" />
+            }
+        </div>
+    }
+    @if (Phase is "Failed" or "Aborted")
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="beacon-chat-phase-error">@PhaseLabel</MudAlert>
+    }
+    <div class="beacon-chat-toolbar @(ShowModelSelect ? "beacon-chat-model-bar" : null)">
+        @if (ShowModelSelect)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune"
+                       Class="beacon-chat-config-button" OnClick="ConfigureModel" Disabled="@Busy"
+                       title="@L["ChatModelSettings"].Value">
+                @ModelSummary · @L[_agent == "plan" ? "ChatAgentPlan" : "ChatAgentAct"]
+            </MudButton>
+        }
         @if (!string.IsNullOrEmpty(ModelStatus))
         {
             @if (ModelStatus == "switching")
@@ -73,39 +74,30 @@
             }
             <MudText Typo="Typo.caption" Class="beacon-chat-model-status">@ModelStatusLabel</MudText>
         }
+        @if (UsageLabel is { } usage)
+        {
+            <MudText Typo="Typo.caption" Class="beacon-chat-usage">@usage</MudText>
+        }
     </div>
-}
-@if (UsageLabel is { } usage)
-{
-    <MudText Typo="Typo.caption" Class="beacon-chat-usage mt-2">@usage</MudText>
-}
-<form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
-    <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
-        @if (ShowModelSelect)
-        {
-            <MudButton Variant="Variant.Outlined"
-                       Color="@(_agent == "plan" ? Color.Secondary : Color.Default)"
-                       Size="Size.Medium"
-                       Class="beacon-chat-mode-toggle"
-                       OnClick="ToggleAgent"
-                       Disabled="@(_switchingAgent || Busy)"
-                       title="@ModeShortcutTitle">
-                @(_agent == "plan" ? L["ChatAgentPlan"] : L["ChatAgentAct"])
-            </MudButton>
-        }
-        <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
-                      OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
-        @if (CanAbort)
-        {
-            <MudButton Variant="Variant.Outlined" OnClick="OnAbortClicked" Disabled="@_aborting">@L["Abort"]</MudButton>
-        }
-        @if (CanRetry)
-        {
-            <MudButton Variant="Variant.Outlined" OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
-        }
-    </MudStack>
-</form>
+    <form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
+        <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="beacon-chat-compose">
+            <MudTextField T="string" Value="@Draft" ValueChanged="OnDraftChanged" Label="@DraftLabel"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Class="beacon-chat-message-input"
+                          Lines="3" OnKeyDown="e => OnKey(e)" Disabled="@Busy" />
+            <div class="beacon-chat-send-actions">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Send" Disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))">@L["Send"]</MudButton>
+                @if (CanAbort)
+                {
+                    <MudButton Variant="Variant.Outlined" OnClick="OnAbortClicked" Disabled="@_aborting">@L["Abort"]</MudButton>
+                }
+                @if (CanRetry)
+                {
+                    <MudButton Variant="Variant.Outlined" OnClick="Retry" Disabled="@Busy">@L["Retry"]</MudButton>
+                }
+            </div>
+        </MudStack>
+    </form>
+</div>
 
 @code {
     // Presentation shared by the full /chat page and the global ChatDock. The hosts own the
@@ -157,10 +149,12 @@
     private ElementReference _log;
     private bool _showJump;
     private bool _followPending;
+    private bool _initialScrollPending;
     private List<(Guid Id, string Title)> _pendingQuestions = [];
     private Guid _sessionId;
     private Guid _lastPartId;
     private int _lastPartLength;
+    private string _partsSignature = string.Empty;
     private bool _attached;
     private Guid _userId;
     private string _agent = "build";
@@ -177,9 +171,12 @@
     {
         RefreshPendingQuestions();
         var sessionId = Session?.Id ?? Guid.Empty;
-        var lastPart = Parts.LastOrDefault();
+        var orderedParts = Parts.OrderBy(part => part.SortOrder).ThenBy(part => part.CreatedAt).ToList();
+        var lastPart = orderedParts.LastOrDefault();
         var lastPartId = lastPart?.Id ?? Guid.Empty;
         var lastPartLength = lastPart?.Body?.Length ?? 0;
+        var partsSignature = string.Join("\u001f", orderedParts.Select(part =>
+            $"{part.Id:N}:{part.SortOrder}:{part.Body}:{part.ToolStatus}:{part.ToolInput}:{part.ToolResult}:{part.Complete}"));
         if (!_attached)
         {
             // The first render only records the baseline; it must not scroll the pane open
@@ -187,8 +184,10 @@
             _sessionId = sessionId;
             _lastPartId = lastPartId;
             _lastPartLength = lastPartLength;
+            _partsSignature = partsSignature;
             _agent = string.Equals(Session?.AgentMode, "plan", StringComparison.OrdinalIgnoreCase) ? "plan" : "build";
             _attached = true;
+            _initialScrollPending = orderedParts.Count > 0;
             return;
         }
         // Agent mode is persisted with the chat session, so switching conversations restores
@@ -197,11 +196,13 @@
             _agent = string.Equals(Session?.AgentMode, "plan", StringComparison.OrdinalIgnoreCase) ? "plan" : "build";
         // The hosts push a sliding window of the latest parts, and streaming upserts reuse
         // the same part id while its body grows: follow on the newest part id or its size.
-        if (sessionId != _sessionId || lastPartId != _lastPartId || lastPartLength != _lastPartLength)
+        if (sessionId != _sessionId || lastPartId != _lastPartId || lastPartLength != _lastPartLength
+            || !string.Equals(partsSignature, _partsSignature, StringComparison.Ordinal))
         {
             _sessionId = sessionId;
             _lastPartId = lastPartId;
             _lastPartLength = lastPartLength;
+            _partsSignature = partsSignature;
             // The DOM still holds the previous parts at this point; the follow must measure
             // scrollHeight after this render commits, so it is deferred to OnAfterRenderAsync.
             _followPending = true;
@@ -210,6 +211,12 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_initialScrollPending)
+        {
+            _initialScrollPending = false;
+            await Js.InvokeVoidAsync("BeaconChat.jumpToLatest", _log);
+            return;
+        }
         if (!_followPending)
             return;
         _followPending = false;
@@ -265,7 +272,8 @@
         {
             ["Models"] = Models,
             ["Model"] = Model,
-            ["ReasoningEffort"] = ReasoningEffort
+            ["ReasoningEffort"] = ReasoningEffort,
+            ["AgentMode"] = _agent
         };
         var dialog = await DialogService.ShowAsync<ChatModelSettingsDialog>(
             L["ChatModelSettings"].Value,
@@ -277,6 +285,7 @@
 
         await OnModelChanged(selection.Model);
         await OnEffortChanged(selection.ReasoningEffort);
+        await OnAgentChanged(selection.AgentMode);
     }
 
     private Task ToggleAgent() => OnAgentChanged(_agent == "plan" ? "build" : "plan");
@@ -319,35 +328,15 @@
     }
 
 
-    // Enter handling: KeyboardEventArgs has no PreventDefault, so on one Enter both the
-    // keydown handler and the native form submit fire. SendOnce serializes them into a
-    // single send; _shiftEnter keeps Shift+Enter from sending via the implicit submit.
     private bool _sending;
-    private bool _shiftEnter;
 
     private async Task OnKey(KeyboardEventArgs e)
     {
         if (e.CtrlKey && e.ShiftKey && string.Equals(e.Key, "m", StringComparison.OrdinalIgnoreCase))
-        {
             await ToggleAgent();
-            return;
-        }
-        if (e.Key != "Enter")
-            return;
-        _shiftEnter = e.ShiftKey;
-        if (!e.ShiftKey)
-            await SendOnce();
     }
 
-    private Task OnSendSubmit()
-    {
-        if (_shiftEnter)
-        {
-            _shiftEnter = false;
-            return Task.CompletedTask;
-        }
-        return SendOnce();
-    }
+    private Task OnSendSubmit() => SendOnce();
 
     private async Task SendOnce()
     {

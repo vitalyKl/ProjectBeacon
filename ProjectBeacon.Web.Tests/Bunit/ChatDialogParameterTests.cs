@@ -17,10 +17,12 @@ public sealed class ChatDialogParameterTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<ChatModelSettingsDialog>(parameters => parameters
             .Add(p => p.Models, new List<LocalModelBackendDto> { backend })
             .Add(p => p.Model, "beacon-local/dialog-model")
-            .Add(p => p.ReasoningEffort, "medium"));
+            .Add(p => p.ReasoningEffort, "medium")
+            .Add(p => p.AgentMode, "plan"));
 
         Assert.Contains("dialog-model", cut.Markup);
         Assert.Contains(backend.ContextSize.ToString("N0"), cut.Markup);
+        Assert.Contains("Plan", cut.Markup);
     }
 
     [Fact]
