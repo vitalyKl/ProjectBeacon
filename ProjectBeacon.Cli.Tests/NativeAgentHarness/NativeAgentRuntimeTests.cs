@@ -824,6 +824,7 @@ public sealed class NativeAgentRuntimeTests
             llama,
             new StubLlamaSync(),
             () => WorkstationSettings.Load(settingsPath),
+            log: logs.Add,
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
         try
@@ -1136,6 +1137,7 @@ public sealed class NativeAgentRuntimeTests
         await using var llama = new ClientLlamaSwap();
         var provider = new RepeatingToolProvider();
         var mcp = new StubMcpToolClient();
+        var logs = new List<string>();
         var runtime = new NativeAgentRuntime(
             control,
             llama,
@@ -1161,6 +1163,8 @@ public sealed class NativeAgentRuntimeTests
             Assert.Null(status.Error);
             Assert.Equal(3, provider.RequestCount);
             Assert.Equal(1, mcp.CallCount);
+            Assert.True(logs.Any(entry => entry.Contains("native tool cache hit", StringComparison.Ordinal)),
+                string.Join(Environment.NewLine, logs));
             Assert.Contains(provider.RequestMessages[2], message =>
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["content"]?.GetValue<string>()?.Contains("Cached result", StringComparison.Ordinal) == true);
@@ -1313,7 +1317,7 @@ public sealed class NativeAgentRuntimeTests
 
             Assert.True(provider.SummaryCalls > 0);
             var transcript = await File.ReadAllTextAsync(Path.Combine(temp, ".opencode", "sessions", session + ".json"));
-            Assert.Contains("Conversation summary (preserve this as context)", transcript, StringComparison.Ordinal);
+            Assert.Contains("Continuation checkpoint (internal state; preserve and follow it)", transcript, StringComparison.Ordinal);
             Assert.Contains("User message 4", transcript, StringComparison.Ordinal);
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
@@ -1631,7 +1635,7 @@ public sealed class NativeAgentRuntimeTests
             ct.ThrowIfCancellationRequested();
             var isSummary = request.Messages.Any(message =>
                 message?["content"]?.GetValue<string>()?.Contains(
-                    "Summarize the conversation history", StringComparison.Ordinal) == true);
+                    "Create a compact continuation checkpoint", StringComparison.Ordinal) == true);
             if (isSummary)
             {
                 SummaryCalls++;
@@ -1657,7 +1661,7 @@ public sealed class NativeAgentRuntimeTests
         {
             ct.ThrowIfCancellationRequested();
             var isSummary = request.Messages.Any(message =>
-                message?["content"]?.GetValue<string>()?.Contains("Summarize the conversation history", StringComparison.Ordinal) == true);
+                message?["content"]?.GetValue<string>()?.Contains("Create a compact continuation checkpoint", StringComparison.Ordinal) == true);
             if (isSummary)
             {
                 SummaryCalls++;
