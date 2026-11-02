@@ -659,9 +659,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
                     }));
 
-                    // Successful non-cacheable operations may have changed project state.
-                    // Invalidate earlier reads before asking the model for its next action.
-                    if (executedTools.Any(item => !item.IsError && !IsCacheableTool(item.Call.Name)))
+                    // Any non-cacheable operation may have changed project state, even when
+                    // it reports an error after a partial write. Invalidate earlier reads.
+                    if (executedTools.Any(item => !IsCacheableTool(item.Call.Name)))
                         toolResultCache.Clear();
 
                     // Execute calls concurrently, but append their results in the model's index
