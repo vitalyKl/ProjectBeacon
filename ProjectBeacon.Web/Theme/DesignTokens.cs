@@ -206,6 +206,7 @@ public static class DesignTokens
         ("--radius-pill", RadiusPill),
         ("--border-hairline", BorderHairline),
         ("--type-page", TypePage),
+        ("--type-lead", TypeLead),
         ("--type-section", TypeSection),
         ("--type-card", TypeCard),
         ("--type-body", TypeBody),

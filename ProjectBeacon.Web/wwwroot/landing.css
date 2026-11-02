@@ -34,7 +34,7 @@
     height: 25px;
     flex: 0 0 25px;
     border: 1px solid color-mix(in srgb, var(--color-accent-hover) 75%, transparent);
-    border-radius: 8px 8px 7px 7px;
+    border-radius: var(--radius-small) var(--radius-small) 0 0;
     background: linear-gradient(145deg, color-mix(in srgb, var(--color-accent) 28%, transparent), color-mix(in srgb, var(--color-success) 12%, transparent));
     box-shadow: 0 0 22px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
@@ -59,7 +59,7 @@
     background: var(--color-accent);
     box-shadow: 0 4px 0 color-mix(in srgb, var(--color-accent) 60%, transparent);
 }
-.landing-nav-links { display: flex; align-items: center; gap: clamp(var(--space-4), 2.5vw, 34px); margin-left: auto; }
+.landing-nav-links { display: flex; align-items: center; gap: clamp(var(--space-4), 2.5vw, var(--space-8)); margin-left: auto; }
 .landing-nav-links a {
     color: var(--color-text-secondary);
     font-size: var(--type-body);
@@ -196,7 +196,7 @@
 .landing-section-subtitle { max-width: 590px; margin-top: var(--space-3); color: var(--color-text-secondary); line-height: 1.7; }
 .landing-intro { display: grid; grid-template-columns: .9fr 1.1fr; align-items: center; gap: clamp(var(--space-8), 5vw, var(--space-16)); }
 .landing-intro .landing-section-heading { margin: 0; }
-.landing-intro .landing-section-lead { max-width: 600px; color: var(--color-text-secondary); font-size: 16px; line-height: 1.85; }
+.landing-intro .landing-section-lead { max-width: 600px; color: var(--color-text-secondary); font-size: var(--type-lead); line-height: 1.85; }
 .landing-feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .landing-feature-card { position: relative; min-height: 205px; overflow: hidden; padding: var(--space-6); border: 1px solid color-mix(in srgb, var(--color-text-secondary) 14%, transparent); border-radius: var(--radius-small); background: linear-gradient(145deg, color-mix(in srgb, var(--color-surface-1) 88%, transparent), color-mix(in srgb, var(--color-bg-app) 90%, transparent)); }
 .landing-feature-card::after { content: ""; position: absolute; right: -45px; bottom: -70px; width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 68%); pointer-events: none; }
