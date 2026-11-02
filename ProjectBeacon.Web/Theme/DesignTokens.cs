@@ -81,6 +81,7 @@ public static class DesignTokens
     public const string ShadowStrong = "rgba(0, 0, 0, .35)";
 
     public const string TypePage = "24px";
+    public const string TypeLead = "16px";
     public const string TypeSection = "15px";
     public const string TypeCard = "14px";
     public const string TypeBody = "13px";
