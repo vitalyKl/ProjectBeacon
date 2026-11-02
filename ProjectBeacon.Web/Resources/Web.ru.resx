@@ -2157,4 +2157,6 @@
 <data name="DaemonUpdateRequiresOnline" xml:space="preserve"><value>Для проверки и установки обновлений рабочая станция должна быть в сети.</value></data>
 <data name="UpdateDaemonConfirm" xml:space="preserve"><value>Установить версию клиента {0}? Демон автоматически перезапустится.</value></data>
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Обновление проверено и запланировано. Клиент рабочей станции перезапускается.</value></data>
+<data name="CheckClientUpdate" xml:space="preserve"><value>Проверить обновления демона</value></data>
+<data name="UpdateClient" xml:space="preserve"><value>Обновить демон</value></data>
 </root>
