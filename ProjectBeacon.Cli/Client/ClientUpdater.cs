@@ -22,7 +22,7 @@ public static class ClientUpdater
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         var root = document.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? throw new InvalidDataException("The latest release has no tag_name.");
-        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var parsedLatest))
+        if (!Version.TryParse(VersionPart(tag), out var parsedLatest))
             throw new InvalidDataException($"Release tag '{tag}' is not a valid version.");
         var latest = Normalize(parsedLatest);
         var current = Normalize(typeof(ClientUpdater).Assembly.GetName().Version ?? new Version(0, 0));
@@ -108,6 +108,9 @@ public static class ClientUpdater
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return http;
     }
+
+    private static string VersionPart(string tag) =>
+        tag.TrimStart('v', 'V').Split('-', '+', StringSplitOptions.RemoveEmptyEntries)[0];
 
     private static Version Normalize(Version version) =>
         new(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build), Math.Max(0, version.Revision));
