@@ -586,6 +586,8 @@
                 return;
             }
             _clientUpdateAvailable = null;
+            _clientUpdateActive = true;
+            _clientUpdatePercent = null;
             _clientUpdateMessage = "Update handed off; waiting for the daemon to restart.";
             var restarted = await WaitForUpdatedClientAsync(deviceId, previousHeartbeat, expectedVersion);
             if (restarted)
