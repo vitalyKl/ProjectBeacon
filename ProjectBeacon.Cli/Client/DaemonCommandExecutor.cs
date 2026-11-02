@@ -50,6 +50,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (false, null, CommandEnvelope.MalformedPayload);
             var kind = command.Kind;
             var payload = CommandEnvelope.NormalizedPayload(command.PayloadJson);
+            if (kind == WorkstationCommandKind.CheckClientUpdate)
+                return (true, JsonSerializer.Serialize(await ClientUpdater.CheckAsync(ct)), null);
+            if (kind == WorkstationCommandKind.UpdateClient)
+                return (true, JsonSerializer.Serialize(await ClientUpdater.DownloadAndScheduleAsync(ct)), null);
             if (CommandSandbox.IsProjectKind(kind))
             {
                 if (string.IsNullOrWhiteSpace(command.LocalRoot))
