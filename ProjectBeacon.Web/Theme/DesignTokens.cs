@@ -81,6 +81,26 @@ public static class DesignTokens
     public const string TotpQrSize = "180px";
     public const string TotpQrBackground = "#ffffff";
     public const string ReportFilterMaxWidth = "420px";
+    public const string OnAccent = "#ffffff";
+    public const string OnDanger = "#ffffff";
+    public const string OverlayDark = "rgba(5,8,12,.58)";
+    public const string OverlayLight = "rgba(243,245,247,.72)";
+
+    public static class Palette
+    {
+        public const string InfoDarken = "#1d5fa3";
+        public const string SuccessDarken = "#0f6b52";
+        public const string WarningDarken = "#8a560c";
+        public const string DangerDarken = "#b33d44";
+        public const string DarkInfoDarken = "#4d8ec9";
+        public const string DarkInfoLighten = "#9cc4ef";
+        public const string DarkSuccessDarken = "#2f9a78";
+        public const string DarkSuccessLighten = "#7fd4b6";
+        public const string DarkWarningDarken = "#b88838";
+        public const string DarkWarningLighten = "#ebc07a";
+        public const string DarkDangerDarken = "#d25d64";
+        public const string DarkDangerLighten = "#f4a0a5";
+    }
     /// <summary>
     /// Dark-theme counterparts of the same tokens.
     /// </summary>
@@ -115,6 +135,12 @@ public static class DesignTokens
         public const string InfoBackground = "#1d3248";
         public const string Sidebar = "#0a0d12";
         public const string SidebarRaised = "#11151c";
+        public const string OnAccent = "#10141c";
+        public const string OnSuccess = "#06281f";
+        public const string OnWarning = "#2a1c08";
+        public const string OnDanger = "#2a1013";
+        public const string OverlayDark = "rgba(0,0,0,.62)";
+        public const string OverlayLight = "rgba(15,18,24,.72)";
     }
 
     private static readonly (string Name, string Value)[] Custom =
@@ -161,8 +187,8 @@ public static class DesignTokens
         ("--color-accent-hover", AccentHover),
         ("--color-accent-active", AccentActive),
         ("--color-accent-soft", AccentSoft),
-        ("--color-on-accent", "#ffffff"),
-        ("--color-on-danger", "#ffffff"),
+        ("--color-on-accent", OnAccent),
+        ("--color-on-danger", OnDanger),
         ("--color-success", Success),
         ("--color-success-background", SuccessBackground),
         ("--color-warning", Warning),
@@ -218,8 +244,8 @@ public static class DesignTokens
         ("--color-accent-hover", Dark.AccentHover),
         ("--color-accent-active", Dark.AccentActive),
         ("--color-accent-soft", Dark.AccentSoft),
-        ("--color-on-accent", "#10141c"),
-        ("--color-on-danger", "#2a1013"),
+        ("--color-on-accent", Dark.OnAccent),
+        ("--color-on-danger", Dark.OnDanger),
         ("--color-success", Dark.Success),
         ("--color-success-background", Dark.SuccessBackground),
         ("--color-warning", Dark.Warning),
