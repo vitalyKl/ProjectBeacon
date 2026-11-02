@@ -52,6 +52,18 @@ public sealed class WorkstationCommandCatalogTests
     }
 
     [Fact]
+    public void ClientUpdateCommands_AreDeviceScopedAndUseSafeRetrySemantics()
+    {
+        var check = WorkstationCommandCatalog.Get(WorkstationCommandKind.CheckClientUpdate);
+        var update = WorkstationCommandCatalog.Get(WorkstationCommandKind.UpdateClient);
+
+        Assert.Equal(WorkstationCommandScope.Device, check.Scope);
+        Assert.Equal(OperationRetrySemantics.ReadOnly, check.RetrySemantics);
+        Assert.Equal(WorkstationCommandScope.Device, update.Scope);
+        Assert.Equal(OperationRetrySemantics.AtMostOnce, update.RetrySemantics);
+    }
+
+    [Fact]
     public void Catalog_RejectsUnknownCommandKinds()
     {
         var exception = Assert.Throws<InvalidOperationException>(
