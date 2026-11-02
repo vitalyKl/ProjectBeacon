@@ -79,7 +79,7 @@ else
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">@L["NoTemplateSelected"]</MudAlert>
         }
         <MudTextField @bind-Value="_templateName" Label="@L["AgentTemplateName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3">
+        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["AgentModeHint"]">
             <MudSelectItem Value="AgentRunMode.Solo">@L["AgentModeSolo"]</MudSelectItem>
             <MudSelectItem Value="AgentRunMode.Pipeline">@L["AgentModePipeline"]</MudSelectItem>
         </MudSelect>
