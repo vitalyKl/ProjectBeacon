@@ -34,6 +34,37 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public void RunShellIsAvailableToInteractiveChatAndRequiresExplicitActorGrantInPipelines()
+    {
+        AgentHarnessAuthorization Authorization(string? role, IReadOnlyList<string>? tools = null)
+            => new(
+                "https://beacon.test",
+                "ephemeral-token",
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                1,
+                Path.GetTempPath(),
+                DateTime.UtcNow.AddMinutes(2),
+                PipelineRole: role,
+                AllowedMcpTools: tools);
+
+        Assert.True(NativeAgentRuntime.IsRunShellAuthorized(Authorization(null)));
+        Assert.True(NativeAgentRuntime.IsRunShellAuthorized(Authorization("Actor", ["run_shell"])));
+        Assert.False(NativeAgentRuntime.IsRunShellAuthorized(Authorization("Actor", ["read_file"])));
+        Assert.False(NativeAgentRuntime.IsRunShellAuthorized(Authorization("Planner", ["run_shell"])));
+        Assert.False(NativeAgentRuntime.IsRunShellAuthorized(Authorization("Review", ["run_shell"])));
+    }
+
+    [Fact]
+    public void PlanModeBlocksShellExecutionEvenWhenModelRequestsIt()
+    {
+        Assert.True(NativeAgentRuntime.IsPlanModeRunShellBlocked("plan", "run_shell"));
+        Assert.False(NativeAgentRuntime.IsPlanModeRunShellBlocked("build", "run_shell"));
+        Assert.False(NativeAgentRuntime.IsPlanModeRunShellBlocked("plan", "read_file"));
+    }
+
+    [Fact]
     public void McpChildReceivesExplicitSubtaskScopeFromHarnessAuthorization()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-native-scope-" + Guid.NewGuid().ToString("N"));

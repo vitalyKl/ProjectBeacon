@@ -352,6 +352,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 && IsRunCommandAuthorized(commandAuth))
                 mcpTools.Add(NativeCommandRunner.ToolDefinition());
 
+            if (controls?.HarnessAuthorization is { } shellAuthorization
+                && IsRunShellAuthorized(shellAuthorization))
+                mcpTools.Add(NativeShellRunner.ToolDefinition());
+
             // Plan mode is read-only by construction. The model cannot invoke mutating MCP
             // tools even if the general chat server advertises them.
             if (string.Equals(agentMode, "plan", StringComparison.Ordinal))
@@ -510,7 +514,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         string toolResult;
                         try
                         {
-                            if (IsPlanModeRunCommandBlocked(agentMode, call.Name))
+                            if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
+                                || IsPlanModeRunShellBlocked(agentMode, call.Name))
                             {
                                 isError = true;
                                 toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
@@ -545,6 +550,24 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                         commandAuthorization.WorkingDirectory,
                                         parsedArguments!,
                                         commandPrefixes,
+                                        ct);
+                                    isError = result.IsError;
+                                    toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                }
+                            }
+                            else if (string.Equals(call.Name, "run_shell", StringComparison.Ordinal))
+                            {
+                                if (controls?.HarnessAuthorization is not { } shellAuthorization
+                                    || !IsRunShellAuthorized(shellAuthorization))
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: run_shell is not authorized for this execution role.";
+                                }
+                                else
+                                {
+                                    var result = await NativeShellRunner.ExecuteAsync(
+                                        shellAuthorization.WorkingDirectory,
+                                        parsedArguments!,
                                         ct);
                                     isError = result.IsError;
                                     toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
@@ -984,6 +1007,21 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             string.Equals(tool, "run_command", StringComparison.OrdinalIgnoreCase)
             || string.Equals(tool, "beacon_run_command", StringComparison.OrdinalIgnoreCase)) == true;
     }
+
+    internal static bool IsRunShellAuthorized(AgentHarnessAuthorization authorization)
+    {
+        // Interactive chat can use the workstation shell. Pipeline execution requires an
+        // explicit subtask grant and is restricted to Actor sessions.
+        if (string.IsNullOrWhiteSpace(authorization.PipelineRole))
+            return true;
+        return string.Equals(authorization.PipelineRole, "Actor", StringComparison.OrdinalIgnoreCase)
+            && authorization.AllowedMcpTools?.Any(tool =>
+                string.Equals(tool, "run_shell", StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    internal static bool IsPlanModeRunShellBlocked(string agentMode, string? toolName)
+        => string.Equals(agentMode, "plan", StringComparison.Ordinal)
+            && string.Equals(toolName, "run_shell", StringComparison.Ordinal);
 
     private async Task<ResolvedProvider> ResolveProviderAsync(string model, CancellationToken ct)
     {
