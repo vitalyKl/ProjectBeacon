@@ -19,7 +19,7 @@ public static partial class McpStdioServer
             Props(("subtaskId", "string", true), ("diffRef", "string", true), ("summary", "string", true))),
         Tool("task_review_verdict", "Record a review verdict (approve, reopen_subtask) on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("verdict", "string", true), ("note", "string", true), ("subtaskId", "string", false))),
-        Tool("task_pipeline_status", "Show the pipeline state (subtasks, sessions, verdicts) of the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
+        Tool("task_pipeline_status", "Show the pipeline state (subtasks, sessions, verdicts) of the task linked to this MCP session. A task created with create_task is linked automatically; otherwise start the chat from an existing task context.",
             Props())
     ];
 
@@ -107,7 +107,7 @@ public static partial class McpStdioServer
         if (parsed is null)
         {
             taskId = Guid.Empty;
-            error = "BEACON_TASK_ID is not set. Set it to the task GUID for this MCP session.";
+            error = "No task is linked to this chat session yet. Create a task with create_task first, or open the chat from an existing task.";
             return false;
         }
 
