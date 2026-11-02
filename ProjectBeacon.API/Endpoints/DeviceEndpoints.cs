@@ -122,7 +122,7 @@ public static class DeviceEndpoints
         var result = await handler.HandleAsync(
             new ReportCommandProgressCommand(new ReportCommandProgressRequest(
                 id, actor.DeviceId!.Value, body.Generation, body.ProgressJson)), ct);
-        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> IssueHarnessToken(
