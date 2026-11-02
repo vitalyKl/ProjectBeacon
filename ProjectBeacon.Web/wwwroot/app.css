@@ -2276,7 +2276,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-chat-sessions {
-    width: 260px;
+    width: clamp(300px, 17vw, 440px);
     flex: 0 0 auto;
     overflow-y: auto;
     padding: var(--space-2);
@@ -3190,4 +3190,22 @@ body:has(.beacon-theme-dark) .mud-main-content {
         min-height: 0;
         max-height: none;
     }
+}
+
+
+/* Wide desktop chat workspace: use ultrawide space instead of centering a narrow
+   1680px content column, and let the session rail scale with the viewport. */
+@media (min-width: 1920px) {
+    .beacon-main:has(.beacon-chat-page) .beacon-content-max {
+        max-width: min(96vw, 2880px);
+    }
+
+    .beacon-chat-sessions {
+        width: clamp(340px, 16vw, 480px);
+    }
+}
+
+.beacon-rename-chat-dialog {
+    width: 100%;
+    min-width: 0;
 }
