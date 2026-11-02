@@ -332,6 +332,62 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
     }
 }
 /// <summary>
+/// Stores the latest progress snapshot for an active client-update attempt. The guarded update
+/// cannot overwrite a terminal result or progress from a newer claim generation.
+/// </summary>
+public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgressCommand, Result<WorkstationCommandDto>>
+{
+    private const int MaxProgressJsonLength = 8 * 1024;
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public ReportCommandProgressHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<WorkstationCommandDto>> HandleAsync(
+        ReportCommandProgressCommand command, CancellationToken ct = default)
+    {
+        var request = command.Request;
+        if (request.Generation < 1 || string.IsNullOrWhiteSpace(request.ProgressJson)
+            || request.ProgressJson.Length > MaxProgressJsonLength)
+            return Result.Failure<WorkstationCommandDto>("Invalid command progress payload.");
+
+        try
+        {
+            using var progress = JsonDocument.Parse(request.ProgressJson);
+            if (progress.RootElement.ValueKind != JsonValueKind.Object)
+                return Result.Failure<WorkstationCommandDto>("Command progress must be a JSON object.");
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<WorkstationCommandDto>("Command progress must be valid JSON.");
+        }
+
+        await using var db = _dbFactory.CreateDbContext();
+        var row = await db.WorkstationCommands.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
+        if (row is null)
+            return Result.Failure<WorkstationCommandDto>("Command not found.");
+        if (row.Kind != WorkstationCommandKind.UpdateClient)
+            return Result.Failure<WorkstationCommandDto>("Progress reporting is only supported for client updates.", ErrorKind.Conflict);
+        if (row.Status != WorkstationCommandStatus.Running || row.Attempts + 1 != request.Generation)
+            return Result.Failure<WorkstationCommandDto>("Command is no longer running in this generation.", ErrorKind.Conflict);
+
+        var updated = await db.WorkstationCommands
+            .Where(c => c.Id == request.CommandId
+                && c.DeviceId == request.DeviceId
+                && c.Kind == WorkstationCommandKind.UpdateClient
+                && c.Status == WorkstationCommandStatus.Running
+                && c.Attempts + 1 == request.Generation)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.ResultJson, request.ProgressJson), ct);
+        if (updated != 1)
+            return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
+
+        var current = await db.WorkstationCommands.AsNoTracking()
+            .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
+        return Result.Ok(EnqueueCommandHandler.MapCommand(current));
+    }
+}
+
+/// <summary>
 /// Lists recent commands for a device the user owns.
 /// </summary>
 public class ListCommandsHandler : ICommandHandler<ListCommandsCommand, Result<IList<WorkstationCommandDto>>>
