@@ -72,6 +72,15 @@ public static class DesignTokens
     public const string TypeMetric = "23px";
 
     public const string BoardCardPad = "10px";
+    public const string AppbarHeight = "80px";
+    public const string DrawerWidthLeft = "236px";
+    public const string ShellGutter = "26px";
+    public const string ShellContentTop = "22px";
+    public const string ShellContentBottom = "42px";
+    public const string ContentMaxWidth = "1680px";
+    public const string TotpQrSize = "180px";
+    public const string TotpQrBackground = "#ffffff";
+    public const string ReportFilterMaxWidth = "420px";
     /// <summary>
     /// Dark-theme counterparts of the same tokens.
     /// </summary>
@@ -111,6 +120,15 @@ public static class DesignTokens
     private static readonly (string Name, string Value)[] Custom =
     [
         ("--beacon-board-card-pad", BoardCardPad),
+        ("--appbar-height", AppbarHeight),
+        ("--drawer-width", DrawerWidthLeft),
+        ("--shell-gutter", ShellGutter),
+        ("--shell-content-top", ShellContentTop),
+        ("--shell-content-bottom", ShellContentBottom),
+        ("--content-max-width", ContentMaxWidth),
+        ("--totp-qr-size", TotpQrSize),
+        ("--totp-qr-background", TotpQrBackground),
+        ("--report-filter-max-width", ReportFilterMaxWidth),
         ("--font-sans", FontSans),
         ("--font-mono", FontMono),
         ("--color-bg-app", BgApp),

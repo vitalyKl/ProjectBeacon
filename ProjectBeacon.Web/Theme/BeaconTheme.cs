@@ -13,8 +13,8 @@ public static class BeaconTheme
         LayoutProperties = new LayoutProperties
         {
             DefaultBorderRadius = DesignTokens.RadiusSmall,
-            AppbarHeight = "80px",
-            DrawerWidthLeft = "236px",
+            AppbarHeight = DesignTokens.AppbarHeight,
+            DrawerWidthLeft = DesignTokens.DrawerWidthLeft,
         },
         ZIndex = new ZIndex
         {

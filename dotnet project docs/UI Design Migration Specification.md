@@ -48,7 +48,7 @@ Shared primitives already in the tree: `PageHeader`, `StatusChip` with `ChipPale
 
 Chrome strings go through `IStringLocalizer<Web>`. Culture is the cookie set by `GET /culture`.
 
-Drawer width is `BeaconTheme.LayoutProperties.DrawerWidthLeft` = `168px`. Do not set a second width on `MudDrawer`.
+Drawer width is `BeaconTheme.LayoutProperties.DrawerWidthLeft` = `236px`. Do not set a second width on `MudDrawer`.
 
 ---
 
@@ -219,11 +219,11 @@ Approximate proportions:
 └───────────────────────┘
 ```
 
-Desktop width is `168px`, set by `BeaconTheme.LayoutProperties.DrawerWidthLeft`. Do not also set `MudDrawer.Width`.
+Desktop width is `236px`, set by `BeaconTheme.LayoutProperties.DrawerWidthLeft`. Do not also set `MudDrawer.Width`.
 
 Sidebar padding in the mockup was `1rem 0.75rem`. The shipped header uses `--space-4` / `--space-3`; nav padding uses `--space-1` / `--space-3`.
 
-Below `Breakpoint.Md` the drawer collapses. Do not require a permanent 168px column on tablet or mobile.
+Below `Breakpoint.Md` the drawer collapses. Do not require a permanent 236px column on tablet or mobile.
 
 ---
 
@@ -867,7 +867,7 @@ Every border is `0.5px solid` — a deliberate hairline weight, never the browse
 
 ## Sidebar
 
-- Width: `168px` (`BeaconTheme.DrawerWidthLeft`). Background: surface 1.
+- Width: `236px` (`BeaconTheme.DrawerWidthLeft`). Background: surface 1.
 - Padding: `1rem 0.75rem` (16px / 12px).
 - Nav items: `7px 8px` padding, `8px` icon-to-label gap, `16px` icon, `13px` label text, small radius tier.
 - Active nav item: accent background, bright text, accent icon.
