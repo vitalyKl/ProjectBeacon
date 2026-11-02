@@ -157,9 +157,11 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME" \
+              release-assets/beacon-client-*.zip release-assets/SHA256SUMS.txt
+          else
+            gh release upload "$GITHUB_REF_NAME" release-assets/beacon-client-*.zip release-assets/SHA256SUMS.txt --clobber
           fi
-          gh release upload "$GITHUB_REF_NAME" release-assets/beacon-client-*.zip release-assets/SHA256SUMS.txt --clobber
 
   image:
     needs: tests
