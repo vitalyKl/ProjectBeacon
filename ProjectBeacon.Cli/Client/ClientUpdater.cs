@@ -44,7 +44,7 @@ public static class ClientUpdater
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         var root = document.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? throw new InvalidDataException("The latest release has no tag_name.");
-        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var parsedLatest))
+        if (!Version.TryParse(VersionPart(tag), out var parsedLatest))
             throw new InvalidDataException($"Release tag '{tag}' is not a valid version.");
         var latest = Normalize(parsedLatest);
 
