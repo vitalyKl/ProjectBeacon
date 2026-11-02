@@ -22,9 +22,10 @@ public static class ClientUpdater
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         var root = document.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? throw new InvalidDataException("The latest release has no tag_name.");
-        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latest))
+        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var parsedLatest))
             throw new InvalidDataException($"Release tag '{tag}' is not a valid version.");
-        var current = typeof(ClientUpdater).Assembly.GetName().Version ?? new Version(0, 0);
+        var latest = Normalize(parsedLatest);
+        var current = Normalize(typeof(ClientUpdater).Assembly.GetName().Version ?? new Version(0, 0));
         var rid = GetRuntimeIdentifier();
         var releaseUrl = root.TryGetProperty("html_url", out var url) ? url.GetString() ?? "" : "";
         return new UpdateInfo(current.ToString(4), latest.ToString(4), latest > current, rid, releaseUrl);
@@ -38,10 +39,11 @@ public static class ClientUpdater
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         var root = document.RootElement;
         var tag = root.GetProperty("tag_name").GetString() ?? throw new InvalidDataException("The latest release has no tag_name.");
-        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latest))
+        if (!Version.TryParse(tag.TrimStart('v', 'V'), out var parsedLatest))
             throw new InvalidDataException($"Release tag '{tag}' is not a valid version.");
+        var latest = Normalize(parsedLatest);
 
-        var current = typeof(ClientUpdater).Assembly.GetName().Version ?? new Version(0, 0);
+        var current = Normalize(typeof(ClientUpdater).Assembly.GetName().Version ?? new Version(0, 0));
         var rid = GetRuntimeIdentifier();
         var releaseUrl = root.TryGetProperty("html_url", out var url) ? url.GetString() ?? "" : "";
         var info = new UpdateInfo(current.ToString(4), latest.ToString(4), latest > current, rid, releaseUrl);
@@ -100,6 +102,9 @@ public static class ClientUpdater
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return http;
     }
+
+    private static Version Normalize(Version version) =>
+        new(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build), Math.Max(0, version.Revision));
 
     private static string GetRuntimeIdentifier()
     {
