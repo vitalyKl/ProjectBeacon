@@ -1377,13 +1377,8 @@ public sealed class NativeAgentRuntimeTests
 
                 var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
                 Assert.True(status!.Ended);
-                if (i < 4)
-                    Assert.Equal("stop", status.Finish);
-                else
-                {
-                    Assert.Equal("error", status.Finish);
-                    Assert.Contains("empty summary", status.Error!, StringComparison.Ordinal);
-                }
+                Assert.Equal("stop", status.Finish);
+                Assert.Null(status.Error);
             }
 
             Assert.Equal(1, provider.SummaryCalls);
@@ -1394,9 +1389,12 @@ public sealed class NativeAgentRuntimeTests
                 Assert.Contains(messages, message =>
                     message?["role"]?.GetValue<string>() == "user"
                     && message["content"]?.GetValue<string>() == $"User message {i}");
-            Assert.DoesNotContain(messages, message =>
+            Assert.Contains(messages, message =>
                 message?["content"]?.GetValue<string>()?.Contains(
-                    "Conversation summary (preserve this as context)", StringComparison.Ordinal) == true);
+                    "Continuation checkpoint", StringComparison.Ordinal) == true
+                && message["content"]?.GetValue<string>()?.Contains("fallback", StringComparison.Ordinal) == true);
+            foreach (var i in Enumerable.Range(1, 4))
+                Assert.Contains($"User message {i}", transcript.ToJsonString(), StringComparison.Ordinal);
         }
         finally
         {
