@@ -824,7 +824,6 @@ public sealed class NativeAgentRuntimeTests
             llama,
             new StubLlamaSync(),
             () => WorkstationSettings.Load(settingsPath),
-            log: logs.Add,
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
         try
@@ -1143,6 +1142,7 @@ public sealed class NativeAgentRuntimeTests
             llama,
             new StubLlamaSync(),
             () => WorkstationSettings.Load(settingsPath),
+            log: logs.Add,
             providerFactory: (_, _, _) => provider,
             mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
         try
