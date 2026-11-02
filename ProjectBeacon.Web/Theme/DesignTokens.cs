@@ -31,6 +31,20 @@ public static class DesignTokens
     public const string DangerBackground = "#fdecee";
     public const string Info = "#2877c7";
     public const string InfoBackground = "#e7f1fb";
+    public const string OnAccent = "#ffffff";
+    public const string OnDanger = "#ffffff";
+    public const string OverlayLight = "rgba(243,245,247,.72)";
+    public const string PrimaryLighten = "#8883ff";
+    public const string InfoDarken = "#1d5fa3";
+    public const string InfoLighten = "#70abe6";
+    public const string SuccessDarken = "#0f6b52";
+    public const string SuccessLighten = "#52c69f";
+    public const string WarningDarken = "#8a560c";
+    public const string WarningLighten = "#e0a64c";
+    public const string DangerDarken = "#b33d44";
+    public const string DangerLighten = "#ef747b";
+    public const string AppbarHeight = "72px";
+    public const string DrawerWidth = "168px";
 
     public const string Sidebar = "#10141c";
     public const string SidebarRaised = "#171c26";
@@ -62,8 +76,12 @@ public static class DesignTokens
     public const string RadiusPill = "9999px";
 
     public const string BorderHairline = "1px";
+    public const string QrBackground = "#ffffff";
+    public const string OverlayBackdrop = "rgba(5, 8, 12, .58)";
+    public const string ShadowStrong = "rgba(0, 0, 0, .35)";
 
     public const string TypePage = "24px";
+    public const string TypeLead = "16px";
     public const string TypeSection = "15px";
     public const string TypeCard = "14px";
     public const string TypeBody = "13px";
@@ -104,6 +122,21 @@ public static class DesignTokens
         public const string DangerBackground = "#442329";
         public const string Info = "#70abe6";
         public const string InfoBackground = "#1d3248";
+        public const string OnAccent = "#10141c";
+        public const string OnDanger = "#2a1013";
+        public const string OnSuccess = "#06281f";
+        public const string OnWarning = "#2a1c08";
+        public const string OverlayBackdrop = "rgba(0, 0, 0, .62)";
+        public const string OverlayLight = "rgba(15,18,24,.72)";
+        public const string ShadowStrong = "rgba(0, 0, 0, .42)";
+        public const string InfoDarken = "#4d8ec9";
+        public const string InfoLighten = "#9cc4ef";
+        public const string SuccessDarken = "#2f9a78";
+        public const string SuccessLighten = "#7fd4b6";
+        public const string WarningDarken = "#b88838";
+        public const string WarningLighten = "#ebc07a";
+        public const string DangerDarken = "#d25d64";
+        public const string DangerLighten = "#f4a0a5";
         public const string Sidebar = "#0a0d12";
         public const string SidebarRaised = "#11151c";
     }
@@ -142,9 +175,15 @@ public static class DesignTokens
         ("--color-accent", Accent),
         ("--color-accent-hover", AccentHover),
         ("--color-accent-active", AccentActive),
+        ("--color-accent-active", AccentActive),
         ("--color-accent-soft", AccentSoft),
-        ("--color-on-accent", "#ffffff"),
-        ("--color-on-danger", "#ffffff"),
+        ("--color-on-accent", OnAccent),
+        ("--color-on-danger", OnDanger),
+        ("--color-qr-background", QrBackground),
+        ("--color-overlay-backdrop", OverlayBackdrop),
+        ("--color-shadow-strong", ShadowStrong),
+        ("--layout-appbar-height", AppbarHeight),
+        ("--layout-drawer-width", DrawerWidth),
         ("--color-success", Success),
         ("--color-success-background", SuccessBackground),
         ("--color-warning", Warning),
@@ -169,6 +208,7 @@ public static class DesignTokens
         ("--radius-pill", RadiusPill),
         ("--border-hairline", BorderHairline),
         ("--type-page", TypePage),
+        ("--type-lead", TypeLead),
         ("--type-section", TypeSection),
         ("--type-card", TypeCard),
         ("--type-body", TypeBody),
@@ -199,9 +239,10 @@ public static class DesignTokens
         ("--color-accent", Dark.Accent),
         ("--color-accent-hover", Dark.AccentHover),
         ("--color-accent-active", Dark.AccentActive),
+        ("--color-accent-active", Dark.AccentActive),
         ("--color-accent-soft", Dark.AccentSoft),
-        ("--color-on-accent", "#10141c"),
-        ("--color-on-danger", "#2a1013"),
+        ("--color-on-accent", Dark.OnAccent),
+        ("--color-on-danger", Dark.OnDanger),
         ("--color-success", Dark.Success),
         ("--color-success-background", Dark.SuccessBackground),
         ("--color-warning", Dark.Warning),
@@ -210,6 +251,8 @@ public static class DesignTokens
         ("--color-danger-background", Dark.DangerBackground),
         ("--color-info", Dark.Info),
         ("--color-info-background", Dark.InfoBackground),
+        ("--color-overlay-backdrop", Dark.OverlayBackdrop),
+        ("--color-shadow-strong", Dark.ShadowStrong),
     ];
 
     public static readonly string RootCss = BuildRoot();
@@ -218,6 +261,7 @@ public static class DesignTokens
     {
         var light = string.Join('\n', Custom.Select(t => $"    {t.Name}: {t.Value};"));
         var dark = string.Join('\n', DarkCustom.Select(t => $"    {t.Name}: {t.Value};"));
-        return ":root {\n" + light + "\n}\n\nbody:has(.beacon-theme-dark) {\n" + dark + "\n    background: var(--color-bg-app);\n    color: var(--color-text-primary);\n}";
+        const string darkScope = "html.beacon-theme-dark,\nbody:has(.beacon-theme-dark),\nhtml:has(.landing-shell),\nbody:has(.landing-shell)";
+        return ":root {\n" + light + "\n}\n\n" + darkScope + " {\n" + dark + "\n    background: var(--color-bg-app);\n    color: var(--color-text-primary);\n}";
     }
 }
