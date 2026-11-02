@@ -215,7 +215,7 @@ public static class ClientUpdater
         return $"{value:0.0} {units[unit]}";
     }
 
-    private static HttpClient CreateHttpClient()    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateHttpClient()
     {
         var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("ProjectBeacon-Client-Updater");
