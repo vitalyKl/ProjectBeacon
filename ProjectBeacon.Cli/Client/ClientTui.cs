@@ -5,7 +5,7 @@ using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 /// <summary>
-/// First-run wizard and the live dashboard. Keys are S settings, P probe, R reload, U unload, A autostart, L log, O open the web UI, Q quit.
+/// First-run wizard and live dashboard. D checks for daemon updates.
 /// </summary>
 public static class ClientTui
 {
@@ -84,7 +84,7 @@ public static class ClientTui
                 ConsoleKey? key;
                 try
                 {
-                    key = await LiveUntilKeyAsync(daemon, linked.Token);
+                    key = await LiveUntilKeyAsync(daemon, run, linked.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -92,7 +92,8 @@ public static class ClientTui
                 }
                 if (key is null or ConsoleKey.Q or ConsoleKey.Escape)
                     break;
-                await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token);
+                if (await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token))
+                    break;
             }
         }
         finally
@@ -249,8 +250,9 @@ public static class ClientTui
         }
     }
 
-    private static async Task HandleKeyAsync(ConsoleKey key, WorkstationDaemon daemon, ClientStore store, string? storePath, CancellationToken ct)
+    private static async Task<bool> HandleKeyAsync(ConsoleKey key, WorkstationDaemon daemon, ClientStore store, string? storePath, CancellationToken ct)
     {
+        var stopAfterUpdate = false;
         switch (key)
         {
             case ConsoleKey.S:
@@ -290,10 +292,43 @@ public static class ClientTui
             case ConsoleKey.O:
                 OpenBrowser(store.Url);
                 break;
+            case ConsoleKey.D:
+                try
+                {
+                    var update = await ClientUpdater.CheckAsync(ct);
+                    AnsiConsole.MarkupLine($"[grey]Client {Markup.Escape(update.CurrentVersion)} · latest {Markup.Escape(update.LatestVersion)}[/]");
+                    if (!update.UpdateAvailable)
+                    {
+                        AnsiConsole.MarkupLine("[green]The client is up to date.[/]");
+                        await Task.Delay(900, ct);
+                        break;
+                    }
+                    if (AnsiConsole.Confirm($"Install client {Markup.Escape(update.LatestVersion)} and restart?", true))
+                    {
+                        var scheduled = await ClientUpdater.DownloadAndScheduleAsync(ct);
+                        if (scheduled.UpdateAvailable)
+                        {
+                            AnsiConsole.MarkupLine("[green]Update downloaded and verified. Restarting the workstation client…[/]");
+                            stopAfterUpdate = true;
+                        }
+                        else
+                        {
+                            AnsiConsole.MarkupLine("[green]The client is already up to date.[/]");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[red]Update failed: {Markup.Escape(ex.Message)}[/]");
+                    AnsiConsole.MarkupLine("[grey]Press any key…[/]");
+                    Console.ReadKey(true);
+                }
+                break;
         }
+        return stopAfterUpdate;
     }
 
-    private static async Task<ConsoleKey?> LiveUntilKeyAsync(WorkstationDaemon daemon, CancellationToken ct)
+    private static async Task<ConsoleKey?> LiveUntilKeyAsync(WorkstationDaemon daemon, Task daemonRun, CancellationToken ct)
     {
         ConsoleKey? pressed = null;
         await AnsiConsole.Live(BuildView(daemon.Snapshot))
@@ -301,7 +336,7 @@ public static class ClientTui
             .Overflow(VerticalOverflow.Ellipsis)
             .StartAsync(async ctx =>
             {
-                while (!ct.IsCancellationRequested)
+                while (!ct.IsCancellationRequested && !daemonRun.IsCompleted)
                 {
                     ctx.UpdateTarget(BuildView(daemon.Snapshot));
                     if (Console.KeyAvailable)
@@ -346,7 +381,7 @@ public static class ClientTui
             grid.AddRow("Error", $"[red]{Markup.Escape(s.Error)}[/]");
 
         var help = new Markup(
-            "[grey][[S]]ettings  [[P]]robe  [[R]]eload  [[U]]nload  [[A]]utostart  [[L]]og  [[O]]pen  [[Q]]uit[/]");
+            "[grey][[S]]ettings  [[P]]robe  [[R]]eload  [[U]]nload  [[A]]utostart  [[L]]og  [[O]]pen  [[D]]aemon update  [[Q]]uit[/]");
         return new Rows(
             new Panel(grid) { Header = new PanelHeader("Beacon client"), Border = BoxBorder.Rounded },
             help);

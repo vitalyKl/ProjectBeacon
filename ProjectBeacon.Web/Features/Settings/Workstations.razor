@@ -149,6 +149,38 @@
 
 @if (_wsDeviceId is { } cmdDeviceId)
 {
+    <MudText Typo="Typo.h6" Class="mb-3">@L["DaemonUpdates"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        <MudText Typo="Typo.body2">@L["DaemonUpdateDescription"]</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-3">
+            <MudText Typo="Typo.body2">@L["DaemonInstalledVersion"]: @_clientCurrentVersion</MudText>
+            <MudText Typo="Typo.body2">@L["DaemonLatestVersion"]: @_clientLatestVersion</MudText>
+            @if (_clientUpdateAvailable == true)
+            {
+                <StatusChip Color="Color.Warning" Label="@L["DaemonUpdateAvailable"]" />
+            }
+            else if (_clientUpdateAvailable == false)
+            {
+                <StatusChip Color="Color.Success" Label="@L["DaemonUpToDate"]" />
+            }
+        </MudStack>
+        <MudStack Row="true" Spacing="2" Class="mt-3">
+            <MudButton Variant="Variant.Outlined" OnClick="CheckClientUpdate" Disabled="_busy || !WorkstationOnline">
+                @L["CheckDaemonUpdates"]
+            </MudButton>
+            @if (_clientUpdateAvailable == true)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="UpdateClient" Disabled="_busy || !WorkstationOnline">
+                    @L["UpdateDaemonNow"]
+                </MudButton>
+            }
+        </MudStack>
+        @if (!WorkstationOnline)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["DaemonUpdateRequiresOnline"]</MudText>
+        }
+        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
+    </MudPaper>
     <MudText Typo="Typo.h6" Class="mb-3">@L["Commands"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <MudTable Items="_commands" Dense="true" Hover="true">
@@ -198,6 +230,9 @@
     private bool? _probeAgentRuntimeHealthy;
     private string? _probeAgentRuntimeError;
     private List<WorkstationCommandDto> _commands = [];
+    private string _clientCurrentVersion = "-";
+    private string _clientLatestVersion = "-";
+    private bool? _clientUpdateAvailable;
     private string? _lifecycle;
     private string? _lifecycleDetail;
     private string? _lifecycleState;
@@ -258,6 +293,8 @@
     private Task OnWorkstationDeviceChanged(Guid? id)
     {
         _wsDeviceId = id;
+        _clientCurrentVersion = _clientLatestVersion = "-";
+        _clientUpdateAvailable = null;
         if (id is { } deviceId)
         {
             LoadWorkstation(deviceId);
@@ -469,10 +506,97 @@
         }
     }
 
-    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
+    private async Task CheckClientUpdate()
+    {
+        if (_wsDeviceId is not { } deviceId || _userId == Guid.Empty || _busy) return;
+        _busy = true;
+        try
+        {
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.CheckClientUpdate, "{}", null)));
+            if (!queued.Success)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var finished = await WaitAsync(queued.Value!.Id);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            using var result = JsonDocument.Parse(string.IsNullOrWhiteSpace(finished.ResultJson) ? "{}" : finished.ResultJson);
+            var root = result.RootElement;
+            _clientCurrentVersion = JsonValue(root, "CurrentVersion", "currentVersion");
+            _clientLatestVersion = JsonValue(root, "LatestVersion", "latestVersion");
+            _clientUpdateAvailable = JsonBoolean(root, "UpdateAvailable", "updateAvailable");
+            Snackbar.Add(_clientUpdateAvailable == true ? L["DaemonUpdateAvailable"].Value : L["DaemonUpToDate"].Value,
+                _clientUpdateAvailable == true ? Severity.Info : Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UpdateClient()
+    {
+        if (_wsDeviceId is not { } deviceId || _userId == Guid.Empty || _busy || _clientUpdateAvailable != true) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value, string.Format(L["UpdateDaemonConfirm"].Value, _clientLatestVersion),
+            yesText: L["UpdateDaemonNow"].Value, cancelText: L["Cancel"].Value);
+        if (confirmed != true) return;
+        _busy = true;
+        try
+        {
+            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
+                new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.UpdateClient, "{}", null)));
+            if (!queued.Success)
+            {
+                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            var finished = await WaitAsync(queued.Value!.Id, 660);
+            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            _clientUpdateAvailable = null;
+            Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string JsonValue(JsonElement root, string primary, string fallback) =>
+        root.TryGetProperty(primary, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? "-"
+            : root.TryGetProperty(fallback, out value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? "-"
+                : "-";
+
+    private static bool? JsonBoolean(JsonElement root, string primary, string fallback) =>
+        root.TryGetProperty(primary, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : root.TryGetProperty(fallback, out value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? value.GetBoolean()
+                : null;
+
+    private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId, int maxAttempts = 80)
     {
         SetLifecycle(WorkstationCommandStatus.Pending, null);
-        for (var i = 0; i < 80; i++)
+        for (var i = 0; i < maxAttempts; i++)
         {
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
             if (!got.Success)

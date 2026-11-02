@@ -12,11 +12,16 @@ public static class ClientHost
     public static async Task<int> RunAsync(string[] args, CancellationToken ct = default)
     {
         var opts = ClientOptions.Parse(args);
-        var store = ClientStore.Load(opts.StorePath);
+        var storePath = string.IsNullOrWhiteSpace(opts.StorePath) ? null : Path.GetFullPath(opts.StorePath);
+        if (storePath is not null)
+            Environment.SetEnvironmentVariable("BEACON_CLIENT_STORE", storePath);
+        var store = ClientStore.Load(storePath);
         if (!string.IsNullOrWhiteSpace(opts.Url))
             store.Url = opts.Url.TrimEnd('/');
         if (!string.IsNullOrWhiteSpace(opts.Token))
             store.Token = opts.Token;
+        if (!string.IsNullOrWhiteSpace(opts.Url) || !string.IsNullOrWhiteSpace(opts.Token))
+            store.Save(storePath);
 
         if (opts.Enroll)
         {
@@ -41,10 +46,10 @@ public static class ClientHost
         var interactive = !opts.Headless && ClientTui.IsInteractive;
         if (ClientStore.NeedsWizard(store) && interactive)
         {
-            var wizard = await ClientTui.RunWizardAsync(store, opts.StorePath, ct);
+            var wizard = await ClientTui.RunWizardAsync(store, storePath, ct);
             if (wizard != 0)
                 return wizard;
-            store = ClientStore.Load(opts.StorePath);
+            store = ClientStore.Load(storePath);
         }
 
         if (ClientStore.NeedsWizard(store))
@@ -83,7 +88,7 @@ public static class ClientHost
                 openCode);
 
             if (interactive)
-                return await ClientTui.RunDashboardAsync(daemon, store, linked.Token, opts.StorePath);
+                return await ClientTui.RunDashboardAsync(daemon, store, linked.Token, storePath);
 
             Console.Error.WriteLine($"beacon client connected to {store.Url}");
             await daemon.RunAsync(linked.Token);

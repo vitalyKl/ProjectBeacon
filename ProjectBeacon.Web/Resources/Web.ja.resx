@@ -2138,4 +2138,43 @@ orthstar</value>
   <data name="TaskKindModelsScopeHint" xml:space="preserve">
     <value>これらはタスクパイプラインで使用するモデルの設定です。設定されたタスクフェーズでは、意思決定モデルと Worker モデルの既定値、およびフェーズ別モデルがワークステーションのロール設定より優先されます。</value>
   </data>
+  <data name="CheckClientUpdate" xml:space="preserve">
+    <value>デーモンの更新を確認</value>
+  </data>
+  <data name="CheckDaemonUpdates" xml:space="preserve">
+    <value>更新を確認</value>
+  </data>
+  <data name="DaemonInstalledVersion" xml:space="preserve">
+    <value>インストール済みバージョン</value>
+  </data>
+  <data name="DaemonLatestVersion" xml:space="preserve">
+    <value>最新バージョン</value>
+  </data>
+  <data name="DaemonUpdateAvailable" xml:space="preserve">
+    <value>更新を利用できます</value>
+  </data>
+  <data name="DaemonUpdateDescription" xml:space="preserve">
+    <value>ProjectBeacon ワークステーションクライアントの最新バージョンを確認してインストールします。</value>
+  </data>
+  <data name="DaemonUpdateRequiresOnline" xml:space="preserve">
+    <value>更新の確認またはインストールには、ワークステーションがオンラインである必要があります。</value>
+  </data>
+  <data name="DaemonUpdates" xml:space="preserve">
+    <value>デーモンの更新</value>
+  </data>
+  <data name="DaemonUpdateScheduled" xml:space="preserve">
+    <value>更新を確認して適用を予約しました。クライアントを再起動しています。</value>
+  </data>
+  <data name="DaemonUpToDate" xml:space="preserve">
+    <value>最新バージョンです</value>
+  </data>
+  <data name="UpdateClient" xml:space="preserve">
+    <value>デーモンを更新</value>
+  </data>
+  <data name="UpdateDaemonConfirm" xml:space="preserve">
+    <value>このワークステーションの Beacon クライアントを更新しますか？</value>
+  </data>
+  <data name="UpdateDaemonNow" xml:space="preserve">
+    <value>今すぐ更新</value>
+  </data>
 </root>

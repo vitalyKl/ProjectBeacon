@@ -2138,4 +2138,43 @@ orthstar</value>
   <data name="TaskKindModelsScopeHint" xml:space="preserve">
     <value>这些是任务流水线的模型设置。对于已配置的任务阶段，决策模型、执行模型默认值以及阶段专用模型的优先级高于工作站角色绑定。</value>
   </data>
+  <data name="CheckClientUpdate" xml:space="preserve">
+    <value>检查守护进程更新</value>
+  </data>
+  <data name="CheckDaemonUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="DaemonInstalledVersion" xml:space="preserve">
+    <value>已安装版本</value>
+  </data>
+  <data name="DaemonLatestVersion" xml:space="preserve">
+    <value>最新版本</value>
+  </data>
+  <data name="DaemonUpdateAvailable" xml:space="preserve">
+    <value>有可用更新</value>
+  </data>
+  <data name="DaemonUpdateDescription" xml:space="preserve">
+    <value>检查并安装 ProjectBeacon 工作站客户端的最新版本，无需手动替换安装目录。</value>
+  </data>
+  <data name="DaemonUpdateRequiresOnline" xml:space="preserve">
+    <value>检查或安装更新时，工作站必须处于在线状态。</value>
+  </data>
+  <data name="DaemonUpdates" xml:space="preserve">
+    <value>守护进程更新</value>
+  </data>
+  <data name="DaemonUpdateScheduled" xml:space="preserve">
+    <value>更新已验证并安排。客户端正在重新启动。</value>
+  </data>
+  <data name="DaemonUpToDate" xml:space="preserve">
+    <value>已是最新版本</value>
+  </data>
+  <data name="UpdateClient" xml:space="preserve">
+    <value>更新守护进程</value>
+  </data>
+  <data name="UpdateDaemonConfirm" xml:space="preserve">
+    <value>要更新此工作站上的 Beacon 客户端吗？</value>
+  </data>
+  <data name="UpdateDaemonNow" xml:space="preserve">
+    <value>立即更新</value>
+  </data>
 </root>

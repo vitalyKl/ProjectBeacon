@@ -62,7 +62,9 @@ public static class WorkstationCommandCatalog
             Project(WorkstationCommandKind.RunEvalTurn, "eval.run-turn", "Run one evaluation turn.", OperationRetrySemantics.AtMostOnce, "{evalRunId:guid}"),
             Device(WorkstationCommandKind.ReconcileDesired, "device.reconcile", "Reconcile workstation desired state.", OperationRetrySemantics.Reconciliation, "{revision:integer,...}"),
             Project(WorkstationCommandKind.RunReviewCheck, "review.run-check", "Run the trusted project review check.", OperationRetrySemantics.AtMostOnce, "{reviewRunId:guid}"),
-            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}")
+            Project(WorkstationCommandKind.RunPipelineSession, "pipeline.run-session", "Run one pipeline agent session on the workstation.", OperationRetrySemantics.AtMostOnce, "{projectId:guid,taskId:guid,subtaskId?:guid,sessionId:guid,role:string,title?:string,prompt:string,model:string,contextLimit?:integer,reasoningEffort?:string}"),
+            Device(WorkstationCommandKind.CheckClientUpdate, "device.check-client-update", "Check the latest signed-off workstation client release.", OperationRetrySemantics.ReadOnly, "{}"),
+            Device(WorkstationCommandKind.UpdateClient, "device.update-client", "Download, verify, and install the latest workstation client release.", OperationRetrySemantics.AtMostOnce, "{}")
         };
 
         var byKind = descriptors.ToDictionary(descriptor => descriptor.Kind);

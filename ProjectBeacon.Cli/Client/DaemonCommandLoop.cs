@@ -162,6 +162,8 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             Error = ok ? null : error
         });
         _state.Log($"{command.Kind} {(ok ? "ok" : error)}");
+        if (ok && command.Kind == WorkstationCommandKind.UpdateClient)
+            _state.RequestStop();
     }
 
     /// <summary>
