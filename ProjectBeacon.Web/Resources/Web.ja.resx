@@ -2129,4 +2129,16 @@ orthstar</value>
 <data name="LandingCtaBody" xml:space="preserve"><value>自分の ProjectBeacon ホストを用意し、ワークステーションを接続してください。</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>AI開発のためのローカルファーストなコントロールプレーン</value></data>
 
+  <data name="AgentModeHint" xml:space="preserve">
+    <value>ワークステーションで対話チャットに使用する OpenCode プロファイルを設定します。タスクパイプラインの既定モデルは「タスク種別」で個別に設定します。</value>
+  </data>
+  <data name="AgentTemplateModelsScopeHint" xml:space="preserve">
+    <value>これらはワークステーション全体に適用されるロール別の既定値と OpenCode 設定です。タスクの該当フェーズに専用モデルが設定されていない場合にのみ、パイプラインセッションでロール設定が使用されます。</value>
+  </data>
+  <data name="PipelineStartHint" xml:space="preserve">
+    <value>Planner を起動してタスクを分析し、実行計画を準備します。</value>
+  </data>
+  <data name="TaskKindModelsScopeHint" xml:space="preserve">
+    <value>これらはタスクパイプラインで使用するモデルの設定です。設定されたタスクフェーズでは、意思決定モデルと Worker モデルの既定値、およびフェーズ別モデルがワークステーションのロール設定より優先されます。</value>
+  </data>
 </root>
