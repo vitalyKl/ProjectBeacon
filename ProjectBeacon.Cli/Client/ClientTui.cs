@@ -305,9 +305,16 @@ public static class ClientTui
                     }
                     if (AnsiConsole.Confirm($"Install client {Markup.Escape(update.LatestVersion)} and restart?", true))
                     {
-                        await ClientUpdater.DownloadAndScheduleAsync(ct);
-                        AnsiConsole.MarkupLine("[green]Update downloaded and verified. Restarting the workstation client…[/]");
-                        stopAfterUpdate = true;
+                        var scheduled = await ClientUpdater.DownloadAndScheduleAsync(ct);
+                        if (scheduled.UpdateAvailable)
+                        {
+                            AnsiConsole.MarkupLine("[green]Update downloaded and verified. Restarting the workstation client…[/]");
+                            stopAfterUpdate = true;
+                        }
+                        else
+                        {
+                            AnsiConsole.MarkupLine("[green]The client is already up to date.[/]");
+                        }
                     }
                 }
                 catch (Exception ex)
