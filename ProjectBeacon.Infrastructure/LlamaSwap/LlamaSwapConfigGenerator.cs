@@ -71,16 +71,18 @@ public static class LlamaSwapConfigGenerator
 
     public static string BuildCommand(LlamaSwapModelSpec model)
     {
-        var command = EnsureJinjaForLlamaServer(model.LaunchCommand.Trim());
+        var extraFlags = model.ExtraFlags
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => f.Trim())
+            .ToArray();
+        var command = EnsureJinjaForLlamaServer(model.LaunchCommand.Trim(), extraFlags);
         var parts = new List<string> { command };
         if (model.ContextSize > 0 &&
             !model.LaunchCommand.Contains("--ctx-size", StringComparison.OrdinalIgnoreCase))
         {
             parts.Add($"--ctx-size {model.ContextSize}");
         }
-        parts.AddRange(model.ExtraFlags
-            .Where(f => !string.IsNullOrWhiteSpace(f))
-            .Select(f => f.Trim()));
+        parts.AddRange(extraFlags);
         return string.Join(" ", parts);
     }
 
@@ -106,9 +108,12 @@ public static class LlamaSwapConfigGenerator
         return JinjaFlag.IsMatch(value) && !NoJinjaFlag.IsMatch(value);
     }
 
-    private static string EnsureJinjaForLlamaServer(string command)
+    private static string EnsureJinjaForLlamaServer(string command, IReadOnlyList<string> extraFlags)
     {
-        if (!IsLlamaServerCommand(command) || HasJinjaEnabled(command) || NoJinjaFlag.IsMatch(command))
+        var jinjaInExtraFlags = extraFlags.Any(flag => JinjaFlag.IsMatch(flag));
+        var noJinjaInExtraFlags = extraFlags.Any(flag => NoJinjaFlag.IsMatch(flag));
+        if (!IsLlamaServerCommand(command) || HasJinjaEnabled(command) || jinjaInExtraFlags
+            || NoJinjaFlag.IsMatch(command) || noJinjaInExtraFlags)
             return command;
 
         // Place the flag immediately after the executable so it precedes options such as
