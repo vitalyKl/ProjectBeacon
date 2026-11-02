@@ -21,6 +21,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
     private readonly IDaemonOpenCodeGate _gate;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonChatSession _chat;
+    private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
 
     public DaemonCommandExecutor(
@@ -28,6 +29,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         IDaemonOpenCodeGate gate,
         IDaemonLlamaSync llamaSync,
         IDaemonChatSession chat,
+        IDaemonRuntimeState state,
         DaemonTiming timing)
     {
         _http = deps.Http;
@@ -36,6 +38,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         _gate = gate;
         _llamaSync = llamaSync;
         _chat = chat;
+        _state = state;
         _timing = timing;
     }
 
