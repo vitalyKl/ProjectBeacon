@@ -1161,7 +1161,7 @@ public sealed class NativeAgentRuntimeTests
             Assert.Null(status.Error);
             Assert.Equal(3, provider.RequestCount);
             Assert.Equal(1, mcp.CallCount);
-            Assert.Contains(provider.RequestMessages[1], message =>
+            Assert.Contains(provider.RequestMessages[2], message =>
                 message?["role"]?.GetValue<string>() == "tool"
                 && message["content"]?.GetValue<string>()?.Contains("Cached result", StringComparison.Ordinal) == true);
         }
