@@ -58,7 +58,9 @@ else
         <div class="beacon-page-actions">
             @if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
             }
             else
             {
@@ -249,7 +251,7 @@ else
         <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Pipeline"]">
-        <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" />
+        <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnStart="OnStartPipeline" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Discussion"]">
         <TaskDiscussionPanel Task="_task" OnSaved="Reload" />
