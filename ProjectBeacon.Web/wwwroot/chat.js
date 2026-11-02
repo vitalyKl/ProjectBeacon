@@ -3,19 +3,16 @@
   function syncViewportHeight() {
     var viewport = window.visualViewport;
     var height = viewport ? viewport.height : window.innerHeight;
-    var offsetTop = viewport ? viewport.offsetTop : 0;
     document.documentElement.style.setProperty("--beacon-visual-viewport-height", height + "px");
-    document.documentElement.style.setProperty("--beacon-visual-viewport-top", offsetTop + "px");
   }
 
   syncViewportHeight();
   window.addEventListener("resize", syncViewportHeight, { passive: true });
   window.addEventListener("orientationchange", syncViewportHeight, { passive: true });
   if (window.visualViewport) {
-    // Mobile browsers resize and sometimes pan the visual viewport when the software
-    // keyboard opens. Listen to both events so the chat transcript/composer can relayout.
+    // Mobile browsers resize the visual viewport when the software keyboard opens.
+    // Track the resize without listening to high-frequency scroll events.
     window.visualViewport.addEventListener("resize", syncViewportHeight, { passive: true });
-    window.visualViewport.addEventListener("scroll", syncViewportHeight, { passive: true });
   }
 })();
 window.BeaconChat = {
