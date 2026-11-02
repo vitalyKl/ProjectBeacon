@@ -389,10 +389,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             string? lastToolCallFingerprint = null;
             var consecutiveToolCallFingerprintCount = 0;
             var nextToolOrdinal = 0;
+            var stepOrdinal = 0;
             var toolResultCache = new ConcurrentDictionary<string, McpToolResult>(StringComparer.Ordinal);
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
+                // Every provider request is a distinct assistant message in the visible transcript.
+                // Reusing one id across tool cycles merges the final answer into text emitted before
+                // the tool call, which makes the UI display the content in the wrong order.
+                var stepMessageId = $"{messageId}:step:{stepOrdinal}";
                 var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
                 var request = new ChatProviderRequest(
                     resolved.Model,
@@ -423,14 +428,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     emittedContent = true;
                                     stepText.Append(item.Text);
                                     responseText.Append(item.Text);
-                                    await AppendDeltaAsync(session, turnNumber, messageId, "text", item.Text, ct);
+                                    await AppendDeltaAsync(session, turnNumber, stepMessageId, "text", item.Text, ct);
                                     break;
 
                                 case ChatProviderEventKind.ReasoningDelta when !string.IsNullOrEmpty(item.Text):
                                     firstTokenAt = firstTokenAt == 0 ? Stopwatch.GetTimestamp() : firstTokenAt;
                                     stepEmittedContent = true;
                                     emittedContent = true;
-                                    await AppendDeltaAsync(session, turnNumber, messageId, "reasoning", item.Text, ct);
+                                    await AppendDeltaAsync(session, turnNumber, stepMessageId, "reasoning", item.Text, ct);
                                     break;
 
                                 case ChatProviderEventKind.Usage:
@@ -707,6 +712,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     }
 
                     finish = "tool_calls";
+                    stepOrdinal++;
                     continue;
                 }
 
