@@ -180,6 +180,14 @@
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["DaemonUpdateRequiresOnline"]</MudText>
         }
         <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
+        @if (_clientUpdateActive || _clientUpdateMessage is not null)
+        {
+            <MudProgressLinear Color="Color.Primary" Value="@(_clientUpdatePercent ?? 0d)"
+                               Indeterminate="@(_clientUpdateActive && _clientUpdatePercent is null)" Class="mt-2" />
+            <MudText Typo="Typo.caption" Class="mt-1">
+                @_clientUpdateMessage @(_clientUpdatePercent is { } percent ? $"· {percent:0}%" : string.Empty)
+            </MudText>
+        }
     </MudPaper>
     <MudText Typo="Typo.h6" Class="mb-3">@L["Commands"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
@@ -233,6 +241,9 @@
     private string _clientCurrentVersion = "-";
     private string _clientLatestVersion = "-";
     private bool? _clientUpdateAvailable;
+    private bool _clientUpdateActive;
+    private double? _clientUpdatePercent;
+    private string? _clientUpdateMessage;
     private string? _lifecycle;
     private string? _lifecycleDetail;
     private string? _lifecycleState;
@@ -295,6 +306,9 @@
         _wsDeviceId = id;
         _clientCurrentVersion = _clientLatestVersion = "-";
         _clientUpdateAvailable = null;
+        _clientUpdateActive = false;
+        _clientUpdatePercent = null;
+        _clientUpdateMessage = null;
         if (id is { } deviceId)
         {
             LoadWorkstation(deviceId);
@@ -551,6 +565,9 @@
             yesText: L["UpdateDaemonNow"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true) return;
         _busy = true;
+        _clientUpdateActive = true;
+        _clientUpdatePercent = null;
+        _clientUpdateMessage = L["CommandQueued"].Value;
         try
         {
             var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
@@ -575,6 +592,7 @@
         }
         finally
         {
+            _clientUpdateActive = false;
             _busy = false;
         }
     }
@@ -605,6 +623,8 @@
                 return null;
             }
             SetLifecycle(got.Value!.Status, got.Value.Error);
+            ApplyClientUpdateProgress(got.Value);
+            await InvokeAsync(StateHasChanged);
             if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
             await Task.Delay(500);
@@ -612,7 +632,37 @@
         _lifecycleState = "TimedOut";
         _lifecycle = L["CommandTimedOut"].Value;
         _lifecycleDetail = null;
+        _clientUpdateActive = false;
         return null;
+    }
+
+    private void ApplyClientUpdateProgress(WorkstationCommandDto command)
+    {
+        if (command.Kind != WorkstationCommandKind.UpdateClient)
+            return;
+
+        _clientUpdateActive = command.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running;
+        if (string.IsNullOrWhiteSpace(command.ResultJson))
+            return;
+
+        try
+        {
+            using var document = JsonDocument.Parse(command.ResultJson);
+            var root = document.RootElement;
+            var message = JsonValue(root, "Message", "message");
+            if (message != "-")
+                _clientUpdateMessage = message;
+            if (root.TryGetProperty("Percent", out var percent)
+                || root.TryGetProperty("percent", out percent))
+            {
+                if (percent.ValueKind == JsonValueKind.Number)
+                    _clientUpdatePercent = Math.Clamp(percent.GetDouble(), 0d, 100d);
+            }
+        }
+        catch (JsonException)
+        {
+            // Completion replaces the progress snapshot with the final UpdateInfo object.
+        }
     }
 
     private void SetLifecycle(WorkstationCommandStatus status, string? detail)
