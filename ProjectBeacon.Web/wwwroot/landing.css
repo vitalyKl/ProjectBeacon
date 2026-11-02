@@ -11,7 +11,7 @@
     top: 0;
     z-index: 20;
     min-height: 72px;
-    padding: 0 clamp(20px, 5vw, var(--space-20));
+    padding: 0 clamp(var(--space-5), 5vw, var(--space-20));
     background: color-mix(in srgb, var(--color-sidebar) 86%, transparent);
     border-bottom: 1px solid color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
     backdrop-filter: blur(18px);
@@ -59,7 +59,7 @@
     background: var(--color-accent);
     box-shadow: 0 4px 0 color-mix(in srgb, var(--color-accent) 60%, transparent);
 }
-.landing-nav-links { display: flex; align-items: center; gap: clamp(16px, 2.5vw, var(--space-8)); margin-left: auto; }
+.landing-nav-links { display: flex; align-items: center; gap: clamp(var(--space-4), 2.5vw, var(--space-8)); margin-left: auto; }
 .landing-nav-links a {
     color: var(--color-text-secondary);
     font-size: 13px;
@@ -70,14 +70,14 @@
 .landing-nav-links a:hover { color: var(--color-text-primary); }
 .landing-nav-actions { display: flex; align-items: center; gap: var(--space-2); margin-left: 28px; }
 .landing-nav .mud-button-root { color: var(--color-text-primary); }
-.landing-main { max-width: none; padding: 0 clamp(20px, 7vw, var(--space-28)) var(--space-18); }
+.landing-main { max-width: none; padding: 0 clamp(var(--space-5), 7vw, var(--space-28)) var(--space-18); }
 .landing-page { max-width: 1240px; margin: 0 auto; }
 .landing-hero {
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
     align-items: center;
-    gap: clamp(40px, 6vw, var(--space-20));
+    gap: clamp(var(--space-10), 6vw, var(--space-20));
     min-height: 640px;
     padding: var(--space-20) 0 var(--space-16);
 }
@@ -145,7 +145,7 @@
 .landing-window-status { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; color: var(--color-text-secondary); font-family: var(--font-sans); font-size: 10px; letter-spacing: 0; }
 .landing-window-status i, .landing-window-sidebar-foot i, .landing-runtime-live { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 9px color-mix(in srgb, var(--color-success) 60%, transparent); }
 .landing-window-body { display: grid; grid-template-columns: 142px minmax(0, 1fr); min-height: 340px; }
-.landing-window-sidebar { display: flex; flex-direction: column; gap: var(--space-1); padding: 16px 10px; border-right: 1px solid color-mix(in srgb, var(--color-text-secondary) 10%, transparent); background: var(--color-sidebar-raised); }
+.landing-window-sidebar { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-4) 10px; border-right: 1px solid color-mix(in srgb, var(--color-text-secondary) 10%, transparent); background: var(--color-sidebar-raised); }
 .landing-window-brand { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 17px 5px; color: var(--color-text-primary); font-size: 12px; font-weight: 700; }
 .landing-window-brand .landing-brand-symbol { width: 19px; height: 19px; flex-basis: 19px; border-radius: var(--radius-small); transform: scale(.78); transform-origin: left center; margin-right: -4px; }
 .landing-window-nav { display: flex; align-items: center; gap: var(--space-2); padding: 8px 9px; border-radius: var(--radius-control); color: var(--color-text-muted); font-size: 10px; white-space: nowrap; }
@@ -234,7 +234,7 @@
 .landing-final-cta .landing-section-kicker { margin-bottom: var(--space-3); }
 .landing-final-cta .mud-typography-body1 { margin-top: var(--space-3); color: var(--color-text-secondary); font-size: 13px; }
 .landing-final-cta .landing-hero-actions { flex: 0 0 auto; margin: 0; }
-.landing-footer { padding: var(--space-6) clamp(20px, 5vw, var(--space-20)); border-top: 1px solid color-mix(in srgb, var(--color-text-secondary) 13%, transparent); background: var(--color-sidebar); }
+.landing-footer { padding: var(--space-6) clamp(var(--space-5), 5vw, var(--space-20)); border-top: 1px solid color-mix(in srgb, var(--color-text-secondary) 13%, transparent); background: var(--color-sidebar); }
 .landing-footer-brand, .landing-footer-meta { display: flex; align-items: center; gap: var(--space-3); }
 .landing-footer-brand { color: var(--color-text-secondary); font-size: 11px; }
 .landing-footer-brand strong { color: var(--color-text-primary); font-size: 12px; }
