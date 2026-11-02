@@ -59,4 +59,4 @@ See `dotnet project docs/mcp-host.md`. Hosted clone, outbound WSS, HTTP MCP, and
 
 ## Kubernetes
 
-Blue-green for the Web host: `deploy/README.md`. Tag `v*` builds `ghcr.io/<org>/projectbeacon-web` with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. `beacon client` is not auto-updated.
+Blue-green for the Web host: `deploy/README.md`. Tag `v*` builds `ghcr.io/<org>/projectbeacon-web` with `BEACON_VERSION` from the tag (`v1.2.3` → `1.2.3`) and `BEACON_GIT_SHA`. The workstation client is published as self-contained release assets for Windows, Linux, and macOS. Run `beacon update` from the installed client, press `D` in its TUI, or use **Settings → Workstations → Daemon updates** in Web.
