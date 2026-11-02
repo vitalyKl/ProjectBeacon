@@ -26,7 +26,7 @@ The implementation must be adapted to the existing project's architecture and te
 
 ## 1.1 Shipped shell
 
-`MainLayout` is the authenticated shell: `MudAppBar`, `MudDrawer` (`DrawerVariant.Responsive`, `Breakpoint.Md`, `Elevation="0"`, width `236px`), `ProjectSwitcher`, page title, command palette, theme toggle, version footer, `LanguageSwitcher`, page body, and `ChatDock`.
+`MainLayout` is the authenticated shell: `MudAppBar`, `MudDrawer` (`DrawerVariant.Responsive`, `Breakpoint.Md`, `Elevation="0"`, width `168px`), `ProjectSwitcher`, page title, command palette, theme toggle, version footer, `LanguageSwitcher`, page body, and `ChatDock`.
 
 Drawer groups:
 
