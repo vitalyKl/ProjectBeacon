@@ -273,6 +273,41 @@ public sealed class ClientLlamaSwapOwnSwapperTests
         Assert.NotNull(ll.Status);
     }
 
+
+    [Fact]
+    public async Task NativeToolCallingWarning_AutoJinjaCommandDoesNotWarn()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m qwen.gguf", 0, 300, [])]);
+        await using var ll = new ClientLlamaSwap
+        {
+            ConfigFile = TempCfg,
+            UseOwnSwapper = true,
+            SkipRealProcess = true
+        };
+
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.Null(ll.NativeToolCallingWarning());
+    }
+
+    [Fact]
+    public async Task NativeToolCallingWarning_ExplicitNoJinjaIsReported()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server --no-jinja -m qwen.gguf", 0, 300, [])]);
+        await using var ll = new ClientLlamaSwap
+        {
+            ConfigFile = TempCfg,
+            UseOwnSwapper = true,
+            SkipRealProcess = true
+        };
+
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.Contains("qwen", ll.NativeToolCallingWarning());
+    }
+
     private static string TwoModelYaml() => LlamaSwapConfigGenerator.Generate([
         new LlamaSwapModelSpec("alpha", "llama-server -m a.gguf", 0, 300, []),
         new LlamaSwapModelSpec("beta", "llama-server -m b.gguf", 0, 300, [])]);
