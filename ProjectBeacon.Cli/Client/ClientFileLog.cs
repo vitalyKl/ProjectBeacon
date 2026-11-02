@@ -7,8 +7,25 @@ internal sealed class ClientFileLog
 {
     private const int MaxBytes = 2 * 1024 * 1024;
     private static readonly string LogDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ProjectBeacon");
+    internal static string LogPath => Path.Combine(LogDir, "client.log");
+
     private readonly object _gate = new();
-    private readonly string _path = Path.Combine(LogDir, "client.log");
+    private readonly string _path = LogPath;
+
+    internal static IReadOnlyList<string> ReadRecent(int maxLines = 200)
+    {
+        if (maxLines <= 0)
+            return [];
+
+        try
+        {
+            return File.Exists(LogPath) ? File.ReadLines(LogPath).TakeLast(maxLines).ToArray() : [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
     private bool _failureReported;
 
     public void Write(string message)
