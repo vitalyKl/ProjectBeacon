@@ -169,7 +169,15 @@
 
     private string PartClass => string.Equals(Part.Role, "user", StringComparison.OrdinalIgnoreCase)
         ? "pa-3 mb-2 beacon-chat-user"
-        : "pa-3 mb-2 beacon-chat-subtle";
+        : IsTool
+            ? "pa-3 mb-2 beacon-chat-tool"
+            : IsReasoning
+                ? "pa-3 mb-2 beacon-chat-reasoning"
+                : IsQuestion
+                    ? "pa-3 mb-2 beacon-chat-question-part"
+                    : IsAssistant
+                        ? "pa-3 mb-2 beacon-chat-assistant"
+                        : "pa-3 mb-2 beacon-chat-subtle";
 
     private string ToolTitle
     {
