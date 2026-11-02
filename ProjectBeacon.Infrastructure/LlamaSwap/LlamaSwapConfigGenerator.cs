@@ -75,7 +75,18 @@ public static class LlamaSwapConfigGenerator
             .Where(f => !string.IsNullOrWhiteSpace(f))
             .Select(f => f.Trim())
             .ToArray();
-        var command = EnsureJinjaForLlamaServer(model.LaunchCommand.Trim(), extraFlags);
+        var command = model.LaunchCommand.Trim();
+        if (IsLlamaServerCommand(command)
+            && !NoJinjaFlag.IsMatch(command)
+            && !extraFlags.Any(flag => NoJinjaFlag.IsMatch(flag)))
+        {
+            // Jinja must precede --chat-template. Normalize a user-supplied extra flag
+            // into the command head, or add it automatically when it is absent.
+            if (!HasJinjaEnabled(command))
+                command = AddJinjaAfterExecutable(command);
+            extraFlags = extraFlags.Where(flag => !JinjaFlag.IsMatch(flag)).ToArray();
+        }
+
         var parts = new List<string> { command };
         if (model.ContextSize > 0 &&
             !model.LaunchCommand.Contains("--ctx-size", StringComparison.OrdinalIgnoreCase))
@@ -108,16 +119,8 @@ public static class LlamaSwapConfigGenerator
         return JinjaFlag.IsMatch(value) && !NoJinjaFlag.IsMatch(value);
     }
 
-    private static string EnsureJinjaForLlamaServer(string command, IReadOnlyList<string> extraFlags)
+    private static string AddJinjaAfterExecutable(string command)
     {
-        var jinjaInExtraFlags = extraFlags.Any(flag => JinjaFlag.IsMatch(flag));
-        var noJinjaInExtraFlags = extraFlags.Any(flag => NoJinjaFlag.IsMatch(flag));
-        if (!IsLlamaServerCommand(command) || HasJinjaEnabled(command) || jinjaInExtraFlags
-            || NoJinjaFlag.IsMatch(command) || noJinjaInExtraFlags)
-            return command;
-
-        // Place the flag immediately after the executable so it precedes options such as
-        // --chat-template, for which llama.cpp requires Jinja to be enabled first.
         var token = ExecutableToken.Match(command);
         return token.Success ? command.Insert(token.Index + token.Length, " --jinja") : command;
     }
