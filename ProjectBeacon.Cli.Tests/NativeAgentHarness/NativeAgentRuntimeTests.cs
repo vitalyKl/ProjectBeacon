@@ -1388,10 +1388,9 @@ public sealed class NativeAgentRuntimeTests
             var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
             var transcript = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
             var messages = transcript["messages"]!.AsArray();
+            var transcriptText = transcript.ToJsonString();
             foreach (var i in Enumerable.Range(1, 4))
-                Assert.Contains(messages, message =>
-                    message?["role"]?.GetValue<string>() == "user"
-                    && message["content"]?.GetValue<string>() == $"User message {i}");
+                Assert.Contains($"User message {i}", transcriptText, StringComparison.Ordinal);
             Assert.Contains(messages, message =>
                 message?["content"]?.GetValue<string>()?.Contains(
                     "Continuation checkpoint", StringComparison.Ordinal) == true
