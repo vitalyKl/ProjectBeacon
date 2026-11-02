@@ -102,6 +102,15 @@ public sealed class ChatPaneTests : BUnitRenderBase
     }
 
     [Fact]
+    public void Follow_InitialLoadStartsAtLatestPart()
+    {
+        Bunit.JSInterop.SetupVoid("BeaconChat.jumpToLatest", _ => true);
+        Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Parts, new List<ChatPartDto> { Part(1, "user", "older"), Part(2, "assistant", "latest") }));
+        Assert.Contains(Bunit.JSInterop.Invocations, invocation => invocation.Identifier == "BeaconChat.jumpToLatest");
+    }
+
+    [Fact]
     public async Task Follow_ScrolledAway_ShowsJumpButton()
     {
         Bunit.JSInterop.Setup<bool>("BeaconChat.followLatest", _ => true).SetResult(false);
