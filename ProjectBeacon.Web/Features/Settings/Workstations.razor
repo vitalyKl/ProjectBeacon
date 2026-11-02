@@ -560,7 +560,7 @@
                 Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            var finished = await WaitAsync(queued.Value!.Id, 360);
+            var finished = await WaitAsync(queued.Value!.Id, 660);
             if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
             {
                 Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
