@@ -72,7 +72,9 @@ public sealed class ChatPaneTests : BUnitRenderBase
 
         Assert.Contains("beacon-chat-model-bar", cut.Markup);
         Assert.Contains("beacon-chat-config-button", cut.Markup);
-        Assert.Contains("Act", cut.Find(".beacon-chat-config-button").TextContent);
+        Assert.Contains("beacon-chat-mode-toggle", cut.Markup);
+        Assert.Contains("beacon-chat-send-mobile", cut.Markup);
+        Assert.Contains("Act", cut.Find(".beacon-chat-mode-toggle").TextContent);
         Assert.Contains("qwen3.8-Q3-medium", cut.Markup);
         Assert.Contains("beacon-chat-model-progress", cut.Markup);
         Assert.Contains("Switching model: qwen3.8-Q3-medium", cut.Markup);
