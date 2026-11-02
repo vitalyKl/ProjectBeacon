@@ -124,7 +124,7 @@
     <value>Шаблоны</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Профили workstation/OpenCode для интерактивного чата. Режим «Одна модель» использует одну модель, «По ролям» назначает Planner, Actor и Review. Эти настройки не выбирают модели для pipeline отдельных задач.</value>
+    <value>Профиль рабочей станции: задаёт режим OpenCode и модели ролей Planner/Actor/Review по умолчанию. Эти модели используются как резервные, если для фазы задачи не назначена отдельная модель; настройки типа задачи ниже имеют приоритет.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>Новый шаблон</value>
@@ -244,7 +244,7 @@
     <value>Виды задач</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>Шаблоны рабочего процесса копируются в каждую новую задачу. Модель решений используется по умолчанию для обычных фаз, модель работников — для фаз с параллельными подзадачами; модель фазы может переопределить оба значения. Эти настройки управляют pipeline задач, а не интерактивным чатом.</value>
+    <value>Шаблоны рабочего процесса копируются в каждую новую задачу. Модели решений и работников задают значения по умолчанию для обычных фаз и фаз с параллельным выполнением; модель конкретной фазы имеет приоритет. Модели фаз приоритетнее привязок ролей рабочей станции.</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>Новый вид</value>
@@ -2147,6 +2147,6 @@
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
-<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки по умолчанию для чата на рабочей станции: одна модель либо модели ролей Planner/Actor/Review.</value></data>
-<data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это настройки pipeline задач: модели принятия решений и выполнения, а также необязательные переопределения для отдельных фаз. Они не меняют настройки интерактивного чата.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки рабочей станции и модели ролей по умолчанию. В pipeline они используются только если для соответствующей фазы задачи не задана отдельная модель.</value></data>
+<data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это выбор моделей для pipeline задач. Значения по умолчанию для решений/работников и модели отдельных фаз имеют приоритет над привязками ролей рабочей станции.</value></data>
 </root>

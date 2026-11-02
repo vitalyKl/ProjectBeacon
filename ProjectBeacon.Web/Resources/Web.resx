@@ -167,7 +167,7 @@
     <value>Templates</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Workstation/OpenCode profiles for interactive chat. Single model uses one model; multi-role assigns Planner, Actor and Review. These settings do not choose the models for each task pipeline.</value>
+    <value>Workstation profile: sets the OpenCode mode and default Planner/Actor/Review role bindings. Those role models are fallbacks when a task has no phase-specific model configuration; task kinds below take precedence for configured phases.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>New template</value>
@@ -287,7 +287,7 @@
     <value>Task kinds</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>Task workflow templates copied onto each new task. The decision model is the default for regular phases; the worker model is used for fan-out phases; a phase can override either. These choices control task pipelines, not interactive chat.</value>
+    <value>Task workflow templates copied onto each new task. Decision and worker models provide defaults for regular and fan-out phases; a phase-level model overrides them. Phase models take precedence over workstation role bindings.</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>New kind</value>
@@ -2355,6 +2355,6 @@ No Beacon-hosted coding agent.</value>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first control plane for AI-assisted development</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Starts the Planner to analyse this task and prepare an execution plan.</value></data>
-<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation chat defaults: one model for single-model chat, or Planner/Actor/Review role models for multi-role chat.</value></data>
-<data name="TaskKindModelsScopeHint" xml:space="preserve"><value>These are task-pipeline defaults: decision and worker models, with optional per-phase overrides. They do not change interactive chat settings.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation-level role defaults and OpenCode settings. Pipeline sessions use the role bindings only when the task has no model configured for its semantic phase.</value></data>
+<data name="TaskKindModelsScopeHint" xml:space="preserve"><value>These are task-pipeline model choices. Decision/worker defaults and phase-level overrides take precedence over workstation role bindings for the configured task phases.</value></data>
 </root>
