@@ -211,7 +211,8 @@ public static class ClientUpdater
                 nohup "$target" client --headless >/dev/null 2>&1 &
                 new_pid=$!
                 sleep 3
-                if ! kill -0 "$new_pid" 2>/dev/null; then
+                new_state="$(ps -p "$new_pid" -o stat= 2>/dev/null || true)"
+                if ! kill -0 "$new_pid" 2>/dev/null || [ -z "$new_state" ] || [ "${new_state#Z}" != "$new_state" ]; then
                     mv "$backup" "$target"
                     nohup "$target" client --headless >/dev/null 2>&1 &
                     exit 1
