@@ -1687,7 +1687,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-project-switcher:hover:not(:disabled) {
-    border-color: rgba(255, 255, 255, .18);
+    border-color: color-mix(in srgb, var(--color-sidebar-text-strong) 18%, transparent);
 }
 
 .beacon-project-switcher:focus-visible {
@@ -1702,7 +1702,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     place-items: center;
     border-radius: 7px;
     background: var(--color-accent);
-    color: #fff;
+    color: var(--color-on-accent);
     font-weight: 700;
 }
 
@@ -1894,7 +1894,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     display: flex;
     justify-content: center;
     padding-top: 12vh;
-    background: rgba(5, 8, 12, .58);
+    background: color-mix(in srgb, var(--color-sidebar) 58%, transparent);
 }
 
 .beacon-command {
@@ -1906,7 +1906,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     border: var(--border-hairline) solid var(--color-border-strong);
     border-radius: var(--radius-panel);
     background: var(--color-surface-2);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .35);
+    box-shadow: 0 30px 80px color-mix(in srgb, var(--color-sidebar) 35%, transparent);
 }
 
 .beacon-command-input {
