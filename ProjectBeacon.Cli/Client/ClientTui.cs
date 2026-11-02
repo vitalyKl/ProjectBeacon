@@ -5,7 +5,7 @@ using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 /// <summary>
-/// First-run wizard and the live dashboard. Keys are S settings, P probe, R reload, U unload, A autostart, L log, O open the web UI, Q quit.
+/// First-run wizard and live dashboard. D checks for daemon updates.
 /// </summary>
 public static class ClientTui
 {
@@ -84,7 +84,7 @@ public static class ClientTui
                 ConsoleKey? key;
                 try
                 {
-                    key = await LiveUntilKeyAsync(daemon, linked.Token);
+                    key = await LiveUntilKeyAsync(daemon, run, linked.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -321,7 +321,7 @@ public static class ClientTui
         return stopAfterUpdate;
     }
 
-    private static async Task<ConsoleKey?> LiveUntilKeyAsync(WorkstationDaemon daemon, CancellationToken ct)
+    private static async Task<ConsoleKey?> LiveUntilKeyAsync(WorkstationDaemon daemon, Task daemonRun, CancellationToken ct)
     {
         ConsoleKey? pressed = null;
         await AnsiConsole.Live(BuildView(daemon.Snapshot))
@@ -329,7 +329,7 @@ public static class ClientTui
             .Overflow(VerticalOverflow.Ellipsis)
             .StartAsync(async ctx =>
             {
-                while (!ct.IsCancellationRequested)
+                while (!ct.IsCancellationRequested && !daemonRun.IsCompleted)
                 {
                     ctx.UpdateTarget(BuildView(daemon.Snapshot));
                     if (Console.KeyAvailable)
