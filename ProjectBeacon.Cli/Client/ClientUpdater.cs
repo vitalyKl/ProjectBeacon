@@ -28,7 +28,12 @@ public static class ClientUpdater
         var current = Normalize(typeof(ClientUpdater).Assembly.GetName().Version ?? new Version(0, 0));
         var rid = GetRuntimeIdentifier();
         var releaseUrl = root.TryGetProperty("html_url", out var url) ? url.GetString() ?? "" : "";
-        return new UpdateInfo(current.ToString(4), latest.ToString(4), latest > current, rid, releaseUrl);
+        var assetNames = root.GetProperty("assets").EnumerateArray()
+            .Select(asset => asset.GetProperty("name").GetString())
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.Ordinal);
+        var hasPackage = assetNames.Contains($"beacon-client-{rid}.zip") && assetNames.Contains("SHA256SUMS.txt");
+        return new UpdateInfo(current.ToString(4), latest.ToString(4), latest > current && hasPackage, rid, releaseUrl);
     }
 
     public static async Task<UpdateInfo> DownloadAndScheduleAsync(CancellationToken ct = default)
@@ -85,6 +90,7 @@ public static class ClientUpdater
                     OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 throw new InvalidOperationException("Self-update requires the published single-file 'beacon' executable. Start the installed client instead of using dotnet run.");
 
+            EnsureWritableDirectory(Path.GetDirectoryName(currentExecutable)!);
             ScheduleReplacement(currentExecutable, newExecutable, workDir);
             return info;
         }
@@ -105,6 +111,23 @@ public static class ClientUpdater
 
     private static Version Normalize(Version version) =>
         new(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build), Math.Max(0, version.Revision));
+
+    private static void EnsureWritableDirectory(string directory)
+    {
+        var probe = Path.Combine(directory, ".beacon-update-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (File.Create(probe)) { }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new UnauthorizedAccessException($"The client installation directory '{directory}' is not writable by the current user.", ex);
+        }
+        finally
+        {
+            try { File.Delete(probe); } catch { }
+        }
+    }
 
     private static string GetRuntimeIdentifier()
     {
@@ -145,9 +168,16 @@ public static class ClientUpdater
                     $backup = "$target.bak"
                     if (Test-Path $backup) { Remove-Item $backup -Force }
                     Copy-Item $target $backup -Force
-                    try { Copy-Item $source $target -Force }
-                    catch { Copy-Item $backup $target -Force; throw }
-                    Start-Process -FilePath $target -ArgumentList @('client', '--headless') -WorkingDirectory (Split-Path $target -Parent)
+                    try {
+                        Copy-Item $source $target -Force
+                        $newProcess = Start-Process -FilePath $target -ArgumentList @('client', '--headless') -WorkingDirectory (Split-Path $target -Parent) -PassThru
+                        Start-Sleep -Seconds 3
+                        if ($newProcess.HasExited) { throw 'Updated client exited during startup.' }
+                    } catch {
+                        Copy-Item $backup $target -Force
+                        Start-Process -FilePath $target -ArgumentList @('client', '--headless') -WorkingDirectory (Split-Path $target -Parent)
+                        throw
+                    }
                     Remove-Item $backup -Force -ErrorAction SilentlyContinue
                 } finally {
                     Remove-Item $workDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -174,6 +204,13 @@ public static class ClientUpdater
                 if ! cp "$source" "$target"; then mv "$backup" "$target"; exit 1; fi
                 chmod 755 "$target"
                 nohup "$target" client --headless >/dev/null 2>&1 &
+                new_pid=$!
+                sleep 3
+                if ! kill -0 "$new_pid" 2>/dev/null; then
+                    mv "$backup" "$target"
+                    nohup "$target" client --headless >/dev/null 2>&1 &
+                    exit 1
+                fi
                 rm -f "$backup"
                 rm -rf "$work_dir"
                 """);
