@@ -564,6 +564,8 @@
             L["Confirm"].Value, string.Format(L["UpdateDaemonConfirm"].Value, _clientLatestVersion),
             yesText: L["UpdateDaemonNow"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true) return;
+        var previousHeartbeat = _devices.FirstOrDefault(d => d.Id == deviceId)?.LastHeartbeatAt;
+        var expectedVersion = _clientLatestVersion;
         _busy = true;
         _clientUpdateActive = true;
         _clientUpdatePercent = null;
@@ -584,7 +586,12 @@
                 return;
             }
             _clientUpdateAvailable = null;
-            Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+            _clientUpdateMessage = "Update handed off; waiting for the daemon to restart.";
+            var restarted = await WaitForUpdatedClientAsync(deviceId, previousHeartbeat, expectedVersion);
+            if (restarted)
+                Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+            else
+                Snackbar.Add("The update was handed off, but the new daemon version has not reported yet. Check the workstation log.", Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -595,6 +602,69 @@
             _clientUpdateActive = false;
             _busy = false;
         }
+    }
+
+    private async Task<bool> WaitForUpdatedClientAsync(Guid deviceId, DateTime? previousHeartbeat, string expectedVersion)
+    {
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+            if (listed.Success)
+            {
+                _devices = listed.Value!.ToList();
+                var device = _devices.FirstOrDefault(d => d.Id == deviceId);
+                var reportedVersion = device is null ? null : ReadClientVersion(device.ProbeJson);
+                if (device?.LastHeartbeatAt is { } heartbeat
+                    && (previousHeartbeat is null || heartbeat > previousHeartbeat.Value)
+                    && reportedVersion is not null
+                    && IsClientVersionAtLeast(reportedVersion, expectedVersion))
+                {
+                    _clientCurrentVersion = reportedVersion;
+                    _clientUpdateMessage = $"Daemon restarted and reported version {reportedVersion}.";
+                    await InvokeAsync(StateHasChanged);
+                    return true;
+                }
+            }
+
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(1000);
+        }
+
+        _clientUpdateActive = false;
+        _clientUpdateMessage = "Update handoff completed, but the restarted daemon has not reported the new version yet. Check the workstation log.";
+        await InvokeAsync(StateHasChanged);
+        return false;
+    }
+
+    private static string? ReadClientVersion(string? probeJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
+            return document.RootElement.TryGetProperty("clientVersion", out var version)
+                && version.ValueKind == JsonValueKind.String
+                    ? version.GetString()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsClientVersionAtLeast(string installedVersion, string expectedVersion)
+    {
+        static Version? Parse(string value)
+        {
+            var component = value.Split(['-', '+'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (component is null || !Version.TryParse(component, out var parsed))
+                return null;
+            return new Version(parsed.Major, Math.Max(0, parsed.Minor), Math.Max(0, parsed.Build), Math.Max(0, parsed.Revision));
+        }
+
+        var installed = Parse(installedVersion);
+        var expected = Parse(expectedVersion);
+        return installed is not null && expected is not null && installed >= expected;
     }
 
     private static string JsonValue(JsonElement root, string primary, string fallback) =>
