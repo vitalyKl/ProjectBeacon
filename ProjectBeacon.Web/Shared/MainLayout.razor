@@ -39,6 +39,7 @@
             title="@L["Menu"].Value"
             aria-label="@L["Menu"].Value"
             OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+        <img class="beacon-app-mark" src="brand/beacon-mark.svg" alt="" aria-hidden="true" />
         <div class="beacon-heading">
             <div class="beacon-page-title">@_pageTitle</div>
             <div class="beacon-page-subtitle">
@@ -77,7 +78,7 @@
         Class="beacon-drawer">
         <div class="beacon-drawer-inner">
             <MudDrawerHeader Class="beacon-drawer-header">
-                <MudText Typo="Typo.subtitle1" Class="beacon-brand">@L["ProjectBeacon"]</MudText>
+                <a class="beacon-brand-lockup" href="/dashboard" aria-label="@L["ProjectBeacon"]"><img src="brand/beacon-mark.svg" alt="" /><span class="beacon-brand">Project<span>Beacon</span></span></a>
             </MudDrawerHeader>
             <ProjectSwitcher />
             <MudNavMenu Dense="true" Class="beacon-nav">
