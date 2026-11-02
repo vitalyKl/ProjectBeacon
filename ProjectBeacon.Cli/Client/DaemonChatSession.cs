@@ -287,17 +287,35 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     var key = part.ExternalId ?? $"{part.Role}:{part.Kind}:{part.Body}";
                     var snapshot = JsonSerializer.Serialize(new
                     {
-                        part.Role, part.Kind, part.Body, part.Tool, part.ToolStatus,
-                        part.ToolInput, part.ToolResult, part.DurationMs, part.Complete
+                        part.Role,
+                        part.Kind,
+                        part.Body,
+                        part.Tool,
+                        part.ToolStatus,
+                        part.ToolInput,
+                        part.ToolResult,
+                        part.DurationMs,
+                        part.Complete
                     });
                     if (publishedSnapshots.TryGetValue(key, out var previous) && previous == snapshot)
                         continue;
-                    await PostChatAsync($"/v1/chat/sessions/{chatId}/parts", new
-                    {
-                        role = part.Role, kind = part.Kind, body = part.Body, externalId = part.ExternalId,
-                        tool = part.Tool, toolStatus = part.ToolStatus, toolInput = part.ToolInput,
-                        toolResult = part.ToolResult, durationMs = part.DurationMs, complete = part.Complete
-                    }, projectId, ct);
+                    await PostChatAsync(
+                        $"/v1/chat/sessions/{chatId}/parts",
+                        new
+                        {
+                            role = part.Role,
+                            kind = part.Kind,
+                            body = part.Body,
+                            externalId = part.ExternalId,
+                            tool = part.Tool,
+                            toolStatus = part.ToolStatus,
+                            toolInput = part.ToolInput,
+                            toolResult = part.ToolResult,
+                            durationMs = part.DurationMs,
+                            complete = part.Complete
+                        },
+                        projectId,
+                        ct);
                     publishedSnapshots[key] = snapshot;
                     if (part.Complete && seen.Add(key))
                     {
