@@ -190,7 +190,9 @@ public static class ClientUpdater
             foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
                 Environment.ProcessId.ToString(), target, source, workDir })
                 start.ArgumentList.Add(arg);
-            Process.Start(start) ?? throw new InvalidOperationException("Could not start the update helper process.");
+            var helper = Process.Start(start);
+            if (helper is null)
+                throw new InvalidOperationException("Could not start the update helper process.");
         }
         else
         {
