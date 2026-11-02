@@ -62,6 +62,9 @@ public static class DesignTokens
     public const string RadiusPill = "9999px";
 
     public const string BorderHairline = "1px";
+    public const string QrBackground = "#ffffff";
+    public const string OverlayBackdrop = "rgba(5, 8, 12, .58)";
+    public const string ShadowStrong = "rgba(0, 0, 0, .35)";
 
     public const string TypePage = "24px";
     public const string TypeSection = "15px";
@@ -145,6 +148,9 @@ public static class DesignTokens
         ("--color-accent-soft", AccentSoft),
         ("--color-on-accent", "#ffffff"),
         ("--color-on-danger", "#ffffff"),
+        ("--color-qr-background", QrBackground),
+        ("--color-overlay-backdrop", OverlayBackdrop),
+        ("--color-shadow-strong", ShadowStrong),
         ("--color-success", Success),
         ("--color-success-background", SuccessBackground),
         ("--color-warning", Warning),
@@ -210,6 +216,8 @@ public static class DesignTokens
         ("--color-danger-background", Dark.DangerBackground),
         ("--color-info", Dark.Info),
         ("--color-info-background", Dark.InfoBackground),
+        ("--color-overlay-backdrop", "rgba(0, 0, 0, .62)"),
+        ("--color-shadow-strong", "rgba(0, 0, 0, .42)"),
     ];
 
     public static readonly string RootCss = BuildRoot();
@@ -218,6 +226,7 @@ public static class DesignTokens
     {
         var light = string.Join('\n', Custom.Select(t => $"    {t.Name}: {t.Value};"));
         var dark = string.Join('\n', DarkCustom.Select(t => $"    {t.Name}: {t.Value};"));
-        return ":root {\n" + light + "\n}\n\nbody:has(.beacon-theme-dark) {\n" + dark + "\n    background: var(--color-bg-app);\n    color: var(--color-text-primary);\n}";
+        const string darkScope = "html.beacon-theme-dark,\nbody:has(.beacon-theme-dark),\nhtml:has(.landing-shell),\nbody:has(.landing-shell)";
+        return ":root {\n" + light + "\n}\n\n" + darkScope + " {\n" + dark + "\n    background: var(--color-bg-app);\n    color: var(--color-text-primary);\n}";
     }
 }

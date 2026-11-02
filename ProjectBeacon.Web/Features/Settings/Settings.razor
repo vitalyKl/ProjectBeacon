@@ -64,7 +64,7 @@
     else if (!string.IsNullOrEmpty(_totpUri))
     {
         <MudText Typo="Typo.body2" Class="mb-3">@L["AuthenticatorScan"]</MudText>
-        <img src="@_totpQr" width="180" height="180" alt="@L["AuthenticatorQr"]" class="mb-3" style="background:#fff;padding:8px" />
+        <img src="@_totpQr" width="180" height="180" alt="@L["AuthenticatorQr"]" class="beacon-qr-code mb-3" />
         <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AuthenticatorManual"]</MudText>
         <MudText Typo="Typo.body2" Class="beacon-pre mb-3">@_totpSecret</MudText>
         <MudTextField @bind-Value="_totpCode" Label="@L["AuthenticatorCode"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
