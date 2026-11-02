@@ -9,7 +9,7 @@ permissions:
   contents: read
   packages: write
 
-# Gate chain (no bypass): tests -> client assets + image -> scan -> deploy.
+# Gate chain (no bypass): tests -> image -> scan -> client assets -> deploy.
 # Only this workflow publishes images; ci.yml never pushes to the registry.
 
 jobs:
