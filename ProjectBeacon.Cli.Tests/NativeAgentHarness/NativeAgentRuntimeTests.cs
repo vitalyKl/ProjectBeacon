@@ -1112,7 +1112,7 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
-    public async Task NativeRuntimeStopsRepeatedIdenticalToolCalls()
+    public async Task NativeRuntimeReusesRepeatedReadOnlyCallsAndContinuesToFinalAnswer()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-loop-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);
@@ -1157,13 +1157,13 @@ public sealed class NativeAgentRuntimeTests
 
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
-            Assert.Equal("error", status.Finish);
-            Assert.Contains("repeated the same tool call", status.Error);
+            Assert.Equal("stop", status.Finish);
+            Assert.Null(status.Error);
             Assert.Equal(3, provider.RequestCount);
             Assert.Equal(1, mcp.CallCount);
-            Assert.Contains(provider.RequestMessages[2], message =>
+            Assert.Contains(provider.RequestMessages[1], message =>
                 message?["role"]?.GetValue<string>() == "tool"
-                && message["content"]?.GetValue<string>()?.Contains("Do not repeat it again", StringComparison.Ordinal) == true);
+                && message["content"]?.GetValue<string>()?.Contains("Cached result", StringComparison.Ordinal) == true);
         }
         finally
         {
@@ -1172,6 +1172,50 @@ public sealed class NativeAgentRuntimeTests
         }
     }
 
+
+    [Fact]
+    public async Task NativeRuntimeCompletesMoreThanTwelveToolCycles()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-many-tools-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        })) { BaseAddress = new Uri("https://beacon.test/") };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new MoreThanTwelveToolCyclesProvider(13);
+        var mcp = new StubMcpToolClient();
+        var runtime = new NativeAgentRuntime(
+            control, llama, new StubLlamaSync(),
+            () => new WorkstationSettings { OpencodeDataDir = Path.Combine(temp, ".opencode", "data") },
+            providerFactory: (_, _, _) => provider,
+            mcpClientFactory: (_, _) => Task.FromResult<IMcpToolClient>(mcp));
+        try
+        {
+            var session = await runtime.CreateSessionAsync("many tool cycles", CancellationToken.None);
+            var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+            var authorization = new AgentHarnessAuthorization(
+                "https://beacon.test", "ephemeral", Guid.NewGuid(), null,
+                Guid.NewGuid(), 1, project, DateTime.UtcNow.AddMinutes(2));
+            await runtime.SendPromptAsync(
+                session, "Inspect thirteen distinct files.", "beacon-local/test-model", CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+            Assert.True(status?.Ended, status?.Error ?? "The long tool turn did not finish.");
+            Assert.Equal("stop", status!.Finish);
+            Assert.Equal(13, mcp.CallCount);
+            Assert.Equal(14, provider.RequestCount);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
 
     [Fact]
     public void ContextCompactionKeepsToolCallAndResultsTogether()
@@ -1475,6 +1519,13 @@ public sealed class NativeAgentRuntimeTests
             ct.ThrowIfCancellationRequested();
             RequestCount++;
             RequestMessages.Add((JsonArray)request.Messages.DeepClone());
+            if (RequestCount >= 3)
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "The cached result is sufficient.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
             yield return new ChatProviderEvent(
                 ChatProviderEventKind.ToolCallDelta,
                 ToolIndex: 0,
@@ -1484,6 +1535,37 @@ public sealed class NativeAgentRuntimeTests
                 ChatProviderEventKind.ToolCallDelta,
                 ToolIndex: 0,
                 ToolArguments: "{\"path\":\"README.md\"}");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class MoreThanTwelveToolCyclesProvider(int toolCycles) : IChatProvider
+    {
+        public int RequestCount { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            RequestCount++;
+            if (RequestCount > toolCycles)
+            {
+                yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Inspected all requested files.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
+                yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+                yield break;
+            }
+
+            var id = "many-" + RequestCount;
+            yield return new ChatProviderEvent(
+                ChatProviderEventKind.ToolCallDelta,
+                ToolIndex: 0,
+                ToolCallId: id,
+                ToolName: "read_file",
+                ToolArguments: JsonSerializer.Serialize(new { path = $"file-{RequestCount}.txt" }));
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
