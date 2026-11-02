@@ -90,7 +90,7 @@ else
                     <ActivatorContent>
                         <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Size="Size.Medium"
                                        Class="beacon-chat-mobile-more" title="@L["Menu"].Value"
-                                       aria-label="@L["Menu"].Value" @onclick="context.ToggleAsync" />
+                                       aria-label="@L["Menu"].Value" OnClick="@((MouseEventArgs _) => context.ToggleAsync())" />
                     </ActivatorContent>
                     <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => Rename(_selected!))">@L["ChatRename"]</MudMenuItem>
