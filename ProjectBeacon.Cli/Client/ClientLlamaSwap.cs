@@ -52,8 +52,8 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         }
 
         var missing = models
-            .Where(model => string.IsNullOrWhiteSpace(model.LaunchCommand)
-                || !model.LaunchCommand.Contains("--jinja", StringComparison.OrdinalIgnoreCase))
+            .Where(model => LlamaSwapConfigGenerator.IsLlamaServerCommand(model.LaunchCommand)
+                && !LlamaSwapConfigGenerator.HasJinjaEnabled(model.LaunchCommand))
             .Select(model => model.Name)
             .ToArray();
         return missing.Length == 0
