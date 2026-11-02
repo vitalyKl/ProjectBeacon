@@ -146,10 +146,17 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         var chat = new DaemonChatSession(
             new DaemonDependencies(_http, _llama, _openCode, runtime, () => new WorkstationSettings()),
             new StubGate(_openCode, runtime), new StubLlamaSync(), new StubState(), timing);
-        var (ok, _, error) = await chat.PromptAsync(_dir, JsonSerializer.Serialize(new
-        {
-            chatSessionId = chatId, externalSessionId = "oc-1", projectId, text = "run a tool", model = (string?)null
-        }), CancellationToken.None);
+        var (ok, _, error) = await chat.PromptAsync(
+            _dir,
+            JsonSerializer.Serialize(new
+            {
+                chatSessionId = chatId,
+                externalSessionId = "oc-1",
+                projectId,
+                text = "run a tool",
+                model = (string?)null
+            }),
+            CancellationToken.None);
         Assert.True(ok, error);
         var posts = _posts.Where(p => p.Path == $"/v1/chat/sessions/{chatId}/parts").ToList();
         Assert.Equal(2, posts.Count);
