@@ -124,7 +124,7 @@
     <value>Шаблоны</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Заготовки того, как использовать модели. Список моделей остаётся у этой учётной записи.</value>
+    <value>Профили workstation/OpenCode для интерактивного чата. Режим «Одна модель» использует одну модель, «По ролям» назначает Planner, Actor и Review. Эти настройки не выбирают модели для pipeline отдельных задач.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>Новый шаблон</value>
@@ -244,7 +244,7 @@
     <value>Виды задач</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>Вид задаёт, как делать работу. Модель решений планирует и читает ревью. Модель работников берёт короткие срезы, например один скриншот.</value>
+    <value>Шаблоны рабочего процесса копируются в каждую новую задачу. Модель решений используется по умолчанию для обычных фаз, модель работников — для фаз с параллельными подзадачами; модель фазы может переопределить оба значения. Эти настройки управляют pipeline задач, а не интерактивным чатом.</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>Новый вид</value>
@@ -262,13 +262,13 @@
     <value>Модель решений</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>Планирует работу и читает ревью срезов.</value>
+    <value>Модель по умолчанию для фаз без параллельного разбиения. Модель, заданная непосредственно у фазы, имеет приоритет.</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>Модель работников</value>
   </data>
 <data name="WorkerModelHint" xml:space="preserve">
-    <value>Для фазы, которую режем на подзадачи. Пусто — берётся модель решений.</value>
+    <value>Модель по умолчанию для фаз, разделённых на параллельные подзадачи. Если не задана, используется модель решений; модель фазы имеет приоритет.</value>
   </data>
 <data name="PhaseTitle" xml:space="preserve">
     <value>Фаза</value>
@@ -1006,7 +1006,7 @@
     <value>Пайплайн</value>
   </data>
 <data name="PipelineNotStarted" xml:space="preserve">
-    <value>Пайплайн не запущен.</value>
+    <value>Задача ещё не запущена. Запустите её, чтобы создать сессию Planner и начать выполнение.</value>
   </data>
 <data name="StagePlanning" xml:space="preserve">
     <value>Планирование</value>
@@ -1075,7 +1075,7 @@
     <value>Вернуть подзадачу</value>
   </data>
 <data name="StartPipeline" xml:space="preserve">
-    <value>Запустить пайплайн</value>
+    <value>Запустить задачу</value>
   </data>
 <data name="CreateSubtask" xml:space="preserve">
     <value>Создать подзадачу</value>
@@ -1251,14 +1251,17 @@
 <data name="McpServers" xml:space="preserve">
     <value>Серверы MCP</value>
   </data>
-<data name="AgentMode" xml:space="preserve">
-    <value>Режим агента</value>
+<data name="AgentModeHint" xml:space="preserve">
+    <value>Настраивает профиль OpenCode на рабочей станции для интерактивного чата. Модели pipeline отдельных задач настраиваются отдельно во вкладке «Виды задач».</value>
+  </data>
+  <data name="AgentMode" xml:space="preserve">
+    <value>Режим чата workstation</value>
   </data>
 <data name="AgentModeSolo" xml:space="preserve">
-    <value>Один</value>
+    <value>Одна модель</value>
   </data>
 <data name="AgentModePipeline" xml:space="preserve">
-    <value>Пайплайн</value>
+    <value>По ролям</value>
   </data>
 <data name="ApplyOnDevice" xml:space="preserve">
     <value>Применить на устройстве</value>
