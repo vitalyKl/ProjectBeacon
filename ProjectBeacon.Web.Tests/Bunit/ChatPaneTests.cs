@@ -90,7 +90,7 @@ public sealed class ChatPaneTests : BUnitRenderBase
             .Add(p => p.Session, session)
             .Add(p => p.ShowModelSelect, true));
 
-        Assert.Contains("Plan", cut.Find(".beacon-chat-config-button").TextContent);
+        Assert.Contains("Plan", cut.Find(".beacon-chat-mode-toggle").TextContent);
     }
 
     [Fact]
