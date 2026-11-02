@@ -887,7 +887,16 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         lock (session.Sync)
         {
             snapshot = session.Messages.Select(m => (JsonObject)m.DeepClone()).ToList();
-            toolJournal = session.ToolJournal.TakeLast(100).ToList();
+            // Keep the durable journal complete, but pass only a bounded excerpt into the
+            // compaction prompt so a large number of tool results cannot defeat compaction.
+            toolJournal = session.ToolJournal.TakeLast(30)
+                .Select(entry => entry with
+                {
+                    Result = entry.Result.Length <= 1200
+                        ? entry.Result
+                        : entry.Result[..1200] + " [journal excerpt truncated]"
+                })
+                .ToList();
         }
 
         var limit = controls?.ContextLimit is > 0 ? controls.ContextLimit.Value : session.ContextLimit.GetValueOrDefault();
