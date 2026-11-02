@@ -658,7 +658,7 @@
     {
         static Version? Parse(string value)
         {
-            var component = value.Split(['-', '+'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            var component = value.Split(['-', '+'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.TrimStart('v', 'V');
             if (component is null || !Version.TryParse(component, out var parsed))
                 return null;
             return new Version(parsed.Major, Math.Max(0, parsed.Minor), Math.Max(0, parsed.Build), Math.Max(0, parsed.Revision));
