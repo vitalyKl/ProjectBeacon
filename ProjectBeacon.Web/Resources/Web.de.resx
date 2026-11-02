@@ -2169,4 +2169,10 @@ orthstar</value>
 <data name="UpdateDaemonNow" xml:space="preserve">
     <value>Jetzt aktualisieren</value>
   </data>
+  <data name="ChatDelete" xml:space="preserve">
+    <value>Chat löschen</value>
+  </data>
+  <data name="ChatDeleteConfirm" xml:space="preserve">
+    <value>Möchtest du den Chat „{0}“ löschen? Er wird aus deiner Chatliste entfernt.</value>
+  </data>
 </root>
