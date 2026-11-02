@@ -145,6 +145,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<EnqueueCommandHandler>();
         services.AddTransient<ClaimNextCommandHandler>();
         services.AddTransient<CompleteCommandHandler>();
+        // Device progress endpoint injects this concrete handler directly.
+        services.AddTransient<ReportCommandProgressHandler>();
         // Minimal API endpoints inject this concrete handler directly, so register the concrete type for endpoint metadata inference.
         services.AddTransient<IssueHarnessTokenHandler>();
         services.AddTransient<GetCommandHandler>();
