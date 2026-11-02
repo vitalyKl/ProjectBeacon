@@ -63,15 +63,8 @@
         {
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Tune"
                        Class="beacon-chat-config-button" OnClick="ConfigureModel"
-                       title="@L["ChatModelSettings"].Value">
-                @ModelSummary
-            </MudButton>
-            <MudButton Variant="Variant.Outlined"
-                       Color="@(_agent == "plan" ? Color.Secondary : Color.Default)"
-                       Size="Size.Small" Class="beacon-chat-mode-toggle"
-                       OnClick="ToggleAgent" Disabled="@(_switchingAgent || Busy)"
-                       title="@ModeShortcutTitle">
-                @(_agent == "plan" ? L["ChatAgentPlan"] : L["ChatAgentAct"])
+                       Disabled="@Busy" title="@L["ChatModelSettings"].Value">
+                @ModelSummary · @L[_agent == "plan" ? "ChatAgentPlan" : "ChatAgentAct"]
             </MudButton>
         }
         @if (!string.IsNullOrEmpty(ModelStatus))
@@ -273,7 +266,8 @@
         {
             ["Models"] = Models,
             ["Model"] = Model,
-            ["ReasoningEffort"] = ReasoningEffort
+            ["ReasoningEffort"] = ReasoningEffort,
+            ["AgentMode"] = _agent
         };
         var dialog = await DialogService.ShowAsync<ChatModelSettingsDialog>(
             L["ChatModelSettings"].Value,
@@ -285,6 +279,7 @@
 
         await OnModelChanged(selection.Model);
         await OnEffortChanged(selection.ReasoningEffort);
+        await OnAgentChanged(selection.AgentMode);
     }
 
     private Task ToggleAgent() => OnAgentChanged(_agent == "plan" ? "build" : "plan");

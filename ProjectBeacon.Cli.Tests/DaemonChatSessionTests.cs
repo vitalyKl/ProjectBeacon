@@ -464,7 +464,7 @@ public sealed class DaemonChatSessionTests : IAsyncLifetime
         }
 
         // The first call is the pre-prompt baseline; later calls report a new finished message.
-        public Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
+        public virtual Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
             => Task.FromResult<AgentTurnStatus?>(Interlocked.Increment(ref _statusCalls) == 1
                 ? new AgentTurnStatus(true, "stop", null, "m1")
                 : new AgentTurnStatus(true, "stop", null, "m2"));

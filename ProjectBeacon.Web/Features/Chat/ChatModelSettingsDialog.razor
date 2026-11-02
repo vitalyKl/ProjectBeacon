@@ -29,6 +29,12 @@
         }
     }
 
+    <MudSelect T="string" Value="@_agentMode" ValueChanged="OnAgentModeChanged"
+               Label="@L["ChatAgent"]" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">
+        <MudSelectItem Value="@("build")">@L["ChatAgentAct"]</MudSelectItem>
+        <MudSelectItem Value="@("plan")">@L["ChatAgentPlan"]</MudSelectItem>
+    </MudSelect>
+
     <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-2">
         <MudButton Variant="Variant.Text" OnClick="Cancel">@L["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">@L["Save"]</MudButton>
@@ -40,8 +46,10 @@
     [Parameter] public List<LocalModelBackendDto> Models { get; set; } = [];
     [Parameter] public string? Model { get; set; }
     [Parameter] public string? ReasoningEffort { get; set; }
+    [Parameter] public string AgentMode { get; set; } = "build";
 
     private List<LocalModelBackendDto> _models = [];
+    private string _agentMode = "build";
     private string? _model;
     private string? _effort;
     private static readonly string[] EffortOptions = ["low", "medium", "high", "xhigh"];
@@ -51,6 +59,7 @@
         _models = Models ?? [];
         _model = Model;
         _effort = ReasoningEffort;
+        _agentMode = AgentMode == "plan" ? "plan" : "build";
     }
 
     private LocalModelBackendDto? SelectedBackend =>
@@ -71,6 +80,12 @@
         return Task.CompletedTask;
     }
 
+    private Task OnAgentModeChanged(string value)
+    {
+        _agentMode = value == "plan" ? "plan" : "build";
+        return Task.CompletedTask;
+    }
+
     private string EffortLabel(string effort) => effort switch
     {
         "low" => L["ChatEffortLow"].Value,
@@ -83,5 +98,5 @@
     private void Cancel() => Instance?.Cancel();
 
     private void Save() =>
-        Instance?.Close(DialogResult.Ok(new ChatModelSettingsSelection(_model, _effort)));
+        Instance?.Close(DialogResult.Ok(new ChatModelSettingsSelection(_model, _effort, _agentMode)));
 }

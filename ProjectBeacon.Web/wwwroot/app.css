@@ -2043,7 +2043,30 @@ body:has(.beacon-theme-dark) .mud-main-content {
     }
 
     .beacon-main {
-        padding: var(--space-4) var(--space-3) 84px;
+        padding: var(--space-3) var(--space-3) calc(68px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .beacon-content-max,
+    .beacon-main,
+    .mud-main-content {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .beacon-form {
+        max-width: none;
+    }
+
+    .mud-table-container {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .mud-paper,
+    .mud-card,
+    .beacon-panel {
+        min-width: 0;
     }
 
     .beacon-mobile-nav {
