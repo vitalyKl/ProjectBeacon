@@ -57,7 +57,11 @@
     }
     else
     {
-        <MudText Typo="Typo.caption" Class="mt-2">@L["PipelineNotStarted"]</MudText>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-3 beacon-task-start-prompt">
+            <MudText Typo="Typo.body2">@L["PipelineNotStarted"]</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
+                       OnClick="OnStart" Disabled="Busy" Class="mt-3">@L["StartPipeline"]</MudButton>
+        </MudAlert>
     }
 </MudPaper>
 
@@ -65,6 +69,7 @@
     [Parameter] public PipelineStateDto? Pipeline { get; set; }
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
+    [Parameter] public EventCallback OnStart { get; set; }
 
     private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
 

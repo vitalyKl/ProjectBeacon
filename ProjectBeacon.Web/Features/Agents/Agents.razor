@@ -65,6 +65,7 @@ else
     <MudTabPanel Text="@L["AgentTemplates"]">
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeUserLevel"] · @L["AgentTemplatesLead"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["AgentTemplateModelsScopeHint"]</MudText>
         <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mb-3">
             <MudSelect T="Guid?" Value="_templateId" ValueChanged="SelectTemplate" Label="@L["AgentTemplates"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="flex-grow-1">
                 @foreach (var template in _templates)
@@ -79,7 +80,7 @@ else
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">@L["NoTemplateSelected"]</MudAlert>
         }
         <MudTextField @bind-Value="_templateName" Label="@L["AgentTemplateName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3">
+        <MudSelect T="AgentRunMode" @bind-Value="_mode" Label="@L["AgentMode"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" HelperText="@L["AgentModeHint"]">
             <MudSelectItem Value="AgentRunMode.Solo">@L["AgentModeSolo"]</MudSelectItem>
             <MudSelectItem Value="AgentRunMode.Pipeline">@L["AgentModePipeline"]</MudSelectItem>
         </MudSelect>

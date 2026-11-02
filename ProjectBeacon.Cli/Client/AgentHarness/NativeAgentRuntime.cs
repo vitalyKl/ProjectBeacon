@@ -18,7 +18,6 @@ using ProjectBeacon.Cli.Client;
 internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilities
 {
     private const int MaxAttempts = 3;
-    private const int MaxAgentSteps = 12;
     private const int MaxToolResultCharacters = 16 * 1024;
     private readonly HttpClient _controlPlane;
     private readonly ClientLlamaSwap _llama;
@@ -389,9 +388,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             var hasFinalText = false;
             string? lastToolCallFingerprint = null;
             var consecutiveToolCallFingerprintCount = 0;
-            var agentStep = 0;
             var nextToolOrdinal = 0;
-            for (; agentStep < MaxAgentSteps; agentStep++)
+            var toolResultCache = new ConcurrentDictionary<string, McpToolResult>(StringComparer.Ordinal);
+            while (true)
             {
                 ct.ThrowIfCancellationRequested();
                 var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
@@ -491,14 +490,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         consecutiveToolCallFingerprintCount = 1;
                     }
 
-                    if (consecutiveToolCallFingerprintCount >= 3)
-                    {
-                        finish = "error";
-                        error = "The agent repeated the same tool call with identical arguments three times; stopped to prevent a tool loop.";
-                        break;
-                    }
-
-                    var repeatedToolCall = consecutiveToolCallFingerprintCount == 2;
+                    // Repetition is an intervention signal, not a reason to terminate the turn.
+                    // Safe read-only repeats are served from the result cache; other repeats are
+                    // returned to the model as actionable warnings so it can change strategy.
+                    var repeatedToolCall = consecutiveToolCallFingerprintCount >= 2;
                     var toolCallMessages = new JsonArray();
                     foreach (var pair in toolCalls)
                     {
@@ -536,99 +531,118 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         ct.ThrowIfCancellationRequested();
                         var startedAt = Stopwatch.GetTimestamp();
                         var isError = false;
+                        var hasArguments = call.TryReadArguments(out var parsedArguments);
+                        var cacheKey = hasArguments && IsCacheableTool(call.Name)
+                            ? CreateToolCacheKey(call.Name!, parsedArguments!)
+                            : null;
+                        var cacheHit = false;
                         string toolResult;
                         try
                         {
-                            if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
-                                || IsPlanModeRunShellBlocked(agentMode, call.Name))
+                            if (cacheKey is not null && toolResultCache.TryGetValue(cacheKey, out var cachedResult))
                             {
-                                isError = true;
-                                toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
-                            }
-                            else if (repeatedToolCall)
-                            {
-                                isError = true;
-                                toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
-                            }
-                            else if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
-                            {
-                                isError = true;
-                                toolResult = "Tool error: the model returned a tool call without a valid id or name.";
-                            }
-                            else if (!call.TryReadArguments(out var parsedArguments))
-                            {
-                                isError = true;
-                                toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
-                            }
-                            else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
-                            {
-                                if (controls?.HarnessAuthorization is not { } commandAuthorization
-                                    || commandPrefixes.Length == 0
-                                    || !IsRunCommandAuthorized(commandAuthorization))
-                                {
-                                    isError = true;
-                                    toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
-                                }
-                                else if (IsInteractiveChatAuthorization(commandAuthorization)
-                                    && !await RequestTerminalPermissionAsync(
-                                        session, call.Name!, commandAuthorization.WorkingDirectory, parsedArguments!, ct))
-                                {
-                                    isError = true;
-                                    toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
-                                }
-                                else
-                                {
-                                    var result = await NativeCommandRunner.ExecuteAsync(
-                                        commandAuthorization.WorkingDirectory,
-                                        parsedArguments!,
-                                        commandPrefixes,
-                                        ct);
-                                    isError = result.IsError;
-                                    toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
-                                }
-                            }
-                            else if (string.Equals(call.Name, "run_shell", StringComparison.Ordinal))
-                            {
-                                if (controls?.HarnessAuthorization is not { } shellAuthorization
-                                    || !IsRunShellAuthorized(shellAuthorization))
-                                {
-                                    isError = true;
-                                    toolResult = "Tool error: run_shell is not authorized for this execution role.";
-                                }
-                                else if (IsInteractiveChatAuthorization(shellAuthorization)
-                                    && !await RequestTerminalPermissionAsync(
-                                        session, call.Name!, shellAuthorization.WorkingDirectory, parsedArguments!, ct))
-                                {
-                                    isError = true;
-                                    toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
-                                }
-                                else
-                                {
-                                    var result = await NativeShellRunner.ExecuteAsync(
-                                        shellAuthorization.WorkingDirectory,
-                                        parsedArguments!,
-                                        ct);
-                                    isError = result.IsError;
-                                    toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
-                                }
-                            }
-                            else if (mcpClient is null)
-                            {
-                                isError = true;
-                                toolResult = "Tool error: no scoped MCP authorization is available for this command.";
-                            }
-                            else if (!IsAdvertisedMcpTool(mcpTools, call.Name!))
-                            {
-                                isError = true;
-                                toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
+                                _log?.Invoke($"native tool cache hit: {call.Name}");
+                                cacheHit = true;
+                                isError = cachedResult.IsError;
+                                toolResult = "[Cached result from an earlier identical read-only call]\n" + cachedResult.Text;
                             }
                             else
                             {
-                                var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
-                                isError = result.IsError;
-                                toolResult = result.IsError
-                                    ? "Tool error: " + result.Text
-                                    : result.Text;
+                                if (cacheKey is not null)
+                                    _log?.Invoke($"native tool cache miss: {call.Name}");
+                                if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
+                                    || IsPlanModeRunShellBlocked(agentMode, call.Name))
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
+                                }
+                                else if (repeatedToolCall)
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: this exact tool call with identical arguments was already repeated. Do not repeat it again; choose a different action or provide a final answer.";
+                                }
+                                else if (string.IsNullOrWhiteSpace(call.Id) || string.IsNullOrWhiteSpace(call.Name))
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: the model returned a tool call without a valid id or name.";
+                                }
+                                else if (!hasArguments)
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
+                                }
+                                else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { } commandAuthorization
+                                        || commandPrefixes.Length == 0
+                                        || !IsRunCommandAuthorized(commandAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
+                                    }
+                                    else if (IsInteractiveChatAuthorization(commandAuthorization)
+                                        && !await RequestTerminalPermissionAsync(
+                                            session, call.Name!, commandAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                    }
+                                    else
+                                    {
+                                        var result = await NativeCommandRunner.ExecuteAsync(
+                                            commandAuthorization.WorkingDirectory,
+                                            parsedArguments!,
+                                            commandPrefixes,
+                                            ct);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (string.Equals(call.Name, "run_shell", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { } shellAuthorization
+                                        || !IsRunShellAuthorized(shellAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: run_shell is not authorized for this execution role.";
+                                    }
+                                    else if (IsInteractiveChatAuthorization(shellAuthorization)
+                                        && !await RequestTerminalPermissionAsync(
+                                            session, call.Name!, shellAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                    }
+                                    else
+                                    {
+                                        var result = await NativeShellRunner.ExecuteAsync(
+                                            shellAuthorization.WorkingDirectory,
+                                            parsedArguments!,
+                                            ct);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (mcpClient is null)
+                                {
+                                    isError = true;
+                                    toolResult = "Tool error: no scoped MCP authorization is available for this command.";
+                                }
+                                else if (!IsAdvertisedMcpTool(mcpTools, call.Name!))
+                                {
+                                    isError = true;
+                                    toolResult = $"Tool error: MCP tool '{call.Name}' was not advertised by the scoped server and cannot be executed.";
+                                }
+                                else
+                                {
+                                    var result = await mcpClient.CallToolAsync(call.Name!, parsedArguments!, ct);
+                                    isError = result.IsError;
+                                    toolResult = result.IsError
+                                        ? "Tool error: " + result.Text
+                                        : result.Text;
+                                }
+                                if (cacheKey is not null && !isError)
+                                    toolResultCache.TryAdd(cacheKey, new McpToolResult(false, toolResult));
                             }
                         }
                         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -642,8 +656,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         }
 
                         var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                        return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs);
+                        return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
                     }));
+
+                    // Any non-cacheable operation may have changed project state, even when
+                    // it reports an error after a partial write. Invalidate earlier reads.
+                    if (executedTools.Any(item => !IsCacheableTool(item.Call.Name)))
+                        toolResultCache.Clear();
 
                     // Execute calls concurrently, but append their results in the model's index
                     // order so the transcript remains deterministic and every tool_call_id matches.
@@ -660,6 +679,20 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 ["content"] = toolResult
                             });
                         }
+                        lock (session.Sync)
+                        {
+                            session.ToolJournal.Add(new ToolJournalEntry(
+                                turnNumber,
+                                call.Name ?? "unknown_tool",
+                                call.Arguments.Length == 0 ? "{}" : call.Arguments.ToString(),
+                                toolResult,
+                                executed.IsError,
+                                executed.CacheHit,
+                                DateTimeOffset.UtcNow));
+                            if (session.ToolJournal.Count > 200)
+                                session.ToolJournal.RemoveRange(0, session.ToolJournal.Count - 200);
+                        }
+
                         await AppendToolPartAsync(
                             session,
                             turnNumber,
@@ -698,17 +731,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
                 finish = finishReason;
                 break;
-            }
-
-            if (agentStep >= MaxAgentSteps && !hasFinalText && error is null)
-            {
-                finish = "error";
-                error = $"The agent reached the maximum of {MaxAgentSteps} model/tool steps without a final answer.";
-            }
-            else if (agentStep >= MaxAgentSteps && error is null)
-            {
-                finish = "error";
-                error = $"The agent reached the maximum of {MaxAgentSteps} model/tool steps.";
             }
 
             if (ct.IsCancellationRequested)
@@ -864,8 +886,21 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         CancellationToken ct)
     {
         List<JsonObject> snapshot;
+        List<ToolJournalEntry> toolJournal;
         lock (session.Sync)
+        {
             snapshot = session.Messages.Select(m => (JsonObject)m.DeepClone()).ToList();
+            // Keep the durable journal complete, but pass only a bounded excerpt into the
+            // compaction prompt so a large number of tool results cannot defeat compaction.
+            toolJournal = session.ToolJournal.TakeLast(30)
+                .Select(entry => entry with
+                {
+                    Result = entry.Result.Length <= 1200
+                        ? entry.Result
+                        : entry.Result[..1200] + " [journal excerpt truncated]"
+                })
+                .ToList();
+        }
 
         var limit = controls?.ContextLimit is > 0 ? controls.ContextLimit.Value : session.ContextLimit.GetValueOrDefault();
         if (limit > 0 && EstimateTokens(snapshot) > (int)(limit * 0.82) && snapshot.Count > 3)
@@ -883,12 +918,16 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         new JsonObject
                         {
                             ["role"] = "system",
-                            ["content"] = "Summarize the conversation history for continuation. Preserve the user's objective, constraints, decisions, important identifiers, completed work, unresolved questions, and exact errors. Be concise and do not invent facts."
+                            ["content"] = "Create a compact continuation checkpoint as a valid JSON object with keys: goal, constraints, completed, inProgress, remaining, decisions, importantIdentifiers, importantFiles, toolResults, unresolvedQuestions, nextAction. Preserve exact identifiers, paths, tool outcomes, errors, and user constraints. Distinguish verified facts from assumptions. Do not invent facts. The checkpoint is internal runtime state, not a user-facing final answer."
                         },
                         new JsonObject
                         {
                             ["role"] = "user",
-                            ["content"] = new JsonArray(old.Select(m => (JsonNode?)m.DeepClone()).ToArray()).ToJsonString()
+                            ["content"] = new JsonObject
+                            {
+                                ["conversation"] = new JsonArray(old.Select(m => (JsonNode?)m.DeepClone()).ToArray()),
+                                ["toolJournal"] = JsonSerializer.SerializeToNode(toolJournal, JsonOptions)
+                            }.ToJsonString()
                         }
                     },
                     new JsonArray(),
@@ -901,11 +940,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         summary.Append(item.Text);
 
                 if (summary.Length == 0)
-                    throw new InvalidOperationException(
-                        "The conversation exceeded its context budget, but the model returned an empty summary. The existing history was preserved.");
+                {
+                    // A failed/empty model summary must not terminate the user's task. Preserve
+                    // a deterministic structured checkpoint from the recent transcript and tool journal.
+                    summary.Append(BuildFallbackCheckpoint(old, toolJournal));
+                    _log?.Invoke("native context compaction used a deterministic fallback checkpoint");
+                }
 
                 var compacted = new List<JsonObject> { snapshot[0] };
-                compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Conversation summary (preserve this as context):\\n" + summary.ToString() });
+                compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Continuation checkpoint (internal state; preserve and follow it):\\n" + summary.ToString() });
                 compacted.AddRange(keep);
                 snapshot = compacted;
                 lock (session.Sync)
@@ -963,6 +1006,42 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
 
         return Math.Clamp(splitAt, 1, messages.Count);
+    }
+
+    private static string BuildFallbackCheckpoint(
+        IReadOnlyList<JsonObject> olderMessages,
+        IReadOnlyList<ToolJournalEntry> toolJournal)
+    {
+        var recentUserMessages = olderMessages
+            .Where(message => string.Equals(message["role"]?.GetValue<string>(), "user", StringComparison.Ordinal))
+            .Select(message => message["content"]?.ToString() ?? "")
+            .Where(content => !string.IsNullOrWhiteSpace(content))
+            .TakeLast(6)
+            .ToArray();
+        var recentAssistantNotes = olderMessages
+            .Where(message => string.Equals(message["role"]?.GetValue<string>(), "assistant", StringComparison.Ordinal)
+                && message["tool_calls"] is not JsonArray)
+            .Select(message => message["content"]?.ToString() ?? "")
+            .Where(content => !string.IsNullOrWhiteSpace(content))
+            .TakeLast(4)
+            .ToArray();
+
+        return new JsonObject
+        {
+            ["goal"] = recentUserMessages.LastOrDefault() ?? "Continue the user's current request from the retained conversation.",
+            ["constraints"] = new JsonArray(),
+            ["completed"] = JsonSerializer.SerializeToNode(recentAssistantNotes, JsonOptions),
+            ["inProgress"] = new JsonArray(),
+            ["remaining"] = new JsonArray(),
+            ["decisions"] = new JsonArray(),
+            ["importantIdentifiers"] = new JsonArray(),
+            ["importantFiles"] = new JsonArray(),
+            ["toolResults"] = JsonSerializer.SerializeToNode(toolJournal, JsonOptions),
+            ["unresolvedQuestions"] = new JsonArray(),
+            ["recentUserMessages"] = JsonSerializer.SerializeToNode(recentUserMessages, JsonOptions),
+            ["nextAction"] = "Continue from the retained recent messages. Consult toolResults before repeating an operation.",
+            ["fallback"] = true
+        }.ToJsonString();
     }
 
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
@@ -1153,6 +1232,31 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         return false;
     }
 
+    private static readonly HashSet<string> CacheableReadOnlyTools = new(StringComparer.Ordinal)
+    {
+        "read_file", "list_files", "get_project", "list_projects", "get_task", "list_tasks",
+        "get_milestone", "list_milestones", "get_label", "list_labels", "context_compile",
+        "context_get", "search_code"
+    };
+
+    internal static bool IsCacheableTool(string? name)
+        => name is not null && CacheableReadOnlyTools.Contains(name);
+
+    private static string CreateToolCacheKey(string tool, JsonObject arguments)
+    {
+        var canonical = CanonicalizeJson(arguments);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            Encoding.UTF8.GetBytes(tool + "\0" + canonical)));
+    }
+
+    private static string CanonicalizeJson(JsonNode? node) => node switch
+    {
+        JsonObject obj => "{" + string.Join(",", obj.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => JsonSerializer.Serialize(pair.Key) + ":" + CanonicalizeJson(pair.Value))) + "}",
+        JsonArray array => "[" + string.Join(",", array.Select(CanonicalizeJson)) + "]",
+        _ => node?.ToJsonString() ?? "null"
+    };
+
     private static string CreateToolCallFingerprint(IEnumerable<ToolCallAccumulator> calls)
     {
         var signature = string.Join("\n", calls
@@ -1258,7 +1362,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             LastModel = saved.LastModel,
             ContextLimit = saved.ContextLimit,
             Usage = saved.Usage,
-            TurnStatus = saved.TurnStatus
+            TurnStatus = saved.TurnStatus,
+            ToolJournal = saved.ToolJournal ?? []
         };
         var changed = false;
         lock (state.Sync)
@@ -1415,7 +1520,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     LastModel = session.LastModel,
                     ContextLimit = session.ContextLimit,
                     Usage = session.Usage,
-                    TurnStatus = session.TurnStatus
+                    TurnStatus = session.TurnStatus,
+                    ToolJournal = session.ToolJournal.ToList()
                 };
             }
             var dir = Path.GetDirectoryName(session.TranscriptPath)!;
@@ -1556,6 +1662,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public int? ContextLimit { get; set; }
         public AgentSessionUsage Usage { get; set; } = new(0, 0, 0, 0);
         public AgentTurnStatus? TurnStatus { get; set; }
+        public List<ToolJournalEntry> ToolJournal { get; set; } = [];
         public CancellationTokenSource? ActiveTurn { get; set; }
         public Task? ActiveTask { get; set; }
     }
@@ -1573,7 +1680,17 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public int? ContextLimit { get; set; }
         public AgentSessionUsage Usage { get; set; } = new(0, 0, 0, 0);
         public AgentTurnStatus? TurnStatus { get; set; }
+        public List<ToolJournalEntry>? ToolJournal { get; set; }
     }
+
+    private sealed record ToolJournalEntry(
+        int TurnNumber,
+        string Tool,
+        string ArgumentsJson,
+        string Result,
+        bool IsError,
+        bool CacheHit,
+        DateTimeOffset RecordedAt);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

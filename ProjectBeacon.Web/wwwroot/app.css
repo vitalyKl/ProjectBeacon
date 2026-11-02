@@ -2481,3 +2481,221 @@ body:has(.beacon-theme-dark) .mud-main-content {
         max-height: 65vh;
     }
 }
+
+
+/* Chat and task workflow layout hardening. Keep flex children scrollable and
+   long model/tool/task labels inside their own containers on narrow screens. */
+.beacon-chat-page,
+.beacon-chat-pane,
+.beacon-chat-log,
+.beacon-chat-sessions {
+    min-width: 0;
+}
+
+.beacon-chat-log {
+    min-height: 0;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+}
+
+.beacon-chat-dock .beacon-chat-pane {
+    min-height: 0;
+}
+
+.beacon-chat-part {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.beacon-chat-part .mud-typography {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.beacon-chat-part.beacon-chat-assistant {
+    color: var(--color-text-primary);
+}
+
+.beacon-chat-part.beacon-chat-assistant .mud-typography {
+    color: inherit;
+}
+
+.beacon-chat-part.beacon-chat-tool,
+.beacon-chat-part.beacon-chat-reasoning,
+.beacon-chat-part.beacon-chat-subtle {
+    color: var(--color-text-secondary);
+}
+
+.beacon-chat-part.beacon-chat-tool .mud-typography,
+.beacon-chat-part.beacon-chat-reasoning .mud-typography,
+.beacon-chat-part.beacon-chat-subtle .mud-typography {
+    color: inherit;
+}
+
+.beacon-chat-part pre,
+.beacon-chat-part code,
+.beacon-chat-part .beacon-pre {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.beacon-chat-compose {
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.beacon-chat-compose .mud-input-control {
+    flex: 1 1 180px;
+    min-width: 0;
+}
+
+.beacon-chat-compose .mud-button-root,
+.beacon-chat-config-button {
+    min-height: 36px;
+    height: 36px;
+    padding: 0 var(--space-3);
+}
+
+.beacon-chat-settings-dialog .mud-input-control {
+    width: 100%;
+    min-width: 0;
+    margin-top: 0;
+}
+
+.beacon-chat-settings-dialog .mud-button-root {
+    min-height: 36px;
+    height: 36px;
+}
+
+.beacon-chat-part-head,
+.beacon-tool-panel-head {
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.beacon-task-hero > :first-child {
+    min-width: 0;
+}
+
+.beacon-task-title {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.beacon-task-start-prompt {
+    min-width: 0;
+}
+
+@media (max-width: 767px) {
+    .beacon-chat-compose {
+        align-items: stretch;
+    }
+
+    .beacon-chat-compose .mud-input-control {
+        flex: 1 1 100%;
+        order: 1;
+    }
+
+    .beacon-chat-compose .beacon-chat-mode-toggle {
+        order: 0;
+    }
+
+    .beacon-chat-compose .mud-button-root:not(.beacon-chat-mode-toggle) {
+        order: 2;
+    }
+
+    .beacon-chat-model-bar .beacon-chat-config-button {
+        flex: 1 1 100%;
+        max-width: 100%;
+    }
+
+    .beacon-chat-dock .beacon-chat-pane {
+        min-height: 0;
+    }
+}
+
+
+/* Final chat layout rules: flex children may shrink, the transcript owns scrolling. */
+.beacon-chat-page {
+    min-height: 0;
+}
+
+.beacon-chat-page .beacon-chat-pane {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.beacon-chat-part,
+.beacon-chat-part .mud-typography,
+.beacon-chat-part .mud-select,
+.beacon-chat-part .mud-input-control,
+.beacon-tool-panel,
+.beacon-tool-panel pre,
+.beacon-tool-panel code,
+.beacon-markdown,
+.beacon-markdown p,
+.beacon-markdown li,
+.beacon-markdown a {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.beacon-markdown pre,
+.beacon-pre-clip {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.beacon-chat-part.beacon-chat-user,
+.beacon-chat-part.beacon-chat-assistant {
+    color: var(--color-text-primary);
+}
+
+.beacon-chat-part.beacon-chat-tool,
+.beacon-chat-part.beacon-chat-reasoning,
+.beacon-chat-part.beacon-chat-subtle {
+    color: var(--color-chat-subtle);
+}
+
+.beacon-chat-compose .mud-button-root,
+.beacon-chat-model-bar .mud-button-root {
+    height: 36px;
+    min-height: 36px;
+}
+
+.beacon-chat-compose .mud-input-control {
+    min-height: 36px;
+}
+
+.beacon-chat-compose .mud-input-outlined {
+    min-height: 36px;
+}
+
+.beacon-pipeline-start-hint {
+    flex-basis: 100%;
+    max-width: 24rem;
+    text-align: right;
+}
+
+@media (max-width: 767px) {
+    .beacon-chat-page {
+        height: calc(100dvh - var(--layout-appbar-height, 72px) - 32px);
+        min-height: 0;
+    }
+
+    .beacon-chat-page .beacon-chat-log {
+        flex: 1 1 0;
+        min-height: 120px;
+        max-height: none;
+    }
+
+    .beacon-pipeline-start-hint {
+        text-align: left;
+    }
+}

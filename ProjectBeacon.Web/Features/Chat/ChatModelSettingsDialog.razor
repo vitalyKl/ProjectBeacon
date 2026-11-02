@@ -2,7 +2,7 @@
 @using ProjectBeacon.Application.Agents
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 
-<MudStack Spacing="3" Class="beacon-chat-settings-dialog">
+<MudStack Spacing="2" Class="beacon-chat-settings-dialog">
     <MudText Typo="Typo.body2">@L["ChatModelSettingsDescription"]</MudText>
     <MudSelect T="string?" Value="@_model" ValueChanged="OnModelChanged"
                Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" FullWidth="true">

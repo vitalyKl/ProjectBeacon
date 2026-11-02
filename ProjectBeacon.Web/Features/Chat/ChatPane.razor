@@ -80,7 +80,7 @@
     <MudText Typo="Typo.caption" Class="beacon-chat-usage mt-2">@usage</MudText>
 }
 <form class="beacon-chat-compose-form" @onsubmit="OnSendSubmit" @onsubmit:preventDefault="true">
-    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
+    <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Spacing="2" Class="mt-2 beacon-chat-compose">
         @if (ShowModelSelect)
         {
             <MudButton Variant="Variant.Outlined"
