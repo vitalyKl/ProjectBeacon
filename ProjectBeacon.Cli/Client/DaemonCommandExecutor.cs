@@ -57,7 +57,33 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (true, JsonSerializer.Serialize(await ClientUpdater.CheckAsync(ct)), null);
             if (kind == WorkstationCommandKind.UpdateClient)
             {
-                var update = await ClientUpdater.DownloadAndScheduleAsync(ct);
+                async Task ReportProgressAsync(ClientUpdateProgress progress, CancellationToken token)
+                {
+                    _state.Publish(status => status with { UpdateProgress = progress });
+                    try
+                    {
+                        using var response = await _http.PostAsJsonAsync(
+                            $"/v1/commands/{command.Id:D}/progress",
+                            new
+                            {
+                                generation = command.Generation,
+                                progressJson = JsonSerializer.Serialize(progress, DaemonJson.Camel)
+                            },
+                            token);
+                        if (!response.IsSuccessStatusCode)
+                            _state.Log($"client update progress report returned HTTP {(int)response.StatusCode}");
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _state.Log($"client update progress could not be reported: {ex.Message}");
+                    }
+                }
+
+                var update = await ClientUpdater.DownloadAndScheduleAsync(ReportProgressAsync, ct);
                 return update.UpdateAvailable
                     ? (true, JsonSerializer.Serialize(update), null)
                     : (false, null, "The workstation client is already up to date.");
