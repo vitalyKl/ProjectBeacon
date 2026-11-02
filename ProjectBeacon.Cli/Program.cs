@@ -14,12 +14,26 @@ if (args[0] is "-h" or "--help")
 
 try
 {
+    if (string.Equals(args[0], "update", StringComparison.OrdinalIgnoreCase))
+    {
+        var update = await ClientUpdater.CheckAsync();
+        Console.WriteLine($"Client {update.CurrentVersion}; latest {update.LatestVersion} ({update.RuntimeIdentifier}).");
+        if (!update.UpdateAvailable)
+        {
+            Console.WriteLine("The client is already up to date.");
+            return 0;
+        }
+        await ClientUpdater.DownloadAndScheduleAsync();
+        Console.WriteLine("Update downloaded and verified. The client will restart.");
+        return 0;
+    }
+
     if (string.Equals(args[0], "client", StringComparison.OrdinalIgnoreCase))
         return Hold(await ClientHost.RunAsync(args), original);
 
     if (!string.Equals(args[0], "mcp", StringComparison.OrdinalIgnoreCase))
     {
-        Console.Error.WriteLine("Unknown command. Use: beacon mcp | beacon client");
+        Console.Error.WriteLine("Unknown command. Use: beacon mcp | beacon client | beacon update");
         return Hold(1, original);
     }
 
@@ -42,6 +56,7 @@ catch (Exception ex)
 static void PrintUsage()
 {
     Console.Error.WriteLine("beacon mcp [--root <path>]");
+    Console.Error.WriteLine("beacon update");
     Console.Error.WriteLine("beacon client [--url <api>] [--token <bcd_>] [--headless]");
     Console.Error.WriteLine("beacon client enroll --url <api> --login <user> --password <pass> [--name <device>]");
 }
