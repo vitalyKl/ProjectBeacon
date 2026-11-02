@@ -2354,4 +2354,15 @@ No Beacon-hosted coding agent.</value>
 <data name="PipelineStartHint" xml:space="preserve"><value>Starts the Planner to analyse this task and prepare an execution plan.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation-level role defaults and OpenCode settings. Pipeline sessions use the role bindings only when the task has no model configured for its semantic phase.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>These are task-pipeline model choices. Decision/worker defaults and phase-level overrides take precedence over workstation role bindings for the configured task phases.</value></data>
+<data name="DaemonUpdates" xml:space="preserve"><value>Daemon updates</value></data>
+<data name="DaemonUpdateDescription" xml:space="preserve"><value>Check and install the latest ProjectBeacon workstation client without manually replacing its installation folder.</value></data>
+<data name="DaemonInstalledVersion" xml:space="preserve"><value>Installed version</value></data>
+<data name="DaemonLatestVersion" xml:space="preserve"><value>Latest version</value></data>
+<data name="DaemonUpdateAvailable" xml:space="preserve"><value>Update available</value></data>
+<data name="DaemonUpToDate" xml:space="preserve"><value>Up to date</value></data>
+<data name="CheckDaemonUpdates" xml:space="preserve"><value>Check for updates</value></data>
+<data name="UpdateDaemonNow" xml:space="preserve"><value>Update daemon</value></data>
+<data name="DaemonUpdateRequiresOnline" xml:space="preserve"><value>The workstation must be online to check for or install updates.</value></data>
+<data name="UpdateDaemonConfirm" xml:space="preserve"><value>Install workstation client version {0}? The daemon will restart automatically.</value></data>
+<data name="DaemonUpdateScheduled" xml:space="preserve"><value>Update verified and scheduled. The workstation client is restarting.</value></data>
 </root>
