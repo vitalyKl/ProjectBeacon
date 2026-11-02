@@ -68,7 +68,12 @@ else
             <select class="beacon-chat-mobile-session-select"
                     aria-label="@L["Chat"]"
                     value="@(_selected?.Id.ToString() ?? string.Empty)"
+                    disabled="@(_sessions.Count == 0)"
                     @onchange="OnMobileSessionChanged">
+                @if (_sessions.Count == 0)
+                {
+                    <option value="">@L["NoChatsYet"]</option>
+                }
                 @foreach (var session in _sessions)
                 {
                     <option value="@session.Id.ToString()">@session.Title</option>
