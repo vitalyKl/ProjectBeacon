@@ -110,7 +110,7 @@ public static class ClientUpdater
     }
 
     private static string VersionPart(string tag) =>
-        tag.TrimStart('v', 'V').Split('-', '+', StringSplitOptions.RemoveEmptyEntries)[0];
+        tag.TrimStart('v', 'V').Split(new[] { '-', '+' }, StringSplitOptions.RemoveEmptyEntries)[0];
 
     private static Version Normalize(Version version) =>
         new(version.Major, Math.Max(0, version.Minor), Math.Max(0, version.Build), Math.Max(0, version.Revision));
