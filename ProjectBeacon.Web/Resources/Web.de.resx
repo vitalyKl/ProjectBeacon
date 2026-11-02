@@ -897,9 +897,6 @@
 <data name="ContextCostCompletionDelta" xml:space="preserve">
     <value>Δ Antwort-Token</value>
   </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ Token gesamt</value>
-  </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ Züge</value>
   </data>

@@ -897,9 +897,6 @@
 <data name="ContextCostCompletionDelta" xml:space="preserve">
     <value>Δ 完成令牌</value>
   </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ 令牌合计</value>
-  </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ 回合</value>
   </data>

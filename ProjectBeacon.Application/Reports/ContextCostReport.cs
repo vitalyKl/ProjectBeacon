@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 /// </summary>
 public record GetContextCostReportRequest(Guid TaskId, Guid? ProjectId = null);
 /// <summary>
-/// One eval pair and the token and turn deltas between the with-brief and without-brief runs.
+/// One eval pair with input-context, generated-output, and turn deltas reported independently.
 /// </summary>
 public record ContextCostPairDto(
     string PairId,
@@ -19,7 +19,6 @@ public record ContextCostPairDto(
     EvalRunDto? WithoutBrief,
     int? PromptTokensDelta,
     int? CompletionTokensDelta,
-    int? TotalTokensDelta,
     int? TurnCountDelta,
     bool? WithBriefPassed,
     bool? WithoutBriefPassed);
@@ -33,7 +32,7 @@ public record ContextCostReportDto(
     int PairCount,
     IReadOnlyList<ContextCostPairDto> Pairs);
 /// <summary>
-/// Compares token cost of a task with and without the compiled brief.
+/// Compares input-context and generated-output token usage independently, without adding output tokens to context usage.
 /// </summary>
 public class ContextCostReportHandler
 {
@@ -97,9 +96,6 @@ public class ContextCostReportHandler
         int? completionDelta = bothCompleted
             ? withBrief!.CompletionTokens - withoutBrief!.CompletionTokens
             : null;
-        int? totalDelta = promptDelta is not null && completionDelta is not null
-            ? promptDelta + completionDelta
-            : null;
         int? turnCountDelta = bothCompleted
             ? withBrief!.TurnCount - withoutBrief!.TurnCount
             : null;
@@ -110,7 +106,6 @@ public class ContextCostReportHandler
             withoutBrief is null ? null : Map(withoutBrief),
             promptDelta,
             completionDelta,
-            totalDelta,
             turnCountDelta,
             withBrief?.Passed,
             withoutBrief?.Passed);

@@ -897,9 +897,6 @@
 <data name="ContextCostCompletionDelta" xml:space="preserve">
     <value>Δ 完了トークン</value>
   </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ 合計トークン</value>
-  </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ ターン</value>
   </data>

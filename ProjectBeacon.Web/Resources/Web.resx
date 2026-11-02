@@ -982,9 +982,6 @@
 <data name="ContextCostCompletionDelta" xml:space="preserve">
     <value>Δ completion tokens</value>
   </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ total tokens</value>
-  </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ turns</value>
   </data>

@@ -921,9 +921,6 @@
 <data name="ContextCostCompletionDelta" xml:space="preserve">
     <value>Δ токенов ответа</value>
   </data>
-<data name="ContextCostTotalDelta" xml:space="preserve">
-    <value>Δ всех токенов</value>
-  </data>
 <data name="ContextCostTurnDelta" xml:space="preserve">
     <value>Δ ходов</value>
   </data>
