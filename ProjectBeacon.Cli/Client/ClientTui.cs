@@ -92,7 +92,8 @@ public static class ClientTui
                 }
                 if (key is null or ConsoleKey.Q or ConsoleKey.Escape)
                     break;
-                await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token);
+                if (await HandleKeyAsync(key.Value, daemon, store, storePath, linked.Token))
+                    break;
             }
         }
         finally
@@ -249,8 +250,9 @@ public static class ClientTui
         }
     }
 
-    private static async Task HandleKeyAsync(ConsoleKey key, WorkstationDaemon daemon, ClientStore store, string? storePath, CancellationToken ct)
+    private static async Task<bool> HandleKeyAsync(ConsoleKey key, WorkstationDaemon daemon, ClientStore store, string? storePath, CancellationToken ct)
     {
+        var stopAfterUpdate = false;
         switch (key)
         {
             case ConsoleKey.S:
@@ -290,7 +292,33 @@ public static class ClientTui
             case ConsoleKey.O:
                 OpenBrowser(store.Url);
                 break;
+            case ConsoleKey.D:
+                try
+                {
+                    var update = await ClientUpdater.CheckAsync(ct);
+                    AnsiConsole.MarkupLine($"[grey]Client {Markup.Escape(update.CurrentVersion)} · latest {Markup.Escape(update.LatestVersion)}[/]");
+                    if (!update.UpdateAvailable)
+                    {
+                        AnsiConsole.MarkupLine("[green]The client is up to date.[/]");
+                        await Task.Delay(900, ct);
+                        break;
+                    }
+                    if (AnsiConsole.Confirm($"Install client {Markup.Escape(update.LatestVersion)} and restart?", true))
+                    {
+                        await ClientUpdater.DownloadAndScheduleAsync(ct);
+                        AnsiConsole.MarkupLine("[green]Update downloaded and verified. Restarting the workstation client…[/]");
+                        stopAfterUpdate = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[red]Update failed: {Markup.Escape(ex.Message)}[/]");
+                    AnsiConsole.MarkupLine("[grey]Press any key…[/]");
+                    Console.ReadKey(true);
+                }
+                break;
         }
+        return stopAfterUpdate;
     }
 
     private static async Task<ConsoleKey?> LiveUntilKeyAsync(WorkstationDaemon daemon, CancellationToken ct)
@@ -346,7 +374,7 @@ public static class ClientTui
             grid.AddRow("Error", $"[red]{Markup.Escape(s.Error)}[/]");
 
         var help = new Markup(
-            "[grey][[S]]ettings  [[P]]robe  [[R]]eload  [[U]]nload  [[A]]utostart  [[L]]og  [[O]]pen  [[Q]]uit[/]");
+            "[grey][[S]]ettings  [[P]]robe  [[R]]eload  [[U]]nload  [[A]]utostart  [[L]]og  [[O]]pen  [[D]]aemon update  [[Q]]uit[/]");
         return new Rows(
             new Panel(grid) { Header = new PanelHeader("Beacon client"), Border = BoxBorder.Rounded },
             help);
