@@ -19,7 +19,7 @@ public sealed class LlamaSwapConfigGeneratorTests
         Assert.Equal(
             "models:\n" +
             "  qwen:\n" +
-            "    cmd: \"llama-server -m qwen.gguf --ctx-size 4096\"\n" +
+            "    cmd: \"llama-server --jinja -m qwen.gguf --ctx-size 4096\"\n" +
             "    ttl: 300\n",
             config);
     }
@@ -31,7 +31,7 @@ public sealed class LlamaSwapConfigGeneratorTests
             new LlamaSwapModelSpec("qwen", "llama-server -m qwen.gguf", 0, 0, [])]);
 
         Assert.DoesNotContain("ttl", config);
-        Assert.Equal("models:\n  qwen:\n    cmd: \"llama-server -m qwen.gguf\"\n", config);
+        Assert.Equal("models:\n  qwen:\n    cmd: \"llama-server --jinja -m qwen.gguf\"\n", config);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class LlamaSwapConfigGeneratorTests
     {
         var spec = new LlamaSwapModelSpec("m", "llama-server --ctx-size 2048 -m m.gguf", 4096, 0, []);
 
-        Assert.Equal("llama-server --ctx-size 2048 -m m.gguf", LlamaSwapConfigGenerator.BuildCommand(spec));
+        Assert.Equal("llama-server --jinja --ctx-size 2048 -m m.gguf", LlamaSwapConfigGenerator.BuildCommand(spec));
     }
 
     [Fact]
@@ -47,7 +47,48 @@ public sealed class LlamaSwapConfigGeneratorTests
     {
         var spec = new LlamaSwapModelSpec("m", "llama-server", 0, 0, [" -ngl 99 ", "", "  "]);
 
-        Assert.Equal("llama-server -ngl 99", LlamaSwapConfigGenerator.BuildCommand(spec));
+        Assert.Equal("llama-server --jinja -ngl 99", LlamaSwapConfigGenerator.BuildCommand(spec));
+    }
+
+
+    [Fact]
+    public void BuildCommand_LlamaServer_AddsJinjaBeforeChatTemplate()
+    {
+        var spec = new LlamaSwapModelSpec("m", "llama-server -m m.gguf --chat-template chatml", 0, 0, []);
+
+        Assert.Equal("llama-server --jinja -m m.gguf --chat-template chatml", LlamaSwapConfigGenerator.BuildCommand(spec));
+    }
+
+    [Fact]
+    public void BuildCommand_ExistingJinja_IsNotDuplicated()
+    {
+        var spec = new LlamaSwapModelSpec("m", "llama-server --jinja -m m.gguf", 0, 0, []);
+
+        Assert.Equal("llama-server --jinja -m m.gguf", LlamaSwapConfigGenerator.BuildCommand(spec));
+    }
+
+    [Fact]
+    public void BuildCommand_ExplicitNoJinja_IsPreserved()
+    {
+        var spec = new LlamaSwapModelSpec("m", "llama-server --no-jinja -m m.gguf", 0, 0, []);
+
+        Assert.Equal("llama-server --no-jinja -m m.gguf", LlamaSwapConfigGenerator.BuildCommand(spec));
+        Assert.False(LlamaSwapConfigGenerator.HasJinjaEnabled(spec.LaunchCommand));
+    }
+
+    [Fact]
+    public void BuildCommand_NonLlamaServerCommand_IsNotModified()
+    {
+        var spec = new LlamaSwapModelSpec("m", "vllm serve model", 0, 0, []);
+
+        Assert.Equal("vllm serve model", LlamaSwapConfigGenerator.BuildCommand(spec));
+    }
+
+    [Fact]
+    public void IsLlamaServerCommand_RecognizesQuotedWindowsExecutable()
+    {
+        Assert.True(LlamaSwapConfigGenerator.IsLlamaServerCommand("\"C:\\Program Files\\llama.cpp\\llama-server.exe\" -m qwen.gguf"));
+        Assert.False(LlamaSwapConfigGenerator.IsLlamaServerCommand("custom-llama-server-wrapper"));
     }
 
     [Fact]
