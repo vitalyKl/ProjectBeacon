@@ -486,13 +486,14 @@ public sealed class NativeAgentRuntimeTests
 
             var parts = await CollectRuntimePartsAsync(runtime, session);
             Assert.Equal(
-                new[] { "reasoning", "text", "tool", "text", "reasoning", "tool", "reasoning", "text" },
+                new[] { "reasoning", "text", "reasoning", "tool", "text", "reasoning", "tool", "reasoning", "text" },
                 parts.Select(part => part.Kind));
             Assert.Equal(
                 new[]
                 {
                     "Thinking before the first tool.",
                     "I will inspect the first file.",
+                    "Another thought before the first tool.",
                     "read_file: README contents",
                     "The first result needs a second check.",
                     "Thinking before the second tool.",
@@ -505,6 +506,7 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal(parts.Select(part => part.ExternalId).ToArray(), streamedPartIds.ToArray());
             Assert.Equal(parts.Count, parts.Select(part => part.ExternalId).Distinct(StringComparer.Ordinal).Count());
             Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:0:reasoning:0");
+            Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:0:reasoning:1");
             Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:1:text:0");
             Assert.Contains(parts, part => part.ExternalId == $"native:{session}:1:step:2:reasoning:0");
         }
@@ -1982,6 +1984,7 @@ public sealed class NativeAgentRuntimeTests
             {
                 yield return new ChatProviderEvent(ChatProviderEventKind.ReasoningDelta, Text: "Thinking before the first tool.");
                 yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "I will inspect the first file.");
+                yield return new ChatProviderEvent(ChatProviderEventKind.ReasoningDelta, Text: "Another thought before the first tool.");
                 yield return new ChatProviderEvent(
                     ChatProviderEventKind.ToolCallDelta,
                     ToolIndex: 0,
