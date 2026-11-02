@@ -2147,4 +2147,6 @@
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки по умолчанию для чата на рабочей станции: одна модель либо модели ролей Planner/Actor/Review.</value></data>
+<data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это настройки pipeline задач: модели принятия решений и выполнения, а также необязательные переопределения для отдельных фаз. Они не меняют настройки интерактивного чата.</value></data>
 </root>

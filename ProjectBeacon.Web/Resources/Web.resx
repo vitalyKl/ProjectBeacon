@@ -2355,4 +2355,6 @@ No Beacon-hosted coding agent.</value>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Local-first control plane for AI-assisted development</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Starts the Planner to analyse this task and prepare an execution plan.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>These are workstation chat defaults: one model for single-model chat, or Planner/Actor/Review role models for multi-role chat.</value></data>
+<data name="TaskKindModelsScopeHint" xml:space="preserve"><value>These are task-pipeline defaults: decision and worker models, with optional per-phase overrides. They do not change interactive chat settings.</value></data>
 </root>
