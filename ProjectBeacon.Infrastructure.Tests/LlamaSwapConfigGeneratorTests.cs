@@ -73,7 +73,16 @@ public sealed class LlamaSwapConfigGeneratorTests
     {
         var spec = new LlamaSwapModelSpec("m", "llama-server -m m.gguf", 0, 0, ["--jinja"]);
 
-        Assert.Equal("llama-server -m m.gguf --jinja", LlamaSwapConfigGenerator.BuildCommand(spec));
+        Assert.Equal("llama-server --jinja -m m.gguf", LlamaSwapConfigGenerator.BuildCommand(spec));
+    }
+
+
+    [Fact]
+    public void BuildCommand_ExtraJinjaFlag_PrecedesChatTemplate()
+    {
+        var spec = new LlamaSwapModelSpec("m", "llama-server -m m.gguf --chat-template chatml", 0, 0, ["--jinja"]);
+
+        Assert.Equal("llama-server --jinja -m m.gguf --chat-template chatml", LlamaSwapConfigGenerator.BuildCommand(spec));
     }
 
     [Fact]
