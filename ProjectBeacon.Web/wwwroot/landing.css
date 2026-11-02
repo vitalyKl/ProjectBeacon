@@ -116,7 +116,7 @@
 }
 .landing-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 31px; }
 .landing-hero-actions .mud-button-root { min-height: 44px; padding-inline: 19px; }
-.landing-hero-actions .mud-button-filled { color: var(--color-text-primary); background: linear-gradient(110deg, var(--color-accent-active), var(--color-accent-active)); box-shadow: 0 8px 28px color-mix(in srgb, var(--color-accent-active) 24%, transparent); }
+.landing-hero-actions .mud-button-filled { color: var(--color-text-primary); background: linear-gradient(110deg, var(--color-accent), var(--color-accent-active)); box-shadow: 0 8px 28px color-mix(in srgb, var(--color-accent-active) 24%, transparent); }
 .landing-hero-actions .mud-button-outlined { border-color: color-mix(in srgb, var(--color-text-secondary) 28%, transparent); }
 .landing-hero-footnote { display: flex; align-items: center; gap: 9px; margin-top: 27px; color: var(--color-text-muted); font-size: 12px; }
 .landing-hero-footnote .mud-icon-root { color: var(--color-accent); }
