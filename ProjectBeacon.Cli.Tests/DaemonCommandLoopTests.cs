@@ -9,6 +9,31 @@ using ProjectBeacon.Domain.Enums;
 public sealed class DaemonCommandLoopTests
 {
     [Fact]
+    public async Task UpdateClientCommand_RequestsShutdownAfterCompletion()
+    {
+        var commandId = Guid.NewGuid();
+        var stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var api = new FakeApi(commandId,
+            _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)),
+            WorkstationCommandKind.UpdateClient);
+        var http = new HttpClient(api) { BaseAddress = new Uri("http://localhost/") };
+        var state = new DaemonRuntimeState("http://localhost", null, () => stopped.TrySetResult(true));
+        var timing = new DaemonTiming { DelayAsync = (_, ct) => Task.CompletedTask };
+        var deps = new DaemonDependencies(http, null!, null!, null!, () => new WorkstationSettings());
+        var loop = new DaemonCommandLoop(deps, new CountingExecutor(), state, timing);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var run = loop.RunAsync(cts.Token);
+        await stopped.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+        cts.Cancel();
+        try { await run; } catch (OperationCanceledException) { }
+
+        Assert.Equal(1, api.CompleteRequests);
+        Assert.True(state.Snapshot.LastCommandOk);
+        http.Dispose();
+    }
+
+    [Fact]
     public async Task Complete_RetriesAfter500_ExecutesExactlyOnce()
     {
         var commandId = Guid.NewGuid();
@@ -308,12 +333,14 @@ public sealed class DaemonCommandLoopTests
     {
         private readonly Guid _commandId;
         private readonly Func<int, Task<HttpResponseMessage>> _completeScript;
+        private readonly WorkstationCommandKind _kind;
         private int _completeCount;
 
-        public FakeApi(Guid commandId, Func<int, Task<HttpResponseMessage>> completeScript)
+        public FakeApi(Guid commandId, Func<int, Task<HttpResponseMessage>> completeScript, WorkstationCommandKind kind = WorkstationCommandKind.Probe)
         {
             _commandId = commandId;
             _completeScript = completeScript;
+            _kind = kind;
         }
 
         public int CompleteRequests => Volatile.Read(ref _completeCount);
@@ -350,7 +377,7 @@ public sealed class DaemonCommandLoopTests
                     return JsonResponse(new
                     {
                         id = _commandId,
-                        kind = "Probe",
+                        kind = _kind.ToString(),
                         version = 1,
                         generation = 1,
                         payloadJson = "{}"
