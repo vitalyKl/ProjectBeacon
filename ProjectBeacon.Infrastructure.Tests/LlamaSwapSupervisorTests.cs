@@ -134,7 +134,7 @@ public sealed class LlamaSwapSupervisorTests
                 Assert.Equal(
                     "models:\n" +
                     "  qwen:\n" +
-                    "    cmd: \"llama-server -m qwen.gguf --ctx-size 4096\"\n" +
+                    "    cmd: \"llama-server --jinja -m qwen.gguf --ctx-size 4096\"\n" +
                     "    ttl: 300\n",
                     await File.ReadAllTextAsync(configPath));
             }
