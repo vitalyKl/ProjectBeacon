@@ -37,6 +37,7 @@ public sealed class ChatDialogParameterTests : BUnitRenderBase
             .Add(p => p.Session, session));
 
         Assert.Contains("Existing chat title", cut.Markup);
+        Assert.Contains("beacon-rename-chat-dialog", cut.Markup);
         Assert.Single(cut.FindAll("input"));
     }
 }
