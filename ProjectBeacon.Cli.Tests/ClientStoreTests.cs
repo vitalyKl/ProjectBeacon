@@ -108,6 +108,21 @@ public sealed class ClientStoreTests : IDisposable
     }
 
     [Fact]
+    public void WorkstationSettings_PersistsAndDefaultsTerminalApprovalToDisabled()
+    {
+        var file = Path.Combine(_dir, "workstation-terminal.json");
+        var defaults = WorkstationSettings.Load(file);
+        Assert.False(defaults.AllowTerminalExecution);
+        defaults.AllowTerminalExecution = true;
+        defaults.Save(file);
+        Assert.True(WorkstationSettings.Load(file).AllowTerminalExecution);
+        var revoked = WorkstationSettings.Load(file);
+        revoked.AllowTerminalExecution = false;
+        revoked.Save(file);
+        Assert.False(WorkstationSettings.Load(file).AllowTerminalExecution);
+    }
+
+    [Fact]
     public void WorkstationSettings_TryRead_InvalidHtml_ReturnsDefaultsAndError()
     {
         var file = Path.Combine(_dir, "workstation.json");

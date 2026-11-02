@@ -31,7 +31,7 @@ internal static class NativeShellRunner
         ["function"] = new JsonObject
         {
             ["name"] = "run_shell",
-            ["description"] = "Run a shell command on the user's workstation, starting in the selected project directory. Supports normal command chaining, pipes, git and GitHub CLI. The command runs as the workstation user and can access files and tools that user can access; do not use it for unrelated system changes. Commands are non-interactive, timed and output-limited.",
+            ["description"] = "Run a shell command on the user's workstation, starting in the selected project directory. Supports command chaining, pipes, git and GitHub CLI. In interactive chat, ProjectBeacon requests user approval before execution unless chat-session or workstation-wide terminal access was already granted. The command runs as the workstation user and can access files and tools available to that user; commands are non-interactive, timed and output-limited.",
             ["parameters"] = new JsonObject
             {
                 ["type"] = "object",

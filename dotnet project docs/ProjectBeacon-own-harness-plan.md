@@ -14,7 +14,7 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 
 - **D0 — место исполнения:** agent loop работает только внутри beacon client на машине пользователя, не на API/Web/Worker.
 - **D1 — доступ к API:** короткоживущий bcn_ harness token выпускается сервером только для действующей команды. В БД хранится hash, сырой токен передаётся только в environment дочернего MCP процесса и не попадает в argv, transcript или logs. Для native eval токен выпускается только после сверки eval run, task, project и закреплённого runtime.
-- **D2 — команды ОС:** run_command запускается без shell, с аргументами процесса, рабочей директорией в корне workspace, timeout и ограничением вывода. Для pipeline Actor требуются одновременно persisted subtask grant и workstation AllowedCommandPrefixes; default allowlist пуст.
+- **D2 — команды ОС:** run_command запускается без shell, с аргументами процесса, timeout и ограничением вывода; run_shell поддерживает обычные команды, цепочки, git и GitHub CLI. В интерактивном чате оба инструмента блокируются до явного ответа пользователя: одна команда, текущий чат или постоянно для workstation. Постоянный grant по умолчанию выключен и отзывается в локальных настройках клиента. Команды работают с правами учётной записи workstation и не являются OS sandbox. Для pipeline Actor требуются persisted subtask grant и workstation AllowedCommandPrefixes для run_command; pipeline/eval не ждут интерактивного ответа.
 - **D3 — transcript:** native session хранится локальными файлами в sessions/ рядом с OpencodeDataDir; сервер получает части чата, а не локальный transcript/секреты.
 
 ## Реализация по шагам
@@ -59,7 +59,7 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 - Pipeline token проверяется по сохранённым command lease/generation, project, task, session, role и subtask. Список Actor tools берётся из persisted subtask, а не из клиентского payload.
 - Native eval token выдаётся только для существующего EvalRun, совпадающего по project/task и закреплённого за native.
 - Planner/Reviewer/Actor имеют разные MCP allowlists. Actor не может сменить subtask/session, запускать supervisor tools или записываться за чужую подзадачу.
-- run_command требует subtask grant и workstation allowlist; shell не используется.
+- run_command требует subtask grant и workstation allowlist; pipeline shell требует отдельного subtask grant. Интерактивный chat shell и run_command показывают точную команду и рабочую директорию, не запускаются до подтверждения пользователя и поддерживают ограниченные grants (once/session/workstation).
 
 ### 5. Cloud providers и credentials
 
@@ -118,7 +118,7 @@ AgentRuntime = "opencode" | "native" хранится на уровне workstat
 ## Не является блокером
 
 - Таблица цен и расчёт TotalCost для облачных моделей: token usage уже учитывается; точное ценообразование требует отдельного версионируемого источника тарифов, поэтому не подменяется предположительными значениями.
-- Swarm/research, interactive approval risky commands, HTTP MCP и server-hosted agents — вне текущего объёма.
+- Swarm/research, HTTP MCP и server-hosted agents — вне текущего объёма. Интерактивное подтверждение workstation-команд работает только в native chat; pipeline/eval не запрашивают пользовательский ввод.
 
 ## Важные риски
 
