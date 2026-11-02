@@ -2177,4 +2177,10 @@ orthstar</value>
   <data name="UpdateDaemonNow" xml:space="preserve">
     <value>立即更新</value>
   </data>
+  <data name="ChatDelete" xml:space="preserve">
+    <value>删除聊天</value>
+  </data>
+  <data name="ChatDeleteConfirm" xml:space="preserve">
+    <value>确定删除聊天“{0}”吗？它将从聊天列表中移除。</value>
+  </data>
 </root>
