@@ -2159,4 +2159,10 @@
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Обновление проверено и запланировано. Клиент рабочей станции перезапускается.</value></data>
 <data name="CheckClientUpdate" xml:space="preserve"><value>Проверить обновления демона</value></data>
 <data name="UpdateClient" xml:space="preserve"><value>Обновить демон</value></data>
+  <data name="ChatDelete" xml:space="preserve">
+    <value>Удалить</value>
+  </data>
+  <data name="ChatDeleteConfirm" xml:space="preserve">
+    <value>Удалить чат «{0}»? Он будет удалён из списка чатов.</value>
+  </data>
 </root>
