@@ -13,5 +13,8 @@ public sealed class DesignTokenGeometryTests
         Assert.Contains("--content-max-width: 1680px;", DesignTokens.RootCss);
         Assert.Contains("--totp-qr-size: 180px;", DesignTokens.RootCss);
         Assert.Contains("--report-filter-max-width: 420px;", DesignTokens.RootCss);
+        Assert.Contains("--space-18: 72px;", DesignTokens.RootCss);
+        Assert.Contains("--space-20: 80px;", DesignTokens.RootCss);
+        Assert.Contains("--space-28: 112px;", DesignTokens.RootCss);
     }
 }

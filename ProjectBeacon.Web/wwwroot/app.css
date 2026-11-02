@@ -117,6 +117,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 .pa-8 { padding: var(--space-8) !important; }
 .ps-4 { padding-inline-start: var(--space-4) !important; }
 .gap-1 { gap: var(--space-1) !important; }
+.gap-2 { gap: var(--space-2) !important; }
 
 
 .mt-1 { margin-top: var(--space-1) !important; }

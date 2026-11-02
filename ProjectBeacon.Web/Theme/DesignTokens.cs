@@ -55,6 +55,9 @@ public static class DesignTokens
     public const string Space10 = "40px";
     public const string Space12 = "48px";
     public const string Space16 = "64px";
+    public const string Space18 = "72px";
+    public const string Space20 = "80px";
+    public const string Space28 = "112px";
 
     public const string RadiusPanel = "12px";
     public const string RadiusSmall = "8px";
@@ -207,6 +210,9 @@ public static class DesignTokens
         ("--space-10", Space10),
         ("--space-12", Space12),
         ("--space-16", Space16),
+        ("--space-18", Space18),
+        ("--space-20", Space20),
+        ("--space-28", Space28),
         ("--radius-panel", RadiusPanel),
         ("--radius-small", RadiusSmall),
         ("--radius-control", RadiusControl),
