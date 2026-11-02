@@ -7,18 +7,21 @@ internal interface IDaemonRuntimeState
     DaemonStatus Snapshot { get; }
     void Log(string message);
     void Publish(Func<DaemonStatus, DaemonStatus> update);
+    void RequestStop();
 }
 
 internal sealed class DaemonRuntimeState : IDaemonRuntimeState
 {
     private readonly Action<string>? _log;
+    private readonly Action? _requestStop;
     private readonly object _gate = new();
     private readonly Queue<string> _logLines = new();
     private DaemonStatus _status;
 
-    public DaemonRuntimeState(string url, Action<string>? log)
+    public DaemonRuntimeState(string url, Action<string>? log, Action? requestStop = null)
     {
         _log = log;
+        _requestStop = requestStop;
         _status = new DaemonStatus { Url = url };
     }
 
@@ -38,6 +41,8 @@ internal sealed class DaemonRuntimeState : IDaemonRuntimeState
         }
         _log?.Invoke(message);
     }
+
+    public void RequestStop() => _requestStop?.Invoke();
 
     public void Publish(Func<DaemonStatus, DaemonStatus> update)
     {
