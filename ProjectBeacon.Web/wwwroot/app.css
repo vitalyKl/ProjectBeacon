@@ -2775,3 +2775,17 @@ body:has(.beacon-theme-dark) .mud-main-content {
         height: calc(var(--beacon-visual-viewport-height, 100dvh) - 56px - 56px - 80px);
     }
 }
+
+
+/* ProjectBeacon visual identity */
+.beacon-app-mark { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; margin-right: 12px; box-shadow: 0 3px 14px rgb(0 119 255 / 18%); }
+.beacon-brand-lockup { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+.beacon-brand-lockup img { width: 34px; height: 34px; border-radius: 10px; box-shadow: 0 3px 14px rgb(0 119 255 / 18%); }
+.beacon-brand span { color: var(--color-accent-hover); }
+.beacon-loader { display: inline-flex; align-items: center; gap: 12px; min-height: 42px; color: var(--color-text-secondary); font-size: var(--type-caption); font-weight: 600; letter-spacing: .02em; }
+.beacon-loader svg { width: 42px; height: 42px; overflow: visible; }
+.beacon-loader-beam { transform-origin: 236px 165px; animation: beacon-sweep 2.4s ease-in-out infinite alternate; }
+.beacon-loader-label { opacity: .82; animation: beacon-breathe 2.4s ease-in-out infinite; }
+@keyframes beacon-sweep { from { transform: rotate(-13deg); opacity: .55; } to { transform: rotate(13deg); opacity: 1; } }
+@keyframes beacon-breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .beacon-loader-beam, .beacon-loader-label { animation: none; } }
