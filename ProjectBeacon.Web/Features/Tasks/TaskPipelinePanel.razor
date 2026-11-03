@@ -23,11 +23,11 @@
                 <StatusChip Color="@SessionStatusColor(session.Status)" Label="@SessionStatusLabel(session.Status)" />
                 @if (session.LaunchedAt is not null)
                 {
-                    <MudText Typo="Typo.caption">@L["Launched"]: @session.LaunchedAt.Value.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption">@L["Launched"]: <LocalTime Value="session.LaunchedAt" Format="d" /></MudText>
                 }
                 @if (session.ClosedAt is not null)
                 {
-                    <MudText Typo="Typo.caption">@L["Closed"]: @session.ClosedAt.Value.ToShortDateString()</MudText>
+                    <MudText Typo="Typo.caption">@L["Closed"]: <LocalTime Value="session.ClosedAt" Format="d" /></MudText>
                 }
                 @if (session.Status == SessionStatus.Ready)
                 {
@@ -51,7 +51,7 @@
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="@(verdict.Kind == ReviewVerdictKind.Approve ? Color.Success : Color.Warning)" Label="@(verdict.Kind == ReviewVerdictKind.Approve ? L["VerdictApprove"].Value : L["VerdictReopenSubtask"].Value)" />
                 <MudText Typo="Typo.body2" Class="grow beacon-pre">@verdict.Note</MudText>
-                <MudText Typo="Typo.caption">@verdict.CreatedAt.ToShortDateString()</MudText>
+                <MudText Typo="Typo.caption"><LocalTime Value="verdict.CreatedAt" Format="d" /></MudText>
             </MudStack>
         }
     }
