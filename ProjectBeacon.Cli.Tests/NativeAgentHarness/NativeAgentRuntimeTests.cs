@@ -1406,6 +1406,248 @@ public sealed class NativeAgentRuntimeTests
     }
 
     [Fact]
+    public void PromptEstimateCountsToolDefinitionsAndPrefersProviderUsage()
+    {
+        var messages = new List<JsonObject>
+        {
+            new() { ["role"] = "system", ["content"] = "system" },
+            new() { ["role"] = "user", ["content"] = "request" },
+            new() { ["role"] = "assistant", ["content"] = "answer" }
+        };
+        var tools = new JsonArray
+        {
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "read_file", ["description"] = new string('x', 4000) }
+            }
+        };
+
+        var toolTokens = NativeAgentRuntime.EstimateToolTokens(tools);
+        Assert.True(toolTokens >= 1000);
+        Assert.Equal(0, NativeAgentRuntime.EstimateToolTokens(new JsonArray()));
+
+        var estimated = NativeAgentRuntime.EstimatePromptTokens(messages, toolTokens, 0, 0);
+        Assert.True(estimated > toolTokens);
+
+        // The provider counted the first two messages at 20k tokens; the third is estimated on top.
+        Assert.True(NativeAgentRuntime.EstimatePromptTokens(messages, toolTokens, 20_000, 2) >= 20_000);
+
+        // A provider that under-reports (cached input) can never make the budget look roomier.
+        Assert.Equal(estimated, NativeAgentRuntime.EstimatePromptTokens(messages, toolTokens, 1, 2));
+    }
+
+    [Fact]
+    public void ElideOlderToolResultsKeepsTheNewestToolGroupAndSmallResults()
+    {
+        var large = new string('x', 5000);
+        var messages = new List<JsonObject>
+        {
+            new() { ["role"] = "system", ["content"] = "system" },
+            new() { ["role"] = "user", ["content"] = "request" },
+            new() { ["role"] = "assistant", ["tool_calls"] = new JsonArray { new JsonObject { ["id"] = "call-1" } } },
+            new() { ["role"] = "tool", ["tool_call_id"] = "call-1", ["content"] = large },
+            new()
+            {
+                ["role"] = "assistant",
+                ["tool_calls"] = new JsonArray { new JsonObject { ["id"] = "call-2" }, new JsonObject { ["id"] = "call-3" } }
+            },
+            new() { ["role"] = "tool", ["tool_call_id"] = "call-2", ["content"] = large },
+            new() { ["role"] = "tool", ["tool_call_id"] = "call-3", ["content"] = "small" }
+        };
+
+        Assert.Equal(1, NativeAgentRuntime.ElideOlderToolResults(messages, 2000));
+        Assert.Contains("elided", messages[3]["content"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(large, messages[5]["content"]!.GetValue<string>());
+        Assert.Equal("small", messages[6]["content"]!.GetValue<string>());
+        Assert.Equal(0, NativeAgentRuntime.ElideOlderToolResults(messages, 2000));
+    }
+
+    [Fact]
+    public void SummaryInputIsBoundedAndKeepsEarlierCheckpointsIntact()
+    {
+        var checkpoint = "Continuation checkpoint (internal state; preserve and follow it):\n" + new string('c', 5000);
+        var old = new List<JsonObject>
+        {
+            new() { ["role"] = "system", ["content"] = checkpoint }
+        };
+        for (var i = 0; i < 40; i++)
+            old.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = "call-" + i, ["content"] = new string('y', 16_000) });
+
+        var input = NativeAgentRuntime.PrepareSummaryInput(old, 4096);
+
+        Assert.Equal(checkpoint, input[0]["content"]!.GetValue<string>());
+        Assert.True(input.Count < old.Count);
+        Assert.All(input.Skip(1), message => Assert.True(message["content"]!.GetValue<string>().Length < 1000));
+    }
+
+    [Fact]
+    public async Task NativeRuntimeFallsBackWhenContextSummaryRequestFails()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-failing-summary-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new FailingSummaryProvider();
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider);
+
+        try
+        {
+            var session = await runtime.CreateSessionAsync("failing summary test", CancellationToken.None);
+            for (var i = 1; i <= 4; i++)
+            {
+                var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
+                await runtime.SendPromptAsync(
+                    session,
+                    $"User message {i}",
+                    "beacon-local/test-model",
+                    CancellationToken.None,
+                    new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
+                await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+                var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                Assert.True(status!.Ended);
+                Assert.Equal("stop", status.Finish);
+                Assert.Null(status.Error);
+            }
+
+            Assert.Equal(1, provider.SummaryCalls);
+            var transcript = JsonNode.Parse(await File.ReadAllTextAsync(
+                Path.Combine(temp, ".opencode", "sessions", session + ".json")))!.AsObject();
+            var checkpoint = transcript["messages"]!.AsArray()
+                .Select(message => message?["content"]?.GetValue<string>())
+                .First(content => content is not null
+                    && content.StartsWith("Continuation checkpoint (internal state; preserve and follow it):\n", StringComparison.Ordinal));
+            Assert.Contains("fallback", checkpoint!, StringComparison.Ordinal);
+            foreach (var i in Enumerable.Range(1, 4))
+                Assert.Contains($"User message {i}", transcript.ToJsonString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
+    public async Task NativeRuntimeDoesNotSummarizeALoneCheckpointAgain()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-lone-checkpoint-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        var project = Path.Combine(temp, "project");
+        Directory.CreateDirectory(project);
+        var settingsPath = Path.Combine(temp, "workstation.json");
+        new WorkstationSettings
+        {
+            ProjectsRoot = project,
+            OpencodeDataDir = Path.Combine(temp, ".opencode", "data"),
+            LlamaSwapPort = 8080
+        }.Save(settingsPath);
+
+        using var control = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[]", Encoding.UTF8, "application/json")
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        await using var llama = new ClientLlamaSwap();
+        var provider = new ContextRecordingProvider();
+        string session;
+        var first = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider);
+        try
+        {
+            session = await first.CreateSessionAsync("lone checkpoint test", CancellationToken.None);
+        }
+        finally
+        {
+            await first.DisposeAsync();
+        }
+
+        // Seven stored messages plus the new prompt make eight: system, a checkpoint and the six
+        // retained messages. The only thing left to compress is the checkpoint itself.
+        var transcriptPath = Path.Combine(temp, ".opencode", "sessions", session + ".json");
+        var stored = JsonNode.Parse(await File.ReadAllTextAsync(transcriptPath))!.AsObject();
+        var systemMessage = stored["messages"]!.AsArray()[0]!.DeepClone();
+        stored["messages"] = new JsonArray(
+            systemMessage,
+            new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = "Continuation checkpoint (internal state; preserve and follow it):\nPRIOR-CHECKPOINT-MARKER"
+            },
+            new JsonObject { ["role"] = "assistant", ["content"] = "answer 1" },
+            new JsonObject { ["role"] = "user", ["content"] = "User message 2" },
+            new JsonObject { ["role"] = "assistant", ["content"] = "answer 2" },
+            new JsonObject { ["role"] = "user", ["content"] = "User message 3" },
+            new JsonObject { ["role"] = "assistant", ["content"] = "answer 3" });
+        await File.WriteAllTextAsync(transcriptPath, stored.ToJsonString());
+
+        var runtime = new NativeAgentRuntime(
+            control,
+            llama,
+            new StubLlamaSync(),
+            () => WorkstationSettings.Load(settingsPath),
+            providerFactory: (_, _, _) => provider);
+        try
+        {
+            await runtime.SendPromptAsync(
+                session,
+                "User message 4",
+                "beacon-local/test-model",
+                CancellationToken.None,
+                new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
+
+            AgentTurnStatus? status = null;
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            while (DateTime.UtcNow < deadline)
+            {
+                status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                if (status?.Ended == true)
+                    break;
+
+                await Task.Delay(25);
+            }
+
+            Assert.True(status?.Ended, status?.Error ?? "The lone-checkpoint turn did not finish before the timeout.");
+            Assert.Equal("stop", status.Finish);
+            Assert.Equal(0, provider.SummaryCalls);
+            Assert.Contains("PRIOR-CHECKPOINT-MARKER", await File.ReadAllTextAsync(transcriptPath), StringComparison.Ordinal);
+        }
+        finally
+        {
+            await runtime.DisposeAsync();
+            Directory.Delete(temp, true);
+        }
+    }
+
+    [Fact]
     public async Task NativeRuntimeAbortCancelsProviderAndEndsTurnAsAborted()
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-abort-" + Guid.NewGuid().ToString("N"));
@@ -1646,6 +1888,31 @@ public sealed class NativeAgentRuntimeTests
                 yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             }
 
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class FailingSummaryProvider : IChatProvider
+    {
+        public int SummaryCalls { get; private set; }
+
+        public async IAsyncEnumerable<ChatProviderEvent> StreamAsync(
+            ChatProviderRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var isSummary = request.Messages.Any(message =>
+                message?["content"]?.GetValue<string>()?.Contains(
+                    "Create a compact continuation checkpoint", StringComparison.Ordinal) == true);
+            if (isSummary)
+            {
+                SummaryCalls++;
+                throw new ChatProviderException("provider HTTP 400", (int)HttpStatusCode.BadRequest, retryable: false);
+            }
+
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Context test response.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
             await Task.CompletedTask;
         }
