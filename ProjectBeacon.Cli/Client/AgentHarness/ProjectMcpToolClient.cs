@@ -526,7 +526,12 @@ internal sealed class McpStreamableHttpClient : IMcpToolClient
 
     private async Task NotifyAsync(string method, JsonObject parameters, CancellationToken ct)
     {
-        var body = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = parameters };
+        var body = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["method"] = method,
+            ["params"] = parameters
+        };
         using var response = await SendAsync(body, ct, includeProtocolHeader: true);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Remote MCP notification failed with HTTP {(int)response.StatusCode}.");
