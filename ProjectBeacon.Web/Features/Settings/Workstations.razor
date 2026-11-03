@@ -68,7 +68,7 @@
                 <MudTd DataLabel="@L["Status"]">
                     <StatusChip Color="@ChipPalette.ForRuntime(context.Online ? "Online" : "Offline")" Label="@(context.Online ? L["DeviceOnline"].Value : L["DeviceOffline"].Value)" />
                 </MudTd>
-                <MudTd DataLabel="@L["LastSeen"]">@(context.LastHeartbeatAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd DataLabel="@L["LastSeen"]"><LocalTime Value="context.LastHeartbeatAt" /></MudTd>
                 <MudTd>
                     <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Revoke(context)">@L["Delete"]</MudButton>
                 </MudTd>
@@ -204,8 +204,8 @@
                 <MudTd DataLabel="@L["Status"]">
                     <StatusChip Color="@ChipPalette.ForCommandStatus(context.Status)" Label="@StatusLabel(context.Status)" />
                 </MudTd>
-                <MudTd DataLabel="@L["Created"]">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
-                <MudTd DataLabel="@L["Completed"]">@(context.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</MudTd>
+                <MudTd DataLabel="@L["Created"]"><LocalTime Value="context.CreatedAt" /></MudTd>
+                <MudTd DataLabel="@L["Completed"]"><LocalTime Value="context.CompletedAt" /></MudTd>
                 <MudTd DataLabel="@L["Error"]">@(string.IsNullOrWhiteSpace(context.Error) ? "-" : context.Error)</MudTd>
             </RowTemplate>
             <NoRecordsContent>@L["NoCommands"]</NoRecordsContent>
