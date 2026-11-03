@@ -473,9 +473,12 @@ public sealed class P2AuthorizationHttpTests
         var labelsResponse = await client.GetAsync($"/v1/projects/{projectId}/labels", TestContext.Current.CancellationToken);
         var nodesResponse = await client.GetAsync($"/v1/projects/{projectId}/context/nodes", TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, projectResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, labelsResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, nodesResponse.StatusCode);
+        Assert.True(projectResponse.StatusCode == HttpStatusCode.OK,
+            $"Project read returned {(int)projectResponse.StatusCode}: {await projectResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+        Assert.True(labelsResponse.StatusCode == HttpStatusCode.OK,
+            $"Label read returned {(int)labelsResponse.StatusCode}: {await labelsResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+        Assert.True(nodesResponse.StatusCode == HttpStatusCode.OK,
+            $"Context-node read returned {(int)nodesResponse.StatusCode}: {await nodesResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
     }
 
     private static async Task<string> BootstrapAndLogin(HttpClient client)
