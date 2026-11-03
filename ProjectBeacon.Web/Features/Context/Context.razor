@@ -111,7 +111,7 @@ else
                 }
                 @foreach (var revision in _revisions.Take(5))
                 {
-                    <MudText Typo="Typo.caption" Class="mt-1">@revision.CreatedAt.ToUniversalTime().ToString("u") · @revision.TokenEstimate · @ShortHash(revision.CompiledHash)</MudText>
+                    <MudText Typo="Typo.caption" Class="mt-1"><LocalTime Value="revision.CreatedAt" Format="u" /> · @revision.TokenEstimate · @ShortHash(revision.CompiledHash)</MudText>
                 }
             </MudPaper>
         </div>
