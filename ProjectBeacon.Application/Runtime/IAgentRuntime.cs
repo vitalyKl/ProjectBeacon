@@ -26,7 +26,8 @@ public sealed record AgentHarnessAuthorization(
     DateTime ExpiresAt,
     Guid? SubtaskId = null,
     string? PipelineRole = null,
-    IReadOnlyList<string>? AllowedMcpTools = null);
+    IReadOnlyList<string>? AllowedMcpTools = null,
+    IReadOnlyList<McpServerConfiguration>? McpServers = null);
 
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)
 {

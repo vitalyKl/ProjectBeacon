@@ -2197,4 +2197,79 @@ orthstar</value>
   </data>
 <data name="ChatDelete" xml:space="preserve"><value>チャットを削除</value></data>
 <data name="ChatDeleteConfirm" xml:space="preserve"><value>チャット「{0}」を削除しますか？チャット一覧から削除されます。</value></data>
+  <data name="McpHarnessLead" xml:space="preserve">
+    <value>サーバー設定はプロジェクトごとに保存され、ワークステーション上の Native Harness が起動します。ローカルコマンドはシェルを介さず直接実行され、リモートサーバーは MCP Streamable HTTP を使用します。外部プロセスは現在の OS ユーザー権限で実行されます。</value>
+  </data>
+  <data name="McpServerName" xml:space="preserve">
+    <value>サーバー名</value>
+  </data>
+  <data name="McpTransport" xml:space="preserve">
+    <value>トランスポート</value>
+  </data>
+  <data name="McpStdio" xml:space="preserve">
+    <value>ローカルプロセス (stdio)</value>
+  </data>
+  <data name="McpHttp" xml:space="preserve">
+    <value>リモート (Streamable HTTP)</value>
+  </data>
+  <data name="McpArguments" xml:space="preserve">
+    <value>引数（1 行に 1 つ。シェル解析なし）</value>
+  </data>
+  <data name="McpEnvironment" xml:space="preserve">
+    <value>環境変数 (KEY=VALUE)</value>
+  </data>
+  <data name="McpEndpoint" xml:space="preserve">
+    <value>HTTP エンドポイント</value>
+  </data>
+  <data name="McpHeaders" xml:space="preserve">
+    <value>HTTP ヘッダー (KEY=VALUE)</value>
+  </data>
+  <data name="McpEnabled" xml:space="preserve">
+    <value>このサーバーを有効化</value>
+  </data>
+  <data name="McpReplaceSecrets" xml:space="preserve">
+    <value>保存済みの認証情報を置換または削除</value>
+  </data>
+  <data name="McpCredentialsHint" xml:space="preserve">
+    <value>シークレットは保存時に暗号化されます。既存の認証情報を保持するには空欄のままにし、置換または削除する場合は上のチェックボックスを選択します。</value>
+  </data>
+  <data name="McpNoServers" xml:space="preserve">
+    <value>このプロジェクトには MCP サーバーが設定されていません。</value>
+  </data>
+  <data name="McpSaved" xml:space="preserve">
+    <value>MCP サーバー設定を保存しました。</value>
+  </data>
+  <data name="McpDeleted" xml:space="preserve">
+    <value>MCP サーバーを削除しました。</value>
+  </data>
+  <data name="McpInvalidPairs" xml:space="preserve">
+    <value>各行に KEY=VALUE 形式で入力してください。</value>
+  </data>
+  <data name="McpEnabledState" xml:space="preserve">
+    <value>有効</value>
+  </data>
+  <data name="McpDisabledState" xml:space="preserve">
+    <value>無効</value>
+  </data>
+  <data name="McpNoProject" xml:space="preserve">
+    <value>MCP サーバーを設定する前にプロジェクトを選択してください。</value>
+  </data>
+  <data name="McpServerNextSession" xml:space="preserve">
+    <value>有効なサーバーは次のチャットまたはタスクセッション開始時に Native Harness が起動します。</value>
+  </data>
+  <data name="McpCredentialsSaved" xml:space="preserve">
+    <value>認証情報を保存済み</value>
+  </data>
+  <data name="McpAddServer" xml:space="preserve">
+    <value>サーバーを保存</value>
+  </data>
+  <data name="McpEditServer" xml:space="preserve">
+    <value>編集</value>
+  </data>
+  <data name="McpCancelEdit" xml:space="preserve">
+    <value>編集をキャンセル</value>
+  </data>
+  <data name="McpPipelineAllowlistHint" xml:space="preserve">
+    <value>ツール名は mcp_&lt;server&gt;_&lt;tool&gt; 形式で公開されます。タスクパイプラインで使用するには、Actor サブタスクの Allowed MCP Tools に正確な名前または mcp_&lt;server&gt;_* を追加してください。</value>
+  </data>
 </root>

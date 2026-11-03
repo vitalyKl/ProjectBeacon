@@ -1,0 +1,303 @@
+@using ProjectBeacon.Application.Agents
+@using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Runtime
+@using Microsoft.AspNetCore.Components.Authorization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+@inject AuthenticationStateProvider Auth
+@inject ListProjectMcpServersHandler ListServers
+@inject SaveProjectMcpServersHandler SaveServers
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeContextual"] · @L["ScopeProjectHint"]</MudText>
+    <MudText Typo="Typo.subtitle1" Class="mb-2">@L["McpServers"]</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@L["McpHarnessLead"]</MudText>
+
+    @if (ProjectId == Guid.Empty)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">@L["McpNoProject"]</MudAlert>
+    }
+    else
+    {
+        <div class="beacon-form">
+            <MudTextField @bind-Value="_name" Label="@L["McpServerName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="string" @bind-Value="_transport" Label="@L["McpTransport"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
+                <MudSelectItem Value="@("stdio")">@L["McpStdio"]</MudSelectItem>
+                <MudSelectItem Value="@("streamable-http")">@L["McpHttp"]</MudSelectItem>
+            </MudSelect>
+
+            @if (_transport == "stdio")
+            {
+                <MudTextField @bind-Value="_command" Label="@L["McpCommand"]" Placeholder="npx" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudTextField @bind-Value="_arguments" Label="@L["McpArguments"]" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudTextField @bind-Value="_environment" Label="@L["McpEnvironment"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            }
+            else
+            {
+                <MudTextField @bind-Value="_endpoint" Label="@L["McpEndpoint"]" Placeholder="https://example.com/mcp" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudTextField @bind-Value="_headers" Label="@L["McpHeaders"]" Lines="3" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            }
+
+            <MudCheckBox T="bool" @bind-Value="_enabled" Label="@L["McpEnabled"]" Dense="true" Class="mt-2" />
+            @if (_editingName is not null || _hasSavedSecrets)
+            {
+                <MudCheckBox T="bool" @bind-Value="_replaceSecrets" Label="@L["McpReplaceSecrets"]" Dense="true" />
+            }
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["McpCredentialsHint"]</MudText>
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy">
+                    @L["McpAddServer"]
+                </MudButton>
+                @if (_editingName is not null)
+                {
+                    <MudButton Variant="Variant.Text" OnClick="ResetForm" Disabled="_busy">@L["McpCancelEdit"]</MudButton>
+                }
+            </MudStack>
+        </div>
+
+        <MudDivider Class="my-4" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["McpServerNextSession"]</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["McpPipelineAllowlistHint"]</MudText>
+        @if (_servers.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@L["McpNoServers"]</MudText>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                @foreach (var server in _servers)
+                {
+                    <MudPaper @key="server.Name" Outlined="true" Elevation="0" Class="pa-3">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body1">@server.Name</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @(server.Transport == "stdio" ? L["McpStdio"].Value : L["McpHttp"].Value)
+                                    · @(server.Enabled ? L["McpEnabledState"].Value : L["McpDisabledState"].Value)
+                                </MudText>
+                            </MudStack>
+                            <MudStack Row="true" Spacing="1">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Edit(server))" Disabled="_busy">@L["McpEditServer"]</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => Remove(server))" Disabled="_busy">@L["Delete"]</MudButton>
+                            </MudStack>
+                        </MudStack>
+                        @if (server.Transport == "stdio")
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">@server.Command @string.Join(" ", server.Arguments)</MudText>
+                            @if (server.EnvironmentKeys.Count > 0)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@string.Join(", ", server.EnvironmentKeys) · @L["McpCredentialsSaved"]</MudText>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">@server.Endpoint</MudText>
+                            @if (server.HeaderNames.Count > 0)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@string.Join(", ", server.HeaderNames) · @L["McpCredentialsSaved"]</MudText>
+                            }
+                        }
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private Guid _loadedProjectId;
+    private ActorContext _actor = ActorContext.Anonymous;
+    private List<ProjectMcpServerDto> _servers = [];
+    private string _name = string.Empty;
+    private string _transport = "stdio";
+    private string _command = string.Empty;
+    private string _arguments = string.Empty;
+    private string _endpoint = string.Empty;
+    private string _environment = string.Empty;
+    private string _headers = string.Empty;
+    private string? _editingName;
+    private bool _enabled = true;
+    private bool _hasSavedSecrets;
+    private bool _replaceSecrets;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProjectId == ProjectId)
+            return;
+        _loadedProjectId = ProjectId;
+        ResetForm();
+        var principal = (await Auth.GetAuthenticationStateAsync()).User;
+        _actor = ActorContextFactory.FromPrincipal(principal);
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (ProjectId == Guid.Empty)
+        {
+            _servers = [];
+            return;
+        }
+        var result = await ListServers.HandleAsync(new ListProjectMcpServersCommand(ProjectId, _actor));
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+            _servers = [];
+            return;
+        }
+        _servers = result.Value!.OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private void Edit(ProjectMcpServerDto server)
+    {
+        _editingName = server.Name;
+        _name = server.Name;
+        _transport = server.Transport;
+        _command = server.Command ?? string.Empty;
+        _arguments = string.Join(Environment.NewLine, server.Arguments);
+        _endpoint = server.Endpoint ?? string.Empty;
+        _environment = string.Empty;
+        _headers = string.Empty;
+        _enabled = server.Enabled;
+        _hasSavedSecrets = server.HasSecrets;
+        _replaceSecrets = false;
+    }
+
+    private async Task Save()
+    {
+        if (_busy || ProjectId == Guid.Empty)
+            return;
+        var name = _name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            Snackbar.Add(L["McpServerName"].Value, Severity.Warning);
+            return;
+        }
+
+        Dictionary<string, string>? environment = null;
+        Dictionary<string, string>? headers = null;
+        if (_transport == "stdio")
+        {
+            if (!TryParsePairs(_environment, out environment))
+                return;
+        }
+        else if (!TryParsePairs(_headers, out headers))
+        {
+            return;
+        }
+
+        var server = new McpServerConfiguration(
+            name,
+            _transport,
+            _transport == "stdio" ? _command.Trim() : null,
+            _transport == "stdio"
+                ? _arguments.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : [],
+            _transport == "streamable-http" ? _endpoint.Trim() : null,
+            environment,
+            headers,
+            _enabled);
+
+        var entries = new List<ProjectMcpServerSaveItem>();
+        foreach (var existing in _servers)
+        {
+            if (string.Equals(existing.Name, _editingName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(existing.Name, name, StringComparison.OrdinalIgnoreCase))
+                continue;
+            entries.Add(new ProjectMcpServerSaveItem(
+                new McpServerConfiguration(existing.Name, existing.Transport, existing.Command, existing.Arguments,
+                    existing.Endpoint, null, null, existing.Enabled)));
+        }
+        entries.Add(new ProjectMcpServerSaveItem(server, _replaceSecrets));
+        if (await SaveList(entries, L["McpSaved"].Value))
+            ResetForm();
+    }
+
+    private async Task Remove(ProjectMcpServerDto server)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["Confirm"].Value,
+            string.Format(L["DeleteConnectionConfirm"].Value, server.Name),
+            yesText: L["Delete"].Value,
+            cancelText: L["Cancel"].Value);
+        if (confirmed != true || _busy)
+            return;
+
+        var entries = _servers
+            .Where(item => !string.Equals(item.Name, server.Name, StringComparison.OrdinalIgnoreCase))
+            .Select(item => new ProjectMcpServerSaveItem(
+                new McpServerConfiguration(item.Name, item.Transport, item.Command, item.Arguments,
+                    item.Endpoint, null, null, item.Enabled)))
+            .ToList();
+        if (await SaveList(entries, L["McpDeleted"].Value)
+            && _editingName is not null
+            && string.Equals(_editingName, server.Name, StringComparison.OrdinalIgnoreCase))
+            ResetForm();
+    }
+
+    private async Task<bool> SaveList(IReadOnlyList<ProjectMcpServerSaveItem> entries, string successMessage)
+    {
+        _busy = true;
+        try
+        {
+            var saved = await SaveServers.HandleAsync(new SaveProjectMcpServersCommand(ProjectId, entries, _actor));
+            if (!saved.Success)
+            {
+                Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
+                return false;
+            }
+            _servers = saved.Value!.OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            Snackbar.Add(successMessage, Severity.Success);
+            return true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private bool TryParsePairs(string raw, out Dictionary<string, string>? result)
+    {
+        result = null;
+        if (string.IsNullOrWhiteSpace(raw))
+            return true;
+        result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in raw.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = line.IndexOf('=');
+            if (separator <= 0)
+            {
+                Snackbar.Add(L["McpInvalidPairs"].Value, Severity.Warning);
+                return false;
+            }
+            var key = line[..separator].Trim();
+            var value = line[(separator + 1)..];
+            if (string.IsNullOrWhiteSpace(key) || result.ContainsKey(key))
+            {
+                Snackbar.Add(L["McpInvalidPairs"].Value, Severity.Warning);
+                return false;
+            }
+            result[key] = value;
+        }
+        return true;
+    }
+
+    private void ResetForm()
+    {
+        _editingName = null;
+        _name = string.Empty;
+        _transport = "stdio";
+        _command = string.Empty;
+        _arguments = string.Empty;
+        _endpoint = string.Empty;
+        _environment = string.Empty;
+        _headers = string.Empty;
+        _enabled = true;
+        _hasSavedSecrets = false;
+        _replaceSecrets = false;
+    }
+}
