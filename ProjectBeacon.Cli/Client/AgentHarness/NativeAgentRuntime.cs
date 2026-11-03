@@ -19,6 +19,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 {
     private const int MaxAttempts = 3;
     private const int MaxToolResultCharacters = 16 * 1024;
+    private const string CheckpointHeader = "Continuation checkpoint (internal state; preserve and follow it):";
+    private const double CompactionTriggerRatio = 0.82;
+    private const double CompactionTargetRatio = 0.6;
+    private const int ElidedToolResultThreshold = 2000;
+    private const int SummaryInputItemCharacters = 2000;
     private readonly HttpClient _controlPlane;
     private readonly ClientLlamaSwap _llama;
     private readonly IDaemonLlamaSync _llamaSync;
@@ -121,6 +126,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             session.ActiveTurn = turnCts;
+            if (!string.Equals(previousModel, selectedModel, StringComparison.Ordinal))
+            {
+                // Another model counts tokens differently; its last reported prompt size is not comparable.
+                session.LastPromptTokens = 0;
+                session.LastPromptMessageCount = 0;
+            }
             session.LastModel = selectedModel;
             session.ContextLimit = controls?.ContextLimit is > 0 ? controls.ContextLimit : session.ContextLimit;
             turnNumber = ++session.TurnNumber;
@@ -393,7 +404,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, ct);
+                var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, mcpTools, ct);
+                var requestMessageCount = messages.Count;
                 var request = new ChatProviderRequest(
                     resolved.Model,
                     messages,
@@ -435,11 +447,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
                                 case ChatProviderEventKind.Usage:
                                     lock (session.Sync)
+                                    {
                                         session.Usage = session.Usage with
                                         {
                                             PromptTokens = session.Usage.PromptTokens + (item.PromptTokens ?? 0),
                                             CompletionTokens = session.Usage.CompletionTokens + (item.CompletionTokens ?? 0)
                                         };
+                                        if (item.PromptTokens is > 0)
+                                        {
+                                            session.LastPromptTokens = item.PromptTokens.Value;
+                                            session.LastPromptMessageCount = requestMessageCount;
+                                        }
+                                    }
                                     break;
 
                                 case ChatProviderEventKind.Finished when item.FinishReason is not null and not "done":
@@ -883,10 +902,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         IChatProvider provider,
         string model,
         AgentPromptControls? controls,
+        JsonArray tools,
         CancellationToken ct)
     {
         List<JsonObject> snapshot;
         List<ToolJournalEntry> toolJournal;
+        int lastPromptTokens;
+        int lastPromptMessageCount;
         lock (session.Sync)
         {
             snapshot = session.Messages.Select(m => (JsonObject)m.DeepClone()).ToList();
@@ -900,63 +922,114 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         : entry.Result[..1200] + " [journal excerpt truncated]"
                 })
                 .ToList();
+            lastPromptTokens = session.LastPromptTokens;
+            lastPromptMessageCount = session.LastPromptMessageCount;
         }
 
         var limit = controls?.ContextLimit is > 0 ? controls.ContextLimit.Value : session.ContextLimit.GetValueOrDefault();
-        if (limit > 0 && EstimateTokens(snapshot) > (int)(limit * 0.82) && snapshot.Count > 3)
+        if (limit <= 0)
         {
-            var preserve = Math.Min(6, snapshot.Count - 1);
-            var splitAt = FindSafeContextSplitIndex(snapshot, snapshot.Count - preserve);
-            var keep = snapshot.Skip(splitAt).ToList();
-            var old = snapshot.Skip(1).Take(splitAt - 1).ToList();
-            if (old.Count > 0)
+            bool announce;
+            lock (session.Sync)
             {
-                var summaryRequest = new ChatProviderRequest(
-                    model,
-                    new JsonArray
-                    {
-                        new JsonObject
+                announce = !session.ContextLimitWarningLogged;
+                session.ContextLimitWarningLogged = true;
+            }
+            if (announce)
+                _log?.Invoke($"native context compaction is off: no context limit is known for model '{model}'; set the context size of its model backend");
+        }
+        else
+        {
+            // The tool definitions travel with every request, so they count against the window too.
+            var toolTokens = EstimateToolTokens(tools);
+            var promptTokens = EstimatePromptTokens(snapshot, toolTokens, lastPromptTokens, lastPromptMessageCount);
+            if (promptTokens > (int)(limit * CompactionTriggerRatio) && snapshot.Count > 3)
+            {
+                var changed = false;
+                var preserve = Math.Min(6, snapshot.Count - 1);
+                var splitAt = FindSafeContextSplitIndex(snapshot, snapshot.Count - preserve);
+                var keep = snapshot.Skip(splitAt).ToList();
+                var old = snapshot.Skip(1).Take(splitAt - 1).ToList();
+
+                // A checkpoint that is the only thing left to compress is already as small as it gets.
+                // Summarizing it again on every step would cost a model call and free nothing.
+                if (old.Any(m => !IsCheckpointMessage(m)))
+                {
+                    _log?.Invoke($"native context compaction: about {promptTokens} of {limit} tokens used (tools about {toolTokens}); summarizing {old.Count} messages");
+                    var summaryInput = PrepareSummaryInput(old, limit);
+                    var summaryRequest = new ChatProviderRequest(
+                        model,
+                        new JsonArray
                         {
-                            ["role"] = "system",
-                            ["content"] = "Create a compact continuation checkpoint as a valid JSON object with keys: goal, constraints, completed, inProgress, remaining, decisions, importantIdentifiers, importantFiles, toolResults, unresolvedQuestions, nextAction. Preserve exact identifiers, paths, tool outcomes, errors, and user constraints. Distinguish verified facts from assumptions. Do not invent facts. The checkpoint is internal runtime state, not a user-facing final answer."
-                        },
-                        new JsonObject
-                        {
-                            ["role"] = "user",
-                            ["content"] = new JsonObject
+                            new JsonObject
                             {
-                                ["conversation"] = new JsonArray(old.Select(m => (JsonNode?)m.DeepClone()).ToArray()),
-                                ["toolJournal"] = JsonSerializer.SerializeToNode(toolJournal, JsonOptions)
-                            }.ToJsonString()
-                        }
-                    },
-                    new JsonArray(),
-                    controls?.Temperature,
-                    controls?.ReasoningEffort,
-                    controls?.MaxTokens is > 0 ? Math.Min(controls.MaxTokens.Value, 2048) : 2048);
-                var summary = new StringBuilder();
-                await foreach (var item in provider.StreamAsync(summaryRequest, ct))
-                    if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
-                        summary.Append(item.Text);
+                                ["role"] = "system",
+                                ["content"] = "Create a compact continuation checkpoint as a valid JSON object with keys: goal, constraints, completed, inProgress, remaining, decisions, importantIdentifiers, importantFiles, toolResults, unresolvedQuestions, nextAction. Preserve exact identifiers, paths, tool outcomes, errors, and user constraints. Distinguish verified facts from assumptions. Do not invent facts. The checkpoint is internal runtime state, not a user-facing final answer."
+                            },
+                            new JsonObject
+                            {
+                                ["role"] = "user",
+                                ["content"] = new JsonObject
+                                {
+                                    ["conversation"] = new JsonArray(summaryInput.Select(m => (JsonNode?)m.DeepClone()).ToArray()),
+                                    ["toolJournal"] = JsonSerializer.SerializeToNode(toolJournal, JsonOptions)
+                                }.ToJsonString()
+                            }
+                        },
+                        new JsonArray(),
+                        controls?.Temperature,
+                        controls?.ReasoningEffort,
+                        controls?.MaxTokens is > 0 ? Math.Min(controls.MaxTokens.Value, 2048) : 2048);
+                    var summary = new StringBuilder();
+                    try
+                    {
+                        await foreach (var item in provider.StreamAsync(summaryRequest, ct))
+                            if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
+                                summary.Append(item.Text);
+                    }
+                    catch (Exception ex) when (!ct.IsCancellationRequested
+                        && ex is HttpRequestException or IOException or InvalidDataException)
+                    {
+                        // The summary request can fail precisely because the window is already
+                        // exhausted. That must not end the user's task: fall back below.
+                        summary.Clear();
+                        _log?.Invoke($"native context summary request failed ({ex.GetType().Name})");
+                    }
 
-                if (summary.Length == 0)
-                {
-                    // A failed/empty model summary must not terminate the user's task. Preserve
-                    // a deterministic structured checkpoint from the recent transcript and tool journal.
-                    summary.Append(BuildFallbackCheckpoint(old, toolJournal));
-                    _log?.Invoke("native context compaction used a deterministic fallback checkpoint");
+                    if (summary.Length == 0)
+                    {
+                        // A failed/empty model summary must not terminate the user's task. Preserve
+                        // a deterministic structured checkpoint from the recent transcript and tool journal.
+                        summary.Append(BuildFallbackCheckpoint(old, toolJournal));
+                        _log?.Invoke("native context compaction used a deterministic fallback checkpoint");
+                    }
+
+                    var compacted = new List<JsonObject> { snapshot[0] };
+                    compacted.Add(new JsonObject { ["role"] = "system", ["content"] = CheckpointHeader + "\n" + summary.ToString() });
+                    compacted.AddRange(keep);
+                    snapshot = compacted;
+                    changed = true;
                 }
 
-                var compacted = new List<JsonObject> { snapshot[0] };
-                compacted.Add(new JsonObject { ["role"] = "system", ["content"] = "Continuation checkpoint (internal state; preserve and follow it):\\n" + summary.ToString() });
-                compacted.AddRange(keep);
-                snapshot = compacted;
-                lock (session.Sync)
+                // The retained tail can still be too large (parallel reads, big tool results). Older tool
+                // results are replaced by a pointer so the next step does not immediately compact again.
+                if (EstimatePromptTokens(snapshot, toolTokens, 0, 0) > (int)(limit * CompactionTargetRatio)
+                    && ElideOlderToolResults(snapshot, ElidedToolResultThreshold) > 0)
+                    changed = true;
+
+                if (changed)
                 {
-                    session.Messages.Clear();
-                    session.Messages.AddRange(snapshot.Select(m => (JsonObject)m.DeepClone()));
+                    lock (session.Sync)
+                    {
+                        session.Messages.Clear();
+                        session.Messages.AddRange(snapshot.Select(m => (JsonObject)m.DeepClone()));
+                        // The reported size described the transcript that no longer exists.
+                        session.LastPromptTokens = 0;
+                        session.LastPromptMessageCount = 0;
+                    }
+                    await PersistAsync(session, ct);
+                    _log?.Invoke($"native context after compaction: about {EstimatePromptTokens(snapshot, toolTokens, 0, 0)} of {limit} tokens");
                 }
-                await PersistAsync(session, ct);
             }
         }
 
@@ -964,6 +1037,125 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         foreach (var message in snapshot)
             result.Add(message.DeepClone());
         return result;
+    }
+
+    internal static int EstimatePromptTokens(
+        IReadOnlyList<JsonObject> messages,
+        int toolTokens,
+        int lastPromptTokens,
+        int lastPromptMessageCount)
+    {
+        var estimate = EstimateTokens(messages) + toolTokens;
+        if (lastPromptTokens <= 0 || lastPromptMessageCount <= 0 || lastPromptMessageCount > messages.Count)
+            return estimate;
+
+        // The provider's own count for the previous request is exact; only what was added since
+        // is estimated. The larger of the two wins, so a provider that under-reports (cached input)
+        // can never make the budget look roomier than the estimate.
+        var addedSince = lastPromptMessageCount == messages.Count
+            ? 0
+            : EstimateTokens(messages.Skip(lastPromptMessageCount).ToList());
+        return Math.Max(estimate, lastPromptTokens + addedSince);
+    }
+
+    internal static int EstimateToolTokens(JsonArray tools) =>
+        tools.Count == 0 ? 0 : Math.Max(1, Encoding.UTF8.GetByteCount(tools.ToJsonString()) / 4);
+
+    internal static bool IsCheckpointMessage(JsonObject message) =>
+        string.Equals(message["role"]?.GetValue<string>(), "system", StringComparison.Ordinal)
+        && message["content"] is JsonValue content
+        && content.TryGetValue<string>(out var text)
+        && text.StartsWith(CheckpointHeader, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Bounds what the summary request sends. The summary call must fit the same window it is
+    /// relieving, so oversized entries are clipped and, as a last resort, the oldest ones dropped.
+    /// Earlier checkpoints are never clipped: they are the densest history there is.
+    /// </summary>
+    internal static List<JsonObject> PrepareSummaryInput(IReadOnlyList<JsonObject> old, int limit)
+    {
+        var budget = Math.Max(2048, (int)(limit * 0.6));
+        var items = old.Select(m => ClipMessageForSummary(m, SummaryInputItemCharacters)).ToList();
+        if (EstimateTokens(items) > budget)
+            items = old.Select(m => ClipMessageForSummary(m, 400)).ToList();
+        while (items.Count > 1 && EstimateTokens(items) > budget)
+        {
+            var drop = items.FindIndex(m => !IsCheckpointMessage(m));
+            if (drop < 0 || drop == items.Count - 1)
+                break;
+            items.RemoveAt(drop);
+        }
+
+        return items;
+    }
+
+    private static JsonObject ClipMessageForSummary(JsonObject message, int maxChars)
+    {
+        var clone = (JsonObject)message.DeepClone();
+        if (IsCheckpointMessage(clone))
+            return clone;
+
+        if (clone["content"] is JsonValue content
+            && content.TryGetValue<string>(out var text)
+            && text.Length > maxChars)
+            clone["content"] = ClipText(text, maxChars, $" [clipped from {text.Length} characters for the summary input]");
+
+        if (clone["tool_calls"] is JsonArray calls)
+        {
+            foreach (var call in calls.OfType<JsonObject>())
+            {
+                if (call["function"] is JsonObject function
+                    && function["arguments"] is JsonValue arguments
+                    && arguments.TryGetValue<string>(out var argumentText)
+                    && argumentText.Length > maxChars)
+                    function["arguments"] = ClipText(argumentText, maxChars, " [clipped]");
+            }
+        }
+
+        return clone;
+    }
+
+    private static string ClipText(string text, int maxChars, string note)
+    {
+        if (text.Length <= maxChars)
+            return text;
+        // Never end on half of a surrogate pair: the JSON writer rejects invalid UTF-16.
+        var end = maxChars > 0 && char.IsHighSurrogate(text[maxChars - 1]) ? maxChars - 1 : maxChars;
+        return text[..end] + note;
+    }
+
+    /// <summary>
+    /// Replaces large tool results with a pointer, except for the newest tool-call group, which the
+    /// model is still reading. Returns how many results were replaced.
+    /// </summary>
+    internal static int ElideOlderToolResults(IList<JsonObject> messages, int threshold)
+    {
+        var protectedFrom = messages.Count;
+        for (var i = messages.Count - 1; i >= 1; i--)
+        {
+            if (string.Equals(messages[i]["role"]?.GetValue<string>(), "assistant", StringComparison.Ordinal)
+                && messages[i]["tool_calls"] is JsonArray { Count: > 0 })
+            {
+                protectedFrom = i;
+                break;
+            }
+        }
+
+        var elided = 0;
+        for (var i = 1; i < protectedFrom; i++)
+        {
+            var message = messages[i];
+            if (!string.Equals(message["role"]?.GetValue<string>(), "tool", StringComparison.Ordinal))
+                continue;
+            if (message["content"] is not JsonValue content
+                || !content.TryGetValue<string>(out var text)
+                || text.Length <= threshold)
+                continue;
+            message["content"] = $"[Older tool result elided to fit the context window: {text.Length} characters. Re-run the tool if the details are needed.]";
+            elided++;
+        }
+
+        return elided;
     }
 
     internal static int FindSafeContextSplitIndex(IReadOnlyList<JsonObject> messages, int requestedIndex)
@@ -1025,10 +1217,17 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             .Where(content => !string.IsNullOrWhiteSpace(content))
             .TakeLast(4)
             .ToArray();
+        // An earlier checkpoint lives in a system message, which the user/assistant filters above skip;
+        // without carrying it over, repeated fallbacks would silently discard the oldest history.
+        var previousCheckpoint = olderMessages
+            .Where(IsCheckpointMessage)
+            .Select(message => message["content"]!.GetValue<string>()[CheckpointHeader.Length..].Trim())
+            .LastOrDefault();
 
         return new JsonObject
         {
             ["goal"] = recentUserMessages.LastOrDefault() ?? "Continue the user's current request from the retained conversation.",
+            ["previousCheckpoint"] = previousCheckpoint is null ? null : ClipText(previousCheckpoint, 6000, " [clipped]"),
             ["constraints"] = new JsonArray(),
             ["completed"] = JsonSerializer.SerializeToNode(recentAssistantNotes, JsonOptions),
             ["inProgress"] = new JsonArray(),
@@ -1660,6 +1859,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public int TurnNumber { get; set; }
         public string? LastModel { get; set; }
         public int? ContextLimit { get; set; }
+        // Provider-reported size of the last request and how many session messages it held. Runtime
+        // only: a restored transcript starts from the estimate until the next response reports usage.
+        public int LastPromptTokens { get; set; }
+        public int LastPromptMessageCount { get; set; }
+        public bool ContextLimitWarningLogged { get; set; }
         public AgentSessionUsage Usage { get; set; } = new(0, 0, 0, 0);
         public AgentTurnStatus? TurnStatus { get; set; }
         public List<ToolJournalEntry> ToolJournal { get; set; } = [];
