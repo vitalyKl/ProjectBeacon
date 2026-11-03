@@ -70,6 +70,9 @@
             for (const node of record.addedNodes) {
                 if (node.nodeType === Node.ELEMENT_NODE) refresh(node);
             }
+            if (record.type === "attributes") {
+                formatElement(record.target);
+            }
             if (record.type === "characterData" && record.target.parentElement?.matches("[data-local-time]")) {
                 formatElement(record.target.parentElement);
             }
