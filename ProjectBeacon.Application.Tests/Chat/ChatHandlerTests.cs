@@ -590,6 +590,32 @@ public sealed class ChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AppendPart_OutOfOrderPartialSnapshotCannotRollBackStreamingText()
+    {
+        var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+        var ct = TestContext.Current.CancellationToken;
+        var append = new AppendChatPartHandler(factory, new ChatEventSignal());
+
+        var newest = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "Hello world", "m1:text:0")), ct);
+        Assert.True(newest.Success, newest.Error);
+
+        var delayed = await append.HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "text", "Hello", "m1:text:0")), ct);
+        Assert.True(delayed.Success, delayed.Error);
+        Assert.Equal("Hello world", delayed.Value!.Body);
+        Assert.False(delayed.Value.Complete);
+
+        var listed = await new ListChatPartsHandler(factory).HandleAsync(
+            new ListChatPartsCommand(new ListChatPartsRequest(sessionId, Guid.Empty)), ct);
+        Assert.True(listed.Success, listed.Error);
+        Assert.Equal("Hello world", Assert.Single(listed.Value!).Body);
+    }
+
+    [Fact]
     public async Task ReportUsage_StoresTotalsAndContextLimit()
     {
         var (projectId, _, _, deviceId, sessionId) = await SeedSessionAsync();
