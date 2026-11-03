@@ -460,18 +460,18 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             var collected = new List<AgentMessagePart>();
             await foreach (var part in runtime.StreamPartsAsync(externalSessionId, tokenCt))
             {
-                // Private reasoning is intentionally not persisted to the task activity log.
-                if (string.Equals(part.Kind, "reasoning", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                // Publish the same reasoning, tool and text events used by the chat transcript.
+                // Clip each entry and keep the snapshot bounded to stay below the progress API limit.
+                if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
                     continue;
                 collected.Add(part with
                 {
-                    Body = ClipActivityText(part.Body, 12000),
-                    ToolInput = ClipActivityText(part.ToolInput, 8000),
-                    ToolResult = ClipActivityText(part.ToolResult, 12000)
+                    Body = ClipActivityText(part.Body, 2000),
+                    ToolInput = ClipActivityText(part.ToolInput, 1000),
+                    ToolResult = ClipActivityText(part.ToolResult, 1500)
                 });
             }
-            var parts = collected.TakeLast(30).Select(part => new
+            var parts = collected.TakeLast(20).Select(part => new
             {
                 role = part.Role,
                 kind = part.Kind,
@@ -504,13 +504,15 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             var latest = collected.LastOrDefault();
             var activity = forms.Count > 0
                 ? "Waiting for your answer"
-                : latest?.Kind == "tool"
-                    ? $"Using {latest.Tool ?? "a tool"}"
-                    : latest?.Kind == "text" && !string.IsNullOrWhiteSpace(latest.Body)
-                        ? ClipActivityText(latest.Body, 280)
-                        : state == "completed" ? "Stage completed"
-                        : state == "failed" ? "Stage failed"
-                        : "Agent is working";
+                : latest?.Kind == "reasoning" && !string.IsNullOrWhiteSpace(latest.Body)
+                    ? $"Thinking: {ClipActivityText(latest.Body, 280)}"
+                    : latest?.Kind == "tool"
+                        ? $"Using {latest.Tool ?? "a tool"}"
+                        : latest?.Kind == "text" && !string.IsNullOrWhiteSpace(latest.Body)
+                            ? ClipActivityText(latest.Body, 280)
+                            : state == "completed" ? "Stage completed"
+                            : state == "failed" ? "Stage failed"
+                            : "Agent is working";
 
             var snapshot = JsonSerializer.Serialize(new
             {
