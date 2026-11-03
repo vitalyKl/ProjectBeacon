@@ -40,7 +40,8 @@
                     }
                 </MudPaper>
             }
-            @if (!Phases.Any() && Pipeline is { Subtasks.Count: > 0 })
+        }
+            @if (Phases.Count == 0 && Pipeline is { Subtasks.Count: > 0 })
             {
                 <MudText Typo="Typo.subtitle2" Class="mt-3">@L["Subtasks"]</MudText>
                 @foreach (var sub in Pipeline.Subtasks)
@@ -59,7 +60,6 @@
                     </MudPaper>
                 }
             }
-        }
     </MudPaper>
 }
 

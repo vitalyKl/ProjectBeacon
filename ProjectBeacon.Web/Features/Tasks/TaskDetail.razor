@@ -108,6 +108,12 @@ else
             </div>
         </section>
     }
+    @if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3" Icon="@Icons.Material.Filled.PanTool">
+            @L["PipelineWaitingForUser"]
+        </MudAlert>
+    }
     <div class="beacon-task-grid">
         <main class="beacon-task-main">
             <section class="beacon-panel beacon-surface-operational">
@@ -235,7 +241,9 @@ else
     private Guid? _openPhaseId;
     private string _stepTitle = string.Empty;
 
-    private string HeroStateClass => _pipeline?.Stage switch
+    private string HeroStateClass => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+        ? "is-warning"
+        : _pipeline?.Stage switch
     {
         TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
         TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
@@ -249,9 +257,11 @@ else
     };
 
     private string HeroStateLabel =>
-        _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
-            ? PipelineStageLabel(stage)
-            : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
+        _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+            ? L["WaitingForUser"].Value
+            : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
+                ? PipelineStageLabel(stage)
+                : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
 
     private static string SessionStateClass(SessionStatus status) => status switch
     {
@@ -270,7 +280,9 @@ else
         _ => ""
     };
 
-    private string NextTone => _pipeline?.Stage switch
+    private string NextTone => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+        ? "is-warning"
+        : _pipeline?.Stage switch
     {
         TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
         TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
@@ -282,6 +294,8 @@ else
     {
         get
         {
+            if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
+                return L["PipelineWaitingForUser"].Value;
             if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
                 return L["NextStepTodo"].Value;
             return _pipeline.Stage switch

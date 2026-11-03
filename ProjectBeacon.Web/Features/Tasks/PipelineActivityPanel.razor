@@ -59,7 +59,8 @@
     private List<ChatPartDto> Forms { get; set; } = [];
     private string SnapshotKey { get; set; } = string.Empty;
 
-    private bool IsLive => Session.Status is SessionStatus.Active or SessionStatus.WaitingForUser;
+    private bool IsLive => Session.Status == SessionStatus.WaitingForUser
+        || (Session.Status == SessionStatus.Active && _state is not ("completed" or "failed"));
     private string ActivityLabel => !string.IsNullOrWhiteSpace(_activity)
         ? _activity
         : _state switch
