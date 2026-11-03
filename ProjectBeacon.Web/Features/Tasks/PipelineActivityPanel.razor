@@ -13,7 +13,7 @@
             <div class="beacon-pipeline-activity-title">
                 <span class="beacon-pipeline-activity-role">@RoleLabel</span>
                 <StatusChip Color="@StatusColor" Label="@StatusLabel" />
-                @if (IsLive)
+                @if (IsWorking)
                 {
                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
                 }
@@ -61,6 +61,8 @@
 
     private bool IsLive => Session.Status == SessionStatus.WaitingForUser
         || (Session.Status == SessionStatus.Active && _state is not ("completed" or "failed"));
+    private bool IsWorking => Session.Status == SessionStatus.Active
+        && _state is not ("completed" or "failed" or "waiting-for-user");
     private string ActivityLabel => !string.IsNullOrWhiteSpace(_activity)
         ? _activity
         : _state switch
@@ -115,8 +117,6 @@
                 {
                     var kind = ReadString(part, "kind") ?? "text";
                     var role = ReadString(part, "role") ?? "assistant";
-                    if (string.Equals(kind, "reasoning", StringComparison.OrdinalIgnoreCase))
-                        continue;
                     var externalId = ReadString(part, "externalId") ?? $"{sort}:{kind}";
                     Parts.Add(new ChatPartDto(
                         StableId(Session.Id, externalId),
