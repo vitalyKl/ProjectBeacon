@@ -2367,4 +2367,22 @@ No Beacon-hosted coding agent.</value>
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Update verified and scheduled. The workstation client is restarting.</value></data>
 <data name="CheckClientUpdate" xml:space="preserve"><value>Check daemon updates</value></data>
 <data name="UpdateClient" xml:space="preserve"><value>Update daemon</value></data>
+  <data name="TimeZone" xml:space="preserve">
+    <value>Time zone</value>
+  </data>
+  <data name="TimeZoneSystem" xml:space="preserve">
+    <value>System default</value>
+  </data>
+  <data name="TimeZoneHint" xml:space="preserve">
+    <value>Dates are stored in UTC and displayed in this time zone. System default follows this browser's time zone.</value>
+  </data>
+  <data name="TimeZoneLoadFailed" xml:space="preserve">
+    <value>Could not read the browser time zone.</value>
+  </data>
+  <data name="TimeZoneSaved" xml:space="preserve">
+    <value>Time zone saved.</value>
+  </data>
+  <data name="TimeZoneInvalid" xml:space="preserve">
+    <value>That time zone is not valid in this browser.</value>
+  </data>
 </root>
