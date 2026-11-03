@@ -1617,17 +1617,29 @@ public sealed class NativeAgentRuntimeTests
             providerFactory: (_, _, _) => provider);
         try
         {
-            var streamTask = runtime.StreamTextAsync(session, (_, _, _, _, _) => Task.CompletedTask, CancellationToken.None);
             await runtime.SendPromptAsync(
                 session,
                 "User message 4",
                 "beacon-local/test-model",
                 CancellationToken.None,
                 new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
-            await streamTask.WaitAsync(TimeSpan.FromSeconds(15));
 
-            var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
-            Assert.True(status!.Ended);
+            AgentTurnStatus? status = null;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            while (!timeout.IsCancellationRequested)
+            {
+                status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
+                if (status?.Ended == true)
+                    break;
+
+                await Task.Delay(25, timeout.Token).ContinueWith(
+                    task => task.IsCanceled ? Task.CompletedTask : task,
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default).Unwrap();
+            }
+
+            Assert.True(status?.Ended, status?.Error ?? "The lone-checkpoint turn did not finish before the timeout.");
             Assert.Equal("stop", status.Finish);
             Assert.Equal(0, provider.SummaryCalls);
             Assert.Contains("PRIOR-CHECKPOINT-MARKER", await File.ReadAllTextAsync(transcriptPath), StringComparison.Ordinal);
