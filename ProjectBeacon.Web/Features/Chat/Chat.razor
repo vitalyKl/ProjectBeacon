@@ -59,7 +59,7 @@ else
                     </div>
                     <div @onclick:stopPropagation="true">
                         <MudIconButton Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Edit" OnClick="() => Rename(session)" title="@L["ChatRename"].Value" aria-label="@L["ChatRename"].Value" />
-                        <MudIconButton Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Archive" OnClick="() => Archive(session)" title="@L["ChatArchive"].Value" aria-label="@L["ChatArchive"].Value" />
+                        <MudIconButton Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.DeleteOutline" OnClick="() => DeleteChat(session)" title="@L["ChatDelete"].Value" aria-label="@L["ChatDelete"].Value" />
                     </div>
                 </div>
             }
@@ -94,7 +94,7 @@ else
                     </ActivatorContent>
                     <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => Rename(_selected!))">@L["ChatRename"]</MudMenuItem>
-                        <MudMenuItem Icon="@Icons.Material.Filled.Archive" OnClick="@(() => Archive(_selected!))">@L["ChatArchive"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="@(() => DeleteChat(_selected!))">@L["ChatDelete"]</MudMenuItem>
                     </ChildContent>
                 </MudMenu>
             }
@@ -245,15 +245,16 @@ else
     private async Task Rename(ChatSessionDto session)
     {
         var parameters = new DialogParameters { ["Session"] = session };
-        await DialogService.ShowAsync(typeof(RenameChatSessionDialog), L["ChatRename"].Value, parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        await DialogService.ShowAsync(typeof(RenameChatSessionDialog), L["ChatRename"].Value, parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = false });
         var selectedId = _selected?.Id;
         await ReloadSessions();
         _selected = selectedId is not null ? _sessions.FirstOrDefault(s => s.Id == selectedId.Value) : _selected;
     }
 
-    private async Task Archive(ChatSessionDto session)
+    private async Task DeleteChat(ChatSessionDto session)
     {
-        var confirmed = await DialogService.ShowMessageBoxAsync(L["ChatArchive"].Value, session.Title, L["Confirm"].Value, L["Cancel"].Value);
+        var confirmation = string.Format(L["ChatDeleteConfirm"].Value, session.Title);
+        var confirmed = await DialogService.ShowMessageBoxAsync(L["ChatDelete"].Value, confirmation, L["Confirm"].Value, L["Cancel"].Value);
         if (confirmed != true)
             return;
         var result = await ArchiveSession.HandleAsync(new ArchiveChatSessionCommand(new ArchiveChatSessionRequest(session.Id, _userId)));

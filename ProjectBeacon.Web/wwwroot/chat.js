@@ -15,6 +15,17 @@
     window.visualViewport.addEventListener("resize", syncViewportHeight, { passive: true });
   }
 })();
+// iOS Safari can scroll the document when the software keyboard changes the visual viewport.
+// Keep the chat page at the top and reveal the composer inside its own scroll container.
+document.addEventListener("focusin", function (e) {
+  var input = e.target.closest(".beacon-chat-message-input textarea");
+  if (!input || !input.closest(".beacon-chat-page")) return;
+  requestAnimationFrame(function () {
+    window.scrollTo(0, 0);
+    // The composer is already anchored by the chat layout; do not call scrollIntoView,
+    // which can scroll the document itself on iOS Safari.
+  });
+});
 window.BeaconChat = {
   copyCode: function (btn) {
     var box = btn.closest(".beacon-code");

@@ -2177,4 +2177,6 @@
   <data name="TimeZoneInvalid" xml:space="preserve">
     <value>Этот часовой пояс не поддерживается браузером.</value>
   </data>
+<data name="ChatDelete" xml:space="preserve"><value>Удалить</value></data>
+<data name="ChatDeleteConfirm" xml:space="preserve"><value>Удалить чат «{0}»? Он будет удалён из списка чатов.</value></data>
 </root>

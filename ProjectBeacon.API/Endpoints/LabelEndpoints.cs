@@ -4,6 +4,7 @@ using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 
 using Application.Projects;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>
@@ -12,12 +13,12 @@ using Microsoft.AspNetCore.Mvc;
 public static class LabelEndpoints
 {
     /// <summary>
-    /// Maps <c>GET /v1/projects/{projectId:guid}/labels</c>, <c>GET /v1/projects/{projectId:guid}/labels/match</c>, and <c>POST /v1/projects/{projectId:guid}/labels/{labelId:guid}/paths</c> with <c>RequireHuman</c>.
+    /// Maps label reads for human or TaskRead token actors, and label-path mutations for human actors.
     /// </summary>
     public static IEndpointRouteBuilder MapLabelEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapGet("/v1/projects/{projectId:guid}/labels/match", MatchLabel).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/labels", ListLabels).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapGet("/v1/projects/{projectId:guid}/labels/match", MatchLabel).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/projects/{projectId:guid}/labels/{labelId:guid}/paths", AddPath).RequireAuthorization().DisableAntiforgery().RequireHuman();
         return app;
     }

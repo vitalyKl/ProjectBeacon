@@ -117,7 +117,6 @@ public sealed class CapabilityWallHttpTests
             ("GET", "/v1/projects"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/decisions"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/milestones"),
-            ("GET", $"/v1/projects/{ctx.ProjectId}/labels"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/reports"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/members"),
             ("GET", $"/v1/projects/{ctx.ProjectId}/tokens"),

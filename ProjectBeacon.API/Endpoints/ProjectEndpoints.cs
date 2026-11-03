@@ -20,13 +20,13 @@ using Microsoft.Extensions.Configuration;
 /// </summary>
 public static class ProjectEndpoints
 {
-    /// <summary>Maps project, member, invite, and token routes. Every route requires a human caller.</summary>
+    /// <summary>Maps project, membership, invite, and token routes. Project detail reads also allow scoped TaskRead tokens; administrative operations remain human-only.</summary>
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}", DeleteProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
