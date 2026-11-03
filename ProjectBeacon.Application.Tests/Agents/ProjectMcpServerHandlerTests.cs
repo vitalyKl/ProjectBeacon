@@ -77,7 +77,7 @@ public sealed class ProjectMcpServerHandlerTests : IDisposable
             projectId, [new ProjectMcpServerSaveItem(edited)], actor));
         Assert.True(second.Success, second.Error);
 
-        var stored = _secrets.Open(_db.Projects.IgnoreQueryFilters()
+        var stored = _secrets.Open(_db.Projects.IgnoreQueryFilters().AsNoTracking()
             .Single(project => project.Id == projectId).McpServersCipher);
         var parsed = JsonSerializer.Deserialize<List<McpServerConfiguration>>(
             stored, new JsonSerializerOptions(JsonSerializerDefaults.Web));
