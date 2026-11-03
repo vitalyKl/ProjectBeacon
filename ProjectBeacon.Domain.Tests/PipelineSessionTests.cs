@@ -107,11 +107,11 @@ public sealed class PipelineSessionTests
         var session = NewSession();
         session.Launch("external-session");
 
-        session.UpdateActivity("{\\"state\\":\\"waiting-for-user\\"}", waitingForUser: true);
+        session.UpdateActivity("{\"state\":\"waiting-for-user\"}", waitingForUser: true);
         Assert.Equal(SessionStatus.WaitingForUser, session.Status);
-        Assert.Equal("{\\"state\\":\\"waiting-for-user\\"}", session.ActivityJson);
+        Assert.Equal("{\"state\":\"waiting-for-user\"}", session.ActivityJson);
 
-        session.UpdateActivity("{\\"state\\":\\"running\\"}", waitingForUser: false);
+        session.UpdateActivity("{\"state\":\"running\"}", waitingForUser: false);
         Assert.Equal(SessionStatus.Active, session.Status);
     }
 
