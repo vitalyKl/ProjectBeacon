@@ -107,12 +107,27 @@ internal static class ProjectMcpToolClient
                         await client.DisposeAsync();
                     // Do not include exception messages: child processes and HTTP libraries may
                     // echo command arguments or credential-bearing request details.
-                    log?.Invoke($"MCP server '{server.Name}' could not be started: {DescribeStartFailure(ex, server)}");
+                    log?.Invoke($"MCP server '{server.Name}' could not be started: {DescribeStartupFailure(ex, server)}");
                 }
             }
         }
 
         return new CompositeMcpToolClient(beacon, clients, aliases, tools);
+    }
+
+    private static string DescribeStartupFailure(Exception exception, McpServerConfiguration server)
+    {
+        // Keep startup diagnostics useful without ever logging exception messages, command
+        // arguments, environment values, HTTP headers, or credential-bearing endpoint data.
+        return exception switch
+        {
+            FileNotFoundException => $"executable '{Path.GetFileName(server.Command ?? string.Empty)}' was not found",
+            System.ComponentModel.Win32Exception => "the operating system could not launch the process",
+            HttpRequestException => "the remote MCP endpoint could not be reached or rejected the request",
+            TimeoutException or OperationCanceledException => "MCP initialization timed out",
+            InvalidDataException => "the server returned an invalid MCP initialization or tools response",
+            _ => exception.GetType().Name
+        };
     }
 
     private static string CreateToolAlias(string serverName, string toolName)
