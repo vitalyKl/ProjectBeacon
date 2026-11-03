@@ -22,8 +22,8 @@ document.addEventListener("focusin", function (e) {
   if (!input) return;
   requestAnimationFrame(function () {
     window.scrollTo(0, 0);
-    var form = input.closest(".beacon-chat-compose-form");
-    if (form) form.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // The composer is already anchored by the chat layout; do not call scrollIntoView,
+    // which can scroll the document itself on iOS Safari.
   });
 });
 window.BeaconChat = {
