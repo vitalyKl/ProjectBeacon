@@ -127,7 +127,8 @@ else
                 <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase"
                               Busy="_busy" OnStartActorSession="OnStartActorSession"
                               OnReportResult="@(subtask => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))"
-                              OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))" />
+                              OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))"
+                              OnLaunchSession="OnLaunchSession" />
             </section>
         </main>
         <aside class="beacon-task-aside">
