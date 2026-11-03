@@ -3,9 +3,11 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Chat
+@using ProjectBeacon.Application.Tasks
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject ReplyChatFormHandler ReplyForm
+@inject ReplyPipelineFormHandler ReplyPipelineForm
 @inject ISnackbar Snackbar
 
 <div class="beacon-chat-part @PartClass" data-chat-part-id="@Part.Id">
@@ -152,6 +154,8 @@
 @code {
     [Parameter, EditorRequired] public ChatPartDto Part { get; set; } = default!;
     [Parameter] public string? ModelName { get; set; }
+    [Parameter] public Guid? PipelineTaskId { get; set; }
+    [Parameter] public Guid? PipelineSessionId { get; set; }
 
     private bool IsTool => string.Equals(Part.Kind, "tool", StringComparison.OrdinalIgnoreCase);
 
@@ -391,12 +395,28 @@
                         break;
                 }
             }
-            var result = await ReplyForm.HandleAsync(new ReplyChatFormCommand(new ReplyChatFormRequest(
-                Part.SessionId, _userId, QFormId, answer.ToJsonString())), CancellationToken.None);
-            if (result.Success)
+            bool success;
+            string? error;
+            if (PipelineTaskId is { } taskId && PipelineSessionId is { } pipelineSessionId)
+            {
+                var result = await ReplyPipelineForm.HandleAsync(new ReplyPipelineFormCommand(
+                    new ReplyPipelineFormRequest(taskId, pipelineSessionId, _userId, QFormId, answer.ToJsonString())),
+                    CancellationToken.None);
+                success = result.Success;
+                error = result.Error;
+            }
+            else
+            {
+                var result = await ReplyForm.HandleAsync(new ReplyChatFormCommand(new ReplyChatFormRequest(
+                    Part.SessionId, _userId, QFormId, answer.ToJsonString())), CancellationToken.None);
+                success = result.Success;
+                error = result.Error;
+            }
+
+            if (success)
                 Snackbar.Add(L["ChatAnswered"].Value, Severity.Info);
             else
-                Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, result.Error ?? L["Error"].Value), Severity.Error);
+                Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, error ?? L["Error"].Value), Severity.Error);
             StateHasChanged();
         }
         finally
