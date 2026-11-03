@@ -1045,10 +1045,6 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("InvitedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("McpServersCipher")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
 
@@ -1293,6 +1289,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("McpServersCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
