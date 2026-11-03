@@ -350,11 +350,15 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             || request.ProgressJson.Length > MaxProgressJsonLength)
             return Result.Failure<WorkstationCommandDto>("Invalid command progress payload.");
 
+        bool waitingForUser;
         try
         {
             using var progress = JsonDocument.Parse(request.ProgressJson);
             if (progress.RootElement.ValueKind != JsonValueKind.Object)
                 return Result.Failure<WorkstationCommandDto>("Command progress must be a JSON object.");
+            waitingForUser = progress.RootElement.TryGetProperty("forms", out var forms)
+                && forms.ValueKind == JsonValueKind.Array
+                && forms.GetArrayLength() > 0;
         }
         catch (JsonException)
         {
@@ -384,9 +388,6 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             if (session is null)
                 return Result.Failure<WorkstationCommandDto>("Pipeline session not found.", ErrorKind.Conflict);
 
-            var waitingForUser = progress.RootElement.TryGetProperty("forms", out var forms)
-                && forms.ValueKind == JsonValueKind.Array
-                && forms.GetArrayLength() > 0;
             var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
             var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
             if (activity["forms"] is null)
