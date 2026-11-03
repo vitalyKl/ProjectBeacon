@@ -48,7 +48,7 @@ public sealed class ProjectMcpServerHandlerTests : IDisposable
             projectId, [new ProjectMcpServerSaveItem(server, ReplaceSecrets: true)], actor));
         Assert.True(saved.Success, saved.Error);
 
-        var cipher = _db.Projects.IgnoreQueryFilters().Single(project => project.Id == projectId).McpServersCipher;
+        var cipher = _db.Projects.IgnoreQueryFilters().AsNoTracking().Single(project => project.Id == projectId).McpServersCipher;
         Assert.DoesNotContain("super-secret-value", cipher);
         Assert.StartsWith(ISecretProtector.V2Prefix, cipher);
 
