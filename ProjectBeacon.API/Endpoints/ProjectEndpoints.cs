@@ -4,10 +4,10 @@ using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 
 using Application.Authorization;
-using Application.Agents;
 using Application.Common;
 using Application.Identity;
 using Application.Projects;
+using Application.Runtime;
 using Domain.Enums;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
@@ -28,8 +28,6 @@ public static class ProjectEndpoints
         app.MapPut("/v1/projects/{projectId:guid}", UpdateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}", DeleteProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
-        app.MapGet("/v1/projects/{projectId:guid}/mcp-servers", ListMcpServers).RequireAuthorization().DisableAntiforgery().RequireHuman();
-        app.MapPut("/v1/projects/{projectId:guid}/mcp-servers", SaveMcpServers).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
@@ -88,31 +86,6 @@ public static class ProjectEndpoints
             ? Results.Ok(MapProjectResponse(result.Value!))
             : result.FromResult(404);
     }
-
-    private static async Task<IResult> ListMcpServers(
-        Guid projectId, ListProjectMcpServersHandler handler, HttpContext ctx, CancellationToken ct)
-    {
-        var result = await handler.HandleAsync(new ListProjectMcpServersCommand(projectId, ctx.GetActor()), ct);
-        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
-    }
-
-    private static async Task<IResult> SaveMcpServers(
-        Guid projectId,
-        [FromBody] ProjectMcpServersBody body,
-        SaveProjectMcpServersHandler handler,
-        HttpContext ctx,
-        CancellationToken ct)
-    {
-        if (body.Servers is null)
-            return ProblemResults.Bad("MCP server list is required.");
-        var result = await handler.HandleAsync(
-            new SaveProjectMcpServersCommand(projectId, body.Servers, ctx.GetActor()), ct);
-        return result.Success ? Results.Ok(result.Value) : result.FromResult(404);
-    }
-
-    /// <summary>Complete replacement of the project's MCP server list.</summary>
-    public sealed record ProjectMcpServersBody(IReadOnlyList<ProjectMcpServerSaveItem> Servers);
-
 
     private static async Task<IResult> ListProjects(Guid orgId, ListProjectsHandler handler)
     {
