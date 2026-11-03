@@ -1625,18 +1625,14 @@ public sealed class NativeAgentRuntimeTests
                 new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
 
             AgentTurnStatus? status = null;
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            while (!timeout.IsCancellationRequested)
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            while (DateTime.UtcNow < deadline)
             {
                 status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
                 if (status?.Ended == true)
                     break;
 
-                await Task.Delay(25, timeout.Token).ContinueWith(
-                    task => task.IsCanceled ? Task.CompletedTask : task,
-                    CancellationToken.None,
-                    TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default).Unwrap();
+                await Task.Delay(25);
             }
 
             Assert.True(status?.Ended, status?.Error ?? "The lone-checkpoint turn did not finish before the timeout.");
