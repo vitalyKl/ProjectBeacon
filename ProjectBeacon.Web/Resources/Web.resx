@@ -2385,4 +2385,6 @@ No Beacon-hosted coding agent.</value>
   <data name="TimeZoneInvalid" xml:space="preserve">
     <value>That time zone is not valid in this browser.</value>
   </data>
+  <data name="ChatDelete" xml:space="preserve"><value>Delete</value></data>
+  <data name="ChatDeleteConfirm" xml:space="preserve"><value>Delete chat "{0}"? It will be removed from your chat list.</value></data>
 </root>
