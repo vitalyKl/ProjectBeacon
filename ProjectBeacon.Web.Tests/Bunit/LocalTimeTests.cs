@@ -15,7 +15,7 @@ public sealed class LocalTimeTests : BUnitRenderBase
         Assert.Contains("data-local-time=\"2026-11-03T08:15:00.0000000Z\"", cut.Markup);
         Assert.Contains("data-local-time-format=\"g\"", cut.Markup);
     }
-    
+
     [Fact]
     public void LocalTime_ConvertsOffsetTimestampToUtc()
     {
