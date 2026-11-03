@@ -446,6 +446,38 @@ public sealed class P2AuthorizationHttpTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ApiToken_WithReadCapabilities_CanReadProjectLabelsAndContextNodes()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var adminJwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminJwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Read API Org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Read API Project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+
+        // TaskRead grants project metadata and label reads; ContextRead grants context-node reads.
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "agent-read-only",
+            capabilities = 1 | 8
+        });
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", token.GetProperty("token").GetString());
+
+        var projectResponse = await client.GetAsync($"/v1/projects/{projectId}", TestContext.Current.CancellationToken);
+        var labelsResponse = await client.GetAsync($"/v1/projects/{projectId}/labels", TestContext.Current.CancellationToken);
+        var nodesResponse = await client.GetAsync($"/v1/projects/{projectId}/context/nodes", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, projectResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, labelsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, nodesResponse.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");
