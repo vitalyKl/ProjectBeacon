@@ -388,6 +388,32 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
                 && forms.ValueKind == JsonValueKind.Array
                 && forms.GetArrayLength() > 0;
             var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
+            var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
+            if (activity["forms"] is null)
+                activity["forms"] = reportedForms;
+
+            // Keep answered forms in the durable task transcript even after the runtime removes
+            // them from its pending-form registry on the next poll.
+            try
+            {
+                var previous = JsonNode.Parse(session.ActivityJson) as JsonObject;
+                if (previous?["forms"] is JsonArray previousForms)
+                {
+                    foreach (var answered in previousForms.OfType<JsonObject>().Where(form => form["answer"] is not null))
+                    {
+                        var id = answered["id"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(id)
+                            && !reportedForms.OfType<JsonObject>().Any(form =>
+                                string.Equals(form["id"]?.GetValue<string>(), id, StringComparison.Ordinal)))
+                            reportedForms.Add(answered.DeepClone());
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // A malformed prior snapshot must not prevent a fresh device update.
+            }
+
             activity["deviceId"] = request.DeviceId.ToString("D");
             activity["commandId"] = request.CommandId.ToString("D");
             session.UpdateActivity(activity.ToJsonString(), waitingForUser);

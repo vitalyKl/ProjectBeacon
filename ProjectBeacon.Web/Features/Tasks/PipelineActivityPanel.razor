@@ -146,7 +146,7 @@
                     {
                         ["id"] = id,
                         ["title"] = ReadString(form, "title"),
-                        ["description"] = ReadString(form, "description"),
+                        ["description"] = ReadString(form, "metadata"),
                         ["fields"] = JsonNode.Parse(fields.GetRawText())
                     };
                     if (form.TryGetProperty("answer", out var answer) && answer.ValueKind == JsonValueKind.Object)
