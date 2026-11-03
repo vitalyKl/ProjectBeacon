@@ -17,6 +17,12 @@
     }
     @foreach (var session in Sessions)
     {
+        @if (session.Status == SessionStatus.Ready)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
+                       OnClick="@(() => OnLaunchSession.InvokeAsync(session))"
+                       Disabled="Busy">@L["LaunchSession"]</MudButton>
+        }
         <PipelineActivityPanel TaskId="TaskId" Session="session" />
     }
     @if (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress)
@@ -49,6 +55,7 @@
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
 
     private string StatusLabel => Subtask.Status == SubtaskStatus.Done
         ? L["SubtaskReported"].Value
