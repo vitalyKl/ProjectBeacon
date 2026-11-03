@@ -180,6 +180,14 @@
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["DaemonUpdateRequiresOnline"]</MudText>
         }
         <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
+        @if (_clientUpdateActive || _clientUpdateMessage is not null)
+        {
+            <MudProgressLinear Color="Color.Primary" Value="@(_clientUpdatePercent ?? 0d)"
+                               Indeterminate="@(_clientUpdateActive && _clientUpdatePercent is null)" Class="mt-2" />
+            <MudText Typo="Typo.caption" Class="mt-1">
+                @_clientUpdateMessage @(_clientUpdatePercent is { } percent ? $"· {percent:0}%" : string.Empty)
+            </MudText>
+        }
     </MudPaper>
     <MudText Typo="Typo.h6" Class="mb-3">@L["Commands"]</MudText>
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
@@ -233,6 +241,9 @@
     private string _clientCurrentVersion = "-";
     private string _clientLatestVersion = "-";
     private bool? _clientUpdateAvailable;
+    private bool _clientUpdateActive;
+    private double? _clientUpdatePercent;
+    private string? _clientUpdateMessage;
     private string? _lifecycle;
     private string? _lifecycleDetail;
     private string? _lifecycleState;
@@ -295,6 +306,9 @@
         _wsDeviceId = id;
         _clientCurrentVersion = _clientLatestVersion = "-";
         _clientUpdateAvailable = null;
+        _clientUpdateActive = false;
+        _clientUpdatePercent = null;
+        _clientUpdateMessage = null;
         if (id is { } deviceId)
         {
             LoadWorkstation(deviceId);
@@ -550,7 +564,12 @@
             L["Confirm"].Value, string.Format(L["UpdateDaemonConfirm"].Value, _clientLatestVersion),
             yesText: L["UpdateDaemonNow"].Value, cancelText: L["Cancel"].Value);
         if (confirmed != true) return;
+        var previousHeartbeat = _devices.FirstOrDefault(d => d.Id == deviceId)?.LastHeartbeatAt;
+        var expectedVersion = _clientLatestVersion;
         _busy = true;
+        _clientUpdateActive = true;
+        _clientUpdatePercent = null;
+        _clientUpdateMessage = L["CommandQueued"].Value;
         try
         {
             var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
@@ -567,7 +586,14 @@
                 return;
             }
             _clientUpdateAvailable = null;
-            Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+            _clientUpdateActive = true;
+            _clientUpdatePercent = null;
+            _clientUpdateMessage = "Update handed off; waiting for the daemon to restart.";
+            var restarted = await WaitForUpdatedClientAsync(deviceId, previousHeartbeat, expectedVersion);
+            if (restarted)
+                Snackbar.Add(L["DaemonUpdateScheduled"].Value, Severity.Success);
+            else
+                Snackbar.Add("The update was handed off, but the new daemon version has not reported yet. Check the workstation log.", Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -575,8 +601,72 @@
         }
         finally
         {
+            _clientUpdateActive = false;
             _busy = false;
         }
+    }
+
+    private async Task<bool> WaitForUpdatedClientAsync(Guid deviceId, DateTime? previousHeartbeat, string expectedVersion)
+    {
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+            if (listed.Success)
+            {
+                _devices = listed.Value!.ToList();
+                var device = _devices.FirstOrDefault(d => d.Id == deviceId);
+                var reportedVersion = device is null ? null : ReadClientVersion(device.ProbeJson);
+                if (device?.LastHeartbeatAt is { } heartbeat
+                    && (previousHeartbeat is null || heartbeat > previousHeartbeat.Value)
+                    && reportedVersion is not null
+                    && IsClientVersionAtLeast(reportedVersion, expectedVersion))
+                {
+                    _clientCurrentVersion = reportedVersion;
+                    _clientUpdateMessage = $"Daemon restarted and reported version {reportedVersion}.";
+                    await InvokeAsync(StateHasChanged);
+                    return true;
+                }
+            }
+
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(1000);
+        }
+
+        _clientUpdateActive = false;
+        _clientUpdateMessage = "Update handoff completed, but the restarted daemon has not reported the new version yet. Check the workstation log.";
+        await InvokeAsync(StateHasChanged);
+        return false;
+    }
+
+    private static string? ReadClientVersion(string? probeJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
+            return document.RootElement.TryGetProperty("clientVersion", out var version)
+                && version.ValueKind == JsonValueKind.String
+                    ? version.GetString()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsClientVersionAtLeast(string installedVersion, string expectedVersion)
+    {
+        static Version? Parse(string value)
+        {
+            var component = value.Split(['-', '+'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.TrimStart('v', 'V');
+            if (component is null || !Version.TryParse(component, out var parsed))
+                return null;
+            return new Version(parsed.Major, Math.Max(0, parsed.Minor), Math.Max(0, parsed.Build), Math.Max(0, parsed.Revision));
+        }
+
+        var installed = Parse(installedVersion);
+        var expected = Parse(expectedVersion);
+        return installed is not null && expected is not null && installed >= expected;
     }
 
     private static string JsonValue(JsonElement root, string primary, string fallback) =>
@@ -605,6 +695,8 @@
                 return null;
             }
             SetLifecycle(got.Value!.Status, got.Value.Error);
+            ApplyClientUpdateProgress(got.Value);
+            await InvokeAsync(StateHasChanged);
             if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
             await Task.Delay(500);
@@ -612,7 +704,37 @@
         _lifecycleState = "TimedOut";
         _lifecycle = L["CommandTimedOut"].Value;
         _lifecycleDetail = null;
+        _clientUpdateActive = false;
         return null;
+    }
+
+    private void ApplyClientUpdateProgress(WorkstationCommandDto command)
+    {
+        if (command.Kind != WorkstationCommandKind.UpdateClient)
+            return;
+
+        _clientUpdateActive = command.Status is WorkstationCommandStatus.Pending or WorkstationCommandStatus.Running;
+        if (string.IsNullOrWhiteSpace(command.ResultJson))
+            return;
+
+        try
+        {
+            using var document = JsonDocument.Parse(command.ResultJson);
+            var root = document.RootElement;
+            var message = JsonValue(root, "Message", "message");
+            if (message != "-")
+                _clientUpdateMessage = message;
+            if (root.TryGetProperty("Percent", out var percent)
+                || root.TryGetProperty("percent", out percent))
+            {
+                if (percent.ValueKind == JsonValueKind.Number)
+                    _clientUpdatePercent = Math.Clamp(percent.GetDouble(), 0d, 100d);
+            }
+        }
+        catch (JsonException)
+        {
+            // Completion replaces the progress snapshot with the final UpdateInfo object.
+        }
     }
 
     private void SetLifecycle(WorkstationCommandStatus status, string? detail)

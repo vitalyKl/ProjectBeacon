@@ -32,6 +32,62 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
+    public async Task ClientUpdateProgress_IsVisibleWhileRunning_AndRejectedAfterCompletion()
+    {
+        var user = await SeedUserAsync("update-progress");
+        var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+            new CreateDeviceCommand(new CreateDeviceRequest("laptop", "update-progress-" + Guid.NewGuid().ToString("N"), user.Id)),
+            TestContext.Current.CancellationToken);
+        var deviceId = created.Value!.Id;
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")),
+            TestContext.Current.CancellationToken);
+        var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
+            new EnqueueCommandCommand(new EnqueueCommandRequest(
+                deviceId, user.Id, WorkstationCommandKind.UpdateClient, "{}", null)),
+            TestContext.Current.CancellationToken);
+        Assert.True(queued.Success, queued.Error);
+
+        var claimed = await new ClaimNextCommandHandler(Factory()).HandleAsync(
+            new ClaimNextCommandCommand(new ClaimNextCommandRequest(deviceId, TimeSpan.Zero)),
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(claimed.Value);
+        Assert.Equal(WorkstationCommandStatus.Running, claimed.Value!.Status);
+
+        const string progressJson = """{"stage":"download","message":"Downloading archive","percent":42}""";
+        var handler = new ReportCommandProgressHandler(Factory());
+        var reported = await handler.HandleAsync(
+            new ReportCommandProgressCommand(new ReportCommandProgressRequest(
+                queued.Value!.Id, deviceId, claimed.Value.Generation, progressJson)),
+            TestContext.Current.CancellationToken);
+        Assert.True(reported.Success, reported.Error);
+        Assert.Equal(progressJson, reported.Value!.ResultJson);
+
+        var staleGeneration = await handler.HandleAsync(
+            new ReportCommandProgressCommand(new ReportCommandProgressRequest(
+                queued.Value.Id, deviceId, claimed.Value.Generation + 1, progressJson)),
+            TestContext.Current.CancellationToken);
+        Assert.False(staleGeneration.Success);
+
+        const string finalJson = """{"updated":true}""";
+        var completed = await new CompleteCommandHandler(Factory()).HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(
+                queued.Value.Id, deviceId, true, finalJson, null, claimed.Value.Generation)),
+            TestContext.Current.CancellationToken);
+        Assert.True(completed.Success, completed.Error);
+
+        var lateProgress = await handler.HandleAsync(
+            new ReportCommandProgressCommand(new ReportCommandProgressRequest(
+                queued.Value.Id, deviceId, claimed.Value.Generation, progressJson)),
+            TestContext.Current.CancellationToken);
+        Assert.False(lateProgress.Success);
+        var final = await new GetCommandHandler(Factory()).HandleAsync(
+            new GetCommandCommand(new GetCommandRequest(queued.Value.Id, user.Id)),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(finalJson, final.Value!.ResultJson);
+    }
+
+    [Fact]
     public async Task CommandQueue_DoesNotExposeLocalRoot_ToNonOwner()
     {
         var (owner, member, project) = await SeedOwnerAndMemberAsync();

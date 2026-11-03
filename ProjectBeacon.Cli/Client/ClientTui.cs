@@ -305,10 +305,24 @@ public static class ClientTui
                     }
                     if (AnsiConsole.Confirm($"Install client {Markup.Escape(update.LatestVersion)} and restart?", true))
                     {
-                        var scheduled = await ClientUpdater.DownloadAndScheduleAsync(ct);
-                        if (scheduled.UpdateAvailable)
+                        ClientUpdater.UpdateInfo? scheduled = null;
+                        await AnsiConsole.Progress().StartAsync(async context =>
                         {
-                            AnsiConsole.MarkupLine("[green]Update downloaded and verified. Restarting the workstation client…[/]");
+                            var task = context.AddTask("Preparing update", maxValue: 100);
+                            scheduled = await ClientUpdater.DownloadAndScheduleAsync((progress, _) =>
+                            {
+                                task.Description = Markup.Escape(progress.Message);
+                                if (progress.Percent is { } percent)
+                                    task.Value = Math.Clamp(percent, 0d, 100d);
+                                return Task.CompletedTask;
+                            }, ct);
+                            if (scheduled.UpdateAvailable)
+                                task.Value = 100;
+                        });
+
+                        if (scheduled?.UpdateAvailable == true)
+                        {
+                            AnsiConsole.MarkupLine("[green]Update staged. The updater helper will restart Beacon; see L (Logs) for the final result.[/]");
                             stopAfterUpdate = true;
                         }
                         else
@@ -377,6 +391,17 @@ public static class ClientTui
             var gpu = host.Gpu?.UtilizationPercent is { } g ? $"GPU {g:0}%" : "";
             grid.AddRow("Load", $"{cpu}  {ram}  {gpu}".Trim());
         }
+        if (s.UpdateProgress is { } updateProgress)
+        {
+            var progressText = Markup.Escape(updateProgress.Message);
+            if (updateProgress.Percent is { } percent)
+            {
+                var filled = Math.Clamp((int)Math.Round(percent / 5d), 0, 20);
+                var bar = new string('█', filled) + new string('░', 20 - filled);
+                progressText += $" [cyan]{bar}[/] {percent:0}%";
+            }
+            grid.AddRow("Client update", progressText);
+        }
         if (!string.IsNullOrWhiteSpace(s.Error))
             grid.AddRow("Error", $"[red]{Markup.Escape(s.Error)}[/]");
 
@@ -389,8 +414,15 @@ public static class ClientTui
 
     private static void ShowLog(DaemonStatus status)
     {
-        var lines = status.Log.Count == 0 ? "[grey]no log yet[/]" : Markup.Escape(string.Join('\n', status.Log));
-        AnsiConsole.Write(new Panel(lines) { Header = new PanelHeader("Log"), Border = BoxBorder.Rounded });
+        var lines = ClientFileLog.ReadRecent(200);
+        if (lines.Count == 0)
+            lines = status.Log;
+        var body = lines.Count == 0 ? "[grey]no log yet[/]" : Markup.Escape(string.Join('\n', lines));
+        AnsiConsole.Write(new Panel(body)
+        {
+            Header = new PanelHeader($"Log — {ClientFileLog.LogPath}"),
+            Border = BoxBorder.Rounded
+        });
         AnsiConsole.MarkupLine("[grey]Press any key…[/]");
         Console.ReadKey(true);
     }

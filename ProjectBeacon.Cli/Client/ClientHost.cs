@@ -44,6 +44,7 @@ public static class ClientHost
         }
 
         var interactive = !opts.Headless && ClientTui.IsInteractive;
+        Environment.SetEnvironmentVariable("BEACON_CLIENT_RESTART_MODE", interactive ? "interactive" : "headless");
         if (ClientStore.NeedsWizard(store) && interactive)
         {
             var wizard = await ClientTui.RunWizardAsync(store, storePath, ct);

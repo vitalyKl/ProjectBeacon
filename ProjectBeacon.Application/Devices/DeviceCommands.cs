@@ -129,6 +129,12 @@ public record CompleteCommandRequest(Guid CommandId, Guid DeviceId, bool Success
 /// </summary>
 public record CompleteCommandCommand(CompleteCommandRequest Request) : ICommand<Result<WorkstationCommandDto>>;
 /// <summary>
+/// Progress payload reported by a device for a running client-update attempt.
+/// </summary>
+public record ReportCommandProgressRequest(Guid CommandId, Guid DeviceId, int Generation, string ProgressJson);
+/// <summary>Command for reporting daemon update progress.</summary>
+public record ReportCommandProgressCommand(ReportCommandProgressRequest Request) : ICommand<Result<WorkstationCommandDto>>;
+/// <summary>
 /// Fields for get command.
 /// </summary>
 public record GetCommandRequest(Guid CommandId, Guid UserId);

@@ -68,5 +68,6 @@ public sealed record DaemonStatus
     public string? Error { get; init; }
     public LlamaSwapStatusDto? Llama { get; init; }
     public HostLoadDto? Host { get; init; }
+    public ClientUpdateProgress? UpdateProgress { get; init; }
     public IReadOnlyList<string> Log { get; init; } = [];
 }
