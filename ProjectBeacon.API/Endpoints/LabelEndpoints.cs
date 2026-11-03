@@ -4,6 +4,7 @@ using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 
 using Application.Projects;
+using Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>
