@@ -69,7 +69,7 @@ else
             <MudTd DataLabel="@L["SubStage"]">
                 @(context.Status == "InProgress" ? ChromeLabels.SubStage(L, context.SubStage) : "-")
             </MudTd>
-            <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToShortDateString()</MudTd>
+            <MudTd DataLabel="@L["CreatedAt"]"><LocalTime Value="context.CreatedAt" Format="d" /></MudTd>
             <MudTd>
                 <MudIconButton
                     Icon="@Icons.Material.Filled.Delete"

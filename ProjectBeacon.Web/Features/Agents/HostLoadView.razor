@@ -8,7 +8,7 @@
     {
         @if (host.SampledAt is { } at)
         {
-            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@string.Format(L["ReportedAt"].Value, at.ToLocalTime().ToString("g"))</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">@L["ReportedAt"].Value.Replace("{0}", string.Empty) <LocalTime OffsetValue="at" /></MudText>
         }
         @if (host.CpuPercent is { } cpu)
         {

@@ -1,0 +1,32 @@
+@using System.Globalization
+
+@if (Value.HasValue || OffsetValue.HasValue)
+{
+    <time class="@Class"
+          data-local-time="@UtcTimestamp"
+          data-local-time-format="@Format"
+          datetime="@UtcTimestamp"
+          title="@UtcTimestamp">@(Value?.ToString(Format, CultureInfo.CurrentCulture) ?? OffsetValue?.ToString(Format, CultureInfo.CurrentCulture))</time>
+}
+
+@code {
+    [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public DateTimeOffset? OffsetValue { get; set; }
+    [Parameter] public string Format { get; set; } = "g";
+    [Parameter] public string? Class { get; set; }
+
+    private string UtcTimestamp
+    {
+        get
+        {
+            if (OffsetValue is { } offsetValue)
+                return offsetValue.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
+
+            var value = Value!.Value;
+            var utc = value.Kind == DateTimeKind.Local
+                ? value.ToUniversalTime()
+                : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+            return utc.ToString("O", CultureInfo.InvariantCulture);
+        }
+    }
+}

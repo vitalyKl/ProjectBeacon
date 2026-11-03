@@ -2169,4 +2169,22 @@ orthstar</value>
 <data name="UpdateDaemonNow" xml:space="preserve">
     <value>Jetzt aktualisieren</value>
   </data>
+  <data name="TimeZone" xml:space="preserve">
+    <value>Zeitzone</value>
+  </data>
+  <data name="TimeZoneSystem" xml:space="preserve">
+    <value>Systemstandard</value>
+  </data>
+  <data name="TimeZoneHint" xml:space="preserve">
+    <value>Daten werden in UTC gespeichert und in dieser Zeitzone angezeigt. Die Systemoption verwendet die Zeitzone dieses Browsers.</value>
+  </data>
+  <data name="TimeZoneLoadFailed" xml:space="preserve">
+    <value>Die Browser-Zeitzone konnte nicht gelesen werden.</value>
+  </data>
+  <data name="TimeZoneSaved" xml:space="preserve">
+    <value>Zeitzone gespeichert.</value>
+  </data>
+  <data name="TimeZoneInvalid" xml:space="preserve">
+    <value>Diese Zeitzone wird von diesem Browser nicht unterstützt.</value>
+  </data>
 </root>
