@@ -11,7 +11,7 @@
 <div class="beacon-chat-part @PartClass" data-chat-part-id="@Part.Id">
     <div class="beacon-chat-part-head">
         <MudText Typo="Typo.caption">@RoleLabel</MudText>
-        <MudText Typo="Typo.caption">@Part.CreatedAt.ToLocalTime().ToString("g")</MudText>
+        <MudText Typo="Typo.caption"><LocalTime Value="Part.CreatedAt" /></MudText>
     </div>
     @if (IsTool)
     {
