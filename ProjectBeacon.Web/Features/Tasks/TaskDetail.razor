@@ -124,7 +124,7 @@ else
                         <div class="beacon-activity-row">
                             <span class="beacon-state @SessionStateClass(session.Status)">@SessionStatusLabel(session.Status)</span>
                             <span>@RoleLabel(session.Role)</span>
-                            <time>@(session.LaunchedAt?.ToLocalTime().ToString("g") ?? session.ClosedAt?.ToLocalTime().ToString("g"))</time>
+                            <LocalTime Value="@(session.LaunchedAt ?? session.ClosedAt)" />
                         </div>
                     }
                 }
@@ -217,7 +217,7 @@ else
                     }
                     @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
                     {
-                        <MudText Typo="Typo.body2" Class="mt-2">@L["Done"] @_task.CompletedAt.Value.ToShortDateString()</MudText>
+                        <MudText Typo="Typo.body2" Class="mt-2">@L["Done"] <LocalTime Value="_task.CompletedAt" Format="d" /></MudText>
                     }
                 </div>
             </section>
