@@ -122,7 +122,37 @@
         await ReloadTotp();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (!firstRender)\n            return;\n        try\n        {\n            _systemTimeZone = await Js.InvokeAsync<string>("beaconTimeZone.getSystem");\n            _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference");\n            await InvokeAsync(StateHasChanged);\n        }\n        catch (JSException)\n        {\n            Snackbar.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);\n        }\n    }\n\n    private async Task SaveTimeZone(string value)\n    {\n        try\n        {\n            await Js.InvokeAsync<string>("beaconTimeZone.setPreference", value);\n            _timeZone = value;\n            Snackbar.Add(L["TimeZoneSaved"].Value, Severity.Success);\n        }\n        catch (JSException)\n        {\n            Snackbar.Add(L["TimeZoneInvalid"].Value, Severity.Error);\n        }\n    }\n\n    private async Task ReloadTotp()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            _systemTimeZone = await Js.InvokeAsync<string>("beaconTimeZone.getSystem");
+            _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference");
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);
+        }
+    }
+
+    private async Task SaveTimeZone(string value)
+    {
+        try
+        {
+            await Js.InvokeAsync<string>("beaconTimeZone.setPreference", value);
+            _timeZone = value;
+            Snackbar.Add(L["TimeZoneSaved"].Value, Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add(L["TimeZoneInvalid"].Value, Severity.Error);
+        }
+    }
+
+    private async Task ReloadTotp()
     {
         if (_userId == Guid.Empty)
             return;
