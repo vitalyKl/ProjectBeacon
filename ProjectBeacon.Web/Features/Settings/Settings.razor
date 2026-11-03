@@ -18,6 +18,7 @@
 @inject DisableTotpHandler DisableTotp
 @inject ISnackbar Snackbar
 @inject BeaconThemeState Theme
+@inject IJSRuntime Js
 
 <PageTitle>@L["Settings"]</PageTitle>
 <div class="beacon-settings">
@@ -30,6 +31,20 @@
         <button type="button" role="radio" aria-checked="@(Theme.Preference == ThemePreference.Dark)" class="beacon-appearance-option @(Theme.Preference == ThemePreference.Dark ? "is-selected" : null)" @onclick="() => SetTheme(ThemePreference.Dark)">@L["ThemeDark"]</button>
         <button type="button" role="radio" aria-checked="@(Theme.Preference == ThemePreference.Light)" class="beacon-appearance-option @(Theme.Preference == ThemePreference.Light ? "is-selected" : null)" @onclick="() => SetTheme(ThemePreference.Light)">@L["ThemeLight"]</button>
         <button type="button" role="radio" aria-checked="@(Theme.Preference == ThemePreference.System)" class="beacon-appearance-option @(Theme.Preference == ThemePreference.System ? "is-selected" : null)" @onclick="() => SetTheme(ThemePreference.System)">@L["ThemeSystem"]</button>
+    </div>
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-3">@L["TimeZone"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+    <div class="beacon-form">
+        <MudSelect T="string" Value="_timeZone" ValueChanged="SaveTimeZone" Label="@L["TimeZone"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+            <MudSelectItem Value="@string.Empty">@L["TimeZoneSystem"] (@_systemTimeZone)</MudSelectItem>
+            @foreach (var zone in _timeZones)
+            {
+                <MudSelectItem Value="@zone">@zone</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["TimeZoneHint"]</MudText>
     </div>
 </MudPaper>
 
@@ -80,6 +95,13 @@
 
 @code {
     private bool _busy;
+    private string _timeZone = string.Empty;
+    private string _systemTimeZone = "UTC";
+    private readonly List<string> _timeZones = TimeZoneInfo.GetSystemTimeZones()
+        .Select(zone => TimeZoneInfo.TryConvertWindowsIdToIanaId(zone.Id, out var iana) ? iana : zone.Id)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(zone => zone, StringComparer.OrdinalIgnoreCase)
+        .ToList();
     private Guid _userId;
     private string _currentPassword = string.Empty;
     private string _newPassword = string.Empty;
@@ -100,7 +122,7 @@
         await ReloadTotp();
     }
 
-    private async Task ReloadTotp()
+    protected override async Task OnAfterRenderAsync(bool firstRender)\n    {\n        if (!firstRender)\n            return;\n        try\n        {\n            _systemTimeZone = await Js.InvokeAsync<string>("beaconTimeZone.getSystem");\n            _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference");\n            await InvokeAsync(StateHasChanged);\n        }\n        catch (JSException)\n        {\n            Snackbar.Add(L["TimeZoneLoadFailed"].Value, Severity.Warning);\n        }\n    }\n\n    private async Task SaveTimeZone(string value)\n    {\n        try\n        {\n            await Js.InvokeAsync<string>("beaconTimeZone.setPreference", value);\n            _timeZone = value;\n            Snackbar.Add(L["TimeZoneSaved"].Value, Severity.Success);\n        }\n        catch (JSException)\n        {\n            Snackbar.Add(L["TimeZoneInvalid"].Value, Severity.Error);\n        }\n    }\n\n    private async Task ReloadTotp()
     {
         if (_userId == Guid.Empty)
             return;
