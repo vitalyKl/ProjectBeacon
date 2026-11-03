@@ -1,0 +1,27 @@
+@using System.Globalization
+
+@if (Value.HasValue)
+{
+    <time class="@Class"
+          data-local-time="@UtcTimestamp"
+          data-local-time-format="@Format"
+          title="@UtcTimestamp"></time>
+}
+
+@code {
+    [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public string Format { get; set; } = "g";
+    [Parameter] public string? Class { get; set; }
+
+    private string UtcTimestamp
+    {
+        get
+        {
+            var value = Value!.Value;
+            var utc = value.Kind == DateTimeKind.Local
+                ? value.ToUniversalTime()
+                : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+            return utc.ToString("O", CultureInfo.InvariantCulture);
+        }
+    }
+}
