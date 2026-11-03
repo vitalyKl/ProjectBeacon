@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Net.Http.Json;
 using Application.Runtime;
 using ProjectBeacon.Cli.Client.AgentHarness;
@@ -484,9 +485,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 complete = part.Complete
             }).ToArray();
 
-            var forms = _gate.Runtime is IAgentRuntimeCapabilities capabilities && capabilities.SupportsForms
+            IReadOnlyList<AgentRuntimeForm> forms = _gate.Runtime is IAgentRuntimeCapabilities capabilities && capabilities.SupportsForms
                 ? await capabilities.ListPendingFormsAsync(externalSessionId, tokenCt)
-                : [];
+                : Array.Empty<AgentRuntimeForm>();
             var formItems = forms.Select(form =>
             {
                 JsonNode? fields = null;

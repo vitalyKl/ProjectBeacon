@@ -1464,6 +1464,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.PipelineSession", b =>
                 {
+                    b.Property<string>("ActivityJson")
+                        .IsRequired()
+                        .HasDefaultValue("{}")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
