@@ -2189,4 +2189,40 @@ orthstar</value>
   </data>
 <data name="ChatDelete" xml:space="preserve"><value>Chat löschen</value></data>
 <data name="ChatDeleteConfirm" xml:space="preserve"><value>Möchtest du den Chat „{0}“ löschen? Er wird aus deiner Chatliste entfernt.</value></data>
+  <data name="ChatContextTask" xml:space="preserve">
+    <value>Aktuelle Aufgabe</value>
+  </data>
+  <data name="ChatConversation" xml:space="preserve">
+    <value>Unterhaltung</value>
+  </data>
+  <data name="ChatNew" xml:space="preserve">
+    <value>Neuer Chat</value>
+  </data>
+  <data name="ChatSelectOrCreate" xml:space="preserve">
+    <value>Wähle eine Unterhaltung aus oder starte einen neuen Chat.</value>
+  </data>
+  <data name="PipelineActivityCompleted" xml:space="preserve">
+    <value>Schritt abgeschlossen</value>
+  </data>
+  <data name="PipelineActivityFailed" xml:space="preserve">
+    <value>Schritt fehlgeschlagen</value>
+  </data>
+  <data name="PipelineActivityReady" xml:space="preserve">
+    <value>Bereit zum Start</value>
+  </data>
+  <data name="PipelineActivityStarting" xml:space="preserve">
+    <value>Die Agentensitzung wurde gestartet. Warte auf die erste Aktivitätsmeldung …</value>
+  </data>
+  <data name="PipelineActivityWorking" xml:space="preserve">
+    <value>Agent arbeitet</value>
+  </data>
+  <data name="PipelineWaitingForUser" xml:space="preserve">
+    <value>Der Agent benötigt deine Eingabe, bevor er fortfahren kann.</value>
+  </data>
+  <data name="UnassignedSubtasks" xml:space="preserve">
+    <value>Nicht zugewiesene Teilaufgaben</value>
+  </data>
+  <data name="WaitingForUser" xml:space="preserve">
+    <value>Wartet auf deine Antwort</value>
+  </data>
 </root>
