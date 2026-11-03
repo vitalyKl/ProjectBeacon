@@ -20,7 +20,7 @@ using Microsoft.Extensions.Configuration;
 /// </summary>
 public static class ProjectEndpoints
 {
-    /// <summary>Maps project, member, invite, and token routes. Every route requires a human caller.</summary>
+    /// <summary>Maps project, membership, invite, and token routes. Project detail reads also allow scoped TaskRead tokens; administrative operations remain human-only.</summary>
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/projects", CreateProject).RequireAuthorization().DisableAntiforgery().RequireHuman();
