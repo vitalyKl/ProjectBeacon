@@ -2159,4 +2159,22 @@
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Обновление проверено и запланировано. Клиент рабочей станции перезапускается.</value></data>
 <data name="CheckClientUpdate" xml:space="preserve"><value>Проверить обновления демона</value></data>
 <data name="UpdateClient" xml:space="preserve"><value>Обновить демон</value></data>
+  <data name="TimeZone" xml:space="preserve">
+    <value>Часовой пояс</value>
+  </data>
+  <data name="TimeZoneSystem" xml:space="preserve">
+    <value>Системный (автоматически)</value>
+  </data>
+  <data name="TimeZoneHint" xml:space="preserve">
+    <value>Даты хранятся в UTC, а отображаются в выбранном часовом поясе. Системный вариант использует часовой пояс этого браузера.</value>
+  </data>
+  <data name="TimeZoneLoadFailed" xml:space="preserve">
+    <value>Не удалось определить часовой пояс браузера.</value>
+  </data>
+  <data name="TimeZoneSaved" xml:space="preserve">
+    <value>Часовой пояс сохранён.</value>
+  </data>
+  <data name="TimeZoneInvalid" xml:space="preserve">
+    <value>Этот часовой пояс не поддерживается браузером.</value>
+  </data>
 </root>
