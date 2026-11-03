@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 public static class LabelEndpoints
 {
     /// <summary>
-    /// Maps <c>GET /v1/projects/{projectId:guid}/labels</c>, <c>GET /v1/projects/{projectId:guid}/labels/match</c>, and <c>POST /v1/projects/{projectId:guid}/labels/{labelId:guid}/paths</c> with <c>RequireHuman</c>.
+    /// Maps label reads for human or TaskRead token actors, and label-path mutations for human actors.
     /// </summary>
     public static IEndpointRouteBuilder MapLabelEndpoints(this IEndpointRouteBuilder app)
     {
