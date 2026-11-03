@@ -335,17 +335,24 @@ else
                 if (_pipeline?.Sessions.Any(session =>
                     session.Status is SessionStatus.Active or SessionStatus.WaitingForUser) != true)
                     continue;
-                await ReloadPipeline();
-                await InvokeAsync(StateHasChanged);
+                try
+                {
+                    await ReloadPipeline();
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Keep the live activity loop alive after a transient read failure.
+                    Console.Error.WriteLine($"Task pipeline refresh failed: {ex.Message}");
+                }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-        }
-        catch (Exception ex)
-        {
-            // The next polling cycle retries; a transient API/DB read must not kill task activity updates.
-            Console.Error.WriteLine($"Task pipeline refresh failed: {ex.Message}");
         }
     }
 
