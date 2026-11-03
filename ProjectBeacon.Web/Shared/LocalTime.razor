@@ -5,7 +5,8 @@
     <time class="@Class"
           data-local-time="@UtcTimestamp"
           data-local-time-format="@Format"
-          title="@UtcTimestamp"></time>
+          datetime="@UtcTimestamp"
+          title="@UtcTimestamp">@Value.Value.ToString(Format, CultureInfo.CurrentCulture)</time>
 }
 
 @code {
