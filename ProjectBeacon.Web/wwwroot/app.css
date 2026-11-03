@@ -3219,3 +3219,119 @@ body:has(.beacon-theme-dark) .mud-main-content {
     .beacon-chat-compose-form, .beacon-chat-controls { scroll-margin-block: 0; }
     .beacon-chat-message-input textarea:focus { scroll-margin-block: 8px; }
 }
+
+
+/* Task workflow: keep agent activity readable and preserve the same content width at every step. */
+.beacon-pipeline-activity {
+    margin-top: var(--space-2);
+    border: var(--border-hairline) solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-1);
+    overflow: hidden;
+}
+
+.beacon-pipeline-activity .mud-expand-panel {
+    margin: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.beacon-pipeline-activity .mud-expand-panel-header {
+    min-height: 48px;
+    padding: var(--space-2) var(--space-3);
+}
+
+.beacon-pipeline-activity .mud-expand-panel-content {
+    padding: 0 var(--space-3) var(--space-3);
+}
+
+.beacon-pipeline-activity-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-width: 0;
+    width: 100%;
+}
+
+.beacon-pipeline-activity-role {
+    font-weight: 650;
+    color: var(--color-text-primary);
+}
+
+.beacon-pipeline-activity-summary {
+    min-width: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--type-caption);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 10rem;
+}
+
+.beacon-pipeline-activity-current {
+    padding: var(--space-2) 0;
+    color: var(--color-text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.beacon-task-main > .beacon-panel {
+    min-width: 0;
+}
+
+.beacon-task-main .beacon-pipeline-activity {
+    margin-top: var(--space-3);
+}
+
+.beacon-task-aside .beacon-ops-pad {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.beacon-task-aside .beacon-ops-pad > .mud-input-control {
+    margin-top: var(--space-2);
+}
+
+/* SnackbarProvider owns placement; individual notifications share one bounded width. */
+.mud-snackbar-collection {
+    width: min(26rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+}
+
+.mud-snackbar-collection .mud-snackbar {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    align-items: flex-start;
+}
+
+.mud-snackbar-collection .mud-snackbar-content-message {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+    .beacon-pipeline-activity-title {
+        align-items: flex-start;
+    }
+
+    .beacon-pipeline-activity-summary {
+        flex-basis: 100%;
+        white-space: normal;
+    }
+
+    .mud-snackbar-collection {
+        width: calc(100vw - 2rem);
+    }
+
+    .beacon-chat-dock {
+        width: calc(100vw - 1.5rem);
+        max-width: 26rem;
+        right: max(var(--space-2), env(safe-area-inset-right, 0px));
+        bottom: max(var(--space-2), env(safe-area-inset-bottom, 0px));
+        max-height: min(76vh, 44rem);
+    }
+}

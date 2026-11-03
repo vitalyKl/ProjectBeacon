@@ -2179,4 +2179,37 @@
   </data>
 <data name="ChatDelete" xml:space="preserve"><value>Удалить</value></data>
 <data name="ChatDeleteConfirm" xml:space="preserve"><value>Удалить чат «{0}»? Он будет удалён из списка чатов.</value></data>
+  <data name="ChatNew" xml:space="preserve">
+    <value>Новый чат</value>
+  </data>
+  <data name="ChatConversation" xml:space="preserve">
+    <value>Беседа</value>
+  </data>
+  <data name="ChatContextTask" xml:space="preserve">
+    <value>Текущая задача</value>
+  </data>
+  <data name="ChatSelectOrCreate" xml:space="preserve">
+    <value>Выберите беседу или создайте новую.</value>
+  </data>
+  <data name="WaitingForUser" xml:space="preserve">
+    <value>Ожидает вашего ответа</value>
+  </data>
+  <data name="PipelineWaitingForUser" xml:space="preserve">
+    <value>Агенту нужна ваша информация, чтобы продолжить.</value>
+  </data>
+  <data name="PipelineActivityStarting" xml:space="preserve">
+    <value>Сессия агента запущена. Ожидается первое обновление активности…</value>
+  </data>
+  <data name="PipelineActivityCompleted" xml:space="preserve">
+    <value>Этап завершён</value>
+  </data>
+  <data name="PipelineActivityFailed" xml:space="preserve">
+    <value>Этап завершился с ошибкой</value>
+  </data>
+  <data name="PipelineActivityReady" xml:space="preserve">
+    <value>Готов к запуску</value>
+  </data>
+  <data name="PipelineActivityWorking" xml:space="preserve">
+    <value>Агент работает</value>
+  </data>
 </root>
