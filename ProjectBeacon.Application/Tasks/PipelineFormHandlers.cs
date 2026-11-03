@@ -118,3 +118,43 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
         return Result.Ok(PipelineMappers.ToDto(session));
     }
 }
+
+public sealed record WaitingPipelineTaskDto(Guid TaskId, string TaskTitle, Guid SessionId, DateTime? LaunchedAt);
+
+public sealed record ListWaitingPipelineTasksRequest(Guid UserId);
+
+public sealed record ListWaitingPipelineTasksCommand(ListWaitingPipelineTasksRequest Request)
+    : ICommand<Result<IReadOnlyList<WaitingPipelineTaskDto>>>;
+
+/// <summary>Lists task pipeline sessions that currently need an answer from the signed-in user.</summary>
+public sealed class ListWaitingPipelineTasksHandler
+    : ICommandHandler<ListWaitingPipelineTasksCommand, Result<IReadOnlyList<WaitingPipelineTaskDto>>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public ListWaitingPipelineTasksHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<IReadOnlyList<WaitingPipelineTaskDto>>> HandleAsync(
+        ListWaitingPipelineTasksCommand command,
+        CancellationToken ct = default)
+    {
+        if (command.Request.UserId == Guid.Empty)
+            return Result.Failure<IReadOnlyList<WaitingPipelineTaskDto>>("User id is required.");
+
+        await using var db = _dbFactory.CreateDbContext();
+        var rows = await (
+            from session in db.PipelineSessions.IgnoreQueryFilters()
+            join member in db.ProjectMembers.IgnoreQueryFilters()
+                on session.ProjectId equals member.ProjectId
+            join task in db.Tasks.IgnoreQueryFilters()
+                on session.TaskId equals task.Id
+            where member.UserId == command.Request.UserId
+                && session.Status == SessionStatus.WaitingForUser
+            orderby session.LaunchedAt descending
+            select new WaitingPipelineTaskDto(task.Id, task.Title, session.Id, session.LaunchedAt))
+            .Take(20)
+            .ToListAsync(ct);
+
+        return Result.Ok((IReadOnlyList<WaitingPipelineTaskDto>)rows);
+    }
+}
