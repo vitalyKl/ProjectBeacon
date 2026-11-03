@@ -219,7 +219,7 @@ else
             {
                 <HostLoadView Status="_status" />
                 <MudText Typo="Typo.body2" Class="mt-2">@L["Memory"]: @(_status.Memory ?? "-")</MudText>
-                <MudText Typo="Typo.body2">@L["LastSwap"]: @(_status.LastSwap?.ToLocalTime().ToString("g") ?? "-")</MudText>
+                <MudText Typo="Typo.body2">@L["LastSwap"]: <LocalTime Value="_status.LastSwap" /></MudText>
             }
         }
     </MudPaper>
