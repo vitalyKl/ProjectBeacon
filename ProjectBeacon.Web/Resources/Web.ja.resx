@@ -2177,4 +2177,22 @@ orthstar</value>
   <data name="UpdateDaemonNow" xml:space="preserve">
     <value>今すぐ更新</value>
   </data>
+  <data name="TimeZone" xml:space="preserve">
+    <value>タイムゾーン</value>
+  </data>
+  <data name="TimeZoneSystem" xml:space="preserve">
+    <value>システム設定</value>
+  </data>
+  <data name="TimeZoneHint" xml:space="preserve">
+    <value>日時は UTC で保存され、このタイムゾーンで表示されます。システム設定ではこのブラウザーのタイムゾーンを使用します。</value>
+  </data>
+  <data name="TimeZoneLoadFailed" xml:space="preserve">
+    <value>ブラウザーのタイムゾーンを読み取れませんでした。</value>
+  </data>
+  <data name="TimeZoneSaved" xml:space="preserve">
+    <value>タイムゾーンを保存しました。</value>
+  </data>
+  <data name="TimeZoneInvalid" xml:space="preserve">
+    <value>このタイムゾーンはブラウザーでサポートされていません。</value>
+  </data>
 </root>
