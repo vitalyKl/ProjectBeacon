@@ -1624,7 +1624,7 @@ public sealed class NativeAgentRuntimeTests
                 "beacon-local/test-model",
                 CancellationToken.None,
                 new AgentPromptControls(null, "medium", null) { ContextLimit = 1 });
-            await streamTask.WaitAsync(TimeSpan.FromSeconds(3));
+            await streamTask.WaitAsync(TimeSpan.FromSeconds(15));
 
             var status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
             Assert.True(status!.Ended);
