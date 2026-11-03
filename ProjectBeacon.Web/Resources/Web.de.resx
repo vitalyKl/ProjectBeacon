@@ -2225,4 +2225,79 @@ orthstar</value>
   <data name="WaitingForUser" xml:space="preserve">
     <value>Wartet auf deine Antwort</value>
   </data>
+  <data name="McpHarnessLead" xml:space="preserve">
+    <value>Diese Server werden pro Projekt gespeichert und vom Native Harness auf der Workstation gestartet. Lokale Befehle werden direkt ohne Shell ausgeführt; Remote-Server verwenden MCP Streamable HTTP. Externe Prozesse laufen mit den Rechten des aktuellen Betriebssystembenutzers.</value>
+  </data>
+  <data name="McpServerName" xml:space="preserve">
+    <value>Servername</value>
+  </data>
+  <data name="McpTransport" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="McpStdio" xml:space="preserve">
+    <value>Lokaler Prozess (stdio)</value>
+  </data>
+  <data name="McpHttp" xml:space="preserve">
+    <value>Remote (Streamable HTTP)</value>
+  </data>
+  <data name="McpArguments" xml:space="preserve">
+    <value>Argumente (ein Argument pro Zeile, keine Shell-Auswertung)</value>
+  </data>
+  <data name="McpEnvironment" xml:space="preserve">
+    <value>Umgebungsvariablen (KEY=WERT)</value>
+  </data>
+  <data name="McpEndpoint" xml:space="preserve">
+    <value>HTTP-Endpunkt</value>
+  </data>
+  <data name="McpHeaders" xml:space="preserve">
+    <value>HTTP-Header (KEY=WERT)</value>
+  </data>
+  <data name="McpEnabled" xml:space="preserve">
+    <value>Server aktivieren</value>
+  </data>
+  <data name="McpReplaceSecrets" xml:space="preserve">
+    <value>Gespeicherte Zugangsdaten ersetzen oder löschen</value>
+  </data>
+  <data name="McpCredentialsHint" xml:space="preserve">
+    <value>Geheime Werte werden verschlüsselt gespeichert. Leer lassen, um vorhandene Zugangsdaten beizubehalten; zum Ersetzen oder Löschen das Kontrollkästchen aktivieren.</value>
+  </data>
+  <data name="McpNoServers" xml:space="preserve">
+    <value>Für dieses Projekt sind keine MCP-Server konfiguriert.</value>
+  </data>
+  <data name="McpSaved" xml:space="preserve">
+    <value>MCP-Serverkonfiguration gespeichert.</value>
+  </data>
+  <data name="McpDeleted" xml:space="preserve">
+    <value>MCP-Server entfernt.</value>
+  </data>
+  <data name="McpInvalidPairs" xml:space="preserve">
+    <value>Jeden Eintrag als KEY=WERT eingeben, einen pro Zeile.</value>
+  </data>
+  <data name="McpEnabledState" xml:space="preserve">
+    <value>Aktiv</value>
+  </data>
+  <data name="McpDisabledState" xml:space="preserve">
+    <value>Deaktiviert</value>
+  </data>
+  <data name="McpNoProject" xml:space="preserve">
+    <value>Wähle zuerst ein Projekt aus, um MCP-Server zu konfigurieren.</value>
+  </data>
+  <data name="McpServerNextSession" xml:space="preserve">
+    <value>Der Native Harness startet aktivierte Server beim nächsten Chat- oder Task-Start.</value>
+  </data>
+  <data name="McpCredentialsSaved" xml:space="preserve">
+    <value>Zugangsdaten gespeichert</value>
+  </data>
+  <data name="McpAddServer" xml:space="preserve">
+    <value>Server speichern</value>
+  </data>
+  <data name="McpEditServer" xml:space="preserve">
+    <value>Bearbeiten</value>
+  </data>
+  <data name="McpCancelEdit" xml:space="preserve">
+    <value>Bearbeitung abbrechen</value>
+  </data>
+  <data name="McpPipelineAllowlistHint" xml:space="preserve">
+    <value>Die Toolnamen haben das Format mcp_&lt;server&gt;_&lt;tool&gt;. Für Task-Pipelines muss der genaue Name oder mcp_&lt;server&gt;_* zu den erlaubten MCP-Tools des Actor-Untertasks hinzugefügt werden.</value>
+  </data>
 </root>

@@ -298,7 +298,7 @@ public sealed partial class DeviceHandlerTests
 
         var actor = new Application.Authorization.ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
-        var handler = new IssueHarnessTokenHandler(Factory());
+        var handler = new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev());
         var issued = await handler.HandleAsync(
             new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
 
@@ -361,7 +361,7 @@ public sealed partial class DeviceHandlerTests
 
         var actor = new Application.Authorization.ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
-        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+        var issued = await new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev()).HandleAsync(
             new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
 
         Assert.True(issued.Success, issued.Error);
@@ -410,7 +410,7 @@ public sealed partial class DeviceHandlerTests
 
         var actor = new ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
-        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+        var issued = await new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev()).HandleAsync(
             new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
 
         Assert.True(issued.Success, issued.Error);
@@ -463,7 +463,7 @@ public sealed partial class DeviceHandlerTests
 
         var actor = new Application.Authorization.ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
-        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+        var issued = await new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev()).HandleAsync(
             new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
 
         Assert.False(issued.Success);
@@ -522,7 +522,7 @@ public sealed partial class DeviceHandlerTests
 
         var actor = new Application.Authorization.ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
-        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+        var issued = await new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev()).HandleAsync(
             new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
 
         Assert.True(issued.Success, issued.Error);
@@ -572,7 +572,7 @@ public sealed partial class DeviceHandlerTests
 
         var actor = new Application.Authorization.ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
-        var issued = await new IssueHarnessTokenHandler(Factory()).HandleAsync(
+        var issued = await new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev()).HandleAsync(
             new IssueHarnessTokenCommand(commandId, 1, actor), TestContext.Current.CancellationToken);
 
         Assert.False(issued.Success);
@@ -602,7 +602,7 @@ public sealed partial class DeviceHandlerTests
             commandId = work.Id;
         }
 
-        var handler = new IssueHarnessTokenHandler(Factory());
+        var handler = new IssueHarnessTokenHandler(Factory(), TestProtectors.Dev());
         var deviceActor = new Application.Authorization.ActorContext(
             ActorType.Device, owner.Id, false, null, deviceId, null, null, ApiTokenCapability.None);
         var stale = await handler.HandleAsync(new IssueHarnessTokenCommand(commandId, 2, deviceActor), TestContext.Current.CancellationToken);

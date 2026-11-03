@@ -1290,6 +1290,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("McpServersCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
 

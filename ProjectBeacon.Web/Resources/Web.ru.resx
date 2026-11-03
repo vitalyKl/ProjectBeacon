@@ -2215,4 +2215,79 @@
   <data name="UnassignedSubtasks" xml:space="preserve">
     <value>Работа без этапа</value>
   </data>
+  <data name="McpHarnessLead" xml:space="preserve">
+    <value>Серверы сохраняются в настройках проекта и запускаются Native Harness на рабочей станции. Локальные команды запускаются напрямую, без shell; удалённые серверы используют MCP Streamable HTTP. Внешние процессы работают с правами текущего пользователя ОС.</value>
+  </data>
+  <data name="McpServerName" xml:space="preserve">
+    <value>Имя сервера</value>
+  </data>
+  <data name="McpTransport" xml:space="preserve">
+    <value>Транспорт</value>
+  </data>
+  <data name="McpStdio" xml:space="preserve">
+    <value>Локальный процесс (stdio)</value>
+  </data>
+  <data name="McpHttp" xml:space="preserve">
+    <value>Удалённый (Streamable HTTP)</value>
+  </data>
+  <data name="McpArguments" xml:space="preserve">
+    <value>Аргументы (по одному на строку, без shell-разбора)</value>
+  </data>
+  <data name="McpEnvironment" xml:space="preserve">
+    <value>Переменные окружения (КЛЮЧ=ЗНАЧЕНИЕ)</value>
+  </data>
+  <data name="McpEndpoint" xml:space="preserve">
+    <value>HTTP-адрес</value>
+  </data>
+  <data name="McpHeaders" xml:space="preserve">
+    <value>HTTP-заголовки (КЛЮЧ=ЗНАЧЕНИЕ)</value>
+  </data>
+  <data name="McpEnabled" xml:space="preserve">
+    <value>Включить сервер</value>
+  </data>
+  <data name="McpReplaceSecrets" xml:space="preserve">
+    <value>Заменить или очистить сохранённые секреты</value>
+  </data>
+  <data name="McpCredentialsHint" xml:space="preserve">
+    <value>Секреты зашифрованы при хранении. Оставьте поле пустым, чтобы сохранить текущие значения; включите флажок выше, чтобы заменить или очистить их.</value>
+  </data>
+  <data name="McpNoServers" xml:space="preserve">
+    <value>Для проекта ещё не настроены MCP-серверы.</value>
+  </data>
+  <data name="McpSaved" xml:space="preserve">
+    <value>Настройки MCP-сервера сохранены.</value>
+  </data>
+  <data name="McpDeleted" xml:space="preserve">
+    <value>MCP-сервер удалён.</value>
+  </data>
+  <data name="McpInvalidPairs" xml:space="preserve">
+    <value>Введите каждое значение в формате КЛЮЧ=ЗНАЧЕНИЕ, по одной записи на строку.</value>
+  </data>
+  <data name="McpEnabledState" xml:space="preserve">
+    <value>Включён</value>
+  </data>
+  <data name="McpDisabledState" xml:space="preserve">
+    <value>Отключён</value>
+  </data>
+  <data name="McpNoProject" xml:space="preserve">
+    <value>Сначала выберите проект, чтобы настроить MCP-серверы.</value>
+  </data>
+  <data name="McpServerNextSession" xml:space="preserve">
+    <value>Native Harness запустит включённые серверы при следующем запуске чата или задачи.</value>
+  </data>
+  <data name="McpCredentialsSaved" xml:space="preserve">
+    <value>Учётные данные сохранены</value>
+  </data>
+  <data name="McpAddServer" xml:space="preserve">
+    <value>Сохранить сервер</value>
+  </data>
+  <data name="McpEditServer" xml:space="preserve">
+    <value>Изменить</value>
+  </data>
+  <data name="McpCancelEdit" xml:space="preserve">
+    <value>Отменить редактирование</value>
+  </data>
+  <data name="McpPipelineAllowlistHint" xml:space="preserve">
+    <value>Имена инструментов в harness имеют вид mcp_&lt;сервер&gt;_&lt;инструмент&gt;. Чтобы разрешить их в pipeline, добавьте точное имя или mcp_&lt;сервер&gt;_* в Allowed MCP Tools у подзадачи Actor.</value>
+  </data>
 </root>

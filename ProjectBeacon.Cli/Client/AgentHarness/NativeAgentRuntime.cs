@@ -55,10 +55,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         _mcpClientFactory = mcpClientFactory ?? StartMcpClientAsync;
     }
 
-    private static async Task<IMcpToolClient> StartMcpClientAsync(
+    private Task<IMcpToolClient> StartMcpClientAsync(
         AgentHarnessAuthorization authorization,
         CancellationToken ct)
-        => await McpStdioClient.StartAsync(authorization, ct);
+        => ProjectMcpToolClient.StartAsync(authorization, _log, ct);
 
     public bool SupportsForms => true;
     public bool SupportsAgentSwitch => true;
