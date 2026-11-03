@@ -46,7 +46,7 @@ else
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="@L["CreatedAt"]">@context.CreatedAt.ToUniversalTime().ToString("u")</MudTd>
+                <MudTd DataLabel="@L["CreatedAt"]"><LocalTime Value="context.CreatedAt" Format="u" /></MudTd>
                 <MudTd DataLabel="@L["Title"]">@context.Title</MudTd>
                 <MudTd DataLabel="@L["Scope"]">@ScopeLabel(context)</MudTd>
                 <MudTd DataLabel="@L["Status"]">@StatusLabel(context)</MudTd>
