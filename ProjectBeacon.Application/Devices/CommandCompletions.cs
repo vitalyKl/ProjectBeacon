@@ -103,7 +103,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
         {
             var now = DateTime.UtcNow;
             await db.PipelineSessions.IgnoreQueryFilters()
-                .Where(s => s.Id == failedId && s.ProjectId == projectId && s.Status == SessionStatus.Active)
+                .Where(s => s.Id == failedId && s.ProjectId == projectId && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(x => x.Status, SessionStatus.Failed)
                     .SetProperty(x => x.ClosedAt, now), ct);
