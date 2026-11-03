@@ -1,6 +1,5 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -108,7 +107,7 @@ internal static class ProjectMcpToolClient
                         await client.DisposeAsync();
                     // Do not include exception messages: child processes and HTTP libraries may
                     // echo command arguments or credential-bearing request details.
-                    log?.Invoke($"MCP server '{server.Name}' could not be started ({ex.GetType().Name}).");
+                    log?.Invoke($"MCP server '{server.Name}' could not be started: {DescribeStartFailure(ex, server)}");
                 }
             }
         }
@@ -191,9 +190,15 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
         if (string.IsNullOrWhiteSpace(config.Command))
             throw new InvalidOperationException("The MCP executable is missing.");
 
+        var arguments = config.Arguments ?? [];
+        var batchCommand = OperatingSystem.IsWindows()
+            ? ResolveWindowsBatchCommand(config.Command.Trim())
+            : null;
         var start = new ProcessStartInfo
         {
-            FileName = config.Command,
+            FileName = batchCommand is null
+                ? config.Command
+                : Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardInput = true,
@@ -201,8 +206,27 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
             RedirectStandardError = true,
             CreateNoWindow = true
         };
-        foreach (var argument in config.Arguments ?? [])
-            start.ArgumentList.Add(argument);
+        if (batchCommand is null)
+        {
+            foreach (var argument in arguments)
+                start.ArgumentList.Add(argument);
+        }
+        else
+        {
+            // npx/npm are commonly installed as .cmd shims on Windows. Run only these explicit
+            // batch files through cmd.exe, with every argument quoted and shell expansion disabled.
+            if (batchCommand.Contains('"') || batchCommand.Contains('%')
+                || arguments.Any(argument => argument.Any(character =>
+                    character is '"' or '%' or '\r' or '\n' or '\0')))
+            {
+                throw new InvalidOperationException(
+                    "Windows .cmd MCP arguments cannot contain quotes, percent signs or line breaks. Use a native executable for those arguments.");
+            }
+
+            var commandLine = $"\"{batchCommand}\""
+                + string.Concat(arguments.Select(argument => $" \"{argument}\""));
+            start.Arguments = $"/d /v:off /s /c \"{commandLine}\"";
+        }
 
         var inherited = SafeEnvironment
             .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
@@ -339,6 +363,54 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
         }
         _process.Dispose();
         _requestLock.Dispose();
+    }
+
+    private static string? ResolveWindowsBatchCommand(string command)
+    {
+        var extension = Path.GetExtension(command);
+        if (extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bat", StringComparison.OrdinalIgnoreCase))
+            return command;
+        if (extension.Length > 0)
+            return null;
+
+        var suffixes = new[] { ".cmd", ".bat" };
+        var hasDirectory = command.Contains(Path.DirectorySeparatorChar)
+            || command.Contains(Path.AltDirectorySeparatorChar);
+        var directories = hasDirectory
+            ? new[] { Path.GetDirectoryName(Path.GetFullPath(command)) ?? Environment.CurrentDirectory }
+            : (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (var directory in directories)
+        foreach (var suffix in suffixes)
+        {
+            var candidate = hasDirectory
+                ? command + suffix
+                : Path.Combine(directory, command + suffix);
+            if (File.Exists(candidate))
+                return Path.GetFullPath(candidate);
+        }
+
+        return null;
+    }
+
+    private static string DescribeStartFailure(Exception exception, McpServerConfiguration config)
+    {
+        var message = exception.Message;
+        var secrets = new List<string>();
+        if (config.Environment is not null)
+            secrets.AddRange(config.Environment.Values);
+        if (config.Headers is not null)
+            secrets.AddRange(config.Headers.Values);
+        if (!string.IsNullOrWhiteSpace(config.Endpoint))
+            secrets.Add(config.Endpoint);
+
+        foreach (var secret in secrets.Where(value => !string.IsNullOrEmpty(value)))
+            message = message.Replace(secret, "[redacted]", StringComparison.Ordinal);
+        if (message.Length > 240)
+            message = message[..240] + "…";
+        return $"{exception.GetType().Name}: {message}";
     }
 
     private static async Task DrainErrorAsync(Process process)
