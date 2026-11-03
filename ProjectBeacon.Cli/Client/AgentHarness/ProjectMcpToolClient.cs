@@ -514,7 +514,10 @@ internal sealed class McpStreamableHttpClient : IMcpToolClient
             var id = Interlocked.Increment(ref _nextId);
             var body = new JsonObject
             {
-                ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters
+                ["jsonrpc"] = "2.0",
+                ["id"] = id,
+                ["method"] = method,
+                ["params"] = parameters
             };
             return await PostAsync(body, id, ct, includeProtocolHeader);
         }
