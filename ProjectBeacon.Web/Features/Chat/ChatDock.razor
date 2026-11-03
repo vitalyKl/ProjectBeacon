@@ -78,10 +78,10 @@
                         }
                     </MudSelect>
                 }
-                @if (_contextTaskId is not null)
+                @if (!string.IsNullOrWhiteSpace(_contextPageLabel))
                 {
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Class="mb-2">
-                        @L["ChatContextTask"]: @_contextTaskTitle
+                        @L["Context"]: @_contextPageLabel
                     </MudChip>
                 }
                 @if (_session is null)
@@ -131,6 +131,8 @@
     private List<WaitingPipelineTaskDto> _waitingTasks = [];
     private Guid? _contextTaskId;
     private string? _contextTaskTitle;
+    private string _contextPageLabel = string.Empty;
+    private string _contextRoute = string.Empty;
     private List<ChatPartDto> _parts = [];
     private List<LocalModelBackendDto> _models = [];
     private string? _model;
@@ -215,6 +217,10 @@
         _contextTaskTitle = null;
         var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var pageSegments = segments.Where(segment => !Guid.TryParse(segment, out _)).ToArray();
+        _contextRoute = string.Join('/', pageSegments);
+        _contextPageLabel = HumanizeRoute(_contextRoute);
+
         if (segments.Length < 2 || !string.Equals(segments[0], "task", StringComparison.OrdinalIgnoreCase)
             || !Guid.TryParse(segments[1], out var taskId))
             return;
@@ -223,6 +229,20 @@
             return;
         _contextTaskId = task.Value.Id;
         _contextTaskTitle = task.Value.Title;
+        _contextPageLabel = $"{L["TaskDetail"].Value}: {task.Value.Title}";
+    }
+
+    private static string HumanizeRoute(string route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+            return "Dashboard";
+
+        return string.Join(" / ", route.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(segment =>
+            {
+                var words = segment.Replace('-', ' ').Replace('_', ' ');
+                return char.ToUpperInvariant(words[0]) + words[1..];
+            }));
     }
 
     private async Task SelectSession(string? id)
@@ -245,9 +265,10 @@
     {
         if (_userId == Guid.Empty)
             return;
-        var title = _contextTaskTitle is null
+        var contextTitle = _contextTaskTitle ?? _contextPageLabel;
+        var title = string.IsNullOrWhiteSpace(contextTitle)
             ? L["Chat"].Value
-            : $"{L["Chat"].Value} · {_contextTaskTitle}";
+            : $"{L["Chat"].Value} · {contextTitle}";
         var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, title)));
         if (!created.Success)
         {
@@ -286,7 +307,11 @@
         _failed = false;
         try
         {
-            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, _model, _effort, _contextTaskId)));
+            var contextualText = string.IsNullOrWhiteSpace(_contextPageLabel)
+                ? _draft
+                : $"Automatic ProjectBeacon workspace context (location only):\nPage: {_contextPageLabel}\nRoute: /{_contextRoute}\n\nUser message:\n{_draft}";
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(
+                new SendChatPromptRequest(_session.Id, _userId, contextualText, _model, _effort, _contextTaskId)));
             if (!sent.Success)
             {
                 _failed = true;
@@ -328,7 +353,10 @@
     {
         if (_session is null)
             return;
-        var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(_session.Id, _userId)));
+        var sessionId = _session.Id;
+        var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
+        if (_session?.Id != sessionId)
+            return;
         _parts = parts.Success ? parts.Value!.ToList() : [];
     }
 
@@ -391,7 +419,7 @@
         }
     }
 
-    private IEnumerable<ChatPartDto> DockParts => _parts.TakeLast(2);
+    private IEnumerable<ChatPartDto> DockParts => _parts;
 
     private string Phase => ChatPhase.Resolve(_session?.Status, _parts.LastOrDefault()?.Kind, _failed, _parts.Count);
 
