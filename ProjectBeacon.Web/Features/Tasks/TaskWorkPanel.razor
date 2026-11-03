@@ -4,62 +4,52 @@
 
 @if (Phases.Count > 0 || Pipeline is { Subtasks.Count: > 0 })
 {
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-task-work-panel">
         @if (Phases.Count > 0)
         {
             <div class="beacon-phase-strip">
                 @foreach (var phase in Phases)
                 {
-                    <button type="button" class="beacon-phase-tick @(OpenPhaseId == phase.Id ? "is-open" : "")" aria-label="@($"{phase.Title} {phase.Status}")" @onclick="() => OnToggle.InvokeAsync(phase.Id)">
+                    <button type="button"
+                            class="beacon-phase-tick @(OpenPhaseId == phase.Id ? "is-open" : "")"
+                            aria-label="@($"{phase.Title} {phase.Status}")"
+                            aria-expanded="@(OpenPhaseId == phase.Id)"
+                            @onclick="() => OnToggle.InvokeAsync(phase.Id)">
                         <span class="beacon-phase-mark @phase.Status.ToString().ToLowerInvariant()" aria-hidden="true"></span>
                         <span>@(string.IsNullOrEmpty(phase.Key) ? phase.Title : L["Phase_" + phase.Key].Value)</span>
                     </button>
                 }
             </div>
-        }
-        @if (Phases.FirstOrDefault(p => p.Id == OpenPhaseId) is { } open)
-        {
-            <MudText Typo="Typo.body2" Class="mt-3">@open.Instruction</MudText>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @ModelName(open.ModelBackendId)</MudText>
-            @foreach (var sub in PhaseSubtasks(open.Id))
+
+            @if (Phases.FirstOrDefault(p => p.Id == OpenPhaseId) is { } open)
             {
-                <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-3 mt-2">
-                    <MudText Typo="Typo.body2">@sub.Instructions</MudText>
-                    <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
-                    @if (!string.IsNullOrWhiteSpace(sub.Summary))
+                <div class="beacon-task-phase-content">
+                    <MudText Typo="Typo.body2">@open.Instruction</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @ModelName(open.ModelBackendId)</MudText>
+                    @foreach (var sub in PhaseSubtasks(open.Id))
                     {
-                        <MudText Typo="Typo.body2" Class="mt-1">@sub.Summary</MudText>
+                        <SubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" />
                     }
-                    @if (!string.IsNullOrWhiteSpace(sub.DiffRef))
-                    {
-                        <MudText Typo="Typo.caption" Class="beacon-ellipsis">@sub.DiffRef</MudText>
-                    }
-                    @foreach (var session in Pipeline?.Sessions.Where(s => s.SubtaskId == sub.Id) ?? [])
-                    {
-                        <PipelineActivityPanel TaskId="Pipeline!.TaskId" Session="session" />
-                    }
-                </MudPaper>
+                </div>
             }
-        }
-            @if (Phases.Count == 0 && Pipeline is { Subtasks.Count: > 0 })
+
+            @if (Pipeline is { } pipeline && pipeline.Subtasks.Any(s => s.TaskPhaseId is null))
             {
-                <MudText Typo="Typo.subtitle2" Class="mt-3">@L["Subtasks"]</MudText>
-                @foreach (var sub in Pipeline.Subtasks)
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle2" Class="mb-2">@L["UnassignedSubtasks"]</MudText>
+                @foreach (var sub in pipeline.Subtasks.Where(s => s.TaskPhaseId is null))
                 {
-                    <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-3 mt-2">
-                        <MudText Typo="Typo.body2">@sub.Instructions</MudText>
-                        <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
-                        @if (!string.IsNullOrWhiteSpace(sub.Summary))
-                        {
-                            <MudText Typo="Typo.body2" Class="mt-1">@sub.Summary</MudText>
-                        }
-                        @foreach (var session in Pipeline.Sessions.Where(s => s.SubtaskId == sub.Id))
-                        {
-                            <PipelineActivityPanel TaskId="Pipeline.TaskId" Session="session" />
-                        }
-                    </MudPaper>
+                    <SubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" />
                 }
             }
+        }
+        else if (Pipeline is { } pipeline)
+        {
+            @foreach (var sub in pipeline.Subtasks)
+            {
+                <SubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" />
+            }
+        }
     </MudPaper>
 }
 
@@ -72,10 +62,9 @@
     private IEnumerable<SubtaskDto> PhaseSubtasks(Guid phaseId) =>
         Pipeline?.Subtasks.Where(s => s.TaskPhaseId == phaseId) ?? [];
 
+    private IReadOnlyList<PipelineSessionDto> SessionsFor(Guid subtaskId) =>
+        Pipeline?.Sessions.Where(s => s.SubtaskId == subtaskId).ToList() ?? [];
+
     private string ModelName(Guid? id) =>
         id is null ? L["Unbound"].Value : L["PhaseModel"].Value;
-
-    private string SubtaskStatusLabel(SubtaskStatus status) => status == SubtaskStatus.Done
-        ? L["SubtaskReported"].Value
-        : L[status.ToString()].Value;
 }
