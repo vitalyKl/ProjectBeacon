@@ -3209,3 +3209,13 @@ body:has(.beacon-theme-dark) .mud-main-content {
     width: 100%;
     min-width: 0;
 }
+
+/* Keep keyboard focus inside the mobile chat workspace instead of scrolling the document. */
+@media (max-width: 767px) {
+    html:has(.beacon-chat-page), body:has(.beacon-chat-page) {
+        overscroll-behavior: none;
+        scroll-padding-block: 0;
+    }
+    .beacon-chat-compose-form, .beacon-chat-controls { scroll-margin-block: 0; }
+    .beacon-chat-message-input textarea:focus { scroll-margin-block: 8px; }
+}
