@@ -579,9 +579,19 @@ public class AppendChatPartHandler : ICommandHandler<AppendChatPartCommand, Resu
                     {
                         existing = await db.ChatParts.IgnoreQueryFilters()
                             .FirstOrDefaultAsync(p => p.SessionId == session.Id && p.ExternalId == command.Request.ExternalId, ct);
-                        // A late streamed snapshot must not clobber a part the poller already finalized;
-                        // every other re-post overwrites so the newest content wins.
+                        // A late streamed snapshot must not clobber a part the poller already finalized.
                         if (existing is not null && existing.Complete && !command.Request.Complete)
+                            return Result.Ok(ListChatPartsHandler.MapPart(existing));
+
+                        // Text and reasoning are append-only deltas. Requests can arrive out of order
+                        // when a slow HTTP write races a later delta; never replace a longer persisted
+                        // prefix with an older, shorter snapshot from that same stream part.
+                        if (existing is not null
+                            && !command.Request.Complete
+                            && string.Equals(existing.Kind, command.Request.Kind, StringComparison.Ordinal)
+                            && command.Request.Kind is "text" or "reasoning"
+                            && existing.Body.Length > command.Request.Body.Length
+                            && existing.Body.StartsWith(command.Request.Body, StringComparison.Ordinal))
                             return Result.Ok(ListChatPartsHandler.MapPart(existing));
                     }
                     var streamed = await db.ChatSessions
