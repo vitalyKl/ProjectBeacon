@@ -20,7 +20,7 @@
         get
         {
             if (OffsetValue is { } offsetValue)
-                return offsetValue.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+                return offsetValue.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);
 
             var value = Value!.Value;
             var utc = value.Kind == DateTimeKind.Local
