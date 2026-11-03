@@ -3338,7 +3338,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 
 .beacon-task-work-panel {
-    margin-top: var(--space-3);
+    margin-top: 0;
     padding: var(--space-3);
 }
 

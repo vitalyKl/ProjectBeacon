@@ -116,9 +116,9 @@ else
     }
     <div class="beacon-task-grid">
         <main class="beacon-task-main">
-            <section class="beacon-panel beacon-surface-operational">
-                <header class="beacon-ops-head">
-                    <div class="beacon-ops-title">@L["Work"]</div>
+            <section class="beacon-task-workflow">
+                <header class="beacon-task-workflow-head">
+                    <MudText Typo="Typo.h6">@L["Work"]</MudText>
                     @if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
                     {
                         <StatusChip Color="Color.Warning" Label="@L["WaitingForUser"]" />
