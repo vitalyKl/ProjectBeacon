@@ -2,7 +2,7 @@
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 
-@if (Phases.Count > 0)
+@if (Phases.Count > 0 || Pipeline?.Subtasks.Count > 0)
 {
     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
         <div class="beacon-phase-strip">
@@ -31,7 +31,30 @@
                     {
                         <MudText Typo="Typo.caption" Class="beacon-ellipsis">@sub.DiffRef</MudText>
                     }
+                    @foreach (var session in Pipeline?.Sessions.Where(s => s.SubtaskId == sub.Id) ?? [])
+                    {
+                        <PipelineActivityPanel TaskId="Pipeline!.TaskId" Session="session" />
+                    }
                 </MudPaper>
+            }
+            @if (!Phases.Any() && Pipeline?.Subtasks.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-3">@L["Subtasks"]</MudText>
+                @foreach (var sub in Pipeline.Subtasks)
+                {
+                    <MudPaper Elevation="0" Outlined="false" Class="beacon-card pa-3 mt-2">
+                        <MudText Typo="Typo.body2">@sub.Instructions</MudText>
+                        <MudText Typo="Typo.caption">@SubtaskStatusLabel(sub.Status)</MudText>
+                        @if (!string.IsNullOrWhiteSpace(sub.Summary))
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1">@sub.Summary</MudText>
+                        }
+                        @foreach (var session in Pipeline.Sessions.Where(s => s.SubtaskId == sub.Id))
+                        {
+                            <PipelineActivityPanel TaskId="Pipeline.TaskId" Session="session" />
+                        }
+                    </MudPaper>
+                }
             }
         }
     </MudPaper>

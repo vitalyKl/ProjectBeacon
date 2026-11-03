@@ -496,7 +496,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 {
                     id = form.Id,
                     title = form.Title,
-                    metadata = form.Metadata,
+                    description = form.Description,
                     fields = fields ?? new JsonArray()
                 };
             }).ToArray();

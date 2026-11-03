@@ -39,6 +39,7 @@
             {
                 <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
             }
+            <PipelineActivityPanel TaskId="pipeline.TaskId" Session="session" />
         }
 
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Verdicts"]</MudText>
@@ -76,6 +77,7 @@
     private Color SessionStatusColor(SessionStatus status) => status switch
     {
         SessionStatus.Active => Color.Info,
+        SessionStatus.WaitingForUser => Color.Warning,
         SessionStatus.Closed => Color.Default,
         SessionStatus.Failed => Color.Error,
         _ => Color.Default

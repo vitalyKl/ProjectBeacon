@@ -77,6 +77,10 @@
                     <MudText Typo="Typo.body2">@QTitle</MudText>
                 }
             </div>
+            @if (!string.IsNullOrWhiteSpace(QDescription))
+            {
+                <MudText Typo="Typo.body2" Class="mb-2 beacon-chat-question-text">@QDescription</MudText>
+            }
             @if (QAnswer is { } answer)
             {
                 <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">@L["ChatQuestionAnswered"]</MudAlert>
@@ -227,6 +231,7 @@
 
     private string? QFormId;
     private string? QTitle;
+    private string? QDescription;
     private List<QField> QFields { get; set; } = [];
     private JsonObject? QAnswer;
 
@@ -258,6 +263,7 @@
         _questionKey = key;
         QFormId = null;
         QTitle = null;
+        QDescription = null;
         QFields = [];
         QAnswer = null;
         _str = new();
@@ -279,6 +285,8 @@
             QFormId = id.GetValue<string>();
         if (obj["title"] is JsonValue title && title.GetValueKind() == JsonValueKind.String)
             QTitle = title.GetValue<string>();
+        if (obj["description"] is JsonValue description && description.GetValueKind() == JsonValueKind.String)
+            QDescription = description.GetValue<string>();
         if (obj["fields"] is JsonArray fields)
         {
             foreach (var el in fields)
