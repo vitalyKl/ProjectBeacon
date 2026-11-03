@@ -128,8 +128,8 @@
             return;
         try
         {
-            _systemTimeZone = await Js.InvokeAsync<string>("beaconTimeZone.getSystem");
-            _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference");
+            _systemTimeZone = await Js.InvokeAsync<string>("beaconTimeZone.getSystem") ?? "UTC";
+            _timeZone = await Js.InvokeAsync<string>("beaconTimeZone.getPreference") ?? string.Empty;
             await InvokeAsync(StateHasChanged);
         }
         catch (JSException)
