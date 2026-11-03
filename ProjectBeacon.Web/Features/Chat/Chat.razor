@@ -51,7 +51,7 @@ else
                 <div class="beacon-session-item @SessionClass(session)">
                     <div class="beacon-session-main" @onclick="() => Select(session)">
                         <MudText Typo="Typo.body2" Class="beacon-ellipsis">@session.Title</MudText>
-                        <MudText Typo="Typo.caption">@session.CreatedAt.ToLocalTime().ToString("g")</MudText>
+                        <MudText Typo="Typo.caption"><LocalTime Value="session.CreatedAt" /></MudText>
                         @if (session.Status == ChatSessionStatus.Streaming)
                         {
                             <StatusChip Color="Color.Info" Label="@L["ChatBusy"]" />
