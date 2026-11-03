@@ -87,7 +87,7 @@ public record ListChatPartsCommand(ListChatPartsRequest Request) : ICommand<Resu
 /// <summary>
 /// Session, user, message text, and an optional model id.
 /// </summary>
-public record SendChatPromptRequest(Guid SessionId, Guid UserId, string Text, string? Model, string? ReasoningEffort = null);
+public record SendChatPromptRequest(Guid SessionId, Guid UserId, string Text, string? Model, string? ReasoningEffort = null, Guid? TaskId = null);
 
 /// <summary>
 /// Command for send chat prompt.

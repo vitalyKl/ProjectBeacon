@@ -5,6 +5,7 @@
 @using ProjectBeacon.Application.Chat
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Runtime
+@using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -18,6 +19,7 @@
 @inject SendChatPromptHandler SendPrompt
 @inject AbortChatHandler AbortChat
 @inject CreateChatSessionHandler CreateSession
+@inject GetTaskHandler GetTask
 @inject ChatEventSignal Events
 @inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Logging.ILogger<ChatDock> Logger
@@ -31,6 +33,7 @@
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
                 <MudText Typo="Typo.subtitle2">@L["Chat"]</MudText>
                 <MudStack Row="true" Spacing="1">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateNewChat">@L["ChatNew"]</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" Href="/chat">@L["ChatOpenFull"]</MudButton>
                     <MudIconButton
                         Size="Size.Small"
@@ -51,6 +54,29 @@
             }
             else
             {
+                @if (_sessions.Count > 0)
+                {
+                    <MudSelect T="string" Value="SelectedSessionId" ValueChanged="SelectSession"
+                               Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                               Label="@L["ChatConversation"]" Class="mb-2">
+                        @foreach (var item in _sessions)
+                        {
+                            <MudSelectItem T="string" Value="@item.Id.ToString()">@item.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (_contextTaskId is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Class="mb-2">
+                        @L["ChatContextTask"]: @_contextTaskTitle
+                    </MudChip>
+                }
+                @if (_session is null)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">@L["ChatSelectOrCreate"]</MudAlert>
+                }
+                else
+                {
                 <ChatPane
                     Session="_session"
                     ModelName="@SelectedBackendName"
@@ -70,6 +96,7 @@
                     CanAbort="_session?.Status == ChatSessionStatus.Streaming"
                     Send="Send"
                     Abort="Abort" />
+                }
             }
         </MudPaper>
     }
@@ -85,6 +112,9 @@
     private string? _block;
     private Guid _userId;
     private ChatSessionDto? _session;
+    private List<ChatSessionDto> _sessions = [];
+    private Guid? _contextTaskId;
+    private string? _contextTaskTitle;
     private List<ChatPartDto> _parts = [];
     private List<LocalModelBackendDto> _models = [];
     private string? _model;
@@ -118,19 +148,19 @@
                     _model = OpencodePayload.OpenCodeId(chosen);
             }
         }
-        var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
-        if (listed.Success && listed.Value!.Count > 0)
-        {
-            _session = listed.Value[0];
-            await ReloadParts();
-        }
+        await ReloadSessions();
+        await ReloadRouteContext();
         _ = PollAsync();
     }
 
     private void OnLocation(object? sender, LocationChangedEventArgs e)
     {
-        UpdateVisible();
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            UpdateVisible();
+            await ReloadRouteContext();
+            StateHasChanged();
+        });
     }
 
     private void UpdateVisible()
@@ -141,31 +171,85 @@
             _visible = false;
     }
 
+    private string SelectedSessionId => _session?.Id.ToString() ?? string.Empty;
+
+    private async Task ReloadSessions()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
+        _sessions = listed.Success ? listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList() : [];
+        if (_session is not null)
+            _session = _sessions.FirstOrDefault(x => x.Id == _session.Id) ?? _session;
+    }
+
+    private async Task ReloadRouteContext()
+    {
+        _contextTaskId = null;
+        _contextTaskTitle = null;
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || !string.Equals(segments[0], "task", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(segments[1], out var taskId))
+            return;
+        var task = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
+        if (!task.Success || task.Value is null)
+            return;
+        _contextTaskId = task.Value.Id;
+        _contextTaskTitle = task.Value.Title;
+    }
+
+    private async Task SelectSession(string? id)
+    {
+        if (!Guid.TryParse(id, out var sessionId))
+        {
+            _session = null;
+            _parts = [];
+            return;
+        }
+        var selected = _sessions.FirstOrDefault(x => x.Id == sessionId);
+        if (selected is null)
+            return;
+        _session = selected;
+        _failed = false;
+        await ReloadParts();
+    }
+
+    private async Task CreateNewChat()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var title = _contextTaskTitle is null
+            ? L["Chat"].Value
+            : $"{L["Chat"].Value} · {_contextTaskTitle}";
+        var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, title)));
+        if (!created.Success)
+        {
+            _block = created.Error switch
+            {
+                CreateChatSessionHandler.ProjectFolderRequired => "folder",
+                CreateChatSessionHandler.ClientRequired => "client",
+                _ => null
+            };
+            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _block = null;
+        _session = created.Value;
+        _open = true;
+        _draft = string.Empty;
+        _failed = false;
+        await ReloadSessions();
+        await ReloadParts();
+    }
+
     private async Task Open()
     {
         _open = true;
         if (_session is null)
-        {
-            var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, L["Chat"].Value)));
-            if (!created.Success)
-            {
-                _block = created.Error switch
-                {
-                    CreateChatSessionHandler.ProjectFolderRequired => "folder",
-                    CreateChatSessionHandler.ClientRequired => "client",
-                    _ => null
-                };
-                if (_block is null)
-                {
-                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
-                    _open = false;
-                }
-                return;
-            }
-            _block = null;
-            _session = created.Value;
-        }
-        await ReloadParts();
+            await CreateNewChat();
+        else
+            await ReloadParts();
     }
 
     private async Task Send()
@@ -176,7 +260,7 @@
         _failed = false;
         try
         {
-            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, _model, _effort)));
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, _model, _effort, _contextTaskId)));
             if (!sent.Success)
             {
                 _failed = true;
@@ -185,6 +269,7 @@
             }
             _draft = string.Empty;
             _session = sent.Value;
+            await ReloadSessions();
             await ReloadParts();
         }
         finally

@@ -248,6 +248,13 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                     var resolved = await ProjectRuntimeResolver.ResolveAsync(db, session.ProjectId, session.DeviceId, ct);
                     if (!resolved.Success)
                         return Result.Failure<ChatSessionDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+                    if (command.Request.TaskId is { } taskId)
+                    {
+                        var belongsToProject = await db.Tasks
+                            .AnyAsync(t => t.Id == taskId && t.ProjectId == session.ProjectId, ct);
+                        if (!belongsToProject)
+                            return Result.Failure<ChatSessionDto>("The current task does not belong to this chat project.");
+                    }
                     var model = await ChatModelSelection.ResolveAsync(
                         db, command.Request.UserId, command.Request.Model, ct);
                     var contextLimit = await ChatModelSelection.ResolveContextLimitAsync(
@@ -257,6 +264,7 @@ public class SendChatPromptHandler : ICommandHandler<SendChatPromptCommand, Resu
                         chatSessionId = session.Id,
                         externalSessionId = session.ExternalSessionId,
                         projectId = session.ProjectId,
+                        taskId = command.Request.TaskId,
                         text,
                         model,
                         reasoningEffort = command.Request.ReasoningEffort,
