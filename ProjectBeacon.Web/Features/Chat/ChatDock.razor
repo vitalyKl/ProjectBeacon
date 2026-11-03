@@ -293,9 +293,9 @@
     private async Task Open()
     {
         _open = true;
-        if (_session is null)
-            await CreateNewChat();
-        else
+        // Opening the dock must not silently create or select a conversation.
+        // The user can explicitly choose an existing session or start a new one.
+        if (_session is not null)
             await ReloadParts();
     }
 
