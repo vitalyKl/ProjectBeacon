@@ -19,7 +19,7 @@
 // Keep the chat page at the top and reveal the composer inside its own scroll container.
 document.addEventListener("focusin", function (e) {
   var input = e.target.closest(".beacon-chat-message-input textarea");
-  if (!input) return;
+  if (!input || !input.closest(".beacon-chat-page")) return;
   requestAnimationFrame(function () {
     window.scrollTo(0, 0);
     // The composer is already anchored by the chat layout; do not call scrollIntoView,
