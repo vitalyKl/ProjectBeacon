@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Net.Http.Json;
 using Application.Runtime;
 using ProjectBeacon.Cli.Client.AgentHarness;
@@ -409,11 +410,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             return (false, null, "Pipeline command requires projectId, taskId, sessionId, model, and prompt.");
         if (pipelineRole is null)
             return (false, null, "Pipeline command requires role Planner, Actor, or Review.");
-        if (string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
-            && subtaskId is null)
+        if (string.Equals(pipelineRole, "Actor", StringComparison.Ordinal) && subtaskId is null)
             return (false, null, "Actor pipeline sessions require subtaskId.");
-        if (!string.Equals(pipelineRole, "Actor", StringComparison.Ordinal)
-            && subtaskId is not null)
+        if (!string.Equals(pipelineRole, "Actor", StringComparison.Ordinal) && subtaskId is not null)
             return (false, null, "Only Actor pipeline sessions may include subtaskId.");
         if (subtaskId is not null && taskId == Guid.Empty)
             return (false, null, "A subtask-scoped pipeline session must include its parent task id.");
@@ -455,6 +454,87 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(_timing.ChatMaxDuration);
+
+        async Task PublishActivityAsync(string state, AgentTurnStatus? turnStatus, CancellationToken tokenCt)
+        {
+            var collected = new List<AgentMessagePart>();
+            await foreach (var part in runtime.StreamPartsAsync(externalSessionId, tokenCt))
+            {
+                // Publish the same reasoning, tool and text events used by the chat transcript.
+                // Clip each entry and keep the snapshot bounded to stay below the progress API limit.
+                if (string.Equals(part.Role, "user", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                collected.Add(part with
+                {
+                    Body = ClipActivityText(part.Body, 2000),
+                    ToolInput = ClipActivityText(part.ToolInput, 1000),
+                    ToolResult = ClipActivityText(part.ToolResult, 1500)
+                });
+            }
+            var parts = collected.TakeLast(20).Select(part => new
+            {
+                role = part.Role,
+                kind = part.Kind,
+                body = part.Body,
+                externalId = part.ExternalId,
+                tool = part.Tool,
+                toolStatus = part.ToolStatus,
+                toolInput = part.ToolInput,
+                toolResult = part.ToolResult,
+                durationMs = part.DurationMs,
+                complete = part.Complete
+            }).ToArray();
+
+            IReadOnlyList<AgentRuntimeForm> forms = _gate.Runtime is IAgentRuntimeCapabilities capabilities && capabilities.SupportsForms
+                ? await capabilities.ListPendingFormsAsync(externalSessionId, tokenCt)
+                : Array.Empty<AgentRuntimeForm>();
+            var formItems = forms.Select(form =>
+            {
+                JsonNode? fields = null;
+                try { fields = JsonNode.Parse(form.FieldsJson); } catch (JsonException) { }
+                return new
+                {
+                    id = form.Id,
+                    title = form.Title,
+                    metadata = form.Metadata,
+                    fields = fields ?? new JsonArray()
+                };
+            }).ToArray();
+
+            var latest = collected.LastOrDefault();
+            var activity = forms.Count > 0
+                ? "Waiting for your answer"
+                : latest?.Kind == "reasoning" && !string.IsNullOrWhiteSpace(latest.Body)
+                    ? $"Thinking: {ClipActivityText(latest.Body, 280)}"
+                    : latest?.Kind == "tool"
+                        ? $"Using {latest.Tool ?? "a tool"}"
+                        : latest?.Kind == "text" && !string.IsNullOrWhiteSpace(latest.Body)
+                            ? ClipActivityText(latest.Body, 280)
+                            : state == "completed" ? "Stage completed"
+                            : state == "failed" ? "Stage failed"
+                            : "Agent is working";
+
+            var snapshot = JsonSerializer.Serialize(new
+            {
+                sessionId = pipelineSessionId,
+                externalSessionId,
+                state = forms.Count > 0 ? "waiting-for-user" : state,
+                activity,
+                finish = turnStatus?.Finish,
+                error = turnStatus?.Error,
+                updatedAt = DateTimeOffset.UtcNow,
+                parts,
+                forms = formItems
+            }, DaemonJson.Camel);
+
+            using var response = await _http.PostAsJsonAsync(
+                $"/v1/commands/{command.Id:D}/progress",
+                new { generation = command.Generation, progressJson = snapshot },
+                tokenCt);
+            if (!response.IsSuccessStatusCode)
+                _state.Log($"pipeline activity report returned HTTP {(int)response.StatusCode}");
+        }
+
         try
         {
             await runtime.SendPromptAsync(
@@ -471,15 +551,20 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             AgentTurnStatus? status;
             do
             {
+                await PublishActivityAsync("running", null, turnCts.Token);
                 await Task.Delay(_timing.ChatPollInterval, turnCts.Token);
                 status = await runtime.GetTurnStatusAsync(externalSessionId, turnCts.Token);
             }
             while (status is null || !status.Ended);
 
-            if (!string.IsNullOrWhiteSpace(status.Error)
+            var usage = await runtime.ReadUsageAsync(externalSessionId, ct);
+            var failed = !string.IsNullOrWhiteSpace(status.Error)
                 || string.Equals(status.Finish, "error", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(status.Finish))
+                || string.IsNullOrWhiteSpace(status.Finish);
+
+            await PublishActivityAsync(failed ? "failed" : "completed", status, ct);
+            if (failed)
             {
                 var failure = status.Error
                     ?? (string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
@@ -488,7 +573,6 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 return (false, null, failure);
             }
 
-            var usage = await runtime.ReadUsageAsync(externalSessionId, ct);
             return (true, JsonSerializer.Serialize(new
             {
                 pipelineSessionId,
@@ -502,8 +586,17 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
+            try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
             return (false, null, "The pipeline agent turn exceeded the workstation chat timeout.");
         }
+    }
+
+    private static string? ClipActivityText(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+            return value;
+        var text = value.Trim();
+        return text.Length <= maxLength ? text : text[..maxLength] + "…";
     }
 
     private static Guid ReadGuid(JsonElement element, string name) =>

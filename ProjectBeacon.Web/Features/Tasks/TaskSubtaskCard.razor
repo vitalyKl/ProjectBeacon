@@ -1,0 +1,71 @@
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudPaper Elevation="0" Outlined="false" Class="beacon-card beacon-task-subtask pa-3 mt-2">
+    <div class="beacon-task-subtask-head">
+        <MudText Typo="Typo.body2">@Subtask.Instructions</MudText>
+        <StatusChip Color="@StatusColor" Label="@StatusLabel" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Subtask.Summary))
+    {
+        <MudText Typo="Typo.body2" Class="mt-1">@Subtask.Summary</MudText>
+    }
+    @if (!string.IsNullOrWhiteSpace(Subtask.DiffRef))
+    {
+        <MudText Typo="Typo.caption" Class="beacon-ellipsis">@Subtask.DiffRef</MudText>
+    }
+    @foreach (var session in Sessions)
+    {
+        @if (session.Status == SessionStatus.Ready)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
+                       OnClick="@(() => OnLaunchSession.InvokeAsync(session))"
+                       Disabled="Busy">@L["LaunchSession"]</MudButton>
+        }
+        <PipelineActivityPanel TaskId="TaskId" Session="session" />
+    }
+    @if (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress)
+    {
+        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
+            @if (Subtask.Status == SubtaskStatus.Pending)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           OnClick="@(() => OnStartActorSession.InvokeAsync(Subtask))"
+                           Disabled="Busy">@L["StartActorSession"]</MudButton>
+            }
+            @if (Subtask.Status == SubtaskStatus.InProgress)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           OnClick="@(() => OnReportResult.InvokeAsync(Subtask))"
+                           Disabled="Busy">@L["ReportResult"]</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                           OnClick="@(() => OnFailSubtask.InvokeAsync(Subtask))"
+                           Disabled="Busy">@L["FailSubtask"]</MudButton>
+            }
+        </MudStack>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public Guid TaskId { get; set; }
+    [Parameter, EditorRequired] public SubtaskDto Subtask { get; set; } = default!;
+    [Parameter] public IReadOnlyList<PipelineSessionDto> Sessions { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
+    [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
+    [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
+
+    private string StatusLabel => Subtask.Status == SubtaskStatus.Done
+        ? L["SubtaskReported"].Value
+        : L[Subtask.Status.ToString()].Value;
+
+    private Color StatusColor => Subtask.Status switch
+    {
+        SubtaskStatus.Done => Color.Success,
+        SubtaskStatus.InProgress => Color.Info,
+        SubtaskStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -67,7 +67,8 @@ public sealed partial class PipelineHandlerTests
             var stored = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
                 .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
             Assert.Equal(externalSessionId, stored.ExternalSessionId);
-            Assert.Equal(SessionStatus.Active, stored.Status);
+            Assert.Equal(SessionStatus.Closed, stored.Status);
+            Assert.NotNull(stored.ClosedAt);
         }
 
         var duplicate = await handler.HandleAsync(

@@ -5,6 +5,7 @@ public enum SessionStatus
 {
     Ready,
     Active,
+    WaitingForUser,
     Closed,
     Failed
 }

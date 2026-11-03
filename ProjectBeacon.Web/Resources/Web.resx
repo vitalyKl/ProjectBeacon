@@ -2387,4 +2387,40 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="ChatDelete" xml:space="preserve"><value>Delete</value></data>
   <data name="ChatDeleteConfirm" xml:space="preserve"><value>Delete chat "{0}"? It will be removed from your chat list.</value></data>
+  <data name="ChatNew" xml:space="preserve">
+    <value>New chat</value>
+  </data>
+  <data name="ChatConversation" xml:space="preserve">
+    <value>Conversation</value>
+  </data>
+  <data name="ChatContextTask" xml:space="preserve">
+    <value>Current task</value>
+  </data>
+  <data name="ChatSelectOrCreate" xml:space="preserve">
+    <value>Select a conversation or start a new one.</value>
+  </data>
+  <data name="WaitingForUser" xml:space="preserve">
+    <value>Waiting for your answer</value>
+  </data>
+  <data name="PipelineWaitingForUser" xml:space="preserve">
+    <value>The agent needs your input before it can continue.</value>
+  </data>
+  <data name="PipelineActivityStarting" xml:space="preserve">
+    <value>The agent session has started. Waiting for its first activity update…</value>
+  </data>
+  <data name="PipelineActivityCompleted" xml:space="preserve">
+    <value>Stage completed</value>
+  </data>
+  <data name="PipelineActivityFailed" xml:space="preserve">
+    <value>Stage failed</value>
+  </data>
+  <data name="PipelineActivityReady" xml:space="preserve">
+    <value>Ready to launch</value>
+  </data>
+  <data name="PipelineActivityWorking" xml:space="preserve">
+    <value>Agent is working</value>
+  </data>
+  <data name="UnassignedSubtasks" xml:space="preserve">
+    <value>Unassigned work</value>
+  </data>
 </root>

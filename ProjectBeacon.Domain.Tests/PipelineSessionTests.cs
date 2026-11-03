@@ -102,6 +102,28 @@ public sealed class PipelineSessionTests
     }
 
     [Fact]
+    public void UpdateActivity_CanWaitForUser_AndResume()
+    {
+        var session = NewSession();
+        session.Launch("external-session");
+
+        session.UpdateActivity("{\"state\":\"waiting-for-user\"}", waitingForUser: true);
+        Assert.Equal(SessionStatus.WaitingForUser, session.Status);
+        Assert.Equal("{\"state\":\"waiting-for-user\"}", session.ActivityJson);
+
+        session.UpdateActivity("{\"state\":\"running\"}", waitingForUser: false);
+        Assert.Equal(SessionStatus.Active, session.Status);
+    }
+
+    [Fact]
+    public void UpdateActivity_RejectsOversizedSnapshots()
+    {
+        var session = NewSession();
+        session.Launch();
+        Assert.Throws<ArgumentException>(() => session.UpdateActivity(new string('x', 262145), false));
+    }
+
+    [Fact]
     public void Close_FromReady_SetsClosedAt()
     {
         var session = NewSession();

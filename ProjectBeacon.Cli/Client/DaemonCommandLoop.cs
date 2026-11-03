@@ -48,7 +48,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 var command = await claimed.Content.ReadFromJsonAsync<WorkstationDaemon.CommandWire>(DaemonJson.Json, ct);
                 if (command is null)
                     continue;
-                if (command.Kind == WorkstationCommandKind.ChatPrompt)
+                if (command.Kind is WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession)
                     await ProcessPromptWithControlLaneAsync(command, ct);
                 else
                     await ProcessCommandAsync(command, ct);

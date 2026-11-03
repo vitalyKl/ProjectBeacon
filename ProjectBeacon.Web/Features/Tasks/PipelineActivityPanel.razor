@@ -1,0 +1,201 @@
+@using System.Security.Cryptography
+@using System.Text
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using ProjectBeacon.Application.Chat
+@using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Web.Features.Chat
+@inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
+
+<MudExpansionPanels Elevation="0" Class="beacon-pipeline-activity">
+    <MudExpansionPanel Expanded="@(Session.Status == SessionStatus.WaitingForUser || IsLive)" Dense="true">
+        <TitleContent>
+            <div class="beacon-pipeline-activity-title">
+                <span class="beacon-pipeline-activity-role">@RoleLabel</span>
+                <StatusChip Color="@StatusColor" Label="@StatusLabel" />
+                @if (IsWorking)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
+                }
+                <span class="beacon-pipeline-activity-summary">@ActivityLabel</span>
+            </div>
+        </TitleContent>
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(ActivityLabel))
+            {
+                <MudText Typo="Typo.body2" Class="beacon-pipeline-activity-current">@ActivityLabel</MudText>
+            }
+            @if (Parts.Count == 0 && Forms.Count == 0)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineActivityStarting"]</MudText>
+            }
+            @foreach (var part in Parts)
+            {
+                <ChatPartView Part="part" PipelineTaskId="TaskId" PipelineSessionId="Session.Id" />
+            }
+            @foreach (var form in Forms)
+            {
+                <ChatPartView Part="form" PipelineTaskId="TaskId" PipelineSessionId="Session.Id" />
+            }
+        </ChildContent>
+    </MudExpansionPanel>
+</MudExpansionPanels>
+
+@code {
+    [Parameter, EditorRequired] public Guid TaskId { get; set; }
+    [Parameter, EditorRequired] public PipelineSessionDto Session { get; set; } = default!;
+
+    private string RoleLabel => Session.Role switch
+    {
+        PipelineRole.Planner => L["RoleBindingPlanner"].Value,
+        PipelineRole.Actor => L["RoleBindingActor"].Value,
+        PipelineRole.Review => L["Review"].Value,
+        _ => Session.Role.ToString()
+    };
+
+    private string _state = string.Empty;
+    private string _activity = string.Empty;
+    private List<ChatPartDto> Parts { get; set; } = [];
+    private List<ChatPartDto> Forms { get; set; } = [];
+    private string SnapshotKey { get; set; } = string.Empty;
+
+    private bool IsLive => Session.Status == SessionStatus.WaitingForUser
+        || (Session.Status == SessionStatus.Active && _state is not ("completed" or "failed"));
+    private bool IsWorking => Session.Status == SessionStatus.Active
+        && _state is not ("completed" or "failed" or "waiting-for-user");
+    private string ActivityLabel => !string.IsNullOrWhiteSpace(_activity)
+        ? _activity
+        : _state switch
+        {
+            "waiting-for-user" => L["PipelineWaitingForUser"].Value,
+            "completed" => L["PipelineActivityCompleted"].Value,
+            "failed" => L["PipelineActivityFailed"].Value,
+            _ => Session.Status == SessionStatus.Ready
+                ? L["PipelineActivityReady"].Value
+                : L["PipelineActivityWorking"].Value
+        };
+
+    private string StatusLabel => Session.Status switch
+    {
+        SessionStatus.WaitingForUser => L["WaitingForUser"].Value,
+        SessionStatus.Active when _state == "completed" => L["PipelineActivityCompleted"].Value,
+        SessionStatus.Active when _state == "failed" => L["PipelineActivityFailed"].Value,
+        _ => L[Session.Status.ToString()].Value
+    };
+
+    private Color StatusColor => Session.Status switch
+    {
+        SessionStatus.Active when _state == "failed" => Color.Error,
+        SessionStatus.Active when _state == "completed" => Color.Success,
+        SessionStatus.Active => Color.Info,
+        SessionStatus.WaitingForUser => Color.Warning,
+        SessionStatus.Failed => Color.Error,
+        SessionStatus.Closed => Color.Success,
+        _ => Color.Default
+    };
+
+    protected override void OnParametersSet()
+    {
+        var body = Session.ActivityJson ?? "{}";
+        if (body == SnapshotKey)
+            return;
+        SnapshotKey = body;
+        Parts = [];
+        Forms = [];
+        _state = string.Empty;
+        _activity = string.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            _state = ReadString(root, "state") ?? string.Empty;
+            _activity = ReadString(root, "activity") ?? string.Empty;
+            if (root.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array)
+            {
+                var sort = 0;
+                foreach (var part in parts.EnumerateArray())
+                {
+                    var kind = ReadString(part, "kind") ?? "text";
+                    var role = ReadString(part, "role") ?? "assistant";
+                    var externalId = ReadString(part, "externalId") ?? $"{sort}:{kind}";
+                    Parts.Add(new ChatPartDto(
+                        StableId(Session.Id, externalId),
+                        Session.Id,
+                        role,
+                        kind,
+                        ReadString(part, "body") ?? string.Empty,
+                        externalId,
+                        sort++,
+                        Session.LaunchedAt ?? DateTime.UtcNow,
+                        ReadString(part, "tool"),
+                        ReadString(part, "toolStatus"),
+                        ReadString(part, "toolInput"),
+                        ReadString(part, "toolResult"),
+                        ReadInt(part, "durationMs"),
+                        ReadBool(part, "complete")));
+                }
+            }
+            if (root.TryGetProperty("forms", out var forms) && forms.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var form in forms.EnumerateArray())
+                {
+                    var id = ReadString(form, "id");
+                    if (string.IsNullOrWhiteSpace(id))
+                        continue;
+                    var fields = form.TryGetProperty("fields", out var parsedFields) ? parsedFields.Clone() : JsonDocument.Parse("[]").RootElement.Clone();
+                    var bodyNode = new JsonObject
+                    {
+                        ["id"] = id,
+                        ["title"] = ReadString(form, "title"),
+                        ["description"] = ReadString(form, "metadata"),
+                        ["fields"] = JsonNode.Parse(fields.GetRawText())
+                    };
+                    if (form.TryGetProperty("answer", out var answer) && answer.ValueKind == JsonValueKind.Object)
+                        bodyNode["answer"] = JsonNode.Parse(answer.GetRawText());
+                    Forms.Add(new ChatPartDto(
+                        StableId(Session.Id, "form:" + id),
+                        Session.Id,
+                        "assistant",
+                        "question",
+                        bodyNode.ToJsonString(),
+                        "form:" + id,
+                        Parts.Count + Forms.Count,
+                        Session.LaunchedAt ?? DateTime.UtcNow,
+                        Complete: true));
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            _state = string.Empty;
+            _activity = string.Empty;
+        }
+    }
+
+    private static string? ReadString(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out var value)
+        && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static int? ReadInt(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var number)
+            ? number
+            : null;
+
+    private static bool ReadBool(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out var value)
+        && value.ValueKind == JsonValueKind.True;
+
+    private static Guid StableId(Guid sessionId, string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sessionId.ToString("N") + ":" + value));
+        return new Guid(bytes.AsSpan(0, 16));
+    }
+}

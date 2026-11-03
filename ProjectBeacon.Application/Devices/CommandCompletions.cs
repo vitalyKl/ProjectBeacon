@@ -91,9 +91,14 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
 
         if (success && !string.IsNullOrWhiteSpace(externalSessionId) && sessionId is { } completedId)
         {
+            var completedAt = DateTime.UtcNow;
             await db.PipelineSessions.IgnoreQueryFilters()
-                .Where(s => s.Id == completedId && s.ProjectId == projectId && s.Status != SessionStatus.Failed)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExternalSessionId, externalSessionId), ct);
+                .Where(s => s.Id == completedId && s.ProjectId == projectId
+                    && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.ExternalSessionId, externalSessionId)
+                    .SetProperty(x => x.Status, SessionStatus.Closed)
+                    .SetProperty(x => x.ClosedAt, completedAt), ct);
             return;
         }
 
@@ -103,7 +108,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
         {
             var now = DateTime.UtcNow;
             await db.PipelineSessions.IgnoreQueryFilters()
-                .Where(s => s.Id == failedId && s.ProjectId == projectId && s.Status == SessionStatus.Active)
+                .Where(s => s.Id == failedId && s.ProjectId == projectId && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(x => x.Status, SessionStatus.Failed)
                     .SetProperty(x => x.ClosedAt, now), ct);

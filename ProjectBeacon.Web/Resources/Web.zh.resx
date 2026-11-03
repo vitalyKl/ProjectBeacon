@@ -2197,4 +2197,40 @@ orthstar</value>
   </data>
 <data name="ChatDelete" xml:space="preserve"><value>删除聊天</value></data>
 <data name="ChatDeleteConfirm" xml:space="preserve"><value>确定删除聊天“{0}”吗？它将从聊天列表中移除。</value></data>
+<data name="ChatContextTask" xml:space="preserve">
+    <value>当前任务</value>
+  </data>
+<data name="ChatConversation" xml:space="preserve">
+    <value>对话</value>
+  </data>
+<data name="ChatNew" xml:space="preserve">
+    <value>新建聊天</value>
+  </data>
+<data name="ChatSelectOrCreate" xml:space="preserve">
+    <value>请选择一个对话，或开始新的对话。</value>
+  </data>
+<data name="PipelineActivityCompleted" xml:space="preserve">
+    <value>阶段已完成</value>
+  </data>
+<data name="PipelineActivityFailed" xml:space="preserve">
+    <value>阶段失败</value>
+  </data>
+<data name="PipelineActivityReady" xml:space="preserve">
+    <value>准备启动</value>
+  </data>
+<data name="PipelineActivityStarting" xml:space="preserve">
+    <value>代理会话已启动，正在等待首次活动更新…</value>
+  </data>
+<data name="PipelineActivityWorking" xml:space="preserve">
+    <value>代理正在工作</value>
+  </data>
+<data name="PipelineWaitingForUser" xml:space="preserve">
+    <value>代理需要你的输入才能继续。</value>
+  </data>
+<data name="UnassignedSubtasks" xml:space="preserve">
+    <value>未分配的工作</value>
+  </data>
+<data name="WaitingForUser" xml:space="preserve">
+    <value>等待你的回复</value>
+  </data>
 </root>

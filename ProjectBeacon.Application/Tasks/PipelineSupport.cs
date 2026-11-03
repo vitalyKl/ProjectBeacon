@@ -18,7 +18,7 @@ public static class PipelineMappers
 
     public static PipelineSessionDto ToDto(PipelineSession s) =>
         new(s.Id, s.TaskId, s.SubtaskId, s.Role, s.Status, s.ModelBackendId,
-            s.LaunchSpec, s.PromptContext, s.LaunchedAt, s.ClosedAt);
+            s.LaunchSpec, s.PromptContext, s.LaunchedAt, s.ClosedAt, s.ActivityJson);
 
     public static ReviewVerdictDto ToDto(ReviewVerdict v) =>
         new(v.Id, v.TaskId, v.SubtaskId, v.Kind, v.Note, v.CreatedAt);
@@ -90,7 +90,7 @@ internal static class PipelineSupport
     {
         var sessions = await db.PipelineSessions
             .Where(s => s.TaskId == taskId
-                && (s.Status == SessionStatus.Ready || s.Status == SessionStatus.Active))
+                && (s.Status == SessionStatus.Ready || s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
             .OrderBy(s => s.Id)
             .ToListAsync(ct);
         if (role is not null)

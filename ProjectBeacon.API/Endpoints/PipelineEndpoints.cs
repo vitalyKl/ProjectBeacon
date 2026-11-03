@@ -21,6 +21,7 @@ public static class PipelineEndpoints
     public static IEndpointRouteBuilder MapPipelineEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/v1/tasks/{taskId:guid}/pipeline", GetPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/forms/{formId}/reply", ReplyPipelineForm).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/start", StartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/subtasks", CreateSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session", StartActorSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -34,6 +35,24 @@ public static class PipelineEndpoints
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/force-close", ForceClosePipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.Admin);
 
         return app;
+    }
+
+    private static async Task<IResult> ReplyPipelineForm(
+        Guid taskId,
+        Guid sessionId,
+        string formId,
+        [FromBody] PipelineFormReplyBody body,
+        ReplyPipelineFormHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        if (actor.UserId is not Guid userId)
+            return ProblemResults.Unauthorized();
+
+        var result = await handler.HandleAsync(new ReplyPipelineFormCommand(
+            new ReplyPipelineFormRequest(taskId, sessionId, userId, formId, body.AnswerJson)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> GetPipeline(Guid taskId, GetPipelineHandler handler, CancellationToken ct)
@@ -179,6 +198,9 @@ public static class PipelineEndpoints
             ? Results.Ok(result.Value)
             : result.FromResult();
     }
+
+    /// <summary>JSON body for replying to a task pipeline form.</summary>
+    public record PipelineFormReplyBody(string AnswerJson);
 
     /// <summary>JSON body for pipeline start and review start. <c>TaskId</c> must match the route.</summary>
     public record PipelineStartBody(Guid TaskId);

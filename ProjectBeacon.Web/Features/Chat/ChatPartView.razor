@@ -3,9 +3,11 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Chat
+@using ProjectBeacon.Application.Tasks
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject ReplyChatFormHandler ReplyForm
+@inject ReplyPipelineFormHandler ReplyPipelineForm
 @inject ISnackbar Snackbar
 
 <div class="beacon-chat-part @PartClass" data-chat-part-id="@Part.Id">
@@ -75,6 +77,10 @@
                     <MudText Typo="Typo.body2">@QTitle</MudText>
                 }
             </div>
+            @if (!string.IsNullOrWhiteSpace(QDescription))
+            {
+                <MudText Typo="Typo.body2" Class="mb-2 beacon-chat-question-text">@QDescription</MudText>
+            }
             @if (QAnswer is { } answer)
             {
                 <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">@L["ChatQuestionAnswered"]</MudAlert>
@@ -152,6 +158,8 @@
 @code {
     [Parameter, EditorRequired] public ChatPartDto Part { get; set; } = default!;
     [Parameter] public string? ModelName { get; set; }
+    [Parameter] public Guid? PipelineTaskId { get; set; }
+    [Parameter] public Guid? PipelineSessionId { get; set; }
 
     private bool IsTool => string.Equals(Part.Kind, "tool", StringComparison.OrdinalIgnoreCase);
 
@@ -223,6 +231,7 @@
 
     private string? QFormId;
     private string? QTitle;
+    private string? QDescription;
     private List<QField> QFields { get; set; } = [];
     private JsonObject? QAnswer;
 
@@ -254,6 +263,7 @@
         _questionKey = key;
         QFormId = null;
         QTitle = null;
+        QDescription = null;
         QFields = [];
         QAnswer = null;
         _str = new();
@@ -275,6 +285,8 @@
             QFormId = id.GetValue<string>();
         if (obj["title"] is JsonValue title && title.GetValueKind() == JsonValueKind.String)
             QTitle = title.GetValue<string>();
+        if (obj["description"] is JsonValue description && description.GetValueKind() == JsonValueKind.String)
+            QDescription = description.GetValue<string>();
         if (obj["fields"] is JsonArray fields)
         {
             foreach (var el in fields)
@@ -391,12 +403,28 @@
                         break;
                 }
             }
-            var result = await ReplyForm.HandleAsync(new ReplyChatFormCommand(new ReplyChatFormRequest(
-                Part.SessionId, _userId, QFormId, answer.ToJsonString())), CancellationToken.None);
-            if (result.Success)
+            bool success;
+            string? error;
+            if (PipelineTaskId is { } taskId && PipelineSessionId is { } pipelineSessionId)
+            {
+                var result = await ReplyPipelineForm.HandleAsync(new ReplyPipelineFormCommand(
+                    new ReplyPipelineFormRequest(taskId, pipelineSessionId, _userId, QFormId, answer.ToJsonString())),
+                    CancellationToken.None);
+                success = result.Success;
+                error = result.Error;
+            }
+            else
+            {
+                var result = await ReplyForm.HandleAsync(new ReplyChatFormCommand(new ReplyChatFormRequest(
+                    Part.SessionId, _userId, QFormId, answer.ToJsonString())), CancellationToken.None);
+                success = result.Success;
+                error = result.Error;
+            }
+
+            if (success)
                 Snackbar.Add(L["ChatAnswered"].Value, Severity.Info);
             else
-                Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, result.Error ?? L["Error"].Value), Severity.Error);
+                Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, error ?? L["Error"].Value), Severity.Error);
             StateHasChanged();
         }
         finally

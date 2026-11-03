@@ -337,7 +337,7 @@ public class GetCommandHandler : ICommandHandler<GetCommandCommand, Result<Works
 /// </summary>
 public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgressCommand, Result<WorkstationCommandDto>>
 {
-    private const int MaxProgressJsonLength = 8 * 1024;
+    private const int MaxProgressJsonLength = 256 * 1024;
     private readonly IBeaconDbFactory _dbFactory;
 
     public ReportCommandProgressHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
@@ -350,11 +350,15 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             || request.ProgressJson.Length > MaxProgressJsonLength)
             return Result.Failure<WorkstationCommandDto>("Invalid command progress payload.");
 
+        bool waitingForUser;
         try
         {
             using var progress = JsonDocument.Parse(request.ProgressJson);
             if (progress.RootElement.ValueKind != JsonValueKind.Object)
                 return Result.Failure<WorkstationCommandDto>("Command progress must be a JSON object.");
+            waitingForUser = progress.RootElement.TryGetProperty("forms", out var forms)
+                && forms.ValueKind == JsonValueKind.Array
+                && forms.GetArrayLength() > 0;
         }
         catch (JsonException)
         {
@@ -366,10 +370,67 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             .FirstOrDefaultAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
         if (row is null)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
-        if (row.Kind != WorkstationCommandKind.UpdateClient)
-            return Result.Failure<WorkstationCommandDto>("Progress reporting is only supported for client updates.", ErrorKind.Conflict);
+        if (row.Kind is not (WorkstationCommandKind.UpdateClient or WorkstationCommandKind.RunPipelineSession))
+            return Result.Failure<WorkstationCommandDto>("Progress reporting is not supported for this command.", ErrorKind.Conflict);
         if (row.Status != WorkstationCommandStatus.Running || row.Attempts + 1 != request.Generation)
             return Result.Failure<WorkstationCommandDto>("Command is no longer running in this generation.", ErrorKind.Conflict);
+
+        if (row.Kind == WorkstationCommandKind.RunPipelineSession)
+        {
+            if (row.ProjectId is not { } projectId)
+                return Result.Failure<WorkstationCommandDto>("Pipeline command has no project scope.", ErrorKind.Conflict);
+            var sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
+            if (sessionId is null)
+                return Result.Failure<WorkstationCommandDto>("Pipeline command has no session id.", ErrorKind.Conflict);
+
+            var session = await db.PipelineSessions.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.Id == sessionId.Value && s.ProjectId == projectId, ct);
+            if (session is null)
+                return Result.Failure<WorkstationCommandDto>("Pipeline session not found.", ErrorKind.Conflict);
+
+            var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
+            var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
+            if (activity["forms"] is null)
+                activity["forms"] = reportedForms;
+
+            // Keep answered forms in the durable task transcript even after the runtime removes
+            // them from its pending-form registry on the next poll.
+            try
+            {
+                var previous = JsonNode.Parse(session.ActivityJson) as JsonObject;
+                if (previous?["forms"] is JsonArray previousForms)
+                {
+                    foreach (var answered in previousForms.OfType<JsonObject>().Where(form => form["answer"] is not null))
+                    {
+                        var id = answered["id"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(id)
+                            && !reportedForms.OfType<JsonObject>().Any(form =>
+                                string.Equals(form["id"]?.GetValue<string>(), id, StringComparison.Ordinal)))
+                            reportedForms.Add(answered.DeepClone());
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // A malformed prior snapshot must not prevent a fresh device update.
+            }
+
+            activity["deviceId"] = request.DeviceId.ToString("D");
+            activity["commandId"] = request.CommandId.ToString("D");
+            session.UpdateActivity(activity.ToJsonString(), waitingForUser);
+
+            var stillRunning = await db.WorkstationCommands
+                .AnyAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId
+                    && c.Kind == WorkstationCommandKind.RunPipelineSession
+                    && c.Status == WorkstationCommandStatus.Running
+                    && c.Attempts + 1 == request.Generation, ct);
+            if (!stillRunning)
+                return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
+            await db.SaveChangesAsync(ct);
+            var currentPipelineCommand = await db.WorkstationCommands.AsNoTracking()
+                .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
+            return Result.Ok(EnqueueCommandHandler.MapCommand(currentPipelineCommand));
+        }
 
         var updated = await db.WorkstationCommands
             .Where(c => c.Id == request.CommandId

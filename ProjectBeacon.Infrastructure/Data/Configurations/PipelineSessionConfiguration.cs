@@ -16,6 +16,7 @@ public class PipelineSessionConfiguration : IEntityTypeConfiguration<PipelineSes
         entity.Property(e => e.ExternalSessionId).HasMaxLength(200);
         entity.Property(e => e.LaunchSpec).HasMaxLength(1000);
         entity.Property(e => e.PromptContext).IsRequired();
+        entity.Property(e => e.ActivityJson).IsRequired().HasDefaultValue("{}");
         entity.HasIndex(e => e.TaskId);
         entity.HasOne(e => e.Task)
             .WithMany()

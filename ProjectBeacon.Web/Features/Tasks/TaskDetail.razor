@@ -1,4 +1,5 @@
 @page "/task/{taskId:guid}"
+@implements IDisposable
 @layout MainLayout
 @attribute [Authorize]
 @using ProjectBeacon.Application.Authorization
@@ -107,152 +108,108 @@ else
             </div>
         </section>
     }
+    @if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3" Icon="@Icons.Material.Filled.PanTool">
+            @L["PipelineWaitingForUser"]
+        </MudAlert>
+    }
     <div class="beacon-task-grid">
-        <div class="beacon-task-main">
-            <section class="beacon-panel beacon-surface-operational">
-                <header class="beacon-ops-head">
-                    <div class="beacon-ops-title">@L["Sessions"]</div>
+        <main class="beacon-task-main">
+            <section class="beacon-task-workflow">
+                <header class="beacon-task-workflow-head">
+                    <MudText Typo="Typo.h6">@L["Work"]</MudText>
+                    @if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
+                    {
+                        <StatusChip Color="Color.Warning" Label="@L["WaitingForUser"]" />
+                    }
                 </header>
-                @if (_pipeline is not { Sessions.Count: > 0 })
-                {
-                    <p class="beacon-ops-empty">@L["NoSessionsYet"]</p>
-                }
-                else
-                {
-                    @foreach (var session in _pipeline.Sessions.TakeLast(6))
-                    {
-                        <div class="beacon-activity-row">
-                            <span class="beacon-state @SessionStateClass(session.Status)">@SessionStatusLabel(session.Status)</span>
-                            <span>@RoleLabel(session.Role)</span>
-                            <LocalTime Value="@(session.LaunchedAt ?? session.ClosedAt)" />
-                        </div>
-                    }
-                }
-                @if (_pipeline?.Stage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision)
-                {
-                    <header class="beacon-ops-head">
-                        <div class="beacon-ops-title">@L["Subtasks"]</div>
-                    </header>
-                    @if (_pipeline.Subtasks.Count == 0)
-                    {
-                        <p class="beacon-ops-empty">@L["NoSubtasksYet"]</p>
-                    }
-                    @foreach (var subtask in _pipeline.Subtasks)
-                    {
-                        <div class="beacon-subtask">
-                            <MudText Typo="Typo.body2" Class="beacon-pre">@subtask.Instructions</MudText>
-                            <div class="beacon-task-kicker">
-                                <span class="beacon-state @SubtaskStateClass(subtask.Status)">@SubtaskStatusLabel(subtask.Status)</span>
-                                @if (subtask.ReopenCount > 0)
-                                {
-                                    <span class="beacon-ops-sub">@L["Reopens"]: @subtask.ReopenCount</span>
-                                }
-                            </div>
-                            @if (subtask.DiffRef is not null)
-                            {
-                                <MudText Typo="Typo.body2">@L["DiffRef"]: @subtask.DiffRef</MudText>
-                            }
-                            @if (subtask.Summary is not null)
-                            {
-                                <MudText Typo="Typo.body2">@L["Summary"]: @subtask.Summary</MudText>
-                            }
-                            <div class="beacon-page-actions mt-2">
-                                @if (subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress)
-                                {
-                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnStartActorSession(subtask))" Disabled="_busy">@L["StartActorSession"]</MudButton>
-                                }
-                                @if (subtask.Status == SubtaskStatus.InProgress)
-                                {
-                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))" Disabled="_busy">@L["ReportResult"]</MudButton>
-                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))" Disabled="_busy">@L["FailSubtask"]</MudButton>
-                                }
-                            </div>
-                        </div>
-                    }
-                }
+                <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase"
+                              Busy="_busy" OnStartActorSession="OnStartActorSession"
+                              OnReportResult="@(subtask => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))"
+                              OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))"
+                              OnLaunchSession="OnLaunchSession" />
             </section>
-        </div>
+        </main>
         <aside class="beacon-task-aside">
-            <div class="beacon-next-action @NextTone">
-                <strong>@L["NextStep"]</strong>
-                <span>@NextStepText</span>
-                @if (_pipeline?.Stage == TaskPipelineStage.Reviewing)
-                {
-                    <span>@L["ReviewSeparate"]</span>
-                }
-            </div>
-            <section class="beacon-panel beacon-surface-section">
-                <div class="beacon-ops-pad">
-                    @if (_pipeline?.Stage == TaskPipelineStage.Executing)
-                    {
-                        <MudButton Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
-                    }
+    
+                <div class="beacon-next-action @NextTone">
+                    <strong>@L["NextStep"]</strong>
+                    <span>@NextStepText</span>
                     @if (_pipeline?.Stage == TaskPipelineStage.Reviewing)
                     {
-                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewReopen))" Disabled="_busy">@L["ReopenSubtask"]</MudButton>
+                        <span>@L["ReviewSeparate"]</span>
                     }
-                    @if (_isAdmin && _pipeline?.Stage is TaskPipelineStage.ReopenedForRevision or TaskPipelineStage.Approved)
-                    {
-                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
-                    }
-                    <MudButton Variant="Variant.Text" OnClick="EditTask">@L["Edit"]</MudButton>
-                    <MudSelect T="TaskItemStatus"
-                        Value="_status"
-                        ValueChanged="OnStatusChanged"
-                        Label="@L["Status"]"
-                        Variant="Variant.Outlined"
-                        Margin="Margin.Dense"
-                        Dense="true"
-                        Disabled="_busy"
-                        Class="mt-3">
-                        @foreach (var status in StatusOptions)
+                </div>
+                <section class="beacon-panel beacon-surface-section">
+                    <div class="beacon-ops-pad">
+                        @if (_pipeline?.Stage == TaskPipelineStage.Executing)
                         {
-                            <MudSelectItem Value="status">@ChromeLabels.Status(L, status)</MudSelectItem>
+                            <MudButton Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
                         }
-                    </MudSelect>
-                    @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
-                    {
-                        <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-3 beacon-track" />
-                        <MudText Typo="Typo.body2" Class="mt-1">@ChromeLabels.SubStage(L, _task.SubStage)</MudText>
-                    }
-                    @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
-                    {
-                        <MudText Typo="Typo.body2" Class="mt-2">@L["Done"] <LocalTime Value="_task.CompletedAt" Format="d" /></MudText>
-                    }
-                </div>
-            </section>
-            <section class="beacon-panel beacon-surface-section">
-                <header class="beacon-ops-head">
-                    <div class="beacon-ops-title">@L["TaskSteps"]</div>
-                </header>
-                <div class="beacon-ops-pad">
-                    <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
-                        <MudTextField @bind-Value="_stepTitle" Label="@L["StepTitle"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnAddStep" Disabled="_busy || string.IsNullOrWhiteSpace(_stepTitle)">@L["AddStep"]</MudButton>
-                    </MudStack>
-                    @if (_steps.Count == 0)
-                    {
-                        <MudText Typo="Typo.body2" Class="mt-2">@L["NoStepsYet"]</MudText>
-                    }
-                    @foreach (var step in _steps)
-                    {
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                            <MudCheckBox T="bool" Value="step.IsDone" ValueChanged="done => OnToggleStep(step, done)" Dense="true" />
-                            <MudText Typo="Typo.body2" Class="@StepTitleClass(step.IsDone)">@step.Title</MudText>
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => OnDeleteStep(step)">@L["Delete"]</MudButton>
+                        @if (_pipeline?.Stage == TaskPipelineStage.Reviewing)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewReopen))" Disabled="_busy">@L["ReopenSubtask"]</MudButton>
+                        }
+                        @if (_isAdmin && _pipeline?.Stage is TaskPipelineStage.ReopenedForRevision or TaskPipelineStage.Approved)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
+                        }
+                        <MudButton Variant="Variant.Text" OnClick="EditTask">@L["Edit"]</MudButton>
+                        <MudSelect T="TaskItemStatus"
+                            Value="_status"
+                            ValueChanged="OnStatusChanged"
+                            Label="@L["Status"]"
+                            Variant="Variant.Outlined"
+                            Margin="Margin.Dense"
+                            Dense="true"
+                            Disabled="_busy"
+                            Class="mt-3">
+                            @foreach (var status in StatusOptions)
+                            {
+                                <MudSelectItem Value="status">@ChromeLabels.Status(L, status)</MudSelectItem>
+                            }
+                        </MudSelect>
+                        @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
+                        {
+                            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-3 beacon-track" />
+                            <MudText Typo="Typo.body2" Class="mt-1">@ChromeLabels.SubStage(L, _task.SubStage)</MudText>
+                        }
+                        @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">@L["Done"] <LocalTime Value="_task.CompletedAt" Format="d" /></MudText>
+                        }
+                    </div>
+                </section>
+                <section class="beacon-panel beacon-surface-section">
+                    <header class="beacon-ops-head">
+                        <div class="beacon-ops-title">@L["TaskSteps"]</div>
+                    </header>
+                    <div class="beacon-ops-pad">
+                        <MudStack Row="true" AlignItems="AlignItems.End" Spacing="2">
+                            <MudTextField @bind-Value="_stepTitle" Label="@L["StepTitle"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnAddStep" Disabled="_busy || string.IsNullOrWhiteSpace(_stepTitle)">@L["AddStep"]</MudButton>
                         </MudStack>
-                    }
-                </div>
-            </section>
-            <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
+                        @if (_steps.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">@L["NoStepsYet"]</MudText>
+                        }
+                        @foreach (var step in _steps)
+                        {
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
+                                <MudCheckBox T="bool" Value="step.IsDone" ValueChanged="done => OnToggleStep(step, done)" Dense="true" />
+                                <MudText Typo="Typo.body2" Class="@StepTitleClass(step.IsDone)">@step.Title</MudText>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => OnDeleteStep(step)">@L["Delete"]</MudButton>
+                            </MudStack>
+                        }
+                    </div>
+                </section>
         </aside>
     </div>
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
-    <MudTabPanel Text="@L["Work"]">
-        <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase" />
-    </MudTabPanel>
     <MudTabPanel Text="@L["Pipeline"]">
         <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnStart="OnStartPipeline" />
+        <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Discussion"]">
         <TaskDiscussionPanel Task="_task" OnSaved="Reload" />
@@ -275,6 +232,7 @@ else
     private TaskItemDto? _task;
     private TaskItemStatus _status = TaskItemStatus.Todo;
     private bool _loading = true;
+    private CancellationTokenSource? _pipelinePoll;
     private PipelineStateDto? _pipeline;
     private bool _busy;
     private bool _isAdmin;
@@ -287,7 +245,9 @@ else
     private Guid? _openPhaseId;
     private string _stepTitle = string.Empty;
 
-    private string HeroStateClass => _pipeline?.Stage switch
+    private string HeroStateClass => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+        ? "is-warning"
+        : _pipeline?.Stage switch
     {
         TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
         TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
@@ -301,13 +261,16 @@ else
     };
 
     private string HeroStateLabel =>
-        _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
-            ? PipelineStageLabel(stage)
-            : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
+        _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+            ? L["WaitingForUser"].Value
+            : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
+                ? PipelineStageLabel(stage)
+                : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
 
     private static string SessionStateClass(SessionStatus status) => status switch
     {
         SessionStatus.Active => "is-info",
+        SessionStatus.WaitingForUser => "is-warning",
         SessionStatus.Failed => "is-danger",
         SessionStatus.Closed => "is-success",
         _ => ""
@@ -321,7 +284,9 @@ else
         _ => ""
     };
 
-    private string NextTone => _pipeline?.Stage switch
+    private string NextTone => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+        ? "is-warning"
+        : _pipeline?.Stage switch
     {
         TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
         TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
@@ -333,6 +298,8 @@ else
     {
         get
         {
+            if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
+                return L["PipelineWaitingForUser"].Value;
             if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
                 return L["NextStepTodo"].Value;
             return _pipeline.Stage switch
@@ -358,6 +325,45 @@ else
             await ReloadPipeline();
             await ReloadSteps();
         }
+        _pipelinePoll = new CancellationTokenSource();
+        _ = PollPipelineAsync(_pipelinePoll.Token);
+    }
+
+    private async Task PollPipelineAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(4), ct);
+                if (_pipeline?.Sessions.Any(session =>
+                    session.Status is SessionStatus.Active or SessionStatus.WaitingForUser) != true)
+                    continue;
+                try
+                {
+                    await ReloadPipeline();
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Keep the live activity loop alive after a transient read failure.
+                    Console.Error.WriteLine($"Task pipeline refresh failed: {ex.Message}");
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _pipelinePoll?.Cancel();
+        _pipelinePoll?.Dispose();
     }
 
     private async Task Reload()

@@ -5,6 +5,7 @@
 @using ProjectBeacon.Application.Chat
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Runtime
+@using ProjectBeacon.Application.Tasks
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject NavigationManager Navigation
@@ -18,6 +19,8 @@
 @inject SendChatPromptHandler SendPrompt
 @inject AbortChatHandler AbortChat
 @inject CreateChatSessionHandler CreateSession
+@inject GetTaskHandler GetTask
+@inject ListWaitingPipelineTasksHandler ListWaitingTasks
 @inject ChatEventSignal Events
 @inject ISnackbar Snackbar
 @inject Microsoft.Extensions.Logging.ILogger<ChatDock> Logger
@@ -31,6 +34,7 @@
             <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
                 <MudText Typo="Typo.subtitle2">@L["Chat"]</MudText>
                 <MudStack Row="true" Spacing="1">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateNewChat">@L["ChatNew"]</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" Href="/chat">@L["ChatOpenFull"]</MudButton>
                     <MudIconButton
                         Size="Size.Small"
@@ -40,6 +44,18 @@
                         aria-label="@L["Close"].Value" />
                 </MudStack>
             </MudStack>
+            @if (_waitingTasks.Count > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">
+                    <MudText Typo="Typo.body2">@L["WaitingPipelineTasks"]</MudText>
+                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-1">
+                        @foreach (var waiting in _waitingTasks)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"/task/{waiting.TaskId:D}")">@waiting.TaskTitle</MudButton>
+                        }
+                    </MudStack>
+                </MudAlert>
+            }
             @if (_block == "folder")
             {
                 <MudAlert Severity="Severity.Info" Dense="true">@L["ChatNeedsFolder"]</MudAlert>
@@ -51,6 +67,29 @@
             }
             else
             {
+                @if (_sessions.Count > 0)
+                {
+                    <MudSelect T="string" Value="@SelectedSessionId" ValueChanged="SelectSession"
+                               Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                               Label="@L["ChatConversation"]" Class="mb-2">
+                        @foreach (var item in _sessions)
+                        {
+                            <MudSelectItem T="string" Value="@item.Id.ToString()">@item.Title</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                @if (!string.IsNullOrWhiteSpace(_contextPageLabel))
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Class="mb-2">
+                        @L["Context"]: @_contextPageLabel
+                    </MudChip>
+                }
+                @if (_session is null)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">@L["ChatSelectOrCreate"]</MudAlert>
+                }
+                else
+                {
                 <ChatPane
                     Session="_session"
                     ModelName="@SelectedBackendName"
@@ -70,12 +109,15 @@
                     CanAbort="_session?.Status == ChatSessionStatus.Streaming"
                     Send="Send"
                     Abort="Abort" />
+                }
             }
         </MudPaper>
     }
     else
     {
-        <MudFab Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Chat" Class="beacon-chat-fab" OnClick="Open" title="@L["Chat"]" aria-label="@L["Chat"]" />
+        <MudBadge Class="beacon-chat-fab-anchor" Content="_waitingTasks.Count" Visible="_waitingTasks.Count > 0" Color="Color.Warning" Overlap="true">
+            <MudFab Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Chat" Class="beacon-chat-fab" OnClick="Open" title="@L["Chat"]" aria-label="@L["Chat"]" />
+        </MudBadge>
     }
 }
 
@@ -85,6 +127,12 @@
     private string? _block;
     private Guid _userId;
     private ChatSessionDto? _session;
+    private List<ChatSessionDto> _sessions = [];
+    private List<WaitingPipelineTaskDto> _waitingTasks = [];
+    private Guid? _contextTaskId;
+    private string? _contextTaskTitle;
+    private string _contextPageLabel = string.Empty;
+    private string _contextRoute = string.Empty;
     private List<ChatPartDto> _parts = [];
     private List<LocalModelBackendDto> _models = [];
     private string? _model;
@@ -118,19 +166,20 @@
                     _model = OpencodePayload.OpenCodeId(chosen);
             }
         }
-        var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
-        if (listed.Success && listed.Value!.Count > 0)
-        {
-            _session = listed.Value[0];
-            await ReloadParts();
-        }
+        await ReloadSessions();
+        await ReloadRouteContext();
+        await ReloadWaitingTasks();
         _ = PollAsync();
     }
 
     private void OnLocation(object? sender, LocationChangedEventArgs e)
     {
-        UpdateVisible();
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            UpdateVisible();
+            await ReloadRouteContext();
+            StateHasChanged();
+        });
     }
 
     private void UpdateVisible()
@@ -141,31 +190,113 @@
             _visible = false;
     }
 
+    private string SelectedSessionId => _session?.Id.ToString() ?? string.Empty;
+
+    private async Task ReloadSessions()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
+        _sessions = listed.Success ? listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList() : [];
+        if (_session is not null)
+            _session = _sessions.FirstOrDefault(x => x.Id == _session.Id) ?? _session;
+    }
+
+    private async Task ReloadWaitingTasks()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var result = await ListWaitingTasks.HandleAsync(
+            new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
+        _waitingTasks = result.Success ? result.Value!.ToList() : [];
+    }
+
+    private async Task ReloadRouteContext()
+    {
+        _contextTaskId = null;
+        _contextTaskTitle = null;
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var pageSegments = segments.Where(segment => !Guid.TryParse(segment, out _)).ToArray();
+        _contextRoute = string.Join('/', pageSegments);
+        _contextPageLabel = HumanizeRoute(_contextRoute);
+
+        if (segments.Length < 2 || !string.Equals(segments[0], "task", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(segments[1], out var taskId))
+            return;
+        var task = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
+        if (!task.Success || task.Value is null)
+            return;
+        _contextTaskId = task.Value.Id;
+        _contextTaskTitle = task.Value.Title;
+        _contextPageLabel = $"{L["TaskDetail"].Value}: {task.Value.Title}";
+    }
+
+    private static string HumanizeRoute(string route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+            return "Dashboard";
+
+        return string.Join(" / ", route.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(segment =>
+            {
+                var words = segment.Replace('-', ' ').Replace('_', ' ');
+                return char.ToUpperInvariant(words[0]) + words[1..];
+            }));
+    }
+
+    private async Task SelectSession(string? id)
+    {
+        if (!Guid.TryParse(id, out var sessionId))
+        {
+            _session = null;
+            _parts = [];
+            return;
+        }
+        var selected = _sessions.FirstOrDefault(x => x.Id == sessionId);
+        if (selected is null)
+            return;
+        _session = selected;
+        _failed = false;
+        await ReloadParts();
+    }
+
+    private async Task CreateNewChat()
+    {
+        if (_userId == Guid.Empty)
+            return;
+        var contextTitle = _contextTaskTitle ?? _contextPageLabel;
+        var title = string.IsNullOrWhiteSpace(contextTitle)
+            ? L["Chat"].Value
+            : $"{L["Chat"].Value} · {contextTitle}";
+        var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, title)));
+        if (!created.Success)
+        {
+            _block = created.Error switch
+            {
+                CreateChatSessionHandler.ProjectFolderRequired => "folder",
+                CreateChatSessionHandler.ClientRequired => "client",
+                _ => null
+            };
+            Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
+            return;
+        }
+        _block = null;
+        _session = created.Value;
+        _open = true;
+        _draft = string.Empty;
+        _failed = false;
+        await ReloadSessions();
+        await ReloadParts();
+    }
+
     private async Task Open()
     {
         _open = true;
-        if (_session is null)
-        {
-            var created = await CreateSession.HandleAsync(new CreateChatSessionCommand(new CreateChatSessionRequest(_userId, L["Chat"].Value)));
-            if (!created.Success)
-            {
-                _block = created.Error switch
-                {
-                    CreateChatSessionHandler.ProjectFolderRequired => "folder",
-                    CreateChatSessionHandler.ClientRequired => "client",
-                    _ => null
-                };
-                if (_block is null)
-                {
-                    Snackbar.Add(created.Error ?? L["Error"].Value, Severity.Error);
-                    _open = false;
-                }
-                return;
-            }
-            _block = null;
-            _session = created.Value;
-        }
-        await ReloadParts();
+        // Opening the dock must not silently create or select a conversation.
+        // The user can explicitly choose an existing session or start a new one.
+        if (_session is not null)
+            await ReloadParts();
     }
 
     private async Task Send()
@@ -176,7 +307,11 @@
         _failed = false;
         try
         {
-            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(new SendChatPromptRequest(_session.Id, _userId, _draft, _model, _effort)));
+            var contextualText = string.IsNullOrWhiteSpace(_contextPageLabel)
+                ? _draft
+                : $"Automatic ProjectBeacon workspace context (location only):\nPage: {_contextPageLabel}\nRoute: /{_contextRoute}\n\nUser message:\n{_draft}";
+            var sent = await SendPrompt.HandleAsync(new SendChatPromptCommand(
+                new SendChatPromptRequest(_session.Id, _userId, contextualText, _model, _effort, _contextTaskId)));
             if (!sent.Success)
             {
                 _failed = true;
@@ -185,6 +320,7 @@
             }
             _draft = string.Empty;
             _session = sent.Value;
+            await ReloadSessions();
             await ReloadParts();
         }
         finally
@@ -217,7 +353,10 @@
     {
         if (_session is null)
             return;
-        var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(_session.Id, _userId)));
+        var sessionId = _session.Id;
+        var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
+        if (_session?.Id != sessionId)
+            return;
         _parts = parts.Success ? parts.Value!.ToList() : [];
     }
 
@@ -237,9 +376,11 @@
             {
                 try
                 {
+                    await ReloadWaitingTasks();
                     if (!_open || _session is null)
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
+                        await InvokeAsync(StateHasChanged);
                         continue;
                     }
                     var sessionId = _session.Id;
@@ -278,7 +419,7 @@
         }
     }
 
-    private IEnumerable<ChatPartDto> DockParts => _parts.TakeLast(2);
+    private IEnumerable<ChatPartDto> DockParts => _parts;
 
     private string Phase => ChatPhase.Resolve(_session?.Status, _parts.LastOrDefault()?.Kind, _failed, _parts.Count);
 

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MudBlazor;
 using Application.Chat;
 using Application.Common;
 using Application.Persistence;
@@ -36,16 +37,18 @@ public sealed class ChatPollRecoveryTests : BUnitRenderBase
     [Fact]
     public async Task ChatDock_PollSurvivesTransientFailure()
     {
-        await SeedSessionAsync("Session One", null);
+        var sessionId = await SeedSessionAsync("Session One", null);
         Bunit.Services.AddTransient<GetChatSessionHandler>(
             sp => new RecoveringGetSessionHandler(sp.GetRequiredService<IBeaconDbFactory>()));
         AuthAsSeededUser();
         Bunit.Services.GetRequiredService<NavigationManager>().NavigateTo("/dashboard");
         var cut = Bunit.RenderComponent<ChatDock>(parameters => parameters
             .Add(p => p.PollSafetyNet, TimeSpan.FromMilliseconds(150)));
-        // The safety-net poll re-renders on its own clock; keep Find and Click in one
-        // InvokeAsync hop so a re-render cannot invalidate the handler in between.
         await cut.InvokeAsync(() => cut.Find(".beacon-chat-fab").Click(new MouseEventArgs()));
+        // The dock deliberately starts without a selected conversation. Selecting an existing
+        // chat explicitly preserves the no-auto-select behavior while exercising live recovery.
+        await cut.InvokeAsync(() =>
+            cut.FindComponent<MudSelect<string>>().Instance.ValueChanged.InvokeAsync(sessionId.ToString()));
         cut.WaitForElement(".beacon-chat-part", TimeSpan.FromSeconds(10));
         Assert.Contains("recovered-marker", cut.Markup);
     }
