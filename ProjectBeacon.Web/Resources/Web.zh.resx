@@ -2177,4 +2177,22 @@ orthstar</value>
   <data name="UpdateDaemonNow" xml:space="preserve">
     <value>立即更新</value>
   </data>
+  <data name="TimeZone" xml:space="preserve">
+    <value>时区</value>
+  </data>
+  <data name="TimeZoneSystem" xml:space="preserve">
+    <value>系统默认</value>
+  </data>
+  <data name="TimeZoneHint" xml:space="preserve">
+    <value>日期以 UTC 存储，并按此时区显示。系统默认使用此浏览器的时区。</value>
+  </data>
+  <data name="TimeZoneLoadFailed" xml:space="preserve">
+    <value>无法读取浏览器时区。</value>
+  </data>
+  <data name="TimeZoneSaved" xml:space="preserve">
+    <value>时区已保存。</value>
+  </data>
+  <data name="TimeZoneInvalid" xml:space="preserve">
+    <value>此浏览器不支持该时区。</value>
+  </data>
 </root>
