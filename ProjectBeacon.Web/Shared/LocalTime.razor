@@ -1,16 +1,17 @@
 @using System.Globalization
 
-@if (Value.HasValue)
+@if (Value.HasValue || OffsetValue.HasValue)
 {
     <time class="@Class"
           data-local-time="@UtcTimestamp"
           data-local-time-format="@Format"
           datetime="@UtcTimestamp"
-          title="@UtcTimestamp">@Value.Value.ToString(Format, CultureInfo.CurrentCulture)</time>
+          title="@UtcTimestamp">@(Value?.ToString(Format, CultureInfo.CurrentCulture) ?? OffsetValue?.ToString(Format, CultureInfo.CurrentCulture))</time>
 }
 
 @code {
     [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public DateTimeOffset? OffsetValue { get; set; }
     [Parameter] public string Format { get; set; } = "g";
     [Parameter] public string? Class { get; set; }
 
@@ -18,6 +19,9 @@
     {
         get
         {
+            if (OffsetValue is { } offsetValue)
+                return offsetValue.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+
             var value = Value!.Value;
             var utc = value.Kind == DateTimeKind.Local
                 ? value.ToUniversalTime()
