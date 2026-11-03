@@ -3293,13 +3293,13 @@ body:has(.beacon-theme-dark) .mud-main-content {
     margin-top: var(--space-2);
 }
 
-/* SnackbarProvider owns placement; individual notifications share one bounded width. */
-.mud-snackbar-collection {
+/* MudBlazor places snackbars in one fixed container; keep individual messages content-led. */
+#mud-snackbar-container {
     width: min(26rem, calc(100vw - 2rem));
     max-width: calc(100vw - 2rem);
 }
 
-.mud-snackbar-collection .mud-snackbar {
+#mud-snackbar-container .mud-snackbar {
     width: 100%;
     min-width: 0;
     max-width: 100%;
@@ -3307,7 +3307,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     align-items: flex-start;
 }
 
-.mud-snackbar-collection .mud-snackbar-content-message {
+#mud-snackbar-container .mud-snackbar-content-message {
     min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -3323,7 +3323,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
         white-space: normal;
     }
 
-    .mud-snackbar-collection {
+    #mud-snackbar-container {
         width: calc(100vw - 2rem);
     }
 
@@ -3333,5 +3333,65 @@ body:has(.beacon-theme-dark) .mud-main-content {
         right: max(var(--space-2), env(safe-area-inset-right, 0px));
         bottom: max(var(--space-2), env(safe-area-inset-bottom, 0px));
         max-height: min(76vh, 44rem);
+    }
+}
+
+
+.beacon-task-work-panel {
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+}
+
+.beacon-task-phase-content {
+    padding-top: var(--space-3);
+}
+
+.beacon-task-subtask {
+    min-width: 0;
+}
+
+.beacon-task-subtask-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.beacon-task-subtask-head > * {
+    min-width: 0;
+}
+
+.beacon-task-subtask-head .mud-typography {
+    overflow-wrap: anywhere;
+}
+
+.beacon-task-workflow {
+    min-width: 0;
+}
+
+.beacon-task-workflow-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.beacon-chat-fab {
+    position: static;
+}
+
+.beacon-chat-fab-anchor {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1200;
+}
+
+@media (max-width: 767px) {
+    .beacon-chat-fab-anchor {
+        right: max(var(--space-3), env(safe-area-inset-right, 0px));
+        bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px));
     }
 }

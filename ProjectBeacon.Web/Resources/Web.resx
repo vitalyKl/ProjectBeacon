@@ -2420,4 +2420,7 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineActivityWorking" xml:space="preserve">
     <value>Agent is working</value>
   </data>
+  <data name="UnassignedSubtasks" xml:space="preserve">
+    <value>Unassigned work</value>
+  </data>
 </root>

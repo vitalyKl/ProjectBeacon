@@ -2212,4 +2212,7 @@
   <data name="PipelineActivityWorking" xml:space="preserve">
     <value>Агент работает</value>
   </data>
+  <data name="UnassignedSubtasks" xml:space="preserve">
+    <value>Работа без этапа</value>
+  </data>
 </root>
