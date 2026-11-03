@@ -3,6 +3,8 @@ namespace ProjectBeacon.Application.Devices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Application.Runtime;
+using Application.Security;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
@@ -20,9 +22,9 @@ public sealed record IssueHarnessTokenCommand(Guid CommandId, int Generation, Ac
     : ICommand<Result<HarnessTokenDto>>;
 
 /// <summary>Ephemeral credential returned only to the authenticated workstation.</summary>
-public sealed record HarnessTokenDto(string Token, Guid ProjectId, Guid CommandId, int Generation, DateTime ExpiresAt, IReadOnlyList<string>? AllowedMcpTools = null);
+public sealed record HarnessTokenDto(string Token, Guid ProjectId, Guid CommandId, int Generation, DateTime ExpiresAt, IReadOnlyList<string>? AllowedMcpTools = null, IReadOnlyList<McpServerConfiguration>? McpServers = null);
 
-public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
+public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
     : ICommandHandler<IssueHarnessTokenCommand, Result<HarnessTokenDto>>
 {
     private const ApiTokenCapability HarnessCapabilities =
@@ -118,6 +120,37 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
                 return Result.Failure<HarnessTokenDto>("The eval run is missing, out of scope, or its pinned runtime does not match the command.", ErrorKind.Forbidden);
         }
 
+        // External MCP credentials are decrypted only for this short-lived, device-authenticated
+        // response. They are never returned by the human project-settings API or written to logs.
+        IReadOnlyList<McpServerConfiguration> mcpServers = [];
+        var project = await db.Projects.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(row => row.Id == projectId, ct);
+        if (project is null)
+            return Result.Failure<HarnessTokenDto>("The harness project no longer exists.", ErrorKind.Forbidden);
+        var mayUseExternalMcp = work.Kind == WorkstationCommandKind.ChatPrompt
+            || (work.Kind == WorkstationCommandKind.RunPipelineSession
+                && allowedMcpTools?.Any(tool => tool.StartsWith("mcp_", StringComparison.OrdinalIgnoreCase)) == true);
+        if (mayUseExternalMcp && !string.IsNullOrWhiteSpace(project.McpServersCipher))
+        {
+            try
+            {
+                var json = secrets.Open(project.McpServersCipher);
+                var configured = JsonSerializer.Deserialize<List<McpServerConfiguration>>(
+                    json, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+                mcpServers = configured
+                    .Where(server => server.Enabled)
+                    .Where(server => work.Kind == WorkstationCommandKind.ChatPrompt
+                        || allowedMcpTools?.Any(allowed => allowed.StartsWith(
+                            $"mcp_{server.Name.ToLowerInvariant()}_", StringComparison.OrdinalIgnoreCase)) == true)
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is CryptographicException or JsonException or FormatException)
+            {
+                return Result.Failure<HarnessTokenDto>("The project's MCP configuration cannot be decrypted. Reconfigure its MCP servers before starting a harness session.");
+            }
+        }
+
+
         // A renewed claim must never inherit a credential from an earlier attempt.
         var previous = await db.ApiTokens.IgnoreQueryFilters()
             .Where(t => t.ClientKind == ApiTokenClientKind.Harness
@@ -148,7 +181,7 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory)
         db.ApiTokens.Add(tokenRow);
         await db.SaveChangesAsync(ct);
 
-        return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools));
+        return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools, mcpServers));
     }
 
     private static bool TryReadEvalScope(string payload, out EvalCommandScope scope)

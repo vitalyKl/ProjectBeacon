@@ -1045,6 +1045,10 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("InvitedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("McpServersCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
 

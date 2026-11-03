@@ -15,6 +15,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         entity.Property(e => e.Description).HasMaxLength(2000);
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.UpdatedAt);
+        entity.Property(e => e.McpServersCipher).IsRequired().HasColumnType("text");
 
         entity.HasOne(e => e.Org)
             .WithMany(e => e.Projects)

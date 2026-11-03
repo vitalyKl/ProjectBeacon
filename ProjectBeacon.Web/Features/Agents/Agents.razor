@@ -146,39 +146,7 @@ else
     </MudPaper>
     </MudTabPanel>
     <MudTabPanel Text="@L["McpServers"]">
-
-    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["ScopeContextual"]</MudText>
-        <MudText Typo="Typo.subtitle1" Class="mb-3">@L["McpServers"]</MudText>
-        <MudCheckBox T="bool" Value="true" Disabled="true" Label="beacon" />
-        <MudCheckBox @bind-Value="_mcpContext7" Label="context7" />
-        <MudCheckBox @bind-Value="_mcpSerena" Label="serena" />
-        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mt-2">
-            <MudTextField @bind-Value="_customName" Label="@L["ModelName"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudSelect T="string" @bind-Value="_customType" Label="@L["Type"]" Variant="Variant.Outlined" Margin="Margin.Dense">
-                <MudSelectItem Value="@("local")">@L["McpLocal"]</MudSelectItem>
-                <MudSelectItem Value="@("remote")">@L["McpRemote"]</MudSelectItem>
-            </MudSelect>
-            <MudTextField @bind-Value="_customCommand" Label="@(_customType == "remote" ? L["McpUrl"].Value : L["McpCommand"].Value)" Variant="Variant.Outlined" Margin="Margin.Dense" />
-            <MudButton Variant="Variant.Outlined" OnClick="AddCustomMcp">@L["Create"]</MudButton>
-        </MudStack>
-        @if (_customMcps.Count > 0)
-        {
-            <MudList T="string" Dense="true" Class="mt-2">
-                @foreach (var server in _customMcps)
-                {
-                    <MudListItem T="string">
-                        @server.Name (@server.Type)
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveCustomMcp(server)">@L["Delete"]</MudButton>
-                    </MudListItem>
-                }
-            </MudList>
-        }
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="ApplyMcp" Disabled="_busy || _runtimeDeviceId is null">
-            @L["ApplyOnDevice"]
-        </MudButton>
-        <CommandLifecycle State="@_lifecycleState" Label="@_lifecycle" Detail="@_lifecycleDetail" />
-    </MudPaper>
+        <ProjectMcpServers ProjectId="@(_project?.Id ?? Guid.Empty)" />
     </MudTabPanel>
     <MudTabPanel Text="@L["RuntimeDiagnostics"]">
 
@@ -244,12 +212,6 @@ else
     private Guid? _runtimeDeviceId;
     private List<RuntimeSummary> _runtimes = [];
     private string? _runtimePhase;
-    private bool _mcpContext7;
-    private bool _mcpSerena;
-    private string _customName = string.Empty;
-    private string _customType = "local";
-    private string _customCommand = string.Empty;
-    private List<CustomMcpServer> _customMcps = [];
     private string? _lifecycle;
     private string? _lifecycleDetail;
     private string? _lifecycleState;
@@ -580,63 +542,6 @@ else
         finally
         {
             _runtimePhase = null;
-            _busy = false;
-        }
-    }
-
-    private void AddCustomMcp()
-    {
-        if (string.IsNullOrWhiteSpace(_customName)) return;
-        _customMcps.Add(new CustomMcpServer(_customName.Trim(), _customType,
-            _customType == "local" ? _customCommand : null,
-            _customType == "remote" ? _customCommand : null));
-        _customName = string.Empty;
-        _customCommand = string.Empty;
-    }
-
-    private void RemoveCustomMcp(CustomMcpServer server) => _customMcps.Remove(server);
-
-    private async Task ApplyMcp()
-    {
-        if (_project is null || _runtimeDeviceId is not { } deviceId || _userId == Guid.Empty) return;
-        var runtime = _runtimes.FirstOrDefault(r => r.DeviceId == deviceId);
-        if (runtime is null) return;
-        _busy = true;
-        try
-        {
-            var diag = await GetDiagnostics.HandleAsync(new GetRuntimeDiagnosticsCommand(new GetRuntimeDiagnosticsRequest(runtime.Id, _userId)));
-            if (!diag.Success)
-            {
-                SetLifecycle(WorkstationCommandStatus.Failed, diag.Error);
-                Snackbar.Add(diag.Error ?? L["Error"].Value, Severity.Error);
-                return;
-            }
-            var mcp = McpCatalog.Build(diag.Value!.LocalRoot, _mcpContext7, _mcpSerena, _customMcps);
-            var payload = new JsonObject
-            {
-                ["path"] = ".",
-                ["mcpReplace"] = true,
-                ["mcp"] = mcp
-            };
-            SetLifecycle(WorkstationCommandStatus.Pending, null);
-            var queued = await EnqueueCommand.HandleAsync(new EnqueueCommandCommand(
-                new EnqueueCommandRequest(deviceId, _userId, WorkstationCommandKind.ApplyOpencode, payload.ToJsonString(), _project.Id)));
-            if (!queued.Success)
-            {
-                SetLifecycle(WorkstationCommandStatus.Failed, queued.Error);
-                Snackbar.Add(queued.Error ?? L["Error"].Value, Severity.Error);
-                return;
-            }
-            var finished = await WaitAsync(queued.Value!.Id);
-            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
-            {
-                Snackbar.Add(finished?.Error ?? _lifecycle ?? L["Error"].Value, Severity.Error);
-                return;
-            }
-            Snackbar.Add(L["ApplyOnDeviceDone"].Value, Severity.Success);
-        }
-        finally
-        {
             _busy = false;
         }
     }

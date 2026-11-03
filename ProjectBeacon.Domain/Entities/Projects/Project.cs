@@ -13,6 +13,8 @@ public class Project : Entity, IOrgScoped
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public string? ReviewCheckCommand { get; private set; }
+    /// <summary>Encrypted JSON containing this project's MCP server definitions and credentials.</summary>
+    public string McpServersCipher { get; private set; } = string.Empty;
     public Guid OrgId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
@@ -33,6 +35,13 @@ public class Project : Entity, IOrgScoped
         project.OrgId = orgId;
         project.CreatedAt = DateTime.UtcNow;
         return project;
+    }
+
+    public void SetMcpServersCipher(string cipher)
+    {
+        ArgumentNullException.ThrowIfNull(cipher);
+        McpServersCipher = cipher;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void Update(string? name = null, string? description = null, string? reviewCheckCommand = null)

@@ -2423,4 +2423,79 @@ No Beacon-hosted coding agent.</value>
   <data name="UnassignedSubtasks" xml:space="preserve">
     <value>Unassigned work</value>
   </data>
+  <data name="McpHarnessLead" xml:space="preserve">
+    <value>These servers are stored per project and started by the Native Harness on the workstation. Local commands run directly without a shell; remote servers use MCP Streamable HTTP. External processes run with your workstation user's permissions.</value>
+  </data>
+  <data name="McpServerName" xml:space="preserve">
+    <value>Server name</value>
+  </data>
+  <data name="McpTransport" xml:space="preserve">
+    <value>Transport</value>
+  </data>
+  <data name="McpStdio" xml:space="preserve">
+    <value>Local process (stdio)</value>
+  </data>
+  <data name="McpHttp" xml:space="preserve">
+    <value>Remote (Streamable HTTP)</value>
+  </data>
+  <data name="McpArguments" xml:space="preserve">
+    <value>Arguments (one per line; no shell parsing)</value>
+  </data>
+  <data name="McpEnvironment" xml:space="preserve">
+    <value>Environment variables (KEY=VALUE)</value>
+  </data>
+  <data name="McpEndpoint" xml:space="preserve">
+    <value>HTTP endpoint</value>
+  </data>
+  <data name="McpHeaders" xml:space="preserve">
+    <value>HTTP headers (KEY=VALUE)</value>
+  </data>
+  <data name="McpEnabled" xml:space="preserve">
+    <value>Enable this server</value>
+  </data>
+  <data name="McpReplaceSecrets" xml:space="preserve">
+    <value>Replace or clear saved credentials</value>
+  </data>
+  <data name="McpCredentialsHint" xml:space="preserve">
+    <value>Secret values are encrypted at rest. Leave this field empty to keep existing credentials; select the checkbox above to replace or clear them.</value>
+  </data>
+  <data name="McpNoServers" xml:space="preserve">
+    <value>No project MCP servers configured.</value>
+  </data>
+  <data name="McpSaved" xml:space="preserve">
+    <value>MCP server configuration saved.</value>
+  </data>
+  <data name="McpDeleted" xml:space="preserve">
+    <value>MCP server removed.</value>
+  </data>
+  <data name="McpInvalidPairs" xml:space="preserve">
+    <value>Enter each value as KEY=VALUE, one entry per line.</value>
+  </data>
+  <data name="McpEnabledState" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="McpDisabledState" xml:space="preserve">
+    <value>Disabled</value>
+  </data>
+  <data name="McpNoProject" xml:space="preserve">
+    <value>Select a project before configuring MCP servers.</value>
+  </data>
+  <data name="McpServerNextSession" xml:space="preserve">
+    <value>The Native Harness starts enabled servers when the next chat or task session begins.</value>
+  </data>
+  <data name="McpCredentialsSaved" xml:space="preserve">
+    <value>Credentials are stored</value>
+  </data>
+  <data name="McpAddServer" xml:space="preserve">
+    <value>Save server</value>
+  </data>
+  <data name="McpEditServer" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="McpCancelEdit" xml:space="preserve">
+    <value>Cancel editing</value>
+  </data>
+  <data name="McpPipelineAllowlistHint" xml:space="preserve">
+    <value>Tool names are exposed as mcp_&lt;server&gt;_&lt;tool&gt;. To grant access in task pipelines, add an exact name or mcp_&lt;server&gt;_* to the Actor subtask's Allowed MCP Tools.</value>
+  </data>
 </root>
