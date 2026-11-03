@@ -311,7 +311,10 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
             var id = Interlocked.Increment(ref _nextId);
             var request = new JsonObject
             {
-                ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters
+                ["jsonrpc"] = "2.0",
+                ["id"] = id,
+                ["method"] = method,
+                ["params"] = parameters
             };
             await _process.StandardInput.WriteLineAsync(request.ToJsonString().AsMemory(), ct);
             await _process.StandardInput.FlushAsync(ct);
@@ -346,7 +349,9 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
     {
         var notification = new JsonObject
         {
-            ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = parameters
+            ["jsonrpc"] = "2.0",
+            ["method"] = method,
+            ["params"] = parameters
         };
         await _process.StandardInput.WriteLineAsync(notification.ToJsonString().AsMemory(), ct);
         await _process.StandardInput.FlushAsync(ct);
@@ -398,13 +403,15 @@ internal sealed class ExternalMcpStdioClient : IMcpToolClient
                 .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         foreach (var directory in directories)
-        foreach (var suffix in suffixes)
         {
-            var candidate = hasDirectory
-                ? command + suffix
-                : Path.Combine(directory, command + suffix);
-            if (File.Exists(candidate))
-                return Path.GetFullPath(candidate);
+            foreach (var suffix in suffixes)
+            {
+                var candidate = hasDirectory
+                    ? command + suffix
+                    : Path.Combine(directory, command + suffix);
+                if (File.Exists(candidate))
+                    return Path.GetFullPath(candidate);
+            }
         }
 
         return null;
