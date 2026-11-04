@@ -546,7 +546,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
     {
         _postgres.RequirePostgres();
 
-        Guid taskId, projectId, subtaskId, sessionId, commandId, deviceId, modelBackendId;
+        Guid taskId, subtaskId, sessionId, commandId, deviceId, modelBackendId;
         await using (var seed = _postgres.CreateAdminContext())
         {
             var user = User.Create("actor-retry-" + Guid.NewGuid().ToString("N"), "actor-retry-" + Guid.NewGuid().ToString("N") + "@beacon.local", "hash");
@@ -597,7 +597,6 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
 
             await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             taskId = task.Id;
-            projectId = project.Id;
             subtaskId = subtask.Id;
             sessionId = session.Id;
             commandId = command.Id;
