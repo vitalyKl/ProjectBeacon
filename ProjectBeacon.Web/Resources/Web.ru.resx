@@ -2290,4 +2290,10 @@
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Имена инструментов в harness имеют вид mcp_&lt;сервер&gt;_&lt;инструмент&gt;. Чтобы разрешить их в pipeline, добавьте точное имя или mcp_&lt;сервер&gt;_* в Allowed MCP Tools у подзадачи Actor.</value>
   </data>
+  <data name="PipelineLastSignal" xml:space="preserve">
+    <value>Последний сигнал</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>Нет свежего сигнала — рабочая станция может быть отключена или агент завис.</value>
+  </data>
 </root>

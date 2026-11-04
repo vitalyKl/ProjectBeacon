@@ -2308,4 +2308,10 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>ツール名は mcp_&lt;server&gt;_&lt;tool&gt; 形式で公開されます。タスクパイプラインで使用するには、Actor サブタスクの Allowed MCP Tools に正確な名前または mcp_&lt;server&gt;_* を追加してください。</value>
   </data>
+  <data name="PipelineLastSignal" xml:space="preserve">
+    <value>最終シグナル</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>新しいシグナルがありません。ワークステーションがオフラインか、エージェントが停止している可能性があります。</value>
+  </data>
 </root>

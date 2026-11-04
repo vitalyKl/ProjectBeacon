@@ -2300,4 +2300,10 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Die Toolnamen haben das Format mcp_&lt;server&gt;_&lt;tool&gt;. Für Task-Pipelines muss der genaue Name oder mcp_&lt;server&gt;_* zu den erlaubten MCP-Tools des Actor-Untertasks hinzugefügt werden.</value>
   </data>
+  <data name="PipelineLastSignal" xml:space="preserve">
+    <value>Letztes Signal</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>Kein aktuelles Signal — die Workstation ist möglicherweise offline oder der Agent hängt.</value>
+  </data>
 </root>

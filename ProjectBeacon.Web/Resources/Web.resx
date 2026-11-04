@@ -2498,4 +2498,10 @@ No Beacon-hosted coding agent.</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Tool names are exposed as mcp_&lt;server&gt;_&lt;tool&gt;. To grant access in task pipelines, add an exact name or mcp_&lt;server&gt;_* to the Actor subtask's Allowed MCP Tools.</value>
   </data>
+  <data name="PipelineLastSignal" xml:space="preserve">
+    <value>Last signal</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>No recent signal — the workstation may be offline or the agent may be stalled.</value>
+  </data>
 </root>

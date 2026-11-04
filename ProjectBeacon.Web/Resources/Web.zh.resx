@@ -2308,4 +2308,10 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>工具名称以 mcp_&lt;server&gt;_&lt;tool&gt; 格式公开。若要在任务流水线中授予访问权限，请将准确名称或 mcp_&lt;server&gt;_* 添加到 Actor 子任务的 Allowed MCP Tools。</value>
   </data>
+  <data name="PipelineLastSignal" xml:space="preserve">
+    <value>最后信号</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>没有新的信号——工作站可能已离线，或代理可能已卡住。</value>
+  </data>
 </root>

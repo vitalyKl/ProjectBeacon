@@ -83,6 +83,7 @@ public class PipelineSession : Entity, IProjectScoped
             throw new InvalidOperationException($"Cannot close session in status {Status}");
         Status = SessionStatus.Closed;
         ClosedAt = DateTime.UtcNow;
+        LastActivityAt = ClosedAt;
     }
 
     public void Fail(string? reason = null)

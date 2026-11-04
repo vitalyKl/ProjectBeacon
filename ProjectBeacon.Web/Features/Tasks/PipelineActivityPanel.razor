@@ -19,9 +19,17 @@
                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
                 }
                 <span class="beacon-pipeline-activity-summary">@ActivityLabel</span>
+                @if (Session.LastActivityAt is { } lastActivity)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineLastSignal"]: <LocalTime Value="lastActivity" Format="t" /></MudText>
+                }
             </div>
         </TitleContent>
         <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(Session.FailureReason))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Session.FailureReason</MudAlert>
+            }
             @if (!string.IsNullOrWhiteSpace(ActivityLabel))
             {
                 <MudText Typo="Typo.body2" Class="beacon-pipeline-activity-current">@ActivityLabel</MudText>
@@ -60,11 +68,15 @@
     private List<ChatPartDto> Forms { get; set; } = [];
     private string SnapshotKey { get; set; } = string.Empty;
 
+    private bool HasRecentSignal => Session.LastActivityAt is { } lastActivity
+        && DateTime.UtcNow - lastActivity <= TimeSpan.FromSeconds(30);
     private bool IsLive => Session.Status == SessionStatus.WaitingForUser
-        || (Session.Status == SessionStatus.Active && _state is not ("completed" or "failed"));
-    private bool IsWorking => Session.Status == SessionStatus.Active
+        || (Session.Status == SessionStatus.Active && HasRecentSignal && _state is not ("completed" or "failed"));
+    private bool IsWorking => Session.Status == SessionStatus.Active && HasRecentSignal
         && _state is not ("completed" or "failed" or "waiting-for-user");
-    private string ActivityLabel => !string.IsNullOrWhiteSpace(_activity)
+    private string ActivityLabel => Session.Status == SessionStatus.Active && !HasRecentSignal
+        ? L["PipelineNoRecentSignal"].Value
+        : !string.IsNullOrWhiteSpace(_activity)
         ? _activity
         : _state switch
         {
@@ -80,12 +92,14 @@
     {
         SessionStatus.WaitingForUser => L["WaitingForUser"].Value,
         SessionStatus.Active when _state == "completed" => L["PipelineActivityCompleted"].Value,
+        SessionStatus.Active when !HasRecentSignal => L["PipelineNoRecentSignal"].Value,
         SessionStatus.Active when _state == "failed" => L["PipelineActivityFailed"].Value,
         _ => L[Session.Status.ToString()].Value
     };
 
     private Color StatusColor => Session.Status switch
     {
+        SessionStatus.Active when !HasRecentSignal => Color.Warning,
         SessionStatus.Active when _state == "failed" => Color.Error,
         SessionStatus.Active when _state == "completed" => Color.Success,
         SessionStatus.Active => Color.Info,
