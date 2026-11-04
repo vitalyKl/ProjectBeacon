@@ -1646,13 +1646,13 @@ Kein von Beacon gehosteter Coding-Agent.</value>
     <value>Hängen Sie im Dashboard einen Projektordner an, damit diese Seite GGUF-Dateien auf dem Gerät suchen kann.</value>
   </data>
 <data name="NextStepTodo" xml:space="preserve">
-    <value>Starten Sie die Aufgabe, um den Planner zu erstellen und zu starten. Die Pipeline benötigt eine online verfügbare native Workstation und ein der Planner-Rolle zugeordnetes Modell.</value>
+    <value>Nichts startet von allein. Hängen Sie im Dashboard einen Ordner an, fügen Sie in den Einstellungen ein Modell hinzu und starten Sie dann die Pipeline (manuelle Stufen) oder schließen Sie die Aufgabe über MCP finish_work ab.</value>
   </data>
 <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>Erstellen Sie eine Teilaufgabe und starten Sie die Actor-Sitzung. Der native Agent wird automatisch gestartet, wenn Workstation und Modell verfügbar sind.</value>
+    <value>Erstellen Sie eine Teilaufgabe und starten Sie dann die Akteur-Sitzung. Sitzung starten markiert die Sitzung in Beacon nur als aktiv — der Agent startet nicht.</value>
   </data>
 <data name="LaunchSessionHint" xml:space="preserve">
-    <value>Startet den nativen Agenten auf einer online verfügbaren nativen Workstation. Ist kein Executor verfügbar, bleibt die Sitzung Ready und der Grund wird angezeigt.</value>
+    <value>Sitzung starten aktualisiert den Status in der Datenbank. Der Agent wird nicht gestartet.</value>
   </data>
 <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>Keine aktiven Pipeline-Sitzungen. Modelle starten keine Aufgaben; öffnen Sie eine Aufgabe und starten Sie die Pipeline, oder nutzen Sie MCP.</value>
@@ -2128,7 +2128,7 @@ orthstar</value>
 
 <data name="AgentModeHint" xml:space="preserve"><value>Steuert das auf der Workstation angewendete OpenCode-Profil für den interaktiven Chat. Standardmodelle für Aufgaben-Pipelines werden separat unter „Aufgabenarten“ konfiguriert.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Dies sind workstationweite Rollenvorgaben und OpenCode-Einstellungen. Pipeline-Sitzungen verwenden die Rollenbindungen nur, wenn für die jeweilige Aufgabenphase kein eigenes Modell festgelegt ist.</value></data>
-<data name="PipelineStartHint" xml:space="preserve"><value>Erstellt die Planner-Sitzung und versucht, sie zu starten. Erforderlich sind eine online verfügbare native Workstation und ein Modell für die Planner-Rolle.</value></data>
+<data name="PipelineStartHint" xml:space="preserve"><value>Startet den Planner, der diese Aufgabe analysiert und einen Ausführungsplan vorbereitet.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Dies sind Modellauswahlen für Aufgaben-Pipelines. Vorgaben für Entscheidungs- und Worker-Modelle sowie phasenspezifische Modelle haben für konfigurierte Aufgabenphasen Vorrang vor den Rollenbindungen der Workstation.</value></data>
 <data name="CheckClientUpdate" xml:space="preserve">
     <value>Nach Client-Updates suchen</value>
@@ -2305,5 +2305,8 @@ orthstar</value>
   </data>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>Kein aktuelles Signal — die Workstation ist möglicherweise offline oder der Agent hängt.</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>Sitzung erneut starten</value>
   </data>
 </root>

@@ -17,6 +17,7 @@
 @inject StartPipelineHandler StartPipeline
 @inject StartActorSessionHandler StartActorSession
 @inject LaunchSessionHandler LaunchSession
+@inject RetryPipelineSessionHandler RetrySession
 @inject StartReviewHandler StartReview
 @inject ListTaskStepsHandler ListSteps
 @inject ListTaskPhasesHandler ListPhases
@@ -208,7 +209,7 @@ else
     </div>
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
     <MudTabPanel Text="@L["Pipeline"]">
-        <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnStart="OnStartPipeline" />
+        <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" OnStart="OnStartPipeline" />
         <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Discussion"]">
@@ -562,6 +563,34 @@ else
                 return;
             }
             Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnRetrySession(PipelineSessionDto previous)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await RetrySession.HandleAsync(
+                new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally

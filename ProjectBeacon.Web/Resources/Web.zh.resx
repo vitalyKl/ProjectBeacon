@@ -1646,13 +1646,13 @@
     <value>请在仪表板上附加项目文件夹，此页才能扫描设备上的 GGUF 文件。</value>
   </data>
 <data name="NextStepTodo" xml:space="preserve">
-    <value>开始任务以创建并启动 Planner。流水线需要在线的原生工作站，以及分配给 Planner 角色的模型。</value>
+    <value>不会自动运行。在仪表板上附加文件夹，在设置中添加模型，然后启动流水线（手动阶段），或通过 MCP finish_work 完成任务。</value>
   </data>
 <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>创建子任务，然后启动 Actor 会话。具备可用工作站和模型时，原生代理会自动启动。</value>
+    <value>创建子任务，然后启动执行会话。启动会话只是在 Beacon 中把会话标为活动，并不会启动代理。</value>
   </data>
 <data name="LaunchSessionHint" xml:space="preserve">
-    <value>在在线的原生工作站上启动原生代理。如果执行器不可用，会话将保持 Ready 并显示原因。</value>
+    <value>启动会话会更新数据库中的状态。它不会启动代理。</value>
   </data>
 <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>没有活动的流水线会话。模型不会启动任务；请打开任务并启动流水线，或使用 MCP。</value>
@@ -2133,7 +2133,7 @@ orthstar</value>
     <value>这些是工作站级别的角色默认设置和 OpenCode 配置。只有当任务的相应阶段未指定专用模型时，流水线会话才会使用这些角色绑定。</value>
   </data>
   <data name="PipelineStartHint" xml:space="preserve">
-    <value>创建 Planner 会话并尝试启动。需要在线的原生工作站，以及分配给 Planner 角色的模型。</value>
+    <value>启动 Planner 分析此任务并准备执行计划。</value>
   </data>
   <data name="TaskKindModelsScopeHint" xml:space="preserve">
     <value>这些是任务流水线的模型设置。对于已配置的任务阶段，决策模型、执行模型默认值以及阶段专用模型的优先级高于工作站角色绑定。</value>
@@ -2313,5 +2313,8 @@ orthstar</value>
   </data>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>没有新的信号——工作站可能已离线，或代理可能已卡住。</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>重新运行会话</value>
   </data>
 </root>

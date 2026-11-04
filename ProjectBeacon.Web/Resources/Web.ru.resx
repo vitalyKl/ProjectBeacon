@@ -1640,13 +1640,13 @@
     <value>Укажите папку проекта на панели управления, чтобы эта страница видела GGUF на устройстве.</value>
   </data>
 <data name="NextStepTodo" xml:space="preserve">
-    <value>Нажмите «Начать задачу», чтобы создать и запустить Planner. Для пайплайна нужны работающая нативная рабочая станция и модель, привязанная к роли Planner.</value>
+    <value>Само ничего не запускается. Укажите папку на панели управления, добавьте модель в настройках, затем запустите пайплайн или завершите задачу через MCP finish_work.</value>
   </data>
 <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>Создайте подзадачу и запустите сессию Actor. Нативный агент запускается автоматически, если доступна подходящая рабочая станция и модель.</value>
+    <value>Создайте подзадачу и запустите сессию актора. «Запустить» только помечает сессию активной в Beacon и не стартует OpenCode.</value>
   </data>
 <data name="LaunchSessionHint" xml:space="preserve">
-    <value>Запускает нативного агента на работающей нативной станции. Если исполнитель недоступен, сессия останется Ready, а причина будет показана.</value>
+    <value>Запуск сессии меняет статус в базе. OpenCode при этом не стартует.</value>
   </data>
 <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>Нет активных сессий пайплайна. Модели сами задачи не начинают: откройте задачу и запустите пайплайн или используйте MCP.</value>
@@ -2143,7 +2143,7 @@
 <data name="LandingCtaBody" xml:space="preserve"><value>Разверните собственный сервер ProjectBeacon и подключите рабочую станцию.</value></data>
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 
-<data name="PipelineStartHint" xml:space="preserve"><value>Создаёт сессию Planner и пытается её запустить. Нужны работающая нативная станция и модель, привязанная к роли Planner.</value></data>
+<data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
 <data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки рабочей станции и модели ролей по умолчанию. В pipeline они используются только если для соответствующей фазы задачи не задана отдельная модель.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это выбор моделей для pipeline задач. Значения по умолчанию для решений/работников и модели отдельных фаз имеют приоритет над привязками ролей рабочей станции.</value></data>
 <data name="DaemonUpdates" xml:space="preserve"><value>Обновление демона</value></data>
@@ -2295,5 +2295,8 @@
   </data>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>Нет свежего сигнала — рабочая станция может быть отключена или агент завис.</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>Запустить заново</value>
   </data>
 </root>
