@@ -19,11 +19,11 @@
         }
 
         <MudText Typo="Typo.subtitle2" Class="mt-2">@L["Sessions"]</MudText>
-        @if (timelineSessions.Count == 0)
+        @if (!pipeline.Sessions.Any(s => s.Role is PipelineRole.Planner or PipelineRole.Review))
         {
             <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
         }
-        @foreach (var session in timelineSessions)
+        @foreach (var session in pipeline.Sessions.Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review))
         {
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
@@ -76,6 +76,13 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
+    [Parameter] public EventCallback OnStart { get; set; }
+
+    private bool CanStartPlanner => Pipeline?.CanStart == true;
+
+    private string PlannerPreflightMessage => Pipeline?.StartBlockedReason is { } reason
+        ? L[reason].Value
+        : L["PipelinePreflightNoPlannerModel"].Value;
 
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
 
@@ -96,4 +103,22 @@
         _ => L["PipelineNotStarted"].Value
     };
 
+    private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
+
+    private Color SessionStatusColor(SessionStatus status) => status switch
+    {
+        SessionStatus.Active => Color.Info,
+        SessionStatus.WaitingForUser => Color.Warning,
+        SessionStatus.Closed => Color.Default,
+        SessionStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
+
+    private string RoleLabel(PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => L["RoleBindingPlanner"].Value,
+        PipelineRole.Actor => L["RoleBindingActor"].Value,
+        PipelineRole.Review => L["Review"].Value,
+        _ => role.ToString()
+    };
 }
