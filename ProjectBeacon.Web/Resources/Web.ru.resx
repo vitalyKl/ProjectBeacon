@@ -2290,22 +2290,7 @@
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Имена инструментов в harness имеют вид mcp_&lt;сервер&gt;_&lt;инструмент&gt;. Чтобы разрешить их в pipeline, добавьте точное имя или mcp_&lt;сервер&gt;_* в Allowed MCP Tools у подзадачи Actor.</value>
   </data>
-  <data name="PipelineLastSignal" xml:space="preserve">
-    <value>Последний сигнал</value>
-  </data>
-  <data name="PipelineNoRecentSignal" xml:space="preserve">
-    <value>Нет свежего сигнала — рабочая станция может быть отключена или агент завис.</value>
-  </data>
-  <data name="RetrySession" xml:space="preserve">
-    <value>Запустить заново</value>
-  </data>
-  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
-    <value>К проекту не привязана онлайн-рабочая станция с native runtime. Установите AgentRuntime=native и подключите станцию.</value>
-  </data>
-  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
-    <value>Для Planner не настроена модель. Настройте модель этапа Understand или привязку роли Planner.</value>
-  </data>
-  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
-    <value>Для этой роли пайплайна не настроена модель. Настройте соответствующий этап или привязку роли.</value>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>Текущая активность</value>
   </data>
 </root>

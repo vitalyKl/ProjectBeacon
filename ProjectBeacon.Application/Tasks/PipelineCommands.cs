@@ -55,16 +55,9 @@ public record PipelineStateDto(
     IReadOnlyList<SubtaskDto> Subtasks,
     IReadOnlyList<PipelineSessionDto> Sessions,
     IReadOnlyList<ReviewVerdictDto> Verdicts,
-    PipelinePreflightDto? Preflight = null,
     bool CanStart = false,
-    string? StartBlockedReason = null);
-
-/// <summary>Server-computed availability of the native executor and role models.</summary>
-public record PipelinePreflightDto(
-    bool HasOnlineNativeWorkstation,
-    bool PlannerModelConfigured,
-    bool ActorModelConfigured,
-    bool ReviewModelConfigured);
+    string? StartBlockedReason = null,
+    PipelinePreflightDto? Preflight = null);
 
 /// <summary>Identifies the task whose pipeline should start.</summary>
 public record StartPipelineRequest(Guid TaskId);

@@ -77,7 +77,11 @@ else
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
                         break;
                     case TaskPipelineStage.Executing:
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy">@L["StartReview"]</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy || !CanStartReview">@L["StartReview"]</MudButton>
+                        @if (!CanStartReview)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Warning">@L["PipelinePreflightNoRoleModel"]</MudText>
+                        }
                         break;
                     case TaskPipelineStage.Reviewing:
                         <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewApprove))" Disabled="_busy">@L["Approve"]</MudButton>
@@ -129,8 +133,23 @@ else
                         <StatusChip Color="Color.Warning" Label="@L["WaitingForUser"]" />
                     }
                 </header>
+                @if (_pipeline?.Sessions.Any(s =>
+                    s.Role is PipelineRole.Planner or PipelineRole.Review
+                    && s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed) == true)
+                {
+                    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-3">
+                        <MudText Typo="Typo.subtitle1">@L["TaskCurrentActivity"]</MudText>
+                        @foreach (var session in _pipeline.Sessions
+                            .Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review
+                                && s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed)
+                            .OrderByDescending(s => s.LastActivityAt ?? s.LaunchedAt))
+                        {
+                            <PipelineActivityPanel TaskId="TaskId" Session="session" />
+                        }
+                    </MudPaper>
+                }
                 <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase"
-                              Busy="_busy" OnStartActorSession="OnStartActorSession"
+                              Busy="_busy" Preflight="_pipeline?.Preflight" OnStartActorSession="OnStartActorSession"
                               OnReportResult="@(subtask => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))"
                               OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))"
                               OnLaunchSession="OnLaunchSession" />
@@ -241,10 +260,11 @@ else
     private PipelineStateDto? _pipeline;
     private bool _busy;
     private bool _isAdmin;
-    private bool CanStartPlanner => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, PlannerModelConfigured: true };
-    private string PlannerPreflightMessage => _pipeline?.Preflight?.HasOnlineNativeWorkstation != true
-        ? L["PipelinePreflightNoNativeWorkstation"].Value
-        : L["PipelinePreflightNoPlannerModel"].Value;
+    private bool CanStartPlanner => _pipeline?.CanStart == true;
+    private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
+    private string PlannerPreflightMessage => string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
+        ? L["PipelinePreflightNoPlannerModel"].Value
+        : L[_pipeline.StartBlockedReason].Value;
     private string? _userId;
 
     private List<LabelDto> _labels = [];

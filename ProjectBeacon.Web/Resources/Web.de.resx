@@ -2300,22 +2300,7 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Die Toolnamen haben das Format mcp_&lt;server&gt;_&lt;tool&gt;. Für Task-Pipelines muss der genaue Name oder mcp_&lt;server&gt;_* zu den erlaubten MCP-Tools des Actor-Untertasks hinzugefügt werden.</value>
   </data>
-  <data name="PipelineLastSignal" xml:space="preserve">
-    <value>Letztes Signal</value>
-  </data>
-  <data name="PipelineNoRecentSignal" xml:space="preserve">
-    <value>Kein aktuelles Signal — die Workstation ist möglicherweise offline oder der Agent hängt.</value>
-  </data>
-  <data name="RetrySession" xml:space="preserve">
-    <value>Sitzung erneut starten</value>
-  </data>
-  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
-    <value>Diesem Projekt ist keine Online-Workstation mit nativem Runtime zugeordnet. Setzen Sie AgentRuntime auf native und verbinden Sie die Workstation.</value>
-  </data>
-  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
-    <value>Für die Planner-Rolle ist kein Modell konfiguriert. Konfigurieren Sie die Understand-Phase oder die Planner-Rollenbindung.</value>
-  </data>
-  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
-    <value>Für diese Pipeline-Rolle ist kein Modell konfiguriert. Konfigurieren Sie die passende Phase oder Rollenbindung.</value>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>Aktuelle Aktivität</value>
   </data>
 </root>

@@ -21,10 +21,10 @@
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
                        OnClick="@(() => OnLaunchSession.InvokeAsync(session))"
-                       Disabled="Busy || !session.CanLaunch">@L["LaunchSession"]</MudButton>
-            @if (!session.CanLaunch && !string.IsNullOrWhiteSpace(session.LaunchBlockedReason))
+                       Disabled="Busy || !CanLaunch(session)">@L["LaunchSession"]</MudButton>
+            @if (session.Status == SessionStatus.Ready && !CanLaunch(session))
             {
-                <MudText Typo="Typo.caption" Color="Color.Warning">@L[session.LaunchBlockedReason]</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session.Role)</MudText>
             }
         }
         <PipelineActivityPanel TaskId="TaskId" Session="session" />
@@ -36,7 +36,11 @@
             {
                 <MudButton Size="Size.Small" Variant="Variant.Outlined"
                            OnClick="@(() => OnStartActorSession.InvokeAsync(Subtask))"
-                           Disabled="Busy">@L["StartActorSession"]</MudButton>
+                           Disabled="Busy || !CanStartActorSession">@L["StartActorSession"]</MudButton>
+                @if (!CanStartActorSession)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(PipelineRole.Actor)</MudText>
+                }
             }
             @if (Subtask.Status == SubtaskStatus.InProgress)
             {
@@ -56,6 +60,13 @@
     [Parameter, EditorRequired] public SubtaskDto Subtask { get; set; } = default!;
     [Parameter] public IReadOnlyList<PipelineSessionDto> Sessions { get; set; } = [];
     [Parameter] public bool Busy { get; set; }
+    [Parameter] public PipelinePreflightDto? Preflight { get; set; }
+
+    private bool CanStartActorSession => Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
+    private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
+    private string PreflightMessage(PipelineRole role) => Preflight?.HasOnlineNativeWorkstation != true
+        ? L["PipelinePreflightNoNativeWorkstation"].Value
+        : L["PipelinePreflightNoRoleModel"].Value;
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }

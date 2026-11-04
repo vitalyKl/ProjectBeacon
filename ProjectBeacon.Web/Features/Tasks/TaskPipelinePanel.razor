@@ -46,10 +46,6 @@
             {
                 <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
             }
-            @if (session.Role is PipelineRole.Planner or PipelineRole.Review)
-            {
-                <PipelineActivityPanel TaskId="pipeline.TaskId" Session="session" />
-            }
         }
 
         <MudText Typo="Typo.subtitle2" Class="mt-4">@L["Verdicts"]</MudText>

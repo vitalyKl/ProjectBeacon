@@ -2308,22 +2308,7 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>工具名称以 mcp_&lt;server&gt;_&lt;tool&gt; 格式公开。若要在任务流水线中授予访问权限，请将准确名称或 mcp_&lt;server&gt;_* 添加到 Actor 子任务的 Allowed MCP Tools。</value>
   </data>
-  <data name="PipelineLastSignal" xml:space="preserve">
-    <value>最后信号</value>
-  </data>
-  <data name="PipelineNoRecentSignal" xml:space="preserve">
-    <value>没有新的信号——工作站可能已离线，或代理可能已卡住。</value>
-  </data>
-  <data name="RetrySession" xml:space="preserve">
-    <value>重新运行会话</value>
-  </data>
-  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
-    <value>此项目未分配在线 native 工作站。请将 AgentRuntime 设置为 native，并使工作站上线。</value>
-  </data>
-  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
-    <value>尚未为 Planner 角色配置模型。请配置 Understand 阶段或 Planner 角色绑定。</value>
-  </data>
-  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
-    <value>尚未为此流水线角色配置模型。请配置对应阶段或角色绑定。</value>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>当前活动</value>
   </data>
 </root>
