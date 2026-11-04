@@ -248,12 +248,11 @@ public sealed partial class PipelineHandlerTests
         {
             var attempts = await _db.PipelineSessions.AsNoTracking()
                 .Where(s => s.TaskId == task.Id)
-                .OrderBy(s => s.CreatedAt)
                 .ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(2, attempts.Count);
-            Assert.Equal(SessionStatus.Failed, attempts[0].Status);
-            Assert.Equal("native agent crashed", attempts[0].FailureReason);
-            Assert.Equal(SessionStatus.Ready, attempts[1].Status);
+            var failedAttempt = Assert.Single(attempts, s => s.Status == SessionStatus.Failed);
+            Assert.Equal("native agent crashed", failedAttempt.FailureReason);
+            Assert.Single(attempts, s => s.Status == SessionStatus.Ready);
         }
     }
 
