@@ -17,16 +17,16 @@
     }
     @foreach (var session in Sessions)
     {
-        @if ((session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult))
-            && Subtask.Status != SubtaskStatus.Done)
+        @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult && Subtask.Status != SubtaskStatus.Done))
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
+                       OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
+        }
+        @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult))
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
                        OnClick="@(() => OnRetrySession.InvokeAsync(session))"
-                       Disabled="Busy || !CanRetryActorSession">@L["RetrySession"]</MudButton>
-            @if (!CanRetryActorSession)
-            {
-                <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(PipelineRole.Actor)</MudText>
-            }
+                       Disabled="Busy">@L["RetrySession"]</MudButton>
         }
         @if (session.Status == SessionStatus.Ready)
         {
@@ -74,7 +74,6 @@
     [Parameter] public PipelinePreflightDto? Preflight { get; set; }
 
     private bool CanStartActorSession => Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
-    private bool CanRetryActorSession => CanStartActorSession;
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
     private string PreflightMessage(PipelineRole role) => Preflight?.HasOnlineNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
