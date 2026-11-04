@@ -12,6 +12,27 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     }
 
     [Fact]
+    public void ProjectMcpServers_RendersForProjectOwner()
+    {
+        var user = DbContext.Users.Single();
+        var project = DbContext.Projects.Single();
+        var authProvider = Bunit.Services.GetRequiredService<Bunit.TestDoubles.FakeAuthenticationStateProvider>();
+        authProvider.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id.ToString())
+            },
+            "TestAuth");
+
+        var cut = Bunit.RenderComponent<Features.Agents.ProjectMcpServers>(parameters =>
+            parameters.Add(component => component.ProjectId, project.Id));
+
+        Assert.Contains("beacon-panel", cut.Markup);
+    }
+
+    [Fact]
     public void Settings_RendersPage()
     {
         var cut = Bunit.RenderComponent<Features.Settings.Settings>();
