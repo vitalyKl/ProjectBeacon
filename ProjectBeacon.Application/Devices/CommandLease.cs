@@ -3,14 +3,14 @@ namespace ProjectBeacon.Application.Devices;
 using Domain.Enums;
 
 /// <summary>
-/// Execution lease granted at claim, per command kind. Every current kind is hard-capped
-/// client-side (chat/eval turns 600s, review check and winget install 120s), so a 15-minute
-/// lease covers all of them with margin. The exhaustive switch forces an explicit lease
-/// whenever a new kind is added.
+/// Execution lease granted at claim, per command kind. Pipeline turns have a dedicated
+/// 75-minute lease for a workstation's 60-minute absolute turn cap plus reporting margin.
+/// The exhaustive switch forces an explicit lease whenever a new kind is added.
 /// </summary>
 public static class CommandLease
 {
     public const int Minutes = 15;
+    public const int PipelineMinutes = 75;
 
     // CS8524 warns about "unnamed" enum values beyond the declared members even when every
     // member is covered; every named kind has an explicit arm on purpose.
@@ -36,7 +36,7 @@ public static class CommandLease
         WorkstationCommandKind.RunEvalTurn => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.ReconcileDesired => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.RunReviewCheck => TimeSpan.FromMinutes(Minutes),
-        WorkstationCommandKind.RunPipelineSession => TimeSpan.FromMinutes(Minutes),
+        WorkstationCommandKind.RunPipelineSession => TimeSpan.FromMinutes(PipelineMinutes),
         WorkstationCommandKind.CheckClientUpdate => TimeSpan.FromMinutes(Minutes),
         WorkstationCommandKind.UpdateClient => TimeSpan.FromMinutes(Minutes)
     };

@@ -84,9 +84,26 @@ internal sealed class OpenAiCompatProvider(HttpClient http, string baseUrl, stri
             var retryable = response.StatusCode == HttpStatusCode.TooManyRequests
                 || status >= 500
                 || response.StatusCode == HttpStatusCode.RequestTimeout;
-            // Do not return arbitrary provider bodies: gateways sometimes echo request headers or credentials.
+            // Remote gateways may echo credentials or request headers, so their bodies are
+            // never surfaced. A loopback model server is locally trusted and its short body
+            // is useful when a template or tool-call parser rejects a request.
+            var diagnostic = string.Empty;
+            if (_endpoint.IsLoopback)
+            {
+                var responseBody = (await response.Content.ReadAsStringAsync(ct))
+                    .Replace('\r', ' ')
+                    .Replace('\n', ' ')
+                    .Trim();
+                if (!string.IsNullOrWhiteSpace(responseBody))
+                {
+                    if (responseBody.Length > 300)
+                        responseBody = responseBody[..300] + "…";
+                    diagnostic = $" Local provider: {responseBody}";
+                }
+            }
+
             throw new ChatProviderException(
-                $"Chat provider returned HTTP {status}.",
+                $"Chat provider returned HTTP {status}.{diagnostic}",
                 (int)response.StatusCode,
                 retryable);
         }

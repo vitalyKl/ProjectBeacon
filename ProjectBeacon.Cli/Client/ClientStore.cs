@@ -123,6 +123,10 @@ public sealed class WorkstationSettings
     /// <summary>Explicit workstation-wide approval for interactive terminal tools. False by default.</summary>
     public bool AllowTerminalExecution { get; set; }
     public int ConcurrentPortBase { get; set; } = 9000;
+    /// <summary>Absolute cap for one native pipeline agent turn. The server lease is 75 minutes.</summary>
+    public int PipelineTurnTimeoutMinutes { get; set; } = 60;
+    /// <summary>Abort a pipeline turn after this many minutes without transcript/tool/form progress.</summary>
+    public int PipelineIdleTimeoutMinutes { get; set; } = 10;
     public string? OpencodeDataDir { get; set; }
     public string? ProjectsRoot { get; set; }
     public string? BeaconPath { get; set; }

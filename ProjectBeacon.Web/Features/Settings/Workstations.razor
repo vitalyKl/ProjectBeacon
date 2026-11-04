@@ -103,6 +103,13 @@
                 <MudSelectItem T="string" Value="@("native")">@L["AgentRuntimeNative"]</MudSelectItem>
             </MudSelect>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentRuntimeRestartHint"]</MudText>
+            <MudNumericField T="int" @bind-Value="_pipelineTurnTimeoutMinutes"
+                             Label="@L["PipelineTurnTimeout"]" Min="15" Max="60" Step="5"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+            <MudNumericField T="int" @bind-Value="_pipelineIdleTimeoutMinutes"
+                             Label="@L["PipelineIdleTimeout"]" Min="1" Max="30" Step="1"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
             <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @RuntimeLabel(_probeAgentRuntime)</MudText>
             @if (_probeAgentRuntime != "-" && !string.Equals(_probeAgentRuntime, _agentRuntime, StringComparison.OrdinalIgnoreCase))
             {
@@ -226,6 +233,8 @@
     private string _historyDir = string.Empty;
     private string _projectsRoot = string.Empty;
     private string _agentRuntime = "native";
+    private int _pipelineTurnTimeoutMinutes = 60;
+    private int _pipelineIdleTimeoutMinutes = 10;
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
@@ -344,6 +353,10 @@
                     : "native";
             _llamaSwapBin = Str(root, "llamaSwapBin");
             _llamaCppBin = Str(root, "llamaCppBin");
+            _pipelineTurnTimeoutMinutes = root.TryGetProperty("pipelineTurnTimeoutMinutes", out var pipelineMax)
+                && pipelineMax.TryGetInt32(out var maxMinutes) ? Math.Clamp(maxMinutes, 15, 60) : 60;
+            _pipelineIdleTimeoutMinutes = root.TryGetProperty("pipelineIdleTimeoutMinutes", out var pipelineIdle)
+                && pipelineIdle.TryGetInt32(out var idleMinutes) ? Math.Clamp(idleMinutes, 1, 30) : 10;
         }
         catch (JsonException)
         {
@@ -462,6 +475,8 @@
                 opencodeDataDir = _historyDir,
                 projectsRoot = _projectsRoot,
                 agentRuntime = _agentRuntime,
+                pipelineTurnTimeoutMinutes = _pipelineTurnTimeoutMinutes,
+                pipelineIdleTimeoutMinutes = _pipelineIdleTimeoutMinutes,
                 llamaSwapBin = _llamaSwapBin,
                 llamaCppBin = _llamaCppBin
             });
