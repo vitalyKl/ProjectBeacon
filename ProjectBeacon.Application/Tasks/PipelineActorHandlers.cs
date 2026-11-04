@@ -126,6 +126,18 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
             if (entered == 0)
                 return Result.Failure<PipelineSessionDto>("Pipeline state changed while starting session; retry.");
 
+            // The task-row update above serializes actor starts across callers.
+            // Only one Actor session may be queued or running for a task at a time.
+            var anotherActorIsOpen = await db.PipelineSessions.AnyAsync(s =>
+                s.TaskId == task.Id
+                && s.Role == PipelineRole.Actor
+                && s.SubtaskId != subtask.Id
+                && (s.Status == SessionStatus.Ready
+                    || s.Status == SessionStatus.Active
+                    || s.Status == SessionStatus.WaitingForUser), ct);
+            if (anotherActorIsOpen)
+                return Result.Failure<PipelineSessionDto>("Another Actor session is already queued or running for this task.");
+
             subtask.Start();
             var started = await db.Subtasks
                 .Where(s => s.Id == subtask.Id && s.Status == SubtaskStatus.Pending)

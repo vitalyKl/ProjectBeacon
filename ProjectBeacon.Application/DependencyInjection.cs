@@ -90,6 +90,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<FinishWorkHandler>();
 
         services.AddTransient<ISessionSpawner, ManualSessionSpawner>();
+        services.AddTransient<PipelineActorQueueDispatcher>();
         services.AddTransient<StartPipelineHandler>();
         services.AddTransient<CreateSubtaskHandler>();
         services.AddTransient<StartActorSessionHandler>();

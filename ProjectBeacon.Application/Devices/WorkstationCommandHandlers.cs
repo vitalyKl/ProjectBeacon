@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Devices;
 using Application.Agents;
 using Application.Auth;
 using Application.Common;
+using Application.Tasks;
 using Application.Security;
 using Domain.Entities.Devices;
 using Domain.Entities.Projects;
@@ -244,8 +245,13 @@ public class ClaimNextCommandHandler : ICommandHandler<ClaimNextCommandCommand, 
 public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Result<WorkstationCommandDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly PipelineActorQueueDispatcher? _pipelineQueue;
 
-    public CompleteCommandHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CompleteCommandHandler(IBeaconDbFactory dbFactory, PipelineActorQueueDispatcher? pipelineQueue = null)
+    {
+        _dbFactory = dbFactory;
+        _pipelineQueue = pipelineQueue;
+    }
 
     public async Task<Result<WorkstationCommandDto>> HandleAsync(CompleteCommandCommand command, CancellationToken ct = default)
     {
@@ -304,6 +310,23 @@ public class CompleteCommandHandler : ICommandHandler<CompleteCommandCommand, Re
             return Result.Failure<WorkstationCommandDto>(ex.Message);
         }
         await db.SaveChangesAsync(ct);
+
+        // Completion is the queue-advance signal. The dispatcher is idempotent and
+        // launches at most one Actor for the task; Review remains a separate user action.
+        if (row.Kind == WorkstationCommandKind.RunPipelineSession && _pipelineQueue is not null)
+        {
+            var sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
+            if (sessionId is { } completedSessionId)
+            {
+                var taskId = await db.PipelineSessions.IgnoreQueryFilters()
+                    .Where(s => s.Id == completedSessionId && s.ProjectId == row.ProjectId)
+                    .Select(s => (Guid?)s.TaskId)
+                    .FirstOrDefaultAsync(ct);
+                if (taskId is { } id)
+                    await _pipelineQueue.DispatchNextAsync(id, ct);
+            }
+        }
+
         var localRoot = await ProjectRuntimeResolver.ResolveRootAsync(db, row, ct);
         return Result.Ok(EnqueueCommandHandler.MapCommand(row, localRoot));
     }

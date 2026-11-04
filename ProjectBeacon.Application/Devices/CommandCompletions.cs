@@ -70,6 +70,10 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             return;
 
         Guid? sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
+        var sessionInfo = await db.PipelineSessions.IgnoreQueryFilters()
+            .Where(s => s.Id == (sessionId ?? Guid.Empty) && s.ProjectId == projectId)
+            .Select(s => new { s.Role, s.SubtaskId })
+            .FirstOrDefaultAsync(ct);
         string? externalSessionId = null;
         if (success && !string.IsNullOrWhiteSpace(resultJson))
         {
@@ -94,7 +98,7 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
         if (success && !string.IsNullOrWhiteSpace(externalSessionId) && sessionId is { } completedId)
         {
             var completedAt = DateTime.UtcNow;
-            await db.PipelineSessions.IgnoreQueryFilters()
+            var closed = await db.PipelineSessions.IgnoreQueryFilters()
                 .Where(s => s.Id == completedId && s.ProjectId == projectId
                     && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
                 .ExecuteUpdateAsync(s => s
@@ -103,6 +107,12 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
                     .SetProperty(x => x.ClosedAt, completedAt)
                     .SetProperty(x => x.LastActivityAt, completedAt)
                     .SetProperty(x => x.FailureReason, (string?)null), ct);
+            if (closed == 1 && sessionInfo?.Role == PipelineRole.Actor)
+            {
+                // A clean turn that skipped subtask_report_result must not strand InProgress.
+                await FailActorSubtaskAsync(db, projectId, sessionInfo.SubtaskId, completedAt,
+                    "Actor session ended without reporting a subtask result.", ct);
+            }
             return;
         }
 
@@ -111,16 +121,33 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
         if (sessionId is { } failedId)
         {
             var now = DateTime.UtcNow;
-            await db.PipelineSessions.IgnoreQueryFilters()
+            var reason = ClipFailureReason(success
+                ? "Pipeline command completed without a usable external session id."
+                : error ?? "Pipeline command failed.");
+            var failed = await db.PipelineSessions.IgnoreQueryFilters()
                 .Where(s => s.Id == failedId && s.ProjectId == projectId && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(x => x.Status, SessionStatus.Failed)
                     .SetProperty(x => x.ClosedAt, now)
                     .SetProperty(x => x.LastActivityAt, now)
-                    .SetProperty(x => x.FailureReason, ClipFailureReason(success
-                        ? "Pipeline command completed without a usable external session id."
-                        : error ?? "Pipeline command failed.")), ct);
+                    .SetProperty(x => x.FailureReason, reason), ct);
+            if (failed == 1 && sessionInfo?.Role == PipelineRole.Actor)
+                await FailActorSubtaskAsync(db, projectId, sessionInfo.SubtaskId, now, reason, ct);
         }
+    }
+
+    private static Task<int> FailActorSubtaskAsync(
+        IBeaconDb db, Guid projectId, Guid? subtaskId, DateTime now, string reason, CancellationToken ct)
+    {
+        if (subtaskId is not { } id)
+            return Task.FromResult(0);
+
+        return db.Subtasks.IgnoreQueryFilters()
+            .Where(s => s.Id == id && s.ProjectId == projectId && s.Status == SubtaskStatus.InProgress)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Status, SubtaskStatus.Failed)
+                .SetProperty(x => x.Summary, reason)
+                .SetProperty(x => x.UpdatedAt, now), ct);
     }
 }
 
