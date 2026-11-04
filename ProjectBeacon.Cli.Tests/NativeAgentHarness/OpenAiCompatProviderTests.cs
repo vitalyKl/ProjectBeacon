@@ -134,6 +134,25 @@ public sealed class OpenAiCompatProviderTests
         Assert.DoesNotContain("private-key", ex.Message);
     }
 
+    [Fact]
+    public async Task IncludesShortLoopbackResponseBodyInHttpError()
+    {
+        using var http = new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent("tool call arguments failed schema validation")
+        }));
+        var provider = new OpenAiCompatProvider(http, "http://127.0.0.1:8080/v1", null);
+        var request = new ChatProviderRequest("model", new JsonArray(), new JsonArray());
+
+        var ex = await Assert.ThrowsAsync<ChatProviderException>(async () =>
+        {
+            await foreach (var _ in provider.StreamAsync(request, CancellationToken.None)) { }
+        });
+
+        Assert.Contains("HTTP 500", ex.Message);
+        Assert.Contains("tool call arguments failed schema validation", ex.Message);
+    }
+
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         public string? LastAuthorization { get; private set; }

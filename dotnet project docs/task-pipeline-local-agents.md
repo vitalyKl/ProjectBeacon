@@ -21,7 +21,15 @@ Pipeline execution uses the native workstation runtime only. A project must have
 
 The task pipeline query exposes server-computed preflight state. The UI disables Start/Launch actions when the required native workstation or role model is missing and displays the reason. Legacy workstation settings without an explicit `agentRuntime` value are interpreted as `native`; an explicit `opencode` value remains OpenCode.
 
-Progress snapshots are posted by the daemon while a native turn runs. They update `PipelineSession.ActivityJson` and `LastActivityAt`; a missing recent signal is displayed as stale rather than as active work. Command completion persists `FailureReason`. Retrying a failed session creates a new session using the current role binding and preserves the previous attempt for diagnosis.
+Progress snapshots are posted by the daemon while a native turn runs. They update `PipelineSession.ActivityJson` and `LastActivityAt`; a missing recent signal is displayed as stale rather than as active work. A command that is still Pending is shown as queued, not as an agent actively generating. Command completion persists `FailureReason`. A failed Actor command also marks its still-InProgress subtask Failed, so review and retry logic cannot be blocked by an orphaned status. Retrying a failed session creates a new session using the current role binding and preserves the previous attempt for diagnosis.
+
+## Actor queue and timeouts
+
+The Planner creates subtasks only; it does not launch Actors. When the Planner command completes (including a failure after partial planning), the server starts the oldest Pending subtask. After each Actor command completes, the server starts the next Pending subtask. Only one Actor session per task may be queued or running at a time. Queue advancement is guarded by a task-row update and the Pending-to-InProgress subtask transition, so duplicate completion callbacks or concurrent dispatchers converge on the same open session. Review remains manual after all subtasks are Done or Failed.
+
+The workstation daemon processes one command at a time. The model `Concurrent` setting controls llama-swap residency groups; it does not opt a task pipeline into parallel Actor execution. Actor sessions for a task are serialized independently of that setting.
+
+Pipeline turns use a 75-minute server lease. Workstation settings expose a 15–60 minute absolute limit (default 60) and a no-progress timeout (default 10 minutes). Transcript, tool-call, and form changes reset the no-progress timer; periodic polling and elapsed-duration counters do not. The absolute limit remains the final safety cap.
 
 ## Scope fields
 

@@ -34,6 +34,20 @@ public sealed class PipelineActivityPanelTests : BUnitRenderBase
     }
 
     [Fact]
+    public void ActiveQueuedSession_ShowsQueueStateInsteadOfWorkingIndicator()
+    {
+        var session = CreateSession(SessionStatus.Active, DateTime.UtcNow,
+            """{"state":"running","activity":"Queued for workstation"}""") with { IsQueued = true };
+
+        var cut = Bunit.RenderComponent<Features.Tasks.PipelineActivityPanel>(parameters => parameters
+            .Add(component => component.TaskId, session.TaskId)
+            .Add(component => component.Session, session));
+
+        Assert.Contains("Queued", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("mud-progress-circular", cut.Markup, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void WaitingForUserSession_ShowsWaitingState()
     {
         var session = CreateSession(SessionStatus.WaitingForUser, DateTime.UtcNow,
