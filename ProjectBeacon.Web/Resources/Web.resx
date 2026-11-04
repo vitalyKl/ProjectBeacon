@@ -2537,4 +2537,16 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineJustNow" xml:space="preserve">
     <value>just now</value>
   </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>No online native workstation is assigned to this project. Set AgentRuntime to native and bring the workstation online.</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>No model is configured for the Planner role. Configure the Understand phase or Planner role binding.</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>No model is configured for this pipeline role. Configure the matching phase or role binding.</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>Retry session</value>
+  </data>
 </root>

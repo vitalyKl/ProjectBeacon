@@ -2347,4 +2347,16 @@ orthstar</value>
   <data name="PipelineJustNow" xml:space="preserve">
     <value>たった今</value>
   </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>このプロジェクトにオンラインのネイティブ実行環境が割り当てられていません。AgentRuntime=native に設定し、ワークステーションをオンラインにしてください。</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>Planner ロールのモデルが設定されていません。Understand フェーズまたは Planner ロールのバインドを設定してください。</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>このパイプラインロールのモデルが設定されていません。対応するフェーズまたはロールのバインドを設定してください。</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>セッションを再試行</value>
+  </data>
 </root>

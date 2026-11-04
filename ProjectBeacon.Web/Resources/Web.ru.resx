@@ -2329,4 +2329,16 @@
   <data name="PipelineJustNow" xml:space="preserve">
     <value>только что</value>
   </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>К проекту не привязана онлайн-рабочая станция с native runtime. Установите AgentRuntime=native и подключите станцию.</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>Для Planner не настроена модель. Настройте модель этапа Understand или привязку роли Planner.</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>Для этой роли пайплайна не настроена модель. Настройте соответствующий этап или привязку роли.</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>Запустить заново</value>
+  </data>
 </root>

@@ -2347,4 +2347,16 @@ orthstar</value>
   <data name="PipelineJustNow" xml:space="preserve">
     <value>刚刚</value>
   </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>此项目未分配在线 native 工作站。请将 AgentRuntime 设置为 native，并使工作站上线。</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>尚未为 Planner 角色配置模型。请配置 Understand 阶段或 Planner 角色绑定。</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>尚未为此流水线角色配置模型。请配置对应阶段或角色绑定。</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>重新运行会话</value>
+  </data>
 </root>
