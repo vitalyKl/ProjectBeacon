@@ -98,7 +98,8 @@ internal static class PipelineSupport
             try
             {
                 using var command = JsonDocument.Parse(payload);
-                if (command.RootElement.TryGetProperty("sessionId", out var value)
+                if (command.RootElement.ValueKind == JsonValueKind.Object
+                    && command.RootElement.TryGetProperty("sessionId", out var value)
                     && value.ValueKind == JsonValueKind.String
                     && Guid.TryParse(value.GetString(), out var queuedId))
                     queuedSessionIds.Add(queuedId);
