@@ -2,6 +2,7 @@
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Runtime
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject AuthenticationStateProvider Auth
 @inject ListProjectMcpServersHandler ListServers
@@ -169,8 +170,9 @@
             var result = await ListServers.HandleAsync(new ListProjectMcpServersCommand(ProjectId, _actor));
             if (!result.Success)
             {
-                _loadError = result.Error ?? L["Error"].Value;
-                Snackbar.Add(_loadError, Severity.Error);
+                var message = result.Error ?? L["Error"].Value;
+                _loadError = message;
+                Snackbar.Add(message, Severity.Error);
                 return;
             }
 
@@ -179,8 +181,9 @@
         catch (Exception exception)
         {
             Logger.LogError(exception, "Failed to load MCP servers for project {ProjectId}.", ProjectId);
-            _loadError = L["Error"].Value;
-            Snackbar.Add(_loadError, Severity.Error);
+            var message = L["Error"].Value;
+            _loadError = message;
+            Snackbar.Add(message, Severity.Error);
         }
         finally
         {
