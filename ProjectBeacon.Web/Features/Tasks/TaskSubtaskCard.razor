@@ -67,7 +67,6 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public PipelinePreflightDto? Preflight { get; set; }
     [Parameter] public TaskPipelineStage? PipelineStage { get; set; }
-    [Parameter] public TaskPipelineStage? PipelineStage { get; set; }
 
     private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
     private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
