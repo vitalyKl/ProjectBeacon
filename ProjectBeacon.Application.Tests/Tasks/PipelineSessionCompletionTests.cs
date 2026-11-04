@@ -144,12 +144,19 @@ public sealed partial class PipelineHandlerTests
 
         var dispatcher = new PipelineActorQueueDispatcher(factory, spawner);
         var completion = new CompleteCommandHandler(factory, dispatcher);
+        var deviceId = await DeviceForProjectAsync(projectId);
         var plannerFailed = await completion.HandleAsync(
             new CompleteCommandCommand(new CompleteCommandRequest(
-                plannerCommandId, await DeviceForProjectAsync(projectId), false, null,
+                plannerCommandId, deviceId, false, null,
                 "planner returned HTTP 500", Generation: 1)),
             TestContext.Current.CancellationToken);
         Assert.True(plannerFailed.Success, plannerFailed.Error);
+
+        var manualSecondStart = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, second.Value!.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.False(manualSecondStart.Success);
+        Assert.Contains("Another Actor session", manualSecondStart.Error);
 
         Guid firstActorCommandId;
         Guid firstActorSessionId;
@@ -179,7 +186,7 @@ public sealed partial class PipelineHandlerTests
 
         var actorFailed = await completion.HandleAsync(
             new CompleteCommandCommand(new CompleteCommandRequest(
-                firstActorCommandId, await DeviceForProjectAsync(projectId), false, null,
+                firstActorCommandId, deviceId, false, null,
                 "The pipeline agent turn exceeded the workstation chat timeout.", Generation: 1)),
             TestContext.Current.CancellationToken);
         Assert.True(actorFailed.Success, actorFailed.Error);

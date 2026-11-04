@@ -410,6 +410,24 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
             if (!expectedStage)
                 return Result.Failure<PipelineSessionDto>($"Cannot retry {previous.Role} session while the pipeline is in stage {task.PipelineStage}.");
 
+            if (previous.Role == PipelineRole.Actor)
+            {
+                // Manual retries must obey the same single-Actor slot as automatic dispatch.
+                var entered = await PipelineSupport.EnterExecutingClaimAsync(db, task.Id, ct);
+                if (entered == 0)
+                    return Result.Failure<PipelineSessionDto>("Pipeline state changed while retrying Actor; retry.");
+
+                var anotherActorIsOpen = await db.PipelineSessions.AnyAsync(s =>
+                    s.TaskId == task.Id
+                    && s.Role == PipelineRole.Actor
+                    && s.Id != previous.Id
+                    && (s.Status == SessionStatus.Ready
+                        || s.Status == SessionStatus.Active
+                        || s.Status == SessionStatus.WaitingForUser), ct);
+                if (anotherActorIsOpen)
+                    return Result.Failure<PipelineSessionDto>("Cannot retry this Actor while another Actor session is queued or running.");
+            }
+
             if (previous.SubtaskId is { } subtaskId)
             {
                 var originalSubtask = await db.Subtasks
