@@ -2327,4 +2327,16 @@ orthstar</value>
   <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
     <value>Vor {0} Min. aktualisiert</value>
   </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>Sek.</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>Min.</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>Std.</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>gerade eben</value>
+  </data>
 </root>

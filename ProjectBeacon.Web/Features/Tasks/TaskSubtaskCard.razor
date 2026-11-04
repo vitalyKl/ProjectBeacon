@@ -17,6 +17,11 @@
     }
     @foreach (var session in Sessions)
     {
+        @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult && Subtask.Status != SubtaskStatus.Done))
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
+                       OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
+        }
         @if (session.Status == SessionStatus.Ready)
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
@@ -71,6 +76,7 @@
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 
     private string StatusLabel => Subtask.Status == SubtaskStatus.Done
         ? L["SubtaskReported"].Value

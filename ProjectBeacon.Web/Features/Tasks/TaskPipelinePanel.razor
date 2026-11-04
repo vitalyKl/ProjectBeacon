@@ -12,17 +12,20 @@
     </MudStack>
     @if (Pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
     {
+        @{
+            var timelineSessions = pipeline.Sessions.Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review).ToList();
+        }
         @if (pipeline.Stage == TaskPipelineStage.Closed)
         {
             <MudText Typo="Typo.body2" Class="mt-2">@L["PipelineClosed"]</MudText>
         }
 
         <MudText Typo="Typo.subtitle2" Class="mt-2">@L["Sessions"]</MudText>
-        @if (pipeline.Sessions.Count == 0)
+        @if (timelineSessions.Count == 0)
         {
             <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
         }
-        @foreach (var session in pipeline.Sessions.Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review))
+        @foreach (var session in timelineSessions)
         {
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
@@ -35,7 +38,7 @@
                 {
                     <MudText Typo="Typo.caption">@L["Closed"]: <LocalTime Value="session.ClosedAt" Format="d" /></MudText>
                 }
-                @if (session.Status is SessionStatus.Failed or SessionStatus.Closed)
+                @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult))
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
                 }

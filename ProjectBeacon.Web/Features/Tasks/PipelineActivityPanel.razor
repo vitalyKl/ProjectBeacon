@@ -74,6 +74,19 @@
             ? string.Format(L["PipelineUpdatedSecondsAgo"].Value, Math.Max(0, (int)(DateTime.UtcNow - lastActivity).TotalSeconds))
             : string.Format(L["PipelineUpdatedMinutesAgo"].Value, Math.Max(1, (int)(DateTime.UtcNow - lastActivity).TotalMinutes));
 
+    private string TimeAgo(DateTime timestamp)
+    {
+        var elapsed = DateTime.UtcNow - timestamp;
+        if (elapsed < TimeSpan.FromMinutes(1))
+        {
+            var seconds = Math.Max(0, (int)elapsed.TotalSeconds);
+            return seconds == 0 ? L["PipelineJustNow"].Value : $"{seconds} {L["PipelineSecondsShort"].Value}";
+        }
+        if (elapsed < TimeSpan.FromHours(1))
+            return $"{(int)elapsed.TotalMinutes} {L["PipelineMinutesShort"].Value}";
+        return $"{(int)elapsed.TotalHours} {L["PipelineHoursShort"].Value}";
+    }
+
     private bool HasRecentSignal => Session.LastActivityAt is { } lastActivity
         && DateTime.UtcNow - lastActivity <= TimeSpan.FromSeconds(30);
     private bool IsLive => Session.Status == SessionStatus.WaitingForUser

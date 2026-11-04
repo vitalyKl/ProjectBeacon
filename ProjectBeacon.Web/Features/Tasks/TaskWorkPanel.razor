@@ -29,7 +29,7 @@
                     @foreach (var sub in PhaseSubtasks(open.Id))
                     {
                         <TaskSubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Pipeline?.Preflight"
-                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" />
+                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                     }
                 </div>
             }
@@ -68,6 +68,7 @@
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 
     private IEnumerable<SubtaskDto> PhaseSubtasks(Guid phaseId) =>
         Pipeline?.Subtasks.Where(s => s.TaskPhaseId == phaseId) ?? [];

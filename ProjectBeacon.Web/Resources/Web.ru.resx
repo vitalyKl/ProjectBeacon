@@ -2317,4 +2317,16 @@
   <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
     <value>Обновлено {0} мин назад</value>
   </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>сек</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>мин</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>ч</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>только что</value>
+  </data>
 </root>

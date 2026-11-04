@@ -152,7 +152,7 @@ else
                               Busy="_busy" Preflight="_pipeline?.Preflight" OnStartActorSession="OnStartActorSession"
                               OnReportResult="@(subtask => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))"
                               OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))"
-                              OnLaunchSession="OnLaunchSession" />
+                              OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
             </section>
         </main>
         <aside class="beacon-task-aside">

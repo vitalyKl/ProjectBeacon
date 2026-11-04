@@ -2525,4 +2525,16 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
     <value>Updated {0}m ago</value>
   </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>sec</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>min</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>hr</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
 </root>

@@ -2335,4 +2335,16 @@ orthstar</value>
   <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
     <value>{0} 分钟前更新</value>
   </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>秒</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>分</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>小时</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
 </root>

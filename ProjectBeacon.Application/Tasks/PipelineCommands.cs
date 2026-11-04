@@ -34,7 +34,8 @@ public record PipelineSessionDto(
     DateTime? LastActivityAt = null,
     string? FailureReason = null,
     bool CanLaunch = false,
-    string? LaunchBlockedReason = null);
+    string? LaunchBlockedReason = null,
+    bool HasExternalResult = false);
 
 /// <summary>A recorded review verdict for a task, optionally aimed at one subtask.</summary>
 public record ReviewVerdictDto(
