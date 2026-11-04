@@ -22,6 +22,12 @@
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
                        OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
         }
+        @if (session.Status is SessionStatus.Failed or SessionStatus.Closed)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
+                       OnClick="@(() => OnRetrySession.InvokeAsync(session))"
+                       Disabled="Busy">@L["RetrySession"]</MudButton>
+        }
         @if (session.Status == SessionStatus.Ready)
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
@@ -76,6 +82,7 @@
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 
     private string StatusLabel => Subtask.Status == SubtaskStatus.Done
