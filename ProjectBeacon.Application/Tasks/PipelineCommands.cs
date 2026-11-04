@@ -59,6 +59,13 @@ public record PipelineStateDto(
     string? StartBlockedReason = null,
     PipelinePreflightDto? Preflight = null);
 
+/// <summary>Server-computed availability of the native executor and role models.</summary>
+public record PipelinePreflightDto(
+    bool HasOnlineNativeWorkstation,
+    bool PlannerModelConfigured,
+    bool ActorModelConfigured,
+    bool ReviewModelConfigured);
+
 /// <summary>Identifies the task whose pipeline should start.</summary>
 public record StartPipelineRequest(Guid TaskId);
 
