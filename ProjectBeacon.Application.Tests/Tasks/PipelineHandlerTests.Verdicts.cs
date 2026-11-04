@@ -234,7 +234,8 @@ public sealed partial class PipelineHandlerTests
     public async Task LaunchSession_DoubleLaunch_Fails()
     {
         var (projectId, task) = await SeedTaskAsync("T");
-        var spawner = new FakeSpawner();
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var spawner = new FakeSpawner(backendId);
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var start = await new StartPipelineHandler(factory, spawner)
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);

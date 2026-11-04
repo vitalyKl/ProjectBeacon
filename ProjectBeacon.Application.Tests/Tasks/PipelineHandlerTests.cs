@@ -4,6 +4,7 @@ using Application.Persistence;
 using Application.Authorization;
 using Application.Devices;
 using Application.Tasks;
+using Domain.Entities.Agents;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
@@ -50,6 +51,36 @@ public sealed partial class PipelineHandlerTests : IDisposable
         }
     }
 
+    private async Task<Guid> SeedNativeRuntimeAsync(Guid projectId)
+    {
+        var user = User.Create("native", $"native-{Guid.NewGuid():N}@beacon.local", "hash");
+        var device = DaemonDevice.Create(
+            "native workstation",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash",
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        device.Heartbeat("{}", """{"agentRuntime":"native"}""");
+        var backend = LocalModelBackend.Create(
+            "native-test-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        var runtime = ProjectRuntime.Create(projectId, device.Id, "/workspace/native");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(user);
+            _db.DaemonDevices.Add(device);
+            _db.LocalModelBackends.Add(backend);
+            _db.ProjectRuntimes.Add(runtime);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        return backend.Id;
+    }
     private async Task ProveReviewAsync(Guid projectId, Guid taskId, BeaconDbFactory factory, int exitCode)
     {
         User user;
@@ -104,14 +135,14 @@ public sealed partial class PipelineHandlerTests : IDisposable
         return tenant;
     }
 
-    private sealed class FakeSpawner : ISessionSpawner
+    private sealed class FakeSpawner(Guid? modelBackendId = null) : ISessionSpawner
     {
         public List<(Guid ProjectId, PipelineRole Role)> Calls { get; } = [];
 
         public Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
         {
             Calls.Add((projectId, role));
-            return Task.FromResult(new SpawnedSession(null, null, null));
+            return Task.FromResult(new SpawnedSession(modelBackendId, null, null));
         }
     }
 

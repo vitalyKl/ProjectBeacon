@@ -39,7 +39,8 @@ public sealed partial class PipelineHandlerTests
     public async Task HappyPath_PlannerActorReviewApprove_ClosesTaskDone()
     {
         var (projectId, task) = await SeedTaskAsync("Ship the report", "Generate the monthly report");
-        var spawner = new FakeSpawner();
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var spawner = new FakeSpawner(backendId);
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
