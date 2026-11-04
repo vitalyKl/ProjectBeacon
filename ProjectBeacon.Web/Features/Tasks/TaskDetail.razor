@@ -133,15 +133,15 @@ else
                         <StatusChip Color="Color.Warning" Label="@L["WaitingForUser"]" />
                     }
                 </header>
-                @if (_pipeline?.Sessions.Any(s =>
-                    s.Role is PipelineRole.Planner or PipelineRole.Review
-                    && s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed) == true)
+                @if (_pipeline is { } activityPipeline && activityPipeline.Sessions.Any(s =>
+                    (s.Role is PipelineRole.Planner or PipelineRole.Review)
+                    && (s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed)))
                 {
                     <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-3">
                         <MudText Typo="Typo.subtitle1">@L["TaskCurrentActivity"]</MudText>
-                        @foreach (var session in _pipeline.Sessions
-                            .Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review
-                                && s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed)
+                        @foreach (var session in activityPipeline.Sessions
+                            .Where(s => (s.Role is PipelineRole.Planner or PipelineRole.Review)
+                                && (s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed))
                             .OrderByDescending(s => s.LastActivityAt ?? s.LaunchedAt))
                         {
                             <PipelineActivityPanel TaskId="TaskId" Session="session" />
