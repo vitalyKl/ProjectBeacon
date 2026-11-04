@@ -62,6 +62,8 @@ internal sealed class ChatSessionCompletion : ICommandCompletion
 
 internal sealed class PipelineSessionCompletion : ICommandCompletion
 {
+    private static string ClipFailureReason(string value) => value.Length <= 4000 ? value : value[..4000];
+
     public async Task ApplyAsync(IBeaconDb db, WorkstationCommand row, bool success, string? resultJson, string? error, CancellationToken ct)
     {
         if (row.Kind != WorkstationCommandKind.RunPipelineSession || row.ProjectId is not { } projectId)
@@ -98,7 +100,9 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(x => x.ExternalSessionId, externalSessionId)
                     .SetProperty(x => x.Status, SessionStatus.Closed)
-                    .SetProperty(x => x.ClosedAt, completedAt), ct);
+                    .SetProperty(x => x.ClosedAt, completedAt)
+                    .SetProperty(x => x.LastActivityAt, completedAt)
+                    .SetProperty(x => x.FailureReason, (string?)null), ct);
             return;
         }
 
@@ -111,7 +115,11 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
                 .Where(s => s.Id == failedId && s.ProjectId == projectId && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(x => x.Status, SessionStatus.Failed)
-                    .SetProperty(x => x.ClosedAt, now), ct);
+                    .SetProperty(x => x.ClosedAt, now)
+                    .SetProperty(x => x.LastActivityAt, now)
+                    .SetProperty(x => x.FailureReason, ClipFailureReason(success
+                        ? "Pipeline command completed without a usable external session id."
+                        : error ?? "Pipeline command failed.")), ct);
         }
     }
 }

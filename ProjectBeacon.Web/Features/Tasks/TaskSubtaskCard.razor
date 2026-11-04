@@ -17,22 +17,35 @@
     }
     @foreach (var session in Sessions)
     {
-        @if (session.Status == SessionStatus.Ready)
+        @if ((session.Status is SessionStatus.Failed or SessionStatus.Closed) && Subtask.Status != SubtaskStatus.Done && CanActOnSubtask)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
+                       OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
+        }
+        @if (session.Status == SessionStatus.Ready && CanActOnSubtask)
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
                        OnClick="@(() => OnLaunchSession.InvokeAsync(session))"
-                       Disabled="Busy">@L["LaunchSession"]</MudButton>
+                       Disabled="Busy || !CanLaunch(session)">@L["LaunchSession"]</MudButton>
+            @if (session.Status == SessionStatus.Ready && !CanLaunch(session))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session.Role)</MudText>
+            }
         }
         <PipelineActivityPanel TaskId="TaskId" Session="session" />
     }
-    @if (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress)
+    @if (CanActOnSubtask && (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress))
     {
         <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
-            @if (Subtask.Status == SubtaskStatus.Pending)
+            @if (Subtask.Status == SubtaskStatus.Pending && Sessions.Count == 0)
             {
                 <MudButton Size="Size.Small" Variant="Variant.Outlined"
                            OnClick="@(() => OnStartActorSession.InvokeAsync(Subtask))"
-                           Disabled="Busy">@L["StartActorSession"]</MudButton>
+                           Disabled="Busy || !CanStartActorSession">@L["StartActorSession"]</MudButton>
+                @if (!CanStartActorSession)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(PipelineRole.Actor)</MudText>
+                }
             }
             @if (Subtask.Status == SubtaskStatus.InProgress)
             {
@@ -52,10 +65,22 @@
     [Parameter, EditorRequired] public SubtaskDto Subtask { get; set; } = default!;
     [Parameter] public IReadOnlyList<PipelineSessionDto> Sessions { get; set; } = [];
     [Parameter] public bool Busy { get; set; }
+    [Parameter] public PipelinePreflightDto? Preflight { get; set; }
+    [Parameter] public TaskPipelineStage? PipelineStage { get; set; }
+
+    private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
+    private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
+    private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
+    private string PreflightMessage(PipelineRole role) => Preflight?.HasNativeWorkstation != true
+        ? L["PipelinePreflightNoNativeWorkstation"].Value
+        : Preflight.HasOnlineNativeWorkstation != true
+            ? L["PipelineNativeWorkstationOffline"].Value
+            : L["PipelinePreflightNoRoleModel"].Value;
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 
     private string StatusLabel => Subtask.Status == SubtaskStatus.Done
         ? L["SubtaskReported"].Value

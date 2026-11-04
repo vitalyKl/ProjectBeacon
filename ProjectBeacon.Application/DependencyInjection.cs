@@ -94,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<CreateSubtaskHandler>();
         services.AddTransient<StartActorSessionHandler>();
         services.AddTransient<LaunchSessionHandler>();
+        services.AddTransient<RetryPipelineSessionHandler>();
         services.AddTransient<ReportSubtaskResultHandler>();
         services.AddTransient<FailSubtaskHandler>();
         services.AddTransient<StartReviewHandler>();
@@ -101,6 +102,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RecordReviewCheckHandler>();
         services.AddTransient<ApprovePipelineHandler>();
         services.AddTransient<ForceClosePipelineHandler>();
+        services.AddTransient<GetLivePipelineTaskHandler>();
         services.AddTransient<GetPipelineHandler>();
         // Minimal API and Blazor inject these handlers by concrete type.
         services.AddTransient<ReplyPipelineFormHandler>();

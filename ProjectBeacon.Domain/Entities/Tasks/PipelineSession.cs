@@ -23,6 +23,8 @@ public class PipelineSession : Entity, IProjectScoped
     /// <summary>Latest bounded activity snapshot reported by the workstation while this session runs.</summary>
     public string ActivityJson { get; private set; } = "{}";
     public DateTime? LaunchedAt { get; private set; }
+    public DateTime? LastActivityAt { get; private set; }
+    public string? FailureReason { get; private set; }
     public DateTime? ClosedAt { get; private set; }
 
     public TaskItem Task { get; private set; } = null!;
@@ -58,7 +60,9 @@ public class PipelineSession : Entity, IProjectScoped
         Status = SessionStatus.Active;
         if (externalSessionId is not null)
             ExternalSessionId = externalSessionId;
-        LaunchedAt = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+        LaunchedAt = now;
+        LastActivityAt = now;
     }
 
     public void UpdateActivity(string activityJson, bool waitingForUser)
@@ -68,6 +72,8 @@ public class PipelineSession : Entity, IProjectScoped
         if (string.IsNullOrWhiteSpace(activityJson) || activityJson.Length > 262144)
             throw new ArgumentException("Activity snapshot must be a non-empty JSON payload of at most 256 KiB.", nameof(activityJson));
         ActivityJson = activityJson;
+        LastActivityAt = DateTime.UtcNow;
+        FailureReason = null;
         Status = waitingForUser ? SessionStatus.WaitingForUser : SessionStatus.Active;
     }
 
@@ -77,13 +83,16 @@ public class PipelineSession : Entity, IProjectScoped
             throw new InvalidOperationException($"Cannot close session in status {Status}");
         Status = SessionStatus.Closed;
         ClosedAt = DateTime.UtcNow;
+        LastActivityAt = ClosedAt;
     }
 
-    public void Fail()
+    public void Fail(string? reason = null)
     {
         if (Status is not (SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser))
             throw new InvalidOperationException($"Cannot fail session in status {Status}");
         Status = SessionStatus.Failed;
+        FailureReason = string.IsNullOrWhiteSpace(reason) ? "Pipeline session failed." : reason.Trim();
         ClosedAt = DateTime.UtcNow;
+        LastActivityAt = ClosedAt;
     }
 }

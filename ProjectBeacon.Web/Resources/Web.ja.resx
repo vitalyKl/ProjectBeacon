@@ -2308,4 +2308,58 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>ツール名は mcp_&lt;server&gt;_&lt;tool&gt; 形式で公開されます。タスクパイプラインで使用するには、Actor サブタスクの Allowed MCP Tools に正確な名前または mcp_&lt;server&gt;_* を追加してください。</value>
   </data>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>現在のアクティビティ</value>
+  </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>このプロジェクトにネイティブ実行環境のワークステーションが割り当てられていません。</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>プロジェクトのネイティブワークステーションはオフラインです。</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>Planner ロールのモデルが設定されていません。</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>設定された Planner モデルは存在しません。</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>このセッションロールのモデルが設定されていません。</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>このセッションに設定されたモデルは存在しません。</value>
+  </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>{0} 秒前に更新</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>{0} 分前に更新</value>
+  </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>秒</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>分</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>時間</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>たった今</value>
+  </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>このプロジェクトにオンラインのネイティブ実行環境が割り当てられていません。AgentRuntime=native に設定し、ワークステーションをオンラインにしてください。</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>Planner ロールのモデルが設定されていません。Understand フェーズまたは Planner ロールのバインドを設定してください。</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>このパイプラインロールのモデルが設定されていません。対応するフェーズまたはロールのバインドを設定してください。</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>セッションを再試行</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>最近の信号なし</value>
+  </data>
 </root>

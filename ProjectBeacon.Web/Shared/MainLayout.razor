@@ -20,7 +20,7 @@
 @inject TenantContextBinder TenantBinder
 @inject GetCurrentProjectHandler CurrentProject
 @inject ListDevicesHandler Devices
-@inject ListTasksByStatusHandler TasksByStatus
+@inject GetLivePipelineTaskHandler LivePipeline
 @inject IJSRuntime JS
 @inject BeaconThemeState Theme
 
@@ -354,10 +354,10 @@
 
         if (project.Value?.Id is Guid projectId)
         {
-            var running = await TasksByStatus.HandleAsync(
-                new ListTasksByStatusCommand(new ListTasksByStatusRequest(projectId, "InProgress")));
-            if (running.Success && running.Value is { Count: > 0 })
-                _pipelineHref = $"/task/{running.Value[0].Id}";
+            var livePipeline = await LivePipeline.HandleAsync(
+                new GetLivePipelineTaskCommand(new GetLivePipelineTaskRequest(projectId)));
+            if (livePipeline.Success && livePipeline.Value is Guid liveTaskId)
+                _pipelineHref = $"/task/{liveTaskId}";
         }
     }
 

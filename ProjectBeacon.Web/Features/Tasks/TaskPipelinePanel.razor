@@ -2,8 +2,14 @@
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 
-<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-    <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-pipeline-timeline mt-3">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+        <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
+        @if (Pipeline?.Stage is { } headerStage)
+        {
+            <StatusChip Color="Color.Info" Label="@StageLabel(headerStage)" />
+        }
+    </MudStack>
     @if (Pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
     {
         @if (pipeline.Stage == TaskPipelineStage.Closed)
@@ -12,11 +18,11 @@
         }
 
         <MudText Typo="Typo.subtitle2" Class="mt-2">@L["Sessions"]</MudText>
-        @if (pipeline.Sessions.Count == 0)
+        @if (!pipeline.Sessions.Any(s => s.Role is PipelineRole.Planner or PipelineRole.Review))
         {
             <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
         }
-        @foreach (var session in pipeline.Sessions)
+        @foreach (var session in pipeline.Sessions.Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review))
         {
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
@@ -29,19 +35,27 @@
                 {
                     <MudText Typo="Typo.caption">@L["Closed"]: <LocalTime Value="session.ClosedAt" Format="d" /></MudText>
                 }
-                @if (session.Status == SessionStatus.Ready)
+                @if (CanRetry(session))
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy">@L["LaunchSession"]</MudButton>
-                    <MudText Typo="Typo.caption">@L["LaunchSessionHint"]</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))"
+                               Disabled="Busy || !CanRunRole(session.Role)">@L["RetrySession"]</MudButton>
+                    @if (!CanRunRole(session.Role))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session)</MudText>
+                    }
+                }
+                @if (session.Status == SessionStatus.Ready && IsCurrentStage(session))
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy || !CanLaunch(session)">@L["LaunchSession"]</MudButton>
+                    @if (!CanLaunch(session))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session)</MudText>
+                    }
                 }
             </MudStack>
             @if (!string.IsNullOrEmpty(session.LaunchSpec))
             {
                 <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
-            }
-            @if (session.Role is PipelineRole.Planner or PipelineRole.Review)
-            {
-                <PipelineActivityPanel TaskId="pipeline.TaskId" Session="session" />
             }
         }
 
@@ -59,21 +73,62 @@
             </MudStack>
         }
     }
-    else
-    {
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-3 beacon-task-start-prompt">
-            <MudText Typo="Typo.body2">@L["PipelineNotStarted"]</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
-                       OnClick="OnStart" Disabled="Busy" Class="mt-3">@L["StartPipeline"]</MudButton>
-        </MudAlert>
-    }
 </MudPaper>
 
 @code {
     [Parameter] public PipelineStateDto? Pipeline { get; set; }
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
-    [Parameter] public EventCallback OnStart { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
+    private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
+
+    private bool IsCurrentStage(PipelineSessionDto session) => session.Role switch
+    {
+        PipelineRole.Planner => Pipeline?.Stage == TaskPipelineStage.Planning,
+        PipelineRole.Review => Pipeline?.Stage == TaskPipelineStage.Reviewing,
+        _ => false
+    };
+
+    private bool CanRetry(PipelineSessionDto session) =>
+        (session.Status is SessionStatus.Failed or SessionStatus.Closed)
+        && (session.Role switch
+        {
+            PipelineRole.Planner => Pipeline?.Stage == TaskPipelineStage.Planning,
+            PipelineRole.Review => Pipeline?.Stage == TaskPipelineStage.Reviewing,
+            _ => false
+        });
+
+    private bool CanRunRole(PipelineRole role)
+    {
+        var preflight = Pipeline?.Preflight;
+        if (preflight?.HasOnlineNativeWorkstation != true) return false;
+        return role switch
+        {
+            PipelineRole.Planner => preflight.PlannerModelConfigured,
+            PipelineRole.Actor => preflight.ActorModelConfigured,
+            PipelineRole.Review => preflight.ReviewModelConfigured,
+            _ => false
+        };
+    }
+
+    private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
+        ? L[reason].Value
+        : Pipeline?.Preflight?.HasNativeWorkstation != true
+            ? L["PipelinePreflightNoNativeWorkstation"].Value
+            : Pipeline.Preflight.HasOnlineNativeWorkstation != true
+                ? L["PipelineNativeWorkstationOffline"].Value
+                : L["PipelinePreflightNoRoleModel"].Value;
+
+    private string StageLabel(TaskPipelineStage stage) => stage switch
+    {
+        TaskPipelineStage.Planning => L["StagePlanning"].Value,
+        TaskPipelineStage.Executing => L["StageExecuting"].Value,
+        TaskPipelineStage.ReopenedForRevision => L["StageReopenedForRevision"].Value,
+        TaskPipelineStage.Reviewing => L["StageReviewing"].Value,
+        TaskPipelineStage.Approved => L["StageApproved"].Value,
+        TaskPipelineStage.Closed => L["Closed"].Value,
+        _ => L["PipelineNotStarted"].Value
+    };
 
     private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
 

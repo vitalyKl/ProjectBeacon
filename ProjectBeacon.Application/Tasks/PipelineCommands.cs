@@ -30,7 +30,12 @@ public record PipelineSessionDto(
     string PromptContext,
     DateTime? LaunchedAt,
     DateTime? ClosedAt,
-    string ActivityJson = "{}");
+    string ActivityJson = "{}",
+    DateTime? LastActivityAt = null,
+    string? FailureReason = null,
+    bool CanLaunch = false,
+    string? LaunchBlockedReason = null,
+    bool HasExternalResult = false);
 
 /// <summary>A recorded review verdict for a task, optionally aimed at one subtask.</summary>
 public record ReviewVerdictDto(
@@ -50,7 +55,22 @@ public record PipelineStateDto(
     string? ReviewNotes,
     IReadOnlyList<SubtaskDto> Subtasks,
     IReadOnlyList<PipelineSessionDto> Sessions,
-    IReadOnlyList<ReviewVerdictDto> Verdicts);
+    IReadOnlyList<ReviewVerdictDto> Verdicts,
+    bool CanStart = false,
+    string? StartBlockedReason = null,
+    PipelinePreflightDto? Preflight = null);
+
+/// <summary>Server-computed availability of the native executor and role models.</summary>
+public record PipelinePreflightDto(
+    bool HasNativeWorkstation,
+    bool HasOnlineNativeWorkstation,
+    bool PlannerModelConfigured,
+    bool ActorModelConfigured,
+    bool ReviewModelConfigured);
+
+/// <summary>Finds the most recently active pipeline for the current project.</summary>
+public record GetLivePipelineTaskRequest(Guid ProjectId);
+public record GetLivePipelineTaskCommand(GetLivePipelineTaskRequest Request) : ICommand<Result<Guid?>>;
 
 /// <summary>Identifies the task whose pipeline should start.</summary>
 public record StartPipelineRequest(Guid TaskId);
@@ -79,6 +99,12 @@ public record LaunchSessionRequest(Guid SessionId);
 
 /// <summary>Launches an existing pipeline session.</summary>
 public record LaunchSessionCommand(LaunchSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
+
+/// <summary>Identifies a failed or closed session attempt to retry.</summary>
+public record RetryPipelineSessionRequest(Guid SessionId);
+
+/// <summary>Creates a new attempt using the original session prompt and role.</summary>
+public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Diff reference and summary reported for a subtask.</summary>
 public record ReportSubtaskResultRequest(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary);

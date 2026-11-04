@@ -94,4 +94,90 @@ public sealed partial class PipelineHandlerTests
                     TestContext.Current.CancellationToken));
         }
     }
+
+    [Fact]
+    public async Task LaunchSession_WithoutNativeRuntime_FailsAndLeavesSessionReady()
+    {
+        var (projectId, task) = await SeedTaskAsync("Pipeline without native runtime");
+        var session = PipelineSession.Create(
+            task.Id,
+            projectId,
+            PipelineRole.Planner,
+            "Planner prompt",
+            modelBackendId: Guid.NewGuid());
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.PipelineSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var launched = await new LaunchSessionHandler(factory).HandleAsync(
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(launched.Success);
+        Assert.Contains("No native pipeline workstation", launched.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.PipelineSessions.AsNoTracking()
+                .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SessionStatus.Ready, persisted.Status);
+            Assert.Null(persisted.LaunchedAt);
+            Assert.Empty(await _db.WorkstationCommands.AsNoTracking()
+                .Where(c => c.Kind == WorkstationCommandKind.RunPipelineSession)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
+    public async Task LaunchSession_LegacyWorkstationWithoutRuntimeField_UsesNativeDefault()
+    {
+        var (projectId, task) = await SeedTaskAsync("Legacy native workstation");
+        var user = User.Create("legacy", $"legacy-{Guid.NewGuid():N}@beacon.local", "hash");
+        var device = DaemonDevice.Create(
+            "legacy workstation",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash",
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        device.Heartbeat("{}", "{}");
+        var backend = LocalModelBackend.Create(
+            "legacy-test-model",
+            ModelBackendType.LlamaCpp,
+            "llama-server -m model.gguf",
+            8192,
+            60,
+            user.Id);
+        var runtime = ProjectRuntime.Create(projectId, device.Id, "/workspace/legacy");
+        var session = PipelineSession.Create(
+            task.Id, projectId, PipelineRole.Planner, "Planner prompt", modelBackendId: backend.Id);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(user);
+            _db.DaemonDevices.Add(device);
+            _db.LocalModelBackends.Add(backend);
+            _db.ProjectRuntimes.Add(runtime);
+            _db.PipelineSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var launched = await new LaunchSessionHandler(factory).HandleAsync(
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(launched.Success, launched.Error);
+        Assert.Equal(SessionStatus.Active, launched.Value!.Status);
+        using (TenantScope.EnterUnscoped())
+        {
+            Assert.Equal(1, await _db.WorkstationCommands.AsNoTracking()
+                .CountAsync(c => c.Kind == WorkstationCommandKind.RunPipelineSession
+                    && c.ProjectId == projectId && c.DeviceId == device.Id,
+                    TestContext.Current.CancellationToken));
+        }
+    }
+
 }

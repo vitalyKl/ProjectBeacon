@@ -19,9 +19,17 @@
                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
                 }
                 <span class="beacon-pipeline-activity-summary">@ActivityLabel</span>
+                @if (Session.LastActivityAt is not null)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@LastActivityLabel</MudText>
+                }
             </div>
         </TitleContent>
         <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(Session.FailureReason))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mb-2">@Session.FailureReason</MudAlert>
+            }
             @if (!string.IsNullOrWhiteSpace(ActivityLabel))
             {
                 <MudText Typo="Typo.body2" Class="beacon-pipeline-activity-current">@ActivityLabel</MudText>
@@ -60,12 +68,37 @@
     private List<ChatPartDto> Forms { get; set; } = [];
     private string SnapshotKey { get; set; } = string.Empty;
 
+    private string LastActivityLabel => Session.LastActivityAt is not { } lastActivity
+        ? string.Empty
+        : (DateTime.UtcNow - lastActivity) < TimeSpan.FromMinutes(1)
+            ? string.Format(L["PipelineUpdatedSecondsAgo"].Value, Math.Max(0, (int)(DateTime.UtcNow - lastActivity).TotalSeconds))
+            : string.Format(L["PipelineUpdatedMinutesAgo"].Value, Math.Max(1, (int)(DateTime.UtcNow - lastActivity).TotalMinutes));
+
+    private string TimeAgo(DateTime timestamp)
+    {
+        var elapsed = DateTime.UtcNow - timestamp;
+        if (elapsed < TimeSpan.FromMinutes(1))
+        {
+            var seconds = Math.Max(0, (int)elapsed.TotalSeconds);
+            return seconds == 0 ? L["PipelineJustNow"].Value : $"{seconds} {L["PipelineSecondsShort"].Value}";
+        }
+        if (elapsed < TimeSpan.FromHours(1))
+            return $"{(int)elapsed.TotalMinutes} {L["PipelineMinutesShort"].Value}";
+        return $"{(int)elapsed.TotalHours} {L["PipelineHoursShort"].Value}";
+    }
+
+    private bool HasRecentSignal => Session.LastActivityAt is { } lastActivity
+        && DateTime.UtcNow - lastActivity <= TimeSpan.FromSeconds(30);
     private bool IsLive => Session.Status == SessionStatus.WaitingForUser
-        || (Session.Status == SessionStatus.Active && _state is not ("completed" or "failed"));
-    private bool IsWorking => Session.Status == SessionStatus.Active
+        || (Session.Status == SessionStatus.Active && HasRecentSignal && _state is not ("completed" or "failed"));
+    private bool IsWorking => Session.Status == SessionStatus.Active && HasRecentSignal
         && _state is not ("completed" or "failed" or "waiting-for-user");
-    private string ActivityLabel => !string.IsNullOrWhiteSpace(_activity)
-        ? _activity
+    private string ActivityLabel => !string.IsNullOrWhiteSpace(Session.FailureReason)
+        ? Session.FailureReason
+        : Session.Status == SessionStatus.Active && !HasRecentSignal
+            ? L["PipelineNoRecentSignal"].Value
+            : !string.IsNullOrWhiteSpace(_activity)
+                ? _activity
         : _state switch
         {
             "waiting-for-user" => L["PipelineWaitingForUser"].Value,
@@ -80,12 +113,14 @@
     {
         SessionStatus.WaitingForUser => L["WaitingForUser"].Value,
         SessionStatus.Active when _state == "completed" => L["PipelineActivityCompleted"].Value,
+        SessionStatus.Active when !HasRecentSignal => L["PipelineNoRecentSignal"].Value,
         SessionStatus.Active when _state == "failed" => L["PipelineActivityFailed"].Value,
         _ => L[Session.Status.ToString()].Value
     };
 
     private Color StatusColor => Session.Status switch
     {
+        SessionStatus.Active when !HasRecentSignal => Color.Warning,
         SessionStatus.Active when _state == "failed" => Color.Error,
         SessionStatus.Active when _state == "completed" => Color.Success,
         SessionStatus.Active => Color.Info,

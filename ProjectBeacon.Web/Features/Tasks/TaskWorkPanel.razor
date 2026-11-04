@@ -28,8 +28,8 @@
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @ModelName(open.ModelBackendId)</MudText>
                     @foreach (var sub in PhaseSubtasks(open.Id))
                     {
-                        <TaskSubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy"
-                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" />
+                        <TaskSubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
+                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                     }
                 </div>
             }
@@ -40,8 +40,8 @@
                 <MudText Typo="Typo.subtitle2" Class="mb-2">@L["UnassignedSubtasks"]</MudText>
                 @foreach (var sub in pipeline.Subtasks.Where(s => s.TaskPhaseId is null))
                 {
-                    <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy"
-                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" />
+                    <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
+                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                 }
             }
         }
@@ -49,9 +49,9 @@
         {
             @foreach (var sub in pipeline.Subtasks)
             {
-                <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy"
+                <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
                                  OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult"
-                                 OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" />
+                                 OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
             }
         }
     </MudPaper>
@@ -63,10 +63,12 @@
     [Parameter] public PipelineStateDto? Pipeline { get; set; }
     [Parameter] public EventCallback<Guid> OnToggle { get; set; }
     [Parameter] public bool Busy { get; set; }
+    [Parameter] public PipelinePreflightDto? Preflight { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 
     private IEnumerable<SubtaskDto> PhaseSubtasks(Guid phaseId) =>
         Pipeline?.Subtasks.Where(s => s.TaskPhaseId == phaseId) ?? [];

@@ -6,9 +6,11 @@ using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Agents;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 
 public sealed partial class PipelineHandlerTests
@@ -39,7 +41,8 @@ public sealed partial class PipelineHandlerTests
     public async Task HappyPath_PlannerActorReviewApprove_ClosesTaskDone()
     {
         var (projectId, task) = await SeedTaskAsync("Ship the report", "Generate the monthly report");
-        var spawner = new FakeSpawner();
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var spawner = new FakeSpawner(backendId);
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
@@ -212,4 +215,96 @@ public sealed partial class PipelineHandlerTests
         Assert.DoesNotContain("--no-reasoning-preserve", actor.Value.LaunchSpec);
         Assert.DoesNotContain("--ctx-size", actor.Value.LaunchSpec);
     }
+
+    [Fact]
+    public async Task RetrySession_CreatesNewAttemptAndPreservesFailedHistory()
+    {
+        var (projectId, task) = await SeedTaskAsync("Retry planner");
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner(backendId);
+        var started = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        Assert.True(started.Success, started.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var failed = await _db.PipelineSessions.SingleAsync(
+                s => s.Id == started.Value!.Id, TestContext.Current.CancellationToken);
+            failed.Fail("native agent crashed");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var retried = await new RetryPipelineSessionHandler(factory, spawner)
+            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(started.Value!.Id)),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(retried.Success, retried.Error);
+        Assert.NotEqual(started.Value.Id, retried.Value!.Id);
+        Assert.Equal(SessionStatus.Ready, retried.Value.Status);
+        Assert.Equal(PipelineRole.Planner, retried.Value.Role);
+        Assert.Equal(backendId, retried.Value.ModelBackendId);
+        Assert.Equal(started.Value.PromptContext, retried.Value.PromptContext);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var attempts = await _db.PipelineSessions.AsNoTracking()
+                .Where(s => s.TaskId == task.Id)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, attempts.Count);
+            var failedAttempt = Assert.Single(attempts, s => s.Status == SessionStatus.Failed);
+            Assert.Equal("native agent crashed", failedAttempt.FailureReason);
+            Assert.Single(attempts, s => s.Status == SessionStatus.Ready);
+        }
+    }
+
+    [Fact]
+    public async Task RetryFailedActorSession_ReopensFailedSubtaskAndStartsNewAttempt()
+    {
+        var (projectId, task) = await SeedTaskAsync("Retry failed actor");
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner(backendId);
+
+        var planner = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        Assert.True(planner.Success, planner.Error);
+        var subtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Implement the change")), TestContext.Current.CancellationToken);
+        Assert.True(subtask.Success, subtask.Error);
+        var actor = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(actor.Success, actor.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var failedSession = await _db.PipelineSessions.SingleAsync(
+                s => s.Id == actor.Value!.Id, TestContext.Current.CancellationToken);
+            failedSession.Fail("actor crashed");
+            var failedSubtask = await _db.Subtasks.SingleAsync(
+                s => s.Id == subtask.Value.Id, TestContext.Current.CancellationToken);
+            failedSubtask.Fail("actor crashed");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var retried = await new RetryPipelineSessionHandler(factory, spawner)
+            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(actor.Value!.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.True(retried.Success, retried.Error);
+        Assert.Equal(PipelineRole.Actor, retried.Value!.Role);
+        Assert.Equal(subtask.Value.Id, retried.Value.SubtaskId);
+        Assert.Equal(backendId, retried.Value.ModelBackendId);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.Subtasks.AsNoTracking().SingleAsync(
+                s => s.Id == subtask.Value.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.InProgress, persisted.Status);
+            Assert.Null(persisted.Summary);
+            Assert.Null(persisted.DiffRef);
+            Assert.Equal(0, persisted.ReopenCount);
+        }
+    }
+
+
 }

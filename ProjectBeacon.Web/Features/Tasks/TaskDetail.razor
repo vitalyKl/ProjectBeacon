@@ -17,6 +17,7 @@
 @inject StartPipelineHandler StartPipeline
 @inject StartActorSessionHandler StartActorSession
 @inject LaunchSessionHandler LaunchSession
+@inject RetryPipelineSessionHandler RetrySession
 @inject StartReviewHandler StartReview
 @inject ListTaskStepsHandler ListSteps
 @inject ListTaskPhasesHandler ListPhases
@@ -61,18 +62,23 @@ else
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                            StartIcon="@Icons.Material.Filled.PlayArrow"
-                           OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
+                           OnClick="OnStartPipeline" Disabled="_busy || !CanStartPlanner">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
+                @if (!CanStartPlanner)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
+                }
             }
             else
             {
                 @switch (_pipeline.Stage)
                 {
-                    case TaskPipelineStage.Planning:
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
-                        break;
                     case TaskPipelineStage.Executing:
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy">@L["StartReview"]</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy || !CanStartReview">@L["StartReview"]</MudButton>
+                        @if (!CanStartReview)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Warning">@ReviewPreflightMessage</MudText>
+                        }
                         break;
                     case TaskPipelineStage.Reviewing:
                         <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ReviewApprove))" Disabled="_busy">@L["Approve"]</MudButton>
@@ -84,36 +90,6 @@ else
             }
         </div>
     </header>
-    @if (_pipeline?.Stage is { } railStage && railStage != TaskPipelineStage.None)
-    {
-        <section class="beacon-task-strip">
-            <PbPipelineRail Labels="@StageLabels" CurrentIndex="@StageIndex(railStage)" Warning="@(railStage == TaskPipelineStage.ReopenedForRevision)" />
-            <div class="beacon-relation">
-                <div>
-                    <small>@L["Status"]</small>
-                    <strong>@ChromeLabels.Status(L, _task.Status)</strong>
-                </div>
-                <div>
-                    <small>@L["Pipeline"]</small>
-                    <strong>@PipelineStageLabel(railStage)</strong>
-                </div>
-                <div>
-                    <small>@L["Sessions"]</small>
-                    <strong>@_pipeline.Sessions.Count</strong>
-                </div>
-                <div>
-                    <small>@L["TaskSteps"]</small>
-                    <strong>@_steps.Count(s => s.IsDone)/@_steps.Count</strong>
-                </div>
-            </div>
-        </section>
-    }
-    @if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
-    {
-        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3" Icon="@Icons.Material.Filled.PanTool">
-            @L["PipelineWaitingForUser"]
-        </MudAlert>
-    }
     <div class="beacon-task-grid">
         <main class="beacon-task-main">
             <section class="beacon-task-workflow">
@@ -124,26 +100,41 @@ else
                         <StatusChip Color="Color.Warning" Label="@L["WaitingForUser"]" />
                     }
                 </header>
+                @if (_pipeline is { } activityPipeline && activityPipeline.Sessions.Any(s =>
+                    (s.Role is PipelineRole.Planner or PipelineRole.Review)
+                    && (s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed)))
+                {
+                    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-3">
+                        <MudText Typo="Typo.subtitle1">@L["TaskCurrentActivity"]</MudText>
+                        @foreach (var session in activityPipeline.Sessions
+                            .Where(s => (s.Role is PipelineRole.Planner or PipelineRole.Review)
+                                && (s.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser or SessionStatus.Failed))
+                            .OrderByDescending(s => s.LastActivityAt ?? s.LaunchedAt))
+                        {
+                            <PipelineActivityPanel TaskId="TaskId" Session="session" />
+                            @if (session.Status == SessionStatus.Failed)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetrySession(session))" Disabled="_busy">@L["RetrySession"]</MudButton>
+                            }
+                        }
+                    </MudPaper>
+                }
                 <TaskWorkPanel Phases="_phases" OpenPhaseId="_openPhaseId" Pipeline="_pipeline" OnToggle="TogglePhase"
-                              Busy="_busy" OnStartActorSession="OnStartActorSession"
+                              Busy="_busy" Preflight="_pipeline?.Preflight" OnStartActorSession="OnStartActorSession"
                               OnReportResult="@(subtask => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))"
                               OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))"
-                              OnLaunchSession="OnLaunchSession" />
+                              OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
+                @if (_pipeline?.Stage is not null && _pipeline.Stage != TaskPipelineStage.None)
+                {
+                    <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" />
+                }
             </section>
         </main>
         <aside class="beacon-task-aside">
     
-                <div class="beacon-next-action @NextTone">
-                    <strong>@L["NextStep"]</strong>
-                    <span>@NextStepText</span>
-                    @if (_pipeline?.Stage == TaskPipelineStage.Reviewing)
-                    {
-                        <span>@L["ReviewSeparate"]</span>
-                    }
-                </div>
                 <section class="beacon-panel beacon-surface-section">
                     <div class="beacon-ops-pad">
-                        @if (_pipeline?.Stage == TaskPipelineStage.Executing)
+                        @if (_pipeline?.Stage is TaskPipelineStage.Planning or TaskPipelineStage.Executing)
                         {
                             <MudButton Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
                         }
@@ -170,11 +161,6 @@ else
                                 <MudSelectItem Value="status">@ChromeLabels.Status(L, status)</MudSelectItem>
                             }
                         </MudSelect>
-                        @if (_task.Status == "InProgress" && _task.SubStage.HasValue)
-                        {
-                            <MudProgressLinear Value="@(SubStageToPercent(_task.SubStage.Value))" Color="Color.Default" Class="mt-3 beacon-track" />
-                            <MudText Typo="Typo.body2" Class="mt-1">@ChromeLabels.SubStage(L, _task.SubStage)</MudText>
-                        }
                         @if (_task.Status == "Done" && _task.CompletedAt.HasValue)
                         {
                             <MudText Typo="Typo.body2" Class="mt-2">@L["Done"] <LocalTime Value="_task.CompletedAt" Format="d" /></MudText>
@@ -204,13 +190,10 @@ else
                         }
                     </div>
                 </section>
+                <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
         </aside>
     </div>
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
-    <MudTabPanel Text="@L["Pipeline"]">
-        <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnStart="OnStartPipeline" />
-        <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
-    </MudTabPanel>
     <MudTabPanel Text="@L["Discussion"]">
         <TaskDiscussionPanel Task="_task" OnSaved="Reload" />
     </MudTabPanel>
@@ -221,11 +204,6 @@ else
 }
 
 @code {
-    private static readonly string[] StageChips = { "StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed" };
-    private string[] StageLabels => StageChips.Select((key, i) =>
-        _pipeline?.Stage == TaskPipelineStage.ReopenedForRevision && i == 1
-            ? L["StageReopenedForRevision"].Value
-            : L[key].Value).ToArray();
     private static readonly TaskItemStatus[] StatusOptions = Enum.GetValues<TaskItemStatus>();
 
     [Parameter] public Guid TaskId { get; set; }
@@ -236,6 +214,16 @@ else
     private PipelineStateDto? _pipeline;
     private bool _busy;
     private bool _isAdmin;
+    private bool CanStartPlanner => _pipeline?.CanStart == true;
+    private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
+    private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
+        ? L["PipelinePreflightNoNativeWorkstation"].Value
+        : _pipeline.Preflight.HasOnlineNativeWorkstation != true
+            ? L["PipelineNativeWorkstationOffline"].Value
+            : L["PipelinePreflightNoRoleModel"].Value;
+    private string PlannerPreflightMessage => string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
+        ? L["PipelinePreflightNoPlannerModel"].Value
+        : L[_pipeline.StartBlockedReason].Value;
     private string? _userId;
 
     private List<LabelDto> _labels = [];
@@ -245,7 +233,11 @@ else
     private Guid? _openPhaseId;
     private string _stepTitle = string.Empty;
 
-    private string HeroStateClass => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+    private bool HasStaleActiveSession => _pipeline?.Sessions.Any(session =>
+        session.Status == SessionStatus.Active
+        && (session.LastActivityAt is not { } lastActivity || DateTime.UtcNow - lastActivity > TimeSpan.FromSeconds(30))) == true;
+
+    private string HeroStateClass => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true || HasStaleActiveSession
         ? "is-warning"
         : _pipeline?.Stage switch
     {
@@ -260,58 +252,47 @@ else
         }
     };
 
-    private string HeroStateLabel =>
-        _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
-            ? L["WaitingForUser"].Value
-            : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
-                ? PipelineStageLabel(stage)
-                : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
-
-    private static string SessionStateClass(SessionStatus status) => status switch
-    {
-        SessionStatus.Active => "is-info",
-        SessionStatus.WaitingForUser => "is-warning",
-        SessionStatus.Failed => "is-danger",
-        SessionStatus.Closed => "is-success",
-        _ => ""
-    };
-
-    private static string SubtaskStateClass(SubtaskStatus status) => status switch
-    {
-        SubtaskStatus.InProgress => "is-info",
-        SubtaskStatus.Done => "is-success",
-        SubtaskStatus.Failed => "is-danger",
-        _ => ""
-    };
-
-    private string NextTone => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
-        ? "is-warning"
-        : _pipeline?.Stage switch
-    {
-        TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
-        TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
-        TaskPipelineStage.Executing => "is-info",
-        _ => ""
-    };
-
-    private string NextStepText
+    private string HeroStateLabel
     {
         get
         {
-            if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
-                return L["PipelineWaitingForUser"].Value;
-            if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
-                return L["NextStepTodo"].Value;
-            return _pipeline.Stage switch
+            if (_pipeline?.Sessions.Any(s => s.Status == SessionStatus.WaitingForUser) == true)
+                return L["WaitingForUser"].Value;
+
+            var current = _pipeline?.Sessions
+                .Where(s => s.Status is SessionStatus.Active or SessionStatus.Ready or SessionStatus.Failed)
+                .OrderByDescending(s => s.LastActivityAt ?? s.LaunchedAt)
+                .FirstOrDefault();
+            if (current is not null)
             {
-                TaskPipelineStage.Planning => L["NextStepCreateSubtask"].Value,
-                TaskPipelineStage.Executing => L["NextStepCreateSubtask"].Value,
-                TaskPipelineStage.Reviewing => L["Approve"].Value,
-                TaskPipelineStage.Approved => L["ConfirmClose"].Value,
-                _ => L["NextStepTodo"].Value
-            };
+                var role = SessionRoleLabel(current.Role);
+                if (current.Status == SessionStatus.Ready)
+                    return $"{role} · {L["PipelineActivityReady"].Value}";
+                if (current.Status == SessionStatus.Failed)
+                    return $"{role} · {L["PipelineActivityFailed"].Value}";
+                if (current.LastActivityAt is not { } lastActivity || DateTime.UtcNow - lastActivity > TimeSpan.FromSeconds(30))
+                    return $"{role} · {L["PipelineNoRecentSignal"].Value}";
+
+                var age = DateTime.UtcNow - lastActivity;
+                var updated = age < TimeSpan.FromMinutes(1)
+                    ? string.Format(L["PipelineUpdatedSecondsAgo"].Value, Math.Max(0, (int)age.TotalSeconds))
+                    : string.Format(L["PipelineUpdatedMinutesAgo"].Value, Math.Max(1, (int)age.TotalMinutes));
+                return $"{role} · {updated}";
+            }
+
+            return _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
+                ? PipelineStageLabel(stage)
+                : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
         }
     }
+
+    private string SessionRoleLabel(PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => L["RoleBindingPlanner"].Value,
+        PipelineRole.Actor => L["RoleBindingActor"].Value,
+        PipelineRole.Review => L["Review"].Value,
+        _ => role.ToString()
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -336,8 +317,7 @@ else
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
-                if (_pipeline?.Sessions.Any(session =>
-                    session.Status is SessionStatus.Active or SessionStatus.WaitingForUser) != true)
+                if (_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed)
                     continue;
                 try
                 {
@@ -486,29 +466,29 @@ else
         await ReloadSteps();
     }
 
-    private static int StageIndex(TaskPipelineStage? stage) => stage switch
-    {
-        TaskPipelineStage.Planning => 0,
-        TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision => 1,
-        TaskPipelineStage.Reviewing => 2,
-        TaskPipelineStage.Approved => 3,
-        TaskPipelineStage.Closed => 4,
-        _ => -1
-    };
-
     private async Task OnStartPipeline()
     {
         if (_busy) return;
         _busy = true;
         try
         {
+            if (!CanStartPlanner)
+            {
+                Snackbar.Add(PlannerPreflightMessage, Severity.Warning);
+                return;
+            }
             var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["PipelineStarted"].Value, Severity.Success);
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["PipelineStarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
         }
@@ -530,7 +510,12 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["SessionStarted"].Value, Severity.Success);
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -560,19 +545,57 @@ else
         }
     }
 
+    private async Task OnRetrySession(PipelineSessionDto previous)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var result = await RetrySession.HandleAsync(
+                new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(previous.Id)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     private async Task OnStartReview()
     {
         if (_busy) return;
         _busy = true;
         try
         {
+            if (_pipeline?.Preflight is not { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true })
+            {
+                Snackbar.Add(ReviewPreflightMessage, Severity.Warning);
+                return;
+            }
             var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
             if (!result.Success)
             {
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["ReviewStarted"].Value, Severity.Success);
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["ReviewStarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
         }
@@ -626,16 +649,6 @@ else
         ? L["SubtaskReported"].Value
         : L[status.ToString()].Value;
 
-    private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
-
-    private Color SessionStatusColor(SessionStatus status) => status switch
-    {
-        SessionStatus.Active => Color.Info,
-        SessionStatus.Closed => Color.Default,
-        SessionStatus.Failed => Color.Error,
-        _ => Color.Default
-    };
-
     private string PipelineStageLabel(TaskPipelineStage stage) => stage switch
     {
         TaskPipelineStage.Planning => L["StagePlanning"].Value,
@@ -655,17 +668,6 @@ else
         _ => role.ToString()
     };
 
-    private int SubStageToPercent(TaskSubStage stage) => stage switch
-    {
-        TaskSubStage.RequirementGathering => 10,
-        TaskSubStage.Estimation => 20,
-        TaskSubStage.IntermediateResult => 40,
-        TaskSubStage.Review => 60,
-        TaskSubStage.Corrections => 75,
-        TaskSubStage.ReviewCorrections => 90,
-        TaskSubStage.Complete => 100,
-        _ => 0
-    };
     private static string StepTitleClass(bool isDone) =>
         isDone ? "grow beacon-step-done" : "grow";
 }

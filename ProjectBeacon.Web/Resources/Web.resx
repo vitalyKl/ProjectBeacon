@@ -2498,4 +2498,58 @@ No Beacon-hosted coding agent.</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Tool names are exposed as mcp_&lt;server&gt;_&lt;tool&gt;. To grant access in task pipelines, add an exact name or mcp_&lt;server&gt;_* to the Actor subtask's Allowed MCP Tools.</value>
   </data>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>Current activity</value>
+  </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>No native workstation is assigned to this project.</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>The project's native workstation is offline.</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>No model is configured for the Planner role.</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>The configured Planner model no longer exists.</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>No model is configured for this session role.</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>The model configured for this session no longer exists.</value>
+  </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>Updated {0}s ago</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>Updated {0}m ago</value>
+  </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>sec</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>min</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>hr</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>No online native workstation is assigned to this project. Set AgentRuntime to native and bring the workstation online.</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>No model is configured for the Planner role. Configure the Understand phase or Planner role binding.</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>No model is configured for this pipeline role. Configure the matching phase or role binding.</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>Retry session</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>No recent signal</value>
+  </data>
 </root>

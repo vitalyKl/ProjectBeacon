@@ -2290,4 +2290,58 @@
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>Имена инструментов в harness имеют вид mcp_&lt;сервер&gt;_&lt;инструмент&gt;. Чтобы разрешить их в pipeline, добавьте точное имя или mcp_&lt;сервер&gt;_* в Allowed MCP Tools у подзадачи Actor.</value>
   </data>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>Текущая активность</value>
+  </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>К проекту не привязана рабочая станция с native runtime.</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>Рабочая станция проекта с native runtime не в сети.</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>Для роли Planner не настроена модель.</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>Настроенная модель Planner больше не существует.</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>Для этой роли сессии не настроена модель.</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>Модель, настроенная для этой сессии, больше не существует.</value>
+  </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>Обновлено {0} с назад</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>Обновлено {0} мин назад</value>
+  </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>сек</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>мин</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>ч</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>только что</value>
+  </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>К проекту не привязана онлайн-рабочая станция с native runtime. Установите AgentRuntime=native и подключите станцию.</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>Для Planner не настроена модель. Настройте модель этапа Understand или привязку роли Planner.</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>Для этой роли пайплайна не настроена модель. Настройте соответствующий этап или привязку роли.</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>Запустить заново</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>Нет свежего сигнала</value>
+  </data>
 </root>

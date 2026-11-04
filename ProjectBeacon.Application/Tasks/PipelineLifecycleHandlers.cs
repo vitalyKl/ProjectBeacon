@@ -174,6 +174,12 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                 }
             }
 
+            // A pipeline session is executable only when a native workstation command
+            // has actually been prepared. Never report Active for a session that nobody can run.
+            if (pipelineCommand is null)
+                return Result.Failure<PipelineSessionDto>(
+                    "No native pipeline workstation is configured for this project. Assign an online workstation with AgentRuntime=native and configure a model for this role.");
+
             try
             {
                 session.Launch();
@@ -206,14 +212,16 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
     private static bool IsNativeRuntime(string? workstationJson)
     {
         if (string.IsNullOrWhiteSpace(workstationJson))
-            return false;
+            return true;
         try
         {
             using var doc = JsonDocument.Parse(workstationJson);
-            return doc.RootElement.ValueKind == JsonValueKind.Object
-                && doc.RootElement.TryGetProperty("agentRuntime", out var runtime)
-                && runtime.ValueKind == JsonValueKind.String
-                && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+            // Match the workstation settings UI: a missing runtime field means native.
+            return !doc.RootElement.TryGetProperty("agentRuntime", out var runtime)
+                || (runtime.ValueKind == JsonValueKind.String
+                    && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase));
         }
         catch (JsonException)
         {
@@ -341,4 +349,100 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
     }
 }
 
+/// <summary>
+/// Creates a fresh session from a failed or closed pipeline attempt while preserving the original attempt.
+/// </summary>
+public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineSessionCommand, Result<PipelineSessionDto>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISessionSpawner _spawner;
 
+    public RetryPipelineSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    {
+        _dbFactory = dbFactory;
+        _spawner = spawner;
+    }
+
+    public async Task<Result<PipelineSessionDto>> HandleAsync(RetryPipelineSessionCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var previous = await db.PipelineSessions.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == command.Request.SessionId, ct);
+            if (previous is null)
+                return Result.Failure<PipelineSessionDto>("Session not found.");
+            if (previous.Status is not (SessionStatus.Failed or SessionStatus.Closed))
+                return Result.Failure<PipelineSessionDto>("Only failed or closed sessions can be retried.");
+
+            var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == previous.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineSessionDto>("Task not found.");
+
+            var expectedStage = previous.Role switch
+            {
+                PipelineRole.Planner => task.PipelineStage == TaskPipelineStage.Planning,
+                PipelineRole.Actor => task.PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision,
+                PipelineRole.Review => task.PipelineStage == TaskPipelineStage.Reviewing,
+                _ => false
+            };
+            if (!expectedStage)
+                return Result.Failure<PipelineSessionDto>($"Cannot retry {previous.Role} session while the pipeline is in stage {task.PipelineStage}.");
+
+            if (previous.SubtaskId is { } subtaskId)
+            {
+                var originalSubtask = await db.Subtasks
+                    .FirstOrDefaultAsync(s => s.Id == subtaskId && s.TaskId == task.Id, ct);
+                if (originalSubtask is null)
+                    return Result.Failure<PipelineSessionDto>("The original subtask no longer exists.");
+                if (originalSubtask.Status == SubtaskStatus.Done)
+                    return Result.Failure<PipelineSessionDto>("A completed subtask cannot be retried.");
+                if (previous.Role == PipelineRole.Actor)
+                    originalSubtask.PrepareRetry();
+            }
+
+            var hasOpenAttempt = await db.PipelineSessions.AnyAsync(s =>
+                s.TaskId == previous.TaskId
+                && s.SubtaskId == previous.SubtaskId
+                && s.Role == previous.Role
+                && (s.Status == SessionStatus.Ready || s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser), ct);
+            if (hasOpenAttempt)
+                return Result.Failure<PipelineSessionDto>("An open session already exists for this pipeline role.");
+
+            SpawnedSession spawned;
+            try
+            {
+                spawned = await _spawner.SpawnAsync(db, previous.ProjectId, previous.Role, previous.TaskId, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure<PipelineSessionDto>(ex.Message);
+            }
+
+            if (spawned.ModelBackendId is null)
+                return Result.Failure<PipelineSessionDto>("No model is configured for this pipeline role. Configure the matching phase or role binding before retrying.");
+
+            var retry = PipelineSession.Create(
+                previous.TaskId,
+                previous.ProjectId,
+                previous.Role,
+                previous.PromptContext,
+                previous.SubtaskId,
+                spawned.ModelBackendId,
+                spawned.LaunchSpec);
+            db.PipelineSessions.Add(retry);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok(PipelineMappers.ToDto(retry));
+        });
+    }
+}

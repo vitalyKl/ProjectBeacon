@@ -2308,4 +2308,58 @@ orthstar</value>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
     <value>工具名称以 mcp_&lt;server&gt;_&lt;tool&gt; 格式公开。若要在任务流水线中授予访问权限，请将准确名称或 mcp_&lt;server&gt;_* 添加到 Actor 子任务的 Allowed MCP Tools。</value>
   </data>
+  <data name="TaskCurrentActivity" xml:space="preserve">
+    <value>当前活动</value>
+  </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>此项目未分配 native 工作站。</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>项目的 native 工作站当前离线。</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>尚未为 Planner 角色配置模型。</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>配置的 Planner 模型已不存在。</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>尚未为此会话角色配置模型。</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>此会话配置的模型已不存在。</value>
+  </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>{0} 秒前更新</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>{0} 分钟前更新</value>
+  </data>
+  <data name="PipelineSecondsShort" xml:space="preserve">
+    <value>秒</value>
+  </data>
+  <data name="PipelineMinutesShort" xml:space="preserve">
+    <value>分</value>
+  </data>
+  <data name="PipelineHoursShort" xml:space="preserve">
+    <value>小时</value>
+  </data>
+  <data name="PipelineJustNow" xml:space="preserve">
+    <value>刚刚</value>
+  </data>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>此项目未分配在线 native 工作站。请将 AgentRuntime 设置为 native，并使工作站上线。</value>
+  </data>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>尚未为 Planner 角色配置模型。请配置 Understand 阶段或 Planner 角色绑定。</value>
+  </data>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>尚未为此流水线角色配置模型。请配置对应阶段或角色绑定。</value>
+  </data>
+  <data name="RetrySession" xml:space="preserve">
+    <value>重新运行会话</value>
+  </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>暂无最新信号</value>
+  </data>
 </root>
