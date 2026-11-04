@@ -2311,4 +2311,10 @@
   <data name="PipelineModelMissing" xml:space="preserve">
     <value>Модель, настроенная для этой сессии, больше не существует.</value>
   </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>Обновлено {0} с назад</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>Обновлено {0} мин назад</value>
+  </data>
 </root>

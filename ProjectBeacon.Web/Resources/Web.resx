@@ -2519,4 +2519,10 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineModelMissing" xml:space="preserve">
     <value>The model configured for this session no longer exists.</value>
   </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>Updated {0}s ago</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>Updated {0}m ago</value>
+  </data>
 </root>

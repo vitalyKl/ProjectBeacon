@@ -19,9 +19,9 @@
                     <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Info" />
                 }
                 <span class="beacon-pipeline-activity-summary">@ActivityLabel</span>
-                @if (Session.LastActivityAt is { } lastActivity)
+                @if (Session.LastActivityAt is not null)
                 {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineLastSignal"]: <LocalTime Value="lastActivity" Format="t" /></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@LastActivityLabel</MudText>
                 }
             </div>
         </TitleContent>
@@ -67,6 +67,12 @@
     private List<ChatPartDto> Parts { get; set; } = [];
     private List<ChatPartDto> Forms { get; set; } = [];
     private string SnapshotKey { get; set; } = string.Empty;
+
+    private string LastActivityLabel => Session.LastActivityAt is not { } lastActivity
+        ? string.Empty
+        : (DateTime.UtcNow - lastActivity) < TimeSpan.FromMinutes(1)
+            ? string.Format(L["PipelineUpdatedSecondsAgo"].Value, Math.Max(0, (int)(DateTime.UtcNow - lastActivity).TotalSeconds))
+            : string.Format(L["PipelineUpdatedMinutesAgo"].Value, Math.Max(1, (int)(DateTime.UtcNow - lastActivity).TotalMinutes));
 
     private bool HasRecentSignal => Session.LastActivityAt is { } lastActivity
         && DateTime.UtcNow - lastActivity <= TimeSpan.FromSeconds(30);

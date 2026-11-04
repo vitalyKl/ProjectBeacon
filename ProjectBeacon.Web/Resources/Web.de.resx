@@ -2321,4 +2321,10 @@ orthstar</value>
   <data name="PipelineModelMissing" xml:space="preserve">
     <value>Das für diese Sitzung konfigurierte Modell existiert nicht mehr.</value>
   </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>Vor {0} s aktualisiert</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>Vor {0} Min. aktualisiert</value>
+  </data>
 </root>

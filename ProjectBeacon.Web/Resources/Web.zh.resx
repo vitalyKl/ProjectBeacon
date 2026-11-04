@@ -2329,4 +2329,10 @@ orthstar</value>
   <data name="PipelineModelMissing" xml:space="preserve">
     <value>此会话配置的模型已不存在。</value>
   </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>{0} 秒前更新</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>{0} 分钟前更新</value>
+  </data>
 </root>

@@ -2329,4 +2329,10 @@ orthstar</value>
   <data name="PipelineModelMissing" xml:space="preserve">
     <value>このセッションに設定されたモデルは存在しません。</value>
   </data>
+  <data name="PipelineUpdatedSecondsAgo" xml:space="preserve">
+    <value>{0} 秒前に更新</value>
+  </data>
+  <data name="PipelineUpdatedMinutesAgo" xml:space="preserve">
+    <value>{0} 分前に更新</value>
+  </data>
 </root>
