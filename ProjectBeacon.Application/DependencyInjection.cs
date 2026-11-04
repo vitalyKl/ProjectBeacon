@@ -170,6 +170,9 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetRoleBindingHandler>();
         services.AddTransient<RemoveRoleBindingHandler>();
         services.AddTransient<GetModelRegistryHandler>();
+        // The Blazor MCP settings component injects these handlers by concrete type.
+        services.AddTransient<ListProjectMcpServersHandler>();
+        services.AddTransient<SaveProjectMcpServersHandler>();
         services.AddTransient<GetChatModelHandler>();
         services.AddTransient<SetChatModelHandler>();
         services.AddTransient<NudgeModelsHandler>();
