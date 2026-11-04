@@ -6,6 +6,7 @@ using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Agents;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Infrastructure.LlamaSwap;
