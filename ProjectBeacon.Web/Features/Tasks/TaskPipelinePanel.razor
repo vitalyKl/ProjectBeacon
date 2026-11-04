@@ -37,7 +37,12 @@
                 }
                 @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult))
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))"
+                               Disabled="Busy || !CanRunRole(session.Role)">@L["RetrySession"]</MudButton>
+                    @if (!CanRunRole(session.Role))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session)</MudText>
+                    }
                 }
                 @if (session.Status == SessionStatus.Ready)
                 {
@@ -84,6 +89,19 @@
         : L["PipelinePreflightNoPlannerModel"].Value;
 
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
+
+    private bool CanRunRole(PipelineRole role)
+    {
+        var preflight = Pipeline?.Preflight;
+        if (preflight?.HasOnlineNativeWorkstation != true) return false;
+        return role switch
+        {
+            PipelineRole.Planner => preflight.PlannerModelConfigured,
+            PipelineRole.Actor => preflight.ActorModelConfigured,
+            PipelineRole.Review => preflight.ReviewModelConfigured,
+            _ => false
+        };
+    }
 
     private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
         ? L[reason].Value
