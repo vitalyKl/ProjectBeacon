@@ -29,7 +29,7 @@ The Planner creates subtasks only; it does not launch Actors. When the Planner c
 
 The workstation daemon processes one command at a time. The model `Concurrent` setting controls llama-swap residency groups; it does not opt a task pipeline into parallel Actor execution. Actor sessions for a task are serialized independently of that setting.
 
-Pipeline turns use a 75-minute server lease. Workstation settings expose a 15–60 minute absolute limit (default 60) and a no-progress timeout (default 10 minutes). Transcript, tool-call, and form changes reset the no-progress timer; periodic polling and elapsed-duration counters do not. The absolute limit remains the final safety cap.
+Pipeline turns use a 75-minute server lease. Workstation settings expose a 15–60 minute absolute limit (default 60) and a no-progress timeout (default 15 minutes). Transcript, tool-call, and form changes reset the no-progress timer; periodic polling and elapsed-duration counters do not. The absolute limit remains the final safety cap.
 
 ## Scope fields
 

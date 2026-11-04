@@ -234,7 +234,7 @@
     private string _projectsRoot = string.Empty;
     private string _agentRuntime = "native";
     private int _pipelineTurnTimeoutMinutes = 60;
-    private int _pipelineIdleTimeoutMinutes = 10;
+    private int _pipelineIdleTimeoutMinutes = 15;
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
@@ -356,7 +356,7 @@
             _pipelineTurnTimeoutMinutes = root.TryGetProperty("pipelineTurnTimeoutMinutes", out var pipelineMax)
                 && pipelineMax.TryGetInt32(out var maxMinutes) ? Math.Clamp(maxMinutes, 15, 60) : 60;
             _pipelineIdleTimeoutMinutes = root.TryGetProperty("pipelineIdleTimeoutMinutes", out var pipelineIdle)
-                && pipelineIdle.TryGetInt32(out var idleMinutes) ? Math.Clamp(idleMinutes, 1, 30) : 10;
+                && pipelineIdle.TryGetInt32(out var idleMinutes) ? Math.Clamp(idleMinutes, 1, 30) : 15;
         }
         catch (JsonException)
         {
