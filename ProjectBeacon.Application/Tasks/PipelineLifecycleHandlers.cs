@@ -355,8 +355,13 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
 public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineSessionCommand, Result<PipelineSessionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly ISessionSpawner _spawner;
 
-    public RetryPipelineSessionHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RetryPipelineSessionHandler(IBeaconDbFactory dbFactory, ISessionSpawner spawner)
+    {
+        _dbFactory = dbFactory;
+        _spawner = spawner;
+    }
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(RetryPipelineSessionCommand command, CancellationToken ct = default)
     {
@@ -403,14 +408,31 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
             if (hasOpenAttempt)
                 return Result.Failure<PipelineSessionDto>("An open session already exists for this pipeline role.");
 
+            SpawnedSession spawned;
+            try
+            {
+                spawned = await _spawner.SpawnAsync(db, previous.ProjectId, previous.Role, previous.TaskId, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return Result.Failure<PipelineSessionDto>(ex.Message);
+            }
+
+            if (spawned.ModelBackendId is null)
+                return Result.Failure<PipelineSessionDto>("No model is configured for this pipeline role. Configure the matching phase or role binding before retrying.");
+
             var retry = PipelineSession.Create(
                 previous.TaskId,
                 previous.ProjectId,
                 previous.Role,
                 previous.PromptContext,
                 previous.SubtaskId,
-                previous.ModelBackendId,
-                previous.LaunchSpec);
+                spawned.ModelBackendId,
+                spawned.LaunchSpec);
             db.PipelineSessions.Add(retry);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
