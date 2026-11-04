@@ -255,14 +255,47 @@ else
         }
     };
 
-    private string HeroStateLabel =>
-        _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
-            ? L["WaitingForUser"].Value
-            : HasStaleActiveSession
-                ? L["PipelineNoRecentSignal"].Value
-                : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
+    private string HeroStateLabel
+    {
+        get
+        {
+            if (_pipeline?.Sessions.Any(s => s.Status == SessionStatus.WaitingForUser) == true)
+                return L["WaitingForUser"].Value;
+
+            var current = _pipeline?.Sessions
+                .Where(s => s.Status is SessionStatus.Active or SessionStatus.Ready or SessionStatus.Failed)
+                .OrderByDescending(s => s.LastActivityAt ?? s.LaunchedAt)
+                .FirstOrDefault();
+            if (current is not null)
+            {
+                var role = SessionRoleLabel(current.Role);
+                if (current.Status == SessionStatus.Ready)
+                    return $"{role} · {L["PipelineActivityReady"].Value}";
+                if (current.Status == SessionStatus.Failed)
+                    return $"{role} · {L["PipelineActivityFailed"].Value}";
+                if (current.LastActivityAt is not { } lastActivity || DateTime.UtcNow - lastActivity > TimeSpan.FromSeconds(30))
+                    return $"{role} · {L["PipelineNoRecentSignal"].Value}";
+
+                var age = DateTime.UtcNow - lastActivity;
+                var updated = age < TimeSpan.FromMinutes(1)
+                    ? string.Format(L["PipelineUpdatedSecondsAgo"].Value, Math.Max(0, (int)age.TotalSeconds))
+                    : string.Format(L["PipelineUpdatedMinutesAgo"].Value, Math.Max(1, (int)age.TotalMinutes));
+                return $"{role} · {updated}";
+            }
+
+            return _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
                 ? PipelineStageLabel(stage)
                 : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
+        }
+    }
+
+    private string SessionRoleLabel(PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => L["RoleBindingPlanner"].Value,
+        PipelineRole.Actor => L["RoleBindingActor"].Value,
+        PipelineRole.Review => L["Review"].Value,
+        _ => role.ToString()
+    };
 
     protected override async Task OnInitializedAsync()
     {
