@@ -1,6 +1,5 @@
 using ProjectBeacon.Application.Tasks;
 using ProjectBeacon.Domain.Enums;
-using ProjectBeacon.Web.Features.Tasks;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
@@ -22,7 +21,7 @@ public sealed class TaskSubtaskCardPreflightTests : BUnitRenderBase
             DateTime.UtcNow,
             null);
 
-        var cut = Bunit.RenderComponent<TaskSubtaskCard>(parameters => parameters
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskSubtaskCard>(parameters => parameters
             .Add(component => component.TaskId, taskId)
             .Add(component => component.Subtask, subtask)
             .Add(component => component.Preflight,
