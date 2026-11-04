@@ -74,10 +74,12 @@
         || (Session.Status == SessionStatus.Active && HasRecentSignal && _state is not ("completed" or "failed"));
     private bool IsWorking => Session.Status == SessionStatus.Active && HasRecentSignal
         && _state is not ("completed" or "failed" or "waiting-for-user");
-    private string ActivityLabel => Session.Status == SessionStatus.Active && !HasRecentSignal
-        ? L["PipelineNoRecentSignal"].Value
-        : !string.IsNullOrWhiteSpace(_activity)
-        ? _activity
+    private string ActivityLabel => !string.IsNullOrWhiteSpace(Session.FailureReason)
+        ? Session.FailureReason
+        : Session.Status == SessionStatus.Active && !HasRecentSignal
+            ? L["PipelineNoRecentSignal"].Value
+            : !string.IsNullOrWhiteSpace(_activity)
+                ? _activity
         : _state switch
         {
             "waiting-for-user" => L["PipelineWaitingForUser"].Value,
