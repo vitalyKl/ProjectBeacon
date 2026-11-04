@@ -7,7 +7,7 @@ The implementation log is historical: `archive/docs/task-pipeline-local-agents-l
 Each role is a new session. Prompt text is `SessionPrompts`.
 
 1. **Planning.** The planner sees the task title, description, and project name. It creates subtasks with instructions and optional `AllowedMcpTools` / `AllowedPaths`. It does not implement the task.
-2. **Executing.** The actor sees only that subtask's instructions, plus the allowed-tool and allowed-path lists when they are non-empty. It does not see the planner transcript or the parent task. It reports a diff reference and a summary.
+2. **Executing.** The actor sees only that subtask's ID and instructions, plus the allowed-tool and allowed-path lists when they are non-empty. It does not see the planner transcript or the parent task. It reports a diff reference and a summary.
 3. **Review.** The reviewer sees the task text and, for each subtask, the instructions, diff ref, and summary. It does not see the other transcripts. The verdict is approve, or reopen one subtask with a fix note.
 4. **Close.** Approve moves the task to approved; the user confirms close. Force-close is a separate path and records that review was skipped.
 
@@ -33,7 +33,7 @@ Pipeline turns use a 75-minute server lease. Workstation settings expose a 15–
 
 ## Scope fields
 
-`AllowedMcpTools` and `AllowedPaths` are persisted on the subtask and copied into the actor prompt. Nothing in the MCP host or the spawner turns those lists into harness permission denies.
+`AllowedMcpTools` and `AllowedPaths` are persisted on the subtask and copied into the actor prompt. The assigned subtask ID is also included in the prompt and bound from the trusted `BEACON_SUBTASK_ID` environment for actor lifecycle calls. If the model omits `subtaskId` when reporting success or failure, the MCP host supplies the assigned ID; an explicitly supplied different ID is rejected. These lifecycle tools remain limited to the actor's own in-progress subtask.
 
 ## What does not run the pipeline
 

@@ -39,7 +39,7 @@ These tools talk to the database and require Beacon environment:
 - `model_bind` `{ role, modelBackendId }` — bind a pipeline role (`planner`, `actor`, `review`) to a model backend
 - `model_status` `{}` — list model backends, role bindings and the llama-swap proxy status
 - `task_create_subtask` `{ instructions, allowedMcpTools?, allowedPaths? }` — create a subtask on the session task
-- `subtask_report_result` `{ subtaskId, diffRef, summary }` — report the result of an in-progress subtask
+- `subtask_report_result` `{ subtaskId?, diffRef, summary }` — report the result of an in-progress subtask; Actor sessions default to their assigned subtask ID
 - `task_review_verdict` `{ verdict, note, subtaskId? }` — record a review verdict (`approve`, `reopen_subtask`)
 - `task_pipeline_status` `{}` — show the pipeline state (subtasks, sessions, verdicts) of the session task
 
@@ -68,7 +68,7 @@ On the control-plane path the caller is the authenticated principal.
 
 `beacon mcp` is not `IAgentRuntime`. `OpenCodeAgentRuntime` on `beacon client` implements that interface for workstation chat. Pipeline role sessions are still created by `ManualSessionSpawner`. Do not treat an MCP tool call as spawning an OpenCode turn.
 
-Subtask `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). In API-backed MCP mode, `SubtaskScopeGuard` also enforces these lists at the stdio tool boundary: restricted in-progress subtasks limit tool names and requested relative paths, and multiple restricted in-progress subtasks require an explicit `subtaskId`. Empty lists mean unrestricted for that dimension. The pipeline scope is loaded from the API and must be readable before a restricted tool call is allowed.
+Subtask ID, `AllowedMcpTools` and `AllowedPaths` are stored on the subtask and copied into the actor prompt (`SessionPrompts`). Actor lifecycle tools (`subtask_report_result` and `pipeline_fail_subtask`) accept an omitted `subtaskId`; the stdio server fills it from the session-bound `BEACON_SUBTASK_ID`. An explicitly supplied different ID is rejected. In API-backed MCP mode, `SubtaskScopeGuard` also enforces these lists at the stdio tool boundary: restricted in-progress subtasks limit tool names and requested relative paths, and non-Actor sessions with multiple restricted in-progress subtasks require an explicit `subtaskId`. Empty lists mean unrestricted for that dimension. The pipeline scope is loaded from the API and must be readable before a restricted tool call is allowed.
 
 ## Workstation and chat boundary
 
@@ -110,7 +110,7 @@ Pipeline actions that the task page has and the six database tools do not:
 - `pipeline_start` `{ taskId? }`
 - `pipeline_start_actor` `{ subtaskId, taskId? }`
 - `pipeline_launch_session` `{ sessionId }`
-- `pipeline_fail_subtask` `{ subtaskId, reason, taskId? }`
+- `pipeline_fail_subtask` `{ subtaskId?, reason, taskId? }` — Actor sessions default to their assigned subtask ID
 - `pipeline_start_review` `{ taskId? }`
 - `pipeline_approve` `{ note?, taskId? }`
 - `pipeline_force_close` `{ reason?, taskId? }` — API token needs Admin. The actor is the authenticated principal.

@@ -39,6 +39,8 @@ public static class SessionPrompts
     {
         var sb = new StringBuilder();
         sb.AppendLine("Role: actor. Execute exactly this subtask; you are not told the surrounding task.");
+        sb.AppendLine($"Assigned subtask ID: {subtask.Id:D}");
+        sb.AppendLine("Use this exact ID when referring to your subtask. Beacon MCP lifecycle tools default to this assigned ID when subtaskId is omitted; an explicitly supplied different ID is rejected.");
         sb.AppendLine();
         sb.AppendLine("Instructions:");
         sb.AppendLine(subtask.Instructions);
