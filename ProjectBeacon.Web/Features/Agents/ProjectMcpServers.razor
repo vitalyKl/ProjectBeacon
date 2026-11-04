@@ -7,6 +7,7 @@
 @inject ListProjectMcpServersHandler ListServers
 @inject SaveProjectMcpServersHandler SaveServers
 @inject ISnackbar Snackbar
+@inject ILogger<ProjectMcpServers> Logger
 @inject IDialogService Dialogs
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -46,7 +47,7 @@
             }
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["McpCredentialsHint"]</MudText>
             <MudStack Row="true" Spacing="2" Class="mt-3">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy || _loading || _loadError is not null">
                     @L["McpAddServer"]
                 </MudButton>
                 @if (_editingName is not null)
@@ -57,13 +58,28 @@
         </div>
 
         <MudDivider Class="my-4" />
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">@L["McpServerNextSession"]</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["McpServerNextSession"]</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Reload" Disabled="_busy || _loading">
+                @L["Refresh"]
+            </MudButton>
+        </MudStack>
         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["McpPipelineAllowlistHint"]</MudText>
-        @if (_servers.Count == 0)
+        @if (_loading && _servers.Count == 0)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        @if (_loadError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">
+                @L["Error"]: @_loadError
+            </MudAlert>
+        }
+        @if (!_loading && _loadError is null && _servers.Count == 0)
         {
             <MudText Typo="Typo.body2" Class="mud-text-secondary">@L["McpNoServers"]</MudText>
         }
-        else
+        @if (_servers.Count > 0)
         {
             <MudStack Spacing="2">
                 @foreach (var server in _servers)
@@ -78,8 +94,8 @@
                                 </MudText>
                             </MudStack>
                             <MudStack Row="true" Spacing="1">
-                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Edit(server))" Disabled="_busy">@L["McpEditServer"]</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => Remove(server))" Disabled="_busy">@L["Delete"]</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Edit(server))" Disabled="_busy || _loading || _loadError is not null">@L["McpEditServer"]</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => Remove(server))" Disabled="_busy || _loading || _loadError is not null">@L["Delete"]</MudButton>
                             </MudStack>
                         </MudStack>
                         @if (server.Transport == "stdio")
@@ -123,6 +139,8 @@
     private bool _hasSavedSecrets;
     private bool _replaceSecrets;
     private bool _busy;
+    private bool _loading;
+    private string? _loadError;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -140,16 +158,34 @@
         if (ProjectId == Guid.Empty)
         {
             _servers = [];
+            _loadError = null;
             return;
         }
-        var result = await ListServers.HandleAsync(new ListProjectMcpServersCommand(ProjectId, _actor));
-        if (!result.Success)
+
+        _loading = true;
+        _loadError = null;
+        try
         {
-            Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
-            _servers = [];
-            return;
+            var result = await ListServers.HandleAsync(new ListProjectMcpServersCommand(ProjectId, _actor));
+            if (!result.Success)
+            {
+                _loadError = result.Error ?? L["Error"].Value;
+                Snackbar.Add(_loadError, Severity.Error);
+                return;
+            }
+
+            _servers = result.Value!.OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
-        _servers = result.Value!.OrderBy(server => server.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to load MCP servers for project {ProjectId}.", ProjectId);
+            _loadError = L["Error"].Value;
+            Snackbar.Add(_loadError, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void Edit(ProjectMcpServerDto server)
@@ -169,7 +205,7 @@
 
     private async Task Save()
     {
-        if (_busy || ProjectId == Guid.Empty)
+        if (_busy || _loading || _loadError is not null || ProjectId == Guid.Empty)
             return;
         var name = _name.Trim();
         if (string.IsNullOrWhiteSpace(name))
