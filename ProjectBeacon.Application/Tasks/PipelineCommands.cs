@@ -30,7 +30,9 @@ public record PipelineSessionDto(
     string PromptContext,
     DateTime? LaunchedAt,
     DateTime? ClosedAt,
-    string ActivityJson = "{}");
+    string ActivityJson = "{}",
+    DateTime? LastActivityAt = null,
+    string? FailureReason = null);
 
 /// <summary>A recorded review verdict for a task, optionally aimed at one subtask.</summary>
 public record ReviewVerdictDto(

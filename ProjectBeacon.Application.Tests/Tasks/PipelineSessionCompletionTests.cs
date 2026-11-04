@@ -96,6 +96,8 @@ public sealed partial class PipelineHandlerTests
                 .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
             Assert.Equal(SessionStatus.Failed, stored.Status);
             Assert.NotNull(stored.ClosedAt);
+            Assert.Equal("native agent turn failed", stored.FailureReason);
+            Assert.NotNull(stored.LastActivityAt);
         }
     }
 
@@ -118,6 +120,8 @@ public sealed partial class PipelineHandlerTests
                 .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
             Assert.Equal(SessionStatus.Failed, stored.Status);
             Assert.NotNull(stored.ClosedAt);
+            Assert.Equal("Pipeline command completed without a usable external session id.", stored.FailureReason);
+            Assert.NotNull(stored.LastActivityAt);
             Assert.Null(stored.ExternalSessionId);
         }
     }
