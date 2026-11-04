@@ -513,10 +513,20 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             // as progress, so a stuck tool cannot keep the turn alive indefinitely.
             var progressSignature = JsonSerializer.Serialize(new
             {
-                parts = parts.Select(part => new
+                parts = collected.Select(part => new
                 {
-                    part.role, part.kind, part.body, part.externalId,
-                    part.tool, part.toolStatus, part.toolInput, part.toolResult, part.complete
+                    part.Role,
+                    part.Kind,
+                    BodyLength = part.Body?.Length,
+                    BodyTail = part.Body is { Length: > 256 } body ? body[^256..] : part.Body,
+                    part.ExternalId,
+                    part.Tool,
+                    part.ToolStatus,
+                    ToolInputLength = part.ToolInput?.Length,
+                    ToolInputTail = part.ToolInput is { Length: > 128 } input ? input[^128..] : part.ToolInput,
+                    ToolResultLength = part.ToolResult?.Length,
+                    ToolResultTail = part.ToolResult is { Length: > 128 } result ? result[^128..] : part.ToolResult,
+                    part.Complete
                 }),
                 forms = formItems
             });
