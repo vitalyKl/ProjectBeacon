@@ -396,9 +396,15 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
             if (!expectedStage)
                 return Result.Failure<PipelineSessionDto>($"Cannot retry {previous.Role} session while the pipeline is in stage {task.PipelineStage}.");
 
-            if (previous.SubtaskId is { } subtaskId
-                && !await db.Subtasks.AnyAsync(s => s.Id == subtaskId && s.TaskId == task.Id, ct))
-                return Result.Failure<PipelineSessionDto>("The original subtask no longer exists.");
+            if (previous.SubtaskId is { } subtaskId)
+            {
+                var subtask = await db.Subtasks.AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Id == subtaskId && s.TaskId == task.Id, ct);
+                if (subtask is null)
+                    return Result.Failure<PipelineSessionDto>("The original subtask no longer exists.");
+                if (subtask.Status != SubtaskStatus.InProgress)
+                    return Result.Failure<PipelineSessionDto>("The original subtask must still be in progress before its actor session can be retried.");
+            }
 
             var hasOpenAttempt = await db.PipelineSessions.AnyAsync(s =>
                 s.TaskId == previous.TaskId
