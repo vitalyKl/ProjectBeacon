@@ -94,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<CreateSubtaskHandler>();
         services.AddTransient<StartActorSessionHandler>();
         services.AddTransient<LaunchSessionHandler>();
+        services.AddTransient<RetryPipelineSessionHandler>();
         services.AddTransient<ReportSubtaskResultHandler>();
         services.AddTransient<FailSubtaskHandler>();
         services.AddTransient<StartReviewHandler>();
