@@ -236,7 +236,11 @@ else
     private Guid? _openPhaseId;
     private string _stepTitle = string.Empty;
 
-    private string HeroStateClass => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+    private bool HasStaleActiveSession => _pipeline?.Sessions.Any(session =>
+        session.Status == SessionStatus.Active
+        && (session.LastActivityAt is not { } lastActivity || DateTime.UtcNow - lastActivity > TimeSpan.FromSeconds(30))) == true;
+
+    private string HeroStateClass => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true || HasStaleActiveSession
         ? "is-warning"
         : _pipeline?.Stage switch
     {
@@ -254,7 +258,9 @@ else
     private string HeroStateLabel =>
         _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
             ? L["WaitingForUser"].Value
-            : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
+            : HasStaleActiveSession
+                ? L["PipelineNoRecentSignal"].Value
+                : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
                 ? PipelineStageLabel(stage)
                 : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
 
@@ -281,8 +287,7 @@ else
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
-                if (_pipeline?.Sessions.Any(session =>
-                    session.Status is SessionStatus.Active or SessionStatus.WaitingForUser) != true)
+                if (_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed)
                     continue;
                 try
                 {
