@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Tests;
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Application.Authorization;
 using Application.Chat;
@@ -7,6 +8,7 @@ using Application.Common;
 using Application.Devices;
 using Application.Persistence;
 using Application.Tasks;
+using Domain.Entities.Agents;
 using Domain.Entities.Chat;
 using Domain.Entities.Devices;
 using Domain.Entities.Evals;
@@ -43,6 +45,13 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             lock (this) _calls++;
             return Task.FromResult(new SpawnedSession(null, null, null));
         }
+    }
+
+    private sealed class RetrySpawner(Guid modelBackendId) : ISessionSpawner
+    {
+        public Task<SpawnedSession> SpawnAsync(
+            IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct)
+            => Task.FromResult(new SpawnedSession(modelBackendId, "retry-model", "retry-launch"));
     }
 
     [Fact]
@@ -528,6 +537,130 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
             Assert.Equal(okIds[0], actorSessions[0].Id);
             var row = await db.Subtasks.FirstAsync(s => s.Id == subtaskId, TestContext.Current.CancellationToken);
             Assert.Equal(SubtaskStatus.InProgress, row.Status);
+        }
+    }
+
+
+    [Fact]
+    public async Task ActorCommandFailure_FailsSubtask_AndRetryCreatesNewAttempt_Postgres()
+    {
+        _postgres.RequirePostgres();
+
+        Guid taskId, projectId, subtaskId, sessionId, commandId, deviceId, modelBackendId;
+        await using (var seed = _postgres.CreateAdminContext())
+        {
+            var user = User.Create("actor-retry-" + Guid.NewGuid().ToString("N"), "actor-retry-" + Guid.NewGuid().ToString("N") + "@beacon.local", "hash");
+            seed.Users.Add(user);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var org = Org.Create("Actor Retry Org " + Guid.NewGuid().ToString("N"), null);
+            seed.Orgs.Add(org);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var project = Project.Create("Actor Retry Project", null, org.Id);
+            seed.Projects.Add(project);
+
+            var task = TaskItem.Create("actor command failure retry", project.Id);
+            task.StartPipeline();
+            task.EnterExecuting();
+            seed.Tasks.Add(task);
+
+            var subtask = Subtask.Create("retry this actor task", task.Id, project.Id);
+            subtask.Start();
+            seed.Subtasks.Add(subtask);
+
+            var backend = LocalModelBackend.Create(
+                "actor-retry-model", ModelBackendType.LlamaCpp, "llama-server", 8192, 0, user.Id);
+            seed.LocalModelBackends.Add(backend);
+
+            var device = DaemonDevice.Create(
+                "actor retry workstation", user.Id,
+                "fp-" + Guid.NewGuid().ToString("N"),
+                "token-" + Guid.NewGuid().ToString("N"),
+                "bcd_" + Guid.NewGuid().ToString("N"));
+            device.Heartbeat();
+            seed.DaemonDevices.Add(device);
+
+            var session = PipelineSession.Create(
+                task.Id, project.Id, PipelineRole.Actor, "execute the subtask", subtask.Id,
+                backend.Id, "launch");
+            session.Launch();
+            seed.PipelineSessions.Add(session);
+
+            var command = WorkstationCommand.Create(
+                device.Id,
+                WorkstationCommandKind.RunPipelineSession,
+                JsonSerializer.Serialize(new { sessionId = session.Id }),
+                project.Id,
+                user.Id);
+            command.Claim(TimeSpan.FromMinutes(CommandLease.PipelineMinutes), "postgres-test");
+            seed.WorkstationCommands.Add(command);
+
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+            taskId = task.Id;
+            projectId = project.Id;
+            subtaskId = subtask.Id;
+            sessionId = session.Id;
+            commandId = command.Id;
+            deviceId = device.Id;
+            modelBackendId = backend.Id;
+        }
+
+        var factory = _postgres.CreateFactory();
+        Result<WorkstationCommandDto> completion;
+        using (TenantScope.EnterUnscoped())
+        {
+            completion = await new CompleteCommandHandler(factory).HandleAsync(
+                new CompleteCommandCommand(new CompleteCommandRequest(
+                    commandId,
+                    deviceId,
+                    false,
+                    null,
+                    "The pipeline agent turn exceeded the workstation chat timeout.",
+                    Generation: 1)),
+                TestContext.Current.CancellationToken);
+        }
+        Assert.True(completion.Success, completion.Error);
+
+        await using (var failedDb = _postgres.CreateAdminContext())
+        using (TenantScope.EnterUnscoped())
+        {
+            var failedSession = await failedDb.PipelineSessions
+                .SingleAsync(s => s.Id == sessionId, TestContext.Current.CancellationToken);
+            var failedSubtask = await failedDb.Subtasks
+                .SingleAsync(s => s.Id == subtaskId, TestContext.Current.CancellationToken);
+            Assert.Equal(SessionStatus.Failed, failedSession.Status);
+            Assert.Equal("The pipeline agent turn exceeded the workstation chat timeout.", failedSession.FailureReason);
+            Assert.Equal(SubtaskStatus.Failed, failedSubtask.Status);
+            Assert.Equal("The pipeline agent turn exceeded the workstation chat timeout.", failedSubtask.Summary);
+        }
+
+        Result<PipelineSessionDto> retry;
+        using (TenantScope.EnterUnscoped())
+        {
+            retry = await new RetryPipelineSessionHandler(factory, new RetrySpawner(modelBackendId))
+                .HandleAsync(
+                    new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(sessionId)),
+                    TestContext.Current.CancellationToken);
+        }
+        Assert.True(retry.Success, retry.Error);
+        Assert.NotEqual(sessionId, retry.Value!.Id);
+        Assert.Equal(PipelineRole.Actor, retry.Value.Role);
+        Assert.Equal(SessionStatus.Ready, retry.Value.Status);
+
+        await using (var retryDb = _postgres.CreateAdminContext())
+        using (TenantScope.EnterUnscoped())
+        {
+            var retriedSubtask = await retryDb.Subtasks
+                .SingleAsync(s => s.Id == subtaskId, TestContext.Current.CancellationToken);
+            var attempts = await retryDb.PipelineSessions
+                .Where(s => s.TaskId == taskId && s.SubtaskId == subtaskId && s.Role == PipelineRole.Actor)
+                .OrderBy(s => s.Id)
+                .ToListAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(SubtaskStatus.InProgress, retriedSubtask.Status);
+            Assert.Equal(2, attempts.Count);
+            Assert.Single(attempts, s => s.Status == SessionStatus.Failed);
+            Assert.Single(attempts, s => s.Status == SessionStatus.Ready);
         }
     }
 
