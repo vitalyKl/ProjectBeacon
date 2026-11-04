@@ -39,8 +39,10 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         var devices = await db.DaemonDevices.IgnoreQueryFilters()
             .Where(d => deviceIds.Contains(d.Id)).ToListAsync(ct);
         var now = DateTime.UtcNow;
-        var hasNative = runtimes.Join(devices, r => r.DeviceId, d => d.Id, (_, device) => device)
-            .Any(device => device.IsOnline(now) && IsNativeRuntime(device.WorkstationJson));
+        var nativeDevices = runtimes.Join(devices, r => r.DeviceId, d => d.Id, (_, device) => device)
+            .Where(device => IsNativeRuntime(device.WorkstationJson)).ToList();
+        var hasNative = nativeDevices.Count > 0;
+        var hasOnlineNative = nativeDevices.Any(device => device.IsOnline(now));
 
         var phases = await db.TaskPhases.Where(p => p.TaskId == taskId).ToListAsync(ct);
         var roleBindings = await db.RoleBindings.Where(b => b.ProjectId == projectId).ToListAsync(ct);
@@ -73,6 +75,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
 
         return new PipelinePreflightDto(
             hasNative,
+            hasOnlineNative,
             HasModel(PipelineRole.Planner),
             HasModel(PipelineRole.Actor),
             HasModel(PipelineRole.Review));

@@ -219,9 +219,11 @@ else
     private bool _isAdmin;
     private bool CanStartPlanner => _pipeline?.CanStart == true;
     private bool CanStartReview => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true };
-    private string ReviewPreflightMessage => _pipeline?.Preflight?.HasOnlineNativeWorkstation != true
+    private string ReviewPreflightMessage => _pipeline?.Preflight?.HasNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
-        : L["PipelinePreflightNoRoleModel"].Value;
+        : _pipeline.Preflight.HasOnlineNativeWorkstation != true
+            ? L["PipelineNativeWorkstationOffline"].Value
+            : L["PipelinePreflightNoRoleModel"].Value;
     private string PlannerPreflightMessage => string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
         ? L["PipelinePreflightNoPlannerModel"].Value
         : L[_pipeline.StartBlockedReason].Value;

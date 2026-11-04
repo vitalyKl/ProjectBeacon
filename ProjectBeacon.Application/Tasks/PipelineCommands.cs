@@ -62,6 +62,7 @@ public record PipelineStateDto(
 
 /// <summary>Server-computed availability of the native executor and role models.</summary>
 public record PipelinePreflightDto(
+    bool HasNativeWorkstation,
     bool HasOnlineNativeWorkstation,
     bool PlannerModelConfigured,
     bool ActorModelConfigured,
