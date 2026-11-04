@@ -58,7 +58,7 @@ public sealed partial class PipelineHandlerTests : IDisposable
             "native workstation",
             user.Id,
             "fp-" + Guid.NewGuid().ToString("N"),
-            "hash",
+            "hash-" + Guid.NewGuid().ToString("N"),
             "bcd_" + Guid.NewGuid().ToString("N"));
         device.Heartbeat("{}", """{"agentRuntime":"native"}""");
         var backend = LocalModelBackend.Create(
