@@ -37,7 +37,7 @@
     @if (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress)
     {
         <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
-            @if (Subtask.Status == SubtaskStatus.Pending)
+            @if (Subtask.Status == SubtaskStatus.Pending && Sessions.Count == 0)
             {
                 <MudButton Size="Size.Small" Variant="Variant.Outlined"
                            OnClick="@(() => OnStartActorSession.InvokeAsync(Subtask))"
