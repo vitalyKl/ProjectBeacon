@@ -37,8 +37,8 @@ public sealed class PipelineActivityPanelTests : BUnitRenderBase
     public void ActiveQueuedSession_ShowsQueueStateInsteadOfWorkingIndicator()
     {
         var session = CreateSession(SessionStatus.Active, DateTime.UtcNow,
-            """{"state":"running","activity":"Queued for workstation"}""")
-            with { IsQueued = true };
+            """{"state":"running","activity":"Queued for workstation"}""");
+        session = session with { IsQueued = true };
 
         var cut = Bunit.RenderComponent<Features.Tasks.PipelineActivityPanel>(parameters => parameters
             .Add(component => component.TaskId, session.TaskId)

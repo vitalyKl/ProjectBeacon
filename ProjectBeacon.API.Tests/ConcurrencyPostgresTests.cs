@@ -576,7 +576,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
                 "actor retry workstation", user.Id,
                 "fp-" + Guid.NewGuid().ToString("N"),
                 "token-" + Guid.NewGuid().ToString("N"),
-                "bcd_" + Guid.NewGuid().ToString("N"));
+                "bcd_retry");
             device.Heartbeat();
             seed.DaemonDevices.Add(device);
 
