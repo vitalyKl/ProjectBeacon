@@ -2402,7 +2402,19 @@ No Beacon-hosted coding agent.</value>
   <data name="WaitingForUser" xml:space="preserve">
     <value>Waiting for your answer</value>
   </data>
-  <data name="PipelineWaitingForUser" xml:space="preserve">
+    <data name="PipelineQueued" xml:space="preserve">
+    <value>Queued · waiting for the workstation to pick up this command</value>
+  </data>
+  <data name="PipelineTurnTimeout" xml:space="preserve">
+    <value>Pipeline turn limit (minutes)</value>
+  </data>
+  <data name="PipelineIdleTimeout" xml:space="preserve">
+    <value>No-progress timeout (minutes)</value>
+  </data>
+  <data name="PipelineTimeoutHelp" xml:space="preserve">
+    <value>A pipeline turn stops after this much time without transcript, tool, or form progress. The absolute turn limit is capped at 60 minutes.</value>
+  </data>
+<data name="PipelineWaitingForUser" xml:space="preserve">
     <value>The agent needs your input before it can continue.</value>
   </data>
   <data name="PipelineActivityStarting" xml:space="preserve">
