@@ -1,5 +1,6 @@
 using System.Globalization;
 using Bunit;
+using Bunit.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
@@ -17,7 +18,7 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     {
         var user = DbContext.Users.Single();
         var project = DbContext.Projects.Single();
-        var authProvider = Bunit.Services.GetRequiredService<Bunit.TestDoubles.FakeAuthenticationStateProvider>();
+        var authProvider = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
         authProvider.TriggerAuthenticationStateChanged(
             "tester",
             Array.Empty<string>(),
