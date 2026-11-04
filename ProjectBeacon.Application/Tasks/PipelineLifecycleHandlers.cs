@@ -398,12 +398,14 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
 
             if (previous.SubtaskId is { } subtaskId)
             {
-                var originalSubtask = await db.Subtasks.AsNoTracking()
+                var originalSubtask = await db.Subtasks
                     .FirstOrDefaultAsync(s => s.Id == subtaskId && s.TaskId == task.Id, ct);
                 if (originalSubtask is null)
                     return Result.Failure<PipelineSessionDto>("The original subtask no longer exists.");
                 if (originalSubtask.Status == SubtaskStatus.Done)
                     return Result.Failure<PipelineSessionDto>("A completed subtask cannot be retried.");
+                if (previous.Role == PipelineRole.Actor)
+                    originalSubtask.PrepareRetry();
             }
 
             var hasOpenAttempt = await db.PipelineSessions.AnyAsync(s =>

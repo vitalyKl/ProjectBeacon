@@ -128,6 +128,22 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Prepares an unfinished subtask for a new actor attempt without counting it as a review reopen.</summary>
+    public void PrepareRetry()
+    {
+        if (Status == SubtaskStatus.Done)
+            throw new InvalidOperationException("A completed subtask cannot be retried.");
+        if (Status == SubtaskStatus.Failed)
+        {
+            Status = SubtaskStatus.Pending;
+            Summary = null;
+            DiffRef = null;
+            UpdatedAt = DateTime.UtcNow;
+        }
+        if (Status == SubtaskStatus.Pending)
+            Start();
+    }
+
     /// <summary>Returns Done or Failed to Pending, appends <paramref name="note"/> to the instructions, and increments <see cref="ReopenCount"/>.</summary>
     public void Reopen(string note)
     {

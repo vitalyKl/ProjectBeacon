@@ -256,4 +256,53 @@ public sealed partial class PipelineHandlerTests
         }
     }
 
+    [Fact]
+    public async Task RetryFailedActorSession_ReopensFailedSubtaskAndStartsNewAttempt()
+    {
+        var (projectId, task) = await SeedTaskAsync("Retry failed actor");
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner(backendId);
+
+        var planner = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        Assert.True(planner.Success, planner.Error);
+        var subtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Implement the change")), TestContext.Current.CancellationToken);
+        Assert.True(subtask.Success, subtask.Error);
+        var actor = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(actor.Success, actor.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var failedSession = await _db.PipelineSessions.SingleAsync(
+                s => s.Id == actor.Value!.Id, TestContext.Current.CancellationToken);
+            failedSession.Fail("actor crashed");
+            var failedSubtask = await _db.Subtasks.SingleAsync(
+                s => s.Id == subtask.Value.Id, TestContext.Current.CancellationToken);
+            failedSubtask.Fail("actor crashed");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var retried = await new RetryPipelineSessionHandler(factory, spawner)
+            .HandleAsync(new RetryPipelineSessionCommand(new RetryPipelineSessionRequest(actor.Value!.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.True(retried.Success, retried.Error);
+        Assert.Equal(PipelineRole.Actor, retried.Value!.Role);
+        Assert.Equal(subtask.Value.Id, retried.Value.SubtaskId);
+        Assert.Equal(backendId, retried.Value.ModelBackendId);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.Subtasks.AsNoTracking().SingleAsync(
+                s => s.Id == subtask.Value.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.InProgress, persisted.Status);
+            Assert.Null(persisted.Summary);
+            Assert.Null(persisted.DiffRef);
+            Assert.Equal(0, persisted.ReopenCount);
+        }
+    }
+
+
 }
