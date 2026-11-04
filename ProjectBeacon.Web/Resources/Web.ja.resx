@@ -1646,13 +1646,13 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>このページがデバイス上の GGUF を走査できるよう、ダッシュボードでプロジェクトフォルダを付けてください。</value>
   </data>
 <data name="NextStepTodo" xml:space="preserve">
-    <value>何も勝手には動きません。ダッシュボードでフォルダを付け、設定でモデルを追加し、パイプラインを開始（手動の段階）するか、MCP の finish_work でタスクを完了してください。</value>
+    <value>タスクを開始すると Planner セッションが作成・起動されます。パイプラインにはオンラインのネイティブワークステーションと Planner ロールに割り当てられたモデルが必要です。</value>
   </data>
 <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>サブタスクを作成してからアクターセッションを開始します。セッションの起動は Beacon 内でセッションを稼働中にするだけで、エージェントは起動しません。</value>
+    <value>サブタスクを作成し、Actor セッションを開始します。対応するワークステーションとモデルが利用可能な場合、ネイティブエージェントは自動的に起動します。</value>
   </data>
 <data name="LaunchSessionHint" xml:space="preserve">
-    <value>セッションの起動はデータベースの状態を更新します。エージェントは起動しません。</value>
+    <value>オンラインのネイティブワークステーションでネイティブエージェントを起動します。実行環境が利用できない場合、セッションは Ready のままになり理由が表示されます。</value>
   </data>
 <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>稼働中のパイプラインセッションはありません。モデルはタスクを開始しません。タスクを開いてパイプラインを開始するか、MCP を使ってください。</value>
@@ -2133,7 +2133,7 @@ orthstar</value>
     <value>これらはワークステーション全体に適用されるロール別の既定値と OpenCode 設定です。タスクの該当フェーズに専用モデルが設定されていない場合にのみ、パイプラインセッションでロール設定が使用されます。</value>
   </data>
   <data name="PipelineStartHint" xml:space="preserve">
-    <value>Planner を起動してタスクを分析し、実行計画を準備します。</value>
+    <value>Planner セッションを作成して起動を試みます。オンラインのネイティブワークステーションと Planner ロールに割り当てられたモデルが必要です。</value>
   </data>
   <data name="TaskKindModelsScopeHint" xml:space="preserve">
     <value>これらはタスクパイプラインで使用するモデルの設定です。設定されたタスクフェーズでは、意思決定モデルと Worker モデルの既定値、およびフェーズ別モデルがワークステーションのロール設定より優先されます。</value>
