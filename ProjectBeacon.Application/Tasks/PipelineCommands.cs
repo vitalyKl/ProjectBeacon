@@ -30,11 +30,7 @@ public record PipelineSessionDto(
     string PromptContext,
     DateTime? LaunchedAt,
     DateTime? ClosedAt,
-    string ActivityJson = "{}",
-    DateTime? LastActivityAt = null,
-    string? FailureReason = null,
-    bool CanLaunch = false,
-    string? LaunchBlockedReason = null);
+    string ActivityJson = "{}");
 
 /// <summary>A recorded review verdict for a task, optionally aimed at one subtask.</summary>
 public record ReviewVerdictDto(
@@ -55,8 +51,14 @@ public record PipelineStateDto(
     IReadOnlyList<SubtaskDto> Subtasks,
     IReadOnlyList<PipelineSessionDto> Sessions,
     IReadOnlyList<ReviewVerdictDto> Verdicts,
-    bool CanStart = false,
-    string? StartBlockedReason = null);
+    PipelinePreflightDto? Preflight = null);
+
+/// <summary>Server-computed availability of the native executor and role models.</summary>
+public record PipelinePreflightDto(
+    bool HasOnlineNativeWorkstation,
+    bool PlannerModelConfigured,
+    bool ActorModelConfigured,
+    bool ReviewModelConfigured);
 
 /// <summary>Identifies the task whose pipeline should start.</summary>
 public record StartPipelineRequest(Guid TaskId);

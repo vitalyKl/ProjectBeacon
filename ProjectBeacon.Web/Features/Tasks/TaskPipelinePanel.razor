@@ -35,10 +35,10 @@
                 }
                 @if (session.Status == SessionStatus.Ready)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy || !session.CanLaunch">@L["LaunchSession"]</MudButton>
-                    @if (!session.CanLaunch && !string.IsNullOrWhiteSpace(session.LaunchBlockedReason))
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy || !CanLaunch(session)">@L["LaunchSession"]</MudButton>
+                    @if (!CanLaunch(session))
                     {
-                        <MudText Typo="Typo.caption" Color="Color.Warning">@L[session.LaunchBlockedReason]</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session.Role)</MudText>
                     }
                 }
             </MudStack>
@@ -70,12 +70,12 @@
     {
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-3 beacon-task-start-prompt">
             <MudText Typo="Typo.body2">@L["PipelineNotStarted"]</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
-                       OnClick="OnStart" Disabled="Busy || Pipeline?.CanStart == false" Class="mt-3">@L["StartPipeline"]</MudButton>
-            @if (!string.IsNullOrWhiteSpace(Pipeline?.StartBlockedReason))
+            @if (!CanStartPlanner)
             {
-                <MudText Typo="Typo.caption" Color="Color.Warning" Class="mt-2">@L[Pipeline.StartBlockedReason]</MudText>
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PreflightMessage(PipelineRole.Planner)</MudAlert>
             }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
+                       OnClick="OnStart" Disabled="Busy || !CanStartPlanner" Class="mt-3">@L["StartPipeline"]</MudButton>
         </MudAlert>
     }
 </MudPaper>
@@ -86,6 +86,22 @@
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
     [Parameter] public EventCallback OnStart { get; set; }
+
+    private bool CanStartPlanner => Pipeline?.Preflight is { HasOnlineNativeWorkstation: true, PlannerModelConfigured: true };
+
+    private bool CanLaunch(PipelineSessionDto session) => Pipeline?.Preflight is { HasOnlineNativeWorkstation: true } preflight && ModelConfigured(preflight, session.Role);
+
+    private bool ModelConfigured(PipelinePreflightDto preflight, PipelineRole role) => role switch
+    {
+        PipelineRole.Planner => preflight.PlannerModelConfigured,
+        PipelineRole.Actor => preflight.ActorModelConfigured,
+        PipelineRole.Review => preflight.ReviewModelConfigured,
+        _ => false
+    };
+
+    private string PreflightMessage(PipelineRole role) => Pipeline?.Preflight?.HasOnlineNativeWorkstation != true
+        ? L["PipelinePreflightNoNativeWorkstation"].Value
+        : L["PipelinePreflightNoRoleModel"].Value;
 
     private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
 

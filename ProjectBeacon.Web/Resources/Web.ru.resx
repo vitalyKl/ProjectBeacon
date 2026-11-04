@@ -2299,22 +2299,13 @@
   <data name="RetrySession" xml:space="preserve">
     <value>Запустить заново</value>
   </data>
-  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
-    <value>К проекту не привязана нативная рабочая станция. Привяжите её и выберите Native в настройке Agent runtime.</value>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>К проекту не привязана онлайн-рабочая станция с native runtime. Установите AgentRuntime=native и подключите станцию.</value>
   </data>
-  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>Привязанная к проекту нативная рабочая станция не в сети.</value>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>Для Planner не настроена модель. Настройте модель этапа Understand или привязку роли Planner.</value>
   </data>
-  <data name="PipelineNoModelConfigured" xml:space="preserve">
-    <value>Для этой роли пайплайна не настроена модель.</value>
-  </data>
-  <data name="PipelineModelMissing" xml:space="preserve">
-    <value>Настроенная для этой роли модель больше не существует.</value>
-  </data>
-  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
-    <value>Не настроена модель для роли Planner или фазы Understand задачи.</value>
-  </data>
-  <data name="PipelinePlannerModelMissing" xml:space="preserve">
-    <value>Модель, настроенная для роли Planner или фазы Understand, больше не существует.</value>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>Для этой роли пайплайна не настроена модель. Настройте соответствующий этап или привязку роли.</value>
   </data>
 </root>

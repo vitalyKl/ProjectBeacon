@@ -2309,22 +2309,13 @@ orthstar</value>
   <data name="RetrySession" xml:space="preserve">
     <value>Sitzung erneut starten</value>
   </data>
-  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
-    <value>Diesem Projekt ist keine native Workstation zugeordnet. Ordnen Sie eine zu und wählen Sie Native als Agent-Laufzeit.</value>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>Diesem Projekt ist keine Online-Workstation mit nativem Runtime zugeordnet. Setzen Sie AgentRuntime auf native und verbinden Sie die Workstation.</value>
   </data>
-  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>Die diesem Projekt zugeordnete native Workstation ist offline.</value>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>Für die Planner-Rolle ist kein Modell konfiguriert. Konfigurieren Sie die Understand-Phase oder die Planner-Rollenbindung.</value>
   </data>
-  <data name="PipelineNoModelConfigured" xml:space="preserve">
-    <value>Für diese Pipeline-Rolle ist kein Modell konfiguriert.</value>
-  </data>
-  <data name="PipelineModelMissing" xml:space="preserve">
-    <value>Das für diese Pipeline-Rolle konfigurierte Modell existiert nicht mehr.</value>
-  </data>
-  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
-    <value>Für die Planner-Rolle oder die Understand-Phase der Aufgabe ist kein Modell konfiguriert.</value>
-  </data>
-  <data name="PipelinePlannerModelMissing" xml:space="preserve">
-    <value>Das für die Planner-Rolle oder die Understand-Phase konfigurierte Modell existiert nicht mehr.</value>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>Für diese Pipeline-Rolle ist kein Modell konfiguriert. Konfigurieren Sie die passende Phase oder Rollenbindung.</value>
   </data>
 </root>

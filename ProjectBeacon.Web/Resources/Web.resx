@@ -2507,22 +2507,13 @@ No Beacon-hosted coding agent.</value>
   <data name="RetrySession" xml:space="preserve">
     <value>Retry session</value>
   </data>
-  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
-    <value>No native workstation is assigned to this project. Attach one and set Agent runtime to Native.</value>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>No online native workstation is assigned to this project. Set AgentRuntime to native and bring the workstation online.</value>
   </data>
-  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>The native workstation assigned to this project is offline.</value>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>No model is configured for the Planner role. Configure the Understand phase or Planner role binding.</value>
   </data>
-  <data name="PipelineNoModelConfigured" xml:space="preserve">
-    <value>No model is configured for this pipeline role.</value>
-  </data>
-  <data name="PipelineModelMissing" xml:space="preserve">
-    <value>The configured model for this pipeline role no longer exists.</value>
-  </data>
-  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
-    <value>No model is configured for the Planner role or the task's Understand phase.</value>
-  </data>
-  <data name="PipelinePlannerModelMissing" xml:space="preserve">
-    <value>The model configured for the Planner role or Understand phase no longer exists.</value>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>No model is configured for this pipeline role. Configure the matching phase or role binding.</value>
   </data>
 </root>

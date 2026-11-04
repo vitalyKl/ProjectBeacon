@@ -2317,22 +2317,13 @@ orthstar</value>
   <data name="RetrySession" xml:space="preserve">
     <value>重新运行会话</value>
   </data>
-  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
-    <value>此项目未分配原生工作站。请关联工作站并将 Agent runtime 设置为 Native。</value>
+  <data name="PipelinePreflightNoNativeWorkstation" xml:space="preserve">
+    <value>此项目未分配在线 native 工作站。请将 AgentRuntime 设置为 native，并使工作站上线。</value>
   </data>
-  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>分配给此项目的原生工作站处于离线状态。</value>
+  <data name="PipelinePreflightNoPlannerModel" xml:space="preserve">
+    <value>尚未为 Planner 角色配置模型。请配置 Understand 阶段或 Planner 角色绑定。</value>
   </data>
-  <data name="PipelineNoModelConfigured" xml:space="preserve">
-    <value>此流水线角色尚未配置模型。</value>
-  </data>
-  <data name="PipelineModelMissing" xml:space="preserve">
-    <value>此流水线角色配置的模型已不存在。</value>
-  </data>
-  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
-    <value>Planner 角色或任务的 Understand 阶段尚未配置模型。</value>
-  </data>
-  <data name="PipelinePlannerModelMissing" xml:space="preserve">
-    <value>Planner 角色或 Understand 阶段配置的模型已不存在。</value>
+  <data name="PipelinePreflightNoRoleModel" xml:space="preserve">
+    <value>尚未为此流水线角色配置模型。请配置对应阶段或角色绑定。</value>
   </data>
 </root>

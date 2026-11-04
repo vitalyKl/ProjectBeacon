@@ -62,11 +62,11 @@ else
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                            StartIcon="@Icons.Material.Filled.PlayArrow"
-                           OnClick="OnStartPipeline" Disabled="_busy || _pipeline?.CanStart == false">@L["StartPipeline"]</MudButton>
+                           OnClick="OnStartPipeline" Disabled="_busy || !CanStartPlanner">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
-                @if (!string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason))
+                @if (!CanStartPlanner)
                 {
-                    <MudText Typo="Typo.caption" Color="Color.Warning">@L[_pipeline.StartBlockedReason]</MudText>
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
                 }
             }
             else
@@ -241,6 +241,10 @@ else
     private PipelineStateDto? _pipeline;
     private bool _busy;
     private bool _isAdmin;
+    private bool CanStartPlanner => _pipeline?.Preflight is { HasOnlineNativeWorkstation: true, PlannerModelConfigured: true };
+    private string PlannerPreflightMessage => _pipeline?.Preflight?.HasOnlineNativeWorkstation != true
+        ? L["PipelinePreflightNoNativeWorkstation"].Value
+        : L["PipelinePreflightNoPlannerModel"].Value;
     private string? _userId;
 
     private List<LabelDto> _labels = [];
@@ -507,6 +511,11 @@ else
         _busy = true;
         try
         {
+            if (!CanStartPlanner)
+            {
+                Snackbar.Add(PlannerPreflightMessage, Severity.Warning);
+                return;
+            }
             var result = await StartPipeline.HandleAsync(new StartPipelineCommand(new StartPipelineRequest(TaskId)));
             if (!result.Success)
             {
@@ -609,6 +618,13 @@ else
         _busy = true;
         try
         {
+            if (_pipeline?.Preflight is not { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true })
+            {
+                Snackbar.Add(_pipeline?.Preflight?.HasOnlineNativeWorkstation != true
+                    ? L["PipelinePreflightNoNativeWorkstation"].Value
+                    : L["PipelinePreflightNoRoleModel"].Value, Severity.Warning);
+                return;
+            }
             var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
             if (!result.Success)
             {
