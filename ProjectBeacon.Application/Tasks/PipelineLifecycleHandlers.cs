@@ -212,7 +212,7 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
     private static bool IsNativeRuntime(string? workstationJson)
     {
         if (string.IsNullOrWhiteSpace(workstationJson))
-            return false;
+            return true;
         try
         {
             using var doc = JsonDocument.Parse(workstationJson);

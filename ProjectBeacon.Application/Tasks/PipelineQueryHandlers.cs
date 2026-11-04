@@ -84,7 +84,7 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
     private static bool IsNativeRuntime(string? workstationJson)
     {
         if (string.IsNullOrWhiteSpace(workstationJson))
-            return false;
+            return true;
         try
         {
             using var document = JsonDocument.Parse(workstationJson);
