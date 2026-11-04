@@ -252,9 +252,9 @@ public sealed partial class PipelineHandlerTests
                 .Where(s => s.TaskId == task.Id)
                 .ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(2, attempts.Count);
-            var failedAttempt = Assert.Single(attempts.Where(s => s.Status == SessionStatus.Failed));
+            var failedAttempt = Assert.Single(attempts, s => s.Status == SessionStatus.Failed);
             Assert.Equal("native agent crashed", failedAttempt.FailureReason);
-            Assert.Single(attempts.Where(s => s.Status == SessionStatus.Ready));
+            Assert.Single(attempts, s => s.Status == SessionStatus.Ready);
         }
     }
 
