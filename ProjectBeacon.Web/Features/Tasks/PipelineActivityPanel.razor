@@ -90,12 +90,14 @@
     private bool HasRecentSignal => Session.LastActivityAt is { } lastActivity
         && DateTime.UtcNow - lastActivity <= TimeSpan.FromSeconds(30);
     private bool IsLive => Session.Status == SessionStatus.WaitingForUser
-        || (Session.Status == SessionStatus.Active && HasRecentSignal && _state is not ("completed" or "failed"));
-    private bool IsWorking => Session.Status == SessionStatus.Active && HasRecentSignal
+        || (Session.Status == SessionStatus.Active && !Session.IsQueued && HasRecentSignal && _state is not ("completed" or "failed"));
+    private bool IsWorking => Session.Status == SessionStatus.Active && !Session.IsQueued && HasRecentSignal
         && _state is not ("completed" or "failed" or "waiting-for-user");
-    private string ActivityLabel => !string.IsNullOrWhiteSpace(Session.FailureReason)
-        ? Session.FailureReason
-        : Session.Status == SessionStatus.Active && !HasRecentSignal
+    private string ActivityLabel => Session.IsQueued
+        ? L["PipelineQueued"].Value
+        : !string.IsNullOrWhiteSpace(Session.FailureReason)
+            ? Session.FailureReason
+            : Session.Status == SessionStatus.Active && !HasRecentSignal
             ? L["PipelineNoRecentSignal"].Value
             : !string.IsNullOrWhiteSpace(_activity)
                 ? _activity
@@ -109,7 +111,9 @@
                 : L["PipelineActivityWorking"].Value
         };
 
-    private string StatusLabel => Session.Status switch
+    private string StatusLabel => Session.IsQueued
+        ? L["PipelineQueued"].Value
+        : Session.Status switch
     {
         SessionStatus.WaitingForUser => L["WaitingForUser"].Value,
         SessionStatus.Active when _state == "completed" => L["PipelineActivityCompleted"].Value,
@@ -118,7 +122,9 @@
         _ => L[Session.Status.ToString()].Value
     };
 
-    private Color StatusColor => Session.Status switch
+    private Color StatusColor => Session.IsQueued
+        ? Color.Warning
+        : Session.Status switch
     {
         SessionStatus.Active when !HasRecentSignal => Color.Warning,
         SessionStatus.Active when _state == "failed" => Color.Error,

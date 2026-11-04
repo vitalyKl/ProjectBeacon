@@ -86,6 +86,30 @@ internal static class PipelineSupport
             .OrderBy(v => v.CreatedAt).ThenBy(v => v.Id)
             .ToListAsync(ct);
 
+        var queuedSessionIds = new HashSet<Guid>();
+        var pendingPipelinePayloads = await db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(c => c.ProjectId == task.ProjectId
+                && c.Kind == WorkstationCommandKind.RunPipelineSession
+                && c.Status == WorkstationCommandStatus.Pending)
+            .Select(c => c.PayloadJson)
+            .ToListAsync(ct);
+        foreach (var payload in pendingPipelinePayloads)
+        {
+            try
+            {
+                using var command = JsonDocument.Parse(payload);
+                if (command.RootElement.ValueKind == JsonValueKind.Object
+                    && command.RootElement.TryGetProperty("sessionId", out var value)
+                    && value.ValueKind == JsonValueKind.String
+                    && Guid.TryParse(value.GetString(), out var queuedId))
+                    queuedSessionIds.Add(queuedId);
+            }
+            catch (JsonException)
+            {
+                // Malformed legacy commands are not displayed as queued sessions.
+            }
+        }
+
         var runtimeDeviceIds = await db.ProjectRuntimes.IgnoreQueryFilters()
             .Where(r => r.ProjectId == task.ProjectId)
             .Select(r => r.DeviceId)
@@ -153,7 +177,8 @@ internal static class PipelineSupport
                 return PipelineMappers.ToDto(session) with
                 {
                     CanLaunch = session.Status == SessionStatus.Ready && blockedReason is null,
-                    LaunchBlockedReason = blockedReason
+                    LaunchBlockedReason = blockedReason,
+                    IsQueued = queuedSessionIds.Contains(session.Id)
                 };
             }).ToList()
         };

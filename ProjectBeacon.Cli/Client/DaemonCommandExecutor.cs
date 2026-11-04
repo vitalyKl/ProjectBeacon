@@ -452,10 +452,18 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             pipelineRole,
             token.AllowedMcpTools, token.McpServers);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
-        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        turnCts.CancelAfter(_timing.ChatMaxDuration);
+        var workstationSettings = _loadSettings();
+        var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
+        var pipelineIdleMinutes = Math.Clamp(workstationSettings.PipelineIdleTimeoutMinutes, 1, Math.Min(30, pipelineMaxMinutes - 1));
+        var pipelineIdleTimeout = TimeSpan.FromMinutes(pipelineIdleMinutes);
+        var lastProgressAt = DateTime.UtcNow;
+        string? lastProgressSignature = null;
+        string? timeoutReason = null;
 
-        async Task PublishActivityAsync(string state, AgentTurnStatus? turnStatus, CancellationToken tokenCt)
+        using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
+
+        async Task<bool> PublishActivityAsync(string state, AgentTurnStatus? turnStatus, CancellationToken tokenCt)
         {
             var collected = new List<AgentMessagePart>();
             await foreach (var part in runtime.StreamPartsAsync(externalSessionId, tokenCt))
@@ -501,6 +509,34 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 };
             }).ToArray();
 
+            // Ignore elapsed-duration counters: only transcript/tool/form changes count
+            // as progress, so a stuck tool cannot keep the turn alive indefinitely.
+            var progressSignature = JsonSerializer.Serialize(new
+            {
+                parts = collected.Select(part => new
+                {
+                    part.Role,
+                    part.Kind,
+                    BodyLength = part.Body?.Length,
+                    BodyTail = part.Body is { Length: > 256 } body ? body[^256..] : part.Body,
+                    part.ExternalId,
+                    part.Tool,
+                    part.ToolStatus,
+                    ToolInputLength = part.ToolInput?.Length,
+                    ToolInputTail = part.ToolInput is { Length: > 128 } input ? input[^128..] : part.ToolInput,
+                    ToolResultLength = part.ToolResult?.Length,
+                    ToolResultTail = part.ToolResult is { Length: > 128 } result ? result[^128..] : part.ToolResult,
+                    part.Complete
+                }),
+                forms = formItems
+            });
+            var madeProgress = !string.Equals(progressSignature, lastProgressSignature, StringComparison.Ordinal);
+            if (madeProgress)
+            {
+                lastProgressSignature = progressSignature;
+                lastProgressAt = DateTime.UtcNow;
+            }
+
             var latest = collected.LastOrDefault();
             var activity = forms.Count > 0
                 ? "Waiting for your answer"
@@ -533,6 +569,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 tokenCt);
             if (!response.IsSuccessStatusCode)
                 _state.Log($"pipeline activity report returned HTTP {(int)response.StatusCode}");
+            return madeProgress;
         }
 
         try
@@ -552,6 +589,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             do
             {
                 await PublishActivityAsync("running", null, turnCts.Token);
+                if (DateTime.UtcNow - lastProgressAt >= pipelineIdleTimeout)
+                {
+                    timeoutReason = $"The pipeline agent turn made no progress for {pipelineIdleMinutes} minutes.";
+                    turnCts.Cancel();
+                    turnCts.Token.ThrowIfCancellationRequested();
+                }
+
                 await Task.Delay(_timing.ChatPollInterval, turnCts.Token);
                 status = await runtime.GetTurnStatusAsync(externalSessionId, turnCts.Token);
             }
@@ -587,7 +631,8 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
             try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
-            return (false, null, "The pipeline agent turn exceeded the workstation chat timeout.");
+            return (false, null, timeoutReason
+                ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.");
         }
     }
 

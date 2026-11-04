@@ -2224,6 +2224,18 @@ orthstar</value>
 <data name="PipelineActivityWorking" xml:space="preserve">
     <value>代理正在工作</value>
   </data>
+  <data name="PipelineQueued" xml:space="preserve">
+    <value>排队中 · 等待工作站执行</value>
+  </data>
+  <data name="PipelineTurnTimeout" xml:space="preserve">
+    <value>流水线轮次上限（分钟）</value>
+  </data>
+  <data name="PipelineIdleTimeout" xml:space="preserve">
+    <value>无进展超时（分钟）</value>
+  </data>
+  <data name="PipelineTimeoutHelp" xml:space="preserve">
+    <value>如果转录内容、工具或表单在此时间内没有变化，则停止该轮次。绝对上限为60分钟。</value>
+  </data>
 <data name="PipelineWaitingForUser" xml:space="preserve">
     <value>代理需要你的输入才能继续。</value>
   </data>

@@ -2224,6 +2224,18 @@ orthstar</value>
 <data name="PipelineActivityWorking" xml:space="preserve">
     <value>エージェントが作業中です</value>
   </data>
+  <data name="PipelineQueued" xml:space="preserve">
+    <value>キュー待ち · ワークステーションの実行待ち</value>
+  </data>
+  <data name="PipelineTurnTimeout" xml:space="preserve">
+    <value>パイプラインターンの上限（分）</value>
+  </data>
+  <data name="PipelineIdleTimeout" xml:space="preserve">
+    <value>進捗なしのタイムアウト（分）</value>
+  </data>
+  <data name="PipelineTimeoutHelp" xml:space="preserve">
+    <value>トランスクリプト、ツール、フォームにこの時間変更がない場合、ターンを停止します。絶対上限は60分です。</value>
+  </data>
 <data name="PipelineWaitingForUser" xml:space="preserve">
     <value>エージェントが作業を続けるには、あなたからの入力が必要です。</value>
   </data>

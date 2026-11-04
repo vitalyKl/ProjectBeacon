@@ -2216,7 +2216,19 @@ orthstar</value>
   <data name="PipelineActivityWorking" xml:space="preserve">
     <value>Agent arbeitet</value>
   </data>
-  <data name="PipelineWaitingForUser" xml:space="preserve">
+    <data name="PipelineQueued" xml:space="preserve">
+    <value>In Warteschlange · wartet auf die Workstation</value>
+  </data>
+  <data name="PipelineTurnTimeout" xml:space="preserve">
+    <value>Maximale Dauer eines Pipeline-Schritts (Minuten)</value>
+  </data>
+  <data name="PipelineIdleTimeout" xml:space="preserve">
+    <value>Zeitlimit ohne Fortschritt (Minuten)</value>
+  </data>
+  <data name="PipelineTimeoutHelp" xml:space="preserve">
+    <value>Ein Schritt wird beendet, wenn sich Transkript, Tools oder Formulare so lange nicht ändern. Das absolute Limit beträgt höchstens 60 Minuten.</value>
+  </data>
+<data name="PipelineWaitingForUser" xml:space="preserve">
     <value>Der Agent benötigt deine Eingabe, bevor er fortfahren kann.</value>
   </data>
   <data name="UnassignedSubtasks" xml:space="preserve">

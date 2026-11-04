@@ -76,6 +76,10 @@ public static class WorkstationSetup
         }
         if (root.TryGetProperty("concurrentPortBase", out var cport) && cport.TryGetInt32(out var cp) && cp > 0)
             settings.ConcurrentPortBase = cp;
+        if (root.TryGetProperty("pipelineTurnTimeoutMinutes", out var pipelineMax) && pipelineMax.TryGetInt32(out var maxMinutes))
+            settings.PipelineTurnTimeoutMinutes = Math.Clamp(maxMinutes, 15, 60);
+        if (root.TryGetProperty("pipelineIdleTimeoutMinutes", out var pipelineIdle) && pipelineIdle.TryGetInt32(out var idleMinutes))
+            settings.PipelineIdleTimeoutMinutes = Math.Clamp(idleMinutes, 1, 30);
         if (root.TryGetProperty("opencodeDataDir", out var data) && data.ValueKind == JsonValueKind.String)
             settings.OpencodeDataDir = data.GetString();
         if (root.TryGetProperty("projectsRoot", out var projects) && projects.ValueKind == JsonValueKind.String)

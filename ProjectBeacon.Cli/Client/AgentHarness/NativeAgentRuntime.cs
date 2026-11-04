@@ -17,7 +17,7 @@ using ProjectBeacon.Cli.Client;
 /// </summary>
 internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilities
 {
-    private const int MaxAttempts = 3;
+    private const int MaxAttempts = 5;
     private const int MaxToolResultCharacters = 16 * 1024;
     private const string CheckpointHeader = "Continuation checkpoint (internal state; preserve and follow it):";
     private const double CompactionTriggerRatio = 0.82;
@@ -501,8 +501,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts
                         && !stepEmittedContent && !ct.IsCancellationRequested)
                     {
-                        _log?.Invoke($"native provider request failed transiently (attempt {attempt}/{MaxAttempts}); retrying");
-                        await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), ct);
+                        var delaySeconds = Math.Min(8, 1 << (attempt - 1));
+                        _log?.Invoke($"native provider request failed transiently (attempt {attempt}/{MaxAttempts}); retrying in {delaySeconds}s");
+                        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), ct);
                     }
                 }
 

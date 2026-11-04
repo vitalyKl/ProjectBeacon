@@ -2194,7 +2194,19 @@
   <data name="WaitingForUser" xml:space="preserve">
     <value>Ожидает вашего ответа</value>
   </data>
-  <data name="PipelineWaitingForUser" xml:space="preserve">
+    <data name="PipelineQueued" xml:space="preserve">
+    <value>В очереди · ожидание выполнения на рабочей станции</value>
+  </data>
+  <data name="PipelineTurnTimeout" xml:space="preserve">
+    <value>Максимальная длительность этапа (минуты)</value>
+  </data>
+  <data name="PipelineIdleTimeout" xml:space="preserve">
+    <value>Таймаут без прогресса (минуты)</value>
+  </data>
+  <data name="PipelineTimeoutHelp" xml:space="preserve">
+    <value>Этап останавливается, если столько времени нет изменений в транскрипте, инструментах или формах. Абсолютный лимит — не более 60 минут.</value>
+  </data>
+<data name="PipelineWaitingForUser" xml:space="preserve">
     <value>Агенту нужна ваша информация, чтобы продолжить.</value>
   </data>
   <data name="PipelineActivityStarting" xml:space="preserve">

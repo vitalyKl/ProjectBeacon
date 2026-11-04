@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Tests;
 
 using System.Text.Json;
 using Application.Devices;
+using Application.Tasks;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
@@ -98,6 +99,128 @@ public sealed partial class PipelineHandlerTests
             Assert.NotNull(stored.ClosedAt);
             Assert.Equal("native agent turn failed", stored.FailureReason);
             Assert.NotNull(stored.LastActivityAt);
+        }
+    }
+
+    [Fact]
+    public async Task FailedPlannerAndActorCommands_AdvancePendingSubtasksOneAtATime()
+    {
+        var (projectId, task) = await SeedTaskAsync("Recover a partially planned pipeline");
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var spawner = new FakeSpawner(backendId);
+
+        var planner = await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        Assert.True(planner.Success, planner.Error);
+        var first = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "First actor work")), TestContext.Current.CancellationToken);
+        var second = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Second actor work")), TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
+        Assert.True(second.Success, second.Error);
+
+        Guid plannerCommandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .SingleAsync(r => r.ProjectId == projectId, TestContext.Current.CancellationToken);
+            var device = await _db.DaemonDevices.IgnoreQueryFilters()
+                .SingleAsync(d => d.Id == runtime.DeviceId, TestContext.Current.CancellationToken);
+            var plannerSession = await _db.PipelineSessions
+                .SingleAsync(s => s.Id == planner.Value!.Id, TestContext.Current.CancellationToken);
+            plannerSession.Launch();
+            var command = WorkstationCommand.Create(
+                device.Id,
+                WorkstationCommandKind.RunPipelineSession,
+                JsonSerializer.Serialize(new { sessionId = plannerSession.Id }),
+                projectId,
+                device.UserId);
+            command.Claim(TimeSpan.FromMinutes(CommandLease.PipelineMinutes), "test-instance");
+            plannerCommandId = command.Id;
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var dispatcher = new PipelineActorQueueDispatcher(factory, spawner);
+        var completion = new CompleteCommandHandler(factory, dispatcher);
+        var deviceId = await DeviceForProjectAsync(projectId);
+        var plannerFailed = await completion.HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(
+                plannerCommandId, deviceId, false, null,
+                "planner returned HTTP 500", Generation: 1)),
+            TestContext.Current.CancellationToken);
+        Assert.True(plannerFailed.Success, plannerFailed.Error);
+
+        var manualSecondStart = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, second.Value!.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.False(manualSecondStart.Success);
+        Assert.Contains("Another Actor session", manualSecondStart.Error);
+
+        Guid firstActorCommandId;
+        Guid firstActorSessionId;
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.ChangeTracker.Clear();
+            var actorSession = await _db.PipelineSessions.IgnoreQueryFilters()
+                .SingleAsync(s => s.TaskId == task.Id && s.Role == PipelineRole.Actor
+                    && s.Status == SessionStatus.Active, TestContext.Current.CancellationToken);
+            firstActorSessionId = actorSession.Id;
+            var actorCommand = await _db.WorkstationCommands.IgnoreQueryFilters()
+                .SingleAsync(c => c.Kind == WorkstationCommandKind.RunPipelineSession
+                    && c.Status == WorkstationCommandStatus.Pending
+                    && c.PayloadJson.Contains(firstActorSessionId.ToString()), TestContext.Current.CancellationToken);
+            actorCommand.Claim(TimeSpan.FromMinutes(CommandLease.PipelineMinutes), "test-instance");
+            firstActorCommandId = actorCommand.Id;
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var firstStatus = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.Id == first.Value!.Id)
+                .Select(s => s.Status).SingleAsync(TestContext.Current.CancellationToken);
+            var secondStatus = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.Id == second.Value!.Id)
+                .Select(s => s.Status).SingleAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.InProgress, firstStatus);
+            Assert.Equal(SubtaskStatus.Pending, secondStatus);
+            Assert.Equal(1, await _db.PipelineSessions.IgnoreQueryFilters().CountAsync(
+                s => s.TaskId == task.Id && s.Role == PipelineRole.Actor && s.Status == SessionStatus.Active,
+                TestContext.Current.CancellationToken));
+        }
+
+        var actorFailed = await completion.HandleAsync(
+            new CompleteCommandCommand(new CompleteCommandRequest(
+                firstActorCommandId, deviceId, false, null,
+                "The pipeline agent turn exceeded the workstation chat timeout.", Generation: 1)),
+            TestContext.Current.CancellationToken);
+        Assert.True(actorFailed.Success, actorFailed.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.ChangeTracker.Clear();
+            var firstSubtask = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(s => s.Id == first.Value!.Id, TestContext.Current.CancellationToken);
+            var secondSubtask = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(s => s.Id == second.Value!.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.Failed, firstSubtask.Status);
+            Assert.Equal("The pipeline agent turn exceeded the workstation chat timeout.", firstSubtask.Summary);
+            Assert.Equal(SubtaskStatus.InProgress, secondSubtask.Status);
+
+            var actors = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Actor).ToListAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(2, actors.Count);
+            Assert.Single(actors, s => s.Status == SessionStatus.Failed);
+            Assert.Single(actors, s => s.Status == SessionStatus.Active);
+        }
+    }
+
+    private async Task<Guid> DeviceForProjectAsync(Guid projectId)
+    {
+        using (TenantScope.EnterUnscoped())
+        {
+            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .SingleAsync(r => r.ProjectId == projectId, TestContext.Current.CancellationToken);
+            return runtime.DeviceId;
         }
     }
 
