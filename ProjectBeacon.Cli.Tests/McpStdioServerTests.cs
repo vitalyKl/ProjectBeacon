@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -474,6 +475,15 @@ public sealed class McpStdioServerTests
             Assert.DoesNotContain("write_file", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("apply_patch", toolsJson, StringComparison.Ordinal);
             Assert.DoesNotContain("get_tree", toolsJson, StringComparison.Ordinal);
+
+            var tools = frames[0]["result"]!["tools"]!.AsArray();
+            foreach (var name in new[] { "subtask_report_result", "pipeline_fail_subtask" })
+            {
+                var tool = tools.Single(item => item?["name"]?.GetValue<string>() == name);
+                var required = tool!["inputSchema"]!["required"]!.AsArray()
+                    .Select(item => item!.GetValue<string>());
+                Assert.DoesNotContain("subtaskId", required);
+            }
         }
         finally
         {
@@ -789,6 +799,75 @@ public sealed class McpStdioServerTests
             Assert.Single(frames);
             Assert.Equal(0, apiCallCount);
             Assert.Contains("only report the current subtask", frames[0].ToJsonString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ActorLifecycleTools_DefaultToAssignedSubtaskWhenIdIsOmitted()
+    {
+        var taskId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var ownSubtaskId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var apiCalls = new ConcurrentBag<(string Method, string Path, string Body)>();
+        var env = McpEnvironment.Of(
+            ("BEACON_API_URL", "https://beacon.test/"),
+            ("BEACON_API_TOKEN", "test-token"),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_SUBTASK_ID", ownSubtaskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"),
+            ("BEACON_PROJECT_ID", Guid.NewGuid().ToString("D")));
+        using var http = new HttpClient(new StubApiHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? "";
+            apiCalls.Add((request.Method.Method, path, body));
+            if (request.Method == HttpMethod.Get && path == $"/v1/tasks/{taskId:D}/pipeline")
+            {
+                var pipeline = """{"subtasks":[{"id":"SUBTASK_ID","status":"InProgress","allowedMcpTools":[],"allowedPaths":[]}]}"""
+                    .Replace("SUBTASK_ID", ownSubtaskId.ToString("D"), StringComparison.Ordinal);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(pipeline, Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"ok\":true}", Encoding.UTF8, "application/json")
+            };
+        }))
+        {
+            BaseAddress = new Uri("https://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+        var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-actor-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using var input = new MemoryStream();
+            WriteFrame(input, """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"subtask_report_result","arguments":{"diffRef":"working-tree","summary":"Implemented and verified."}}}""");
+            WriteFrame(input, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"pipeline_fail_subtask","arguments":{"reason":"Could not complete safely."}}}""");
+            input.Position = 0;
+            using var output = new MemoryStream();
+            await McpStdioServer.RunAsync(root, input, output, api, env);
+            output.Position = 0;
+            var frames = await ReadAllFramesAsync(output);
+
+            Assert.Equal(2, frames.Count);
+            Assert.All(frames, frame => Assert.DoesNotContain(
+                "\"isError\":true", frame.ToJsonString(), StringComparison.OrdinalIgnoreCase));
+
+            var resultCall = Assert.Single(apiCalls.Where(call => call.Method == "POST"
+                && call.Path == $"/v1/tasks/{taskId:D}/subtasks/{ownSubtaskId:D}/result"));
+            var failCall = Assert.Single(apiCalls.Where(call => call.Method == "POST"
+                && call.Path == $"/v1/tasks/{taskId:D}/subtasks/{ownSubtaskId:D}/fail"));
+            Assert.Contains(ownSubtaskId.ToString("D"), resultCall.Body, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(ownSubtaskId.ToString("D"), failCall.Body, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(2, apiCalls.Count(call => call.Method == "GET"
+                && call.Path == $"/v1/tasks/{taskId:D}/pipeline"));
         }
         finally
         {
