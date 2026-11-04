@@ -102,6 +102,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<RecordReviewCheckHandler>();
         services.AddTransient<ApprovePipelineHandler>();
         services.AddTransient<ForceClosePipelineHandler>();
+        services.AddTransient<GetLivePipelineTaskHandler>();
         services.AddTransient<GetPipelineHandler>();
         // Minimal API and Blazor inject these handlers by concrete type.
         services.AddTransient<ReplyPipelineFormHandler>();
