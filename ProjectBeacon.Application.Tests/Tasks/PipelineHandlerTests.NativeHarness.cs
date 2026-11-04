@@ -94,4 +94,40 @@ public sealed partial class PipelineHandlerTests
                     TestContext.Current.CancellationToken));
         }
     }
+
+    [Fact]
+    public async Task LaunchSession_WithoutNativeRuntime_FailsAndLeavesSessionReady()
+    {
+        var (projectId, task) = await SeedTaskAsync("Pipeline without native runtime");
+        var session = PipelineSession.Create(
+            task.Id,
+            projectId,
+            PipelineRole.Planner,
+            "Planner prompt",
+            modelBackendId: Guid.NewGuid());
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.PipelineSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var launched = await new LaunchSessionHandler(factory).HandleAsync(
+            new LaunchSessionCommand(new LaunchSessionRequest(session.Id)),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(launched.Success);
+        Assert.Contains("No native pipeline workstation", launched.Error);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.PipelineSessions.AsNoTracking()
+                .SingleAsync(s => s.Id == session.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SessionStatus.Ready, persisted.Status);
+            Assert.Null(persisted.LaunchedAt);
+            Assert.Empty(await _db.WorkstationCommands.AsNoTracking()
+                .Where(c => c.Kind == WorkstationCommandKind.RunPipelineSession)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        }
+    }
 }

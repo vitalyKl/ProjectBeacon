@@ -174,6 +174,12 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
                 }
             }
 
+            // A pipeline session is executable only when a native workstation command
+            // has actually been prepared. Never report Active for a session that nobody can run.
+            if (pipelineCommand is null)
+                return Result.Failure<PipelineSessionDto>(
+                    "No native pipeline workstation is configured for this project. Assign an online workstation with AgentRuntime=native and configure a model for this role.");
+
             try
             {
                 session.Launch();
