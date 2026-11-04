@@ -28,8 +28,8 @@
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PhaseModel"]: @ModelName(open.ModelBackendId)</MudText>
                     @foreach (var sub in PhaseSubtasks(open.Id))
                     {
-                        <TaskSubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Pipeline?.Preflight"
-                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
+                        <TaskSubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight"
+                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" Preflight="Preflight" />
                     }
                 </div>
             }

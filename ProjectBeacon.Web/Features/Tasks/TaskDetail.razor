@@ -614,16 +614,6 @@ else
         ? L["SubtaskReported"].Value
         : L[status.ToString()].Value;
 
-    private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
-
-    private Color SessionStatusColor(SessionStatus status) => status switch
-    {
-        SessionStatus.Active => Color.Info,
-        SessionStatus.Closed => Color.Default,
-        SessionStatus.Failed => Color.Error,
-        _ => Color.Default
-    };
-
     private string PipelineStageLabel(TaskPipelineStage stage) => stage switch
     {
         TaskPipelineStage.Planning => L["StagePlanning"].Value,
