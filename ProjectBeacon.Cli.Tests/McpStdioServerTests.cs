@@ -860,10 +860,10 @@ public sealed class McpStdioServerTests
             Assert.All(frames, frame => Assert.DoesNotContain(
                 "\"isError\":true", frame.ToJsonString(), StringComparison.OrdinalIgnoreCase));
 
-            var resultCall = Assert.Single(apiCalls.Where(call => call.Method == "POST"
-                && call.Path == $"/v1/tasks/{taskId:D}/subtasks/{ownSubtaskId:D}/result"));
-            var failCall = Assert.Single(apiCalls.Where(call => call.Method == "POST"
-                && call.Path == $"/v1/tasks/{taskId:D}/subtasks/{ownSubtaskId:D}/fail"));
+            var resultCall = Assert.Single(apiCalls, call => call.Method == "POST"
+                && call.Path == $"/v1/tasks/{taskId:D}/subtasks/{ownSubtaskId:D}/result");
+            var failCall = Assert.Single(apiCalls, call => call.Method == "POST"
+                && call.Path == $"/v1/tasks/{taskId:D}/subtasks/{ownSubtaskId:D}/fail");
             Assert.Contains(ownSubtaskId.ToString("D"), resultCall.Body, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(ownSubtaskId.ToString("D"), failCall.Body, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(2, apiCalls.Count(call => call.Method == "GET"
