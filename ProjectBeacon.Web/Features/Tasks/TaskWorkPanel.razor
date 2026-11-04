@@ -40,7 +40,7 @@
                 <MudText Typo="Typo.subtitle2" Class="mb-2">@L["UnassignedSubtasks"]</MudText>
                 @foreach (var sub in pipeline.Subtasks.Where(s => s.TaskPhaseId is null))
                 {
-                    <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight"
+                    <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
                                          OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                 }
             }
@@ -49,7 +49,7 @@
         {
             @foreach (var sub in pipeline.Subtasks)
             {
-                <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight"
+                <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
                                  OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult"
                                  OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
             }
