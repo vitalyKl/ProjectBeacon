@@ -73,9 +73,6 @@ else
             {
                 @switch (_pipeline.Stage)
                 {
-                    case TaskPipelineStage.Planning:
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
-                        break;
                     case TaskPipelineStage.Executing:
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnStartReview" Disabled="_busy || !CanStartReview">@L["StartReview"]</MudButton>
                         @if (!CanStartReview)
@@ -137,7 +134,7 @@ else
     
                 <section class="beacon-panel beacon-surface-section">
                     <div class="beacon-ops-pad">
-                        @if (_pipeline?.Stage == TaskPipelineStage.Executing)
+                        @if (_pipeline?.Stage is TaskPipelineStage.Planning or TaskPipelineStage.Executing)
                         {
                             <MudButton Variant="Variant.Outlined" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.CreateSubtask))" Disabled="_busy">@L["CreateSubtask"]</MudButton>
                         }
