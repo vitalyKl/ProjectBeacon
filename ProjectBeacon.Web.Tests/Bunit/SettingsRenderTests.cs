@@ -1,5 +1,7 @@
 using System.Globalization;
 using Bunit;
+using Bunit.TestDoubles;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
@@ -9,6 +11,27 @@ public sealed class SettingsRenderTests : BUnitRenderBase
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en");
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
+    }
+
+    [Fact]
+    public void ProjectMcpServers_RendersForProjectOwner()
+    {
+        var user = DbContext.Users.Single();
+        var project = DbContext.Projects.Single();
+        var authProvider = Bunit.Services.GetRequiredService<FakeAuthenticationStateProvider>();
+        authProvider.TriggerAuthenticationStateChanged(
+            "tester",
+            Array.Empty<string>(),
+            new[]
+            {
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id.ToString())
+            },
+            "TestAuth");
+
+        var cut = Bunit.RenderComponent<Features.Agents.ProjectMcpServers>(parameters =>
+            parameters.Add(component => component.ProjectId, project.Id));
+
+        Assert.Contains("beacon-panel", cut.Markup);
     }
 
     [Fact]
