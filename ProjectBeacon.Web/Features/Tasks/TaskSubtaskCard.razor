@@ -22,7 +22,7 @@
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
                        OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
         }
-        @if (session.Status is SessionStatus.Failed or SessionStatus.Closed)
+        @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult))
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
                        OnClick="@(() => OnRetrySession.InvokeAsync(session))"

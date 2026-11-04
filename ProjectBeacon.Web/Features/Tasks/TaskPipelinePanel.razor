@@ -12,7 +12,6 @@
     </MudStack>
     @if (Pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
     {
-        var timelineSessions = pipeline.Sessions.Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review).ToList();
         @if (pipeline.Stage == TaskPipelineStage.Closed)
         {
             <MudText Typo="Typo.body2" Class="mt-2">@L["PipelineClosed"]</MudText>
