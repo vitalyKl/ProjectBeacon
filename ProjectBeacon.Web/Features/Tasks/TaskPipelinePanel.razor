@@ -35,7 +35,8 @@
                 {
                     <MudText Typo="Typo.caption">@L["Closed"]: <LocalTime Value="session.ClosedAt" Format="d" /></MudText>
                 }
-                @if (session.Status is SessionStatus.Failed or SessionStatus.Closed)
+                @if (pipeline.Stage != TaskPipelineStage.Closed
+                    && (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult)))
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))"
                                Disabled="Busy || !CanRunRole(session.Role)">@L["RetrySession"]</MudButton>
@@ -80,14 +81,6 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
-    [Parameter] public EventCallback OnStart { get; set; }
-
-    private bool CanStartPlanner => Pipeline?.CanStart == true;
-
-    private string PlannerPreflightMessage => Pipeline?.StartBlockedReason is { } reason
-        ? L[reason].Value
-        : L["PipelinePreflightNoPlannerModel"].Value;
-
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
 
     private bool CanRunRole(PipelineRole role)
