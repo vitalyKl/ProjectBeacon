@@ -3,7 +3,13 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
-    <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+        <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
+        @if (Pipeline?.Stage is { } headerStage)
+        {
+            <StatusChip Color="Color.Info" Label="@StageLabel(headerStage)" />
+        }
+    </MudStack>
     @if (Pipeline is { } pipeline && pipeline.Stage is not null && pipeline.Stage != TaskPipelineStage.None)
     {
         @if (pipeline.Stage == TaskPipelineStage.Closed)
@@ -16,7 +22,7 @@
         {
             <MudText Typo="Typo.caption" Class="mt-1">@L["NoSessionsYet"]</MudText>
         }
-        @foreach (var session in pipeline.Sessions)
+        @foreach (var session in pipeline.Sessions.Where(s => s.Role is PipelineRole.Planner or PipelineRole.Review))
         {
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mt-1">
                 <StatusChip Color="Color.Default" Label="@RoleLabel(session.Role)" />
@@ -61,18 +67,6 @@
                 <MudText Typo="Typo.caption"><LocalTime Value="verdict.CreatedAt" Format="d" /></MudText>
             </MudStack>
         }
-    }
-    else
-    {
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-3 beacon-task-start-prompt">
-            <MudText Typo="Typo.body2">@L["PipelineNotStarted"]</MudText>
-            @if (!CanStartPlanner)
-            {
-                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@PlannerPreflightMessage</MudAlert>
-            }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
-                       OnClick="OnStart" Disabled="Busy || !CanStartPlanner" Class="mt-3">@L["StartPipeline"]</MudButton>
-        </MudAlert>
     }
 </MudPaper>
 

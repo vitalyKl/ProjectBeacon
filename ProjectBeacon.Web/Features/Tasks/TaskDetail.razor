@@ -249,23 +249,6 @@ else
                 ? PipelineStageLabel(stage)
                 : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
 
-    private static string SessionStateClass(SessionStatus status) => status switch
-    {
-        SessionStatus.Active => "is-info",
-        SessionStatus.WaitingForUser => "is-warning",
-        SessionStatus.Failed => "is-danger",
-        SessionStatus.Closed => "is-success",
-        _ => ""
-    };
-
-    private static string SubtaskStateClass(SubtaskStatus status) => status switch
-    {
-        SubtaskStatus.InProgress => "is-info",
-        SubtaskStatus.Done => "is-success",
-        SubtaskStatus.Failed => "is-danger",
-        _ => ""
-    };
-
     protected override async Task OnInitializedAsync()
     {
         var auth = await Auth.GetAuthenticationStateAsync();
