@@ -9,6 +9,26 @@ using Application.Common;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
+/// <summary>Returns the task that has an active or waiting pipeline session.</summary>
+public sealed class GetLivePipelineTaskHandler : ICommandHandler<GetLivePipelineTaskCommand, Result<Guid?>>
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public GetLivePipelineTaskHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<Guid?>> HandleAsync(GetLivePipelineTaskCommand command, CancellationToken ct = default)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var taskId = await db.PipelineSessions.AsNoTracking()
+            .Where(s => s.ProjectId == command.Request.ProjectId
+                && (s.Status == SessionStatus.Active || s.Status == SessionStatus.WaitingForUser))
+            .OrderByDescending(s => s.LastActivityAt ?? s.LaunchedAt)
+            .Select(s => (Guid?)s.TaskId)
+            .FirstOrDefaultAsync(ct);
+        return Result.Ok(taskId);
+    }
+}
+
 /// <summary>
 /// Returns subtasks, sessions, and verdicts for a task.
 /// </summary>

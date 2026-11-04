@@ -40,8 +40,7 @@ public sealed partial class PipelineHandlerTests
     public async Task HappyPath_PlannerActorReviewApprove_ClosesTaskDone()
     {
         var (projectId, task) = await SeedTaskAsync("Ship the report", "Generate the monthly report");
-        var backendId = await SeedNativeRuntimeAsync(projectId);
-        var spawner = new FakeSpawner(backendId);
+        var spawner = new FakeSpawner();
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
 
         var start = await new StartPipelineHandler(factory, spawner)
@@ -305,5 +304,48 @@ public sealed partial class PipelineHandlerTests
         }
     }
 
+
+    [Fact]
+    public async Task GetLivePipelineTask_IgnoresInProgressTasksWithoutActiveSessions()
+    {
+        var (projectId, task) = await SeedTaskAsync("Manually in progress");
+        using (TenantScope.EnterUnscoped())
+        {
+            var stored = await _db.Tasks.SingleAsync(t => t.Id == task.Id, TestContext.Current.CancellationToken);
+            stored.TransitionTo(TaskItemStatus.InProgress);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new GetLivePipelineTaskHandler(factory).HandleAsync(
+            new GetLivePipelineTaskCommand(new GetLivePipelineTaskRequest(projectId)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Null(result.Value);
+    }
+
+    [Fact]
+    public async Task GetLivePipelineTask_ReturnsTaskWithActivePipelineSession()
+    {
+        var (projectId, task) = await SeedTaskAsync("Live pipeline");
+        using (TenantScope.EnterUnscoped())
+        {
+            var stored = await _db.Tasks.SingleAsync(t => t.Id == task.Id, TestContext.Current.CancellationToken);
+            stored.StartPipeline();
+            var session = PipelineSession.Create(task.Id, projectId, PipelineRole.Planner, "Planner prompt");
+            session.Launch();
+            _db.PipelineSessions.Add(session);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new GetLivePipelineTaskHandler(factory).HandleAsync(
+            new GetLivePipelineTaskCommand(new GetLivePipelineTaskRequest(projectId)),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(task.Id, result.Value);
+    }
 
 }

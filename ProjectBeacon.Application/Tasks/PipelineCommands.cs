@@ -68,6 +68,10 @@ public record PipelinePreflightDto(
     bool ActorModelConfigured,
     bool ReviewModelConfigured);
 
+/// <summary>Finds the most recently active pipeline for the current project.</summary>
+public record GetLivePipelineTaskRequest(Guid ProjectId);
+public record GetLivePipelineTaskCommand(GetLivePipelineTaskRequest Request) : ICommand<Result<Guid?>>;
+
 /// <summary>Identifies the task whose pipeline should start.</summary>
 public record StartPipelineRequest(Guid TaskId);
 
