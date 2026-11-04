@@ -35,8 +35,7 @@
                 {
                     <MudText Typo="Typo.caption">@L["Closed"]: <LocalTime Value="session.ClosedAt" Format="d" /></MudText>
                 }
-                @if (pipeline.Stage != TaskPipelineStage.Closed
-                    && session.Status is SessionStatus.Failed or SessionStatus.Closed)
+                @if (CanRetry(session))
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))"
                                Disabled="Busy || !CanRunRole(session.Role)">@L["RetrySession"]</MudButton>
@@ -82,6 +81,15 @@
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
+
+    private bool CanRetry(PipelineSessionDto session) =>
+        (session.Status is SessionStatus.Failed or SessionStatus.Closed)
+        && (session.Role switch
+        {
+            PipelineRole.Planner => Pipeline?.Stage == TaskPipelineStage.Planning,
+            PipelineRole.Review => Pipeline?.Stage == TaskPipelineStage.Reviewing,
+            _ => false
+        });
 
     private bool CanRunRole(PipelineRole role)
     {

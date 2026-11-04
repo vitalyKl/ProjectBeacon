@@ -17,7 +17,7 @@
     }
     @foreach (var session in Sessions)
     {
-        @if ((session.Status is SessionStatus.Failed or SessionStatus.Closed) && Subtask.Status != SubtaskStatus.Done)
+        @if ((session.Status is SessionStatus.Failed or SessionStatus.Closed) && Subtask.Status != SubtaskStatus.Done && CanActOnSubtask)
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
                        OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>
@@ -66,8 +66,10 @@
     [Parameter] public IReadOnlyList<PipelineSessionDto> Sessions { get; set; } = [];
     [Parameter] public bool Busy { get; set; }
     [Parameter] public PipelinePreflightDto? Preflight { get; set; }
+    [Parameter] public TaskPipelineStage? PipelineStage { get; set; }
 
-    private bool CanStartActorSession => Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
+    private bool CanActOnSubtask => PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision;
+    private bool CanStartActorSession => CanActOnSubtask && Preflight is { HasOnlineNativeWorkstation: true, ActorModelConfigured: true };
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
     private string PreflightMessage(PipelineRole role) => Preflight?.HasNativeWorkstation != true
         ? L["PipelinePreflightNoNativeWorkstation"].Value
