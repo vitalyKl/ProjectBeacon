@@ -85,10 +85,12 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         try
         {
             using var document = JsonDocument.Parse(workstationJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("agentRuntime", out var runtime)
-                && runtime.ValueKind == JsonValueKind.String
-                && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+            // Match the workstation settings UI: a missing runtime field means native.
+            return !document.RootElement.TryGetProperty("agentRuntime", out var runtime)
+                || (runtime.ValueKind == JsonValueKind.String
+                    && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase));
         }
         catch (JsonException)
         {

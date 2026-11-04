@@ -216,10 +216,12 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
         try
         {
             using var doc = JsonDocument.Parse(workstationJson);
-            return doc.RootElement.ValueKind == JsonValueKind.Object
-                && doc.RootElement.TryGetProperty("agentRuntime", out var runtime)
-                && runtime.ValueKind == JsonValueKind.String
-                && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+            // Match the workstation settings UI: a missing runtime field means native.
+            return !doc.RootElement.TryGetProperty("agentRuntime", out var runtime)
+                || (runtime.ValueKind == JsonValueKind.String
+                    && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase));
         }
         catch (JsonException)
         {
