@@ -164,6 +164,7 @@ public static partial class McpStdioServer
         if (string.IsNullOrEmpty(name))
             return ToolError(id, "malformed path");
 
+        BindActorSubtaskId(name, arguments, env);
         var denied = await EnforceSubtaskScopeAsync(name, arguments, api, env);
         if (denied is not null)
             return ToolError(id, denied);
@@ -217,6 +218,24 @@ public static partial class McpStdioServer
         {
             return ToolError(id, ex.Message);
         }
+    }
+
+    private static void BindActorSubtaskId(string tool, JsonObject? arguments, McpEnvironment env)
+    {
+        if (arguments is null
+            || !IsActorTerminalTool(tool)
+            || !string.Equals(env.Get("BEACON_PIPELINE_ROLE"), "Actor", StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(env.Get("BEACON_SUBTASK_ID"), out var subtaskId)
+            || subtaskId == Guid.Empty)
+            return;
+
+        var supplied = arguments["subtaskId"];
+        var omitted = supplied is null
+            || (supplied is JsonValue value
+                && value.TryGetValue<string>(out var text)
+                && string.IsNullOrWhiteSpace(text));
+        if (omitted)
+            arguments["subtaskId"] = subtaskId.ToString("D");
     }
 
     private static bool IsControlPlaneTool(string name) =>
