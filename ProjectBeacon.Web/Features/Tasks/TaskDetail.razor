@@ -126,6 +126,7 @@ else
                 @if (_pipeline?.Stage is not null && _pipeline.Stage != TaskPipelineStage.None)
                 {
                     <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" />
+                    <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
                 }
             </section>
         </main>
@@ -189,7 +190,6 @@ else
                         }
                     </div>
                 </section>
-                <TaskReviewNotesPanel Task="_task" OnSaved="Reload" />
         </aside>
     </div>
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
@@ -203,6 +203,11 @@ else
 }
 
 @code {
+    private static readonly string[] StageChips = { "StagePlanning", "StageExecuting", "StageReviewing", "StageApproved", "Closed" };
+    private string[] StageLabels => StageChips.Select((key, i) =>
+        _pipeline?.Stage == TaskPipelineStage.ReopenedForRevision && i == 1
+            ? L["StageReopenedForRevision"].Value
+            : L[key].Value).ToArray();
     private static readonly TaskItemStatus[] StatusOptions = Enum.GetValues<TaskItemStatus>();
 
     [Parameter] public Guid TaskId { get; set; }
@@ -251,6 +256,52 @@ else
             : _pipeline?.Stage is { } stage && stage != TaskPipelineStage.None
                 ? PipelineStageLabel(stage)
                 : _task is null ? string.Empty : ChromeLabels.Status(L, _task.Status);
+
+    private static string SessionStateClass(SessionStatus status) => status switch
+    {
+        SessionStatus.Active => "is-info",
+        SessionStatus.WaitingForUser => "is-warning",
+        SessionStatus.Failed => "is-danger",
+        SessionStatus.Closed => "is-success",
+        _ => ""
+    };
+
+    private static string SubtaskStateClass(SubtaskStatus status) => status switch
+    {
+        SubtaskStatus.InProgress => "is-info",
+        SubtaskStatus.Done => "is-success",
+        SubtaskStatus.Failed => "is-danger",
+        _ => ""
+    };
+
+    private string NextTone => _pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true
+        ? "is-warning"
+        : _pipeline?.Stage switch
+    {
+        TaskPipelineStage.Reviewing or TaskPipelineStage.ReopenedForRevision => "is-warning",
+        TaskPipelineStage.Approved or TaskPipelineStage.Closed => "is-success",
+        TaskPipelineStage.Executing => "is-info",
+        _ => ""
+    };
+
+    private string NextStepText
+    {
+        get
+        {
+            if (_pipeline?.Sessions.Any(x => x.Status == SessionStatus.WaitingForUser) == true)
+                return L["PipelineWaitingForUser"].Value;
+            if (_pipeline is null || _pipeline.Stage is null || _pipeline.Stage == TaskPipelineStage.None)
+                return L["NextStepTodo"].Value;
+            return _pipeline.Stage switch
+            {
+                TaskPipelineStage.Planning => L["NextStepCreateSubtask"].Value,
+                TaskPipelineStage.Executing => L["NextStepCreateSubtask"].Value,
+                TaskPipelineStage.Reviewing => L["Approve"].Value,
+                TaskPipelineStage.Approved => L["ConfirmClose"].Value,
+                _ => L["NextStepTodo"].Value
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -424,6 +475,16 @@ else
         }
         await ReloadSteps();
     }
+
+    private static int StageIndex(TaskPipelineStage? stage) => stage switch
+    {
+        TaskPipelineStage.Planning => 0,
+        TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision => 1,
+        TaskPipelineStage.Reviewing => 2,
+        TaskPipelineStage.Approved => 3,
+        TaskPipelineStage.Closed => 4,
+        _ => -1
+    };
 
     private async Task OnStartPipeline()
     {
@@ -639,6 +700,17 @@ else
         _ => role.ToString()
     };
 
+    private int SubStageToPercent(TaskSubStage stage) => stage switch
+    {
+        TaskSubStage.RequirementGathering => 10,
+        TaskSubStage.Estimation => 20,
+        TaskSubStage.IntermediateResult => 40,
+        TaskSubStage.Review => 60,
+        TaskSubStage.Corrections => 75,
+        TaskSubStage.ReviewCorrections => 90,
+        TaskSubStage.Complete => 100,
+        _ => 0
+    };
     private static string StepTitleClass(bool isDone) =>
         isDone ? "grow beacon-step-done" : "grow";
 }

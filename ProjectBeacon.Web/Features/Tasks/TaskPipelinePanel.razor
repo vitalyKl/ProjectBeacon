@@ -2,7 +2,7 @@
 @using ProjectBeacon.Domain.Enums
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 
-<MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+<MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-pipeline-timeline mt-3">
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
         <MudText Typo="Typo.h6">@L["Pipeline"]</MudText>
         @if (Pipeline?.Stage is { } headerStage)
