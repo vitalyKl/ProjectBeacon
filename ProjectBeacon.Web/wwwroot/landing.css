@@ -300,3 +300,30 @@
 /* Shared lighthouse identity */
 .landing-brand-mark { display: inline-block; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; box-shadow: 0 3px 16px rgb(0 119 255 / 22%); }
 .landing-footer-brand .landing-brand-mark { width: 26px; height: 26px; flex-basis: 26px; border-radius: 8px; }
+
+/* The landing shell uses flex layouts for its horizontal navigation and footer.
+   Keep these structural rules explicit: without them the children fall back to
+   normal block flow and the page looks vertically collapsed. */
+.landing-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.landing-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    box-sizing: border-box;
+    width: 100%;
+}
+
+@media (max-width: 767px) {
+    .landing-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
