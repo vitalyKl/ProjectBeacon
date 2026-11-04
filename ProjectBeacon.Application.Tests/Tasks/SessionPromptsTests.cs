@@ -16,6 +16,6 @@ public sealed class SessionPromptsTests
         var prompt = SessionPrompts.Actor(subtask);
 
         Assert.Contains($"Assigned subtask ID: {subtask.Id:D}", prompt);
-        Assert.Contains("defaults to this assigned ID when subtaskId is omitted", prompt);
+        Assert.Contains("lifecycle tools default to this assigned ID", prompt);
     }
 }
