@@ -1,5 +1,6 @@
 using System.Globalization;
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
