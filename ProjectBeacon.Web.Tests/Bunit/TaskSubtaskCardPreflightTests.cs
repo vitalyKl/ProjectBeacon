@@ -1,5 +1,6 @@
 using ProjectBeacon.Application.Tasks;
 using ProjectBeacon.Domain.Enums;
+using ProjectBeacon.Web.Features.Tasks;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
