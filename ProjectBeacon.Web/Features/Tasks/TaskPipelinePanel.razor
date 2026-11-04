@@ -97,6 +97,17 @@
             ? L[startReason].Value
             : L["PipelinePreflightNoRoleModel"].Value;
 
+    private string StageLabel(TaskPipelineStage stage) => stage switch
+    {
+        TaskPipelineStage.Planning => L["StagePlanning"].Value,
+        TaskPipelineStage.Executing => L["StageExecuting"].Value,
+        TaskPipelineStage.ReopenedForRevision => L["StageReopenedForRevision"].Value,
+        TaskPipelineStage.Reviewing => L["StageReviewing"].Value,
+        TaskPipelineStage.Approved => L["StageApproved"].Value,
+        TaskPipelineStage.Closed => L["Closed"].Value,
+        _ => L["PipelineNotStarted"].Value
+    };
+
     private string SessionStatusLabel(SessionStatus status) => L[status.ToString()].Value;
 
     private Color SessionStatusColor(SessionStatus status) => status switch
