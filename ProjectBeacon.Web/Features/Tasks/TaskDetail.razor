@@ -581,9 +581,7 @@ else
         {
             if (_pipeline?.Preflight is not { HasOnlineNativeWorkstation: true, ReviewModelConfigured: true })
             {
-                Snackbar.Add(_pipeline?.Preflight?.HasOnlineNativeWorkstation != true
-                    ? L["PipelinePreflightNoNativeWorkstation"].Value
-                    : L["PipelinePreflightNoRoleModel"].Value, Severity.Warning);
+                Snackbar.Add(ReviewPreflightMessage, Severity.Warning);
                 return;
             }
             var result = await StartReview.HandleAsync(new StartReviewCommand(new StartReviewRequest(TaskId)));
