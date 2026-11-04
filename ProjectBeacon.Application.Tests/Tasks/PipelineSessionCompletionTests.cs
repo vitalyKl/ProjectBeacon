@@ -209,8 +209,8 @@ public sealed partial class PipelineHandlerTests
             var actors = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
                 .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Actor).ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(2, actors.Count);
-            Assert.Single(actors.Where(s => s.Status == SessionStatus.Failed));
-            Assert.Single(actors.Where(s => s.Status == SessionStatus.Active));
+            Assert.Single(actors, s => s.Status == SessionStatus.Failed);
+            Assert.Single(actors, s => s.Status == SessionStatus.Active);
         }
     }
 

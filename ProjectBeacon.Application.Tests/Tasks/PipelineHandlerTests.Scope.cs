@@ -85,7 +85,8 @@ public sealed partial class PipelineHandlerTests
         Assert.True(actor1.Success, actor1.Error);
         var actor2 = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub2.Value!.Id)), TestContext.Current.CancellationToken);
-        Assert.True(actor2.Success, actor2.Error);
+        Assert.False(actor2.Success);
+        Assert.Contains("Another Actor session", actor2.Error);
 
         var final = await new GetPipelineHandler(factory)
             .HandleAsync(new GetPipelineCommand(new GetPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
