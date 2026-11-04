@@ -83,7 +83,6 @@
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
-    [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 
     private string StatusLabel => Subtask.Status == SubtaskStatus.Done
         ? L["SubtaskReported"].Value
