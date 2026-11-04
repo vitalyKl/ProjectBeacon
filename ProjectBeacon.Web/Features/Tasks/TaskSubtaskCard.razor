@@ -17,7 +17,7 @@
     }
     @foreach (var session in Sessions)
     {
-        @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult && Subtask.Status != SubtaskStatus.Done))
+        @if ((session.Status is SessionStatus.Failed or SessionStatus.Closed) && Subtask.Status != SubtaskStatus.Done)
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Class="mt-2"
                        OnClick="@(() => OnRetrySession.InvokeAsync(session))" Disabled="Busy">@L["RetrySession"]</MudButton>

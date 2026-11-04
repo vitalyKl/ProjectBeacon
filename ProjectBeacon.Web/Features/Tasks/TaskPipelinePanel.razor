@@ -35,7 +35,7 @@
                 {
                     <MudText Typo="Typo.caption">@L["Closed"]: <LocalTime Value="session.ClosedAt" Format="d" /></MudText>
                 }
-                @if (session.Status == SessionStatus.Failed || (session.Status == SessionStatus.Closed && !session.HasExternalResult))
+                @if (session.Status is SessionStatus.Failed or SessionStatus.Closed)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => OnRetry.InvokeAsync(session))"
                                Disabled="Busy || !CanRunRole(session.Role)">@L["RetrySession"]</MudButton>
