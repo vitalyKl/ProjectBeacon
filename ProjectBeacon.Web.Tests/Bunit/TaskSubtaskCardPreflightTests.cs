@@ -51,7 +51,7 @@ public sealed class TaskSubtaskCardPreflightTests : BUnitRenderBase
             DateTime.UtcNow,
             null);
 
-        var cut = Bunit.RenderComponent<TaskSubtaskCard>(parameters => parameters
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskSubtaskCard>(parameters => parameters
             .Add(component => component.TaskId, Guid.NewGuid())
             .Add(component => component.Subtask, subtask)
             .Add(component => component.Preflight,
