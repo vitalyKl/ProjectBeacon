@@ -175,10 +175,14 @@ public sealed partial class PipelineHandlerTests
             firstActorCommandId = actorCommand.Id;
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            var statuses = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
-                .Where(s => s.TaskId == task.Id).OrderBy(s => s.CreatedAt)
-                .Select(s => s.Status).ToListAsync(TestContext.Current.CancellationToken);
-            Assert.Equal([SubtaskStatus.InProgress, SubtaskStatus.Pending], statuses);
+            var firstStatus = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.Id == first.Value!.Id)
+                .Select(s => s.Status).SingleAsync(TestContext.Current.CancellationToken);
+            var secondStatus = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.Id == second.Value!.Id)
+                .Select(s => s.Status).SingleAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.InProgress, firstStatus);
+            Assert.Equal(SubtaskStatus.Pending, secondStatus);
             Assert.Equal(1, await _db.PipelineSessions.IgnoreQueryFilters().CountAsync(
                 s => s.TaskId == task.Id && s.Role == PipelineRole.Actor && s.Status == SessionStatus.Active,
                 TestContext.Current.CancellationToken));
@@ -194,11 +198,13 @@ public sealed partial class PipelineHandlerTests
         using (TenantScope.EnterUnscoped())
         {
             _db.ChangeTracker.Clear();
-            var subtasks = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
-                .Where(s => s.TaskId == task.Id).OrderBy(s => s.CreatedAt).ToListAsync(TestContext.Current.CancellationToken);
-            Assert.Equal(SubtaskStatus.Failed, subtasks[0].Status);
-            Assert.Equal("The pipeline agent turn exceeded the workstation chat timeout.", subtasks[0].Summary);
-            Assert.Equal(SubtaskStatus.InProgress, subtasks[1].Status);
+            var firstSubtask = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(s => s.Id == first.Value!.Id, TestContext.Current.CancellationToken);
+            var secondSubtask = await _db.Subtasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(s => s.Id == second.Value!.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(SubtaskStatus.Failed, firstSubtask.Status);
+            Assert.Equal("The pipeline agent turn exceeded the workstation chat timeout.", firstSubtask.Summary);
+            Assert.Equal(SubtaskStatus.InProgress, secondSubtask.Status);
 
             var actors = await _db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
                 .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Actor).ToListAsync(TestContext.Current.CancellationToken);
