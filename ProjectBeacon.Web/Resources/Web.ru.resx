@@ -2341,4 +2341,7 @@
   <data name="RetrySession" xml:space="preserve">
     <value>Запустить заново</value>
   </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>Нет свежего сигнала</value>
+  </data>
 </root>

@@ -2359,4 +2359,7 @@ orthstar</value>
   <data name="RetrySession" xml:space="preserve">
     <value>重新运行会话</value>
   </data>
+  <data name="PipelineNoRecentSignal" xml:space="preserve">
+    <value>暂无最新信号</value>
+  </data>
 </root>
