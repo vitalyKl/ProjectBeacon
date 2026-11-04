@@ -378,6 +378,8 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
                 return Result.Failure<PipelineSessionDto>("Session not found.");
             if (previous.Status is not (SessionStatus.Failed or SessionStatus.Closed))
                 return Result.Failure<PipelineSessionDto>("Only failed or closed sessions can be retried.");
+            if (previous.Status == SessionStatus.Closed && previous.ExternalSessionId is not null)
+                return Result.Failure<PipelineSessionDto>("This session already completed with an external result and cannot be retried.");
 
             var task = await db.Tasks.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == previous.TaskId, ct);
