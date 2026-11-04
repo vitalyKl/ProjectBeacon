@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
 using Domain.Entities.Devices;
+using Application.Tasks;
 using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -25,11 +26,10 @@ public static class CommandRecovery
     public const int MaxRequeues = 1;
 
     /// <summary>
-    /// Long-stale tier, in minutes: a running command whose lease expired more than this long ago
-    /// is recovered even when the claiming process is still alive and heartbeating. The 15-minute
-    /// lease already far exceeds every client-side execution cap (LLM/eval 180s, review/winget
-    /// 120s, the rest seconds), and the client's bounded completion retries finish within seconds
-    /// of the execution — so a lease expired by this much can only belong to a lost attempt.
+    /// Long-stale tier, in minutes after the command-specific lease expires: a running command
+    /// is recovered even when the claiming process is still alive and heartbeating. Pipeline turns
+    /// have a 75-minute lease for a 60-minute client-side cap; other command kinds retain the
+    /// 15-minute lease. The grace period resolves a lost acknowledgement or wedged command loop.
     /// </summary>
     public const int LongStaleGraceMinutes = 30;
 
@@ -83,11 +83,16 @@ public static class CommandRecovery
     /// resolve dependent state (eval run, review run, chat session).
     /// Returns the number of recovered rows.
     /// </summary>
-    public static async Task<int> RecoverAsync(IBeaconDb db, DateTime now, CancellationToken ct)
+    public static async Task<int> RecoverAsync(
+        IBeaconDb db,
+        DateTime now,
+        CancellationToken ct,
+        PipelineActorQueueDispatcher? pipelineQueue = null)
     {
         var candidates = await StaleRows(db, now).OrderBy(c => c.CreatedAt).ToListAsync(ct);
 
         var recovered = 0;
+        var pipelineTaskIds = new HashSet<Guid>();
         foreach (var row in candidates)
         {
             var action = Decide(row.Kind, row.Attempts, stale: true);
@@ -121,9 +126,33 @@ public static class CommandRecovery
             {
                 await CommandCompletions.ApplyAsync(db, row, false, null, error, ct);
                 recovered++;
+
+                // The Worker can recover a lost daemon completion without going through
+                // CompleteCommandHandler. Preserve the same queue-advance guarantee here.
+                if (pipelineQueue is not null
+                    && row.Kind == WorkstationCommandKind.RunPipelineSession
+                    && row.ProjectId is { } projectId
+                    && DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId") is { } sessionId)
+                {
+                    var taskId = await db.PipelineSessions.IgnoreQueryFilters()
+                        .Where(s => s.Id == sessionId && s.ProjectId == projectId)
+                        .Select(s => (Guid?)s.TaskId)
+                        .FirstOrDefaultAsync(ct);
+                    if (taskId is { } recoveredTaskId)
+                        pipelineTaskIds.Add(recoveredTaskId);
+                }
             }
         }
         await db.SaveChangesAsync(ct);
+
+        // Dispatch only after all recovery effects are durable. Several expired commands
+        // for the same task collapse into one idempotent queue advance.
+        if (pipelineQueue is not null)
+        {
+            foreach (var taskId in pipelineTaskIds)
+                await pipelineQueue.DispatchNextAsync(taskId, ct);
+        }
+
         return recovered;
     }
 }

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Worker.Services;
 
 using Application.Devices;
+using Application.Tasks;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,7 +54,8 @@ public sealed class StaleCommandRecoveryService : BackgroundService
         using (TenantScope.EnterUnscoped())
         {
             await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
-            var recovered = await CommandRecovery.RecoverAsync(db, DateTime.UtcNow, ct);
+            var pipelineQueue = scope.ServiceProvider.GetService<PipelineActorQueueDispatcher>();
+            var recovered = await CommandRecovery.RecoverAsync(db, DateTime.UtcNow, ct, pipelineQueue);
             if (recovered > 0)
                 _logger.LogInformation("Recovered {Count} stale workstation commands", recovered);
             return recovered;
