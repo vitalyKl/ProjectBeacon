@@ -2311,4 +2311,22 @@ orthstar</value>
   <data name="TaskCurrentActivity" xml:space="preserve">
     <value>現在のアクティビティ</value>
   </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>このプロジェクトにネイティブ実行環境のワークステーションが割り当てられていません。</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>プロジェクトのネイティブワークステーションはオフラインです。</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>Planner ロールのモデルが設定されていません。</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>設定された Planner モデルは存在しません。</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>このセッションロールのモデルが設定されていません。</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>このセッションに設定されたモデルは存在しません。</value>
+  </data>
 </root>

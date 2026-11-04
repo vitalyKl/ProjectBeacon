@@ -2311,4 +2311,22 @@ orthstar</value>
   <data name="TaskCurrentActivity" xml:space="preserve">
     <value>当前活动</value>
   </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>此项目未分配 native 工作站。</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>项目的 native 工作站当前离线。</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>尚未为 Planner 角色配置模型。</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>配置的 Planner 模型已不存在。</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>尚未为此会话角色配置模型。</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>此会话配置的模型已不存在。</value>
+  </data>
 </root>

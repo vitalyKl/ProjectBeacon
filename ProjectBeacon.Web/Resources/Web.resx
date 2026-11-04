@@ -2501,4 +2501,22 @@ No Beacon-hosted coding agent.</value>
   <data name="TaskCurrentActivity" xml:space="preserve">
     <value>Current activity</value>
   </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>No native workstation is assigned to this project.</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>The project's native workstation is offline.</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>No model is configured for the Planner role.</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>The configured Planner model no longer exists.</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>No model is configured for this session role.</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>The model configured for this session no longer exists.</value>
+  </data>
 </root>

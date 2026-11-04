@@ -2303,4 +2303,22 @@ orthstar</value>
   <data name="TaskCurrentActivity" xml:space="preserve">
     <value>Aktuelle Aktivität</value>
   </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>Diesem Projekt ist keine Workstation mit nativem Runtime zugeordnet.</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>Die native Workstation des Projekts ist offline.</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>Für die Planner-Rolle ist kein Modell konfiguriert.</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>Das konfigurierte Planner-Modell existiert nicht mehr.</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>Für diese Sitzungsrolle ist kein Modell konfiguriert.</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>Das für diese Sitzung konfigurierte Modell existiert nicht mehr.</value>
+  </data>
 </root>
