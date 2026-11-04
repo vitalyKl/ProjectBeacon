@@ -225,7 +225,7 @@
     private string _modelsRoot = string.Empty;
     private string _historyDir = string.Empty;
     private string _projectsRoot = string.Empty;
-    private string _agentRuntime = "opencode";
+    private string _agentRuntime = "native";
     private string _llamaSwapBin = string.Empty;
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
@@ -337,7 +337,11 @@
             _modelsRoot = Str(root, "modelsRoot");
             _historyDir = Str(root, "opencodeDataDir");
             _projectsRoot = Str(root, "projectsRoot");
-            _agentRuntime = Str(root, "agentRuntime") == "native" ? "native" : "opencode";
+            _agentRuntime = root.TryGetProperty("agentRuntime", out var runtime)
+                && runtime.ValueKind == JsonValueKind.String
+                && string.Equals(runtime.GetString(), "opencode", StringComparison.OrdinalIgnoreCase)
+                    ? "opencode"
+                    : "native";
             _llamaSwapBin = Str(root, "llamaSwapBin");
             _llamaCppBin = Str(root, "llamaCppBin");
         }

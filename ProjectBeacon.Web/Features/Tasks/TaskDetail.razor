@@ -508,7 +508,12 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["PipelineStarted"].Value, Severity.Success);
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["PipelineStarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
         }
@@ -530,7 +535,12 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["SessionStarted"].Value, Severity.Success);
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["SessionLaunched"].Value, Severity.Success);
             await ReloadPipeline();
         }
         finally
@@ -572,7 +582,12 @@ else
                 Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
                 return;
             }
-            Snackbar.Add(L["ReviewStarted"].Value, Severity.Success);
+            var launch = await LaunchSession.HandleAsync(
+                new LaunchSessionCommand(new LaunchSessionRequest(result.Value!.Id)));
+            if (!launch.Success)
+                Snackbar.Add(launch.Error ?? L["Error"].Value, Severity.Error);
+            else
+                Snackbar.Add(L["ReviewStarted"].Value, Severity.Success);
             await Reload();
             await ReloadPipeline();
         }
