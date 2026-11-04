@@ -32,7 +32,9 @@ public record PipelineSessionDto(
     DateTime? ClosedAt,
     string ActivityJson = "{}",
     DateTime? LastActivityAt = null,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    bool CanLaunch = false,
+    string? LaunchBlockedReason = null);
 
 /// <summary>A recorded review verdict for a task, optionally aimed at one subtask.</summary>
 public record ReviewVerdictDto(
@@ -52,7 +54,9 @@ public record PipelineStateDto(
     string? ReviewNotes,
     IReadOnlyList<SubtaskDto> Subtasks,
     IReadOnlyList<PipelineSessionDto> Sessions,
-    IReadOnlyList<ReviewVerdictDto> Verdicts);
+    IReadOnlyList<ReviewVerdictDto> Verdicts,
+    bool CanStart = false,
+    string? StartBlockedReason = null);
 
 /// <summary>Identifies the task whose pipeline should start.</summary>
 public record StartPipelineRequest(Guid TaskId);

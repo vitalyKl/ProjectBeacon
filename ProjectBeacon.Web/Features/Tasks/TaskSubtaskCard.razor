@@ -21,7 +21,11 @@
         {
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2"
                        OnClick="@(() => OnLaunchSession.InvokeAsync(session))"
-                       Disabled="Busy">@L["LaunchSession"]</MudButton>
+                       Disabled="Busy || !session.CanLaunch">@L["LaunchSession"]</MudButton>
+            @if (!session.CanLaunch && !string.IsNullOrWhiteSpace(session.LaunchBlockedReason))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Warning">@L[session.LaunchBlockedReason]</MudText>
+            }
         }
         <PipelineActivityPanel TaskId="TaskId" Session="session" />
     }

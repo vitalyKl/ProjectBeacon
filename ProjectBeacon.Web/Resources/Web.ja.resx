@@ -2317,4 +2317,22 @@ orthstar</value>
   <data name="RetrySession" xml:space="preserve">
     <value>セッションを再試行</value>
   </data>
+  <data name="PipelineNoNativeWorkstation" xml:space="preserve">
+    <value>このプロジェクトにネイティブワークステーションが割り当てられていません。割り当てて Agent runtime を Native に設定してください。</value>
+  </data>
+  <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
+    <value>このプロジェクトに割り当てられたネイティブワークステーションはオフラインです。</value>
+  </data>
+  <data name="PipelineNoModelConfigured" xml:space="preserve">
+    <value>このパイプラインロールにモデルが設定されていません。</value>
+  </data>
+  <data name="PipelineModelMissing" xml:space="preserve">
+    <value>このパイプラインロールに設定されたモデルは存在しません。</value>
+  </data>
+  <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
+    <value>Planner ロールまたはタスクの Understand フェーズにモデルが設定されていません。</value>
+  </data>
+  <data name="PipelinePlannerModelMissing" xml:space="preserve">
+    <value>Planner ロールまたは Understand フェーズに設定されたモデルは存在しません。</value>
+  </data>
 </root>

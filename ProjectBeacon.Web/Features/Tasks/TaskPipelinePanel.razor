@@ -35,8 +35,11 @@
                 }
                 @if (session.Status == SessionStatus.Ready)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy">@L["LaunchSession"]</MudButton>
-                    <MudText Typo="Typo.caption">@L["LaunchSessionHint"]</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => OnLaunch.InvokeAsync(session))" Disabled="Busy || !session.CanLaunch">@L["LaunchSession"]</MudButton>
+                    @if (!session.CanLaunch && !string.IsNullOrWhiteSpace(session.LaunchBlockedReason))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">@L[session.LaunchBlockedReason]</MudText>
+                    }
                 }
             </MudStack>
             @if (!string.IsNullOrEmpty(session.LaunchSpec))
@@ -68,7 +71,11 @@
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-3 beacon-task-start-prompt">
             <MudText Typo="Typo.body2">@L["PipelineNotStarted"]</MudText>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
-                       OnClick="OnStart" Disabled="Busy" Class="mt-3">@L["StartPipeline"]</MudButton>
+                       OnClick="OnStart" Disabled="Busy || Pipeline?.CanStart == false" Class="mt-3">@L["StartPipeline"]</MudButton>
+            @if (!string.IsNullOrWhiteSpace(Pipeline?.StartBlockedReason))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Warning" Class="mt-2">@L[Pipeline.StartBlockedReason]</MudText>
+            }
         </MudAlert>
     }
 </MudPaper>

@@ -62,8 +62,12 @@ else
             {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                            StartIcon="@Icons.Material.Filled.PlayArrow"
-                           OnClick="OnStartPipeline" Disabled="_busy">@L["StartPipeline"]</MudButton>
+                           OnClick="OnStartPipeline" Disabled="_busy || _pipeline?.CanStart == false">@L["StartPipeline"]</MudButton>
                 <MudText Typo="Typo.caption" Class="beacon-pipeline-start-hint">@L["PipelineStartHint"]</MudText>
+                @if (!string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">@L[_pipeline.StartBlockedReason]</MudText>
+                }
             }
             else
             {

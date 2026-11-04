@@ -2,6 +2,8 @@ namespace ProjectBeacon.Application.Tasks;
 
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Domain.Entities.Agents;
 using Application.Common;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -82,7 +84,78 @@ internal static class PipelineSupport
             .Where(v => v.TaskId == task.Id)
             .OrderBy(v => v.CreatedAt).ThenBy(v => v.Id)
             .ToListAsync(ct);
-        return PipelineMappers.ToState(task, subtasks, sessions, verdicts);
+
+        var runtimeDeviceIds = await db.ProjectRuntimes.IgnoreQueryFilters()
+            .Where(r => r.ProjectId == task.ProjectId)
+            .Select(r => r.DeviceId)
+            .Distinct()
+            .ToListAsync(ct);
+        var devices = runtimeDeviceIds.Count == 0
+            ? new List<Domain.Entities.Devices.DaemonDevice>()
+            : await db.DaemonDevices.IgnoreQueryFilters()
+                .Where(d => runtimeDeviceIds.Contains(d.Id))
+                .ToListAsync(ct);
+        var nativeDevices = devices.Where(d => IsNativeRuntime(d.WorkstationJson)).ToList();
+        var hasNativeWorkstation = nativeDevices.Count > 0;
+        var hasOnlineNativeWorkstation = nativeDevices.Any(d => d.IsOnline(DateTime.UtcNow));
+
+        var phases = await db.TaskPhases.Where(p => p.TaskId == task.Id).ToListAsync(ct);
+        Guid? plannerBackendId = phases.Count > 0
+            ? phases.FirstOrDefault(p => p.Key == "understand")?.ModelBackendId
+            : await db.RoleBindings
+                .Where(b => b.ProjectId == task.ProjectId && b.Role == PipelineRole.Planner)
+                .Select(b => (Guid?)b.ModelBackendId)
+                .FirstOrDefaultAsync(ct);
+        var backendIds = sessions.Where(s => s.ModelBackendId is not null)
+            .Select(s => s.ModelBackendId!.Value)
+            .Append(plannerBackendId ?? Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToArray();
+        var existingBackendIds = backendIds.Length == 0
+            ? new HashSet<Guid>()
+            : (await db.LocalModelBackends.AsNoTracking()
+                .Where(b => backendIds.Contains(b.Id))
+                .Select(b => b.Id)
+                .ToListAsync(ct)).ToHashSet();
+
+        string? startBlockedReason = null;
+        if (!hasNativeWorkstation)
+            startBlockedReason = "PipelineNoNativeWorkstation";
+        else if (!hasOnlineNativeWorkstation)
+            startBlockedReason = "PipelineNativeWorkstationOffline";
+        else if (plannerBackendId is null)
+            startBlockedReason = "PipelineNoPlannerModelConfigured";
+        else if (!existingBackendIds.Contains(plannerBackendId.Value))
+            startBlockedReason = "PipelinePlannerModelMissing";
+
+        var state = PipelineMappers.ToState(task, subtasks, sessions, verdicts);
+        return state with
+        {
+            CanStart = startBlockedReason is null,
+            StartBlockedReason = startBlockedReason,
+            Sessions = sessions.Select(session =>
+            {
+                string? blockedReason = null;
+                if (session.Status == SessionStatus.Ready)
+                {
+                    if (!hasNativeWorkstation)
+                        blockedReason = "PipelineNoNativeWorkstation";
+                    else if (!hasOnlineNativeWorkstation)
+                        blockedReason = "PipelineNativeWorkstationOffline";
+                    else if (session.ModelBackendId is null)
+                        blockedReason = "PipelineNoModelConfigured";
+                    else if (!existingBackendIds.Contains(session.ModelBackendId.Value))
+                        blockedReason = "PipelineModelMissing";
+                }
+
+                return PipelineMappers.ToDto(session) with
+                {
+                    CanLaunch = session.Status == SessionStatus.Ready && blockedReason is null,
+                    LaunchBlockedReason = blockedReason
+                };
+            }).ToList()
+        };
     }
 
     public static async Task<List<PipelineSession>> OpenSessionsAsync(
@@ -96,6 +169,24 @@ internal static class PipelineSupport
         if (role is not null)
             sessions.RemoveAll(s => s.Role != role);
         return sessions;
+    }
+
+    private static bool IsNativeRuntime(string? workstationJson)
+    {
+        if (string.IsNullOrWhiteSpace(workstationJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(workstationJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("agentRuntime", out var runtime)
+                && runtime.ValueKind == JsonValueKind.String
+                && string.Equals(runtime.GetString(), "native", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public static int MaxReopenCycles()
