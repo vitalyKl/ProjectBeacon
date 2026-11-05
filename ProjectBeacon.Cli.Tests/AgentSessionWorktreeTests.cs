@@ -15,6 +15,7 @@ public sealed class AgentSessionWorktreeTests
         try
         {
             await Git(root, "init", "-b", "main");
+            await Git(root, "config", "core.autocrlf", "false");
             await Git(root, "config", "user.name", "ProjectBeacon Tests");
             await Git(root, "config", "user.email", "tests@projectbeacon.local");
             await File.WriteAllTextAsync(Path.Combine(root, "README.md"), "base\n");

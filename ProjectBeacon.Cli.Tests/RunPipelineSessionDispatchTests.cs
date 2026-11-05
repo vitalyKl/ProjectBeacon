@@ -116,6 +116,7 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Empty(capturedAuthorization.AllowedMcpTools!);
             Assert.True(capturedAuthorization.ExpiresAt > DateTime.UtcNow);
             Assert.Equal(generation, tokenHandler.RequestedGeneration);
+            Assert.True(tokenHandler.ProgressRequests > 0, "The pipeline must report progress through the command API.");
         }
         finally
         {
@@ -210,6 +211,7 @@ public sealed class RunPipelineSessionDispatchTests
     private static async Task InitializeGitRepositoryAsync(string projectRoot, CancellationToken ct)
     {
         await GitAsync(projectRoot, ct, "init", "-b", "main");
+        await GitAsync(projectRoot, ct, "config", "core.autocrlf", "false");
         await GitAsync(projectRoot, ct, "config", "user.name", "ProjectBeacon Tests");
         await GitAsync(projectRoot, ct, "config", "user.email", "tests@projectbeacon.local");
         await GitAsync(projectRoot, ct, "config", "commit.gpgsign", "false");
@@ -277,10 +279,25 @@ public sealed class RunPipelineSessionDispatchTests
     {
         public int? RequestedGeneration { get; private set; }
 
+        public int ProgressRequests { get; private set; }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (request.Method != HttpMethod.Post
-                || request.RequestUri?.AbsolutePath != $"/v1/commands/{commandId:D}/harness-token")
+            if (request.Method != HttpMethod.Post)
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+
+            var path = request.RequestUri?.AbsolutePath;
+            if (path == $"/v1/commands/{commandId:D}/progress")
+            {
+                using var progress = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                if (progress.RootElement.GetProperty("generation").GetInt32() != generation)
+                    return new HttpResponseMessage(HttpStatusCode.Conflict);
+
+                Interlocked.Increment(ref ProgressRequests);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            if (path != $"/v1/commands/{commandId:D}/harness-token")
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
 
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
