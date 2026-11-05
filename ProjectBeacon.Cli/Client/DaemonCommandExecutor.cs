@@ -595,7 +595,18 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 new { generation = command.Generation, progressJson = snapshot },
                 tokenCt);
             if (!response.IsSuccessStatusCode)
+            {
                 _state.Log($"pipeline activity report returned HTTP {(int)response.StatusCode}");
+                if (response.StatusCode is System.Net.HttpStatusCode.Conflict
+                    or System.Net.HttpStatusCode.NotFound
+                    or System.Net.HttpStatusCode.Unauthorized
+                    or System.Net.HttpStatusCode.Forbidden)
+                {
+                    timeoutReason = $"The server no longer accepts progress for this pipeline command (HTTP {(int)response.StatusCode}); its session was cancelled or is no longer authorized.";
+                    turnCts.Cancel();
+                    tokenCt.ThrowIfCancellationRequested();
+                }
+            }
             return madeProgress;
         }
 
