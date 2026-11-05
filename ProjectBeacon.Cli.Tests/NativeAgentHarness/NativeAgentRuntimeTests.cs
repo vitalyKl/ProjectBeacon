@@ -68,7 +68,7 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal("stop", status!.Finish);
             Assert.Equal(1, provider.FinalRequests);
             Assert.Empty(await capabilities.ListPendingFormsAsync(session, CancellationToken.None));
-            Assert.Contains("\\"exitCode\\":0", provider.LastToolResult, StringComparison.Ordinal);
+            Assert.Contains("\"exitCode\":0", provider.LastToolResult, StringComparison.Ordinal);
         }
         finally
         {
