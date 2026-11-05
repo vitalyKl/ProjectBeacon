@@ -212,6 +212,7 @@ public sealed class RunPipelineSessionDispatchTests
         await GitAsync(projectRoot, ct, "init", "-b", "main");
         await GitAsync(projectRoot, ct, "config", "user.name", "ProjectBeacon Tests");
         await GitAsync(projectRoot, ct, "config", "user.email", "tests@projectbeacon.local");
+        await GitAsync(projectRoot, ct, "config", "commit.gpgsign", "false");
         await File.WriteAllTextAsync(Path.Combine(projectRoot, "README.md"), "pipeline fixture\n", ct);
         await GitAsync(projectRoot, ct, "add", "README.md");
         await GitAsync(projectRoot, ct, "commit", "-m", "initialize pipeline fixture");
@@ -249,9 +250,24 @@ public sealed class RunPipelineSessionDispatchTests
 
         using var process = Process.Start(start)
             ?? throw new InvalidOperationException("Could not start git for the pipeline fixture.");
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        var stderr = process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct);
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            var timedOutOutput = await stdout;
+            var timedOutError = await stderr;
+            throw new TimeoutException(
+                $"git {string.Join(' ', arguments)} exceeded the 30-second test command timeout: {timedOutError}{timedOutOutput}");
+        }
+
         var output = await stdout;
         var error = await stderr;
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}{output}");
