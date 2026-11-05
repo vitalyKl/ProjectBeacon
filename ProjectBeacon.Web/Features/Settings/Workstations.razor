@@ -103,6 +103,13 @@
                 <MudSelectItem T="string" Value="@("native")">@L["AgentRuntimeNative"]</MudSelectItem>
             </MudSelect>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentRuntimeRestartHint"]</MudText>
+            <MudSelect T="string" @bind-Value="_commandPolicy" Label="@L["CommandPolicy"]" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" Disabled="_busy || _agentRuntime != "native"">
+                <MudSelectItem T="string" Value="@("off")">@L["CommandPolicyOff"]</MudSelectItem>
+                <MudSelectItem T="string" Value="@("ask")">@L["CommandPolicyAsk"]</MudSelectItem>
+                <MudSelectItem T="string" Value="@("auto")">@L["CommandPolicyAuto"]</MudSelectItem>
+            </MudSelect>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["CommandPolicyHelp"]</MudText>
             <MudNumericField T="int" @bind-Value="_pipelineTurnTimeoutMinutes"
                              Label="@L["PipelineTurnTimeout"]" Min="15" Max="60" Step="5"
                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
@@ -233,6 +240,7 @@
     private string _historyDir = string.Empty;
     private string _projectsRoot = string.Empty;
     private string _agentRuntime = "native";
+    private string _commandPolicy = "ask";
     private int _pipelineTurnTimeoutMinutes = 60;
     private int _pipelineIdleTimeoutMinutes = 15;
     private string _llamaSwapBin = string.Empty;
@@ -351,6 +359,10 @@
                 && string.Equals(runtime.GetString(), "opencode", StringComparison.OrdinalIgnoreCase)
                     ? "opencode"
                     : "native";
+            _commandPolicy = root.TryGetProperty("commandPolicy", out var commandPolicy)
+                && commandPolicy.ValueKind == JsonValueKind.String
+                    ? commandPolicy.GetString()?.Trim().ToLowerInvariant() is "off" or "auto" or "ask" ? commandPolicy.GetString()!.Trim().ToLowerInvariant() : "ask"
+                    : "ask";
             _llamaSwapBin = Str(root, "llamaSwapBin");
             _llamaCppBin = Str(root, "llamaCppBin");
             _pipelineTurnTimeoutMinutes = root.TryGetProperty("pipelineTurnTimeoutMinutes", out var pipelineMax)
@@ -475,6 +487,7 @@
                 opencodeDataDir = _historyDir,
                 projectsRoot = _projectsRoot,
                 agentRuntime = _agentRuntime,
+                commandPolicy = _commandPolicy,
                 pipelineTurnTimeoutMinutes = _pipelineTurnTimeoutMinutes,
                 pipelineIdleTimeoutMinutes = _pipelineIdleTimeoutMinutes,
                 llamaSwapBin = _llamaSwapBin,
