@@ -364,7 +364,11 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 }
                 // Surface model questions: v2 forms live outside the message list, so poll them
                 // while the turn runs instead of waiting for the durable parts.
-                await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
+                var waitingForUser = await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
+                if (harnessAuthorization is { } chatAuthorization)
+                    await ReportPromptProgressAsync(chatAuthorization, waitingForUser, ct);
+                if (waitingForUser)
+                    i--; // Human wait is not part of the normal chat turn duration.
                 quiet = added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
                 // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
@@ -439,13 +443,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         {
             _state.Log($"chat usage report failed: {ex.Message}");
         }
-        // A chat turn owns its services only until the turn completes. AbortAsync also
-        // stops services, but normal successful turns need the same cleanup path.
-        if (runtime is ProjectBeacon.Cli.Client.AgentHarness.NativeAgentRuntime nativeRuntime)
-        {
-            try { await nativeRuntime.StopServicesAsync(externalId, CancellationToken.None); }
-            catch (Exception ex) { _state.Log($"chat service cleanup failed: {ex.Message}"); }
-        }
+        // Services belong to the chat session, not an individual prompt turn. They remain
+        // available to the next user message and are stopped by ChatAbort/session reaper.
 
         if (sessionWorktree is not null)
         {
@@ -490,7 +489,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         }, projectId, ct);
     }
 
-    private async Task SurfacePendingFormsAsync(
+    private async Task<bool> SurfacePendingFormsAsync(
         IAgentRuntimeCapabilities? capabilities, string externalId, Guid chatId, Guid projectId, HashSet<string> seenForms, CancellationToken ct)
     {
         try
@@ -503,7 +502,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     .Select(form => new AgentRuntimeForm(form.Id, form.Title, form.Metadata, form.FieldsJson))
                     .ToArray();
             else
-                return;
+                return false;
 
             foreach (var form in forms)
             {
@@ -525,6 +524,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     complete = true
                 }, projectId, ct);
             }
+            return forms.Count > 0;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -533,6 +533,35 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         catch (Exception ex)
         {
             _state.Log($"chat form poll failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task ReportPromptProgressAsync(
+        AgentHarnessAuthorization authorization,
+        bool waitingForUser,
+        CancellationToken ct)
+    {
+        if (_http.BaseAddress is null || authorization.CommandId == Guid.Empty)
+            return;
+
+        var progressJson = waitingForUser ? "{\\"forms\\":[{}]}" : "{\\"forms\\":[]}";
+        try
+        {
+            using var response = await _http.PostAsJsonAsync(
+                $"/v1/commands/{authorization.CommandId:D}/progress",
+                new { generation = authorization.Generation, progressJson },
+                ct);
+            if (!response.IsSuccessStatusCode)
+                _state.Log($"chat command progress report returned HTTP {(int)response.StatusCode}");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _state.Log($"chat command progress report failed: {ex.GetType().Name}");
         }
     }
 
