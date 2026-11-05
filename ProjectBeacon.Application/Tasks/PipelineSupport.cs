@@ -197,6 +197,61 @@ internal static class PipelineSupport
         return sessions;
     }
 
+    public static async Task<int> CancelPipelineCommandsAsync(
+        IBeaconDb db,
+        Guid projectId,
+        IReadOnlyCollection<Guid> sessionIds,
+        CancellationToken ct)
+    {
+        if (sessionIds.Count == 0)
+            return 0;
+
+        var wantedSessions = sessionIds.ToHashSet();
+        var candidates = await db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(command => command.ProjectId == projectId
+                && command.Kind == WorkstationCommandKind.RunPipelineSession
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running))
+            .Select(command => new { command.Id, command.PayloadJson })
+            .ToListAsync(ct);
+
+        var commandIds = candidates
+            .Where(candidate => TryReadPipelineSessionId(candidate.PayloadJson) is { } sessionId
+                && wantedSessions.Contains(sessionId))
+            .Select(candidate => candidate.Id)
+            .ToArray();
+        if (commandIds.Length == 0)
+            return 0;
+
+        var completedAt = DateTime.UtcNow;
+        return await db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(command => commandIds.Contains(command.Id)
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running))
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(command => command.Status, WorkstationCommandStatus.Cancelled)
+                .SetProperty(command => command.CompletedAt, completedAt)
+                .SetProperty(command => command.LeaseExpiresAt, (DateTime?)null), ct);
+    }
+
+    private static Guid? TryReadPipelineSessionId(string payloadJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("sessionId", out var sessionId)
+                && sessionId.ValueKind == JsonValueKind.String
+                && Guid.TryParse(sessionId.GetString(), out var parsed)
+                    ? parsed
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static bool IsNativeRuntime(string? workstationJson)
     {
         if (string.IsNullOrWhiteSpace(workstationJson))
