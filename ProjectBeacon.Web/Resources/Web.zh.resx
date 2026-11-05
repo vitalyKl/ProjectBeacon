@@ -1784,6 +1784,21 @@ orthstar</value>
 <data name="CommandTimedOut" xml:space="preserve">
     <value>已超时</value>
   </data>
+  <data name="CommandPolicy" xml:space="preserve">
+    <value>代理命令执行策略</value>
+  </data>
+  <data name="CommandPolicyAsk" xml:space="preserve">
+    <value>询问 — 批准不熟悉的命令</value>
+  </data>
+  <data name="CommandPolicyAuto" xml:space="preserve">
+    <value>自动 — 在隔离的工作树中运行命令</value>
+  </data>
+  <data name="CommandPolicyHelp" xml:space="preserve">
+    <value>适用于此工作站上的原生代理。项目清单和 CI 工作流只提供命令建议；首次使用时会请求批准。已保存的批准会在审核过的清单或工作流发生变化时失效。自动模式会跳过确认，但它并不是安全沙箱。</value>
+  </data>
+  <data name="CommandPolicyOff" xml:space="preserve">
+    <value>关闭 — 禁用命令执行</value>
+  </data>
 <data name="RuntimeOffline" xml:space="preserve">
     <value>离线</value>
   </data>

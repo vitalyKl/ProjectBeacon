@@ -1784,6 +1784,21 @@ orthstar</value>
 <data name="CommandTimedOut" xml:space="preserve">
     <value>時間切れ</value>
   </data>
+  <data name="CommandPolicy" xml:space="preserve">
+    <value>エージェントのコマンド実行ポリシー</value>
+  </data>
+  <data name="CommandPolicyAsk" xml:space="preserve">
+    <value>確認 — 未知のコマンドを承認する</value>
+  </data>
+  <data name="CommandPolicyAuto" xml:space="preserve">
+    <value>自動 — 分離された作業ツリーでコマンドを実行する</value>
+  </data>
+  <data name="CommandPolicyHelp" xml:space="preserve">
+    <value>このワークステーション上のネイティブエージェントに適用されます。プロジェクトのマニフェストと CI ワークフローはコマンドを提案するだけで、初回実行時には承認を求めます。保存した承認は、確認済みのマニフェストまたはワークフローが変更されると無効になります。自動モードは承認を省略しますが、セキュリティサンドボックスではありません。</value>
+  </data>
+  <data name="CommandPolicyOff" xml:space="preserve">
+    <value>オフ — コマンド実行を無効にする</value>
+  </data>
 <data name="RuntimeOffline" xml:space="preserve">
     <value>オフライン</value>
   </data>
