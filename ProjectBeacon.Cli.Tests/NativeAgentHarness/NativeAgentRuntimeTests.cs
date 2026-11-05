@@ -11,14 +11,14 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 public sealed class NativeAgentRuntimeTests
 {
     [Fact]
-    public async Task NativeRuntimeWaitsForChatApprovalBeforeRunningShellAndResumesAfterReply()
+    public async Task NativeRuntimeWaitsForCommandApprovalBeforeRunningArgvAndResumesAfterReply()
     {
-        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-shell-approval-" + Guid.NewGuid().ToString("N"));
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-native-command-approval-" + Guid.NewGuid().ToString("N"));
         var project = Path.Combine(temp, "project");
         Directory.CreateDirectory(project);
         using var control = new HttpClient { BaseAddress = new Uri("https://beacon.test/") };
         await using var llama = new ClientLlamaSwap();
-        var provider = new ShellApprovalProvider();
+        var provider = new CommandApprovalProvider();
         var mcp = new StubMcpToolClient();
         var runtime = new NativeAgentRuntime(
             control, llama, new StubLlamaSync(),
@@ -30,7 +30,7 @@ public sealed class NativeAgentRuntimeTests
             var session = await runtime.CreateSessionAsync("terminal approval", CancellationToken.None);
             var authorization = new AgentHarnessAuthorization(
                 "https://beacon.test", "ephemeral-token", Guid.NewGuid(), null, Guid.NewGuid(),
-                1, project, DateTime.UtcNow.AddMinutes(2));
+                1, project, DateTime.UtcNow.AddMinutes(2), ProjectRoot: project, IsolatedWorkspace: true);
             await runtime.SendPromptAsync(session, "Run the diagnostic.", "beacon-local/test-model",
                 CancellationToken.None, new AgentPromptControls(null, "medium", null) { HarnessAuthorization = authorization });
 
@@ -43,12 +43,13 @@ public sealed class NativeAgentRuntimeTests
                     await Task.Delay(20, TestContext.Current.CancellationToken);
             }
             var approval = Assert.Single(forms);
-            Assert.Equal("Terminal access requested", approval.Title);
+            Assert.Equal("Command approval requested", approval.Title);
             Assert.Equal(0, provider.FinalRequests);
             using (var form = JsonDocument.Parse(approval.FieldsJson))
             {
                 var description = form.RootElement[0].GetProperty("description").GetString();
-                Assert.Contains("echo beacon-approved", description, StringComparison.Ordinal);
+                Assert.Contains("dotnet", description, StringComparison.Ordinal);
+                Assert.Contains("argv", description, StringComparison.Ordinal);
                 Assert.Contains(Path.GetFullPath(project), description, StringComparison.Ordinal);
             }
 
@@ -63,7 +64,7 @@ public sealed class NativeAgentRuntimeTests
                     break;
                 await Task.Delay(20, TestContext.Current.CancellationToken);
             }
-            Assert.True(status?.Ended, status?.Error ?? "The approved shell turn did not finish.");
+            Assert.True(status?.Ended, status?.Error ?? "The approved command turn did not finish.");
             Assert.Equal("stop", status!.Finish);
             Assert.Equal(1, provider.FinalRequests);
             Assert.Empty(await capabilities.ListPendingFormsAsync(session, CancellationToken.None));
@@ -91,9 +92,9 @@ public sealed class NativeAgentRuntimeTests
     [Theory]
     [InlineData("Planner", true, false)]
     [InlineData("Review", true, false)]
-    [InlineData("Actor", false, false)]
+    [InlineData("Actor", false, true)]
     [InlineData("Actor", true, true)]
-    public void RunCommandRequiresActorRoleAndExplicitSubtaskGrant(string role, bool grantRunCommand, bool expected)
+    public void RunCommandRequiresIsolatedWorkspaceAndActorRoleNotSubtaskCommandGrant(string role, bool grantRunCommand, bool expected)
     {
         var authorization = new AgentHarnessAuthorization(
             "https://beacon.test",
@@ -106,9 +107,13 @@ public sealed class NativeAgentRuntimeTests
             DateTime.UtcNow.AddMinutes(2),
             Guid.NewGuid(),
             role,
-            grantRunCommand ? ["read_file", "run_command"] : ["read_file"]);
+            grantRunCommand ? ["read_file", "run_command"] : ["read_file"],
+            ProjectRoot: Path.GetTempPath(),
+            IsolatedWorkspace: true);
 
         Assert.Equal(expected, NativeAgentRuntime.IsRunCommandAuthorized(authorization));
+
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(authorization with { IsolatedWorkspace = false }));
     }
 
     [Fact]
@@ -2153,7 +2158,7 @@ public sealed class NativeAgentRuntimeTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class ShellApprovalProvider : IChatProvider
+    private sealed class CommandApprovalProvider : IChatProvider
     {
         private int _requests;
         public int FinalRequests { get; private set; }
@@ -2177,7 +2182,7 @@ public sealed class NativeAgentRuntimeTests
             FinalRequests++;
             var toolMessage = Assert.Single(request.Messages, message => message?["role"]?.GetValue<string>() == "tool");
             LastToolResult = toolMessage!["content"]!.GetValue<string>();
-            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Terminal command completed.");
+            yield return new ChatProviderEvent(ChatProviderEventKind.TextDelta, Text: "Command completed.");
             yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "stop");
             await Task.CompletedTask;
         }
