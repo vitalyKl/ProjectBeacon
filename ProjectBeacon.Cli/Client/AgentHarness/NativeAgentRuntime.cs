@@ -1837,7 +1837,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     }
 
     internal static bool IsInteractiveChatAuthorization(AgentHarnessAuthorization authorization)
-        => authorization.PipelineRole is null && authorization.TaskId is null;
+        => authorization.PipelineRole is null
+            && authorization.TaskId is null
+            && authorization.SubtaskId is null;
 
     internal static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
     {
