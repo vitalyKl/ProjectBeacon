@@ -134,6 +134,9 @@ internal static class NativeCommandRunner
             return new McpToolResult(true, $"Command failed to start: {ex.GetType().Name}.");
         }
 
+        // Every command belongs to the daemon's kill-on-job-close job on Windows,
+        // so a daemon crash cannot leave a build/test process tree running unattended.
+        ProcessJob.TryAssign(process);
         process.StandardInput.Close();
         var outputGate = new SemaphoreSlim(1, 1);
         try
@@ -185,6 +188,13 @@ internal static class NativeCommandRunner
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            throw;
+        }
+        catch
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
             throw;
         }
         finally
