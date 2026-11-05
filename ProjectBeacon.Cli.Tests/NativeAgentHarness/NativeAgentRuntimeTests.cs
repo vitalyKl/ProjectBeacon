@@ -259,10 +259,10 @@ public sealed class NativeAgentRuntimeTests
 
     [Theory]
     [InlineData("run_command", true)]
-    [InlineData("run_log", true)]
+    [InlineData("run_log", false)]
     [InlineData("service_start", true)]
-    [InlineData("service_status", true)]
-    [InlineData("service_logs", true)]
+    [InlineData("service_status", false)]
+    [InlineData("service_logs", false)]
     [InlineData("service_stop", true)]
     [InlineData("read_file", false)]
     public void PlanModeBlocksCommandAndServiceOperations(string tool, bool expected)
