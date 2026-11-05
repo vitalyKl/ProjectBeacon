@@ -377,6 +377,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             {
                 try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
             }
+            sessionWorktree?.Preserve();
+            throw;
+        }
+        catch
+        {
+            sessionWorktree?.Preserve();
             throw;
         }
         finally
