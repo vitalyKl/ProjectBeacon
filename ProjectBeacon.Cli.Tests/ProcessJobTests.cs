@@ -6,6 +6,15 @@ using ProjectBeacon.Cli.Client;
 public sealed class ProcessJobTests
 {
     [Fact]
+    public void WindowsExtendedJobLimitInformationMatchesTheNativeAbi()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        Assert.Equal(144, ProcessJob.ExtendedLimitInformationSize);
+    }
+
+    [Fact]
     public void TryAssign_AssignsRunningProcess()
     {
         if (!OperatingSystem.IsWindows())
