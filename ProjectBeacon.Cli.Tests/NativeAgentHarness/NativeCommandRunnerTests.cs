@@ -95,29 +95,30 @@ public sealed class NativeCommandRunnerTests
     public void ExecutableResolutionDoesNotSearchTheProjectWorktree()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        var tools = Path.Combine(Path.GetTempPath(), "beacon-command-tools-" + Guid.NewGuid().ToString("N"));
         var sessionId = Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(root);
-        var oldPath = Environment.GetEnvironmentVariable("PATH");
+        Directory.CreateDirectory(tools);
         try
         {
-            var fakeExecutable = Path.Combine(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-            File.WriteAllText(fakeExecutable, "repository-controlled executable");
-            Environment.SetEnvironmentVariable("PATH", root + Path.PathSeparator + oldPath);
+            var fakeInWorktree = Path.Combine(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+            var trustedExecutable = Path.Combine(tools, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+            File.WriteAllText(fakeInWorktree, "repository-controlled executable");
+            File.WriteAllText(trustedExecutable, "trusted executable");
 
-            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["dotnet", "--version"]);
+            var pathOverride = root + Path.PathSeparator + tools;
+            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["dotnet", "--version"], pathOverride);
 
-            Assert.False(Path.GetFullPath(start.FileName).StartsWith(
-                Path.GetFullPath(root) + Path.DirectorySeparatorChar,
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+            Assert.Equal(Path.GetFullPath(trustedExecutable), Path.GetFullPath(start.FileName));
             Assert.DoesNotContain(root, start.Environment["PATH"], OperatingSystem.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("PATH", oldPath);
             NativeCommandRunner.CleanupSession(sessionId);
             Directory.Delete(root, recursive: true);
+            Directory.Delete(tools, recursive: true);
         }
     }
 
@@ -132,14 +133,13 @@ public sealed class NativeCommandRunnerTests
         var sessionId = Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(root);
         Directory.CreateDirectory(shimDirectory);
-        var oldPath = Environment.GetEnvironmentVariable("PATH");
         try
         {
             var shim = Path.Combine(shimDirectory, "npm.cmd");
             File.WriteAllText(shim, "@echo off\r\necho shim\r\n");
-            Environment.SetEnvironmentVariable("PATH", shimDirectory + Path.PathSeparator + oldPath);
 
-            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["npm", "test"]);
+            var start = NativeCommandRunner.CreateStartInfo(
+                root, sessionId, ["npm", "test"], shimDirectory);
 
             Assert.EndsWith("cmd.exe", start.FileName, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("/d /v:off /s /c", start.Arguments, StringComparison.OrdinalIgnoreCase);
@@ -149,7 +149,6 @@ public sealed class NativeCommandRunnerTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable("PATH", oldPath);
             NativeCommandRunner.CleanupSession(sessionId);
             Directory.Delete(root, recursive: true);
             Directory.Delete(shimDirectory, recursive: true);
