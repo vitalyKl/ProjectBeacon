@@ -1,29 +1,26 @@
 namespace ProjectBeacon.Cli.Tests.NativeAgentHarness;
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class NativeCommandRunnerTests
 {
     [Fact]
-    public async Task DisabledOrUnlistedCommandsAreRejectedWithoutStartingAProcess()
+    public void ObviousDangerousCommandsAreRejectedBeforeStartingAProcess()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
-            var args = new JsonObject
-            {
-                ["executable"] = "dotnet",
-                ["arguments"] = new JsonArray { JsonValue.Create("--version") }
-            };
-            var disabled = await NativeCommandRunner.ExecuteAsync(root, args, [], CancellationToken.None);
-            Assert.True(disabled.IsError);
-            Assert.Contains("AllowedCommandPrefixes", disabled.Text, StringComparison.Ordinal);
+            Assert.False(CommandExecutionPolicy.TryValidate(["sudo", "dotnet", "test"], root, out var sudoError));
+            Assert.Contains("blocked", sudoError, StringComparison.OrdinalIgnoreCase);
 
-            var mismatch = await NativeCommandRunner.ExecuteAsync(root, args, ["dotnet test"], CancellationToken.None);
-            Assert.True(mismatch.IsError);
-            Assert.Contains("does not match", mismatch.Text, StringComparison.Ordinal);
+            Assert.False(CommandExecutionPolicy.TryValidate(["git", "push", "origin", "main"], root, out var pushError));
+            Assert.Contains("git push", pushError, StringComparison.OrdinalIgnoreCase);
+
+            Assert.False(CommandExecutionPolicy.TryValidate(["npm", "install", "-g", "tool"], root, out var globalError));
+            Assert.Contains("Global", globalError, StringComparison.Ordinal);
         }
         finally
         {
@@ -32,25 +29,39 @@ public sealed class NativeCommandRunnerTests
     }
 
     [Fact]
-    public async Task AllowlistedCommandRunsWithoutShellAndReturnsBoundedResult()
+    public async Task ArgvCommandRunsWithoutShellAndReturnsStructuredResultAndLogId()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        var sessionId = Guid.NewGuid().ToString("N");
         Directory.CreateDirectory(root);
         try
         {
             var args = new JsonObject
             {
-                ["executable"] = "dotnet",
-                ["arguments"] = new JsonArray { JsonValue.Create("--version") },
+                ["argv"] = new JsonArray { JsonValue.Create("dotnet"), JsonValue.Create("--version") },
                 ["timeoutSeconds"] = 15
             };
-            var result = await NativeCommandRunner.ExecuteAsync(root, args, ["dotnet --version"], CancellationToken.None);
-            Assert.False(result.IsError);
-            Assert.Contains("Exit code: 0", result.Text, StringComparison.Ordinal);
-            Assert.Contains("STDOUT:", result.Text, StringComparison.Ordinal);
+            var result = await NativeCommandRunner.ExecuteAsync(root, sessionId, args, CancellationToken.None);
+            Assert.False(result.IsError, result.Text);
+
+            using var document = JsonDocument.Parse(result.Text);
+            var payload = document.RootElement;
+            Assert.Equal(0, payload.GetProperty("exitCode").GetInt32());
+            Assert.True(payload.GetProperty("durationMs").GetInt64() >= 0);
+            Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("outputTail").GetString()));
+            var runId = payload.GetProperty("runId").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(runId));
+
+            var log = await NativeCommandRunner.ReadLogAsync(sessionId,
+                new JsonObject { ["runId"] = runId, ["maxLines"] = 20 }, CancellationToken.None);
+            Assert.False(log.IsError, log.Text);
+            using var logDocument = JsonDocument.Parse(log.Text);
+            Assert.Equal(runId, logDocument.RootElement.GetProperty("runId").GetString());
+            Assert.True(logDocument.RootElement.GetProperty("lines").GetArrayLength() > 0);
         }
         finally
         {
+            NativeCommandRunner.CleanupSession(sessionId);
             Directory.Delete(root, true);
         }
     }
@@ -68,12 +79,11 @@ public sealed class NativeCommandRunnerTests
         {
             var args = new JsonObject
             {
-                ["executable"] = "dotnet",
-                ["arguments"] = new JsonArray { JsonValue.Create("test"), JsonValue.Create(argument) }
+                ["argv"] = new JsonArray { JsonValue.Create("dotnet"), JsonValue.Create("test"), JsonValue.Create(argument) }
             };
-            var result = await NativeCommandRunner.ExecuteAsync(root, args, ["dotnet test"], CancellationToken.None);
+            var result = await NativeCommandRunner.ExecuteAsync(root, Guid.NewGuid().ToString("N"), args, CancellationToken.None);
             Assert.True(result.IsError);
-            Assert.Contains("absolute paths and parent-directory traversal", result.Text, StringComparison.Ordinal);
+            Assert.Contains("Absolute paths and parent-directory traversal", result.Text, StringComparison.Ordinal);
         }
         finally
         {
@@ -82,24 +92,13 @@ public sealed class NativeCommandRunnerTests
     }
 
     [Fact]
-    public async Task AbsoluteAndParentTraversalArgumentsAreRejected()
+    public async Task RunLogRejectsPathsAndUnknownRunIds()
     {
-        var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            var args = new JsonObject
-            {
-                ["executable"] = "dotnet",
-                ["arguments"] = new JsonArray { JsonValue.Create("test"), JsonValue.Create("../outside.sln") }
-            };
-            var result = await NativeCommandRunner.ExecuteAsync(root, args, ["dotnet test"], CancellationToken.None);
-            Assert.True(result.IsError);
-            Assert.Contains("parent-directory traversal", result.Text, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(root, true);
-        }
+        var session = Guid.NewGuid().ToString("N");
+        var missing = await NativeCommandRunner.ReadLogAsync(session,
+            new JsonObject { ["runId"] = "../outside" }, CancellationToken.None);
+        Assert.True(missing.IsError);
+        Assert.Contains("invalid", missing.Text, StringComparison.Ordinal);
+        NativeCommandRunner.CleanupSession(session);
     }
 }
