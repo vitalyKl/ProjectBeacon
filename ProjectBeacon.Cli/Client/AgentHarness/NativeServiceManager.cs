@@ -338,6 +338,34 @@ internal sealed class NativeServiceManager : IAsyncDisposable
                     || !root.TryGetProperty("startTimeUtcTicks", out var startValue) || !startValue.TryGetInt64(out var startTicks))
                     continue;
 
+                // Another daemon instance may still own a live managed service. Only reap
+                // services whose recorded owner process has exited or whose PID was reused.
+                if (root.TryGetProperty("ownerProcessId", out var ownerPidValue)
+                    && ownerPidValue.TryGetInt32(out var ownerPid)
+                    && root.TryGetProperty("ownerStartTimeUtcTicks", out var ownerStartValue)
+                    && ownerStartValue.TryGetInt64(out var ownerStartTicks))
+                {
+                    try
+                    {
+                        using var owner = Process.GetProcessById(ownerPid);
+                        if (Math.Abs(owner.StartTime.ToUniversalTime().Ticks - ownerStartTicks) <= TimeSpan.FromSeconds(2).Ticks)
+                            continue;
+                    }
+                    catch (ArgumentException)
+                    {
+                        // The daemon that registered this service has exited.
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        continue;
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        // Cannot safely determine whether another daemon still owns it.
+                        continue;
+                    }
+                }
+
                 try
                 {
                     using var process = Process.GetProcessById(pid);
@@ -478,10 +506,13 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         {
             try
             {
+                using var owner = Process.GetCurrentProcess();
                 var metadata = JsonSerializer.Serialize(new
                 {
                     processId = process.Id,
                     startTimeUtcTicks = process.StartTime.ToUniversalTime().Ticks,
+                    ownerProcessId = owner.Id,
+                    ownerStartTimeUtcTicks = owner.StartTime.ToUniversalTime().Ticks,
                     serviceId = id,
                     sessionId
                 });
