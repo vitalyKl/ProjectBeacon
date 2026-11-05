@@ -33,6 +33,31 @@ public sealed class ProcessJobTests
     }
 
     [Fact]
+    public async Task ProcessRunnerClosesRedirectedStdinForNonInteractiveCommands()
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git",
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add("hash-object");
+        start.ArgumentList.Add("--stdin");
+
+        var result = await ProcessRunner.RunAsync(
+            start,
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.TimedOut);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", result.StdOut.Trim());
+    }
+
+    [Fact]
     public void TryStart_AssignsJobToLaunchedProcess()
     {
         if (!OperatingSystem.IsWindows())
