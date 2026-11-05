@@ -197,6 +197,28 @@ internal static class PipelineSupport
         return sessions;
     }
 
+    public static async Task<int> StopActorSessionsAndCancelCommandsAsync(
+        IBeaconDb db,
+        Guid projectId,
+        Guid taskId,
+        Guid subtaskId,
+        CancellationToken ct)
+    {
+        var sessions = await db.PipelineSessions.IgnoreQueryFilters()
+            .Where(session => session.ProjectId == projectId
+                && session.TaskId == taskId
+                && session.Role == PipelineRole.Actor
+                && session.SubtaskId == subtaskId)
+            .ToListAsync(ct);
+
+        foreach (var session in sessions.Where(session =>
+            session.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser))
+            session.Close();
+
+        await db.SaveChangesAsync(ct);
+        return await CancelPipelineCommandsAsync(db, projectId, sessions.Select(session => session.Id).ToArray(), ct);
+    }
+
     public static async Task<int> CancelPipelineCommandsAsync(
         IBeaconDb db,
         Guid projectId,
