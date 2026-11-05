@@ -13,9 +13,8 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     private readonly string _repositoryRoot;
     private readonly string _originalWorkingDirectory;
     private readonly string _worktreeRoot;
-    private readonly string _snapshotCommit;
+    private string _snapshotCommit;
     private bool _preserve;
-    private bool _applied;
 
     private AgentSessionWorktree(
         string repositoryRoot,
@@ -153,50 +152,50 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     /// </summary>
     public async Task<(bool Success, string? Error)> ApplyChangesAsync(CancellationToken ct)
     {
-        if (_applied)
-            return (true, null);
-
         var status = await RunGitAsync(WorkingDirectory, ct, "status", "--porcelain", "--untracked-files=all");
         if (status.ExitCode != 0 || status.TimedOut)
             return (false, "Could not inspect the isolated worktree changes.");
 
-        if (string.IsNullOrWhiteSpace(status.StdOut))
+        if (!string.IsNullOrWhiteSpace(status.StdOut))
         {
-            _applied = true;
-            return (true, null);
+            var stage = await RunGitAsync(WorkingDirectory, ct, "add", "-A", "--", ".");
+            if (stage.ExitCode != 0 || stage.TimedOut)
+                return (false, "Could not stage the agent's worktree changes.");
+
+            var summary = await RunGitAsync(WorkingDirectory, ct, "diff", "--cached", "--summary", _snapshotCommit);
+            if (summary.ExitCode != 0 || summary.TimedOut)
+                return (false, "Could not inspect the agent's worktree diff.");
+            if (summary.StdOut.Contains("120000", StringComparison.Ordinal)
+                || summary.StdOut.Contains("symbolic link", StringComparison.OrdinalIgnoreCase))
+                return (false, $"The agent created or changed a symbolic link. The worktree was preserved at {_worktreeRoot}.");
+
+            var commit = await RunGitAsync(
+                WorkingDirectory,
+                ct,
+                "-c", "user.name=ProjectBeacon",
+                "-c", "user.email=projectbeacon@localhost",
+                "-c", "commit.gpgsign=false",
+                "commit", "-m", "ProjectBeacon: apply verified agent session");
+            if (commit.ExitCode != 0 || commit.TimedOut)
+                return (false, $"Could not commit the agent worktree changes. The worktree was preserved at {_worktreeRoot}.");
         }
-
-        var stage = await RunGitAsync(WorkingDirectory, ct, "add", "-A", "--", ".");
-        if (stage.ExitCode != 0 || stage.TimedOut)
-            return (false, "Could not stage the agent's worktree changes.");
-
-        var summary = await RunGitAsync(WorkingDirectory, ct, "diff", "--cached", "--summary", _snapshotCommit);
-        if (summary.ExitCode != 0 || summary.TimedOut)
-            return (false, "Could not inspect the agent's worktree diff.");
-        if (summary.StdOut.Contains("120000", StringComparison.Ordinal)
-            || summary.StdOut.Contains("symbolic link", StringComparison.OrdinalIgnoreCase))
-            return (false, $"The agent created or changed a symbolic link. The worktree was preserved at {_worktreeRoot}.");
-
-        var commit = await RunGitAsync(
-            WorkingDirectory,
-            ct,
-            "-c", "user.name=ProjectBeacon",
-            "-c", "user.email=projectbeacon@localhost",
-            "-c", "commit.gpgsign=false",
-            "commit", "-m", "ProjectBeacon: apply verified agent session");
-        if (commit.ExitCode != 0 || commit.TimedOut)
-            return (false, $"Could not commit the agent worktree changes. The worktree was preserved at {_worktreeRoot}.");
 
         var newHead = await RunGitAsync(WorkingDirectory, ct, "rev-parse", "HEAD");
         if (newHead.ExitCode != 0 || newHead.TimedOut || string.IsNullOrWhiteSpace(newHead.StdOut))
             return (false, $"Could not identify the agent worktree commit. The worktree was preserved at {_worktreeRoot}.");
 
-        var patch = await RunGitAsync(_repositoryRoot, ct, "diff", "--binary", "--no-ext-diff", "--no-textconv", _snapshotCommit, newHead.StdOut.Trim());
+        var nextSnapshot = newHead.StdOut.Trim();
+        if (string.Equals(nextSnapshot, _snapshotCommit, StringComparison.Ordinal))
+            return (true, null);
+
+        // Diff from the last successfully applied baseline, not just the current index. This
+        // lets a later chat turn retry a patch after a previous turn hit a conflict.
+        var patch = await RunGitAsync(_repositoryRoot, ct, "diff", "--binary", "--no-ext-diff", "--no-textconv", _snapshotCommit, nextSnapshot);
         if (patch.ExitCode != 0 || patch.TimedOut)
             return (false, $"Could not create a patch for the agent changes. The worktree was preserved at {_worktreeRoot}.");
         if (string.IsNullOrEmpty(patch.StdOut))
         {
-            _applied = true;
+            _snapshotCommit = nextSnapshot;
             return (true, null);
         }
 
@@ -209,12 +208,12 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             if (apply.ExitCode != 0 || apply.TimedOut)
                 return (false, $"The agent changes conflict with the current project files. The worktree was preserved at {_worktreeRoot}; patch: {patchPath}.");
 
-            _applied = true;
+            _snapshotCommit = nextSnapshot;
             return (true, null);
         }
         finally
         {
-            if (_applied)
+            if (string.Equals(_snapshotCommit, nextSnapshot, StringComparison.Ordinal))
             {
                 try { File.Delete(patchPath); } catch { }
             }
