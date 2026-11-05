@@ -23,7 +23,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ProjectBeacon", "managed-services");
     private static readonly Regex DefaultReadyRegex = new(
-        @"Now listening|Application started|\bready\b|\bListening on\b|\bLocal:\s*https?://",
+        @"Now listening|Application started|\bready\b|\bListening on\b|\bLocal:\s*https?://|\bRunning on https?://|Uvicorn running|Server started",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(100));
 
@@ -109,6 +109,9 @@ internal sealed class NativeServiceManager : IAsyncDisposable
             try { readyRegex = new Regex(patternText, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100)); }
             catch (ArgumentException) { return new McpToolResult(true, "service_start rejected: readyPattern is not a valid regular expression."); }
         }
+
+        if (port is { } readinessPort && await IsPortOpenAsync(readinessPort, ct))
+            return new McpToolResult(true, $"service_start rejected: TCP port {readinessPort} is already listening before launch; readiness cannot be attributed to this service process tree.");
 
         var sessionDirectory = NativeCommandRunner.SessionHomePath(sessionId);
         var logDirectory = Path.Combine(sessionDirectory, "logs");
