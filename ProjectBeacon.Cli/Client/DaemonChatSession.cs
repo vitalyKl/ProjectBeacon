@@ -371,19 +371,22 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                     await ReportPromptProgressAsync(chatAuthorization, waitingForUser, ct);
                 if (waitingForUser)
                     i--; // Human wait is not part of the normal chat turn duration.
-                quiet = added > 0 ? 0 : quiet + 1;
+                quiet = waitingForUser || added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
                 // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
                 var turn = await runtime.GetTurnStatusAsync(externalId, ct);
                 lastTurn = turn;
                 // Fresh means a new assistant message appeared after the baseline.
                 var fresh = turn is not null && turn.MessageId is not null && turn.MessageId != baselineMessageId;
-                if (turn is { Ended: true } && fresh)
-                    idle = true;
-                else if (turn is null && quiet >= maxQuiet && assistantParts > 0)
-                    // The quiet path must not end a turn before the first assistant part: a slow
-                    // first token (model swap, context compaction) can outlast ChatIdleTimeout.
-                    idle = true;
+                if (!waitingForUser)
+                {
+                    if (turn is { Ended: true } && fresh)
+                        idle = true;
+                    else if (turn is null && quiet >= maxQuiet && assistantParts > 0)
+                        // The quiet path must not end a turn before the first assistant part: a slow
+                        // first token (model swap, context compaction) can outlast ChatIdleTimeout.
+                        idle = true;
+                }
                 if (idle)
                     break;
                 await _timing.DelayAsync(_timing.ChatPollInterval, ct);
