@@ -41,7 +41,7 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
             .ToListAsync(ct);
         if (subtasks.Count == 0)
             return Result.Failure<PipelineSessionDto>("No subtasks to review.");
-        if (subtasks.Any(s => s.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress))
+        if (subtasks.Any(s => s.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
             return Result.Failure<PipelineSessionDto>("All subtasks must be done or failed before review.");
 
         var expectedStatus = task.Status;
