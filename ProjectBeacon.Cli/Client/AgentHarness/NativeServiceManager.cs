@@ -161,6 +161,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
             await service.StopAsync(CancellationToken.None);
             return new McpToolResult(true, "service_start failed: could not register the service process for crash recovery.");
         }
+        service.RefreshExitState();
 
         var session = _sessions.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, ManagedService>(StringComparer.Ordinal));
         if (!session.TryAdd(serviceId, service))
@@ -602,6 +603,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
                 try { _exitCode = process.ExitCode; } catch { }
                 _stoppedAt = DateTimeOffset.UtcNow;
                 _status = _exitCode == 0 ? "exited" : "failed";
+                try { File.Delete(registryPath); } catch { }
             }
         }
 
@@ -617,6 +619,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
 
         public async Task StopAsync(CancellationToken ct)
         {
+            var stopped = false;
             try
             {
                 if (!process.HasExited)
@@ -627,20 +630,37 @@ internal sealed class NativeServiceManager : IAsyncDisposable
                     try { await process.WaitForExitAsync(timeout.Token); }
                     catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
                 }
+                stopped = process.HasExited;
             }
-            catch (InvalidOperationException) { }
-            catch (System.ComponentModel.Win32Exception) { }
+            catch (InvalidOperationException)
+            {
+                try { stopped = process.HasExited; } catch { }
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                try { stopped = process.HasExited; } catch { }
+            }
             finally
             {
                 lock (_sync)
                 {
-                    if (_status is not "failed" and not "exited")
-                        _status = "stopped";
                     _stoppedAt ??= DateTimeOffset.UtcNow;
-                    try { _exitCode = process.HasExited ? process.ExitCode : _exitCode; } catch { }
+                    if (stopped)
+                    {
+                        if (_status is not "failed" and not "exited")
+                            _status = "stopped";
+                        try { _exitCode = process.ExitCode; } catch { }
+                    }
+                    else
+                    {
+                        _status = "stop-failed";
+                    }
                 }
                 try { process.Dispose(); } catch { }
-                try { File.Delete(registryPath); } catch { }
+                if (stopped)
+                {
+                    try { File.Delete(registryPath); } catch { }
+                }
             }
         }
 
