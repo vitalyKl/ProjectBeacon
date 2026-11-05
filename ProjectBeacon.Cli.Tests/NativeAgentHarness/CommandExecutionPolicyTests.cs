@@ -94,6 +94,30 @@ public sealed class CommandExecutionPolicyTests
     }
 
     [Fact]
+    public void TryValidateAllowsPathsInsideWorktreeAndBuildSwitchesButRejectsEscapes()
+    {
+        var root = CreateProject();
+        try
+        {
+            var inside = Path.Combine(root, "src", "App.csproj");
+            Directory.CreateDirectory(Path.GetDirectoryName(inside)!);
+            File.WriteAllText(inside, "<Project />");
+            var outside = Path.Combine(root, "..", "outside.csproj");
+
+            Assert.True(CommandExecutionPolicy.TryValidate(["dotnet", "test", inside], root, out var insideError), insideError);
+            Assert.True(CommandExecutionPolicy.TryValidate(["dotnet", "test", "--project=" + inside], root, out var optionError), optionError);
+            Assert.True(CommandExecutionPolicy.TryValidate(["dotnet", "test", "/p:Configuration=Release"], root, out var switchError), switchError);
+            Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", outside], root, out _));
+            Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", "--project=" + outside], root, out _));
+            Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", "@" + outside], root, out _));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ManifestSourcesMatchOnlyWhenWorktreeHasTheSameBuildInputs()
     {
         var root = CreateProject();
