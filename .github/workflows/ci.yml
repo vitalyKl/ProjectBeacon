@@ -1,15 +1,20 @@
 name: CI
 
 on:
+  # Keep main protected by an automatic check after every merge.
   push:
     branches: [main]
+  # Do not run on "synchronize": commits pushed to an existing PR are
+  # accumulated until the author explicitly requests a fresh CI run.
   pull_request:
     branches: [main]
+    types: [opened, reopened, ready_for_review]
+  # Run the full matrix on demand from Actions -> CI -> Run workflow.
+  workflow_dispatch:
 
-# Keep only the latest verification for a given PR/ref. Rapid fix commits should not
-# consume all runners with obsolete builds while the current head waits in the queue.
+# Avoid overlapping runs for the same PR/branch; keep the newest requested run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -113,7 +118,7 @@ jobs:
               raise SystemExit(f"::error::Only {total} test results reported; expected at least {MIN_TOTAL}")
           unexpected = sorted(set(skipped) - EXPECTED_NOT_EXECUTED)
           if unexpected:
-              raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\n" + "\n".join(unexpected))
+              raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\\n" + "\\n".join(unexpected))
           print(f"OK: {total} results, {len(skipped)} platform-conditional skips, {len(paths)} modules, symlink gates Passed")
           PY
       - name: Verify formatting
