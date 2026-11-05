@@ -383,7 +383,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 ? CommandExecutionPolicy.GetManifestFingerprint(fingerprintAuthorization.WorkingDirectory)
                 : null;
             if (commandPolicy != CommandExecutionPolicy.Off
-                && controls?.HarnessAuthorization is { } commandAuth
+                && controls?.HarnessAuthorization is { IsolatedWorkspace: true } commandAuth
                 && IsRunCommandAuthorized(commandAuth))
             {
                 mcpTools.Add(NativeCommandRunner.ToolDefinition());
@@ -611,7 +611,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 {
                                     var policy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
                                     if (policy == CommandExecutionPolicy.Off
-                                        || controls?.HarnessAuthorization is not { } commandAuthorization
+                                        || controls?.HarnessAuthorization is not { IsolatedWorkspace: true } commandAuthorization
                                         || !IsRunCommandAuthorized(commandAuthorization))
                                     {
                                         isError = true;
@@ -629,7 +629,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     }
                                     else
                                     {
-                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(commandAuthorization.WorkingDirectory);
+                                        var approvalProjectRoot = commandAuthorization.ProjectRoot ?? commandAuthorization.WorkingDirectory;
+                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(approvalProjectRoot);
                                         var manifestUnchanged = string.Equals(
                                             manifestFingerprint,
                                             CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory),
@@ -644,6 +645,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                             && !await RequestCommandPermissionAsync(
                                                 session,
                                                 commandAuthorization.WorkingDirectory,
+                                                approvalProjectRoot,
                                                 argv,
                                                 ct))
                                         {
@@ -664,7 +666,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 }
                                 else if (string.Equals(call.Name, "run_log", StringComparison.Ordinal))
                                 {
-                                    if (controls?.HarnessAuthorization is not { } logAuthorization
+                                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } logAuthorization
                                         || !IsRunCommandAuthorized(logAuthorization))
                                     {
                                         isError = true;
@@ -1285,6 +1287,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private async Task<bool> RequestCommandPermissionAsync(
         SessionState session,
         string workingDirectory,
+        string approvalProjectRoot,
         IReadOnlyList<string> argv,
         CancellationToken ct)
     {
@@ -1306,7 +1309,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     case "once":
                         return true;
                     case "always":
-                        if (CommandExecutionPolicy.ApprovePrefix(workingDirectory, prefix, out var error))
+                        if (CommandExecutionPolicy.ApprovePrefix(approvalProjectRoot, prefix, out var error))
                             return true;
                         _log?.Invoke("could not persist project command approval: " + (error ?? "unknown error"));
                         return false;
@@ -1494,8 +1497,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     internal static bool IsRunCommandAuthorized(AgentHarnessAuthorization authorization)
     {
-        // Interactive sessions are controlled by the workstation-wide policy. Pipeline execution
-        // is available only to Actor sessions; Planner, Review and Eval never execute commands.
+        // Command execution is never advertised outside an isolated worktree. Interactive
+        // sessions are governed by workstation policy; only Actor pipeline sessions may execute.
+        if (!authorization.IsolatedWorkspace)
+            return false;
         if (authorization.PipelineRole is null && authorization.TaskId is null)
             return true;
         return string.Equals(authorization.PipelineRole, "Actor", StringComparison.OrdinalIgnoreCase)
