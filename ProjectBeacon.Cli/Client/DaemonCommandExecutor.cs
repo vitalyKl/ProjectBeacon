@@ -472,7 +472,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
 
-        async Task<bool> PublishActivityAsync(string state, AgentTurnStatus? turnStatus, CancellationToken tokenCt)
+        async Task<bool> PublishActivityAsync(
+            string state,
+            AgentTurnStatus? turnStatus,
+            CancellationToken tokenCt,
+            bool terminal = false)
         {
             var collected = new List<AgentMessagePart>();
             await foreach (var part in runtime.StreamPartsAsync(externalSessionId, tokenCt))
@@ -597,7 +601,11 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             if (!response.IsSuccessStatusCode)
             {
                 _state.Log($"pipeline activity report returned HTTP {(int)response.StatusCode}");
-                if (response.StatusCode is System.Net.HttpStatusCode.Conflict
+                // A terminal snapshot is best-effort: the API may already have closed
+                // the pipeline session (for example, after an Actor reports its result or
+                // an operator cancels it). Never replace the actual agent outcome with a
+                // secondary failure to publish that final snapshot.
+                if (!terminal && response.StatusCode is System.Net.HttpStatusCode.Conflict
                     or System.Net.HttpStatusCode.NotFound
                     or System.Net.HttpStatusCode.Unauthorized
                     or System.Net.HttpStatusCode.Forbidden)
@@ -645,7 +653,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 || string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(status.Finish);
 
-            await PublishActivityAsync(failed ? "failed" : "completed", status, ct);
+            await PublishActivityAsync(failed ? "failed" : "completed", status, ct, terminal: true);
             if (failed)
             {
                 var failure = status.Error
@@ -677,7 +685,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
-            try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
+            try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
             sessionWorktree.Preserve();
             return (false, null, (timeoutReason
                 ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.")
