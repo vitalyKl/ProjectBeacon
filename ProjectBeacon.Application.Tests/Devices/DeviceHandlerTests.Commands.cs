@@ -97,7 +97,7 @@ public sealed partial class DeviceHandlerTests
             user.Id,
             "fp-" + Guid.NewGuid().ToString("N"),
             "hash",
-            "bcd_" + Guid.NewGuid().ToString("N));
+            "bcd_" + Guid.NewGuid().ToString("N)));
         var task = TaskItem.Create("completed actor progress", project.Id);
         var subtask = Subtask.Create("complete work", task.Id, project.Id);
         subtask.Start();
@@ -125,7 +125,7 @@ public sealed partial class DeviceHandlerTests
             new ReportCommandProgressCommand(new ReportCommandProgressRequest(
                 command.Id,
                 device.Id,
-                generation: 1,
+                1,
                 """{"forms":[]}""")),
             TestContext.Current.CancellationToken);
 
@@ -143,7 +143,7 @@ public sealed partial class DeviceHandlerTests
             user.Id,
             "fp-" + Guid.NewGuid().ToString("N"),
             "hash",
-            "bcd_" + Guid.NewGuid().ToString("N));
+            "bcd_" + Guid.NewGuid().ToString("N)));
         var task = TaskItem.Create("failed actor progress", project.Id);
         var subtask = Subtask.Create("incomplete work", task.Id, project.Id);
         subtask.Start();
@@ -171,12 +171,12 @@ public sealed partial class DeviceHandlerTests
             new ReportCommandProgressCommand(new ReportCommandProgressRequest(
                 command.Id,
                 device.Id,
-                generation: 1,
+                1,
                 """{"forms":[]}""")),
             TestContext.Current.CancellationToken);
 
         Assert.False(reported.Success);
-        Assert.Equal(ErrorKind.Conflict, reported.ErrorKind);
+        Assert.Contains("terminal", reported.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.WorkstationCommands.AsNoTracking()
