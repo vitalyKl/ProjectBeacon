@@ -392,7 +392,7 @@ internal static class NativeCommandRunner
                 var candidate = Path.GetFullPath(Path.Combine(directory, executable + extension));
                 if (!File.Exists(candidate))
                     continue;
-    
+
                 var resolved = candidate;
                 try
                 {
@@ -404,7 +404,7 @@ internal static class NativeCommandRunner
                 {
                     continue;
                 }
-    
+
                 if (IsInsideDirectory(resolved, FindWorkspaceRoot(workingDirectory)))
                     continue;
                 return candidate;
