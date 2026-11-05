@@ -109,6 +109,7 @@ public sealed class CommandExecutionPolicyTests
             Assert.True(CommandExecutionPolicy.TryValidate(["dotnet", "test", "/p:Configuration=Release"], root, out var switchError), switchError);
             Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", outside], root, out _));
             Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", "--project=" + outside], root, out _));
+            Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", "--project:" + outside], root, out _));
             Assert.False(CommandExecutionPolicy.TryValidate(["dotnet", "test", "@" + outside], root, out _));
         }
         finally
