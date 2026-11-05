@@ -391,7 +391,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 ? CommandExecutionPolicy.GetManifestFingerprint(fingerprintAuthorization.WorkingDirectory)
                 : null;
             var manifestTrustedAtTurnStart = controls?.HarnessAuthorization is { IsolatedWorkspace: true } trustAuthorization
-                && CommandExecutionPolicy.IsManifestFingerprintTrusted(trustAuthorization.ProjectRoot ?? trustAuthorization.WorkingDirectory);
+                && CommandExecutionPolicy.ManifestSourcesMatch(
+                    trustAuthorization.ProjectRoot ?? trustAuthorization.WorkingDirectory,
+                    trustAuthorization.WorkingDirectory)
+                && CommandExecutionPolicy.IsManifestFingerprintTrusted(
+                    trustAuthorization.ProjectRoot ?? trustAuthorization.WorkingDirectory);
             if (controls?.HarnessAuthorization is { IsolatedWorkspace: true } suggestionAuthorization)
                 mcpTools.Add(SuggestCommandPrefixesToolDefinition());
             if (controls?.HarnessAuthorization is { IsolatedWorkspace: true } commandAuth
