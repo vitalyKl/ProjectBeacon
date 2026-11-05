@@ -137,10 +137,10 @@ internal static class NativeCommandRunner
         // Every command belongs to the daemon's kill-on-job-close job on Windows,
         // so a daemon crash cannot leave a build/test process tree running unattended.
         ProcessJob.TryAssign(process);
-        process.StandardInput.Close();
         var outputGate = new SemaphoreSlim(1, 1);
         try
         {
+            process.StandardInput.Close();
             await using var logStream = new FileStream(logPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 16 * 1024, useAsync: true);
             await using var logWriter = new StreamWriter(logStream, new UTF8Encoding(false), leaveOpen: true);
             var stdoutTask = ReadOutputAsync(process.StandardOutput, "OUT", logWriter, logStream, outputGate);
