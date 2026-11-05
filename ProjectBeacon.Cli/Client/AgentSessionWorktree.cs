@@ -91,7 +91,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             var snapshotEntries = await RunGitAsync(repositoryRoot, ct, "ls-tree", "-r", tree.StdOut.Trim());
             if (snapshotEntries.ExitCode != 0 || snapshotEntries.TimedOut)
                 return await FailCreateAsync(repositoryRoot, worktreeRoot, snapshotEntries, "Could not inspect the isolated worktree snapshot.");
-            if (snapshotEntries.StdOut.Split('\\n').Any(line => line.StartsWith("120000 blob ", StringComparison.Ordinal)))
+            if (snapshotEntries.StdOut.Split('\n').Any(line => line.StartsWith("120000 blob ", StringComparison.Ordinal)))
                 return await FailCreateAsync(repositoryRoot, worktreeRoot, snapshotEntries, "The project contains symbolic links. Isolated command execution refuses to follow paths that can escape the worktree.");
 
             var snapshot = await RunGitAsync(
@@ -191,7 +191,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         if (newHead.ExitCode != 0 || newHead.TimedOut || string.IsNullOrWhiteSpace(newHead.StdOut))
             return (false, $"Could not identify the agent worktree commit. The worktree was preserved at {_worktreeRoot}.");
 
-        var patch = await RunGitAsync(_repositoryRoot, ct, "diff", "--binary", "--no-ext-diff", _snapshotCommit, newHead.StdOut.Trim());
+        var patch = await RunGitAsync(_repositoryRoot, ct, "diff", "--binary", "--no-ext-diff", "--no-textconv", _snapshotCommit, newHead.StdOut.Trim());
         if (patch.ExitCode != 0 || patch.TimedOut)
             return (false, $"Could not create a patch for the agent changes. The worktree was preserved at {_worktreeRoot}.");
         if (string.IsNullOrEmpty(patch.StdOut))
@@ -279,7 +279,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
                     if (System.Text.RegularExpressions.Regex.IsMatch(
                         contents,
-                        @"(?im)(?:^|\\s)(?:filter|working-tree-encoding)\\s*="))
+                        @"(?im)(?:^|\s)(?:filter|working-tree-encoding)\s*="))
                         return true;
                 }
             }
