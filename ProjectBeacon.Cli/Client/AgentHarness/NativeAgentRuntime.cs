@@ -1495,7 +1495,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         try
         {
             var formId = "command-suggestions:" + Guid.NewGuid().ToString("N");
-            var safeSuggestions = suggestions.Take(50).ToArray();
+            var allSuggestions = suggestions.ToArray();
+            var safeSuggestions = allSuggestions.Take(50).ToArray();
+            var truncated = allSuggestions.Length > safeSuggestions.Length;
             var options = new JsonArray();
             var defaults = new JsonArray();
             foreach (var suggestion in safeSuggestions)
@@ -1551,7 +1553,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         _log?.Invoke("could not persist command prefix approval: " + (error ?? "unknown error"));
                 }
 
-                var selectedAll = safeSuggestions.Length > 0
+                var selectedAll = !truncated
+                    && safeSuggestions.Length > 0
                     && selected.Length == safeSuggestions.Length
                     && safeSuggestions.All(item => selected.Contains(item.Prefix, StringComparer.OrdinalIgnoreCase));
                 var manifestSourcesMatch = string.Equals(
@@ -1567,11 +1570,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     approvedCount = approved,
                     selectedPrefixes = selected,
                     manifestFingerprintTrusted = fingerprintTrusted,
+                    truncated,
                     note = selected.Length == 0
                         ? "No command prefixes were approved."
-                        : fingerprintTrusted
-                            ? "All listed prefixes were approved. The current manifest and workflow fingerprint is now trusted for future turns."
-                            : "Selected prefixes were approved locally. Other manifest-derived prefixes will still require confirmation."
+                        : truncated
+                            ? "Only the first 50 suggestions were displayed. Selected prefixes were approved locally, but the manifest fingerprint remains untrusted until the full list is reviewed."
+                            : fingerprintTrusted
+                                ? "All listed prefixes were approved. The current manifest and workflow fingerprint is now trusted for future turns."
+                                : "Selected prefixes were approved locally. Other manifest-derived prefixes will still require confirmation."
                 }));
             }
             finally
