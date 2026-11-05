@@ -89,6 +89,37 @@ public sealed class CommandRecoveryTests : IDisposable
     }
 
     [Fact]
+    public async Task WaitingForUserLease_IsRenewedBeyondNormalPipelineTurnWindow()
+    {
+        var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
+        var command = await SeedRunningAsync(
+            device, WorkstationCommandKind.RunPipelineSession, "{}", "inst-1");
+
+        // A pending ask_user form renews the active claim for a bounded human wait window.
+        command.RenewLease(TimeSpan.FromDays(7));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var oneDayLater = t0.AddDays(1);
+        await SetHeartbeatAsync(device.Id, oneDayLater.AddSeconds(-10));
+        Assert.Equal(0, await CommandRecovery.RecoverAsync(
+            _db, oneDayLater, TestContext.Current.CancellationToken));
+        Assert.Equal(WorkstationCommandStatus.Running, (await SnapshotAsync(command.Id)).Status);
+
+        // Once the form is answered, normal pipeline lease duration resumes.
+        _db.ChangeTracker.Clear();
+        using var scope = TenantScope.EnterUnscoped();
+        var current = await _db.WorkstationCommands.SingleAsync(
+            row => row.Id == command.Id, TestContext.Current.CancellationToken);
+        current.RenewLease(CommandLease.For(WorkstationCommandKind.RunPipelineSession));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var renewed = await SnapshotAsync(command.Id);
+        Assert.InRange(
+            (renewed.LeaseExpiresAt!.Value - DateTime.UtcNow).TotalMinutes,
+            CommandLease.PipelineMinutes - 1,
+            CommandLease.PipelineMinutes + 1);
+    }
+
+    [Fact]
     public async Task StaleIdempotent_IsRequeuedOnce()
     {
         var (device, t0) = await SeedOnlineDeviceAsync("inst-1");
