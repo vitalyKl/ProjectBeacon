@@ -121,6 +121,56 @@ required policy.
   actor is not in the tenant yet.
 - All auth endpoints are rate-limited.
 
+## Native agent command execution
+
+The native workstation harness exposes a single argv-based command interface. Its
+workstation-local `commandPolicy` is `ask` by default:
+
+- `off` disables command execution tools;
+- `ask` requires a user decision for commands not detected from the project's build
+  manifests or already approved locally for that project;
+- `auto` skips the approval prompt but still applies the command validator and uses
+  the isolated session worktree.
+
+The command runner uses `UseShellExecute=false` and passes an argument vector directly;
+it does not interpret shell pipelines or command separators. The workstation environment
+passed to child processes is rebuilt from a small allowlist. Beacon tokens, provider API
+keys, and the daemon's arbitrary environment variables are not forwarded. `HOME`,
+temporary directories, and common package-manager caches are redirected to a per-session
+directory. Every command has a timeout, bounded response output, a paged log, and
+process-tree termination. Long-running services have explicit start/status/log/stop tools
+and are stopped at session completion or abort. Windows child processes are assigned to
+a kill-on-job-close job where available; stale service process records are checked on the
+next daemon start.
+
+Each native chat prompt and pipeline Actor session uses a detached Git worktree seeded
+from a snapshot of the current project files. The original Git index is not modified.
+On successful completion, only the agent's diff is applied to the original working tree;
+if the turn fails or the patch conflicts, the worktree is retained for recovery. Worktree
+creation refuses repositories with configured Git content filters or symbolic links,
+and internal Git commands run with hooks disabled.
+
+**This is isolation for correctness and defense in depth, not a security sandbox.** A
+command executes with the workstation user's operating-system permissions. Code in a
+test, build script, package lifecycle hook, compiler plugin, or application can still
+access the network, read files by absolute path, write outside the worktree, or use any
+other capability available to that OS account. A malicious repository can also influence
+what an approved build or test command does. The deny-list and argv-prefix approvals
+catch only obvious mistakes; they do not establish a security boundary. The `auto`
+mode therefore skips consent, not the underlying OS permissions. A container with
+restricted mounts/network or a dedicated low-privilege OS account is required for a
+stronger boundary.
+
+Manifest- and CI-derived prefixes are suggestions for convenience. Changing a relevant
+manifest or workflow during an agent turn invalidates automatic manifest trust for that
+turn, so a newly introduced command requires a user decision. Project-specific manual
+approvals are stored locally outside the repository and are never uploaded to the control
+plane.
+
+In a pipeline Actor turn, a pending command approval keeps the session and subtask in
+`WaitingForUser`; the normal idle and absolute turn timeouts are suspended while the
+form remains pending. This is an intentional pause, not a failed subtask.
+
 ## Known limitations (open)
 
 - **Rate limiting behind a proxy.** The IP key for a proxied client relies on forwarded
