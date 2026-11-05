@@ -191,10 +191,15 @@ public static class ClientTui
         settings.OpencodeDataDir = PromptOptional("OpenCode history dir", settings.OpencodeDataDir);
         settings.BeaconPath = PromptOptional("beacon executable", settings.BeaconPath ?? Environment.ProcessPath);
         settings.LlamaSwapPort = AnsiConsole.Ask("llama-swap port:", settings.LlamaSwapPort > 0 ? settings.LlamaSwapPort : 8080);
-        AnsiConsole.MarkupLine("[grey]Terminal commands run as your workstation user and can access files and credentials available to that user.[/]");
-        settings.AllowTerminalExecution = AnsiConsole.Confirm(
-            "Allow terminal commands without asking each time on this workstation?",
-            settings.AllowTerminalExecution);
+        AnsiConsole.MarkupLine("[grey]Command execution policy applies to native agents on this workstation. Auto skips consent; it is not an OS sandbox.[/]");
+        var currentPolicy = settings.CommandPolicy?.Trim().ToLowerInvariant() is "off" or "auto" or "ask"
+            ? settings.CommandPolicy.Trim().ToLowerInvariant()
+            : "ask";
+        settings.CommandPolicy = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"Agent command policy (current: {currentPolicy})")
+                .AddChoices("off", "ask", "auto")
+                .HighlightStyle(new Style(Color.Cyan1)));
         settings.Save();
         AnsiConsole.MarkupLine("[green]Saved workstation.json[/]");
     }

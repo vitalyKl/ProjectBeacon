@@ -108,18 +108,20 @@ public sealed class ClientStoreTests : IDisposable
     }
 
     [Fact]
-    public void WorkstationSettings_PersistsAndDefaultsTerminalApprovalToDisabled()
+    public void WorkstationSettings_PersistsWorkstationCommandPolicyAndDefaultsToAsk()
     {
-        var file = Path.Combine(_dir, "workstation-terminal.json");
+        var file = Path.Combine(_dir, "workstation-command-policy.json");
         var defaults = WorkstationSettings.Load(file);
-        Assert.False(defaults.AllowTerminalExecution);
-        defaults.AllowTerminalExecution = true;
+        Assert.Equal("ask", defaults.CommandPolicy);
+
+        defaults.CommandPolicy = "auto";
         defaults.Save(file);
-        Assert.True(WorkstationSettings.Load(file).AllowTerminalExecution);
-        var revoked = WorkstationSettings.Load(file);
-        revoked.AllowTerminalExecution = false;
-        revoked.Save(file);
-        Assert.False(WorkstationSettings.Load(file).AllowTerminalExecution);
+        Assert.Equal("auto", WorkstationSettings.Load(file).CommandPolicy);
+
+        var disabled = WorkstationSettings.Load(file);
+        disabled.CommandPolicy = "off";
+        disabled.Save(file);
+        Assert.Equal("off", WorkstationSettings.Load(file).CommandPolicy);
     }
 
     [Fact]

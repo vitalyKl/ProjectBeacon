@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Common;
 using Application.Authorization;
 using Application.Devices;
+using Domain.Entities.Devices;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
@@ -85,6 +86,109 @@ public sealed partial class DeviceHandlerTests
             new GetCommandCommand(new GetCommandRequest(queued.Value.Id, user.Id)),
             TestContext.Current.CancellationToken);
         Assert.Equal(finalJson, final.Value!.ResultJson);
+    }
+
+    [Fact]
+    public async Task PipelineProgress_AfterSuccessfulActorReport_AllowsFinalHeartbeat()
+    {
+        var (user, project) = await SeedMemberAsync();
+        var device = DaemonDevice.Create(
+            "pipeline-progress",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash",
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        var task = TaskItem.Create("completed actor progress", project.Id);
+        var subtask = Subtask.Create("complete work", task.Id, project.Id);
+        subtask.Start();
+        subtask.ReportResult("worktree:verified", "Changes verified.");
+        var session = PipelineSession.Create(
+            task.Id, project.Id, PipelineRole.Actor, "Actor prompt", subtask.Id);
+        session.Launch();
+        session.Close();
+        var payload = JsonSerializer.Serialize(new { sessionId = session.Id });
+        var command = WorkstationCommand.Create(
+            device.Id, WorkstationCommandKind.RunPipelineSession, payload, project.Id, user.Id);
+        command.Claim(TimeSpan.FromMinutes(5), "daemon-instance");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.DaemonDevices.Add(device);
+            _db.Tasks.Add(task);
+            _db.Subtasks.Add(subtask);
+            _db.PipelineSessions.Add(session);
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var reported = await new ReportCommandProgressHandler(Factory()).HandleAsync(
+            new ReportCommandProgressCommand(new ReportCommandProgressRequest(
+                command.Id,
+                device.Id,
+                1,
+                """{"forms":[]}""")),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(reported.Success, reported.Error);
+        Assert.Equal(WorkstationCommandStatus.Running, reported.Value!.Status);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.WorkstationCommands.AsNoTracking()
+                .SingleAsync(row => row.Id == command.Id, TestContext.Current.CancellationToken);
+            Assert.True(persisted.LeaseExpiresAt > DateTime.UtcNow);
+        }
+    }
+
+    [Fact]
+    public async Task PipelineProgress_AfterFailedActorSession_RejectsLateHeartbeat()
+    {
+        var (user, project) = await SeedMemberAsync();
+        var device = DaemonDevice.Create(
+            "pipeline-progress-failed",
+            user.Id,
+            "fp-" + Guid.NewGuid().ToString("N"),
+            "hash",
+            "bcd_" + Guid.NewGuid().ToString("N"));
+        var task = TaskItem.Create("failed actor progress", project.Id);
+        var subtask = Subtask.Create("incomplete work", task.Id, project.Id);
+        subtask.Start();
+        subtask.ForceFail("The user cancelled this Actor.");
+        var session = PipelineSession.Create(
+            task.Id, project.Id, PipelineRole.Actor, "Actor prompt", subtask.Id);
+        session.Launch();
+        session.Close();
+        var payload = JsonSerializer.Serialize(new { sessionId = session.Id });
+        var command = WorkstationCommand.Create(
+            device.Id, WorkstationCommandKind.RunPipelineSession, payload, project.Id, user.Id);
+        command.Claim(TimeSpan.FromMinutes(5), "daemon-instance");
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.DaemonDevices.Add(device);
+            _db.Tasks.Add(task);
+            _db.Subtasks.Add(subtask);
+            _db.PipelineSessions.Add(session);
+            _db.WorkstationCommands.Add(command);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var reported = await new ReportCommandProgressHandler(Factory()).HandleAsync(
+            new ReportCommandProgressCommand(new ReportCommandProgressRequest(
+                command.Id,
+                device.Id,
+                1,
+                """{"forms":[]}""")),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(reported.Success);
+        Assert.Contains("closed", reported.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.WorkstationCommands.AsNoTracking()
+                .SingleAsync(row => row.Id == command.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(WorkstationCommandStatus.Running, persisted.Status);
+            Assert.Equal(command.LeaseExpiresAt, persisted.LeaseExpiresAt);
+        }
     }
 
     [Fact]

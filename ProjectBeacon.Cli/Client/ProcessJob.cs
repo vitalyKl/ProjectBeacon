@@ -55,8 +55,8 @@ internal static class ProcessJob
         }
     }
 
-    // The extended structure must be exactly 144 bytes on current Windows (probed on the running OS):
-    // basic(64) + IO_COUNTERS(32) + 4 memory fields(32) + 16 vendor-added trailing bytes.
+    // JOBOBJECT_EXTENDED_LIMIT_INFORMATION on 64-bit Windows:
+    // basic(64) + IO_COUNTERS(48: six ULONGLONGs) + four SIZE_T memory fields(32) = 144 bytes.
     [StructLayout(LayoutKind.Sequential)]
     private struct JobBasicLimitInformation
     {
@@ -72,24 +72,29 @@ internal static class ProcessJob
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct JobIoCounters
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct JobExtendedLimitInformation
     {
         public JobBasicLimitInformation BasicLimitInformation;
-        public uint IoReadTransferCount;
-        public uint IoWriteTransferCount;
-        public uint IoReadOperationCount;
-        public uint IoWriteOperationCount;
-        public uint IoOtherOperationCount;
-        public uint IoReadTransferBytes;
-        public uint IoWriteTransferBytes;
-        public uint IoOtherTransferBytes;
+        public JobIoCounters IoInfo;
         public ulong ProcessMemoryLimit;
         public ulong JobMemoryLimit;
         public ulong PeakProcessMemoryUsed;
         public ulong PeakJobMemoryUsed;
-        public ulong VendorReserved1;
-        public ulong VendorReserved2;
     }
+
+    internal static int ExtendedLimitInformationSize
+        => Marshal.SizeOf<JobExtendedLimitInformation>();
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateJobObject(IntPtr p1, string? name);

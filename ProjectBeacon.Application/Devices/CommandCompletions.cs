@@ -143,7 +143,8 @@ internal sealed class PipelineSessionCompletion : ICommandCompletion
             return Task.FromResult(0);
 
         return db.Subtasks.IgnoreQueryFilters()
-            .Where(s => s.Id == id && s.ProjectId == projectId && s.Status == SubtaskStatus.InProgress)
+            .Where(s => s.Id == id && s.ProjectId == projectId
+                && (s.Status == SubtaskStatus.InProgress || s.Status == SubtaskStatus.WaitingForUser))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(x => x.Status, SubtaskStatus.Failed)
                 .SetProperty(x => x.Summary, reason)

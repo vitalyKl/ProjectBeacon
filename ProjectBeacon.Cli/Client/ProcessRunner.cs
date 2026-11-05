@@ -65,6 +65,11 @@ public static class ProcessRunner
             if (!process.Start())
                 return (1, "", "failed to start", false);
 
+            // ProcessRunner.RunAsync is for non-interactive commands. Close redirected stdin
+            // immediately so tools such as git that read until EOF cannot wait for user input.
+            if (info.RedirectStandardInput)
+                process.StandardInput.Close();
+
             var stdoutTask = Task.Run(() => process.StandardOutput.ReadToEnd(), CancellationToken.None);
             var stderrTask = Task.Run(() => process.StandardError.ReadToEnd(), CancellationToken.None);
 

@@ -75,6 +75,16 @@ public class WorkstationCommand : Entity
         ClaimInstanceId = string.IsNullOrWhiteSpace(instanceId) ? null : instanceId.Trim();
     }
 
+    /// <summary>Renews the execution lease while the workstation reports active progress.</summary>
+    public void RenewLease(TimeSpan lease)
+    {
+        if (lease <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(lease), "Lease must be positive.");
+        if (Status != WorkstationCommandStatus.Running)
+            throw new InvalidOperationException("Only a running command can renew its lease.");
+        LeaseExpiresAt = DateTime.UtcNow + lease;
+    }
+
     /// <summary>
     /// Returns an expired running command to the queue. The recovery rule must have
     /// established the claiming process is gone before calling this.
@@ -134,5 +144,6 @@ public class WorkstationCommand : Entity
             throw new InvalidOperationException("Command already finished.");
         Status = WorkstationCommandStatus.Cancelled;
         CompletedAt = DateTime.UtcNow;
+        LeaseExpiresAt = null;
     }
 }
