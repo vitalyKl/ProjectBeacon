@@ -123,7 +123,11 @@ public sealed class CommandExecutionPolicyTests
             var manifest = Path.Combine(root, "package.json");
             File.WriteAllText(manifest, """{"scripts":{"test":"vitest run"}}""");
 
-            Assert.True(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+            // A fresh repository manifest is a suggestion source, never automatic consent.
+            Assert.False(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+            Assert.False(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+
+            Assert.True(CommandExecutionPolicy.TrustCurrentManifestFingerprint(root));
             Assert.True(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
 
             File.WriteAllText(manifest, """{"scripts":{"test":"vitest run","build":"vite build"}}""");
