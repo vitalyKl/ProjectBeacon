@@ -206,6 +206,30 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var readiness = await _gate.EnsureReadyAsync(cwd, ct);
         if (!readiness.Ready)
             return (false, null, readiness.Error ?? "The selected agent runtime is not ready.");
+
+        AgentSessionWorktree? sessionWorktree = null;
+        if (harnessAuthorization is not null)
+        {
+            var created = await AgentSessionWorktree.CreateAsync(
+                readiness.WorkingDirectory ?? Path.GetFullPath(cwd),
+                chatId,
+                ct);
+            if (created.Workspace is null)
+                return (false, null, created.Error ?? "Could not create an isolated chat worktree.");
+            sessionWorktree = created.Workspace;
+        }
+        await using var worktreeScope = sessionWorktree;
+        if (sessionWorktree is not null && harnessAuthorization is not null)
+        {
+            cwd = sessionWorktree.WorkingDirectory;
+            harnessAuthorization = harnessAuthorization with
+            {
+                WorkingDirectory = sessionWorktree.WorkingDirectory,
+                ProjectRoot = sessionWorktree.ProjectRoot,
+                IsolatedWorkspace = true
+            };
+        }
+
         if (_llama.UseOwnSwapper && model is not null)
             await _llamaSync.RunLockedAsync(() => _llama.EnsureSwapModelAsync(DaemonPayload.ExtractSwapName(model), ct), ct);
         // Baseline: the last assistant message before the prompt; an ended turn from an
@@ -395,8 +419,31 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         {
             _state.Log($"chat usage report failed: {ex.Message}");
         }
+        if (sessionWorktree is not null)
+        {
+            if (!idle || lastTurn?.Error is not null)
+            {
+                sessionWorktree.Preserve();
+            }
+            else
+            {
+                var applied = await sessionWorktree.ApplyChangesAsync(ct);
+                if (!applied.Success)
+                {
+                    sessionWorktree.Preserve();
+                    return (false, null, (applied.Error ?? "Could not apply isolated chat changes.")
+                        + $" Chat worktree preserved at {sessionWorktree.RecoveryPath}.");
+                }
+            }
+        }
+
         await PostChatAsync($"/v1/chat/sessions/{chatId}/idle", new { }, projectId, ct);
-        return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
+        return (true, JsonSerializer.Serialize(new
+        {
+            sessionId = externalId,
+            interrupted = !idle,
+            worktree = sessionWorktree is not null && (!idle || lastTurn?.Error is not null) ? sessionWorktree.RecoveryPath : null
+        }), null);
     }
 
     private static string ClipError(string error) => error.Length <= 200 ? error : error[..200];
