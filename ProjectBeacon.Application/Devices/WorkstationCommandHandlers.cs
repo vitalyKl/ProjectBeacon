@@ -399,122 +399,7 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             return Result.Failure<WorkstationCommandDto>("Command is no longer running in this generation.", ErrorKind.Conflict);
 
         if (row.Kind == WorkstationCommandKind.RunPipelineSession)
-        {
-            if (row.ProjectId is not { } projectId)
-                return Result.Failure<WorkstationCommandDto>("Pipeline command has no project scope.", ErrorKind.Conflict);
-            var sessionId = DevicePayloadReader.ReadGuid(row.PayloadJson, "sessionId");
-            if (sessionId is null)
-                return Result.Failure<WorkstationCommandDto>("Pipeline command has no session id.", ErrorKind.Conflict);
-
-            var session = await db.PipelineSessions.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(s => s.Id == sessionId.Value && s.ProjectId == projectId, ct);
-            if (session is null)
-                return Result.Failure<WorkstationCommandDto>("Pipeline session not found.", ErrorKind.Conflict);
-
-            if (session.Status == SessionStatus.Closed)
-            {
-                // subtask_report_result closes the Actor session before the model emits its
-                // final assistant message. Let that already-reported success finish normally,
-                // but reject progress for any other closed session so the daemon aborts it.
-                var actorReportedDone = session.Role == PipelineRole.Actor
-                    && session.SubtaskId is { } completedSubtaskId
-                    && await db.Subtasks.IgnoreQueryFilters().AnyAsync(
-                        subtask => subtask.Id == completedSubtaskId
-                            && subtask.TaskId == session.TaskId
-                            && subtask.Status == SubtaskStatus.Done,
-                        ct);
-                if (!actorReportedDone)
-                    return Result.Failure<WorkstationCommandDto>(
-                        "Pipeline session is closed and no successful Actor result was reported.",
-                        ErrorKind.Conflict);
-
-                var completedLease = DateTime.UtcNow + CommandLease.For(row.Kind);
-                var renewedCompletedActor = await db.WorkstationCommands
-                    .Where(commandRow => commandRow.Id == request.CommandId
-                        && commandRow.DeviceId == request.DeviceId
-                        && commandRow.Status == WorkstationCommandStatus.Running
-                        && commandRow.Attempts + 1 == request.Generation)
-                    .ExecuteUpdateAsync(update => update.SetProperty(commandRow => commandRow.LeaseExpiresAt, completedLease), ct);
-                if (renewedCompletedActor != 1)
-                    return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
-                var completedActorCommand = await db.WorkstationCommands.AsNoTracking()
-                    .FirstAsync(commandRow => commandRow.Id == request.CommandId
-                        && commandRow.DeviceId == request.DeviceId, ct);
-                return Result.Ok(EnqueueCommandHandler.MapCommand(completedActorCommand));
-            }
-
-            var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
-            var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
-            if (activity["forms"] is null)
-                activity["forms"] = reportedForms;
-
-            // Keep answered forms in the durable task transcript even after the runtime removes
-            // them from its pending-form registry on the next poll.
-            try
-            {
-                var previous = JsonNode.Parse(session.ActivityJson) as JsonObject;
-                if (previous?["forms"] is JsonArray previousForms)
-                {
-                    foreach (var answered in previousForms.OfType<JsonObject>().Where(form => form["answer"] is not null))
-                    {
-                        var id = answered["id"]?.GetValue<string>();
-                        if (!string.IsNullOrWhiteSpace(id)
-                            && !reportedForms.OfType<JsonObject>().Any(form =>
-                                string.Equals(form["id"]?.GetValue<string>(), id, StringComparison.Ordinal)))
-                            reportedForms.Add(answered.DeepClone());
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // A malformed prior snapshot must not prevent a fresh device update.
-            }
-
-            activity["deviceId"] = request.DeviceId.ToString("D");
-            activity["commandId"] = request.CommandId.ToString("D");
-
-            // The Actor subtask mirrors the session's human-wait state so the task card cannot
-            // report Failed/InProgress while an ask_user form is awaiting an answer.
-            if (session.Role == PipelineRole.Actor && session.SubtaskId is { } subtaskId)
-            {
-                var subtask = await db.Subtasks
-                    .FirstOrDefaultAsync(item => item.Id == subtaskId && item.TaskId == session.TaskId, ct);
-                if (subtask?.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
-                    return Result.Failure<WorkstationCommandDto>(
-                        "Actor subtask is already terminal; the workstation turn must stop.",
-                        ErrorKind.Conflict);
-                if (subtask is not null)
-                {
-                    if (waitingForUser)
-                        subtask.WaitForUser();
-                    else
-                        subtask.ResumeFromUser();
-                }
-            }
-
-            session.UpdateActivity(activity.ToJsonString(), waitingForUser);
-
-            // A pending human form is an intentional pause. Keep the claim alive while the
-            // workstation is online and reporting it; allow up to seven days offline before
-            // stale-command recovery treats an abandoned wait as lost. The guarded UPDATE also
-            // prevents a late heartbeat from resurrecting a lease after cancellation/completion.
-            var lease = waitingForUser ? TimeSpan.FromDays(7) : CommandLease.For(row.Kind);
-            var leaseExpiresAt = DateTime.UtcNow + lease;
-            var renewed = await db.WorkstationCommands
-                .Where(commandRow => commandRow.Id == request.CommandId
-                    && commandRow.DeviceId == request.DeviceId
-                    && commandRow.Kind == WorkstationCommandKind.RunPipelineSession
-                    && commandRow.Status == WorkstationCommandStatus.Running
-                    && commandRow.Attempts + 1 == request.Generation)
-                .ExecuteUpdateAsync(update => update.SetProperty(commandRow => commandRow.LeaseExpiresAt, leaseExpiresAt), ct);
-            if (renewed != 1)
-                return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
-
-            await db.SaveChangesAsync(ct);
-            var currentPipelineCommand = await db.WorkstationCommands.AsNoTracking()
-                .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
-            return Result.Ok(EnqueueCommandHandler.MapCommand(currentPipelineCommand));
-        }
+            return await ReportPipelineProgressAsync(db, request, waitingForUser, ct);
 
         if (row.Kind == WorkstationCommandKind.ChatPrompt)
         {
@@ -548,6 +433,187 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
         var current = await db.WorkstationCommands.AsNoTracking()
             .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
         return Result.Ok(EnqueueCommandHandler.MapCommand(current));
+    }
+
+    private static async Task<Result<WorkstationCommandDto>> ReportPipelineProgressAsync(
+        IBeaconDb db,
+        ReportCommandProgressRequest request,
+        bool waitingForUser,
+        CancellationToken ct)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            // This transaction serializes the Actor subtask -> session -> command progress
+            // transitions. FailSubtask uses the same row order, so a late heartbeat cannot
+            // restore InProgress/Active after a human or operator has failed the subtask.
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var command = await db.WorkstationCommands
+                .FirstOrDefaultAsync(row => row.Id == request.CommandId
+                    && row.DeviceId == request.DeviceId, ct);
+            if (command is null)
+                return Result.Failure<WorkstationCommandDto>("Command not found.");
+            if (command.Kind != WorkstationCommandKind.RunPipelineSession
+                || command.Status != WorkstationCommandStatus.Running
+                || command.Attempts + 1 != request.Generation)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Command is no longer running in this generation.", ErrorKind.Conflict);
+
+            if (command.ProjectId is not { } projectId)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Pipeline command has no project scope.", ErrorKind.Conflict);
+            var sessionId = DevicePayloadReader.ReadGuid(command.PayloadJson, "sessionId");
+            if (sessionId is null)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Pipeline command has no session id.", ErrorKind.Conflict);
+
+            var session = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(item => item.Id == sessionId.Value && item.ProjectId == projectId, ct);
+            if (session is null)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Pipeline session not found.", ErrorKind.Conflict);
+
+            if (session.Status == SessionStatus.Closed)
+            {
+                // subtask_report_result closes an Actor session before the model emits its
+                // final assistant message. Let that already-reported success finish normally,
+                // but reject progress for any other closed session so the daemon aborts it.
+                var actorReportedDone = session.Role == PipelineRole.Actor
+                    && session.SubtaskId is { } completedSubtaskId
+                    && await db.Subtasks.IgnoreQueryFilters().AnyAsync(
+                        subtask => subtask.Id == completedSubtaskId
+                            && subtask.TaskId == session.TaskId
+                            && subtask.Status == SubtaskStatus.Done,
+                        ct);
+                if (!actorReportedDone)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "Pipeline session is closed and no successful Actor result was reported.",
+                        ErrorKind.Conflict);
+
+                var completedLease = DateTime.UtcNow + CommandLease.For(command.Kind);
+                var renewedCompletedActor = await db.WorkstationCommands
+                    .Where(row => row.Id == request.CommandId
+                        && row.DeviceId == request.DeviceId
+                        && row.Kind == WorkstationCommandKind.RunPipelineSession
+                        && row.Status == WorkstationCommandStatus.Running
+                        && row.Attempts + 1 == request.Generation)
+                    .ExecuteUpdateAsync(update => update.SetProperty(row => row.LeaseExpiresAt, completedLease), ct);
+                if (renewedCompletedActor != 1)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "Command state changed while reporting progress.", ErrorKind.Conflict);
+
+                await transaction.CommitAsync(ct);
+                var completedActorCommand = await db.WorkstationCommands.AsNoTracking()
+                    .FirstAsync(row => row.Id == request.CommandId
+                        && row.DeviceId == request.DeviceId, ct);
+                return Result.Ok(EnqueueCommandHandler.MapCommand(completedActorCommand));
+            }
+
+            if (session.Status is not (SessionStatus.Active or SessionStatus.WaitingForUser))
+                return Result.Failure<WorkstationCommandDto>(
+                    $"Pipeline session cannot report progress from status {session.Status}.",
+                    ErrorKind.Conflict);
+
+            var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
+            var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
+            if (activity["forms"] is null)
+                activity["forms"] = reportedForms;
+
+            // Keep answered forms in the durable task transcript even after the runtime removes
+            // them from its pending-form registry on the next poll.
+            try
+            {
+                var previous = JsonNode.Parse(session.ActivityJson) as JsonObject;
+                if (previous?["forms"] is JsonArray previousForms)
+                {
+                    foreach (var answered in previousForms.OfType<JsonObject>().Where(form => form["answer"] is not null))
+                    {
+                        var id = answered["id"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(id)
+                            && !reportedForms.OfType<JsonObject>().Any(form =>
+                                string.Equals(form["id"]?.GetValue<string>(), id, StringComparison.Ordinal)))
+                            reportedForms.Add(answered.DeepClone());
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // A malformed prior snapshot must not prevent a fresh device update.
+            }
+
+            activity["deviceId"] = request.DeviceId.ToString("D");
+            activity["commandId"] = request.CommandId.ToString("D");
+            var activityJson = activity.ToJsonString();
+            if (string.IsNullOrWhiteSpace(activityJson) || activityJson.Length > 262144)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Pipeline activity snapshot must be a non-empty JSON payload of at most 256 KiB.");
+
+            var now = DateTime.UtcNow;
+            if (session.Role == PipelineRole.Actor)
+            {
+                if (session.SubtaskId is not { } subtaskId)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "Actor session has no subtask scope.", ErrorKind.Conflict);
+
+                // Match FailSubtask's write order and guard the transition against terminal
+                // states. Exactly one side of a concurrent fail/progress race can win.
+                var nextSubtaskStatus = waitingForUser
+                    ? SubtaskStatus.WaitingForUser
+                    : SubtaskStatus.InProgress;
+                var updatedSubtask = await db.Subtasks.IgnoreQueryFilters()
+                    .Where(subtask => subtask.Id == subtaskId
+                        && subtask.TaskId == session.TaskId
+                        && (subtask.Status == SubtaskStatus.InProgress
+                            || subtask.Status == SubtaskStatus.WaitingForUser))
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(subtask => subtask.Status, nextSubtaskStatus)
+                        .SetProperty(subtask => subtask.UpdatedAt, now), ct);
+                if (updatedSubtask != 1)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "Actor subtask is already terminal or no longer active; the workstation turn must stop.",
+                        ErrorKind.Conflict);
+            }
+
+            var nextSessionStatus = waitingForUser
+                ? SessionStatus.WaitingForUser
+                : SessionStatus.Active;
+            var updatedSession = await db.PipelineSessions.IgnoreQueryFilters()
+                .Where(item => item.Id == session.Id
+                    && item.ProjectId == projectId
+                    && (item.Status == SessionStatus.Active
+                        || item.Status == SessionStatus.WaitingForUser))
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(item => item.ActivityJson, activityJson)
+                    .SetProperty(item => item.LastActivityAt, now)
+                    .SetProperty(item => item.FailureReason, (string?)null)
+                    .SetProperty(item => item.Status, nextSessionStatus), ct);
+            if (updatedSession != 1)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Pipeline session state changed while reporting progress.", ErrorKind.Conflict);
+
+            // Renew only while this generation remains Running. This also prevents a heartbeat
+            // racing cancellation/completion from resurrecting an execution lease.
+            var lease = waitingForUser ? TimeSpan.FromDays(7) : CommandLease.For(command.Kind);
+            var leaseExpiresAt = DateTime.UtcNow + lease;
+            var renewed = await db.WorkstationCommands
+                .Where(row => row.Id == request.CommandId
+                    && row.DeviceId == request.DeviceId
+                    && row.Kind == WorkstationCommandKind.RunPipelineSession
+                    && row.Status == WorkstationCommandStatus.Running
+                    && row.Attempts + 1 == request.Generation)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.LeaseExpiresAt, leaseExpiresAt), ct);
+            if (renewed != 1)
+                return Result.Failure<WorkstationCommandDto>(
+                    "Command state changed while reporting progress.", ErrorKind.Conflict);
+
+            await transaction.CommitAsync(ct);
+            var currentPipelineCommand = await db.WorkstationCommands.AsNoTracking()
+                .FirstAsync(row => row.Id == request.CommandId
+                    && row.DeviceId == request.DeviceId, ct);
+            return Result.Ok(EnqueueCommandHandler.MapCommand(currentPipelineCommand));
+        });
     }
 }
 
