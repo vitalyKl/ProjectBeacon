@@ -19,10 +19,10 @@ public sealed class RunPipelineSessionDispatchTests
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-dispatch-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
         Directory.CreateDirectory(projectRoot);
-        await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
 
         try
         {
+            await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
             var sessionId = Guid.NewGuid();
@@ -130,10 +130,10 @@ public sealed class RunPipelineSessionDispatchTests
         var projectRoot = Path.Combine(temp, "project");
         var sessionId = Guid.NewGuid();
         Directory.CreateDirectory(projectRoot);
-        await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
 
         try
         {
+            await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
             var commandId = Guid.NewGuid();
