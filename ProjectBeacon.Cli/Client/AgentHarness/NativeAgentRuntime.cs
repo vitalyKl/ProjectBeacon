@@ -1746,7 +1746,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     internal static bool IsPlanModeCommandExecutionBlocked(string agentMode, string? toolName)
         => string.Equals(agentMode, "plan", StringComparison.Ordinal)
-            && toolName is "run_command" or "service_start" or "service_stop";
+            && toolName is "run_command" or "run_log"
+                or "service_start" or "service_status" or "service_logs" or "service_stop";
 
     internal static JsonArray FilterPlanTools(JsonArray tools)
     {
