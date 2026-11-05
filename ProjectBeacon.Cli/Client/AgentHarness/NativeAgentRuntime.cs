@@ -378,18 +378,17 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 foreach (var tool in mcpClient.OpenAiTools)
                     mcpTools.Add(tool?.DeepClone());
             }
-            var commandPrefixes = _loadSettings().AllowedCommandPrefixes
-                .Where(prefix => !string.IsNullOrWhiteSpace(prefix))
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            if (controls?.HarnessAuthorization is { } commandAuth
-                && commandPrefixes.Length > 0
+            var commandPolicy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
+            var manifestFingerprint = controls?.HarnessAuthorization is { } fingerprintAuthorization
+                ? CommandExecutionPolicy.GetManifestFingerprint(fingerprintAuthorization.WorkingDirectory)
+                : null;
+            if (commandPolicy != CommandExecutionPolicy.Off
+                && controls?.HarnessAuthorization is { } commandAuth
                 && IsRunCommandAuthorized(commandAuth))
+            {
                 mcpTools.Add(NativeCommandRunner.ToolDefinition());
-
-            if (controls?.HarnessAuthorization is { } shellAuthorization
-                && IsRunShellAuthorized(shellAuthorization))
-                mcpTools.Add(NativeShellRunner.ToolDefinition());
+                mcpTools.Add(NativeCommandRunner.RunLogToolDefinition());
+            }
 
             // Plan mode is read-only by construction. The model cannot invoke mutating MCP
             // tools even if the general chat server advertises them.
@@ -588,11 +587,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             {
                                 if (cacheKey is not null)
                                     _log?.Invoke($"native tool cache miss: {call.Name}");
-                                if (IsPlanModeRunCommandBlocked(agentMode, call.Name)
-                                    || IsPlanModeRunShellBlocked(agentMode, call.Name))
+                                if (IsPlanModeRunCommandBlocked(agentMode, call.Name))
                                 {
                                     isError = true;
-                                    toolResult = "Tool error: run_command is disabled in Plan mode. Use read-only inspection tools and return a plan.";
+                                    toolResult = "Tool error: command execution is disabled in Plan mode. Use read-only inspection tools and return a plan.";
                                 }
                                 else if (repeatedToolCall)
                                 {
@@ -611,52 +609,70 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                 }
                                 else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
                                 {
-                                    if (controls?.HarnessAuthorization is not { } commandAuthorization
-                                        || commandPrefixes.Length == 0
+                                    var policy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
+                                    if (policy == CommandExecutionPolicy.Off
+                                        || controls?.HarnessAuthorization is not { } commandAuthorization
                                         || !IsRunCommandAuthorized(commandAuthorization))
                                     {
                                         isError = true;
-                                        toolResult = "Tool error: run_command is disabled because the command allowlist or pipeline subtask permission is missing.";
+                                        toolResult = "Tool error: run_command is disabled by the workstation policy or execution role.";
                                     }
-                                    else if (IsInteractiveChatAuthorization(commandAuthorization)
-                                        && !await RequestTerminalPermissionAsync(
-                                            session, call.Name!, commandAuthorization.WorkingDirectory, parsedArguments!, ct))
+                                    else if (!TryReadCommandArgv(parsedArguments!, out var argv))
                                     {
                                         isError = true;
-                                        toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                        toolResult = "Tool error: run_command requires argv as a non-empty array of strings.";
+                                    }
+                                    else if (!CommandExecutionPolicy.TryValidate(argv, commandAuthorization.WorkingDirectory, out var commandError))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: " + commandError;
                                     }
                                     else
                                     {
-                                        var result = await NativeCommandRunner.ExecuteAsync(
-                                            commandAuthorization.WorkingDirectory,
-                                            parsedArguments!,
-                                            commandPrefixes,
-                                            ct);
-                                        isError = result.IsError;
-                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(commandAuthorization.WorkingDirectory);
+                                        var manifestUnchanged = string.Equals(
+                                            manifestFingerprint,
+                                            CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory),
+                                            StringComparison.Ordinal);
+                                        var manifestPrefixes = manifestUnchanged
+                                            ? CommandExecutionPolicy.DetectManifestPrefixes(commandAuthorization.WorkingDirectory)
+                                            : Array.Empty<string>();
+                                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(argv, manuallyApproved)
+                                            || CommandExecutionPolicy.MatchesApprovedPrefix(argv, manifestPrefixes);
+                                        if (policy == CommandExecutionPolicy.Ask
+                                            && !isApproved
+                                            && !await RequestCommandPermissionAsync(
+                                                session,
+                                                commandAuthorization.WorkingDirectory,
+                                                argv,
+                                                ct))
+                                        {
+                                            isError = true;
+                                            toolResult = "Tool error: the user denied this command. Do not retry it or change its arguments to bypass the decision.";
+                                        }
+                                        else
+                                        {
+                                            var result = await NativeCommandRunner.ExecuteAsync(
+                                                commandAuthorization.WorkingDirectory,
+                                                session.Id,
+                                                parsedArguments!,
+                                                ct);
+                                            isError = result.IsError;
+                                            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                        }
                                     }
                                 }
-                                else if (string.Equals(call.Name, "run_shell", StringComparison.Ordinal))
+                                else if (string.Equals(call.Name, "run_log", StringComparison.Ordinal))
                                 {
-                                    if (controls?.HarnessAuthorization is not { } shellAuthorization
-                                        || !IsRunShellAuthorized(shellAuthorization))
+                                    if (controls?.HarnessAuthorization is not { } logAuthorization
+                                        || !IsRunCommandAuthorized(logAuthorization))
                                     {
                                         isError = true;
-                                        toolResult = "Tool error: run_shell is not authorized for this execution role.";
-                                    }
-                                    else if (IsInteractiveChatAuthorization(shellAuthorization)
-                                        && !await RequestTerminalPermissionAsync(
-                                            session, call.Name!, shellAuthorization.WorkingDirectory, parsedArguments!, ct))
-                                    {
-                                        isError = true;
-                                        toolResult = "Tool error: the user denied terminal execution. Do not retry this command unless the user explicitly approves it.";
+                                        toolResult = "Tool error: run_log is not authorized for this execution role.";
                                     }
                                     else
                                     {
-                                        var result = await NativeShellRunner.ExecuteAsync(
-                                            shellAuthorization.WorkingDirectory,
-                                            parsedArguments!,
-                                            ct);
+                                        var result = await NativeCommandRunner.ReadLogAsync(session.Id, parsedArguments!, ct);
                                         isError = result.IsError;
                                         toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                                     }
