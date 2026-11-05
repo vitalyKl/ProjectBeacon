@@ -545,7 +545,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         if (_http.BaseAddress is null || authorization.CommandId == Guid.Empty)
             return;
 
-        var progressJson = waitingForUser ? "{\\"forms\\":[{}]}" : "{\\"forms\\":[]}";
+        var progressJson = waitingForUser ? "{\"forms\":[{}]}" : "{\"forms\":[]}";
         try
         {
             using var response = await _http.PostAsJsonAsync(
