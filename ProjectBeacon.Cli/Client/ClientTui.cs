@@ -197,10 +197,9 @@ public static class ClientTui
             : "ask";
         settings.CommandPolicy = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
-                .Title("Agent command policy")
+                .Title($"Agent command policy (current: {currentPolicy})")
                 .AddChoices("off", "ask", "auto")
                 .HighlightStyle(new Style(Color.Cyan1)));
-        AnsiConsole.MarkupLine($"[grey]Previous setting: {Markup.Escape(currentPolicy)}[/]");
         settings.Save();
         AnsiConsole.MarkupLine("[green]Saved workstation.json[/]");
     }
