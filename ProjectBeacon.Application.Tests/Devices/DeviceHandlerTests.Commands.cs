@@ -130,8 +130,13 @@ public sealed partial class DeviceHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.True(reported.Success, reported.Error);
-        Assert.NotNull(reported.Value!.LeaseExpiresAt);
-        Assert.Equal(WorkstationCommandStatus.Running, reported.Value.Status);
+        Assert.Equal(WorkstationCommandStatus.Running, reported.Value!.Status);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.WorkstationCommands.AsNoTracking()
+                .SingleAsync(row => row.Id == command.Id, TestContext.Current.CancellationToken);
+            Assert.True(persisted.LeaseExpiresAt > DateTime.UtcNow);
+        }
     }
 
     [Fact]
