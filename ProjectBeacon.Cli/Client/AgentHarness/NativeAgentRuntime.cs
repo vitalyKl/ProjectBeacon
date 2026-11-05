@@ -671,12 +671,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                         isError = true;
                                         toolResult = "Tool error: run_command is disabled by the workstation policy or execution role.";
                                     }
-                                    else if (!TryReadCommandArgv(parsedArguments!, out var argv))
+                                    else if (!TryReadCommandArgv(parsedArguments!, out var commandArgv))
                                     {
                                         isError = true;
                                         toolResult = "Tool error: run_command requires argv as a non-empty array of strings.";
                                     }
-                                    else if (!CommandExecutionPolicy.TryValidate(argv, commandAuthorization.WorkingDirectory, out var commandError))
+                                    else if (!CommandExecutionPolicy.TryValidate(commandArgv, commandAuthorization.WorkingDirectory, out var commandError))
                                     {
                                         isError = true;
                                         toolResult = "Tool error: " + commandError;
@@ -692,15 +692,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                         var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
                                             ? CommandExecutionPolicy.DetectManifestPrefixes(commandAuthorization.WorkingDirectory)
                                             : Array.Empty<string>();
-                                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(argv, manuallyApproved)
-                                            || CommandExecutionPolicy.MatchesApprovedPrefix(argv, manifestPrefixes);
+                                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manuallyApproved)
+                                            || CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manifestPrefixes);
                                         if (policy == CommandExecutionPolicy.Ask
                                             && !isApproved
                                             && !await RequestCommandPermissionAsync(
                                                 session,
                                                 commandAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
-                                                argv,
+                                                commandArgv,
                                                 ct))
                                         {
                                             isError = true;
@@ -743,15 +743,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                         isError = true;
                                         toolResult = "Tool error: service_start is disabled by the workstation policy or execution role.";
                                     }
-                                    else if (!TryReadCommandArgv(parsedArguments!, out var argv))
+                                    else if (!TryReadCommandArgv(parsedArguments!, out var serviceArgv))
                                     {
                                         isError = true;
                                         toolResult = "Tool error: service_start requires argv as a non-empty array of strings.";
                                     }
-                                    else if (!CommandExecutionPolicy.TryValidate(argv, serviceAuthorization.WorkingDirectory, out var commandError))
+                                    else if (!CommandExecutionPolicy.TryValidate(serviceArgv, serviceAuthorization.WorkingDirectory, out var serviceCommandError))
                                     {
                                         isError = true;
-                                        toolResult = "Tool error: " + commandError;
+                                        toolResult = "Tool error: " + serviceCommandError;
                                     }
                                     else
                                     {
@@ -761,18 +761,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                             manifestFingerprint,
                                             CommandExecutionPolicy.GetManifestFingerprint(serviceAuthorization.WorkingDirectory),
                                             StringComparison.Ordinal);
-                                        var manifestPrefixes = manifestUnchanged
+                                        var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
                                             ? CommandExecutionPolicy.DetectManifestPrefixes(serviceAuthorization.WorkingDirectory)
                                             : Array.Empty<string>();
-                                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(argv, manuallyApproved)
-                                            || CommandExecutionPolicy.MatchesApprovedPrefix(argv, manifestPrefixes);
+                                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manuallyApproved)
+                                            || CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manifestPrefixes);
                                         if (policy == CommandExecutionPolicy.Ask
                                             && !isApproved
                                             && !await RequestCommandPermissionAsync(
                                                 session,
                                                 serviceAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
-                                                argv,
+                                                serviceArgv,
                                                 ct))
                                         {
                                             isError = true;
