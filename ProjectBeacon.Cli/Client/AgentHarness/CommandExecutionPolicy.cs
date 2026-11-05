@@ -46,7 +46,11 @@ internal static class CommandExecutionPolicy
     };
 
     public static IReadOnlyList<string> GetManuallyApprovedPrefixes(string projectDirectory)
-        => ReadProjectApprovals(projectDirectory).ToArray();
+        => GetManuallyApprovedPrefixes(projectDirectory, GetManifestFingerprint(projectDirectory));
+
+    /// <summary>Reads local approvals only when their stored fingerprint matches this execution snapshot.</summary>
+    public static IReadOnlyList<string> GetManuallyApprovedPrefixes(string projectDirectory, string expectedManifestFingerprint)
+        => ReadProjectApprovals(projectDirectory, expectedManifestFingerprint).ToArray();
 
     public static bool ManifestSourcesMatch(string projectRoot, string workingDirectory)
     {
@@ -600,7 +604,7 @@ internal static class CommandExecutionPolicy
 
         // Existing approvals survive only while the exact manifests and CI workflows they
         // were reviewed against remain unchanged.
-        var existing = ReadProjectApprovals(projectDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existing = ReadProjectApprovals(projectDirectory, approvedManifestFingerprint).ToHashSet(StringComparer.OrdinalIgnoreCase);
         existing.Add(string.Join(' ', parts));
         var path = ApprovalPath(projectDirectory);
         try
@@ -631,8 +635,11 @@ internal static class CommandExecutionPolicy
         }
     }
 
-    private static IEnumerable<string> ReadProjectApprovals(string projectDirectory)
+    private static IEnumerable<string> ReadProjectApprovals(string projectDirectory, string expectedManifestFingerprint)
     {
+        if (string.IsNullOrWhiteSpace(expectedManifestFingerprint))
+            return [];
+
         var path = ApprovalPath(projectDirectory);
         if (!File.Exists(path))
             return [];
@@ -644,7 +651,7 @@ internal static class CommandExecutionPolicy
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("manifestFingerprint", out var fingerprint)
                 || fingerprint.ValueKind != JsonValueKind.String
-                || !string.Equals(fingerprint.GetString(), GetManifestFingerprint(projectDirectory), StringComparison.Ordinal)
+                || !string.Equals(fingerprint.GetString(), expectedManifestFingerprint, StringComparison.Ordinal)
                 || !root.TryGetProperty("prefixes", out var prefixes)
                 || prefixes.ValueKind != JsonValueKind.Array
                 || prefixes.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String))
