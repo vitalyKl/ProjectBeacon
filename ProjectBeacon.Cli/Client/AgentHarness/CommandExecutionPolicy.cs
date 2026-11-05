@@ -452,7 +452,7 @@ internal static class CommandExecutionPolicy
         else if (argv.Count > 2 && (
             ((executable is "npm" or "pnpm" or "yarn" or "bun") && argv[1] == "run")
             || ((executable is "python" or "python3") && argv[1] == "-m")
-            || (executable == "dotnet" && (argv[1] == "tool" || argv[1] == "ef")))
+            || (executable == "dotnet" && (argv[1] == "tool" || argv[1] == "ef"))))
             count = 3;
         if (argv.Count > 3 && (executable is "python" or "python3") && argv[1] == "-m" && argv[2] == "pip")
             count = 4;
