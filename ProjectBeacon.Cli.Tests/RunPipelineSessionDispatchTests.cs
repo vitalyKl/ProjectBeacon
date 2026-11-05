@@ -279,7 +279,8 @@ public sealed class RunPipelineSessionDispatchTests
     {
         public int? RequestedGeneration { get; private set; }
 
-        public int ProgressRequests { get; private set; }
+        private int _progressRequests;
+        public int ProgressRequests => Volatile.Read(ref _progressRequests);
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -293,7 +294,7 @@ public sealed class RunPipelineSessionDispatchTests
                 if (progress.RootElement.GetProperty("generation").GetInt32() != generation)
                     return new HttpResponseMessage(HttpStatusCode.Conflict);
 
-                Interlocked.Increment(ref ProgressRequests);
+                Interlocked.Increment(ref _progressRequests);
                 return new HttpResponseMessage(HttpStatusCode.OK);
             }
 
