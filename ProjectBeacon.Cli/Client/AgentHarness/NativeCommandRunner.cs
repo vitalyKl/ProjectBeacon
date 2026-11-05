@@ -2,25 +2,25 @@ namespace ProjectBeacon.Cli.Client.AgentHarness;
 
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-/// <summary>
-/// Executes an explicitly allowlisted command directly, without a shell, in a fixed project
-/// working directory. The allowlist is workstation-local and empty by default.
-/// </summary>
 internal static class NativeCommandRunner
 {
     private const int MaxOutputCharacters = 12_000;
+    private const int MaxLogBytes = 16 * 1024 * 1024;
     private const int DefaultTimeoutSeconds = 60;
     private const int MaxTimeoutSeconds = 180;
+    private const int DefaultLogPageSize = 100;
+    private const int MaxLogPageSize = 250;
 
-    private static readonly string[] SafeEnvironmentNames =
+    private static readonly string[] InheritedEnvironmentNames =
     [
-        "PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
-        "TEMP", "TMP", "TMPDIR", "SystemRoot", "WINDIR",
-        "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_CLI_HOME", "DOTNET_MULTILEVEL_LOOKUP",
-        "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"
+        "PATH", "SystemRoot", "WINDIR", "COMSPEC",
+        "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_MULTILEVEL_LOOKUP",
+        "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "LANG", "LC_ALL",
+        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER"
     ];
 
     public static JsonObject ToolDefinition() => new()
@@ -29,22 +29,19 @@ internal static class NativeCommandRunner
         ["function"] = new JsonObject
         {
             ["name"] = "run_command",
-            ["description"] = "Run an allowlisted command directly (no shell) in the current project directory. The workstation owner must configure AllowedCommandPrefixes. Interactive chat asks the user to approve execution unless terminal access was already granted for the chat or workstation. Each call has a timeout and output limit.",
+            ["description"] = "Run one executable with an argv array (no shell) in the current isolated project worktree. Returns a structured exit code, duration, bounded output tail, detected error lines, and a runId for reading the full log with run_log. Commands may be blocked by the workstation policy.",
             ["parameters"] = new JsonObject
             {
                 ["type"] = "object",
                 ["properties"] = new JsonObject
                 {
-                    ["executable"] = new JsonObject
-                    {
-                        ["type"] = "string",
-                        ["description"] = "Executable name only, such as dotnet or npm; executable paths are not accepted."
-                    },
-                    ["arguments"] = new JsonObject
+                    ["argv"] = new JsonObject
                     {
                         ["type"] = "array",
+                        ["minItems"] = 1,
+                        ["maxItems"] = 128,
                         ["items"] = new JsonObject { ["type"] = "string" },
-                        ["description"] = "Argument vector passed directly to the process, not interpreted by a shell."
+                        ["description"] = "Executable followed by its arguments, e.g. [\"dotnet\", \"test\"] or [\"npm\", \"test\"]. No shell parsing or chaining."
                     },
                     ["timeoutSeconds"] = new JsonObject
                     {
@@ -54,7 +51,29 @@ internal static class NativeCommandRunner
                         ["description"] = "Optional timeout, default 60 seconds."
                     }
                 },
-                ["required"] = new JsonArray { JsonValue.Create("executable"), JsonValue.Create("arguments") },
+                ["required"] = new JsonArray { JsonValue.Create("argv") },
+                ["additionalProperties"] = false
+            }
+        }
+    };
+
+    public static JsonObject RunLogToolDefinition() => new()
+    {
+        ["type"] = "function",
+        ["function"] = new JsonObject
+        {
+            ["name"] = "run_log",
+            ["description"] = "Read a page of the complete output from an earlier run_command call using its runId. Use the returned nextOffset to continue.",
+            ["parameters"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["runId"] = new JsonObject { ["type"] = "string", ["description"] = "runId returned by run_command." },
+                    ["offset"] = new JsonObject { ["type"] = "integer", ["minimum"] = 0, ["description"] = "Line offset, default 0." },
+                    ["maxLines"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxLogPageSize, ["description"] = "Lines to read, default 100." }
+                },
+                ["required"] = new JsonArray { JsonValue.Create("runId") },
                 ["additionalProperties"] = false
             }
         }
@@ -62,42 +81,40 @@ internal static class NativeCommandRunner
 
     public static async Task<McpToolResult> ExecuteAsync(
         string workingDirectory,
+        string sessionId,
         JsonObject arguments,
-        IReadOnlyCollection<string> allowedPrefixes,
         CancellationToken ct)
     {
-        if (!Directory.Exists(workingDirectory))
+        if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
             return new McpToolResult(true, "Command rejected: the project working directory does not exist.");
 
-        var executable = ReadString(arguments, "executable")?.Trim();
-        if (string.IsNullOrWhiteSpace(executable))
-            return new McpToolResult(true, "Command rejected: 'executable' is required.");
-        if (Path.IsPathRooted(executable)
-            || executable.Contains('/') || executable.Contains('\\')
-            || executable.Contains(':') || executable.Contains('\0'))
-            return new McpToolResult(true, "Command rejected: executable must be a name from PATH, not a path.");
+        if (arguments["argv"] is not JsonArray argvNode
+            || argvNode.Count == 0
+            || argvNode.Any(item => item is not JsonValue value || value.GetValueKind() != JsonValueKind.String))
+            return new McpToolResult(true, "Command rejected: 'argv' must be a non-empty array of strings.");
 
-        if (arguments["arguments"] is not JsonArray argumentArray
-            || argumentArray.Any(x => x is not JsonValue value || value.GetValueKind() != System.Text.Json.JsonValueKind.String))
-            return new McpToolResult(true, "Command rejected: 'arguments' must be an array of strings.");
-
-        var argv = argumentArray.Select(x => x!.GetValue<string>()).ToArray();
-        if (argv.Any(IsUnsafePathArgument))
-            return new McpToolResult(true, "Command rejected: absolute paths and parent-directory traversal are not allowed in arguments.");
-
-        if (!MatchesAllowlist(executable, argv, allowedPrefixes))
-            return new McpToolResult(true, "Command rejected: it does not match any configured AllowedCommandPrefixes entry.");
+        var argv = argvNode.Select(item => item!.GetValue<string>()).ToArray();
+        if (!CommandExecutionPolicy.TryValidate(argv, workingDirectory, out var validationError))
+            return new McpToolResult(true, "Command rejected: " + validationError);
 
         var timeoutSeconds = arguments["timeoutSeconds"] is JsonValue timeoutValue
             && timeoutValue.TryGetValue<int>(out var configuredTimeout)
-            ? configuredTimeout
-            : DefaultTimeoutSeconds;
+                ? configuredTimeout
+                : DefaultTimeoutSeconds;
         if (timeoutSeconds < 1 || timeoutSeconds > MaxTimeoutSeconds)
             return new McpToolResult(true, $"Command rejected: timeoutSeconds must be between 1 and {MaxTimeoutSeconds}.");
 
+        var sessionHome = SessionHomePath(sessionId);
+        var tempDirectory = Path.Combine(sessionHome, "tmp");
+        var logDirectory = Path.Combine(sessionHome, "logs");
+        Directory.CreateDirectory(tempDirectory);
+        Directory.CreateDirectory(logDirectory);
+        var runId = Guid.NewGuid().ToString("N");
+        var logPath = Path.Combine(logDirectory, runId + ".log");
+
         var startInfo = new ProcessStartInfo
         {
-            FileName = executable,
+            FileName = argv[0],
             WorkingDirectory = Path.GetFullPath(workingDirectory),
             UseShellExecute = false,
             RedirectStandardInput = true,
@@ -105,11 +122,10 @@ internal static class NativeCommandRunner
             RedirectStandardError = true,
             CreateNoWindow = true
         };
-        foreach (var arg in argv)
-            startInfo.ArgumentList.Add(arg);
+        foreach (var argument in argv.Skip(1))
+            startInfo.ArgumentList.Add(argument);
 
-        // Do not forward arbitrary user/application environment variables to build scripts.
-        var inherited = SafeEnvironmentNames
+        var inherited = InheritedEnvironmentNames
             .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
             .Where(pair => pair.Value is not null)
             .ToArray();
@@ -117,7 +133,34 @@ internal static class NativeCommandRunner
         foreach (var pair in inherited)
             startInfo.Environment[pair.Name] = pair.Value!;
 
+        // The command process gets a disposable per-session home, not the user's profile or
+        // the daemon's environment. Beacon tokens, provider keys and arbitrary env vars are
+        // never forwarded to build/test processes.
+        var isolatedHome = Path.Combine(sessionHome, "home");
+        Directory.CreateDirectory(isolatedHome);
+        startInfo.Environment["HOME"] = isolatedHome;
+        startInfo.Environment["USERPROFILE"] = isolatedHome;
+        startInfo.Environment["APPDATA"] = Path.Combine(isolatedHome, "AppData", "Roaming");
+        startInfo.Environment["LOCALAPPDATA"] = Path.Combine(isolatedHome, "AppData", "Local");
+        startInfo.Environment["XDG_CONFIG_HOME"] = Path.Combine(isolatedHome, ".config");
+        startInfo.Environment["TMP"] = tempDirectory;
+        startInfo.Environment["TEMP"] = tempDirectory;
+        startInfo.Environment["TMPDIR"] = tempDirectory;
+        startInfo.Environment["DOTNET_CLI_HOME"] = Path.Combine(isolatedHome, ".dotnet");
+        startInfo.Environment["NUGET_PACKAGES"] = Path.Combine(isolatedHome, ".nuget", "packages");
+        startInfo.Environment["npm_config_cache"] = Path.Combine(isolatedHome, ".npm");
+        startInfo.Environment["CARGO_HOME"] = Path.Combine(isolatedHome, ".cargo");
+        startInfo.Environment["PIP_CACHE_DIR"] = Path.Combine(isolatedHome, ".cache", "pip");
+        startInfo.Environment["GOCACHE"] = Path.Combine(isolatedHome, ".cache", "go-build");
+        startInfo.Environment["GOMODCACHE"] = Path.Combine(isolatedHome, "go", "pkg", "mod");
+        startInfo.Environment["CI"] = "true";
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        startInfo.Environment["GIT_PAGER"] = "cat";
+        startInfo.Environment["GH_PAGER"] = "cat";
+        startInfo.Environment["PAGER"] = "cat";
+
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+        var startedAt = Stopwatch.GetTimestamp();
         try
         {
             if (!process.Start())
@@ -128,126 +171,189 @@ internal static class NativeCommandRunner
             return new McpToolResult(true, $"Command failed to start: {ex.GetType().Name}.");
         }
 
-        // No interactive stdin. A command that requires user input should fail instead of hanging.
         process.StandardInput.Close();
-        var stdoutTask = ReadBoundedAsync(process.StandardOutput, MaxOutputCharacters);
-        var stderrTask = ReadBoundedAsync(process.StandardError, MaxOutputCharacters);
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var outputGate = new SemaphoreSlim(1, 1);
         try
         {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
-        {
-            try { process.Kill(entireProcessTree: true); } catch { }
-            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
-            var stdoutAfterTimeout = await stdoutTask;
-            var stderrAfterTimeout = await stderrTask;
-            ct.ThrowIfCancellationRequested();
-            return new McpToolResult(true, FormatResult(null, true, stdoutAfterTimeout, stderrAfterTimeout));
-        }
+            await using var logStream = new FileStream(logPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 16 * 1024, useAsync: true);
+            await using var logWriter = new StreamWriter(logStream, new UTF8Encoding(false), leaveOpen: true);
+            var stdoutTask = ReadOutputAsync(process.StandardOutput, "OUT", logWriter, logStream, outputGate);
+            var stderrTask = ReadOutputAsync(process.StandardError, "ERR", logWriter, logStream, outputGate);
+            var timedOut = false;
 
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-        return new McpToolResult(false, FormatResult(process.ExitCode, false, stdout, stderr));
-    }
-
-    private static bool MatchesAllowlist(
-        string executable,
-        IReadOnlyList<string> arguments,
-        IReadOnlyCollection<string> allowedPrefixes)
-    {
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        foreach (var entry in allowedPrefixes)
-        {
-            if (string.IsNullOrWhiteSpace(entry))
-                continue;
-
-            // Settings use simple, unquoted token prefixes, e.g. "dotnet test" or "npm run test".
-            var prefix = entry.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            if (prefix.Length == 0)
-                continue;
-            if (!string.Equals(Path.GetFileName(prefix[0]), Path.GetFileName(executable), comparison))
-                continue;
-            if (arguments.Count < prefix.Length - 1)
-                continue;
-
-            var match = true;
-            for (var i = 1; i < prefix.Length; i++)
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            try
             {
-                if (!string.Equals(arguments[i - 1], prefix[i], comparison))
-                {
-                    match = false;
-                    break;
-                }
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+            {
+                timedOut = !ct.IsCancellationRequested;
+                try { process.Kill(entireProcessTree: true); } catch { }
+                try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+                ct.ThrowIfCancellationRequested();
             }
 
-            if (match)
-                return true;
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+            await logWriter.FlushAsync(ct);
+            var durationMs = (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            var outputTail = JoinOutputTails(stdout, stderr);
+            var errors = ExtractErrorLines(outputTail);
+
+            var result = new JsonObject
+            {
+                ["runId"] = runId,
+                ["exitCode"] = timedOut ? null : JsonValue.Create(process.ExitCode),
+                ["timedOut"] = timedOut,
+                ["durationMs"] = durationMs,
+                ["outputTail"] = outputTail,
+                ["errorLines"] = JsonSerializer.SerializeToNode(errors),
+                ["logTruncated"] = logStream.Length >= MaxLogBytes
+            };
+            return new McpToolResult(false, result.ToJsonString());
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw;
+        }
+        finally
+        {
+            outputGate.Dispose();
+        }
+    }
+
+    public static async Task<McpToolResult> ReadLogAsync(string sessionId, JsonObject arguments, CancellationToken ct)
+    {
+        var runId = ReadString(arguments, "runId")?.Trim();
+        if (string.IsNullOrWhiteSpace(runId) || !Regex.IsMatch(runId, @"^[a-fA-F0-9]{32}$"))
+            return new McpToolResult(true, "run_log rejected: runId is invalid.");
+
+        var offset = ReadInt(arguments, "offset") ?? 0;
+        var maxLines = ReadInt(arguments, "maxLines") ?? DefaultLogPageSize;
+        if (offset < 0 || maxLines < 1 || maxLines > MaxLogPageSize)
+            return new McpToolResult(true, $"run_log rejected: offset must be non-negative and maxLines must be 1..{MaxLogPageSize}.");
+
+        var path = Path.Combine(SessionHomePath(sessionId), "logs", runId + ".log");
+        if (!File.Exists(path))
+            return new McpToolResult(true, "run_log: no output log exists for this runId in the current session.");
+
+        var page = new List<string>(maxLines);
+        var lineNumber = 0;
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 16 * 1024, useAsync: true);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            if (lineNumber >= offset && page.Count < maxLines)
+                page.Add(line);
+            lineNumber++;
+            if (page.Count == maxLines && lineNumber >= offset + maxLines)
+                break;
         }
 
-        return false;
+        var result = new JsonObject
+        {
+            ["runId"] = runId,
+            ["offset"] = offset,
+            ["lines"] = JsonSerializer.SerializeToNode(page),
+            ["nextOffset"] = page.Count == maxLines ? offset + page.Count : null,
+            ["endOfLog"] = offset + page.Count >= lineNumber && stream.Position >= stream.Length
+        };
+        return new McpToolResult(false, result.ToJsonString());
     }
 
-    private static bool IsUnsafePathArgument(string argument)
+    public static string SessionHomePath(string sessionId)
     {
-        if (string.IsNullOrWhiteSpace(argument) || argument.Contains('\0'))
-            return true;
-        if (Path.IsPathRooted(argument)
-            || Regex.IsMatch(argument, @"^[A-Za-z]:[\\/]")
-            || argument.StartsWith(@"\\", StringComparison.Ordinal))
-            return true;
-
-        // Arguments may embed paths in options (for example --project=../outside.csproj).
-        // Check path boundaries inside the whole argument, not only when the argument is a path.
-        if (Regex.IsMatch(argument, @"(^|[=:])([A-Za-z]:[\\/]|/|\\\\)"))
-            return true;
-
-        var normalized = argument.Replace('\\', '/');
-        return Regex.IsMatch(normalized, @"(^|[=:/])\.\.(?:/|$)");
+        var safeId = new string((sessionId ?? string.Empty)
+            .Where(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
+            .Take(80)
+            .ToArray());
+        if (string.IsNullOrWhiteSpace(safeId))
+            safeId = Guid.NewGuid().ToString("N");
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ProjectBeacon",
+            "command-sessions",
+            safeId);
     }
 
-    private static async Task<string> ReadBoundedAsync(StreamReader reader, int maxCharacters)
+    public static void CleanupSession(string sessionId)
     {
-        var output = new StringBuilder(Math.Min(1024, maxCharacters));
+        var path = SessionHomePath(sessionId);
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+            // A locked service process must be stopped before session files can be deleted.
+        }
+    }
+
+    private static async Task<string> ReadOutputAsync(
+        StreamReader reader,
+        string streamName,
+        StreamWriter writer,
+        FileStream logStream,
+        SemaphoreSlim outputGate)
+    {
+        var tail = new StringBuilder();
         var truncated = false;
         while (await reader.ReadLineAsync() is { } line)
         {
-            if (output.Length < maxCharacters)
+            var formatted = $"[{streamName}] {line}";
+            await outputGate.WaitAsync();
+            try
             {
-                if (output.Length > 0)
-                    output.AppendLine();
-                var remaining = maxCharacters - output.Length;
-                output.Append(line.AsSpan(0, Math.Min(remaining, line.Length)));
-                if (line.Length > remaining)
+                if (logStream.Length < MaxLogBytes)
+                    await writer.WriteLineAsync(formatted);
+                else
                     truncated = true;
             }
-            else
+            finally
             {
+                outputGate.Release();
+            }
+
+            if (tail.Length > 0)
+                tail.AppendLine();
+            tail.Append(formatted);
+            if (tail.Length > MaxOutputCharacters)
+            {
+                tail.Remove(0, tail.Length - MaxOutputCharacters);
                 truncated = true;
             }
         }
 
         if (truncated)
-            output.AppendLine().Append("[output truncated by ProjectBeacon]");
-        return output.ToString();
+            tail.Insert(0, "[Earlier output omitted; use run_log for the saved log tail.]\n");
+        return tail.ToString();
     }
 
-    private static string FormatResult(int? exitCode, bool timedOut, string stdout, string stderr)
+    private static string JoinOutputTails(string stdout, string stderr)
     {
-        var result = new StringBuilder();
-        result.AppendLine(timedOut ? "Command timed out and was terminated." : $"Exit code: {exitCode}.");
-        if (!string.IsNullOrWhiteSpace(stdout))
-            result.AppendLine("STDOUT:").AppendLine(stdout);
-        if (!string.IsNullOrWhiteSpace(stderr))
-            result.AppendLine("STDERR:").AppendLine(stderr);
-        return result.ToString().TrimEnd();
+        if (string.IsNullOrWhiteSpace(stdout))
+            return stderr;
+        if (string.IsNullOrWhiteSpace(stderr))
+            return stdout;
+        return stdout + Environment.NewLine + stderr;
     }
+
+    private static IReadOnlyList<string> ExtractErrorLines(string output)
+        => output.Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => Regex.IsMatch(line, @"\b(error|failed|failure|exception|fatal)\b", RegexOptions.IgnoreCase))
+            .TakeLast(30)
+            .ToArray();
 
     private static string? ReadString(JsonObject arguments, string key) =>
-        arguments[key] is JsonValue value && value.GetValueKind() == System.Text.Json.JsonValueKind.String
+        arguments[key] is JsonValue value && value.GetValueKind() == JsonValueKind.String
             ? value.GetValue<string>()
             : null;
+
+    private static int? ReadInt(JsonObject arguments, string key) =>
+        arguments[key] is JsonValue value && value.TryGetValue<int>(out var parsed) ? parsed : null;
 }
