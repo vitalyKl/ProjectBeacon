@@ -44,6 +44,61 @@ internal static class CommandExecutionPolicy
         return prefixes.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    public static IReadOnlyList<string> GetManuallyApprovedPrefixes(string projectDirectory)
+        => ReadProjectApprovals(projectDirectory).ToArray();
+
+    /// <summary>
+    /// Hashes the manifests and CI workflow files used for command discovery. A change during a
+    /// turn invalidates automatic manifest trust for that turn and forces a fresh human decision.
+    /// </summary>
+    public static string GetManifestFingerprint(string projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(projectDirectory) || !Directory.Exists(projectDirectory))
+            return string.Empty;
+
+        var root = Path.GetFullPath(projectDirectory);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var path in EnumerateManifestFiles(root)
+            .Concat(EnumerateWorkflowFiles(root))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
+                hash.AppendData(Encoding.UTF8.GetBytes(relative + "\\0"));
+                hash.AppendData(File.ReadAllBytes(path));
+                hash.AppendData([0]);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Unreadable manifests are omitted; a changed fingerprint remains conservative
+                // because command detection will not infer permission from them.
+                hash.AppendData(Encoding.UTF8.GetBytes("unreadable:" + Path.GetFileName(path)));
+            }
+        }
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
+
+    private static IEnumerable<string> EnumerateWorkflowFiles(string root)
+    {
+        var directory = Path.Combine(root, ".github", "workflows");
+        if (!Directory.Exists(directory))
+            yield break;
+
+        IEnumerable<string> files;
+        try { files = Directory.EnumerateFiles(directory).ToArray(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { yield break; }
+
+        foreach (var file in files)
+        {
+            var extension = Path.GetExtension(file);
+            if (extension.Equals(".yml", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase))
+                yield return file;
+        }
+    }
+
     public static IReadOnlyList<string> DetectManifestPrefixes(string projectDirectory)
     {
         if (string.IsNullOrWhiteSpace(projectDirectory) || !Directory.Exists(projectDirectory))
@@ -320,7 +375,13 @@ internal static class CommandExecutionPolicy
             foreach (var entry in entries)
             {
                 var name = Path.GetFileName(entry);
-                if (Directory.Exists(entry))
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(entry); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    continue;
+
+                if ((attributes & FileAttributes.Directory) != 0)
                 {
                     if (depth < 3 && !SkippedDirectories.Contains(name))
                         pending.Enqueue((entry, depth + 1));
