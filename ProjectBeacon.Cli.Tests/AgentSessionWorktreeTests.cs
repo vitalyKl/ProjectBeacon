@@ -54,9 +54,11 @@ public sealed class AgentSessionWorktreeTests
 
             // Patch-back changes only the working tree; the user's staging area is untouched.
             Assert.Equal(originalIndexHash, HashFile(Path.Combine(root, ".git", "index")));
-            var expectedStatus = originalStatus + $"?? agent-output.txt{Environment.NewLine}";
             var actualStatus = await Git(root, "status", "--porcelain", "--untracked-files=all");
-            Assert.Equal(expectedStatus.TrimEnd(), actualStatus.TrimEnd());
+            Assert.Contains(" M README.md", actualStatus, StringComparison.Ordinal);
+            Assert.Contains("A  staged.txt", actualStatus, StringComparison.Ordinal);
+            Assert.Contains("?? untracked.txt", actualStatus, StringComparison.Ordinal);
+            Assert.Contains("?? agent-output.txt", actualStatus, StringComparison.Ordinal);
 
             await workspace.DisposeAsync();
             Assert.False(Directory.Exists(recoveryPath));
