@@ -19,6 +19,7 @@ internal static class NativeCommandRunner
     [
         "PATH", "SystemRoot", "WINDIR", "COMSPEC",
         "DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_MULTILEVEL_LOOKUP",
+        "JAVA_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "GOROOT", "GOTOOLCHAIN",
         "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "LANG", "LC_ALL",
         "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER"
     ];
