@@ -423,7 +423,9 @@ internal static class CommandExecutionPolicy
 
         var executable = Path.GetFileName(argv[0]).ToLowerInvariant();
         var count = argv.Count > 1 ? 2 : 1;
-        if (argv.Count > 2 && (
+        if (executable == "make" && argv.Count > 2 && argv[1] is "-C" or "-f")
+            count = Math.Min(4, argv.Count);
+        else if (argv.Count > 2 && (
             ((executable is "npm" or "pnpm" or "yarn" or "bun") && argv[1] == "run")
             || ((executable is "python" or "python3") && argv[1] == "-m")
             || (executable == "dotnet" && argv[1] == "tool")))
