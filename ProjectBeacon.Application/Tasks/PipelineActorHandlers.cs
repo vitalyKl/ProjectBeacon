@@ -247,6 +247,7 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
             return Result.Failure<PipelineStateDto>("Subtask state changed while reporting; retry.");
 
         await db.SaveChangesAsync(ct);
+        await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, failedSessionIds, ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
@@ -299,9 +300,13 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
         var expectedStatus = subtask.Status;
         subtask.ForceFail(reason);
 
-        foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct))
-            if (session.SubtaskId == subtask.Id)
-                session.Close();
+        var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
+        var failedSessionIds = actorSessions
+            .Where(session => session.SubtaskId == subtask.Id)
+            .Select(session => session.Id)
+            .ToArray();
+        foreach (var session in actorSessions.Where(session => session.SubtaskId == subtask.Id))
+            session.Close();
 
         var failed = await db.Subtasks
             .Where(s => s.Id == subtask.Id && s.Status == expectedStatus)
