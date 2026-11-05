@@ -42,7 +42,7 @@ public sealed class RunPipelineSessionDispatchTests
                 AgentRuntime = "native",
                 OpencodeDataDir = Path.Combine(temp, "native-data"),
                 LlamaSwapPort = 8080,
-                AllowedCommandPrefixes = []
+                CommandPolicy = "off"
             };
             Func<WorkstationSettings> settingsLoader = () => settings;
             var deps = new DaemonDependencies(
