@@ -76,7 +76,7 @@ jobs:
       - name: Test — CLI
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Cli.Tests/ProjectBeacon.Cli.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Cli.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false -- ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -showLiveOutput
+        run: dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll --xunit-config-filename ProjectBeacon.Cli.Tests/testconfig.json --xunit-info --long-running 30 --xunit-diagnostics on --xunit-internal-diagnostics on --results-directory TestResults/ProjectBeacon.Cli.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
@@ -196,7 +196,7 @@ jobs:
       - name: Test — CLI
         if: always()
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Cli.Tests/ProjectBeacon.Cli.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false -- ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -showLiveOutput
+        run: dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll --xunit-config-filename ProjectBeacon.Cli.Tests/testconfig.json --xunit-info --long-running 30 --xunit-diagnostics on --xunit-internal-diagnostics on
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
