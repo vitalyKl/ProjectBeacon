@@ -230,6 +230,11 @@ public sealed partial class PipelineHandlerTests
         Assert.True(failed.Success, failed.Error);
         Assert.Equal(SubtaskStatus.Failed, failed.Value!.Subtasks.Single(row => row.Id == created.Value.Id).Status);
 
+        // Retrying a failed state also retries best-effort cleanup; cancellation is idempotent.
+        var retried = await new FailSubtaskHandler(factory)
+            .HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(task.Id, created.Value.Id, "retry cancellation")), TestContext.Current.CancellationToken);
+        Assert.True(retried.Success, retried.Error);
+
         using (TenantScope.EnterUnscoped())
         {
             var session = await _db.PipelineSessions.AsNoTracking()
