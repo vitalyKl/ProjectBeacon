@@ -139,6 +139,31 @@ public sealed class CommandExecutionPolicyTests
     }
 
     [Fact]
+    public void SavedProjectApprovalMustMatchTheManifestSnapshotBeingExecuted()
+    {
+        var root = CreateProject();
+        try
+        {
+            var packageJson = Path.Combine(root, "package.json");
+            File.WriteAllText(packageJson, """{"scripts":{"test":"node test.js"}}""");
+            var oldSnapshot = CommandExecutionPolicy.GetManifestFingerprint(root);
+            Assert.True(CommandExecutionPolicy.ApprovePrefix(root, "npm test", oldSnapshot, out var error), error);
+
+            // The developer changes the original project while the agent keeps running an older
+            // detached worktree snapshot. A new root approval must not authorize that old snapshot.
+            File.WriteAllText(packageJson, """{"scripts":{"test":"node test.js","build":"webpack"}}""");
+            var newSnapshot = CommandExecutionPolicy.GetManifestFingerprint(root);
+            Assert.NotEqual(oldSnapshot, newSnapshot);
+            Assert.Empty(CommandExecutionPolicy.GetManuallyApprovedPrefixes(root, newSnapshot));
+            Assert.Contains("npm test", CommandExecutionPolicy.GetManuallyApprovedPrefixes(root, oldSnapshot));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SavedProjectApprovalExpiresWhenBuildManifestOrCiWorkflowChanges()
     {
         var root = CreateProject();
