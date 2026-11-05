@@ -89,6 +89,37 @@ public sealed class NativeAgentRuntimeTests
         Assert.False(NativeAgentRuntime.IsInteractiveChatAuthorization(Auth("Planner", Guid.NewGuid())));
     }
 
+    [Fact]
+    public void RunCommandRequiresTasklessChatOrFullyScopedActorAuthorization()
+    {
+        AgentHarnessAuthorization Authorization(
+            string? role,
+            Guid? taskId,
+            Guid? subtaskId)
+            => new(
+                "https://beacon.test",
+                "ephemeral-token",
+                Guid.NewGuid(),
+                taskId,
+                Guid.NewGuid(),
+                1,
+                Path.GetTempPath(),
+                DateTime.UtcNow.AddMinutes(2),
+                subtaskId,
+                role,
+                AllowedMcpTools: [],
+                ProjectRoot: Path.GetTempPath(),
+                IsolatedWorkspace: true);
+
+        Assert.True(NativeAgentRuntime.IsRunCommandAuthorized(Authorization(null, null, null)));
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(Authorization(null, Guid.NewGuid(), null)));
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(Authorization(null, null, Guid.NewGuid())));
+        Assert.True(NativeAgentRuntime.IsRunCommandAuthorized(Authorization("Actor", Guid.NewGuid(), Guid.NewGuid())));
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(Authorization("Actor", null, Guid.NewGuid())));
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(Authorization("Actor", Guid.NewGuid(), null)));
+        Assert.False(NativeAgentRuntime.IsRunCommandAuthorized(Authorization("Eval", Guid.NewGuid(), Guid.NewGuid())));
+    }
+
     [Theory]
     [InlineData("Planner", true, false)]
     [InlineData("Review", true, false)]
