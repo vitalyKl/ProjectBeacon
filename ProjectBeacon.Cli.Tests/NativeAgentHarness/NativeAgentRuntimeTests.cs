@@ -2171,10 +2171,10 @@ public sealed class NativeAgentRuntimeTests
             ct.ThrowIfCancellationRequested();
             if (Interlocked.Increment(ref _requests) == 1)
             {
-                Assert.Contains(request.Tools, tool => tool?["function"]?["name"]?.GetValue<string>() == "run_shell");
+                Assert.Contains(request.Tools, tool => tool?["function"]?["name"]?.GetValue<string>() == "run_command");
                 yield return new ChatProviderEvent(ChatProviderEventKind.ToolCallDelta,
-                    ToolIndex: 0, ToolCallId: "shell-approval", ToolName: "run_shell",
-                    ToolArguments: "{\"command\":\"echo beacon-approved\"}");
+                    ToolIndex: 0, ToolCallId: "command-approval", ToolName: "run_command",
+                    ToolArguments: """{"argv":["dotnet","--version"]}""");
                 yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "tool_calls");
                 yield return new ChatProviderEvent(ChatProviderEventKind.Finished, FinishReason: "done");
                 yield break;
