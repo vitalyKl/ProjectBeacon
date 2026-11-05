@@ -654,6 +654,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                             var result = await RequestCommandSuggestionsAsync(
                                                 session,
                                                 projectRoot,
+                                                suggestionAuthorization.WorkingDirectory,
                                                 suggestions,
                                                 ct);
                                             isError = result.IsError;
@@ -1482,6 +1483,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private async Task<McpToolResult> RequestCommandSuggestionsAsync(
         SessionState session,
         string projectRoot,
+        string workingDirectory,
         IReadOnlyList<(string Prefix, string Source)> suggestions,
         CancellationToken ct)
     {
@@ -1544,7 +1546,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 var selectedAll = safeSuggestions.Length > 0
                     && selected.Length == safeSuggestions.Length
                     && safeSuggestions.All(item => selected.Contains(item.Prefix, StringComparer.OrdinalIgnoreCase));
+                var manifestSourcesMatch = string.Equals(
+                    CommandExecutionPolicy.GetManifestFingerprint(projectRoot),
+                    CommandExecutionPolicy.GetManifestFingerprint(workingDirectory),
+                    StringComparison.Ordinal);
                 var fingerprintTrusted = selectedAll
+                    && manifestSourcesMatch
                     && CommandExecutionPolicy.TrustCurrentManifestFingerprint(projectRoot);
 
                 return new McpToolResult(false, JsonSerializer.Serialize(new
