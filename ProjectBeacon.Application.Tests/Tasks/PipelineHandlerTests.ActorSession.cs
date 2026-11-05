@@ -180,6 +180,71 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task FailSubtask_WhileWaitingForUser_ClosesActorAndCancelsWorkstationCommand()
+    {
+        var (projectId, task) = await SeedTaskAsync("Cancel waiting Actor");
+        var backendId = await SeedNativeRuntimeAsync(projectId);
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var plannerSpawner = new FakeSpawner(backendId);
+        await new StartPipelineHandler(factory, plannerSpawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await _db.Tasks
+                .Where(row => row.Id == task.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.PipelineStage, TaskPipelineStage.Executing), TestContext.Current.CancellationToken);
+        }
+
+        var created = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var actorSpawner = new FakeSpawner(backendId);
+        var actor = await new StartActorSessionHandler(factory, actorSpawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, created.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(actor.Success, actor.Error);
+
+        var launched = await new LaunchSessionHandler(factory)
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(actor.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(launched.Success, launched.Error);
+
+        Guid commandId;
+        using (TenantScope.EnterUnscoped())
+        {
+            commandId = await _db.WorkstationCommands
+                .Where(row => row.Kind == WorkstationCommandKind.RunPipelineSession
+                    && row.ProjectId == projectId)
+                .Select(row => row.Id)
+                .SingleAsync(TestContext.Current.CancellationToken);
+            await _db.Subtasks
+                .Where(row => row.Id == created.Value.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Status, SubtaskStatus.WaitingForUser), TestContext.Current.CancellationToken);
+            await _db.PipelineSessions
+                .Where(row => row.Id == actor.Value.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(row => row.Status, SessionStatus.WaitingForUser), TestContext.Current.CancellationToken);
+        }
+
+        var failed = await new FailSubtaskHandler(factory)
+            .HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(task.Id, created.Value.Id, "cancel the waiting Actor")), TestContext.Current.CancellationToken);
+        Assert.True(failed.Success, failed.Error);
+        Assert.Equal(SubtaskStatus.Failed, failed.Value!.Subtasks.Single(row => row.Id == created.Value.Id).Status);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var session = await _db.PipelineSessions.AsNoTracking()
+                .SingleAsync(row => row.Id == actor.Value.Id, TestContext.Current.CancellationToken);
+            var command = await _db.WorkstationCommands.AsNoTracking()
+                .SingleAsync(row => row.Id == commandId, TestContext.Current.CancellationToken);
+
+            Assert.Equal(SessionStatus.Closed, session.Status);
+            Assert.Equal(WorkstationCommandStatus.Cancelled, command.Status);
+            Assert.Null(command.LeaseExpiresAt);
+            Assert.NotNull(command.CompletedAt);
+        }
+    }
+
+    [Fact]
     public async Task StuckSubtask_FailAndReopen_RestartsThroughReviewVerdict()
     {
         var (projectId, task) = await SeedTaskAsync("T");
