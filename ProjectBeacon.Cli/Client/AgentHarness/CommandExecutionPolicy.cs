@@ -566,44 +566,62 @@ internal static class CommandExecutionPolicy
         if (value.Length == 0)
             return false;
 
-        // URLs and URI-like values are not filesystem paths.
-        if (Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && uri.Scheme.Length > 1)
-            return false;
-
-        // MSBuild accepts slash-prefixed switches on every platform. Do not mistake
-        // /p:Configuration=Release or /verbosity:minimal for absolute filesystem paths.
-        if (Regex.IsMatch(value,
+        var isMsBuildSwitch = Regex.IsMatch(value,
             @"^/(?:p:|property:|m(?:$|:)|maxcpucount(?:$|:)|nologo$|verbosity:|v:|target:|t:|restore$|nr:|clp:|warnaserror|fl(?:p:|$))",
-            RegexOptions.IgnoreCase))
-            return false;
+            RegexOptions.IgnoreCase);
+        var candidates = new List<string>();
+        if (!isMsBuildSwitch)
+            candidates.Add(value);
 
-        var hasWindowsRoot = Regex.IsMatch(value, @"^[A-Za-z]:[\\/]|^\\\\");
-        var hasPathSeparator = value.Contains('/') || value.Contains('\\');
-        if (!Path.IsPathRooted(value) && !hasWindowsRoot && !hasPathSeparator)
-            return false;
+        // Path-bearing option values and response files must be checked separately:
+        // resolving the complete "--project=/outside/file" token would treat it as a
+        // harmless relative filename inside the worktree.
+        var equals = value.LastIndexOf('=');
+        if (equals >= 0 && equals < value.Length - 1)
+            candidates.Add(value[(equals + 1)..].Trim().Trim('"'));
+        if (value.StartsWith('@') && value.Length > 1)
+            candidates.Add(value[1..].Trim().Trim('"'));
 
-        if (hasWindowsRoot && !OperatingSystem.IsWindows())
-            return true;
-
-        try
+        foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))
         {
-            var root = FindRepositoryRoot(workingDirectory) ?? workingDirectory;
-            var fullRoot = Path.GetFullPath(root)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var fullPath = Path.GetFullPath(value, workingDirectory)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            return !string.Equals(fullPath, fullRoot, comparison)
-                && !fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison)
-                && !fullPath.StartsWith(fullRoot + Path.AltDirectorySeparatorChar, comparison);
+            if (candidate.Length == 0)
+                continue;
+
+            // URLs and URI-like values are not filesystem paths.
+            if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+                && uri.Scheme.Length > 1)
+                continue;
+
+            var hasWindowsRoot = Regex.IsMatch(candidate, @"^[A-Za-z]:[\\/]|^\\\\");
+            var hasPathSeparator = candidate.Contains('/') || candidate.Contains('\\');
+            if (!Path.IsPathRooted(candidate) && !hasWindowsRoot && !hasPathSeparator)
+                continue;
+
+            if (hasWindowsRoot && !OperatingSystem.IsWindows())
+                return true;
+
+            try
+            {
+                var root = FindRepositoryRoot(workingDirectory) ?? workingDirectory;
+                var fullRoot = Path.GetFullPath(root)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var fullPath = Path.GetFullPath(candidate, workingDirectory)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var comparison = OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
+                if (!string.Equals(fullPath, fullRoot, comparison)
+                    && !fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison)
+                    && !fullPath.StartsWith(fullRoot + Path.AltDirectorySeparatorChar, comparison))
+                    return true;
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                return true;
+            }
         }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            return true;
-        }
+
+        return false;
     }
 
     private static string? GetGitSubcommand(IReadOnlyList<string> args)
