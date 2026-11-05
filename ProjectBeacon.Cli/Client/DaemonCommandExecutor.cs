@@ -425,6 +425,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         if (!readiness.Ready)
             return (false, null, readiness.Error ?? "The native agent runtime is not ready.");
 
+        var originalProjectRoot = readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot);
+        var createdWorktree = await AgentSessionWorktree.CreateAsync(originalProjectRoot, pipelineSessionId, ct);
+        if (createdWorktree.Workspace is null)
+            return (false, null, createdWorktree.Error ?? "Could not create an isolated agent worktree.");
+        await using var sessionWorktree = createdWorktree.Workspace;
+
         using var tokenResponse = await _http.PostAsJsonAsync(
             $"/v1/commands/{command.Id:D}/harness-token",
             new { generation = command.Generation },
@@ -446,11 +452,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             taskId,
             command.Id,
             command.Generation,
-            readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot),
+            sessionWorktree.WorkingDirectory,
             token.ExpiresAt,
             subtaskId,
             pipelineRole,
-            token.AllowedMcpTools, token.McpServers);
+            token.AllowedMcpTools, token.McpServers,
+            sessionWorktree.ProjectRoot,
+            IsolatedWorkspace: true);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         var workstationSettings = _loadSettings();
         var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
@@ -614,7 +622,16 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     ?? (string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
                         ? "The pipeline agent turn was aborted."
                         : "The pipeline agent turn failed.");
-                return (false, null, failure);
+                sessionWorktree.Preserve();
+                return (false, null, failure + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
+            }
+
+            var applied = await sessionWorktree.ApplyChangesAsync(ct);
+            if (!applied.Success)
+            {
+                sessionWorktree.Preserve();
+                return (false, null, (applied.Error ?? "Could not apply isolated agent changes.")
+                    + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
             }
 
             return (true, JsonSerializer.Serialize(new
@@ -631,8 +648,22 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
             try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
-            return (false, null, timeoutReason
-                ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.");
+            sessionWorktree.Preserve();
+            return (false, null, (timeoutReason
+                ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.")
+                + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
+        }
+        catch (OperationCanceledException)
+        {
+            sessionWorktree.Preserve();
+            throw;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
+            try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
+            sessionWorktree.Preserve();
+            return (false, null, $"Pipeline agent failed ({ex.GetType().Name}). Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
         }
     }
 
