@@ -18,6 +18,7 @@ public sealed class RunPipelineSessionDispatchTests
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-dispatch-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
+        var sessionId = Guid.NewGuid();
         Directory.CreateDirectory(projectRoot);
 
         try
@@ -25,7 +26,6 @@ public sealed class RunPipelineSessionDispatchTests
             await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
-            var sessionId = Guid.NewGuid();
             var commandId = Guid.NewGuid();
             const int generation = 3;
             AgentHarnessAuthorization? capturedAuthorization = null;
@@ -119,6 +119,7 @@ public sealed class RunPipelineSessionDispatchTests
         }
         finally
         {
+            await RemovePreservedWorktreesAsync(projectRoot, sessionId);
             try { Directory.Delete(temp, true); } catch { }
         }
     }
