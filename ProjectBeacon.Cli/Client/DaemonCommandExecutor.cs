@@ -467,6 +467,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var lastProgressAt = DateTime.UtcNow;
         string? lastProgressSignature = null;
         string? timeoutReason = null;
+        var awaitingUser = false;
 
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
@@ -516,6 +517,24 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     fields = fields ?? new JsonArray()
                 };
             }).ToArray();
+
+            // A human question is a durable pause, not an idle agent. Suspend both idle and
+            // absolute turn timeouts while the form remains pending; resume the cap after reply.
+            if (forms.Count > 0)
+            {
+                lastProgressAt = DateTime.UtcNow;
+                if (!awaitingUser)
+                {
+                    awaitingUser = true;
+                    turnCts.CancelAfter(Timeout.InfiniteTimeSpan);
+                }
+            }
+            else if (awaitingUser)
+            {
+                awaitingUser = false;
+                lastProgressAt = DateTime.UtcNow;
+                turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
+            }
 
             // Ignore elapsed-duration counters: only transcript/tool/form changes count
             // as progress, so a stuck tool cannot keep the turn alive indefinitely.
@@ -597,7 +616,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             do
             {
                 await PublishActivityAsync("running", null, turnCts.Token);
-                if (DateTime.UtcNow - lastProgressAt >= pipelineIdleTimeout)
+                if (!awaitingUser && DateTime.UtcNow - lastProgressAt >= pipelineIdleTimeout)
                 {
                     timeoutReason = $"The pipeline agent turn made no progress for {pipelineIdleMinutes} minutes.";
                     turnCts.Cancel();
