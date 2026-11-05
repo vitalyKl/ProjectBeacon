@@ -156,9 +156,26 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         }
 
         ProcessJob.TryAssign(process);
-        process.StandardInput.Close();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        try
+        {
+            process.StandardInput.Close();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(CancellationToken.None);
+            }
+            catch { }
+            process.Dispose();
+            try { File.Delete(logPath); } catch { }
+            return new McpToolResult(true, $"service_start failed while initializing process output: {ex.GetType().Name}.");
+        }
+
         if (!service.PersistRegistry())
         {
             await service.StopAsync(CancellationToken.None);
