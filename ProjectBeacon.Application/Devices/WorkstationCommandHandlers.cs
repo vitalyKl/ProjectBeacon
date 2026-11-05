@@ -440,6 +440,22 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
 
             activity["deviceId"] = request.DeviceId.ToString("D");
             activity["commandId"] = request.CommandId.ToString("D");
+
+            // The Actor subtask mirrors the session's human-wait state so the task card cannot
+            // report Failed/InProgress while an ask_user form is awaiting an answer.
+            if (session.Role == PipelineRole.Actor && session.SubtaskId is { } subtaskId)
+            {
+                var subtask = await db.Subtasks
+                    .FirstOrDefaultAsync(item => item.Id == subtaskId && item.TaskId == session.TaskId, ct);
+                if (subtask is not null)
+                {
+                    if (waitingForUser)
+                        subtask.WaitForUser();
+                    else
+                        subtask.ResumeFromUser();
+                }
+            }
+
             session.UpdateActivity(activity.ToJsonString(), waitingForUser);
 
             var stillRunning = await db.WorkstationCommands
