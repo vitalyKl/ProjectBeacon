@@ -155,7 +155,13 @@ internal sealed class NativeServiceManager : IAsyncDisposable
             return new McpToolResult(true, $"service_start failed: {ex.GetType().Name}.");
         }
 
-        ProcessJob.TryAssign(process);
+        if (OperatingSystem.IsWindows() && !ProcessJob.TryAssign(process))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            process.Dispose();
+            return new McpToolResult(true, "service_start failed: Windows could not attach the process to the daemon's kill-on-close Job Object.");
+        }
         try
         {
             process.StandardInput.Close();
