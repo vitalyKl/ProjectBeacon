@@ -29,9 +29,14 @@ internal sealed class NativeServiceManager : IAsyncDisposable
 
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ManagedService>> _sessions =
         new(StringComparer.Ordinal);
+    private static int _reaperRan;
     private volatile bool _disposed;
 
-    public NativeServiceManager() => ReapStaleServices();
+    public NativeServiceManager()
+    {
+        if (Interlocked.Exchange(ref _reaperRan, 1) == 0)
+            ReapStaleServices();
+    }
 
     public static JsonObject StartToolDefinition() => Tool("service_start",
         "Start a long-running project service with argv (no shell). Waits for a TCP port or startup output to indicate readiness. Returns serviceId and status.",
@@ -349,6 +354,10 @@ internal sealed class NativeServiceManager : IAsyncDisposable
                 catch (InvalidOperationException)
                 {
                     // Process information became unavailable during reaping.
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // The process could not be inspected with the current OS permissions.
                 }
                 finally
                 {
