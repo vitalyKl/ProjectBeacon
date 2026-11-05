@@ -93,15 +93,18 @@ public class StartActorSessionHandler : ICommandHandler<StartActorSessionCommand
             if (subtask.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
                 return Result.Failure<PipelineSessionDto>("Subtask is already finished.");
 
-            if (subtask.Status == SubtaskStatus.InProgress)
+            if (subtask.Status is SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser)
             {
-                // A retry after an ambiguous commit returns the session created by the first attempt.
+                // A retry after an ambiguous commit returns the existing Actor session.
+                // WaitingForUser is also active: never call Start() or create a second session
+                // while the first Actor is waiting for a human form response.
                 var open = (await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct))
                     .FirstOrDefault(s => s.SubtaskId == subtask.Id);
                 if (open is not null)
                     return Result.Ok(PipelineMappers.ToDto(open));
+                var status = subtask.Status == SubtaskStatus.WaitingForUser ? "waiting for user" : "in progress";
                 return Result.Failure<PipelineSessionDto>(
-                    "Subtask is in progress without an open session. Fail and reopen it to retry.");
+                    $"Subtask is {status} without an open Actor session. Fail and reopen it to retry.");
             }
 
             if (task.PipelineStage is not (TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision))
