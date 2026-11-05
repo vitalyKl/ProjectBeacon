@@ -287,9 +287,17 @@ public sealed class RunPipelineSessionDispatchTests
             if (request.Method != HttpMethod.Post)
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
 
-            var path = request.RequestUri?.AbsolutePath;
-            if (path == $"/v1/commands/{commandId:D}/progress")
+            var path = request.RequestUri?.AbsolutePath.TrimEnd('/');
+            if (request.Method == HttpMethod.Post
+                && path is not null
+                && path.EndsWith("/progress", StringComparison.OrdinalIgnoreCase))
             {
+                var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                if (segments.Length < 2
+                    || !Guid.TryParse(segments[^2], out var progressCommandId)
+                    || progressCommandId != commandId)
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+
                 using var progress = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
                 if (progress.RootElement.GetProperty("generation").GetInt32() != generation)
                     return new HttpResponseMessage(HttpStatusCode.Conflict);
