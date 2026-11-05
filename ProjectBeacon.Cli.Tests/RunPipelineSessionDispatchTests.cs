@@ -109,7 +109,7 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Equal(commandId, capturedAuthorization.CommandId);
             Assert.Equal(generation, capturedAuthorization.Generation);
             Assert.NotEqual(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.WorkingDirectory));
-            Assert.Equal(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.ProjectRoot));
+            Assert.Equal(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.ProjectRoot!));
             Assert.True(capturedAuthorization.IsolatedWorkspace);
             Assert.Equal("test-short-lived-token", capturedAuthorization.ApiToken);
             Assert.Equal("Planner", capturedAuthorization.PipelineRole);
