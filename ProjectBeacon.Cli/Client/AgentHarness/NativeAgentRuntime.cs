@@ -689,10 +689,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     else
                                     {
                                         var approvalProjectRoot = commandAuthorization.ProjectRoot ?? commandAuthorization.WorkingDirectory;
-                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(approvalProjectRoot);
+                                        var executionManifestFingerprint = CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory);
+                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(
+                                            approvalProjectRoot, executionManifestFingerprint);
                                         var manifestUnchanged = string.Equals(
                                             manifestFingerprint,
-                                            CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory),
+                                            executionManifestFingerprint,
                                             StringComparison.Ordinal);
                                         var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
                                             ? CommandExecutionPolicy.DetectManifestPrefixes(commandAuthorization.WorkingDirectory)
@@ -761,10 +763,12 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     else
                                     {
                                         var approvalProjectRoot = serviceAuthorization.ProjectRoot ?? serviceAuthorization.WorkingDirectory;
-                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(approvalProjectRoot);
+                                        var executionManifestFingerprint = CommandExecutionPolicy.GetManifestFingerprint(serviceAuthorization.WorkingDirectory);
+                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(
+                                            approvalProjectRoot, executionManifestFingerprint);
                                         var manifestUnchanged = string.Equals(
                                             manifestFingerprint,
-                                            CommandExecutionPolicy.GetManifestFingerprint(serviceAuthorization.WorkingDirectory),
+                                            executionManifestFingerprint,
                                             StringComparison.Ordinal);
                                         var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
                                             ? CommandExecutionPolicy.DetectManifestPrefixes(serviceAuthorization.WorkingDirectory)
