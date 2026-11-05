@@ -32,6 +32,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private readonly Action<string>? _log;
     private readonly Func<HttpClient, string, string?, IChatProvider> _providerFactory;
     private readonly Func<AgentHarnessAuthorization, CancellationToken, Task<IMcpToolClient>> _mcpClientFactory;
+    private readonly NativeServiceManager _services = new();
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new(StringComparer.Ordinal);
     private volatile bool _disposed;
 
@@ -204,7 +205,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         active?.Cancel();
         if (activeTask is not null)
             await activeTask.WaitAsync(ct);
+        await _services.StopAllAsync(sessionId, ct);
     }
+
+    public Task StopServicesAsync(string sessionId, CancellationToken ct = default)
+        => _services.StopAllAsync(sessionId, ct);
 
     public async Task<AgentSessionUsage> ReadUsageAsync(string sessionId, CancellationToken ct)
     {
@@ -329,6 +334,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         try { await Task.WhenAll(tasks); } catch { }
         foreach (var session in states)
         {
+            try { await _services.StopAllAsync(session.Id, CancellationToken.None); } catch { }
+            NativeCommandRunner.CleanupSession(session.Id);
             lock (session.Sync)
             {
                 session.ActiveTurn?.Dispose();
@@ -336,6 +343,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             }
             session.Deltas.Writer.TryComplete();
         }
+        await _services.DisposeAsync();
     }
 
     private async Task RunTurnAsync(
@@ -382,12 +390,20 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             var manifestFingerprint = controls?.HarnessAuthorization is { } fingerprintAuthorization
                 ? CommandExecutionPolicy.GetManifestFingerprint(fingerprintAuthorization.WorkingDirectory)
                 : null;
-            if (commandPolicy != CommandExecutionPolicy.Off
-                && controls?.HarnessAuthorization is { IsolatedWorkspace: true } commandAuth
+            if (controls?.HarnessAuthorization is { IsolatedWorkspace: true } commandAuth
                 && IsRunCommandAuthorized(commandAuth))
             {
-                mcpTools.Add(NativeCommandRunner.ToolDefinition());
-                mcpTools.Add(NativeCommandRunner.RunLogToolDefinition());
+                // Stop/status/log controls remain available so a user can stop a running service
+                // even after switching the workstation policy to Off.
+                mcpTools.Add(NativeServiceManager.StatusToolDefinition());
+                mcpTools.Add(NativeServiceManager.LogsToolDefinition());
+                mcpTools.Add(NativeServiceManager.StopToolDefinition());
+                if (commandPolicy != CommandExecutionPolicy.Off)
+                {
+                    mcpTools.Add(NativeCommandRunner.ToolDefinition());
+                    mcpTools.Add(NativeCommandRunner.RunLogToolDefinition());
+                    mcpTools.Add(NativeServiceManager.StartToolDefinition());
+                }
             }
 
             // Plan mode is read-only by construction. The model cannot invoke mutating MCP
@@ -587,10 +603,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             {
                                 if (cacheKey is not null)
                                     _log?.Invoke($"native tool cache miss: {call.Name}");
-                                if (IsPlanModeRunCommandBlocked(agentMode, call.Name))
+                                if (IsPlanModeCommandExecutionBlocked(agentMode, call.Name))
                                 {
                                     isError = true;
-                                    toolResult = "Tool error: command execution is disabled in Plan mode. Use read-only inspection tools and return a plan.";
+                                    toolResult = "Tool error: command and service operations are disabled in Plan mode. Use read-only inspection tools and return a plan.";
                                 }
                                 else if (repeatedToolCall)
                                 {
@@ -675,6 +691,108 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     else
                                     {
                                         var result = await NativeCommandRunner.ReadLogAsync(session.Id, parsedArguments!, ct);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (string.Equals(call.Name, "service_start", StringComparison.Ordinal))
+                                {
+                                    var policy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
+                                    if (policy == CommandExecutionPolicy.Off
+                                        || controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
+                                        || !IsRunCommandAuthorized(serviceAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: service_start is disabled by the workstation policy or execution role.";
+                                    }
+                                    else if (!TryReadCommandArgv(parsedArguments!, out var argv))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: service_start requires argv as a non-empty array of strings.";
+                                    }
+                                    else if (!CommandExecutionPolicy.TryValidate(argv, serviceAuthorization.WorkingDirectory, out var commandError))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: " + commandError;
+                                    }
+                                    else
+                                    {
+                                        var approvalProjectRoot = serviceAuthorization.ProjectRoot ?? serviceAuthorization.WorkingDirectory;
+                                        var manuallyApproved = CommandExecutionPolicy.GetManuallyApprovedPrefixes(approvalProjectRoot);
+                                        var manifestUnchanged = string.Equals(
+                                            manifestFingerprint,
+                                            CommandExecutionPolicy.GetManifestFingerprint(serviceAuthorization.WorkingDirectory),
+                                            StringComparison.Ordinal);
+                                        var manifestPrefixes = manifestUnchanged
+                                            ? CommandExecutionPolicy.DetectManifestPrefixes(serviceAuthorization.WorkingDirectory)
+                                            : Array.Empty<string>();
+                                        var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(argv, manuallyApproved)
+                                            || CommandExecutionPolicy.MatchesApprovedPrefix(argv, manifestPrefixes);
+                                        if (policy == CommandExecutionPolicy.Ask
+                                            && !isApproved
+                                            && !await RequestCommandPermissionAsync(
+                                                session,
+                                                serviceAuthorization.WorkingDirectory,
+                                                approvalProjectRoot,
+                                                argv,
+                                                ct))
+                                        {
+                                            isError = true;
+                                            toolResult = "Tool error: the user denied this service command. Do not retry it or change its arguments to bypass the decision.";
+                                        }
+                                        else
+                                        {
+                                            var result = await _services.StartAsync(
+                                                session.Id,
+                                                serviceAuthorization.WorkingDirectory,
+                                                parsedArguments!,
+                                                ct);
+                                            isError = result.IsError;
+                                            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                        }
+                                    }
+                                }
+                                else if (string.Equals(call.Name, "service_status", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
+                                        || !IsRunCommandAuthorized(serviceAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: service_status is not authorized for this execution role.";
+                                    }
+                                    else
+                                    {
+                                        var result = _services.Status(session.Id, parsedArguments!);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (string.Equals(call.Name, "service_logs", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
+                                        || !IsRunCommandAuthorized(serviceAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: service_logs is not authorized for this execution role.";
+                                    }
+                                    else
+                                    {
+                                        var result = await _services.LogsAsync(session.Id, parsedArguments!, ct);
+                                        isError = result.IsError;
+                                        toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                    }
+                                }
+                                else if (string.Equals(call.Name, "service_stop", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } serviceAuthorization
+                                        || !IsRunCommandAuthorized(serviceAuthorization))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: service_stop is not authorized for this execution role.";
+                                    }
+                                    else
+                                    {
+                                        var result = await _services.StopAsync(session.Id, parsedArguments!, ct);
                                         isError = result.IsError;
                                         toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
                                     }
@@ -1430,9 +1548,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     internal static bool IsPlanToolAllowed(string name) => PlanAllowedTools.Contains(name);
 
-    internal static bool IsPlanModeRunCommandBlocked(string agentMode, string? toolName)
+    internal static bool IsPlanModeCommandExecutionBlocked(string agentMode, string? toolName)
         => string.Equals(agentMode, "plan", StringComparison.Ordinal)
-            && string.Equals(toolName, "run_command", StringComparison.Ordinal);
+            && toolName is "run_command" or "run_log" or "service_start" or "service_status" or "service_logs" or "service_stop";
 
     internal static JsonArray FilterPlanTools(JsonArray tools)
     {
@@ -1506,21 +1624,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         return string.Equals(authorization.PipelineRole, "Actor", StringComparison.OrdinalIgnoreCase)
             && authorization.SubtaskId is not null;
     }
-
-    internal static bool IsRunShellAuthorized(AgentHarnessAuthorization authorization)
-    {
-        // Interactive chat can use the workstation shell. Pipeline execution requires an
-        // explicit subtask grant and is restricted to Actor sessions.
-        if (string.IsNullOrWhiteSpace(authorization.PipelineRole))
-            return true;
-        return string.Equals(authorization.PipelineRole, "Actor", StringComparison.OrdinalIgnoreCase)
-            && authorization.AllowedMcpTools?.Any(tool =>
-                string.Equals(tool, "run_shell", StringComparison.OrdinalIgnoreCase)) == true;
-    }
-
-    internal static bool IsPlanModeRunShellBlocked(string agentMode, string? toolName)
-        => string.Equals(agentMode, "plan", StringComparison.Ordinal)
-            && string.Equals(toolName, "run_shell", StringComparison.Ordinal);
 
     private async Task<ResolvedProvider> ResolveProviderAsync(string model, CancellationToken ct)
     {
