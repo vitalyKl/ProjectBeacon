@@ -21,7 +21,7 @@ internal interface IDaemonChatSession
     Task<(bool Ok, string? Result, string? Error)> ReplyFormAsync(string payload, CancellationToken ct);
 }
 
-internal sealed class DaemonChatSession : IDaemonChatSession
+internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
@@ -571,6 +571,25 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         if (projectId != Guid.Empty)
             request.Headers.TryAddWithoutValidation("X-Project-Id", projectId.ToString());
         return _http.SendAsync(request, ct);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _worktreeGate.WaitAsync();
+        try
+        {
+            foreach (var workspace in _chatWorktrees.Values)
+            {
+                try { await workspace.DisposeAsync(); }
+                catch (Exception ex) { _state.Log($"chat worktree cleanup failed: {ex.GetType().Name}"); }
+            }
+            _chatWorktrees.Clear();
+        }
+        finally
+        {
+            _worktreeGate.Release();
+            _worktreeGate.Dispose();
+        }
     }
 
     private static async Task<IReadOnlyList<AgentMessagePart>> CollectPartsAsync(IAgentRuntime runtime, string sessionId, CancellationToken ct)
