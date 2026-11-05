@@ -123,7 +123,15 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(label))
             label = Path.GetFileName(argv[0]);
 
-        var startInfo = NativeCommandRunner.CreateStartInfo(workingDirectory, sessionId, argv);
+        ProcessStartInfo startInfo;
+        try
+        {
+            startInfo = NativeCommandRunner.CreateStartInfo(workingDirectory, sessionId, argv);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            return new McpToolResult(true, $"service_start could not resolve the executable safely: {ex.Message}");
+        }
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         var service = new ManagedService(serviceId, sessionId, label!, logPath, registryPath, process, port, readyRegex ?? DefaultReadyRegex);
         process.OutputDataReceived += (_, eventArgs) => service.Append("OUT", eventArgs.Data);
