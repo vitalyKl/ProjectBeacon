@@ -92,6 +92,71 @@ public sealed class NativeCommandRunnerTests
     }
 
     [Fact]
+    public void ExecutableResolutionDoesNotSearchTheProjectWorktree()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        var sessionId = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(root);
+        var oldPath = Environment.GetEnvironmentVariable("PATH");
+        try
+        {
+            var fakeExecutable = Path.Combine(root, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+            File.WriteAllText(fakeExecutable, "repository-controlled executable");
+            Environment.SetEnvironmentVariable("PATH", root + Path.PathSeparator + oldPath);
+
+            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["dotnet", "--version"]);
+
+            Assert.False(Path.GetFullPath(start.FileName).StartsWith(
+                Path.GetFullPath(root) + Path.DirectorySeparatorChar,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+            Assert.DoesNotContain(root, start.Environment["PATH"], OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", oldPath);
+            NativeCommandRunner.CleanupSession(sessionId);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WindowsBatchPackageManagerShimsUseTheFixedCmdAdapter()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        var shimDirectory = Path.Combine(Path.GetTempPath(), "beacon-command-shims-" + Guid.NewGuid().ToString("N"));
+        var sessionId = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(shimDirectory);
+        var oldPath = Environment.GetEnvironmentVariable("PATH");
+        try
+        {
+            var shim = Path.Combine(shimDirectory, "npm.cmd");
+            File.WriteAllText(shim, "@echo off\r\necho shim\r\n");
+            Environment.SetEnvironmentVariable("PATH", shimDirectory + Path.PathSeparator + oldPath);
+
+            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["npm", "test"]);
+
+            Assert.EndsWith("cmd.exe", start.FileName, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("/d /v:off /s /c", start.Arguments, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(shim, start.Arguments, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("\"test\"", start.Arguments, StringComparison.Ordinal);
+            Assert.False(start.UseShellExecute);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", oldPath);
+            NativeCommandRunner.CleanupSession(sessionId);
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(shimDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ProcessStartInfoUsesCleanSessionEnvironmentAndPreservesArgv()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
