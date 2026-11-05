@@ -31,6 +31,8 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     private readonly DaemonTiming _timing;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeTurns = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _abortRequested = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<Guid, AgentSessionWorktree> _chatWorktrees = new();
+    private readonly SemaphoreSlim _worktreeGate = new(1, 1);
 
     public DaemonChatSession(
         DaemonDependencies deps,
@@ -210,15 +212,27 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         AgentSessionWorktree? sessionWorktree = null;
         if (harnessAuthorization is not null)
         {
-            var created = await AgentSessionWorktree.CreateAsync(
-                readiness.WorkingDirectory ?? Path.GetFullPath(cwd),
-                chatId,
-                ct);
-            if (created.Workspace is null)
-                return (false, null, created.Error ?? "Could not create an isolated chat worktree.");
-            sessionWorktree = created.Workspace;
+            await _worktreeGate.WaitAsync(ct);
+            try
+            {
+                if (!_chatWorktrees.TryGetValue(chatId, out sessionWorktree))
+                {
+                    var created = await AgentSessionWorktree.CreateAsync(
+                        readiness.WorkingDirectory ?? Path.GetFullPath(cwd),
+                        chatId,
+                        ct);
+                    if (created.Workspace is null)
+                        return (false, null, created.Error ?? "Could not create an isolated chat worktree.");
+                    sessionWorktree = _chatWorktrees.GetOrAdd(chatId, created.Workspace);
+                    if (!ReferenceEquals(sessionWorktree, created.Workspace))
+                        await created.Workspace.DisposeAsync();
+                }
+            }
+            finally
+            {
+                _worktreeGate.Release();
+            }
         }
-        await using var worktreeScope = sessionWorktree;
         if (sessionWorktree is not null && harnessAuthorization is not null)
         {
             cwd = sessionWorktree.WorkingDirectory;
