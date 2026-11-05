@@ -378,15 +378,16 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
                 lastTurn = turn;
                 // Fresh means a new assistant message appeared after the baseline.
                 var fresh = turn is not null && turn.MessageId is not null && turn.MessageId != baselineMessageId;
-                if (!waitingForUser)
-                {
-                    if (turn is { Ended: true } && fresh)
-                        idle = true;
-                    else if (turn is null && quiet >= maxQuiet && assistantParts > 0)
-                        // The quiet path must not end a turn before the first assistant part: a slow
-                        // first token (model swap, context compaction) can outlast ChatIdleTimeout.
-                        idle = true;
-                }
+                // A pending form suspends the duration-based idle cutoff, but it must not
+                // suppress a terminal assistant turn. Some runtimes mark an ask-user tool
+                // request as ended while keeping the form pending for the UI to answer; return
+                // control to the caller so the user can submit that answer.
+                if (turn is { Ended: true } && fresh)
+                    idle = true;
+                else if (!waitingForUser && turn is null && quiet >= maxQuiet && assistantParts > 0)
+                    // The quiet path must not end a turn before the first assistant part: a slow
+                    // first token (model swap, context compaction) can outlast ChatIdleTimeout.
+                    idle = true;
                 if (idle)
                     break;
                 await _timing.DelayAsync(_timing.ChatPollInterval, ct);
