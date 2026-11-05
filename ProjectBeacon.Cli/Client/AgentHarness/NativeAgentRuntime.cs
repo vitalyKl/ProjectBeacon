@@ -1541,7 +1541,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 var approved = 0;
                 foreach (var prefix in selected)
                 {
-                    if (CommandExecutionPolicy.ApprovePrefix(projectRoot, prefix, out var error))
+                    if (CommandExecutionPolicy.ApprovePrefix(
+                        projectRoot,
+                        prefix,
+                        CommandExecutionPolicy.GetManifestFingerprint(workingDirectory),
+                        out var error))
                         approved++;
                     else
                         _log?.Invoke("could not persist command prefix approval: " + (error ?? "unknown error"));
@@ -1632,7 +1636,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     case "once":
                         return true;
                     case "always":
-                        if (CommandExecutionPolicy.ApprovePrefix(approvalProjectRoot, prefix, out var error))
+                        if (CommandExecutionPolicy.ApprovePrefix(
+                            approvalProjectRoot,
+                            prefix,
+                            CommandExecutionPolicy.GetManifestFingerprint(workingDirectory),
+                            out var error))
                             return true;
                         _log?.Invoke("could not persist project command approval: " + (error ?? "unknown error"));
                         return false;
