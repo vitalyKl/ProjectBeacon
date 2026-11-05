@@ -80,22 +80,26 @@ internal static class CommandExecutionPolicy
         return Convert.ToHexString(hash.GetHashAndReset());
     }
 
-    private static IEnumerable<string> EnumerateWorkflowFiles(string root)
+    private static IReadOnlyList<string> EnumerateWorkflowFiles(string root)
     {
         var directory = Path.Combine(root, ".github", "workflows");
         if (!Directory.Exists(directory))
-            yield break;
+            return [];
 
-        IEnumerable<string> files;
-        try { files = Directory.EnumerateFiles(directory).ToArray(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { yield break; }
-
-        foreach (var file in files)
+        try
         {
-            var extension = Path.GetExtension(file);
-            if (extension.Equals(".yml", StringComparison.OrdinalIgnoreCase)
-                || extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase))
-                yield return file;
+            return Directory.EnumerateFiles(directory)
+                .Where(file =>
+                {
+                    var extension = Path.GetExtension(file);
+                    return extension.Equals(".yml", StringComparison.OrdinalIgnoreCase)
+                        || extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
         }
     }
 
@@ -201,8 +205,8 @@ internal static class CommandExecutionPolicy
         var executable = Path.GetFileName(argv[0]).ToLowerInvariant();
         var count = argv.Count > 1 ? 2 : 1;
         if (argv.Count > 2 && (
-            (executable is "npm" or "pnpm" or "yarn" or "bun" && argv[1] == "run")
-            || (executable is "python" or "python3" && argv[1] == "-m")
+            ((executable is "npm" or "pnpm" or "yarn" or "bun") && argv[1] == "run")
+            || ((executable is "python" or "python3") && argv[1] == "-m")
             || (executable == "dotnet" && argv[1] == "tool")))
             count = 3;
 
@@ -283,7 +287,7 @@ internal static class CommandExecutionPolicy
 
         var args = argv.Skip(1).ToArray();
         var command = basename.ToLowerInvariant();
-        if (command == "git" && args.Length > 0 && args[0].Equals("push", StringComparison.OrdinalIgnoreCase))
+        if (command == "git" && args.Any(argument => argument.Equals("push", StringComparison.OrdinalIgnoreCase)))
         {
             error = "git push is blocked on the workstation command interface.";
             return false;
