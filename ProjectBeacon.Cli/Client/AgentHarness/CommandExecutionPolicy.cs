@@ -564,7 +564,11 @@ internal static class CommandExecutionPolicy
         return null;
     }
 
-    public static bool ApprovePrefix(string projectDirectory, string prefix, out string? error)
+    public static bool ApprovePrefix(
+        string projectDirectory,
+        string prefix,
+        string approvedManifestFingerprint,
+        out string? error)
     {
         error = null;
         var parts = prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
@@ -578,7 +582,14 @@ internal static class CommandExecutionPolicy
             error = validationError;
             return false;
         }
+        if (string.IsNullOrWhiteSpace(approvedManifestFingerprint))
+        {
+            error = "A current project manifest fingerprint is required to save command approval.";
+            return false;
+        }
 
+        // Existing approvals survive only while the exact manifests and CI workflows they
+        // were reviewed against remain unchanged.
         var existing = ReadProjectApprovals(projectDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
         existing.Add(string.Join(' ', parts));
         var path = ApprovalPath(projectDirectory);
@@ -586,9 +597,14 @@ internal static class CommandExecutionPolicy
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            var approvalDocument = new
+            {
+                manifestFingerprint = approvedManifestFingerprint,
+                prefixes = existing.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray()
+            };
             try
             {
-                File.WriteAllText(temp, JsonSerializer.Serialize(existing.OrderBy(x => x).ToArray(), JsonOptions));
+                File.WriteAllText(temp, JsonSerializer.Serialize(approvalDocument, JsonOptions));
                 File.Move(temp, path, overwrite: true);
             }
             catch
@@ -613,7 +629,19 @@ internal static class CommandExecutionPolicy
 
         try
         {
-            return (JsonSerializer.Deserialize<string[]>(File.ReadAllText(path), JsonOptions) ?? [])
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("manifestFingerprint", out var fingerprint)
+                || fingerprint.ValueKind != JsonValueKind.String
+                || !string.Equals(fingerprint.GetString(), GetManifestFingerprint(projectDirectory), StringComparison.Ordinal)
+                || !root.TryGetProperty("prefixes", out var prefixes)
+                || prefixes.ValueKind != JsonValueKind.Array
+                || prefixes.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.String))
+                return [];
+
+            return prefixes.EnumerateArray()
+                .Select(value => value.GetString() ?? string.Empty)
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
