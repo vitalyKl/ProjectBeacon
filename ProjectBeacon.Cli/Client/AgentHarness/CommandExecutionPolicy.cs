@@ -90,8 +90,9 @@ internal static class CommandExecutionPolicy
     }
 
     /// <summary>
-    /// Trusts a project's first observed manifest fingerprint automatically. On later turns,
-    /// only an exact match remains auto-approved.
+    /// Returns true only after a human reviewed and selected the complete command suggestion
+    /// list for this exact manifest/workflow fingerprint. An unseen repository is never trusted
+    /// merely because it contains familiar manifest filenames.
     /// </summary>
     public static bool IsManifestFingerprintTrusted(string projectDirectory)
     {
@@ -101,7 +102,7 @@ internal static class CommandExecutionPolicy
 
         var path = ManifestApprovalPath(projectDirectory);
         if (!File.Exists(path))
-            return WriteManifestFingerprint(projectDirectory, current);
+            return false;
 
         try
         {
