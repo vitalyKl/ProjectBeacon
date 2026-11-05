@@ -2578,6 +2578,6 @@ No Beacon-hosted coding agent.</value>
     <value>Auto — run commands in an isolated worktree</value>
   </data>
   <data name="CommandPolicyHelp" xml:space="preserve">
-    <value>Applies to native agents on this workstation. Common build and test commands are detected from project manifests; other prefixes are stored locally only after approval. Auto mode is not a security sandbox.</value>
+    <value>Applies to native agents on this workstation. Project manifests and CI workflows only suggest commands; the first use asks you to approve them. Remembered approvals expire when the reviewed manifests or workflows change. Auto skips consent and is not a security sandbox.</value>
   </data>
 </root>
