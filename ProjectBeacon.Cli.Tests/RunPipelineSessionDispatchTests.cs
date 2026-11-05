@@ -128,6 +128,7 @@ public sealed class RunPipelineSessionDispatchTests
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-aborted-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
+        var sessionId = Guid.NewGuid();
         Directory.CreateDirectory(projectRoot);
         await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
 
@@ -135,7 +136,6 @@ public sealed class RunPipelineSessionDispatchTests
         {
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
-            var sessionId = Guid.NewGuid();
             var commandId = Guid.NewGuid();
             const int generation = 1;
             var tokenHandler = new HarnessTokenHandler(projectId, commandId, generation);
