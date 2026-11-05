@@ -51,7 +51,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             return (null, "Agent command execution requires a Git repository so the session can use an isolated worktree.");
 
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
-        var hasFilters = await RunGitAsync(repositoryRoot, ct, "config", "--get-regexp", "^filter\\.");
+        var hasFilters = await RunGitAsync(repositoryRoot, ct, "config", "--local", "--get-regexp", "^filter\\.");
         if (hasFilters.ExitCode == 0 && !string.IsNullOrWhiteSpace(hasFilters.StdOut))
             return (null, "This repository has configured Git content filters. Isolated worktree creation is disabled because those filters can execute external programs.");
 

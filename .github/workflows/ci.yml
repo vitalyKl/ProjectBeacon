@@ -66,27 +66,35 @@ jobs:
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
       - name: Test — API
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.API.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Application
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Application.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — CLI
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Cli.Tests/ProjectBeacon.Cli.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Cli.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Domain
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Domain.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Infrastructure
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Infrastructure.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Web
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Web.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Worker
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Verify test results (TRX guards)
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -178,24 +186,31 @@ jobs:
       # Testcontainers fallback is unreliable on shared GHA egress IPs, so the
       # matrix lanes run with BEACON_TEST_SKIP_POSTGRES=1 (reported skips).
       - name: Test — API
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Test — Application
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Test — CLI
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Cli.Tests/ProjectBeacon.Cli.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Test — Domain
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Test — Infrastructure
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Test — Web
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Test — Worker
+        if: always()
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
       - name: Verify formatting

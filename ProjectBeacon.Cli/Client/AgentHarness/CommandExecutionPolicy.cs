@@ -532,7 +532,7 @@ internal static class CommandExecutionPolicy
 
             if (ContainsPathOutsideWorktree(argument, workingDirectory))
             {
-                error = "Paths outside the isolated project worktree are not allowed in command arguments.";
+                error = "Absolute paths and parent-directory traversal outside the isolated project worktree are not allowed in command arguments.";
                 return false;
             }
         }
@@ -590,12 +590,18 @@ internal static class CommandExecutionPolicy
             if (candidate.Length == 0)
                 continue;
 
-            // URLs and URI-like values are not filesystem paths.
-            if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
-                && uri.Scheme.Length > 1)
-                continue;
-
+            // Do not let Uri classify POSIX absolute paths as file:// URIs and bypass
+            // the worktree boundary check. Only skip genuine non-file URIs.
             var hasWindowsRoot = Regex.IsMatch(candidate, @"^[A-Za-z]:[\\/]|^\\\\");
+            if (!hasWindowsRoot
+                && Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+                && uri.Scheme.Length > 1)
+            {
+                if (!uri.IsFile)
+                    continue;
+                candidate = uri.LocalPath;
+            }
+
             var hasPathSeparator = candidate.Contains('/') || candidate.Contains('\\');
             if (!Path.IsPathRooted(candidate) && !hasWindowsRoot && !hasPathSeparator)
                 continue;

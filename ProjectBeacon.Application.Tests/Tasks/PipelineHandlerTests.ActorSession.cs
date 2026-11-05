@@ -98,7 +98,7 @@ public sealed partial class PipelineHandlerTests
         var result = await new StartActorSessionHandler(factory, spawner)
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value.Id)), TestContext.Current.CancellationToken);
         Assert.False(result.Success);
-        Assert.Equal("Subtask is in progress without an open session. Fail and reopen it to retry.", result.Error);
+        Assert.Equal("Subtask is in progress without an open Actor session. Fail and reopen it to retry.", result.Error);
         // StartPipeline already spawned a Planner session; this start must not spawn an Actor one.
         Assert.DoesNotContain(spawner.Calls, c => c.Role == PipelineRole.Actor);
 

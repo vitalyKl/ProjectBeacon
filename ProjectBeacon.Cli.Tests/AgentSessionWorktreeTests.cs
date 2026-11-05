@@ -78,19 +78,34 @@ public sealed class AgentSessionWorktreeTests
             FileName = "git",
             WorkingDirectory = directory,
             UseShellExecute = false,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add("commit.gpgsign=false");
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
 
         using var process = Process.Start(start)
             ?? throw new InvalidOperationException("Could not start Git in the worktree test.");
+        process.StandardInput.Close();
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            var timedOutOutput = await stdout;
+            var timedOutError = await stderr;
+            throw new TimeoutException($"git {string.Join(' ', arguments)} exceeded 30 seconds: {timedOutError}{timedOutOutput}");
+        }
         var output = await stdout;
         var error = await stderr;
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}{output}");
