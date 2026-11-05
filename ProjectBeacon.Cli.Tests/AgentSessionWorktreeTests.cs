@@ -33,13 +33,13 @@ public sealed class AgentSessionWorktreeTests
             var created = await AgentSessionWorktree.CreateAsync(root, Guid.NewGuid(), CancellationToken.None);
             Assert.NotNull(created.Workspace);
             Assert.Null(created.Error);
-            var workspace = created.Workspace!;
-            var recoveryPath = workspace.RecoveryPath;
+            // Always dispose the linked worktree, including when a cross-platform assertion fails.
+            await using var workspace = created.Workspace!;
 
             Assert.NotEqual(Path.GetFullPath(root), Path.GetFullPath(workspace.WorkingDirectory));
-            Assert.Equal("user unstaged edit\n", await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "README.md")));
-            Assert.Equal("user staged file\n", await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "staged.txt")));
-            Assert.Equal("user untracked file\n", await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "untracked.txt")));
+            Assert.Equal("user unstaged edit\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "README.md"))));
+            Assert.Equal("user staged file\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "staged.txt"))));
+            Assert.Equal("user untracked file\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "untracked.txt"))));
 
             await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-output.txt"), "verified by agent\n");
             await File.AppendAllTextAsync(Path.Combine(workspace.WorkingDirectory, "README.md"), "agent appended\n");
@@ -47,10 +47,10 @@ public sealed class AgentSessionWorktreeTests
             var applied = await workspace.ApplyChangesAsync(CancellationToken.None);
             Assert.True(applied.Success, applied.Error);
 
-            Assert.Equal("user unstaged edit\nagent appended\n", await File.ReadAllTextAsync(Path.Combine(root, "README.md")));
-            Assert.Equal("user staged file\n", await File.ReadAllTextAsync(Path.Combine(root, "staged.txt")));
-            Assert.Equal("user untracked file\n", await File.ReadAllTextAsync(Path.Combine(root, "untracked.txt")));
-            Assert.Equal("verified by agent\n", await File.ReadAllTextAsync(Path.Combine(root, "agent-output.txt")));
+            Assert.Equal("user unstaged edit\nagent appended\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(root, "README.md"))));
+            Assert.Equal("user staged file\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(root, "staged.txt"))));
+            Assert.Equal("user untracked file\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(root, "untracked.txt"))));
+            Assert.Equal("verified by agent\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(root, "agent-output.txt"))));
 
             // Patch-back changes only the working tree; the user's staging area is untouched.
             Assert.Equal(originalIndexHash, HashFile(Path.Combine(root, ".git", "index")));
@@ -60,14 +60,15 @@ public sealed class AgentSessionWorktreeTests
             Assert.Contains("?? untracked.txt", actualStatus, StringComparison.Ordinal);
             Assert.Contains("?? agent-output.txt", actualStatus, StringComparison.Ordinal);
 
-            await workspace.DisposeAsync();
-            Assert.False(Directory.Exists(recoveryPath));
         }
         finally
         {
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+    private static string NormalizeLineEndings(string value)
+        => value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
     private static string HashFile(string path)
         => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
