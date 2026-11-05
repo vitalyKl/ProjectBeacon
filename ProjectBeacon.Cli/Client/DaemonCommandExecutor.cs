@@ -605,10 +605,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 // the pipeline session (for example, after an Actor reports its result or
                 // an operator cancels it). Never replace the actual agent outcome with a
                 // secondary failure to publish that final snapshot.
-                if (!terminal && response.StatusCode is System.Net.HttpStatusCode.Conflict
+                if (!terminal && (response.StatusCode is System.Net.HttpStatusCode.Conflict
                     or System.Net.HttpStatusCode.NotFound
                     or System.Net.HttpStatusCode.Unauthorized
-                    or System.Net.HttpStatusCode.Forbidden)
+                    or System.Net.HttpStatusCode.Forbidden))
                 {
                     timeoutReason = $"The server no longer accepts progress for this pipeline command (HTTP {(int)response.StatusCode}); its session was cancelled or is no longer authorized.";
                     turnCts.Cancel();
@@ -699,7 +699,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
-            try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
+            try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
             sessionWorktree.Preserve();
             return (false, null, $"Pipeline agent failed ({ex.GetType().Name}). Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
         }
