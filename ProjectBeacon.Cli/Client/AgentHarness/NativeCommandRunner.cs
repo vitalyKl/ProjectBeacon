@@ -291,6 +291,11 @@ internal static class NativeCommandRunner
                 startInfo.Environment[pair.Name] = pair.Value!;
         }
         startInfo.Environment["PATH"] = safePath;
+        if (OperatingSystem.IsWindows())
+        {
+            var trustedCmd = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            startInfo.Environment["COMSPEC"] = trustedCmd;
+        }
 
         // Do not forward application credentials or arbitrary daemon environment variables.
         startInfo.Environment["HOME"] = isolatedHome;
@@ -354,7 +359,7 @@ internal static class NativeCommandRunner
     {
         var extensions = OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(executable))
             ? new[] { ".exe", ".com", ".cmd", ".bat" }
-            : [string.Empty];
+            : new[] { string.Empty };
 
         foreach (var directory in safePath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         foreach (var extension in extensions)
