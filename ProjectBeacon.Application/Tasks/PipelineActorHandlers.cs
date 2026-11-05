@@ -247,7 +247,6 @@ public class ReportSubtaskResultHandler : ICommandHandler<ReportSubtaskResultCom
             return Result.Failure<PipelineStateDto>("Subtask state changed while reporting; retry.");
 
         await db.SaveChangesAsync(ct);
-        await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, failedSessionIds, ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
@@ -318,6 +317,7 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             return Result.Failure<PipelineStateDto>("Subtask state changed while failing; retry.");
 
         await db.SaveChangesAsync(ct);
+        await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, failedSessionIds, ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
