@@ -32,6 +32,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeTurns = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _abortRequested = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<Guid, AgentSessionWorktree> _chatWorktrees = new();
+    private readonly ConcurrentDictionary<Guid, string> _chatExternalSessions = new();
     private readonly SemaphoreSlim _worktreeGate = new(1, 1);
 
     public DaemonChatSession(
@@ -84,6 +85,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
         var projectId = doc.RootElement.TryGetProperty("projectId", out var p) && p.TryGetGuid(out var pid) ? pid : Guid.Empty;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
+        _chatExternalSessions[chatId] = externalId;
 
         using var activeTurn = CancellationTokenSource.CreateLinkedTokenSource(ct);
         if (!_activeTurns.TryAdd(externalId, activeTurn))
@@ -575,15 +577,35 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Stop prompt loops before removing the directories that their MCP and service
+        // child processes may still be using. The bounded drain avoids hanging daemon shutdown.
+        foreach (var activeTurn in _activeTurns.Values)
+            activeTurn.Cancel();
+
+        for (var attempt = 0; attempt < 200 && !_activeTurns.IsEmpty; attempt++)
+            await Task.Delay(50);
+
+        foreach (var externalId in _chatExternalSessions.Values.Distinct(StringComparer.Ordinal))
+        {
+            try { await _gate.Runtime.AbortAsync(externalId, CancellationToken.None); }
+            catch (Exception ex) { _state.Log($"chat service cleanup failed: {ex.GetType().Name}"); }
+        }
+
         await _worktreeGate.WaitAsync();
         try
         {
             foreach (var workspace in _chatWorktrees.Values)
             {
-                try { await workspace.DisposeAsync(); }
+                try
+                {
+                    if (!_activeTurns.IsEmpty)
+                        workspace.Preserve();
+                    await workspace.DisposeAsync();
+                }
                 catch (Exception ex) { _state.Log($"chat worktree cleanup failed: {ex.GetType().Name}"); }
             }
             _chatWorktrees.Clear();
+            _chatExternalSessions.Clear();
         }
         finally
         {
