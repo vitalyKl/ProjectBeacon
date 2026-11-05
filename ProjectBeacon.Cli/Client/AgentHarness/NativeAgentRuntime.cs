@@ -1822,7 +1822,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         // sessions are governed by workstation policy; only Actor pipeline sessions may execute.
         if (!authorization.IsolatedWorkspace)
             return false;
-        if (authorization.PipelineRole is null && authorization.TaskId is null)
+        if (authorization.PipelineRole is null)
             return true;
         return string.Equals(authorization.PipelineRole, "Actor", StringComparison.OrdinalIgnoreCase)
             && authorization.SubtaskId is not null;
