@@ -80,6 +80,942 @@ internal static class CommandExecutionPolicy
         return Convert.ToHexString(hash.GetHashAndReset());
     }
 
+    /// <summary>
+    /// A fresh project gets its manifest fingerprint trusted automatically. Once an existing
+    /// project's manifests/workflows change, new manifest-derived prefixes require confirmation.
+    /// </summary>
+    public static bool IsManifestFingerprintTrusted(string projectDirectory)
+    {
+        var current = GetManifestFingerprint(projectDirectory);
+        if (string.IsNullOrWhiteSpace(current))
+            return false;
+
+        var path = ManifestApprovalPath(projectDirectory);
+        if (!File.Exists(path))
+            return WriteManifestFingerprint(projectDirectory, current);
+
+        try
+        {
+            var trusted = JsonSerializer.Deserialize<string>(File.ReadAllText(path), JsonOptions);
+            return string.Equals(trusted, current, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Records the current manifest/workflow fingerprint after the user reviews the suggestions.</summary>
+    public static bool TrustCurrentManifestFingerprint(string projectDirectory)
+    {
+        var current = GetManifestFingerprint(projectDirectory);
+        return !string.IsNullOrWhiteSpace(current) && WriteManifestFingerprint(projectDirectory, current);
+    }
+
+    /// <summary>
+    /// Collects manifest commands, simple commands actually used by CI workflows, and optional
+    /// agent proposals. Repository-derived text is only returned as data; it is never executed.
+    /// </summary>
+    public static IReadOnlyList<(string Prefix, string Source)> GetCommandSuggestions(
+        string projectDirectory,
+        IEnumerable<string>? agentProposals = null)
+    {
+        var suggestions = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        void Add(string prefix, string source)
+        {
+            if (string.IsNullOrWhiteSpace(prefix))
+                return;
+            if (!suggestions.TryGetValue(prefix, out var sources))
+            {
+                sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                suggestions.Add(prefix, sources);
+            }
+            sources.Add(source);
+        }
+
+        foreach (var prefix in DetectManifestPrefixes(projectDirectory))
+            Add(prefix, "Detected from project manifests");
+
+        if (!string.IsNullOrWhiteSpace(projectDirectory) && Directory.Exists(projectDirectory))
+        {
+            foreach (var workflow in EnumerateWorkflowFiles(Path.GetFullPath(projectDirectory)))
+            {
+                string[] lines;
+                try { lines = File.ReadAllLines(workflow); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i];
+                    var match = System.Text.RegularExpressions.Regex.Match(
+                        line, @"^(?<indent>\\s*)run\\s*:\\s*(?<value>.*)$",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (!match.Success)
+                        continue;
+
+                    var indent = match.Groups["indent"].Value.Length;
+                    var value = match.Groups["value"].Value.Trim();
+                    var commands = new List<string>();
+                    if (value is "|" or "|-" or "|+" or ">" or ">-" or ">+")
+                    {
+                        var block = new StringBuilder();
+                        while (i + 1 < lines.Length)
+                        {
+                            var next = lines[i + 1];
+                            if (!string.IsNullOrWhiteSpace(next)
+                                && next.TakeWhile(char.IsWhiteSpace).Count() <= indent)
+                                break;
+                            i++;
+                            block.AppendLine(next.Trim());
+                        }
+                        commands.AddRange(block.ToString().Split('\\n', StringSplitOptions.RemoveEmptyEntries));
+                    }
+                    else
+                    {
+                        commands.Add(value);
+                    }
+
+                    foreach (var command in commands)
+                    {
+                        if (TryParseWorkflowCommand(command, projectDirectory, out var prefix))
+                            Add(prefix, "Observed in a GitHub Actions workflow");
+                    }
+                }
+            }
+        }
+
+        foreach (var proposal in agentProposals ?? [])
+        {
+            if (TryNormalizeSuggestedPrefix(proposal, projectDirectory, out var prefix))
+                Add(prefix, "Proposed by the agent");
+        }
+
+        return suggestions
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => (pair.Key, string.Join("; ", pair.Value.OrderBy(value => value, StringComparer.OrdinalIgnoreCase))))
+            .ToArray();
+    }
+
+    public static bool TryNormalizeSuggestedPrefix(string? value, string projectDirectory, out string prefix)
+    {
+        prefix = string.Empty;
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 240)
+            return false;
+        var trimmed = value.Trim();
+        if (trimmed.Any(character => character is '"' or '\\'' or '`' or '    {
+        var directory = Path.Combine(root, ".github", "workflows");
+        if (!Directory.Exists(directory))
+            return [];
+
+        try
+        {
+            return Directory.EnumerateFiles(directory)
+                .Where(file =>
+                {
+                    var extension = Path.GetExtension(file);
+                    return extension.Equals(".yml", StringComparison.OrdinalIgnoreCase)
+                        || extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    public static IReadOnlyList<string> DetectManifestPrefixes(string projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(projectDirectory) || !Directory.Exists(projectDirectory))
+            return [];
+
+        var root = Path.GetFullPath(projectDirectory);
+        var files = EnumerateManifestFiles(root).ToArray();
+        var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (files.Any(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".fsproj", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".vbproj", StringComparison.OrdinalIgnoreCase)))
+        {
+            prefixes.Add("dotnet build");
+            prefixes.Add("dotnet test");
+        }
+
+        foreach (var packageJson in files.Where(path => Path.GetFileName(path).Equals("package.json", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(packageJson));
+                if (!document.RootElement.TryGetProperty("scripts", out var scripts)
+                    || scripts.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var packageManager = document.RootElement.TryGetProperty("packageManager", out var manager)
+                    && manager.ValueKind == JsonValueKind.String
+                        ? manager.GetString()?.Split('@')[0]
+                        : null;
+                var runner = packageManager switch
+                {
+                    "pnpm" => "pnpm",
+                    "yarn" => "yarn",
+                    "bun" => "bun",
+                    _ => "npm"
+                };
+
+                if (scripts.TryGetProperty("test", out _))
+                    prefixes.Add(runner == "npm" ? "npm test" : runner + " test");
+                if (scripts.TryGetProperty("build", out _))
+                    prefixes.Add(runner == "npm" ? "npm run build" : runner + " run build");
+                if (scripts.TryGetProperty("lint", out _))
+                    prefixes.Add(runner == "npm" ? "npm run lint" : runner + " run lint");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                // A malformed or unreadable manifest never grants command permission.
+            }
+        }
+
+        if (files.Any(path => Path.GetFileName(path).Equals("Cargo.toml", StringComparison.OrdinalIgnoreCase)))
+        {
+            prefixes.Add("cargo build");
+            prefixes.Add("cargo test");
+        }
+
+        if (files.Any(path => Path.GetFileName(path).Equals("go.mod", StringComparison.OrdinalIgnoreCase)))
+        {
+            prefixes.Add("go test");
+            prefixes.Add("go build");
+        }
+
+        if (files.Any(path => Path.GetFileName(path).Equals("pyproject.toml", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(path).Equals("pytest.ini", StringComparison.OrdinalIgnoreCase)))
+            prefixes.Add("python -m pytest");
+
+        foreach (var makefile in files.Where(path =>
+            Path.GetFileName(path).Equals("Makefile", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(path).Equals("GNUmakefile", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                foreach (var line in File.ReadLines(makefile))
+                {
+                    var colon = line.IndexOf(':');
+                    if (colon <= 0 || char.IsWhiteSpace(line[0]))
+                        continue;
+                    var target = line[..colon].Trim();
+                    if (target is "build" or "test" or "check" or "lint" or "format" or "fmt")
+                        prefixes.Add("make " + target);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Ignore inaccessible optional manifests.
+            }
+        }
+
+        return prefixes.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    public static string CreateApprovalPrefix(IReadOnlyList<string> argv)
+    {
+        if (argv.Count == 0)
+            return string.Empty;
+
+        var executable = Path.GetFileName(argv[0]).ToLowerInvariant();
+        var count = argv.Count > 1 ? 2 : 1;
+        if (argv.Count > 2 && (
+            ((executable is "npm" or "pnpm" or "yarn" or "bun") && argv[1] == "run")
+            || ((executable is "python" or "python3") && argv[1] == "-m")
+            || (executable == "dotnet" && argv[1] == "tool")))
+            count = 3;
+
+        return string.Join(' ', argv.Take(count));
+    }
+
+    public static bool MatchesApprovedPrefix(IReadOnlyList<string> argv, IReadOnlyCollection<string> prefixes)
+    {
+        if (argv.Count == 0)
+            return false;
+
+        foreach (var prefix in prefixes)
+        {
+            var parts = prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0 || parts.Length > argv.Count)
+                continue;
+
+            var matches = true;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (!string.Equals(argv[i], parts[i], OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryValidate(IReadOnlyList<string> argv, string workingDirectory, out string error)
+    {
+        error = string.Empty;
+        if (argv.Count == 0 || argv.Count > 128 || argv.Any(string.IsNullOrWhiteSpace))
+        {
+            error = "argv must contain between 1 and 128 non-empty strings.";
+            return false;
+        }
+
+        var executable = argv[0].Trim();
+        if (Path.IsPathRooted(executable)
+            || executable.Contains('/') || executable.Contains('\\')
+            || executable.Contains(':') || executable.Contains('\0'))
+        {
+            error = "The executable must be a name from PATH, not a path.";
+            return false;
+        }
+
+        var basename = Path.GetFileName(executable);
+        if (BlockedExecutables.Contains(basename))
+        {
+            error = $"The executable '{basename}' is blocked by the workstation command policy.";
+            return false;
+        }
+
+        foreach (var argument in argv.Skip(1))
+        {
+            if (argument.Contains('\0'))
+            {
+                error = "Command arguments cannot contain null characters.";
+                return false;
+            }
+
+            if (Path.IsPathRooted(argument)
+                || System.Text.RegularExpressions.Regex.IsMatch(argument, @"(^|[=:])([A-Za-z]:[\\/]|/|\\\\)")
+                || System.Text.RegularExpressions.Regex.IsMatch(argument.Replace('\\', '/'), @"(^|[=:/])\.\.(?:/|$)"))
+            {
+                error = "Absolute paths and parent-directory traversal are not allowed in command arguments.";
+                return false;
+            }
+        }
+
+        var args = argv.Skip(1).ToArray();
+        var command = basename.ToLowerInvariant();
+        if (command == "git" && args.Any(argument => argument.Equals("push", StringComparison.OrdinalIgnoreCase)))
+        {
+            error = "git push is blocked on the workstation command interface.";
+            return false;
+        }
+
+        if (IsGlobalInstall(command, args))
+        {
+            error = "Global package and tool installation is blocked. Use a project-local environment.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
+        {
+            error = "The project working directory does not exist.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool ApprovePrefix(string projectDirectory, string prefix, out string? error)
+    {
+        error = null;
+        var parts = prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            error = "An empty command prefix cannot be approved.";
+            return false;
+        }
+
+        var existing = ReadProjectApprovals(projectDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        existing.Add(string.Join(' ', parts));
+        var path = ApprovalPath(projectDirectory);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(temp, JsonSerializer.Serialize(existing.OrderBy(x => x).ToArray(), JsonOptions));
+                File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(temp); } catch { }
+                throw;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"Could not save the project command approval ({ex.GetType().Name}).";
+            return false;
+        }
+    }
+
+    private static IEnumerable<string> ReadProjectApprovals(string projectDirectory)
+    {
+        var path = ApprovalPath(projectDirectory);
+        if (!File.Exists(path))
+            return [];
+
+        try
+        {
+            return (JsonSerializer.Deserialize<string[]>(File.ReadAllText(path), JsonOptions) ?? [])
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            // Corrupt local approvals fail closed; they are not repaired from repository content.
+            return [];
+        }
+    }
+
+    private static IEnumerable<string> EnumerateManifestFiles(string root)
+    {
+        var pending = new Queue<(string Directory, int Depth)>();
+        pending.Enqueue((root, 0));
+        while (pending.Count > 0)
+        {
+            var (directory, depth) = pending.Dequeue();
+            IEnumerable<string> entries;
+            try { entries = Directory.EnumerateFileSystemEntries(directory).ToArray(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+
+            foreach (var entry in entries)
+            {
+                var name = Path.GetFileName(entry);
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(entry); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    continue;
+
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    if (depth < 3 && !SkippedDirectories.Contains(name))
+                        pending.Enqueue((entry, depth + 1));
+                    continue;
+                }
+
+                if (name.Equals("package.json", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("Cargo.toml", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("go.mod", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("pyproject.toml", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("pytest.ini", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("Makefile", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("GNUmakefile", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".sln", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".slnx", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".fsproj", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".vbproj", StringComparison.OrdinalIgnoreCase))
+                    yield return entry;
+            }
+        }
+    }
+
+    private static bool IsGlobalInstall(string executable, IReadOnlyList<string> args)
+    {
+        if (args.Count == 0)
+            return false;
+
+        if (executable is "npm" or "pnpm" or "bun")
+            return args.Any(arg => arg.Equals("-g", StringComparison.OrdinalIgnoreCase)
+                || arg.Equals("--global", StringComparison.OrdinalIgnoreCase));
+        if (executable == "yarn")
+            return args.Count >= 2 && args[0].Equals("global", StringComparison.OrdinalIgnoreCase);
+        if (executable == "dotnet")
+            return args.Count >= 3 && args[0].Equals("tool", StringComparison.OrdinalIgnoreCase)
+                && args[1].Equals("install", StringComparison.OrdinalIgnoreCase)
+                && args.Any(arg => arg.Equals("-g", StringComparison.OrdinalIgnoreCase)
+                    || arg.Equals("--global", StringComparison.OrdinalIgnoreCase));
+        if (executable == "cargo")
+            return args[0].Equals("install", StringComparison.OrdinalIgnoreCase);
+        if (executable is "pip" or "pip3")
+            return args[0].Equals("install", StringComparison.OrdinalIgnoreCase)
+                && args.Any(arg => arg.Equals("--user", StringComparison.OrdinalIgnoreCase));
+        if (executable is "go")
+            return args[0].Equals("install", StringComparison.OrdinalIgnoreCase);
+
+        return false;
+    }
+
+    private static string ApprovalPath(string projectDirectory)
+    {
+        var canonical = Path.GetFullPath(projectDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var comparisonValue = OperatingSystem.IsWindows() ? canonical.ToUpperInvariant() : canonical;
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(comparisonValue))).ToLowerInvariant();
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ProjectBeacon",
+            "project-command-approvals",
+            key + ".json");
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+}
+ or ';' or '|' or '&' or '<' or '>' or '\\r' or '\\n'))
+            return false;
+
+        var argv = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (argv.Length == 0 || argv.Length > 8)
+            return false;
+        if (!TryValidate(argv, projectDirectory, out _))
+            return false;
+
+        prefix = CreateApprovalPrefix(argv);
+        return !string.IsNullOrWhiteSpace(prefix);
+    }
+
+    private static bool TryParseWorkflowCommand(string raw, string projectDirectory, out string prefix)
+    {
+        prefix = string.Empty;
+        var command = raw.Trim();
+        if (command.Length == 0 || command.StartsWith('#') || command.StartsWith(':'))
+            return false;
+
+        // These are shell constructs, not argv commands. Never try to split or interpret them.
+        if (command.Any(character => character is '|' or '&' or ';' or '<' or '>' or '`' or '    {
+        var directory = Path.Combine(root, ".github", "workflows");
+        if (!Directory.Exists(directory))
+            return [];
+
+        try
+        {
+            return Directory.EnumerateFiles(directory)
+                .Where(file =>
+                {
+                    var extension = Path.GetExtension(file);
+                    return extension.Equals(".yml", StringComparison.OrdinalIgnoreCase)
+                        || extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    public static IReadOnlyList<string> DetectManifestPrefixes(string projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(projectDirectory) || !Directory.Exists(projectDirectory))
+            return [];
+
+        var root = Path.GetFullPath(projectDirectory);
+        var files = EnumerateManifestFiles(root).ToArray();
+        var prefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (files.Any(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".fsproj", StringComparison.OrdinalIgnoreCase)
+            || Path.GetExtension(path).Equals(".vbproj", StringComparison.OrdinalIgnoreCase)))
+        {
+            prefixes.Add("dotnet build");
+            prefixes.Add("dotnet test");
+        }
+
+        foreach (var packageJson in files.Where(path => Path.GetFileName(path).Equals("package.json", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(packageJson));
+                if (!document.RootElement.TryGetProperty("scripts", out var scripts)
+                    || scripts.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var packageManager = document.RootElement.TryGetProperty("packageManager", out var manager)
+                    && manager.ValueKind == JsonValueKind.String
+                        ? manager.GetString()?.Split('@')[0]
+                        : null;
+                var runner = packageManager switch
+                {
+                    "pnpm" => "pnpm",
+                    "yarn" => "yarn",
+                    "bun" => "bun",
+                    _ => "npm"
+                };
+
+                if (scripts.TryGetProperty("test", out _))
+                    prefixes.Add(runner == "npm" ? "npm test" : runner + " test");
+                if (scripts.TryGetProperty("build", out _))
+                    prefixes.Add(runner == "npm" ? "npm run build" : runner + " run build");
+                if (scripts.TryGetProperty("lint", out _))
+                    prefixes.Add(runner == "npm" ? "npm run lint" : runner + " run lint");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                // A malformed or unreadable manifest never grants command permission.
+            }
+        }
+
+        if (files.Any(path => Path.GetFileName(path).Equals("Cargo.toml", StringComparison.OrdinalIgnoreCase)))
+        {
+            prefixes.Add("cargo build");
+            prefixes.Add("cargo test");
+        }
+
+        if (files.Any(path => Path.GetFileName(path).Equals("go.mod", StringComparison.OrdinalIgnoreCase)))
+        {
+            prefixes.Add("go test");
+            prefixes.Add("go build");
+        }
+
+        if (files.Any(path => Path.GetFileName(path).Equals("pyproject.toml", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(path).Equals("pytest.ini", StringComparison.OrdinalIgnoreCase)))
+            prefixes.Add("python -m pytest");
+
+        foreach (var makefile in files.Where(path =>
+            Path.GetFileName(path).Equals("Makefile", StringComparison.OrdinalIgnoreCase)
+            || Path.GetFileName(path).Equals("GNUmakefile", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                foreach (var line in File.ReadLines(makefile))
+                {
+                    var colon = line.IndexOf(':');
+                    if (colon <= 0 || char.IsWhiteSpace(line[0]))
+                        continue;
+                    var target = line[..colon].Trim();
+                    if (target is "build" or "test" or "check" or "lint" or "format" or "fmt")
+                        prefixes.Add("make " + target);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Ignore inaccessible optional manifests.
+            }
+        }
+
+        return prefixes.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    public static string CreateApprovalPrefix(IReadOnlyList<string> argv)
+    {
+        if (argv.Count == 0)
+            return string.Empty;
+
+        var executable = Path.GetFileName(argv[0]).ToLowerInvariant();
+        var count = argv.Count > 1 ? 2 : 1;
+        if (argv.Count > 2 && (
+            ((executable is "npm" or "pnpm" or "yarn" or "bun") && argv[1] == "run")
+            || ((executable is "python" or "python3") && argv[1] == "-m")
+            || (executable == "dotnet" && argv[1] == "tool")))
+            count = 3;
+
+        return string.Join(' ', argv.Take(count));
+    }
+
+    public static bool MatchesApprovedPrefix(IReadOnlyList<string> argv, IReadOnlyCollection<string> prefixes)
+    {
+        if (argv.Count == 0)
+            return false;
+
+        foreach (var prefix in prefixes)
+        {
+            var parts = prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0 || parts.Length > argv.Count)
+                continue;
+
+            var matches = true;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (!string.Equals(argv[i], parts[i], OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryValidate(IReadOnlyList<string> argv, string workingDirectory, out string error)
+    {
+        error = string.Empty;
+        if (argv.Count == 0 || argv.Count > 128 || argv.Any(string.IsNullOrWhiteSpace))
+        {
+            error = "argv must contain between 1 and 128 non-empty strings.";
+            return false;
+        }
+
+        var executable = argv[0].Trim();
+        if (Path.IsPathRooted(executable)
+            || executable.Contains('/') || executable.Contains('\\')
+            || executable.Contains(':') || executable.Contains('\0'))
+        {
+            error = "The executable must be a name from PATH, not a path.";
+            return false;
+        }
+
+        var basename = Path.GetFileName(executable);
+        if (BlockedExecutables.Contains(basename))
+        {
+            error = $"The executable '{basename}' is blocked by the workstation command policy.";
+            return false;
+        }
+
+        foreach (var argument in argv.Skip(1))
+        {
+            if (argument.Contains('\0'))
+            {
+                error = "Command arguments cannot contain null characters.";
+                return false;
+            }
+
+            if (Path.IsPathRooted(argument)
+                || System.Text.RegularExpressions.Regex.IsMatch(argument, @"(^|[=:])([A-Za-z]:[\\/]|/|\\\\)")
+                || System.Text.RegularExpressions.Regex.IsMatch(argument.Replace('\\', '/'), @"(^|[=:/])\.\.(?:/|$)"))
+            {
+                error = "Absolute paths and parent-directory traversal are not allowed in command arguments.";
+                return false;
+            }
+        }
+
+        var args = argv.Skip(1).ToArray();
+        var command = basename.ToLowerInvariant();
+        if (command == "git" && args.Any(argument => argument.Equals("push", StringComparison.OrdinalIgnoreCase)))
+        {
+            error = "git push is blocked on the workstation command interface.";
+            return false;
+        }
+
+        if (IsGlobalInstall(command, args))
+        {
+            error = "Global package and tool installation is blocked. Use a project-local environment.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
+        {
+            error = "The project working directory does not exist.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool ApprovePrefix(string projectDirectory, string prefix, out string? error)
+    {
+        error = null;
+        var parts = prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+        {
+            error = "An empty command prefix cannot be approved.";
+            return false;
+        }
+
+        var existing = ReadProjectApprovals(projectDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        existing.Add(string.Join(' ', parts));
+        var path = ApprovalPath(projectDirectory);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(temp, JsonSerializer.Serialize(existing.OrderBy(x => x).ToArray(), JsonOptions));
+                File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(temp); } catch { }
+                throw;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"Could not save the project command approval ({ex.GetType().Name}).";
+            return false;
+        }
+    }
+
+    private static IEnumerable<string> ReadProjectApprovals(string projectDirectory)
+    {
+        var path = ApprovalPath(projectDirectory);
+        if (!File.Exists(path))
+            return [];
+
+        try
+        {
+            return (JsonSerializer.Deserialize<string[]>(File.ReadAllText(path), JsonOptions) ?? [])
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            // Corrupt local approvals fail closed; they are not repaired from repository content.
+            return [];
+        }
+    }
+
+    private static IEnumerable<string> EnumerateManifestFiles(string root)
+    {
+        var pending = new Queue<(string Directory, int Depth)>();
+        pending.Enqueue((root, 0));
+        while (pending.Count > 0)
+        {
+            var (directory, depth) = pending.Dequeue();
+            IEnumerable<string> entries;
+            try { entries = Directory.EnumerateFileSystemEntries(directory).ToArray(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+
+            foreach (var entry in entries)
+            {
+                var name = Path.GetFileName(entry);
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(entry); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    continue;
+
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    if (depth < 3 && !SkippedDirectories.Contains(name))
+                        pending.Enqueue((entry, depth + 1));
+                    continue;
+                }
+
+                if (name.Equals("package.json", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("Cargo.toml", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("go.mod", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("pyproject.toml", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("pytest.ini", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("Makefile", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("GNUmakefile", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".sln", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".slnx", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".fsproj", StringComparison.OrdinalIgnoreCase)
+                    || Path.GetExtension(name).Equals(".vbproj", StringComparison.OrdinalIgnoreCase))
+                    yield return entry;
+            }
+        }
+    }
+
+    private static bool IsGlobalInstall(string executable, IReadOnlyList<string> args)
+    {
+        if (args.Count == 0)
+            return false;
+
+        if (executable is "npm" or "pnpm" or "bun")
+            return args.Any(arg => arg.Equals("-g", StringComparison.OrdinalIgnoreCase)
+                || arg.Equals("--global", StringComparison.OrdinalIgnoreCase));
+        if (executable == "yarn")
+            return args.Count >= 2 && args[0].Equals("global", StringComparison.OrdinalIgnoreCase);
+        if (executable == "dotnet")
+            return args.Count >= 3 && args[0].Equals("tool", StringComparison.OrdinalIgnoreCase)
+                && args[1].Equals("install", StringComparison.OrdinalIgnoreCase)
+                && args.Any(arg => arg.Equals("-g", StringComparison.OrdinalIgnoreCase)
+                    || arg.Equals("--global", StringComparison.OrdinalIgnoreCase));
+        if (executable == "cargo")
+            return args[0].Equals("install", StringComparison.OrdinalIgnoreCase);
+        if (executable is "pip" or "pip3")
+            return args[0].Equals("install", StringComparison.OrdinalIgnoreCase)
+                && args.Any(arg => arg.Equals("--user", StringComparison.OrdinalIgnoreCase));
+        if (executable is "go")
+            return args[0].Equals("install", StringComparison.OrdinalIgnoreCase);
+
+        return false;
+    }
+
+    private static string ApprovalPath(string projectDirectory)
+    {
+        var canonical = Path.GetFullPath(projectDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var comparisonValue = OperatingSystem.IsWindows() ? canonical.ToUpperInvariant() : canonical;
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(comparisonValue))).ToLowerInvariant();
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ProjectBeacon",
+            "project-command-approvals",
+            key + ".json");
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+}
+
+            or '"' or '\\'' or '(' or ')' or '{' or '}' or '[' or ']'))
+            return false;
+
+        var comment = command.IndexOf(" #", StringComparison.Ordinal);
+        if (comment >= 0)
+            command = command[..comment].TrimEnd();
+        var argv = command.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (argv.Length == 0)
+            return false;
+
+        var executable = Path.GetFileName(argv[0]).ToLowerInvariant();
+        if (executable is not ("dotnet" or "npm" or "pnpm" or "yarn" or "bun" or "cargo" or "go"
+            or "python" or "python3" or "pytest" or "make" or "gradle" or "mvn" or "ruby" or "bundle" or "rake"))
+            return false;
+
+        if (!TryValidate(argv, projectDirectory, out _))
+            return false;
+
+        // make with -C/-f is path-sensitive and too easy to widen accidentally; skip it.
+        if (executable == "make" && argv.Length > 1 && argv[1].StartsWith('-', StringComparison.Ordinal))
+            return false;
+
+        prefix = CreateApprovalPrefix(argv);
+        return !string.IsNullOrWhiteSpace(prefix);
+    }
+
+    private static bool WriteManifestFingerprint(string projectDirectory, string fingerprint)
+    {
+        var path = ManifestApprovalPath(projectDirectory);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                File.WriteAllText(temp, JsonSerializer.Serialize(fingerprint, JsonOptions));
+                File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(temp); } catch { }
+                throw;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static string ManifestApprovalPath(string projectDirectory)
+        => Path.Combine(Path.GetDirectoryName(ApprovalPath(projectDirectory))!, "manifest-" + Path.GetFileName(ApprovalPath(projectDirectory)));
+
     private static IReadOnlyList<string> EnumerateWorkflowFiles(string root)
     {
         var directory = Path.Combine(root, ".github", "workflows");
