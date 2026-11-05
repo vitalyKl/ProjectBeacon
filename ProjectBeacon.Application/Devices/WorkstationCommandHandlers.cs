@@ -393,7 +393,7 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             .FirstOrDefaultAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
         if (row is null)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
-        if (row.Kind is not (WorkstationCommandKind.UpdateClient or WorkstationCommandKind.RunPipelineSession))
+        if (row.Kind is not (WorkstationCommandKind.UpdateClient or WorkstationCommandKind.RunPipelineSession or WorkstationCommandKind.ChatPrompt))
             return Result.Failure<WorkstationCommandDto>("Progress reporting is not supported for this command.", ErrorKind.Conflict);
         if (row.Status != WorkstationCommandStatus.Running || row.Attempts + 1 != request.Generation)
             return Result.Failure<WorkstationCommandDto>("Command is no longer running in this generation.", ErrorKind.Conflict);
@@ -476,6 +476,17 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             var currentPipelineCommand = await db.WorkstationCommands.AsNoTracking()
                 .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
             return Result.Ok(EnqueueCommandHandler.MapCommand(currentPipelineCommand));
+        }
+
+        if (row.Kind == WorkstationCommandKind.ChatPrompt)
+        {
+            // Native chat uses this lightweight heartbeat only while an ask_user form is open.
+            // The chat turn itself retains its normal bounded timeout once the form is answered.
+            row.RenewLease(waitingForUser ? TimeSpan.FromDays(7) : CommandLease.For(row.Kind));
+            await db.SaveChangesAsync(ct);
+            var currentChatCommand = await db.WorkstationCommands.AsNoTracking()
+                .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
+            return Result.Ok(EnqueueCommandHandler.MapCommand(currentChatCommand));
         }
 
         var updated = await db.WorkstationCommands
