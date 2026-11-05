@@ -125,6 +125,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
                 || relativeTarget.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal)
                 || !Directory.Exists(targetDirectory))
             {
+                try { File.Delete(indexPath); } catch { }
                 await RemoveWorktreeAsync(repositoryRoot, worktreeRoot);
                 return (null, "The isolated project directory is missing or escapes the worktree.");
             }
