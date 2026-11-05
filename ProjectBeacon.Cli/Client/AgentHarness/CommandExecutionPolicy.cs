@@ -662,8 +662,7 @@ internal static class CommandExecutionPolicy
         if (executable == "dotnet")
             return args.Count >= 3 && args[0].Equals("tool", StringComparison.OrdinalIgnoreCase)
                 && (args[1] is "install" or "update")
-                && args.Any(arg => arg.Equals("-g", StringComparison.OrdinalIgnoreCase)
-                    || arg.Equals("--global", StringComparison.OrdinalIgnoreCase));
+                && !args.Any(arg => arg.Equals("--local", StringComparison.OrdinalIgnoreCase));
         if (executable == "cargo")
             return args[0].Equals("install", StringComparison.OrdinalIgnoreCase);
         if (executable is "pip" or "pip3")
@@ -697,5 +696,4 @@ internal static class CommandExecutionPolicy
             key + ".json");
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 }
