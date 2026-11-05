@@ -585,8 +585,9 @@ internal static class CommandExecutionPolicy
         if (value.StartsWith('@') && value.Length > 1)
             candidates.Add(value[1..].Trim().Trim('"'));
 
-        foreach (var candidate in candidates.Distinct(StringComparer.Ordinal))
+        foreach (var rawCandidate in candidates.Distinct(StringComparer.Ordinal))
         {
+            var candidate = rawCandidate;
             if (candidate.Length == 0)
                 continue;
 
