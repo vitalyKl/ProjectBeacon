@@ -439,6 +439,14 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         {
             _state.Log($"chat usage report failed: {ex.Message}");
         }
+        // A chat turn owns its services only until the turn completes. AbortAsync also
+        // stops services, but normal successful turns need the same cleanup path.
+        if (runtime is ProjectBeacon.Cli.Client.AgentHarness.NativeAgentRuntime nativeRuntime)
+        {
+            try { await nativeRuntime.StopServicesAsync(externalId, CancellationToken.None); }
+            catch (Exception ex) { _state.Log($"chat service cleanup failed: {ex.Message}"); }
+        }
+
         if (sessionWorktree is not null)
         {
             if (!idle || lastTurn?.Error is not null)
