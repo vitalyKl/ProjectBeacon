@@ -568,9 +568,14 @@ internal static class CommandExecutionPolicy
     {
         error = null;
         var parts = prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0 || !TryValidate(parts, projectDirectory, out var validationError))
+        if (parts.Length == 0)
         {
-            error = parts.Length == 0 ? "An empty command prefix cannot be approved." : validationError;
+            error = "An empty command prefix cannot be approved.";
+            return false;
+        }
+        if (!TryValidate(parts, projectDirectory, out var validationError))
+        {
+            error = validationError;
             return false;
         }
 
