@@ -579,6 +579,9 @@ internal static class CommandExecutionPolicy
         var equals = value.LastIndexOf('=');
         if (equals >= 0 && equals < value.Length - 1)
             candidates.Add(value[(equals + 1)..].Trim().Trim('"'));
+        var colon = value.StartsWith('-') ? value.IndexOf(':') : -1;
+        if (colon >= 0 && colon < value.Length - 1)
+            candidates.Add(value[(colon + 1)..].Trim().Trim('"'));
         if (value.StartsWith('@') && value.Length > 1)
             candidates.Add(value[1..].Trim().Trim('"'));
 
