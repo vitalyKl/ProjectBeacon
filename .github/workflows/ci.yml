@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Keep only the latest verification for a given PR/ref. Rapid fix commits should not
+# consume all runners with obsolete builds while the current head waits in the queue.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
