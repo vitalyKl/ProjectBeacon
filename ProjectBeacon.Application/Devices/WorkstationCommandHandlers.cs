@@ -389,7 +389,7 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
         }
 
         await using var db = _dbFactory.CreateDbContext();
-        var row = await db.WorkstationCommands.AsNoTracking()
+        var row = await db.WorkstationCommands
             .FirstOrDefaultAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
         if (row is null)
             return Result.Failure<WorkstationCommandDto>("Command not found.");
@@ -465,6 +465,13 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
                     && c.Attempts + 1 == request.Generation, ct);
             if (!stillRunning)
                 return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
+
+            // A pending human form is an intentional pause. Keep the claim alive while the
+            // workstation is online and reporting it; allow up to seven days offline before
+            // stale-command recovery treats an abandoned wait as lost.
+            row.RenewLease(waitingForUser
+                ? TimeSpan.FromDays(7)
+                : CommandLease.For(row.Kind));
             await db.SaveChangesAsync(ct);
             var currentPipelineCommand = await db.WorkstationCommands.AsNoTracking()
                 .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
