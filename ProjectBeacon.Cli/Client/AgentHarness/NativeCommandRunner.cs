@@ -231,24 +231,52 @@ internal static class NativeCommandRunner
         string sessionId,
         IReadOnlyList<string> argv)
     {
+        if (argv.Count == 0)
+            throw new ArgumentException("argv cannot be empty.", nameof(argv));
+
         var sessionHome = SessionHomePath(sessionId);
         var tempDirectory = Path.Combine(sessionHome, "tmp");
         var isolatedHome = Path.Combine(sessionHome, "home");
         Directory.CreateDirectory(tempDirectory);
         Directory.CreateDirectory(isolatedHome);
 
+        var fullWorkingDirectory = Path.GetFullPath(workingDirectory);
+        var safePath = BuildSafePath(Environment.GetEnvironmentVariable("PATH"), fullWorkingDirectory);
+        var executablePath = ResolveExecutable(argv[0], safePath, fullWorkingDirectory);
+        var isBatchShim = OperatingSystem.IsWindows()
+            && (Path.GetExtension(executablePath).Equals(".cmd", StringComparison.OrdinalIgnoreCase)
+                || Path.GetExtension(executablePath).Equals(".bat", StringComparison.OrdinalIgnoreCase));
+
         var startInfo = new ProcessStartInfo
         {
-            FileName = argv[0],
-            WorkingDirectory = Path.GetFullPath(workingDirectory),
+            WorkingDirectory = fullWorkingDirectory,
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
-        foreach (var argument in argv.Skip(1))
-            startInfo.ArgumentList.Add(argument);
+
+        if (isBatchShim)
+        {
+            // npm/pnpm/yarn commonly install as .cmd files on Windows. CreateProcess cannot
+            // launch those directly. Use cmd.exe only as a fixed batch-shim adapter, quote every
+            // argv token, disable delayed expansion, and reject the characters that cmd expands.
+            var cmdPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            if (!File.Exists(cmdPath))
+                throw new FileNotFoundException("Windows command interpreter was not found.", cmdPath);
+
+            var command = QuoteBatchToken(executablePath)
+                + string.Concat(argv.Skip(1).Select(argument => " " + QuoteBatchToken(argument)));
+            startInfo.FileName = cmdPath;
+            startInfo.Arguments = "/d /v:off /s /c \"" + command + "\"";
+        }
+        else
+        {
+            startInfo.FileName = executablePath;
+            foreach (var argument in argv.Skip(1))
+                startInfo.ArgumentList.Add(argument);
+        }
 
         var inherited = InheritedEnvironmentNames
             .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
@@ -256,7 +284,13 @@ internal static class NativeCommandRunner
             .ToArray();
         startInfo.Environment.Clear();
         foreach (var pair in inherited)
-            startInfo.Environment[pair.Name] = pair.Value!;
+        {
+            if (string.Equals(pair.Name, "PATH", StringComparison.OrdinalIgnoreCase))
+                startInfo.Environment[pair.Name] = safePath;
+            else
+                startInfo.Environment[pair.Name] = pair.Value!;
+        }
+        startInfo.Environment["PATH"] = safePath;
 
         // Do not forward application credentials or arbitrary daemon environment variables.
         startInfo.Environment["HOME"] = isolatedHome;
@@ -280,6 +314,105 @@ internal static class NativeCommandRunner
         startInfo.Environment["GH_PAGER"] = "cat";
         startInfo.Environment["PAGER"] = "cat";
         return startInfo;
+    }
+
+    private static string BuildSafePath(string? path, string workingDirectory)
+    {
+        var workspaceRoot = FindWorkspaceRoot(workingDirectory);
+        var safeEntries = new List<string>();
+        foreach (var entry in (path ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = entry.Trim().Trim('"');
+            if (candidate.Length == 0)
+                continue;
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(candidate, workingDirectory);
+                var resolved = new DirectoryInfo(fullPath).ResolveLinkTarget(returnFinalTarget: true);
+                if (resolved is not null)
+                    fullPath = Path.GetFullPath(resolved.FullName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                continue;
+            }
+
+            if (IsInsideDirectory(fullPath, workspaceRoot) || !Directory.Exists(fullPath))
+                continue;
+            if (!safeEntries.Contains(fullPath, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal))
+                safeEntries.Add(fullPath);
+        }
+
+        if (safeEntries.Count == 0)
+            throw new InvalidOperationException("No executable search path remains after excluding the isolated project worktree.");
+        return string.Join(Path.PathSeparator, safeEntries);
+    }
+
+    private static string ResolveExecutable(string executable, string safePath, string workingDirectory)
+    {
+        var extensions = OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(executable))
+            ? new[] { ".exe", ".com", ".cmd", ".bat" }
+            : [string.Empty];
+
+        foreach (var directory in safePath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var extension in extensions)
+        {
+            var candidate = Path.GetFullPath(Path.Combine(directory, executable + extension));
+            if (!File.Exists(candidate))
+                continue;
+
+            var resolved = candidate;
+            try
+            {
+                var target = new FileInfo(candidate).ResolveLinkTarget(returnFinalTarget: true);
+                if (target is not null)
+                    resolved = Path.GetFullPath(target.FullName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                continue;
+            }
+
+            if (IsInsideDirectory(resolved, FindWorkspaceRoot(workingDirectory)))
+                continue;
+            return candidate;
+        }
+
+        throw new FileNotFoundException($"Executable '{executable}' was not found on the workstation PATH outside the project worktree.");
+    }
+
+    private static string FindWorkspaceRoot(string workingDirectory)
+    {
+        var current = new DirectoryInfo(Path.GetFullPath(workingDirectory));
+        while (current is not null)
+        {
+            var marker = Path.Combine(current.FullName, ".git");
+            if (Directory.Exists(marker) || File.Exists(marker))
+                return current.FullName;
+            current = current.Parent;
+        }
+        return Path.GetFullPath(workingDirectory);
+    }
+
+    private static bool IsInsideDirectory(string candidate, string root)
+    {
+        var fullCandidate = Path.GetFullPath(candidate)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullRoot = Path.GetFullPath(root)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(fullCandidate, fullRoot, comparison)
+            || fullCandidate.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison)
+            || fullCandidate.StartsWith(fullRoot + Path.AltDirectorySeparatorChar, comparison);
+    }
+
+    private static string QuoteBatchToken(string value)
+    {
+        if (value.Contains('"') || value.Contains('%') || value.Contains('\r') || value.Contains('\n'))
+            throw new InvalidOperationException("Windows .cmd/.bat commands cannot safely accept arguments containing quotes, percent signs, or newlines.");
+        return "\"" + value + "\"";
     }
 
     internal static string RunLogPath(string sessionId, string runId)
