@@ -402,10 +402,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 mcpTools.Add(NativeServiceManager.StatusToolDefinition());
                 mcpTools.Add(NativeServiceManager.LogsToolDefinition());
                 mcpTools.Add(NativeServiceManager.StopToolDefinition());
+                mcpTools.Add(NativeCommandRunner.RunLogToolDefinition());
                 if (commandPolicy != CommandExecutionPolicy.Off)
                 {
                     mcpTools.Add(NativeCommandRunner.ToolDefinition());
-                    mcpTools.Add(NativeCommandRunner.RunLogToolDefinition());
                     mcpTools.Add(NativeServiceManager.StartToolDefinition());
                 }
             }
@@ -1738,14 +1738,15 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         "list_context_nodes", "get_context_node", "export_agents_md",
         "list_constraints", "list_decisions", "list_milestones", "get_milestone",
         "list_labels", "match_label", "list_reports", "get_report",
-        "task_pipeline_status", "context_compile", "model_status", "suggest_command_prefixes"
+        "task_pipeline_status", "context_compile", "model_status", "suggest_command_prefixes",
+        "run_log", "service_status", "service_logs"
     };
 
     internal static bool IsPlanToolAllowed(string name) => PlanAllowedTools.Contains(name);
 
     internal static bool IsPlanModeCommandExecutionBlocked(string agentMode, string? toolName)
         => string.Equals(agentMode, "plan", StringComparison.Ordinal)
-            && toolName is "run_command" or "run_log" or "service_start" or "service_status" or "service_logs" or "service_stop";
+            && toolName is "run_command" or "service_start" or "service_stop";
 
     internal static JsonArray FilterPlanTools(JsonArray tools)
     {
