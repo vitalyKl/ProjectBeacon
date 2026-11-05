@@ -146,7 +146,12 @@ internal static class NativeCommandRunner
                 timedOut = !ct.IsCancellationRequested;
                 try { process.Kill(entireProcessTree: true); } catch { }
                 try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
-                ct.ThrowIfCancellationRequested();
+                if (ct.IsCancellationRequested)
+                {
+                    try { await Task.WhenAll(stdoutTask, stderrTask); } catch { }
+                    await logWriter.FlushAsync(CancellationToken.None);
+                    ct.ThrowIfCancellationRequested();
+                }
             }
 
             var stdout = await stdoutTask;
