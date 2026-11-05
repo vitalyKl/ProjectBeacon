@@ -684,6 +684,10 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             sessionWorktree.Preserve();
             return (false, null, $"Pipeline agent failed ({ex.GetType().Name}). Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
         }
+        finally
+        {
+            try { await runtime.StopServicesAsync(externalSessionId, CancellationToken.None); } catch { }
+        }
     }
 
     private static string? ClipActivityText(string? value, int maxLength)
