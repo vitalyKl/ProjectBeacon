@@ -111,53 +111,7 @@ internal static class NativeCommandRunner
         Directory.CreateDirectory(logDirectory);
         var runId = Guid.NewGuid().ToString("N");
         var logPath = Path.Combine(logDirectory, runId + ".log");
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = argv[0],
-            WorkingDirectory = Path.GetFullPath(workingDirectory),
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var argument in argv.Skip(1))
-            startInfo.ArgumentList.Add(argument);
-
-        var inherited = InheritedEnvironmentNames
-            .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
-            .Where(pair => pair.Value is not null)
-            .ToArray();
-        startInfo.Environment.Clear();
-        foreach (var pair in inherited)
-            startInfo.Environment[pair.Name] = pair.Value!;
-
-        // The command process gets a disposable per-session home, not the user's profile or
-        // the daemon's environment. Beacon tokens, provider keys and arbitrary env vars are
-        // never forwarded to build/test processes.
-        var isolatedHome = Path.Combine(sessionHome, "home");
-        Directory.CreateDirectory(isolatedHome);
-        startInfo.Environment["HOME"] = isolatedHome;
-        startInfo.Environment["USERPROFILE"] = isolatedHome;
-        startInfo.Environment["APPDATA"] = Path.Combine(isolatedHome, "AppData", "Roaming");
-        startInfo.Environment["LOCALAPPDATA"] = Path.Combine(isolatedHome, "AppData", "Local");
-        startInfo.Environment["XDG_CONFIG_HOME"] = Path.Combine(isolatedHome, ".config");
-        startInfo.Environment["TMP"] = tempDirectory;
-        startInfo.Environment["TEMP"] = tempDirectory;
-        startInfo.Environment["TMPDIR"] = tempDirectory;
-        startInfo.Environment["DOTNET_CLI_HOME"] = Path.Combine(isolatedHome, ".dotnet");
-        startInfo.Environment["NUGET_PACKAGES"] = Path.Combine(isolatedHome, ".nuget", "packages");
-        startInfo.Environment["npm_config_cache"] = Path.Combine(isolatedHome, ".npm");
-        startInfo.Environment["CARGO_HOME"] = Path.Combine(isolatedHome, ".cargo");
-        startInfo.Environment["PIP_CACHE_DIR"] = Path.Combine(isolatedHome, ".cache", "pip");
-        startInfo.Environment["GOCACHE"] = Path.Combine(isolatedHome, ".cache", "go-build");
-        startInfo.Environment["GOMODCACHE"] = Path.Combine(isolatedHome, "go", "pkg", "mod");
-        startInfo.Environment["CI"] = "true";
-        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        startInfo.Environment["GIT_PAGER"] = "cat";
-        startInfo.Environment["GH_PAGER"] = "cat";
-        startInfo.Environment["PAGER"] = "cat";
+        var startInfo = CreateStartInfo(workingDirectory, sessionId, argv);
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         var startedAt = Stopwatch.GetTimestamp();
@@ -266,6 +220,65 @@ internal static class NativeCommandRunner
         };
         return new McpToolResult(false, result.ToJsonString());
     }
+
+    internal static ProcessStartInfo CreateStartInfo(
+        string workingDirectory,
+        string sessionId,
+        IReadOnlyList<string> argv)
+    {
+        var sessionHome = SessionHomePath(sessionId);
+        var tempDirectory = Path.Combine(sessionHome, "tmp");
+        var isolatedHome = Path.Combine(sessionHome, "home");
+        Directory.CreateDirectory(tempDirectory);
+        Directory.CreateDirectory(isolatedHome);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = argv[0],
+            WorkingDirectory = Path.GetFullPath(workingDirectory),
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in argv.Skip(1))
+            startInfo.ArgumentList.Add(argument);
+
+        var inherited = InheritedEnvironmentNames
+            .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
+            .Where(pair => pair.Value is not null)
+            .ToArray();
+        startInfo.Environment.Clear();
+        foreach (var pair in inherited)
+            startInfo.Environment[pair.Name] = pair.Value!;
+
+        // Do not forward application credentials or arbitrary daemon environment variables.
+        startInfo.Environment["HOME"] = isolatedHome;
+        startInfo.Environment["USERPROFILE"] = isolatedHome;
+        startInfo.Environment["APPDATA"] = Path.Combine(isolatedHome, "AppData", "Roaming");
+        startInfo.Environment["LOCALAPPDATA"] = Path.Combine(isolatedHome, "AppData", "Local");
+        startInfo.Environment["XDG_CONFIG_HOME"] = Path.Combine(isolatedHome, ".config");
+        startInfo.Environment["TMP"] = tempDirectory;
+        startInfo.Environment["TEMP"] = tempDirectory;
+        startInfo.Environment["TMPDIR"] = tempDirectory;
+        startInfo.Environment["DOTNET_CLI_HOME"] = Path.Combine(isolatedHome, ".dotnet");
+        startInfo.Environment["NUGET_PACKAGES"] = Path.Combine(isolatedHome, ".nuget", "packages");
+        startInfo.Environment["npm_config_cache"] = Path.Combine(isolatedHome, ".npm");
+        startInfo.Environment["CARGO_HOME"] = Path.Combine(isolatedHome, ".cargo");
+        startInfo.Environment["PIP_CACHE_DIR"] = Path.Combine(isolatedHome, ".cache", "pip");
+        startInfo.Environment["GOCACHE"] = Path.Combine(isolatedHome, ".cache", "go-build");
+        startInfo.Environment["GOMODCACHE"] = Path.Combine(isolatedHome, "go", "pkg", "mod");
+        startInfo.Environment["CI"] = "true";
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        startInfo.Environment["GIT_PAGER"] = "cat";
+        startInfo.Environment["GH_PAGER"] = "cat";
+        startInfo.Environment["PAGER"] = "cat";
+        return startInfo;
+    }
+
+    internal static string RunLogPath(string sessionId, string runId)
+        => Path.Combine(SessionHomePath(sessionId), "logs", runId + ".log");
 
     public static string SessionHomePath(string sessionId)
     {
