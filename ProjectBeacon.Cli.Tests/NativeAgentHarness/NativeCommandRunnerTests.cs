@@ -168,7 +168,8 @@ public sealed class NativeCommandRunnerTests
             var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["dotnet", "test", "--no-restore"]);
 
             Assert.False(start.UseShellExecute);
-            Assert.Equal("dotnet", start.FileName);
+            Assert.True(Path.IsPathFullyQualified(start.FileName));
+            Assert.Equal("dotnet", Path.GetFileNameWithoutExtension(start.FileName));
             Assert.Equal(["test", "--no-restore"], start.ArgumentList);
             Assert.False(start.Environment.ContainsKey("BEACON_TEST_SECRET"));
             Assert.Equal(Path.Combine(NativeCommandRunner.SessionHomePath(sessionId), "home"), start.Environment["HOME"]);
