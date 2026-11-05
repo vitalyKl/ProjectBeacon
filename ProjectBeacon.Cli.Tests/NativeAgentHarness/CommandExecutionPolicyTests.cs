@@ -139,6 +139,29 @@ public sealed class CommandExecutionPolicyTests
     }
 
     [Fact]
+    public void SavedProjectApprovalExpiresWhenBuildManifestOrCiWorkflowChanges()
+    {
+        var root = CreateProject();
+        try
+        {
+            var packageJson = Path.Combine(root, "package.json");
+            File.WriteAllText(packageJson, """{"scripts":{"test":"node test.js"}}""");
+            var approvedFingerprint = CommandExecutionPolicy.GetManifestFingerprint(root);
+
+            Assert.True(CommandExecutionPolicy.ApprovePrefix(root, "npm test", approvedFingerprint, out var error), error);
+            Assert.Contains("npm test", CommandExecutionPolicy.GetManuallyApprovedPrefixes(root));
+
+            File.WriteAllText(packageJson, """{"scripts":{"test":"node test.js","build":"webpack"}}""");
+
+            Assert.Empty(CommandExecutionPolicy.GetManuallyApprovedPrefixes(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void MatchesApprovedPrefix_UsesArgvTokenBoundaries()
     {
         Assert.True(CommandExecutionPolicy.MatchesApprovedPrefix(["npm", "test", "--runInBand"], ["npm test"]));
