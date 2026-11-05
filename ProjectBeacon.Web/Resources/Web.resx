@@ -2564,4 +2564,20 @@ No Beacon-hosted coding agent.</value>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>No recent signal</value>
   </data>
+
+  <data name="CommandPolicy" xml:space="preserve">
+    <value>Agent command policy</value>
+  </data>
+  <data name="CommandPolicyOff" xml:space="preserve">
+    <value>Off — disable command execution</value>
+  </data>
+  <data name="CommandPolicyAsk" xml:space="preserve">
+    <value>Ask — approve unfamiliar commands</value>
+  </data>
+  <data name="CommandPolicyAuto" xml:space="preserve">
+    <value>Auto — run commands in an isolated worktree</value>
+  </data>
+  <data name="CommandPolicyHelp" xml:space="preserve">
+    <value>Applies to native agents on this workstation. Common build and test commands are detected from project manifests; other prefixes are stored locally only after approval. Auto mode is not a security sandbox.</value>
+  </data>
 </root>
