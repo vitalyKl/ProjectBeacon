@@ -132,15 +132,14 @@ workstation-local `commandPolicy` is `ask` by default:
 - `auto` skips the approval prompt but still applies the command validator and uses
   the isolated session worktree.
 
-Project manifests and GitHub Actions workflows are **discovery sources, not general consent**.
-On first observation, the workstation records the exact manifest/workflow fingerprint
-locally. Only the small deterministic set of common build/test prefixes inferred directly
-from supported manifests (for example `dotnet build`, `dotnet test`, or `npm test`) can
-use that initial trust, which keeps ordinary stacks zero-click. CI-derived and agent-proposed
-prefixes are never automatically allowed: they must be reviewed in the command-suggestion
-form. Individual `always` approvals are also stored locally against the exact snapshot.
-Changing a relevant manifest or workflow invalidates the snapshot trust and remembered
-prefix approvals, so commands from the changed snapshot require fresh review.
+Project manifests and GitHub Actions workflows are **discovery sources, not consent**.
+A new project has no trusted manifest fingerprint. Even familiar commands such as
+`dotnet test` or `npm test` require the first user decision. The full suggestion list
+can be reviewed and selected in one form; only after every displayed suggestion is
+selected is that exact manifest/workflow snapshot remembered as trusted. Individual
+`always` approvals are also stored locally against the exact snapshot. Changing a
+relevant manifest or workflow invalidates both snapshot trust and remembered prefix
+approvals, so commands from the changed snapshot require fresh review.
 
 The command runner uses `UseShellExecute=false` and passes an argument vector directly;
 it does not interpret shell pipelines or command separators. The workstation environment
