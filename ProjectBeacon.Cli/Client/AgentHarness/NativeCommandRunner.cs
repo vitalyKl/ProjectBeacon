@@ -387,28 +387,28 @@ internal static class NativeCommandRunner
             : new[] { string.Empty };
 
         foreach (var directory in safePath.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        foreach (var extension in extensions)
-        {
-            var candidate = Path.GetFullPath(Path.Combine(directory, executable + extension));
-            if (!File.Exists(candidate))
-                continue;
-
-            var resolved = candidate;
-            try
+            foreach (var extension in extensions)
             {
-                var target = new FileInfo(candidate).ResolveLinkTarget(returnFinalTarget: true);
-                if (target is not null)
-                    resolved = Path.GetFullPath(target.FullName);
+                var candidate = Path.GetFullPath(Path.Combine(directory, executable + extension));
+                if (!File.Exists(candidate))
+                    continue;
+    
+                var resolved = candidate;
+                try
+                {
+                    var target = new FileInfo(candidate).ResolveLinkTarget(returnFinalTarget: true);
+                    if (target is not null)
+                        resolved = Path.GetFullPath(target.FullName);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+                {
+                    continue;
+                }
+    
+                if (IsInsideDirectory(resolved, FindWorkspaceRoot(workingDirectory)))
+                    continue;
+                return candidate;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-            {
-                continue;
-            }
-
-            if (IsInsideDirectory(resolved, FindWorkspaceRoot(workingDirectory)))
-                continue;
-            return candidate;
-        }
 
         throw new FileNotFoundException($"Executable '{executable}' was not found on the workstation PATH outside the project worktree.");
     }
