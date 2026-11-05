@@ -162,6 +162,17 @@ public sealed class CommandExecutionPolicyTests
     }
 
     [Fact]
+    public void DotnetEfApprovalsIncludeTheMigrationArea()
+    {
+        Assert.Equal(
+            "dotnet ef migrations",
+            CommandExecutionPolicy.CreateApprovalPrefix(["dotnet", "ef", "migrations", "has-pending-model-changes"]));
+        Assert.Equal(
+            "dotnet tool restore",
+            CommandExecutionPolicy.CreateApprovalPrefix(["dotnet", "tool", "restore"]));
+    }
+
+    [Fact]
     public void MatchesApprovedPrefix_UsesArgvTokenBoundaries()
     {
         Assert.True(CommandExecutionPolicy.MatchesApprovedPrefix(["npm", "test", "--runInBand"], ["npm test"]));
