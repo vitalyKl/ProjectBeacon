@@ -62,8 +62,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         var worktreeParent = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "agent-worktrees");
         var worktreeRoot = Path.Combine(worktreeParent, $"{sessionId:N}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(worktreeParent);
-        Directory.CreateDirectory(worktreeRoot);
-        var indexPath = Path.Combine(worktreeRoot, "snapshot.index");
+        var indexPath = worktreeRoot + ".snapshot.index";
 
         try
         {
@@ -208,7 +207,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_preserve || !_applied)
+        if (_preserve)
             return;
         await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot);
     }
