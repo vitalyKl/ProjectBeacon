@@ -198,6 +198,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         if (string.IsNullOrEmpty(patch.StdOut))
         {
             _snapshotCommit = nextSnapshot;
+            _preserve = false;
             return (true, null);
         }
 
@@ -211,6 +212,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
                 return (false, $"The agent changes conflict with the current project files. The worktree was preserved at {_worktreeRoot}; patch: {patchPath}.");
 
             _snapshotCommit = nextSnapshot;
+            _preserve = false;
             return (true, null);
         }
         finally
