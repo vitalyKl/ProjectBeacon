@@ -428,8 +428,15 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
                         "Pipeline session is closed and no successful Actor result was reported.",
                         ErrorKind.Conflict);
 
-                row.RenewLease(CommandLease.For(row.Kind));
-                await db.SaveChangesAsync(ct);
+                var completedLease = DateTime.UtcNow + CommandLease.For(row.Kind);
+                var renewedCompletedActor = await db.WorkstationCommands
+                    .Where(commandRow => commandRow.Id == request.CommandId
+                        && commandRow.DeviceId == request.DeviceId
+                        && commandRow.Status == WorkstationCommandStatus.Running
+                        && commandRow.Attempts + 1 == request.Generation)
+                    .ExecuteUpdateAsync(update => update.SetProperty(commandRow => commandRow.LeaseExpiresAt, completedLease), ct);
+                if (renewedCompletedActor != 1)
+                    return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
                 var completedActorCommand = await db.WorkstationCommands.AsNoTracking()
                     .FirstAsync(commandRow => commandRow.Id == request.CommandId
                         && commandRow.DeviceId == request.DeviceId, ct);
@@ -487,20 +494,22 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
 
             session.UpdateActivity(activity.ToJsonString(), waitingForUser);
 
-            var stillRunning = await db.WorkstationCommands
-                .AnyAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId
-                    && c.Kind == WorkstationCommandKind.RunPipelineSession
-                    && c.Status == WorkstationCommandStatus.Running
-                    && c.Attempts + 1 == request.Generation, ct);
-            if (!stillRunning)
-                return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
-
             // A pending human form is an intentional pause. Keep the claim alive while the
             // workstation is online and reporting it; allow up to seven days offline before
-            // stale-command recovery treats an abandoned wait as lost.
-            row.RenewLease(waitingForUser
-                ? TimeSpan.FromDays(7)
-                : CommandLease.For(row.Kind));
+            // stale-command recovery treats an abandoned wait as lost. The guarded UPDATE also
+            // prevents a late heartbeat from resurrecting a lease after cancellation/completion.
+            var lease = waitingForUser ? TimeSpan.FromDays(7) : CommandLease.For(row.Kind);
+            var leaseExpiresAt = DateTime.UtcNow + lease;
+            var renewed = await db.WorkstationCommands
+                .Where(commandRow => commandRow.Id == request.CommandId
+                    && commandRow.DeviceId == request.DeviceId
+                    && commandRow.Kind == WorkstationCommandKind.RunPipelineSession
+                    && commandRow.Status == WorkstationCommandStatus.Running
+                    && commandRow.Attempts + 1 == request.Generation)
+                .ExecuteUpdateAsync(update => update.SetProperty(commandRow => commandRow.LeaseExpiresAt, leaseExpiresAt), ct);
+            if (renewed != 1)
+                return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
+
             await db.SaveChangesAsync(ct);
             var currentPipelineCommand = await db.WorkstationCommands.AsNoTracking()
                 .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
@@ -511,8 +520,16 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
         {
             // Native chat uses this lightweight heartbeat only while an ask_user form is open.
             // The chat turn itself retains its normal bounded timeout once the form is answered.
-            row.RenewLease(waitingForUser ? TimeSpan.FromDays(7) : CommandLease.For(row.Kind));
-            await db.SaveChangesAsync(ct);
+            var chatLeaseExpiresAt = DateTime.UtcNow
+                + (waitingForUser ? TimeSpan.FromDays(7) : CommandLease.For(row.Kind));
+            var renewedChatCommand = await db.WorkstationCommands
+                .Where(commandRow => commandRow.Id == request.CommandId
+                    && commandRow.DeviceId == request.DeviceId
+                    && commandRow.Status == WorkstationCommandStatus.Running
+                    && commandRow.Attempts + 1 == request.Generation)
+                .ExecuteUpdateAsync(update => update.SetProperty(commandRow => commandRow.LeaseExpiresAt, chatLeaseExpiresAt), ct);
+            if (renewedChatCommand != 1)
+                return Result.Failure<WorkstationCommandDto>("Command state changed while reporting progress.", ErrorKind.Conflict);
             var currentChatCommand = await db.WorkstationCommands.AsNoTracking()
                 .FirstAsync(c => c.Id == request.CommandId && c.DeviceId == request.DeviceId, ct);
             return Result.Ok(EnqueueCommandHandler.MapCommand(currentChatCommand));
