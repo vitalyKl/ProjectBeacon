@@ -92,6 +92,33 @@ public sealed class NativeCommandRunnerTests
     }
 
     [Fact]
+    public void ProcessStartInfoUsesCleanSessionEnvironmentAndPreservesArgv()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-command-test-" + Guid.NewGuid().ToString("N"));
+        var sessionId = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(root);
+        var oldSecret = Environment.GetEnvironmentVariable("BEACON_TEST_SECRET");
+        try
+        {
+            Environment.SetEnvironmentVariable("BEACON_TEST_SECRET", "must-not-leak");
+            var start = NativeCommandRunner.CreateStartInfo(root, sessionId, ["dotnet", "test", "--no-restore"]);
+
+            Assert.False(start.UseShellExecute);
+            Assert.Equal("dotnet", start.FileName);
+            Assert.Equal(["test", "--no-restore"], start.ArgumentList);
+            Assert.False(start.Environment.ContainsKey("BEACON_TEST_SECRET"));
+            Assert.Equal(Path.Combine(NativeCommandRunner.SessionHomePath(sessionId), "home"), start.Environment["HOME"]);
+            Assert.Equal(Path.Combine(NativeCommandRunner.SessionHomePath(sessionId), "tmp"), start.Environment["TMP"]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BEACON_TEST_SECRET", oldSecret);
+            NativeCommandRunner.CleanupSession(sessionId);
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RunLogRejectsPathsAndUnknownRunIds()
     {
         var session = Guid.NewGuid().ToString("N");
