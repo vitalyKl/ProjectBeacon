@@ -142,7 +142,7 @@ internal static class CommandExecutionPolicy
                 for (var i = 0; i < lines.Length; i++)
                 {
                     var match = Regex.Match(
-                        lines[i], @"^(?<indent>\s*)run\s*:\s*(?<value>.*)$",
+                        lines[i], @"^(?<indent>\s*)(?:-\s*)?run\s*:\s*(?<value>.*)$",
                         RegexOptions.IgnoreCase);
                     if (!match.Success)
                         continue;
@@ -299,9 +299,23 @@ internal static class CommandExecutionPolicy
         return Path.Combine(Path.GetDirectoryName(approvalPath)!, "manifest-" + Path.GetFileName(approvalPath));
     }
 
+    private static string? FindRepositoryRoot(string directory)
+    {
+        var current = new DirectoryInfo(Path.GetFullPath(directory));
+        while (current is not null)
+        {
+            var gitMetadata = Path.Combine(current.FullName, ".git");
+            if (Directory.Exists(gitMetadata) || File.Exists(gitMetadata))
+                return current.FullName;
+            current = current.Parent;
+        }
+        return null;
+    }
+
     private static IReadOnlyList<string> EnumerateWorkflowFiles(string root)
     {
-        var directory = Path.Combine(root, ".github", "workflows");
+        var repositoryRoot = FindRepositoryRoot(root) ?? root;
+        var directory = Path.Combine(repositoryRoot, ".github", "workflows");
         if (!Directory.Exists(directory))
             return [];
 
