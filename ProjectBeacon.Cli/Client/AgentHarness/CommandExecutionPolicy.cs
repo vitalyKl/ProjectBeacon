@@ -48,6 +48,16 @@ internal static class CommandExecutionPolicy
     public static IReadOnlyList<string> GetManuallyApprovedPrefixes(string projectDirectory)
         => ReadProjectApprovals(projectDirectory).ToArray();
 
+    public static bool ManifestSourcesMatch(string projectRoot, string workingDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(workingDirectory))
+            return false;
+        return string.Equals(
+            GetManifestFingerprint(projectRoot),
+            GetManifestFingerprint(workingDirectory),
+            StringComparison.Ordinal);
+    }
+
     public static string GetManifestFingerprint(string projectDirectory)
     {
         if (string.IsNullOrWhiteSpace(projectDirectory) || !Directory.Exists(projectDirectory))
