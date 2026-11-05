@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Client;
 
 using System.Diagnostics;
 using System.Text;
+using ProjectBeacon.Cli.Client.AgentHarness;
 
 /// <summary>
 /// A disposable worktree for one agent execution. A temporary snapshot commit captures the
@@ -313,21 +314,14 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     {
         var hooksDirectory = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "empty-git-hooks");
         Directory.CreateDirectory(hooksDirectory);
-        var info = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        info.ArgumentList.Add("-c");
-        info.ArgumentList.Add("core.hooksPath=" + hooksDirectory);
-        info.ArgumentList.Add("-c");
-        info.ArgumentList.Add("commit.gpgsign=false");
-        foreach (var argument in arguments)
-            info.ArgumentList.Add(argument);
+        var argv = new string[arguments.Length + 1];
+        argv[0] = "git";
+        Array.Copy(arguments, 0, argv, 1, arguments.Length);
+        var info = NativeCommandRunner.CreateStartInfo(workingDirectory, "git-internal-worktree", argv);
+        info.ArgumentList.Insert(0, "commit.gpgsign=false");
+        info.ArgumentList.Insert(0, "-c");
+        info.ArgumentList.Insert(0, "core.hooksPath=" + hooksDirectory);
+        info.ArgumentList.Insert(0, "-c");
         if (!string.IsNullOrWhiteSpace(indexPath))
             info.Environment["GIT_INDEX_FILE"] = indexPath;
         return ProcessRunner.RunAsync(info, TimeSpan.FromSeconds(60), ct);
