@@ -27,7 +27,6 @@ public sealed class AgentSessionWorktreeTests
             await Git(root, "add", "staged.txt");
             await File.WriteAllTextAsync(Path.Combine(root, "untracked.txt"), "user untracked file\n");
 
-            var originalStatus = await Git(root, "status", "--porcelain", "--untracked-files=all");
             var originalIndexHash = HashFile(Path.Combine(root, ".git", "index"));
 
             var created = await AgentSessionWorktree.CreateAsync(root, Guid.NewGuid(), CancellationToken.None);
