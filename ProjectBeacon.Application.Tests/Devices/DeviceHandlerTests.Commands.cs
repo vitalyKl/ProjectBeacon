@@ -97,7 +97,7 @@ public sealed partial class DeviceHandlerTests
             user.Id,
             "fp-" + Guid.NewGuid().ToString("N"),
             "hash",
-            "bcd_" + Guid.NewGuid().ToString("N)));
+            "bcd_" + Guid.NewGuid().ToString("N"));
         var task = TaskItem.Create("completed actor progress", project.Id);
         var subtask = Subtask.Create("complete work", task.Id, project.Id);
         subtask.Start();
@@ -143,7 +143,7 @@ public sealed partial class DeviceHandlerTests
             user.Id,
             "fp-" + Guid.NewGuid().ToString("N"),
             "hash",
-            "bcd_" + Guid.NewGuid().ToString("N)));
+            "bcd_" + Guid.NewGuid().ToString("N"));
         var task = TaskItem.Create("failed actor progress", project.Id);
         var subtask = Subtask.Create("incomplete work", task.Id, project.Id);
         subtask.Start();
@@ -176,7 +176,7 @@ public sealed partial class DeviceHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.False(reported.Success);
-        Assert.Contains("terminal", reported.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("closed", reported.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.WorkstationCommands.AsNoTracking()
