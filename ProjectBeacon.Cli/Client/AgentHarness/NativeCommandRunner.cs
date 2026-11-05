@@ -111,7 +111,15 @@ internal static class NativeCommandRunner
         Directory.CreateDirectory(logDirectory);
         var runId = Guid.NewGuid().ToString("N");
         var logPath = Path.Combine(logDirectory, runId + ".log");
-        var startInfo = CreateStartInfo(workingDirectory, sessionId, argv);
+        ProcessStartInfo startInfo;
+        try
+        {
+            startInfo = CreateStartInfo(workingDirectory, sessionId, argv);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            return new McpToolResult(true, $"Command could not be resolved safely on the workstation PATH: {ex.Message}");
+        }
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         var startedAt = Stopwatch.GetTimestamp();
