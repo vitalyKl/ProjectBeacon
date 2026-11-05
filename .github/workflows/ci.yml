@@ -76,7 +76,9 @@ jobs:
       - name: Test — CLI
         if: always()
         timeout-minutes: 8
-        run: dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll --xunit-config-filename ProjectBeacon.Cli.Tests/testconfig.json --xunit-info --long-running 30 --xunit-diagnostics on --xunit-internal-diagnostics on --results-directory TestResults/ProjectBeacon.Cli.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx
+        run: |
+          mkdir -p TestResults/ProjectBeacon.Cli.Tests
+          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
@@ -196,7 +198,7 @@ jobs:
       - name: Test — CLI
         if: always()
         timeout-minutes: 8
-        run: dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll --xunit-config-filename ProjectBeacon.Cli.Tests/testconfig.json --xunit-info --long-running 30 --xunit-diagnostics on --xunit-internal-diagnostics on
+        run: dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu"
       - name: Test — Domain
         if: always()
         timeout-minutes: 8
