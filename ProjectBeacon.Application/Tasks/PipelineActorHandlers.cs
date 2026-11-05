@@ -279,7 +279,11 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
         if (subtask.Status == SubtaskStatus.Done)
             return Result.Failure<PipelineStateDto>("Subtask is already done; reopen it through a review verdict.");
         if (subtask.Status == SubtaskStatus.Failed)
+        {
+            await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
+                db, task.ProjectId, task.Id, subtask.Id, ct);
             return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+        }
 
         if (task.PipelineStage == TaskPipelineStage.ReopenedForRevision)
         {
@@ -299,14 +303,6 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
         var expectedStatus = subtask.Status;
         subtask.ForceFail(reason);
 
-        var actorSessions = await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Actor, ct);
-        var failedSessionIds = actorSessions
-            .Where(session => session.SubtaskId == subtask.Id)
-            .Select(session => session.Id)
-            .ToArray();
-        foreach (var session in actorSessions.Where(session => session.SubtaskId == subtask.Id))
-            session.Close();
-
         var failed = await db.Subtasks
             .Where(s => s.Id == subtask.Id && s.Status == expectedStatus)
             .ExecuteUpdateAsync(s => s
@@ -317,7 +313,8 @@ public class FailSubtaskHandler : ICommandHandler<FailSubtaskCommand, Result<Pip
             return Result.Failure<PipelineStateDto>("Subtask state changed while failing; retry.");
 
         await db.SaveChangesAsync(ct);
-        await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, failedSessionIds, ct);
+        await PipelineSupport.StopActorSessionsAndCancelCommandsAsync(
+            db, task.ProjectId, task.Id, subtask.Id, ct);
         return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
     }
 }
