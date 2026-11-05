@@ -240,26 +240,29 @@ internal static class NativeCommandRunner
         if (!File.Exists(path))
             return new McpToolResult(true, "run_log: no output log exists for this runId in the current session.");
 
-        var page = new List<string>(maxLines);
+        var pageWithLookahead = new List<string>(maxLines + 1);
         var lineNumber = 0;
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 16 * 1024, useAsync: true);
         using var reader = new StreamReader(stream, Encoding.UTF8);
         while (await reader.ReadLineAsync(ct) is { } line)
         {
-            if (lineNumber >= offset && page.Count < maxLines)
-                page.Add(line);
+            if (lineNumber >= offset && pageWithLookahead.Count <= maxLines)
+                pageWithLookahead.Add(line);
             lineNumber++;
-            if (page.Count == maxLines && lineNumber >= offset + maxLines)
+            if (pageWithLookahead.Count > maxLines)
                 break;
         }
 
+        var hasMore = pageWithLookahead.Count > maxLines;
+        if (hasMore)
+            pageWithLookahead.RemoveAt(pageWithLookahead.Count - 1);
         var result = new JsonObject
         {
             ["runId"] = runId,
             ["offset"] = offset,
-            ["lines"] = JsonSerializer.SerializeToNode(page),
-            ["nextOffset"] = page.Count == maxLines ? offset + page.Count : null,
-            ["endOfLog"] = offset + page.Count >= lineNumber && stream.Position >= stream.Length
+            ["lines"] = JsonSerializer.SerializeToNode(pageWithLookahead),
+            ["nextOffset"] = hasMore ? JsonValue.Create(offset + pageWithLookahead.Count) : null,
+            ["endOfLog"] = !hasMore
         };
         return new McpToolResult(false, result.ToJsonString());
     }
