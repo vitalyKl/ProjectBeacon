@@ -139,6 +139,47 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task StartActorSession_WaitingForUser_ReturnsExistingSessionWithoutRespawn()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var spawner = new FakeSpawner();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var sub = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "work")), TestContext.Current.CancellationToken);
+        Assert.True(sub.Success, sub.Error);
+
+        var first = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(first.Success, first.Error);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            await _db.Subtasks
+                .Where(s => s.Id == sub.Value.Id && s.Status == SubtaskStatus.InProgress)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, SubtaskStatus.WaitingForUser), TestContext.Current.CancellationToken);
+            await _db.PipelineSessions
+                .Where(s => s.Id == first.Value!.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, SessionStatus.WaitingForUser), TestContext.Current.CancellationToken);
+        }
+
+        var again = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value.Id)), TestContext.Current.CancellationToken);
+
+        Assert.True(again.Success, again.Error);
+        Assert.Equal(first.Value!.Id, again.Value!.Id);
+        Assert.Single(spawner.Calls, call => call.Role == PipelineRole.Actor);
+        using (TenantScope.EnterUnscoped())
+        {
+            Assert.Equal(SubtaskStatus.WaitingForUser,
+                await _db.Subtasks.Where(s => s.Id == sub.Value.Id).Select(s => s.Status).SingleAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(SessionStatus.WaitingForUser,
+                await _db.PipelineSessions.Where(s => s.Id == first.Value.Id).Select(s => s.Status).SingleAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
     public async Task StuckSubtask_FailAndReopen_RestartsThroughReviewVerdict()
     {
         var (projectId, task) = await SeedTaskAsync("T");
