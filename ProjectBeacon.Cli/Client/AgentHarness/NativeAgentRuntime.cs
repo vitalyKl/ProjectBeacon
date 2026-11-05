@@ -1409,7 +1409,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         IReadOnlyList<string> argv,
         CancellationToken ct)
     {
-        await session.TerminalPermissionGate.WaitAsync(ct);
+        await session.CommandPermissionGate.WaitAsync(ct);
         try
         {
             var formId = "command-permission:" + Guid.NewGuid().ToString("N");
@@ -1442,7 +1442,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
         finally
         {
-            session.TerminalPermissionGate.Release();
+            session.CommandPermissionGate.Release();
         }
     }
 
@@ -1975,9 +1975,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     {
         public object Sync { get; } = new();
         public SemaphoreSlim Persistence { get; } = new(1, 1);
-        public SemaphoreSlim TerminalPermissionGate { get; } = new(1, 1);
+        public SemaphoreSlim CommandPermissionGate { get; } = new(1, 1);
         public ConcurrentDictionary<string, PendingFormState> PendingForms { get; } = new(StringComparer.Ordinal);
-        public bool TerminalPermissionGranted { get; set; }
         public Channel<NativeDelta> Deltas { get; } = Channel.CreateUnbounded<NativeDelta>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         public string Id { get; set; } = "";
         public string Title { get; set; } = "";
