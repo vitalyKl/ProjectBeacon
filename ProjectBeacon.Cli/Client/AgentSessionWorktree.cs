@@ -33,6 +33,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
 
     public string WorkingDirectory { get; }
     public string ProjectRoot => _originalWorkingDirectory;
+    public string RecoveryPath => _worktreeRoot;
 
     public void Preserve() => _preserve = true;
 
