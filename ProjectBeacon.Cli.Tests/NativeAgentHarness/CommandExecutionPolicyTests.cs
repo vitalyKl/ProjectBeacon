@@ -94,6 +94,30 @@ public sealed class CommandExecutionPolicyTests
     }
 
     [Fact]
+    public void ManifestFingerprintTrustIsInvalidatedByManifestChanges()
+    {
+        var root = CreateProject();
+        try
+        {
+            var manifest = Path.Combine(root, "package.json");
+            File.WriteAllText(manifest, """{"scripts":{"test":"vitest run"}}""");
+
+            Assert.True(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+            Assert.True(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+
+            File.WriteAllText(manifest, """{"scripts":{"test":"vitest run","build":"vite build"}}""");
+
+            Assert.False(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+            Assert.True(CommandExecutionPolicy.TrustCurrentManifestFingerprint(root));
+            Assert.True(CommandExecutionPolicy.IsManifestFingerprintTrusted(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void MatchesApprovedPrefix_UsesArgvTokenBoundaries()
     {
         Assert.True(CommandExecutionPolicy.MatchesApprovedPrefix(["npm", "test", "--runInBand"], ["npm test"]));
