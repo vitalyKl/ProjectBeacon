@@ -329,6 +329,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
 
         foreach (var record in records)
         {
+            var removeRecord = false;
             try
             {
                 using var document = JsonDocument.Parse(File.ReadAllText(record));
@@ -341,32 +342,49 @@ internal sealed class NativeServiceManager : IAsyncDisposable
                 {
                     using var process = Process.GetProcessById(pid);
                     var actualTicks = process.StartTime.ToUniversalTime().Ticks;
-                    if (Math.Abs(actualTicks - startTicks) <= TimeSpan.FromSeconds(2).Ticks)
+                    if (Math.Abs(actualTicks - startTicks) > TimeSpan.FromSeconds(2).Ticks)
+                    {
+                        // PID has been reused; never kill an unrelated process.
+                        removeRecord = true;
+                    }
+                    else
                     {
                         try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
                         try { process.WaitForExit(3000); } catch (InvalidOperationException) { }
+                        removeRecord = process.HasExited;
                     }
                 }
                 catch (ArgumentException)
                 {
                     // Process is already gone.
+                    removeRecord = true;
                 }
                 catch (InvalidOperationException)
                 {
                     // Process information became unavailable during reaping.
+                    removeRecord = false;
                 }
                 catch (System.ComponentModel.Win32Exception)
                 {
-                    // The process could not be inspected with the current OS permissions.
+                    // Keep the registry entry so a later daemon run can retry with available rights.
+                    removeRecord = false;
                 }
-                finally
+            }
+            catch (JsonException)
+            {
+                // Do not guess a PID from a malformed registry record.
+                removeRecord = false;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                removeRecord = false;
+            }
+            finally
+            {
+                if (removeRecord)
                 {
                     try { File.Delete(record); } catch { }
                 }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-            {
-                // Invalid or inaccessible registry entries are left alone rather than guessing a PID.
             }
         }
     }
