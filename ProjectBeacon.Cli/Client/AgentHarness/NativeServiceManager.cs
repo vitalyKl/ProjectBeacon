@@ -205,7 +205,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         var requested = ReadString(arguments, "serviceId");
         if (requested is not null)
         {
-            if (!session?.TryGetValue(requested, out var one) == true || one is null)
+            if (session is null || !session.TryGetValue(requested, out var one))
                 return new McpToolResult(true, "service_status: serviceId was not found in this session.");
             one.RefreshExitState();
             return new McpToolResult(false, JsonSerializer.Serialize(one.ToSnapshot()));
