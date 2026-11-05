@@ -411,6 +411,31 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             if (session is null)
                 return Result.Failure<WorkstationCommandDto>("Pipeline session not found.", ErrorKind.Conflict);
 
+            if (session.Status == SessionStatus.Closed)
+            {
+                // subtask_report_result closes the Actor session before the model emits its
+                // final assistant message. Let that already-reported success finish normally,
+                // but reject progress for any other closed session so the daemon aborts it.
+                var actorReportedDone = session.Role == PipelineRole.Actor
+                    && session.SubtaskId is { } completedSubtaskId
+                    && await db.Subtasks.IgnoreQueryFilters().AnyAsync(
+                        subtask => subtask.Id == completedSubtaskId
+                            && subtask.TaskId == session.TaskId
+                            && subtask.Status == SubtaskStatus.Done,
+                        ct);
+                if (!actorReportedDone)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "Pipeline session is closed and no successful Actor result was reported.",
+                        ErrorKind.Conflict);
+
+                row.RenewLease(CommandLease.For(row.Kind));
+                await db.SaveChangesAsync(ct);
+                var completedActorCommand = await db.WorkstationCommands.AsNoTracking()
+                    .FirstAsync(commandRow => commandRow.Id == request.CommandId
+                        && commandRow.DeviceId == request.DeviceId, ct);
+                return Result.Ok(EnqueueCommandHandler.MapCommand(completedActorCommand));
+            }
+
             var activity = JsonNode.Parse(request.ProgressJson) as JsonObject ?? new JsonObject();
             var reportedForms = activity["forms"] as JsonArray ?? new JsonArray();
             if (activity["forms"] is null)
