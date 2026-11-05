@@ -51,6 +51,13 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             return (null, "Agent command execution requires a Git repository so the session can use an isolated worktree.");
 
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
+        var hasFilters = await RunGitAsync(repositoryRoot, ct, "config", "--get-regexp", "^filter\\.");
+        if (hasFilters.ExitCode == 0 && !string.IsNullOrWhiteSpace(hasFilters.StdOut))
+            return (null, "This repository has configured Git content filters. Isolated worktree creation is disabled because those filters can execute external programs.");
+
+        if (await HasExternalGitAttributesAsync(repositoryRoot, ct))
+            return (null, "This repository declares Git content filters or working-tree encodings. Isolated worktree creation is disabled to avoid executing repository-provided filters.");
+
         var prefixResult = await RunGitAsync(original, ct, "rev-parse", "--show-prefix");
         if (prefixResult.ExitCode != 0 || prefixResult.TimedOut)
             return (null, "Could not resolve the project directory relative to its Git repository.");
@@ -80,6 +87,12 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             var tree = await RunGitAsync(repositoryRoot, ct, ["write-tree"], indexPath);
             if (tree.ExitCode != 0 || tree.TimedOut || string.IsNullOrWhiteSpace(tree.StdOut))
                 return await FailCreateAsync(repositoryRoot, worktreeRoot, tree, "Could not create the isolated worktree snapshot.");
+
+            var snapshotEntries = await RunGitAsync(repositoryRoot, ct, "ls-tree", "-r", tree.StdOut.Trim());
+            if (snapshotEntries.ExitCode != 0 || snapshotEntries.TimedOut)
+                return await FailCreateAsync(repositoryRoot, worktreeRoot, snapshotEntries, "Could not inspect the isolated worktree snapshot.");
+            if (snapshotEntries.StdOut.Split('\\n').Any(line => line.StartsWith("120000 blob ", StringComparison.Ordinal)))
+                return await FailCreateAsync(repositoryRoot, worktreeRoot, snapshotEntries, "The project contains symbolic links. Isolated command execution refuses to follow paths that can escape the worktree.");
 
             var snapshot = await RunGitAsync(
                 repositoryRoot,
@@ -122,11 +135,13 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            try { File.Delete(indexPath); } catch { }
             await RemoveWorktreeAsync(repositoryRoot, worktreeRoot);
             throw;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
+            try { File.Delete(indexPath); } catch { }
             await RemoveWorktreeAsync(repositoryRoot, worktreeRoot);
             return (null, $"Could not create an isolated Git worktree ({ex.GetType().Name}).");
         }
@@ -219,6 +234,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         (int ExitCode, string StdOut, string StdErr, bool TimedOut) result,
         string message)
     {
+        try { File.Delete(worktreeRoot + ".snapshot.index"); } catch { }
         await RemoveWorktreeAsync(repositoryRoot, worktreeRoot);
         var detail = string.IsNullOrWhiteSpace(result.StdErr) ? result.StdOut : result.StdErr;
         return (null, string.IsNullOrWhiteSpace(detail) ? message : message + " " + Clip(detail));
@@ -228,6 +244,47 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     {
         var normalized = value.Trim();
         return normalized.Length <= 400 ? normalized : normalized[..400] + "…";
+    }
+
+    private static async Task<bool> HasExternalGitAttributesAsync(string root, CancellationToken ct)
+    {
+        var pending = new Queue<(string Path, int Depth)>();
+        pending.Enqueue((root, 0));
+        while (pending.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var (directory, depth) = pending.Dequeue();
+            IEnumerable<string> entries;
+            try { entries = Directory.EnumerateFileSystemEntries(directory).ToArray(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+
+            foreach (var entry in entries)
+            {
+                var name = Path.GetFileName(entry);
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(entry); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    continue;
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    if (depth < 5 && name is not (".git" or "node_modules" or "bin" or "obj" or "target" or "vendor"))
+                        pending.Enqueue((entry, depth + 1));
+                    continue;
+                }
+                if (name.Equals(".gitattributes", StringComparison.OrdinalIgnoreCase))
+                {
+                    string contents;
+                    try { contents = await File.ReadAllTextAsync(entry, ct); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
+                    if (System.Text.RegularExpressions.Regex.IsMatch(
+                        contents,
+                        @"(?im)(?:^|\\s)(?:filter|working-tree-encoding)\\s*="))
+                        return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static async Task RemoveWorktreeAsync(string repositoryRoot, string worktreeRoot)
@@ -254,6 +311,8 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
         string[] arguments,
         string? indexPath)
     {
+        var hooksDirectory = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "empty-git-hooks");
+        Directory.CreateDirectory(hooksDirectory);
         var info = new ProcessStartInfo
         {
             FileName = "git",
@@ -263,6 +322,10 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("core.hooksPath=" + hooksDirectory);
+        info.ArgumentList.Add("-c");
+        info.ArgumentList.Add("commit.gpgsign=false");
         foreach (var argument in arguments)
             info.ArgumentList.Add(argument);
         if (!string.IsNullOrWhiteSpace(indexPath))
