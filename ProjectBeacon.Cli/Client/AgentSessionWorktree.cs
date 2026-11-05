@@ -188,7 +188,10 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
 
         var nextSnapshot = newHead.StdOut.Trim();
         if (string.Equals(nextSnapshot, _snapshotCommit, StringComparison.Ordinal))
+        {
+            _preserve = false;
             return (true, null);
+        }
 
         // Diff from the last successfully applied baseline, not just the current index. This
         // lets a later chat turn retry a patch after a previous turn hit a conflict.
