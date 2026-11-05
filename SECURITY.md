@@ -127,10 +127,19 @@ The native workstation harness exposes a single argv-based command interface. It
 workstation-local `commandPolicy` is `ask` by default:
 
 - `off` disables command execution tools;
-- `ask` requires a user decision for commands not detected from the project's build
-  manifests or already approved locally for that project;
+- `ask` requires a user decision for commands that are not covered by a
+  previously reviewed local approval for the current manifest/workflow snapshot;
 - `auto` skips the approval prompt but still applies the command validator and uses
   the isolated session worktree.
+
+Project manifests and GitHub Actions workflows are **suggestion sources, not consent**.
+A new project starts with no trusted manifest fingerprint: even familiar commands such
+as `dotnet test` or `npm test` require the first user decision. The complete suggestion
+list can be reviewed and selected in one form; only after every displayed suggestion is
+selected is that exact manifest/workflow snapshot remembered as trusted. Individual
+`always` approvals are also stored locally against the exact snapshot. Changing a
+relevant manifest or workflow invalidates both the snapshot trust and remembered
+prefix approvals, so newly introduced commands require fresh review.
 
 The command runner uses `UseShellExecute=false` and passes an argument vector directly;
 it does not interpret shell pipelines or command separators. The workstation environment
@@ -161,11 +170,11 @@ mode therefore skips consent, not the underlying OS permissions. A container wit
 restricted mounts/network or a dedicated low-privilege OS account is required for a
 stronger boundary.
 
-Manifest- and CI-derived prefixes are suggestions for convenience. Changing a relevant
-manifest or workflow during an agent turn invalidates automatic manifest trust for that
-turn, so a newly introduced command requires a user decision. Project-specific manual
-approvals are stored locally outside the repository and are never uploaded to the control
-plane.
+Manifest- and CI-derived prefixes are suggestions for convenience only; they are never
+automatically approved on first observation. Changing a relevant manifest or workflow
+during an agent turn invalidates manifest trust for that turn, so a newly introduced
+command requires a user decision. Project-specific approvals and reviewed fingerprints
+are stored locally outside the repository and are never uploaded to the control plane.
 
 In a pipeline Actor turn, a pending command approval keeps the session and subtask in
 `WaitingForUser`; the normal idle and absolute turn timeouts are suspended while the
