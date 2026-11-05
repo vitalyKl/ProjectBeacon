@@ -144,5 +144,6 @@ public class WorkstationCommand : Entity
             throw new InvalidOperationException("Command already finished.");
         Status = WorkstationCommandStatus.Cancelled;
         CompletedAt = DateTime.UtcNow;
+        LeaseExpiresAt = null;
     }
 }
