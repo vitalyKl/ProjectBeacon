@@ -238,7 +238,8 @@ internal static class NativeCommandRunner
     internal static ProcessStartInfo CreateStartInfo(
         string workingDirectory,
         string sessionId,
-        IReadOnlyList<string> argv)
+        IReadOnlyList<string> argv,
+        string? pathOverride = null)
     {
         if (argv.Count == 0)
             throw new ArgumentException("argv cannot be empty.", nameof(argv));
@@ -250,7 +251,7 @@ internal static class NativeCommandRunner
         Directory.CreateDirectory(isolatedHome);
 
         var fullWorkingDirectory = Path.GetFullPath(workingDirectory);
-        var safePath = BuildSafePath(Environment.GetEnvironmentVariable("PATH"), fullWorkingDirectory);
+        var safePath = BuildSafePath(pathOverride ?? Environment.GetEnvironmentVariable("PATH"), fullWorkingDirectory);
         var executablePath = ResolveExecutable(argv[0], safePath, fullWorkingDirectory);
         var isBatchShim = OperatingSystem.IsWindows()
             && (Path.GetExtension(executablePath).Equals(".cmd", StringComparison.OrdinalIgnoreCase)
