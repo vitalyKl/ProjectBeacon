@@ -387,9 +387,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     mcpTools.Add(tool?.DeepClone());
             }
             var commandPolicy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
-            var manifestFingerprint = controls?.HarnessAuthorization is { } fingerprintAuthorization
+            var manifestFingerprint = controls?.HarnessAuthorization is { IsolatedWorkspace: true } fingerprintAuthorization
                 ? CommandExecutionPolicy.GetManifestFingerprint(fingerprintAuthorization.WorkingDirectory)
                 : null;
+            var manifestTrustedAtTurnStart = controls?.HarnessAuthorization is { IsolatedWorkspace: true } trustAuthorization
+                && CommandExecutionPolicy.IsManifestFingerprintTrusted(trustAuthorization.ProjectRoot ?? trustAuthorization.WorkingDirectory);
+            if (controls?.HarnessAuthorization is { IsolatedWorkspace: true } suggestionAuthorization)
+                mcpTools.Add(SuggestCommandPrefixesToolDefinition());
             if (controls?.HarnessAuthorization is { IsolatedWorkspace: true } commandAuth
                 && IsRunCommandAuthorized(commandAuth))
             {
@@ -623,6 +627,40 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     isError = true;
                                     toolResult = "Tool error: the model returned malformed JSON arguments. Return a valid JSON object and try again.";
                                 }
+                                else if (string.Equals(call.Name, "suggest_command_prefixes", StringComparison.Ordinal))
+                                {
+                                    if (controls?.HarnessAuthorization is not { IsolatedWorkspace: true } suggestionAuthorization)
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: command suggestions require an isolated project workspace.";
+                                    }
+                                    else if (!TryReadCommandPrefixSuggestions(parsedArguments!, out var agentSuggestions))
+                                    {
+                                        isError = true;
+                                        toolResult = "Tool error: additionalPrefixes must be an array of strings.";
+                                    }
+                                    else
+                                    {
+                                        var projectRoot = suggestionAuthorization.ProjectRoot ?? suggestionAuthorization.WorkingDirectory;
+                                        var suggestions = CommandExecutionPolicy.GetCommandSuggestions(
+                                            suggestionAuthorization.WorkingDirectory,
+                                            agentSuggestions);
+                                        if (suggestions.Count == 0)
+                                        {
+                                            toolResult = "No safe command prefixes were detected in the project manifests or CI workflows. Use run_command to request approval for a specific argv command.";
+                                        }
+                                        else
+                                        {
+                                            var result = await RequestCommandSuggestionsAsync(
+                                                session,
+                                                projectRoot,
+                                                suggestions,
+                                                ct);
+                                            isError = result.IsError;
+                                            toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
+                                        }
+                                    }
+                                }
                                 else if (string.Equals(call.Name, "run_command", StringComparison.Ordinal))
                                 {
                                     var policy = CommandExecutionPolicy.NormalizeMode(_loadSettings().CommandPolicy);
@@ -651,7 +689,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                             manifestFingerprint,
                                             CommandExecutionPolicy.GetManifestFingerprint(commandAuthorization.WorkingDirectory),
                                             StringComparison.Ordinal);
-                                        var manifestPrefixes = manifestUnchanged
+                                        var manifestPrefixes = manifestTrustedAtTurnStart && manifestUnchanged
                                             ? CommandExecutionPolicy.DetectManifestPrefixes(commandAuthorization.WorkingDirectory)
                                             : Array.Empty<string>();
                                         var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(argv, manuallyApproved)
@@ -1402,6 +1440,162 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     private static int EstimateTokens(IReadOnlyList<JsonObject> messages) =>
         Math.Max(1, Encoding.UTF8.GetByteCount(string.Join("\n", messages.Select(m => m.ToJsonString()))) / 4);
 
+    private static JsonObject SuggestCommandPrefixesToolDefinition() => new()
+    {
+        ["type"] = "function",
+        ["function"] = new JsonObject
+        {
+            ["name"] = "suggest_command_prefixes",
+            ["description"] = "Read project manifests and GitHub Actions workflows and propose safe argv command prefixes for human review. This tool never executes commands and is available in Plan mode and when commandPolicy is Off. You may also include additionalPrefixes for commands needed by a non-standard build; shell operators, paths outside the worktree, blocked executables and global installs are rejected.",
+            ["parameters"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["additionalPrefixes"] = new JsonObject
+                    {
+                        ["type"] = "array",
+                        ["maxItems"] = 20,
+                        ["items"] = new JsonObject { ["type"] = "string", ["maxLength"] = 240 },
+                        ["description"] = "Optional argv prefixes such as 'gradle test' or 'npm run integration'. Do not include shell syntax."
+                    }
+                },
+                ["required"] = new JsonArray(),
+                ["additionalProperties"] = false
+            }
+        }
+    };
+
+    private static bool TryReadCommandPrefixSuggestions(JsonObject arguments, out string[] suggestions)
+    {
+        suggestions = [];
+        if (arguments["additionalPrefixes"] is null)
+            return true;
+        if (arguments["additionalPrefixes"] is not JsonArray array
+            || array.Count > 20
+            || array.Any(item => item is not JsonValue value || value.GetValueKind() != JsonValueKind.String))
+            return false;
+        suggestions = array.Select(item => item!.GetValue<string>()).ToArray();
+        return true;
+    }
+
+    private async Task<McpToolResult> RequestCommandSuggestionsAsync(
+        SessionState session,
+        string projectRoot,
+        IReadOnlyList<(string Prefix, string Source)> suggestions,
+        CancellationToken ct)
+    {
+        await session.CommandPermissionGate.WaitAsync(ct);
+        try
+        {
+            var formId = "command-suggestions:" + Guid.NewGuid().ToString("N");
+            var safeSuggestions = suggestions.Take(50).ToArray();
+            var options = new JsonArray();
+            var defaults = new JsonArray();
+            foreach (var suggestion in safeSuggestions)
+            {
+                options.Add(new JsonObject
+                {
+                    ["value"] = suggestion.Prefix,
+                    ["label"] = suggestion.Prefix + " — " + suggestion.Source
+                });
+                defaults.Add(JsonValue.Create(suggestion.Prefix));
+            }
+
+            var fields = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["key"] = "prefixes",
+                    ["title"] = "Command prefixes to approve",
+                    ["description"] = "These are argv prefixes, not shell commands. They were read from project manifests, CI workflow run steps, or proposed by the agent. Uncheck anything you do not want this project to run. Selected entries are stored locally for this project only.",
+                    ["type"] = "multiselect",
+                    ["options"] = options,
+                    ["default"] = defaults
+                }
+            };
+            var form = new AgentRuntimeForm(
+                formId,
+                "Review project command suggestions",
+                "No command has been executed. Review the exact prefixes and submit your selection to approve them.",
+                fields.ToJsonString());
+            var pending = new PendingFormState(form,
+                new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously));
+            if (!session.PendingForms.TryAdd(formId, pending))
+                return new McpToolResult(true, "Could not register the command suggestion form.");
+
+            try
+            {
+                var answerJson = await pending.Completion.Task.WaitAsync(ct);
+                if (!TryReadApprovedCommandPrefixes(answerJson, out var selected))
+                    return new McpToolResult(true, "The command suggestion answer was malformed; no prefixes were approved.");
+
+                var allowed = safeSuggestions.Select(item => item.Prefix).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                selected = selected.Where(allowed.Contains).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var approved = 0;
+                foreach (var prefix in selected)
+                {
+                    if (CommandExecutionPolicy.ApprovePrefix(projectRoot, prefix, out var error))
+                        approved++;
+                    else
+                        _log?.Invoke("could not persist command prefix approval: " + (error ?? "unknown error"));
+                }
+
+                var selectedAll = safeSuggestions.Length > 0
+                    && selected.Length == safeSuggestions.Length
+                    && safeSuggestions.All(item => selected.Contains(item.Prefix, StringComparer.OrdinalIgnoreCase));
+                var fingerprintTrusted = selectedAll
+                    && CommandExecutionPolicy.TrustCurrentManifestFingerprint(projectRoot);
+
+                return new McpToolResult(false, JsonSerializer.Serialize(new
+                {
+                    approvedCount = approved,
+                    selectedPrefixes = selected,
+                    manifestFingerprintTrusted = fingerprintTrusted,
+                    note = selected.Length == 0
+                        ? "No command prefixes were approved."
+                        : fingerprintTrusted
+                            ? "All listed prefixes were approved. The current manifest and workflow fingerprint is now trusted for future turns."
+                            : "Selected prefixes were approved locally. Other manifest-derived prefixes will still require confirmation."
+                }));
+            }
+            finally
+            {
+                session.PendingForms.TryRemove(formId, out _);
+            }
+        }
+        finally
+        {
+            session.CommandPermissionGate.Release();
+        }
+    }
+
+    private static bool TryReadApprovedCommandPrefixes(string? answerJson, out string[] prefixes)
+    {
+        prefixes = [];
+        if (string.IsNullOrWhiteSpace(answerJson))
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(answerJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("prefixes", out var array)
+                || array.ValueKind != JsonValueKind.Array
+                || array.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String))
+                return false;
+            prefixes = array.EnumerateArray()
+                .Select(item => item.GetString() ?? string.Empty)
+                .Where(value => value.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private async Task<bool> RequestCommandPermissionAsync(
         SessionState session,
         string workingDirectory,
@@ -1543,7 +1737,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         "list_context_nodes", "get_context_node", "export_agents_md",
         "list_constraints", "list_decisions", "list_milestones", "get_milestone",
         "list_labels", "match_label", "list_reports", "get_report",
-        "task_pipeline_status", "context_compile", "model_status"
+        "task_pipeline_status", "context_compile", "model_status", "suggest_command_prefixes"
     };
 
     internal static bool IsPlanToolAllowed(string name) => PlanAllowedTools.Contains(name);
