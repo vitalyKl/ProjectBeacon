@@ -19,6 +19,9 @@ internal sealed class NativeServiceManager : IAsyncDisposable
     private const int DefaultReadyTimeoutSeconds = 30;
     private const int MaxReadyTimeoutSeconds = 120;
     private const int MaxLogPageSize = 250;
+    private static readonly string RegistryRoot = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ProjectBeacon", "managed-services");
     private static readonly Regex DefaultReadyRegex = new(
         @"Now listening|Application started|\bready\b|\bListening on\b|\bLocal:\s*https?://",
         RegexOptions.IgnoreCase | RegexOptions.Compiled,
@@ -27,6 +30,8 @@ internal sealed class NativeServiceManager : IAsyncDisposable
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ManagedService>> _sessions =
         new(StringComparer.Ordinal);
     private volatile bool _disposed;
+
+    public NativeServiceManager() => ReapStaleServices();
 
     public static JsonObject StartToolDefinition() => Tool("service_start",
         "Start a long-running project service with argv (no shell). Waits for a TCP port or startup output to indicate readiness. Returns serviceId and status.",
@@ -38,7 +43,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
             ["readyPattern"] = new JsonObject { ["type"] = "string", ["maxLength"] = 200, ["description"] = "Optional bounded regular expression matching startup output. Defaults to common .NET/Node/web-server ready messages." },
             ["readyTimeoutSeconds"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = MaxReadyTimeoutSeconds, ["description"] = "Readiness timeout, default 30 seconds." }
         },
-        ["argv", "readyTimeoutSeconds"]);
+        ["argv"]);
 
     public static JsonObject StatusToolDefinition() => Tool("service_status",
         "Return the current state and process id of services started by this agent session. Omit serviceId to list all.",
@@ -105,13 +110,17 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         Directory.CreateDirectory(logDirectory);
         var serviceId = Guid.NewGuid().ToString("N");
         var logPath = NativeCommandRunner.RunLogPath(sessionId, serviceId);
+        Directory.CreateDirectory(RegistryRoot);
+        var registryPath = Path.Combine(RegistryRoot, serviceId + ".json");
+        if (!File.Exists(logPath))
+            await File.WriteAllTextAsync(logPath, string.Empty, new UTF8Encoding(false), ct);
         var label = ReadString(arguments, "name");
         if (string.IsNullOrWhiteSpace(label))
             label = Path.GetFileName(argv[0]);
 
         var startInfo = NativeCommandRunner.CreateStartInfo(workingDirectory, sessionId, argv);
         var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        var service = new ManagedService(serviceId, sessionId, label!, logPath, process, port, readyRegex ?? DefaultReadyRegex);
+        var service = new ManagedService(serviceId, sessionId, label!, logPath, registryPath, process, port, readyRegex ?? DefaultReadyRegex);
         process.OutputDataReceived += (_, eventArgs) => service.Append("OUT", eventArgs.Data);
         process.ErrorDataReceived += (_, eventArgs) => service.Append("ERR", eventArgs.Data);
         process.Exited += (_, _) => service.MarkExited();
@@ -130,9 +139,15 @@ internal sealed class NativeServiceManager : IAsyncDisposable
             return new McpToolResult(true, $"service_start failed: {ex.GetType().Name}.");
         }
 
+        ProcessJob.TryAssign(process);
         process.StandardInput.Close();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
+        if (!service.PersistRegistry())
+        {
+            await service.StopAsync(CancellationToken.None);
+            return new McpToolResult(true, "service_start failed: could not register the service process for crash recovery.");
+        }
 
         var session = _sessions.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, ManagedService>(StringComparer.Ordinal));
         if (!session.TryAdd(serviceId, service))
@@ -298,6 +313,55 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         _sessions.Clear();
     }
 
+    private static void ReapStaleServices()
+    {
+        if (!Directory.Exists(RegistryRoot))
+            return;
+
+        IEnumerable<string> records;
+        try { records = Directory.EnumerateFiles(RegistryRoot, "*.json").ToArray(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+
+        foreach (var record in records)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(record));
+                var root = document.RootElement;
+                if (!root.TryGetProperty("processId", out var pidValue) || !pidValue.TryGetInt32(out var pid)
+                    || !root.TryGetProperty("startTimeUtcTicks", out var startValue) || !startValue.TryGetInt64(out var startTicks))
+                    continue;
+
+                try
+                {
+                    using var process = Process.GetProcessById(pid);
+                    var actualTicks = process.StartTime.ToUniversalTime().Ticks;
+                    if (Math.Abs(actualTicks - startTicks) <= TimeSpan.FromSeconds(2).Ticks)
+                    {
+                        try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                        try { process.WaitForExit(3000); } catch (InvalidOperationException) { }
+                    }
+                }
+                catch (ArgumentException)
+                {
+                    // Process is already gone.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Process information became unavailable during reaping.
+                }
+                finally
+                {
+                    try { File.Delete(record); } catch { }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                // Invalid or inaccessible registry entries are left alone rather than guessing a PID.
+            }
+        }
+    }
+
     private static async Task<bool> IsPortOpenAsync(int port, CancellationToken ct)
     {
         try
@@ -366,6 +430,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         string sessionId,
         string name,
         string logPath,
+        string registryPath,
         Process process,
         int? port,
         Regex readyPattern)
@@ -381,6 +446,36 @@ internal sealed class NativeServiceManager : IAsyncDisposable
         public string Id { get; } = id;
         public DateTimeOffset StartedAt => _startedAt;
         public long DurationMs => (long)((_stoppedAt ?? DateTimeOffset.UtcNow) - _startedAt).TotalMilliseconds;
+
+        public bool PersistRegistry()
+        {
+            try
+            {
+                var metadata = JsonSerializer.Serialize(new
+                {
+                    processId = process.Id,
+                    startTimeUtcTicks = process.StartTime.ToUniversalTime().Ticks,
+                    serviceId = id,
+                    sessionId
+                });
+                var temp = registryPath + ".tmp-" + Guid.NewGuid().ToString("N");
+                try
+                {
+                    File.WriteAllText(temp, metadata, new UTF8Encoding(false));
+                    File.Move(temp, registryPath, overwrite: true);
+                }
+                catch
+                {
+                    try { File.Delete(temp); } catch { }
+                    throw;
+                }
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return false;
+            }
+        }
         public string OutputTail { get { lock (_sync) return _output.ToString(); } }
 
         public void Append(string stream, string? line)
@@ -479,6 +574,7 @@ internal sealed class NativeServiceManager : IAsyncDisposable
                     try { _exitCode = process.HasExited ? process.ExitCode : _exitCode; } catch { }
                 }
                 try { process.Dispose(); } catch { }
+                try { File.Delete(registryPath); } catch { }
             }
         }
 
