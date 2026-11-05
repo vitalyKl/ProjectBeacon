@@ -104,7 +104,7 @@
             </MudSelect>
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentRuntimeRestartHint"]</MudText>
             <MudSelect T="string" @bind-Value="_commandPolicy" Label="@L["CommandPolicy"]" Variant="Variant.Outlined"
-                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" Disabled="_busy || _agentRuntime != "native"">
+                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" Disabled='_busy || _agentRuntime != "native"'>
                 <MudSelectItem T="string" Value="@("off")">@L["CommandPolicyOff"]</MudSelectItem>
                 <MudSelectItem T="string" Value="@("ask")">@L["CommandPolicyAsk"]</MudSelectItem>
                 <MudSelectItem T="string" Value="@("auto")">@L["CommandPolicyAuto"]</MudSelectItem>
