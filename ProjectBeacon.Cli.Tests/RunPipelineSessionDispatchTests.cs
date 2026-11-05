@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -18,6 +19,7 @@ public sealed class RunPipelineSessionDispatchTests
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-dispatch-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
         Directory.CreateDirectory(projectRoot);
+        await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
 
         try
         {
@@ -106,7 +108,9 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Equal(taskId, capturedAuthorization.TaskId);
             Assert.Equal(commandId, capturedAuthorization.CommandId);
             Assert.Equal(generation, capturedAuthorization.Generation);
-            Assert.Equal(projectRoot, capturedAuthorization.WorkingDirectory);
+            Assert.NotEqual(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.WorkingDirectory));
+            Assert.Equal(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.ProjectRoot));
+            Assert.True(capturedAuthorization.IsolatedWorkspace);
             Assert.Equal("test-short-lived-token", capturedAuthorization.ApiToken);
             Assert.Equal("Planner", capturedAuthorization.PipelineRole);
             Assert.Empty(capturedAuthorization.AllowedMcpTools!);
@@ -125,6 +129,7 @@ public sealed class RunPipelineSessionDispatchTests
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-aborted-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
         Directory.CreateDirectory(projectRoot);
+        await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
 
         try
         {
@@ -196,8 +201,59 @@ public sealed class RunPipelineSessionDispatchTests
         }
         finally
         {
+            await RemovePreservedWorktreesAsync(projectRoot, sessionId);
             try { Directory.Delete(temp, true); } catch { }
         }
+    }
+
+    private static async Task InitializeGitRepositoryAsync(string projectRoot, CancellationToken ct)
+    {
+        await GitAsync(projectRoot, ct, "init", "-b", "main");
+        await GitAsync(projectRoot, ct, "config", "user.name", "ProjectBeacon Tests");
+        await GitAsync(projectRoot, ct, "config", "user.email", "tests@projectbeacon.local");
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "README.md"), "pipeline fixture\n", ct);
+        await GitAsync(projectRoot, ct, "add", "README.md");
+        await GitAsync(projectRoot, ct, "commit", "-m", "initialize pipeline fixture");
+    }
+
+    private static async Task RemovePreservedWorktreesAsync(string projectRoot, Guid sessionId)
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "agent-worktrees");
+        if (!Directory.Exists(parent))
+            return;
+
+        foreach (var worktree in Directory.EnumerateDirectories(parent, sessionId.ToString("N") + "-*"))
+        {
+            try { await GitAsync(projectRoot, CancellationToken.None, "worktree", "remove", "--force", worktree); }
+            catch { }
+            try { if (Directory.Exists(worktree)) Directory.Delete(worktree, recursive: true); } catch { }
+        }
+
+        try { await GitAsync(projectRoot, CancellationToken.None, "worktree", "prune"); } catch { }
+    }
+
+    private static async Task GitAsync(string directory, CancellationToken ct, params string[] arguments)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("Could not start git for the pipeline fixture.");
+        var stdout = process.StandardOutput.ReadToEndAsync(ct);
+        var stderr = process.StandardError.ReadToEndAsync(ct);
+        await process.WaitForExitAsync(ct);
+        var output = await stdout;
+        var error = await stderr;
+        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}{output}");
     }
 
     private sealed class HarnessTokenHandler(Guid projectId, Guid commandId, int generation) : HttpMessageHandler
