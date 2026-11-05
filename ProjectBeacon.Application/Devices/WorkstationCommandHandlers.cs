@@ -472,6 +472,10 @@ public class ReportCommandProgressHandler : ICommandHandler<ReportCommandProgres
             {
                 var subtask = await db.Subtasks
                     .FirstOrDefaultAsync(item => item.Id == subtaskId && item.TaskId == session.TaskId, ct);
+                if (subtask?.Status is SubtaskStatus.Done or SubtaskStatus.Failed)
+                    return Result.Failure<WorkstationCommandDto>(
+                        "Actor subtask is already terminal; the workstation turn must stop.",
+                        ErrorKind.Conflict);
                 if (subtask is not null)
                 {
                     if (waitingForUser)
