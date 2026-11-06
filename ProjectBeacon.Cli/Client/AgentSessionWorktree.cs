@@ -98,6 +98,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             var snapshot = await RunGitAsync(
                 repositoryRoot,
                 ct,
+                disabledFilterDrivers,
                 [
                     "-c", "user.name=ProjectBeacon",
                     "-c", "user.email=projectbeacon@localhost",
@@ -133,7 +134,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
             }
 
             try { File.Delete(indexPath); } catch { }
-            return (new AgentSessionWorktree(repositoryRoot, original, targetDirectory, worktreeRoot, snapshotCommit), null);
+            return (new AgentSessionWorktree(repositoryRoot, original, targetDirectory, worktreeRoot, snapshotCommit, disabledFilterDrivers), null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
