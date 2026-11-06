@@ -259,7 +259,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     private static string[] ParseFilterDriverNames(string configKeys)
     {
         var drivers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in configKeys.Split('\\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var line in configKeys.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var key = line.Trim();
             if (!key.StartsWith("filter.", StringComparison.OrdinalIgnoreCase))
