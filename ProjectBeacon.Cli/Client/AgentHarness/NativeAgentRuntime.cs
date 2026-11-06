@@ -364,11 +364,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         string? error = null;
         var emittedContent = false;
         var responseText = new StringBuilder();
-        ResolvedProvider? resolved = null;
-
         try
         {
-            resolved = await ResolveProviderAsync(model, ct);
+            var resolved = await ResolveProviderAsync(model, ct);
             var localModelConcurrent = resolved.IsLocal && _llama.IsModelConcurrent(resolved.Model);
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
