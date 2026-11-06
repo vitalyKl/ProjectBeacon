@@ -373,8 +373,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             IChatProvider CreateProvider()
             {
-                var baseUrl = resolved.IsLocal && _llama.UseOwnSwapper
-                    ? _llama.GetOwnModelBaseUrl(resolved.Model)
+                var baseUrl = resolved.IsLocal
+                    ? _llama.GetLocalModelBaseUrl(resolved.Model)
                     : resolved.BaseUrl;
                 return string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
                     ? new AnthropicProvider(providerHttp, baseUrl, resolved.ApiKey)
