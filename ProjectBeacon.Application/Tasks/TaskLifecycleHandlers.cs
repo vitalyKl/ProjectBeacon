@@ -172,6 +172,8 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
             // These records are indexed by task but intentionally have no cascade FK.
             var phases = await db.TaskPhases.IgnoreQueryFilters()
                 .Where(phase => phase.ProjectId == task.ProjectId && phase.TaskId == task.Id).ToListAsync(ct);
+            var taskSteps = await db.TaskSteps.IgnoreQueryFilters()
+                .Where(step => step.ProjectId == task.ProjectId && step.TaskId == task.Id).ToListAsync(ct);
             var reviewRuns = await db.ReviewRuns.IgnoreQueryFilters()
                 .Where(run => run.ProjectId == task.ProjectId && run.TaskId == task.Id).ToListAsync(ct);
             var evalRuns = await db.EvalRuns.IgnoreQueryFilters()
@@ -181,6 +183,7 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
                 .ToListAsync(ct);
 
             db.TaskPhases.RemoveRange(phases);
+            db.TaskSteps.RemoveRange(taskSteps);
             db.ReviewRuns.RemoveRange(reviewRuns);
             db.EvalRuns.RemoveRange(evalRuns);
             db.TaskDependencies.RemoveRange(dependencies);

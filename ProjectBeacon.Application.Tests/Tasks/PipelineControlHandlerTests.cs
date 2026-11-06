@@ -132,6 +132,11 @@ public sealed partial class PipelineHandlerTests
         var backendId = await SeedNativeRuntimeAsync(projectId);
         var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
         var spawner = new FakeSpawner(backendId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.TaskSteps.Add(TaskStep.Create(task.Id, projectId, "Remove with task", 0));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
 
         var planner = await new StartPipelineHandler(factory, spawner)
             .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
@@ -147,6 +152,7 @@ public sealed partial class PipelineHandlerTests
         using (TenantScope.EnterUnscoped())
         {
             Assert.False(await _db.Tasks.AnyAsync(t => t.Id == task.Id, TestContext.Current.CancellationToken));
+            Assert.False(await _db.TaskSteps.AnyAsync(step => step.TaskId == task.Id, TestContext.Current.CancellationToken));
             var command = await _db.WorkstationCommands.SingleAsync(
                 row => row.Kind == WorkstationCommandKind.RunPipelineSession,
                 TestContext.Current.CancellationToken);
