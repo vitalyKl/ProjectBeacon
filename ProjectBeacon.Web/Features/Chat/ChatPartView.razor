@@ -150,6 +150,10 @@
     {
         <ChatMarkdown Text="@Part.Body" />
     }
+    else if (string.Equals(Part.Role, "user", StringComparison.OrdinalIgnoreCase))
+    {
+        <ChatMarkdown Text="@Part.Body" />
+    }
     else
     {
         <MudText Typo="Typo.body2" Class="beacon-pre">@Part.Body</MudText>
