@@ -484,15 +484,26 @@ else
         await ReloadSteps();
     }
 
+    private async Task<bool> ConfirmActionAsync(string title, string message, bool destructive = false)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(TaskActionConfirmDialog.Message), message },
+            { nameof(TaskActionConfirmDialog.ConfirmText), destructive ? L["Delete"].Value : L["Confirm"].Value },
+            { nameof(TaskActionConfirmDialog.CancelText), L["Cancel"].Value },
+            { nameof(TaskActionConfirmDialog.Destructive), destructive }
+        };
+        var reference = await Dialogs.ShowAsync(typeof(TaskActionConfirmDialog), title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await reference.Result;
+        return result?.Data is true;
+    }
+
     private async Task OnCancelPipeline()
     {
         if (_busy || _pipeline is null) return;
-        var confirmed = await Dialogs.ShowMessageBox(
-            L["CancelPipeline"].Value,
-            L["CancelPipelineConfirm"].Value,
-            yesText: L["Confirm"].Value,
-            cancelText: L["Cancel"].Value);
-        if (confirmed != true) return;
+        if (!await ConfirmActionAsync(L["CancelPipeline"].Value, L["CancelPipelineConfirm"].Value))
+            return;
 
         _busy = true;
         try
@@ -518,12 +529,8 @@ else
     private async Task OnRestartPipeline()
     {
         if (_busy || _pipeline is null) return;
-        var confirmed = await Dialogs.ShowMessageBox(
-            L["RestartPipeline"].Value,
-            L["RestartPipelineConfirm"].Value,
-            yesText: L["Confirm"].Value,
-            cancelText: L["Cancel"].Value);
-        if (confirmed != true) return;
+        if (!await ConfirmActionAsync(L["RestartPipeline"].Value, L["RestartPipelineConfirm"].Value))
+            return;
 
         _busy = true;
         try
@@ -549,12 +556,8 @@ else
     private async Task OnCancelPipelineSession(PipelineSessionDto session)
     {
         if (_busy) return;
-        var confirmed = await Dialogs.ShowMessageBox(
-            L["CancelWork"].Value,
-            L["CancelWorkConfirm"].Value,
-            yesText: L["Confirm"].Value,
-            cancelText: L["Cancel"].Value);
-        if (confirmed != true) return;
+        if (!await ConfirmActionAsync(L["CancelWork"].Value, L["CancelWorkConfirm"].Value))
+            return;
 
         _busy = true;
         try
@@ -578,12 +581,8 @@ else
     private async Task OnCancelSubtask(SubtaskDto subtask)
     {
         if (_busy) return;
-        var confirmed = await Dialogs.ShowMessageBox(
-            L["CancelWork"].Value,
-            L["CancelWorkConfirm"].Value,
-            yesText: L["Confirm"].Value,
-            cancelText: L["Cancel"].Value);
-        if (confirmed != true) return;
+        if (!await ConfirmActionAsync(L["CancelWork"].Value, L["CancelWorkConfirm"].Value))
+            return;
 
         _busy = true;
         try
@@ -607,12 +606,8 @@ else
     private async Task OnDeleteTask()
     {
         if (_busy) return;
-        var confirmed = await Dialogs.ShowMessageBox(
-            L["DeleteTask"].Value,
-            L["DeleteTaskConfirm"].Value,
-            yesText: L["Delete"].Value,
-            cancelText: L["Cancel"].Value);
-        if (confirmed != true) return;
+        if (!await ConfirmActionAsync(L["DeleteTask"].Value, L["DeleteTaskConfirm"].Value, destructive: true))
+            return;
 
         _busy = true;
         try

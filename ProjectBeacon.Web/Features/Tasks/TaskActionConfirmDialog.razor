@@ -1,0 +1,22 @@
+@using Microsoft.AspNetCore.Components
+@using MudBlazor
+
+<MudText Typo="Typo.body1">@Message</MudText>
+<MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+    <MudButton Variant="Variant.Text" OnClick="Cancel">@CancelText</MudButton>
+    <MudButton Variant="Variant.Filled" Color="@(Destructive ? Color.Error : Color.Primary)" OnClick="Confirm">
+        @ConfirmText
+    </MudButton>
+</MudStack>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance? Dialog { get; set; }
+
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public string ConfirmText { get; set; } = string.Empty;
+    [Parameter] public string CancelText { get; set; } = string.Empty;
+    [Parameter] public bool Destructive { get; set; }
+
+    private void Cancel() => Dialog?.Cancel();
+    private void Confirm() => Dialog?.Close(DialogResult.Ok(true));
+}

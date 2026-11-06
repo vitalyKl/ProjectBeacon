@@ -4,6 +4,7 @@ using Application.Tasks;
 using Domain.Entities.Evals;
 using Domain.Entities.Tasks;
 using Domain.Enums;
+using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
