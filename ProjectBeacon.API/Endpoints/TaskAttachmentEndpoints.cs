@@ -1,6 +1,7 @@
 namespace ProjectBeacon.API.Endpoints;
 
 using Microsoft.AspNetCore.Mvc;
+using ProjectBeacon.API;
 using ProjectBeacon.API.Auth;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure.Attachments;
