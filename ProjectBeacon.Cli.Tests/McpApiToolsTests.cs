@@ -8,6 +8,36 @@ using ProjectBeacon.Cli.Mcp;
 public sealed class McpApiToolsTests
 {
     [Fact]
+    public async Task TaskAttachFile_UploadsWorkspaceFileToCurrentTask()
+    {
+        var root = TempRoot();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "artifact.md"), "verified attachment payload");
+            var env = McpEnvironment.Of(
+                ("BEACON_PROJECT_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                ("BEACON_TASK_ID", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                ("BEACON_WORKSPACE_ROOT", root));
+            var handler = new RecordingHandler();
+            using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+            var api = new BeaconApiClient(http, env);
+
+            var result = await McpApiTools.CallAsync(
+                "task_attach_file", new JsonObject { ["path"] = "artifact.md" }, api, env);
+
+            Assert.False(result.IsError);
+            Assert.Contains(handler.Calls, call =>
+                call.Method == "POST"
+                && call.Path == "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/tasks/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/attachments"
+                && call.Body.Contains("verified attachment payload", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task TaskAttachFile_RejectsPathsOutsideWorkspaceBeforeHttpRequest()
     {
         var root = TempRoot();
