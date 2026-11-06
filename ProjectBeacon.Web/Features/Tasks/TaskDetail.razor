@@ -1,3 +1,4 @@
+@using ProjectBeacon.Web.Features.Chat
 @page "/task/{taskId:guid}"
 @implements IDisposable
 @layout MainLayout
@@ -59,10 +60,7 @@ else
             <div class="beacon-task-title">@_task.Title</div>
             @if (!string.IsNullOrEmpty(_task.Description))
             {
-                <div class="beacon-task-goal">
-                    <strong>@L["Goal"]</strong>
-                    <ChatMarkdown Text="@_task.Description" />
-                </div>
+                <p class="beacon-task-goal"><strong>@L["Goal"]</strong>@_task.Description</p>
             }
         </div>
         <div class="beacon-page-actions">
