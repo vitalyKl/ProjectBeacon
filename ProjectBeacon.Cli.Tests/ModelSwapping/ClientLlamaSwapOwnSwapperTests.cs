@@ -161,6 +161,31 @@ public sealed class ClientLlamaSwapOwnSwapperTests
         Assert.Null(ll.Status.LoadedModel);
     }
 
+    [Fact]
+    public async Task TickOwn_ModelResidencyFlagSelectsSharedQueueOrResidentPort()
+    {
+        var yaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("embed", "llama-server -m e.gguf", 0, 0, [], Concurrent: true),
+            new LlamaSwapModelSpec("embed-fast", "llama-server -m ef.gguf", 0, 0, [], Concurrent: true),
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 0, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            ConfigFile = TempCfg,
+            UseOwnSwapper = true,
+            SkipRealProcess = true,
+            ConcurrentPortBase = 9000
+        };
+        await ll.TickAsync(yaml, 8080, null, CancellationToken.None);
+
+        Assert.True(ll.IsModelConcurrent("embed"));
+        Assert.True(ll.IsModelConcurrent("embed-fast"));
+        Assert.False(ll.IsModelConcurrent("qwen"));
+        Assert.Equal("http://127.0.0.1:9000/v1", ll.GetOwnModelBaseUrl("embed"));
+        Assert.Equal("http://127.0.0.1:9001/v1", ll.GetOwnModelBaseUrl("embed-fast"));
+        Assert.Equal("http://127.0.0.1:8080/v1", ll.GetOwnModelBaseUrl("qwen"));
+    }
+
     private sealed class FixedVram(long free) : IVramChecker
     {
         public Task<VramReading> ReadFreeAsync(CancellationToken ct) =>
