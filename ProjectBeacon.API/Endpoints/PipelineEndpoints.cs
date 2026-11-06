@@ -15,7 +15,7 @@ public static class PipelineEndpoints
 {
     /// <summary>
     /// Maps <c>GET /v1/tasks/{taskId:guid}/pipeline</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskRead)</c>.
-    /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/start</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>, <c>POST /v1/sessions/{sessionId:guid}/launch</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>, and <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
+    /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/cancel</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/restart</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/cancel</c>, and <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/cancel</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session</c>, <c>POST /v1/sessions/{sessionId:guid}/launch</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>, <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/start</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>, <c>POST /v1/tasks/{taskId:guid}/pipeline/review/check</c>, and <c>POST /v1/tasks/{taskId:guid}/pipeline/approve</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.TaskWrite)</c>.
     /// Maps <c>POST /v1/tasks/{taskId:guid}/pipeline/force-close</c> with <c>RequireHumanOrApiToken(ApiTokenCapability.Admin)</c>. The body is task id plus an optional reason.
     /// </summary>
     public static IEndpointRouteBuilder MapPipelineEndpoints(this IEndpointRouteBuilder app)
@@ -23,6 +23,11 @@ public static class PipelineEndpoints
         app.MapGet("/v1/tasks/{taskId:guid}/pipeline", GetPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/forms/{formId}/reply", ReplyPipelineForm).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/tasks/{taskId:guid}/pipeline/start", StartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/cancel", CancelPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/restart", RestartPipeline).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/pipeline/sessions/{sessionId:guid}/cancel", CancelPipelineSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/cancel", CancelSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+
         app.MapPost("/v1/tasks/{taskId:guid}/subtasks", CreateSubtask).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/session", StartActorSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPost("/v1/sessions/{sessionId:guid}/launch", LaunchSession).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -73,6 +78,62 @@ public static class PipelineEndpoints
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
+    }
+
+    private static async Task<IResult> CancelPipeline(
+        Guid taskId,
+        [FromBody] PipelineControlBody body,
+        CancelPipelineHandler handler,
+        CancellationToken ct)
+    {
+        if (taskId != body.TaskId)
+            return ProblemResults.Bad("TaskId mismatch.");
+
+        var result = await handler.HandleAsync(new CancelPipelineCommand(new CancelPipelineRequest(taskId)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> RestartPipeline(
+        Guid taskId,
+        [FromBody] PipelineControlBody body,
+        RestartPipelineHandler handler,
+        CancellationToken ct)
+    {
+        if (taskId != body.TaskId)
+            return ProblemResults.Bad("TaskId mismatch.");
+
+        var result = await handler.HandleAsync(new RestartPipelineCommand(new RestartPipelineRequest(taskId)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> CancelPipelineSession(
+        Guid taskId,
+        Guid sessionId,
+        [FromBody] PipelineSessionCancelBody body,
+        CancelPipelineSessionHandler handler,
+        CancellationToken ct)
+    {
+        if (taskId != body.TaskId || sessionId != body.SessionId)
+            return ProblemResults.Bad("TaskId/SessionId mismatch.");
+
+        var result = await handler.HandleAsync(
+            new CancelPipelineSessionCommand(new CancelPipelineSessionRequest(taskId, sessionId)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> CancelSubtask(
+        Guid taskId,
+        Guid subtaskId,
+        [FromBody] SubtaskCancelBody body,
+        CancelSubtaskHandler handler,
+        CancellationToken ct)
+    {
+        if (taskId != body.TaskId || subtaskId != body.SubtaskId)
+            return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
+
+        var result = await handler.HandleAsync(
+            new CancelSubtaskCommand(new CancelSubtaskRequest(taskId, subtaskId)), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> CreateSubtask(Guid taskId, [FromBody] CreateSubtaskBody body, CreateSubtaskHandler handler, CancellationToken ct)
@@ -209,6 +270,15 @@ public static class PipelineEndpoints
 
     /// <summary>JSON body for replying to a task pipeline form.</summary>
     public record PipelineFormReplyBody(string AnswerJson);
+
+    /// <summary>JSON body for pipeline cancellation or restart.</summary>
+    public record PipelineControlBody(Guid TaskId);
+
+    /// <summary>JSON body for cancelling a pipeline session.</summary>
+    public record PipelineSessionCancelBody(Guid TaskId, Guid SessionId);
+
+    /// <summary>JSON body for cancelling a subtask.</summary>
+    public record SubtaskCancelBody(Guid TaskId, Guid SubtaskId);
 
     /// <summary>JSON body for pipeline start and review start. <c>TaskId</c> must match the route.</summary>
     public record PipelineStartBody(Guid TaskId);

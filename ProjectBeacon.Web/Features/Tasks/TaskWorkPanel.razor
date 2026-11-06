@@ -29,7 +29,7 @@
                     @foreach (var sub in PhaseSubtasks(open.Id))
                     {
                         <TaskSubtaskCard TaskId="Pipeline!.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
-                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
+                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnCancelSubtask="OnCancelSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                     }
                 </div>
             }
@@ -41,7 +41,7 @@
                 @foreach (var sub in pipeline.Subtasks.Where(s => s.TaskPhaseId is null))
                 {
                     <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
-                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
+                                         OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult" OnFailSubtask="OnFailSubtask" OnCancelSubtask="OnCancelSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                 }
             }
         }
@@ -51,7 +51,7 @@
             {
                 <TaskSubtaskCard TaskId="pipeline.TaskId" Subtask="sub" Sessions="SessionsFor(sub.Id)" Busy="Busy" Preflight="Preflight" PipelineStage="Pipeline?.Stage"
                                  OnStartActorSession="OnStartActorSession" OnReportResult="OnReportResult"
-                                 OnFailSubtask="OnFailSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
+                                 OnFailSubtask="OnFailSubtask" OnCancelSubtask="OnCancelSubtask" OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
             }
         }
     </MudPaper>
@@ -67,6 +67,7 @@
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
+    [Parameter] public EventCallback<SubtaskDto> OnCancelSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 

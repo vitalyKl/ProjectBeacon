@@ -125,6 +125,20 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
+    /// <summary>Cancels active work and returns the subtask to Pending so it can be run again.</summary>
+    public void Cancel()
+    {
+        if (Status == SubtaskStatus.Pending)
+            return;
+        if (Status is not (SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
+            throw new InvalidOperationException($"Cannot cancel subtask in status {Status}");
+
+        Status = SubtaskStatus.Pending;
+        DiffRef = null;
+        Summary = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     /// <summary>Marks Failed. Throws when the subtask is already Done or Failed.</summary>
     public void Fail(string? reason = null)
     {

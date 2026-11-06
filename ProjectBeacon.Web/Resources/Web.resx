@@ -2580,4 +2580,34 @@ No Beacon-hosted coding agent.</value>
   <data name="CommandPolicyHelp" xml:space="preserve">
     <value>Applies to native agents on this workstation. Project manifests and CI workflows only suggest commands; the first use asks you to approve them. Remembered approvals expire when the reviewed manifests or workflows change. Auto skips consent and is not a security sandbox.</value>
   </data>
+  <data name="CancelPipeline" xml:space="preserve">
+    <value>Cancel pipeline</value>
+  </data>
+  <data name="CancelPipelineConfirm" xml:space="preserve">
+    <value>Stop all active work? The current plan will be kept and can be restarted later.</value>
+  </data>
+  <data name="RestartPipeline" xml:space="preserve">
+    <value>Restart pipeline</value>
+  </data>
+  <data name="RestartPipelineConfirm" xml:space="preserve">
+    <value>Start again from planning? Subtasks and review results will be cleared; session history is retained.</value>
+  </data>
+  <data name="CancelWork" xml:space="preserve">
+    <value>Cancel work</value>
+  </data>
+  <data name="CancelWorkConfirm" xml:space="preserve">
+    <value>Stop this agent session?</value>
+  </data>
+  <data name="PipelineCancelled" xml:space="preserve">
+    <value>Pipeline cancelled.</value>
+  </data>
+  <data name="PipelineRestarted" xml:space="preserve">
+    <value>Pipeline reset. Start it again to create a new planning run.</value>
+  </data>
+  <data name="WorkCancelled" xml:space="preserve">
+    <value>Work cancelled.</value>
+  </data>
+  <data name="StageCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+  </data>
 </root>

@@ -34,7 +34,7 @@
         }
         <PipelineActivityPanel TaskId="TaskId" Session="session" />
     }
-    @if (CanActOnSubtask && (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress))
+    @if (CanActOnSubtask && (Subtask.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
     {
         <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
             @if (Subtask.Status == SubtaskStatus.Pending && Sessions.Count == 0)
@@ -55,6 +55,12 @@
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
                            OnClick="@(() => OnFailSubtask.InvokeAsync(Subtask))"
                            Disabled="Busy">@L["FailSubtask"]</MudButton>
+            }
+            @if (Subtask.Status is SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                           OnClick="@(() => OnCancelSubtask.InvokeAsync(Subtask))"
+                           Disabled="Busy">@L["CancelWork"]</MudButton>
             }
         </MudStack>
     }
@@ -79,6 +85,7 @@
     [Parameter] public EventCallback<SubtaskDto> OnStartActorSession { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnReportResult { get; set; }
     [Parameter] public EventCallback<SubtaskDto> OnFailSubtask { get; set; }
+    [Parameter] public EventCallback<SubtaskDto> OnCancelSubtask { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunchSession { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetrySession { get; set; }
 

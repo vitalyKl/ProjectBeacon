@@ -110,6 +110,17 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
 
+            var roleStageMatches = session.Role switch
+            {
+                PipelineRole.Planner => task.PipelineStage == TaskPipelineStage.Planning,
+                PipelineRole.Actor => task.PipelineStage is TaskPipelineStage.Executing or TaskPipelineStage.ReopenedForRevision,
+                PipelineRole.Review => task.PipelineStage == TaskPipelineStage.Reviewing,
+                _ => false
+            };
+            if (!roleStageMatches)
+                return Result.Failure<PipelineSessionDto>(
+                    $"Cannot launch {session.Role} session while the pipeline is in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
+
             if (session.Role == PipelineRole.Actor)
             {
                 // Serialize Actor launches on the task row. Existing Ready sessions may

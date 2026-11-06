@@ -233,4 +233,31 @@ public class TaskItem : Entity, IProjectScoped
         else
             CompletedAt ??= DateTime.UtcNow;
     }
+    /// <summary>Stops the current pipeline without marking the task complete.</summary>
+    public void CancelPipeline()
+    {
+        if (PipelineStage is null or TaskPipelineStage.None)
+            throw new InvalidOperationException("Pipeline is not started.");
+        if (PipelineStage == TaskPipelineStage.Closed)
+            throw new InvalidOperationException("A closed pipeline cannot be cancelled. Restart it to begin again.");
+
+        PipelineStage = TaskPipelineStage.Cancelled;
+        Status = TaskItemStatus.Todo;
+        SubStage = default;
+        ReviewNotes = null;
+        CompletedAt = null;
+        StateRevision++;
+    }
+
+    /// <summary>Clears pipeline output so the task can start again from Planning.</summary>
+    public void ResetPipeline()
+    {
+        PipelineStage = null;
+        Status = TaskItemStatus.Todo;
+        SubStage = default;
+        ReviewNotes = null;
+        CompletedAt = null;
+        StateRevision++;
+    }
+
 }

@@ -2371,4 +2371,34 @@
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>Нет свежего сигнала</value>
   </data>
+  <data name="CancelPipeline" xml:space="preserve">
+    <value>Отменить пайплайн</value>
+  </data>
+  <data name="CancelPipelineConfirm" xml:space="preserve">
+    <value>Остановить всю активную работу? Текущий план сохранится, и пайплайн можно будет перезапустить позже.</value>
+  </data>
+  <data name="RestartPipeline" xml:space="preserve">
+    <value>Перезапустить пайплайн</value>
+  </data>
+  <data name="RestartPipelineConfirm" xml:space="preserve">
+    <value>Начать заново с планирования? Подзадачи и результаты ревью будут очищены, история сессий сохранится.</value>
+  </data>
+  <data name="CancelWork" xml:space="preserve">
+    <value>Остановить работу</value>
+  </data>
+  <data name="CancelWorkConfirm" xml:space="preserve">
+    <value>Остановить эту сессию агента?</value>
+  </data>
+  <data name="PipelineCancelled" xml:space="preserve">
+    <value>Пайплайн отменён.</value>
+  </data>
+  <data name="PipelineRestarted" xml:space="preserve">
+    <value>Пайплайн сброшен. Запустите его, чтобы начать новое планирование.</value>
+  </data>
+  <data name="WorkCancelled" xml:space="preserve">
+    <value>Работа остановлена.</value>
+  </data>
+  <data name="StageCancelled" xml:space="preserve">
+    <value>Отменён</value>
+  </data>
 </root>

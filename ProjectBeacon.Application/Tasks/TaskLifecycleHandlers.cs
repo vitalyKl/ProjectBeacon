@@ -148,14 +148,47 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
     public async Task<Result> HandleAsync(DeleteTaskCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.FindAsync([command.Request.TaskId], ct);
-        if (task is null)
-            return Result.Failure("Task not found.");
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        db.Tasks.Remove(task);
-        await db.SaveChangesAsync(ct);
+            var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure("Task not found.");
 
-        return Result.Ok();
+            var sessions = await db.PipelineSessions.IgnoreQueryFilters()
+                .Where(session => session.ProjectId == task.ProjectId && session.TaskId == task.Id)
+                .ToListAsync(ct);
+            foreach (var session in sessions.Where(session =>
+                session.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser))
+                session.Close();
+
+            await db.SaveChangesAsync(ct);
+            await PipelineSupport.CancelPipelineCommandsAsync(db, task.ProjectId, sessions.Select(session => session.Id).ToArray(), ct);
+            await PipelineSupport.CancelReviewCheckCommandsAsync(db, task.ProjectId, task.Id, ct);
+
+            // These records are indexed by task but intentionally have no cascade FK.
+            var phases = await db.TaskPhases.IgnoreQueryFilters()
+                .Where(phase => phase.ProjectId == task.ProjectId && phase.TaskId == task.Id).ToListAsync(ct);
+            var reviewRuns = await db.ReviewRuns.IgnoreQueryFilters()
+                .Where(run => run.ProjectId == task.ProjectId && run.TaskId == task.Id).ToListAsync(ct);
+            var evalRuns = await db.EvalRuns.IgnoreQueryFilters()
+                .Where(run => run.ProjectId == task.ProjectId && run.TaskId == task.Id).ToListAsync(ct);
+            var dependencies = await db.TaskDependencies.IgnoreQueryFilters()
+                .Where(dependency => dependency.TaskId == task.Id || dependency.DependentTaskId == task.Id)
+                .ToListAsync(ct);
+
+            db.TaskPhases.RemoveRange(phases);
+            db.ReviewRuns.RemoveRange(reviewRuns);
+            db.EvalRuns.RemoveRange(evalRuns);
+            db.TaskDependencies.RemoveRange(dependencies);
+            db.Tasks.Remove(task);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Result.Ok();
+        });
     }
 }
 /// <summary>
