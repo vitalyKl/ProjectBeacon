@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Cli.Client;
 
 using System.Net.Http.Json;
+using ProjectBeacon.Cli.Client.ModelSwapping;
 
 internal interface IDaemonLlamaSync
 {
