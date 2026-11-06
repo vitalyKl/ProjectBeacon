@@ -95,7 +95,7 @@ public sealed class ReplyPipelineFormHandler : ICommandHandler<ReplyPipelineForm
             return Result.Failure<PipelineSessionDto>("Question already answered.", ErrorKind.Conflict);
 
         var device = await db.DaemonDevices.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(d => d.Id == deviceId && d.UserId == request.UserId && !d.IsRevoked, ct);
+            .FirstOrDefaultAsync(d => d.Id == deviceId && d.UserId == request.UserId && d.RevokedAt == null, ct);
         if (device is null)
             return Result.Failure<PipelineSessionDto>("Workstation not found.");
 
