@@ -95,7 +95,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
             return;
         }
 
-        _ = ExecutePromptInBackgroundAsync(prompt, ct, completion);
+        _ = Task.Run(() => ExecutePromptInBackgroundAsync(prompt, ct, completion), CancellationToken.None);
     }
 
     private async Task ExecutePromptInBackgroundAsync(
