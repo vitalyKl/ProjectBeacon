@@ -22,6 +22,15 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Agents.AgentTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1867,6 +1876,59 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.HasIndex("TaskId", "SortOrder");
 
                     b.ToTable("TaskPhases");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedByType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("TaskId", "CreatedAt");
+
+                    b.ToTable("TaskAttachments");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskStep", b =>
