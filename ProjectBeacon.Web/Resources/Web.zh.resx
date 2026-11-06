@@ -2389,4 +2389,34 @@ orthstar</value>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>暂无最新信号</value>
   </data>
+  <data name="CancelPipeline" xml:space="preserve">
+    <value>取消流水线</value>
+  </data>
+  <data name="CancelPipelineConfirm" xml:space="preserve">
+    <value>停止所有正在进行的工作？当前计划将保留，之后可以重新启动。</value>
+  </data>
+  <data name="CancelWork" xml:space="preserve">
+    <value>取消工作</value>
+  </data>
+  <data name="CancelWorkConfirm" xml:space="preserve">
+    <value>停止此代理会话？</value>
+  </data>
+  <data name="PipelineCancelled" xml:space="preserve">
+    <value>流水线已取消。</value>
+  </data>
+  <data name="PipelineRestarted" xml:space="preserve">
+    <value>流水线已重置。重新启动即可开始新的规划。</value>
+  </data>
+  <data name="RestartPipeline" xml:space="preserve">
+    <value>重新启动流水线</value>
+  </data>
+  <data name="RestartPipelineConfirm" xml:space="preserve">
+    <value>从规划阶段重新开始？子任务和评审结果将被清除，会话历史将保留。</value>
+  </data>
+  <data name="StageCancelled" xml:space="preserve">
+    <value>已取消</value>
+  </data>
+  <data name="WorkCancelled" xml:space="preserve">
+    <value>工作已取消。</value>
+  </data>
 </root>
