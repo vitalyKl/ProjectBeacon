@@ -10,6 +10,7 @@ using ProjectBeacon.Infrastructure.Data;
 using ProjectBeacon.Infrastructure.LlamaSwap;
 using ProjectBeacon.Infrastructure.Mail;
 using ProjectBeacon.Infrastructure.Security;
+using ProjectBeacon.Infrastructure.Attachments;
 /// <summary>
 /// Registers the database, mail, password hashing, JWT, TOTP, and secret protection used by the hosts.
 /// </summary>
@@ -23,6 +24,7 @@ public static class ServiceCollectionExtensions
                 .AddInterceptors(new TenantRlsConnectionInterceptor()));
         services.AddBeaconDbFactory();
         services.AddApplicationPorts();
+        services.AddScoped<IAttachmentService, PhysicalAttachmentService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
