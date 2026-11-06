@@ -186,6 +186,40 @@ public sealed class ClientLlamaSwapOwnSwapperTests
         Assert.Equal("http://127.0.0.1:8080/v1", ll.GetOwnModelBaseUrl("qwen"));
     }
 
+    [Fact]
+    public async Task IsModelConcurrent_AfterSwitchingToExternalSwapper_UsesCurrentYamlFile()
+    {
+        var configPath = Path.Combine(Path.GetTempPath(), "beacon-llama-mode-switch-" + Guid.NewGuid().ToString("N") + ".yaml");
+        var residentYaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 0, 300, [], Concurrent: true)]);
+        var exclusiveYaml = LlamaSwapConfigGenerator.Generate([
+            new LlamaSwapModelSpec("qwen", "llama-server -m q.gguf", 0, 300, [])]);
+
+        var ll = new ClientLlamaSwap
+        {
+            ConfigFile = configPath,
+            UseOwnSwapper = true,
+            SkipRealProcess = true
+        };
+
+        try
+        {
+            await ll.TickAsync(residentYaml, 8080, null, CancellationToken.None);
+            Assert.True(ll.IsModelConcurrent("qwen"));
+
+            // Switching to the external supervisor leaves the last in-process YAML in memory.
+            // Residency must now follow the current on-disk external config instead.
+            ll.UseOwnSwapper = false;
+            await ll.TickAsync(exclusiveYaml, 8080, null, CancellationToken.None);
+
+            Assert.False(ll.IsModelConcurrent("qwen"));
+        }
+        finally
+        {
+            try { File.Delete(configPath); } catch (IOException) { }
+        }
+    }
+
     private sealed class FixedVram(long free) : IVramChecker
     {
         public Task<VramReading> ReadFreeAsync(CancellationToken ct) =>
