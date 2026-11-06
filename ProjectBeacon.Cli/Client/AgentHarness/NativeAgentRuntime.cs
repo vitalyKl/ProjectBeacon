@@ -367,7 +367,6 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         try
         {
             var resolved = await ResolveProviderAsync(model, ct);
-            var localModelConcurrent = resolved.IsLocal && _llama.IsModelConcurrent(resolved.Model);
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
 
@@ -389,14 +388,18 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     return;
                 }
 
-                await _llamaSync.RunModelRequestAsync(localModelConcurrent, async () =>
-                {
-                    // Exclusive swap-group models are selected only after they own the shared
-                    // slot. Concurrent resident models are already loaded on their own ports.
-                    if (_llama.UseOwnSwapper && !localModelConcurrent)
-                        await _llama.EnsureSwapModelAsync(resolved.Model, requestCt);
-                    await request();
-                }, requestCt);
+                await _llamaSync.RunModelRequestAsync(
+                    () => _llama.IsModelConcurrent(resolved.Model),
+                    async () =>
+                    {
+                        // Residency is read again inside the scheduler's lifecycle lease.
+                        // Exclusive swap-group models are selected only after they own the
+                        // shared slot; resident models stay on their dedicated endpoints.
+                        if (_llama.UseOwnSwapper && !_llama.IsModelConcurrent(resolved.Model))
+                            await _llama.EnsureSwapModelAsync(resolved.Model, requestCt);
+                        await request();
+                    },
+                    requestCt);
             }
 
             async Task<string> SummarizeAsync(ChatProviderRequest summaryRequest, CancellationToken requestCt)
