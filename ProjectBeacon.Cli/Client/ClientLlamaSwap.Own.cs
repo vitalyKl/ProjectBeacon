@@ -12,6 +12,55 @@ using ModelSwapping;
 
 public sealed partial class ClientLlamaSwap
 {
+    /// <summary>Whether a local model belongs to the resident group and may run alongside other models.</summary>
+    internal bool IsModelConcurrent(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var yaml = _ownLastYaml;
+        if (string.IsNullOrWhiteSpace(yaml))
+        {
+            try
+            {
+                if (File.Exists(ConfigFile))
+                    yaml = File.ReadAllText(ConfigFile);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log?.Invoke($"could not read model residency config: {ex.Message}");
+                return false;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(yaml))
+            return false;
+
+        try
+        {
+            return LlamaSwapConfigParser.Parse(yaml)
+                .Any(model => string.Equals(model.Name, name, StringComparison.OrdinalIgnoreCase) && model.Concurrent);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidDataException)
+        {
+            Log?.Invoke($"could not read model residency config: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns the actual llama-server endpoint for an in-process backend. The caller must hold
+    /// the model execution scheduler's read lease so a lifecycle tick cannot replace its process.
+    /// </summary>
+    internal string GetOwnModelBaseUrl(string name)
+    {
+        if (!UseOwnSwapper)
+            throw new InvalidOperationException("A direct model endpoint is only available with the in-process swapper.");
+        if (!_own.TryGetValue(name, out var backend) || backend.State != BackendState.Ready)
+            throw new InvalidOperationException($"Local model '{name}' is not loaded and ready.");
+        return $"http://127.0.0.1:{backend.Port}/v1";
+    }
+
     private async Task<bool> TryAdmitAsync(long need, CancellationToken ct)
     {
         if (need <= 0)
