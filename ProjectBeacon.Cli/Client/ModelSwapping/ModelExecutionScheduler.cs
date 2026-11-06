@@ -22,16 +22,16 @@ internal sealed class ModelExecutionScheduler
         if (!concurrent)
             swapLease = await _swapGroup.AcquireWriteAsync(ct);
 
-        using (swapLease)
-        using (await _lifecycle.AcquireReadAsync(ct))
-            await action();
+        using var swapScope = swapLease;
+        using var lifecycleLease = await _lifecycle.AcquireReadAsync(ct);
+        await action();
     }
 
     public async Task RunMaintenanceAsync(Func<Task> action, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(action);
-        using (await _lifecycle.AcquireWriteAsync(ct))
-            await action();
+        using var lease = await _lifecycle.AcquireWriteAsync(ct);
+        await action();
     }
 
     public async Task<bool> TryRunMaintenanceAsync(Func<Task> action, CancellationToken ct)
