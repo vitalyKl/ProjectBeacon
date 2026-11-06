@@ -304,9 +304,15 @@ internal static partial class McpApiTools
         var bytes = await File.ReadAllBytesAsync(fullPath, ct);
         var type = Path.GetExtension(fullPath).ToLowerInvariant() switch
         {
-            ".png" => "image/png", ".jpg" or ".jpeg" => "image/jpeg", ".gif" => "image/gif",
-            ".webp" => "image/webp", ".pdf" => "application/pdf", ".txt" or ".md" or ".log" => "text/plain",
-            ".json" => "application/json", ".csv" => "text/csv", ".zip" => "application/zip",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".pdf" => "application/pdf",
+            ".txt" or ".md" or ".log" => "text/plain",
+            ".json" => "application/json",
+            ".csv" => "text/csv",
+            ".zip" => "application/zip",
             _ => "application/octet-stream"
         };
         var result = await api.SendFileAsync(
