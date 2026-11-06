@@ -96,11 +96,11 @@ public sealed class ModelExecutionSchedulerTests
             return Task.CompletedTask;
         }, TestContext.Current.CancellationToken);
 
-        Assert.Equal(["A:first-generation", "B:generation"], order);
+        Assert.Equal(new[] { "A:first-generation", "B:generation" }, order);
         releaseSecondTurn.TrySetResult(true);
 
         await Task.WhenAll(secondTurn, resumedFirstTurn).WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
-        Assert.Equal(["A:first-generation", "B:generation", "A:resumed-generation"], order);
+        Assert.Equal(new[] { "A:first-generation", "B:generation", "A:resumed-generation" }, order);
     }
 
     [Fact]
