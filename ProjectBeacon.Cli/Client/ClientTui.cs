@@ -302,9 +302,16 @@ public static class ClientTui
                 {
                     var update = await ClientUpdater.CheckAsync(ct);
                     AnsiConsole.MarkupLine($"[grey]Client {Markup.Escape(update.CurrentVersion)} · latest {Markup.Escape(update.LatestVersion)}[/]");
-                    if (!update.UpdateAvailable)
+                    if (!update.NewerVersionAvailable)
                     {
                         AnsiConsole.MarkupLine("[green]The client is up to date.[/]");
+                        await Task.Delay(900, ct);
+                        break;
+                    }
+                    if (!update.PackageAvailable)
+                    {
+                        AnsiConsole.MarkupLine(
+                            $"[yellow]Client {Markup.Escape(update.LatestVersion)} is available, but the {Markup.Escape(update.RuntimeIdentifier)} update package has not been published yet. Try again shortly.[/]");
                         await Task.Delay(900, ct);
                         break;
                     }
@@ -329,6 +336,11 @@ public static class ClientTui
                         {
                             AnsiConsole.MarkupLine("[green]Update staged. The updater helper will restart Beacon; see L (Logs) for the final result.[/]");
                             stopAfterUpdate = true;
+                        }
+                        else if (scheduled?.NewerVersionAvailable == true)
+                        {
+                            AnsiConsole.MarkupLine(
+                                $"[yellow]Client {Markup.Escape(scheduled.LatestVersion)} is available, but the {Markup.Escape(scheduled.RuntimeIdentifier)} update package is not currently available.[/]");
                         }
                         else
                         {
