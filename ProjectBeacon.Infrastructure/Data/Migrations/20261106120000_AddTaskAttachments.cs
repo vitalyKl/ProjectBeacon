@@ -38,6 +38,12 @@ public sealed class AddTaskAttachments : Migration
                     onDelete: ReferentialAction.Cascade);
             });
 
+        migrationBuilder.Sql("ALTER TABLE \"TaskAttachments\" ENABLE ROW LEVEL SECURITY;");
+        migrationBuilder.Sql("ALTER TABLE \"TaskAttachments\" FORCE ROW LEVEL SECURITY;");
+        migrationBuilder.Sql(@"CREATE POLICY tenant_project_isolation ON \"TaskAttachments\"
+            USING (current_setting('app.tenant_unscoped', true) = 'true'
+                   OR \"ProjectId\"::text = current_setting('app.tenant_project_id', true));");
+
         migrationBuilder.CreateIndex(
             name: "IX_TaskAttachments_ProjectId", table: "TaskAttachments", column: "ProjectId");
         migrationBuilder.CreateIndex(
