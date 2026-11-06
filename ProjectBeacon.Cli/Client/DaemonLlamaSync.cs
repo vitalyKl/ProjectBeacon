@@ -6,6 +6,8 @@ internal interface IDaemonLlamaSync
 {
     Task SyncAsync(WorkstationSettings settings, CancellationToken ct);
     Task RunLockedAsync(Func<Task> action, CancellationToken ct);
+    Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
+        => concurrent ? action() : RunLockedAsync(action, ct);
     Task ReloadAsync(CancellationToken ct);
     Task UnloadAsync(CancellationToken ct);
     Task SyncNowAsync(CancellationToken ct);
@@ -18,7 +20,7 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
     private readonly ClientLlamaSwap _llama;
     private readonly Func<WorkstationSettings> _loadSettings;
     private readonly IDaemonRuntimeState _state;
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ModelExecutionScheduler _scheduler = new();
 
     public DaemonLlamaSync(DaemonDependencies deps, IDaemonRuntimeState state)
     {
@@ -53,18 +55,11 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
         }
     }
 
-    public async Task RunLockedAsync(Func<Task> action, CancellationToken ct)
-    {
-        await _lock.WaitAsync(ct);
-        try
-        {
-            await action();
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
+    public Task RunLockedAsync(Func<Task> action, CancellationToken ct)
+        => _scheduler.RunMaintenanceAsync(action, ct);
+
+    public Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
+        => _scheduler.RunModelRequestAsync(concurrent, action, ct);
 
     public Task ReloadAsync(CancellationToken ct) =>
         RunLockedAsync(() => _llama.ReloadAsync(ct), ct);
@@ -74,5 +69,5 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
 
     public Task SyncNowAsync(CancellationToken ct) => SyncAsync(_loadSettings(), ct);
 
-    public void Release() => _lock.Dispose();
+    public void Release() { }
 }
