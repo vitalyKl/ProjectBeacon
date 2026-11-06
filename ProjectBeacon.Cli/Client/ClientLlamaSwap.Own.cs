@@ -18,7 +18,7 @@ public sealed partial class ClientLlamaSwap
         if (string.IsNullOrWhiteSpace(name))
             return false;
 
-        var yaml = _ownLastYaml;
+        var yaml = UseOwnSwapper ? _ownLastYaml : null;
         if (string.IsNullOrWhiteSpace(yaml))
         {
             try
