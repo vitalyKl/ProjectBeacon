@@ -3,13 +3,14 @@ namespace ProjectBeacon.Cli.Tests;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Application.Runtime;
 using ProjectBeacon.Cli.Client;
 
 public sealed class DaemonChatSessionConcurrencyTests
 {
     [Fact]
-    public async Task NativeRuntime_AllowsAnotherChatWhileFirstSessionIsWaiting()
+    public async Task NativeRuntime_AllowsAnotherChatWhileFirstSessionWaitsForFormAnswer()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-chat-concurrency-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -34,14 +35,28 @@ public sealed class DaemonChatSessionConcurrencyTests
 
         try
         {
-            var first = chat.PromptAsync(root, PromptPayload(Guid.NewGuid(), "native-session-1"), CancellationToken.None);
-            var second = chat.PromptAsync(root, PromptPayload(Guid.NewGuid(), "native-session-2"), CancellationToken.None);
+            var firstChatId = Guid.NewGuid();
+            var first = chat.PromptAsync(root, PromptPayload(firstChatId, "native-session-1"), CancellationToken.None);
+            await runtime.FirstFormObserved.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.False(runtime.FirstFormAnswered);
 
+            var second = chat.PromptAsync(root, PromptPayload(Guid.NewGuid(), "native-session-2"), CancellationToken.None);
             await runtime.BothPromptsStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-            runtime.Release.TrySetResult(true);
+
+            Assert.False(runtime.FirstFormAnswered);
+            var (replyOk, _, replyError) = await chat.ReplyFormAsync(
+                JsonSerializer.Serialize(new
+                {
+                    externalSessionId = "native-session-1",
+                    formId = "question-1",
+                    answerJson = "{}"
+                }),
+                CancellationToken.None);
+            Assert.True(replyOk, replyError);
 
             var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.All(results, result => Assert.True(result.Ok, result.Error));
+            Assert.True(runtime.FirstFormAnswered);
             Assert.Equal(2, runtime.Started);
         }
         finally
@@ -52,7 +67,7 @@ public sealed class DaemonChatSessionConcurrencyTests
         }
     }
 
-    private static string PromptPayload(Guid chatId, string externalSessionId) => System.Text.Json.JsonSerializer.Serialize(new
+    private static string PromptPayload(Guid chatId, string externalSessionId) => JsonSerializer.Serialize(new
     {
         chatSessionId = chatId,
         externalSessionId,
@@ -64,14 +79,16 @@ public sealed class DaemonChatSessionConcurrencyTests
     {
         private readonly ConcurrentDictionary<string, int> _statusCalls = new(StringComparer.Ordinal);
         private int _started;
+        private int _firstFormAnswered;
 
         public int Started => Volatile.Read(ref _started);
+        public bool FirstFormAnswered => Volatile.Read(ref _firstFormAnswered) != 0;
         public TaskCompletionSource<bool> BothPromptsStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource<bool> Release { get; } =
+        public TaskCompletionSource<bool> FirstFormObserved { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public bool SupportsForms => false;
+        public bool SupportsForms => true;
         public bool SupportsAgentSwitch => false;
         public bool SupportsReasoningEffort => true;
         public bool SupportsLiveDeltas => false;
@@ -80,12 +97,12 @@ public sealed class DaemonChatSessionConcurrencyTests
         public Task<string> CreateSessionAsync(string title, CancellationToken ct)
             => Task.FromResult(Guid.NewGuid().ToString("N"));
 
-        public async Task SendPromptAsync(
+        public Task SendPromptAsync(
             string sessionId, string text, string? model, CancellationToken ct, AgentPromptControls? controls = null)
         {
             if (Interlocked.Increment(ref _started) == 2)
                 BothPromptsStarted.TrySetResult(true);
-            await Release.Task.WaitAsync(ct);
+            return Task.CompletedTask;
         }
 
         public async IAsyncEnumerable<AgentMessagePart> StreamPartsAsync(
@@ -97,6 +114,9 @@ public sealed class DaemonChatSessionConcurrencyTests
 
         public Task<AgentTurnStatus?> GetTurnStatusAsync(string sessionId, CancellationToken ct)
         {
+            if (sessionId == "native-session-1" && !FirstFormAnswered)
+                return Task.FromResult<AgentTurnStatus?>(new AgentTurnStatus(false, null, null, "baseline:" + sessionId));
+
             var call = _statusCalls.AddOrUpdate(sessionId, 1, (_, previous) => previous + 1);
             var messageId = call == 1 ? "baseline:" + sessionId : "final:" + sessionId;
             return Task.FromResult<AgentTurnStatus?>(new AgentTurnStatus(true, "stop", null, messageId));
@@ -117,10 +137,24 @@ public sealed class DaemonChatSessionConcurrencyTests
             => Task.CompletedTask;
 
         public Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct)
-            => Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([]);
+        {
+            if (sessionId == "native-session-1" && !FirstFormAnswered)
+            {
+                FirstFormObserved.TrySetResult(true);
+                return Task.FromResult<IReadOnlyList<AgentRuntimeForm>>(
+                    [new AgentRuntimeForm("question-1", "Need an answer", "{}", "[]")]);
+            }
+
+            return Task.FromResult<IReadOnlyList<AgentRuntimeForm>>([]);
+        }
 
         public Task<bool> ReplyFormAsync(string sessionId, string formId, string answerJson, CancellationToken ct)
-            => Task.FromResult(false);
+        {
+            if (sessionId != "native-session-1" || formId != "question-1" || FirstFormAnswered)
+                return Task.FromResult(false);
+            Interlocked.Exchange(ref _firstFormAnswered, 1);
+            return Task.FromResult(true);
+        }
 
         public Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
             => Task.CompletedTask;
