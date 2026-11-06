@@ -2419,4 +2419,10 @@ orthstar</value>
   <data name="WorkCancelled" xml:space="preserve">
     <value>工作已取消。</value>
   </data>
+  <data name="ChatInputTokens" xml:space="preserve">
+    <value>输入上下文</value>
+  </data>
+  <data name="ContextInputEstimate" xml:space="preserve">
+    <value>预计输入令牌数</value>
+  </data>
 </root>

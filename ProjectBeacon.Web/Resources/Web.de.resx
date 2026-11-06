@@ -2411,4 +2411,10 @@ orthstar</value>
   <data name="WorkCancelled" xml:space="preserve">
     <value>Arbeit abgebrochen.</value>
   </data>
+  <data name="ChatInputTokens" xml:space="preserve">
+    <value>Eingabekontext</value>
+  </data>
+  <data name="ContextInputEstimate" xml:space="preserve">
+    <value>Geschätzte Eingabetokens</value>
+  </data>
 </root>

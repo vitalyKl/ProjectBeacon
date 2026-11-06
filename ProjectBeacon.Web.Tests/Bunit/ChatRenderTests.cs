@@ -100,14 +100,15 @@ public sealed class ChatRenderTests : BUnitRenderBase
     }
 
     [Fact]
-    public void UserText_StaysPlainAndEscaped()
+    public void UserText_RendersMarkdownAndStillStripsRawHtml()
     {
         var cut = Bunit.RenderComponent<ChatPartView>(ps => ps.Add(p => p.Part,
-            Part("user", "text", "hi <script>alert(1)</script>")));
+            Part("user", "text", "hi **world** <script>alert(1)</script>")));
         var html = cut.Markup;
         Assert.DoesNotContain("<script>", html);
         Assert.Contains("beacon-chat-user", html);
-        Assert.DoesNotContain("beacon-markdown", html);
+        Assert.Contains("beacon-markdown", html);
+        Assert.Contains("<strong>world</strong>", html);
     }
 
     [Fact]
