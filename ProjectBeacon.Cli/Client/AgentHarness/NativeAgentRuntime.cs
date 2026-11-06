@@ -369,10 +369,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         try
         {
             resolved = await ResolveProviderAsync(model, ct);
-            if (resolved.IsLocal && _llama.UseOwnSwapper)
-                await _llamaSync.RunLockedAsync(
-                    () => _llama.EnsureSwapModelAsync(resolved.Model, ct),
-                    ct);
+            // The local model swap is performed under the generation lock for each provider
+            // request. The lock is released between tool calls, including while a user form
+            // is pending, so another session can use the model without racing a model swap.
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
             var provider = string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
@@ -464,7 +463,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 for (var attempt = 1; attempt <= MaxAttempts && !requestCompleted; attempt++)
                 {
                     var stepEmittedContent = false;
-                    try
+                    async Task StreamProviderAttemptAsync()
                     {
                         await foreach (var item in provider.StreamAsync(request, ct))
                         {
@@ -519,6 +518,24 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     accumulator.Append(item.ToolCallId, item.ToolName, item.ToolArguments);
                                     break;
                             }
+                        }
+                    }
+
+                    try
+                    {
+                        if (resolved.IsLocal && _llama.UseOwnSwapper)
+                        {
+                            // LlamaSwap hosts one active model. Keep its lock for a single
+                            // provider generation only, not the whole agent turn.
+                            await _llamaSync.RunLockedAsync(async () =>
+                            {
+                                await _llama.EnsureSwapModelAsync(resolved.Model, ct);
+                                await StreamProviderAttemptAsync();
+                            }, ct);
+                        }
+                        else
+                        {
+                            await StreamProviderAttemptAsync();
                         }
                         requestCompleted = true;
                     }
