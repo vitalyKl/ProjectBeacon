@@ -49,7 +49,11 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                 }
 
                 if (settings is not null)
-                    await _llamaSync.SyncAsync(settings, ct);
+                {
+                    var synced = await _llamaSync.TrySyncAsync(settings, ct);
+                    if (!synced)
+                        _state.Log("llama-swap sync deferred while model generations are active");
+                }
 
                 // Keep the last workspace where possible; native runtime readiness must not start OpenCode.
                 await _gate.TryTickAsync(_gate.RuntimeWorkingDirectory ?? settings?.ProjectsRoot, ct);
