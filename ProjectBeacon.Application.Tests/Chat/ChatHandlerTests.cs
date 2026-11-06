@@ -306,6 +306,40 @@ public sealed class ChatHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ReplyChatForm_DoesNotPersistAnswerWhenTheDeviceIsOffline()
+    {
+        var (projectId, userId, _, deviceId, sessionId) = await SeedSessionAsync();
+        var tenant = new TenantContext();
+        tenant.Assign(projectId, null, false);
+        var ct = TestContext.Current.CancellationToken;
+        var factory = HandlerSqlite.Factory(_connection, tenant);
+
+        var questionBody = JsonSerializer.Serialize(new
+        {
+            id = "f-offline",
+            title = "Command approval",
+            fields = new[] { new { key = "decision", type = "string" } }
+        });
+        var question = await new AppendChatPartHandler(factory, new ChatEventSignal()).HandleAsync(
+            new AppendChatPartCommand(new AppendChatPartRequest(sessionId, deviceId, "assistant", "question",
+                questionBody, "form:f-offline", Complete: true)), ct);
+        Assert.True(question.Success, question.Error);
+
+        var handler = new ReplyChatFormHandler(factory, new EnqueueCommandHandler(factory), new ChatEventSignal());
+        var replied = await handler.HandleAsync(
+            new ReplyChatFormCommand(new ReplyChatFormRequest(
+                sessionId, userId, "f-offline", JsonSerializer.Serialize(new { decision = "always" }))), ct);
+
+        Assert.False(replied.Success);
+        Assert.Equal("Device is not connected.", replied.Error);
+
+        await using var check = factory.CreateDbContext();
+        var persisted = await check.ChatParts.SingleAsync(part => part.Id == question.Value!.Id, ct);
+        using var body = JsonDocument.Parse(persisted.Body);
+        Assert.False(body.RootElement.TryGetProperty("answer", out _));
+    }
+
+    [Fact]
     public async Task ReplyChatForm_ValidatesAnswerJson()
     {
         var (projectId, userId, _, _, sessionId) = await SeedSessionAsync();

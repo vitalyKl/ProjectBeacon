@@ -701,17 +701,21 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                             : Array.Empty<string>();
                                         var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manuallyApproved)
                                             || CommandExecutionPolicy.MatchesApprovedPrefix(commandArgv, manifestPrefixes);
-                                        if (policy == CommandExecutionPolicy.Ask
-                                            && !isApproved
-                                            && !await RequestCommandPermissionAsync(
+                                        (bool Allowed, string? Error) permission = (true, null);
+                                        if (policy == CommandExecutionPolicy.Ask && !isApproved)
+                                            permission = await RequestCommandPermissionAsync(
                                                 session,
                                                 commandAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
                                                 commandArgv,
-                                                ct))
+                                                ct);
+
+                                        if (!permission.Allowed)
                                         {
                                             isError = true;
-                                            toolResult = "Tool error: the user denied this command. Do not retry it or change its arguments to bypass the decision.";
+                                            toolResult = permission.Error is null
+                                                ? "Tool error: the user denied this command. Do not retry it or change its arguments to bypass the decision."
+                                                : "Tool error: " + permission.Error;
                                         }
                                         else
                                         {
@@ -775,17 +779,21 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                             : Array.Empty<string>();
                                         var isApproved = CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manuallyApproved)
                                             || CommandExecutionPolicy.MatchesApprovedPrefix(serviceArgv, manifestPrefixes);
-                                        if (policy == CommandExecutionPolicy.Ask
-                                            && !isApproved
-                                            && !await RequestCommandPermissionAsync(
+                                        (bool Allowed, string? Error) permission = (true, null);
+                                        if (policy == CommandExecutionPolicy.Ask && !isApproved)
+                                            permission = await RequestCommandPermissionAsync(
                                                 session,
                                                 serviceAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
                                                 serviceArgv,
-                                                ct))
+                                                ct);
+
+                                        if (!permission.Allowed)
                                         {
                                             isError = true;
-                                            toolResult = "Tool error: the user denied this service command. Do not retry it or change its arguments to bypass the decision.";
+                                            toolResult = permission.Error is null
+                                                ? "Tool error: the user denied this service command. Do not retry it or change its arguments to bypass the decision."
+                                                : "Tool error: " + permission.Error;
                                         }
                                         else
                                         {
@@ -1621,7 +1629,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
     }
 
-    private async Task<bool> RequestCommandPermissionAsync(
+    private async Task<(bool Allowed, string? Error)> RequestCommandPermissionAsync(
         SessionState session,
         string workingDirectory,
         string approvalProjectRoot,
@@ -1644,18 +1652,19 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 switch (ParseCommandPermissionDecision(answerJson))
                 {
                     case "once":
-                        return true;
+                        return (true, null);
                     case "always":
                         if (CommandExecutionPolicy.ApprovePrefix(
                             approvalProjectRoot,
                             prefix,
                             CommandExecutionPolicy.GetManifestFingerprint(workingDirectory),
                             out var error))
-                            return true;
+                            return (true, null);
+                        var message = "Could not save the project command approval: " + (error ?? "unknown error");
                         _log?.Invoke("could not persist project command approval: " + (error ?? "unknown error"));
-                        return false;
+                        return (false, message);
                     default:
-                        return false;
+                        return (false, null);
                 }
             }
             finally

@@ -9,6 +9,7 @@
 @inject ReplyChatFormHandler ReplyForm
 @inject ReplyPipelineFormHandler ReplyPipelineForm
 @inject ISnackbar Snackbar
+@inject ILogger<ChatPartView> Logger
 
 <div class="beacon-chat-part @PartClass" data-chat-part-id="@Part.Id">
     <div class="beacon-chat-part-head">
@@ -426,6 +427,11 @@
             else
                 Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, error ?? L["Error"].Value), Severity.Error);
             StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to submit chat form {FormId} for chat part {PartId}", QFormId, Part.Id);
+            Snackbar.Add(string.Format(L["ChatAnswerFailed"].Value, ex.Message), Severity.Error);
         }
         finally
         {
