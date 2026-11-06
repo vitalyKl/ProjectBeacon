@@ -23,7 +23,16 @@ public sealed class DaemonCommandLoopConcurrencyTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         var run = loop.RunAsync(cts.Token);
 
-        await executor.BothPromptsStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        try
+        {
+            await executor.BothPromptsStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Equal(2, api.NormalClaims);
+            Assert.True(executor.Started >= 1, "The first prompt command was not dispatched to the executor.");
+            throw;
+        }
         executor.Release.TrySetResult(true);
         await api.BothCommandsCompleted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
@@ -64,6 +73,7 @@ public sealed class DaemonCommandLoopConcurrencyTests
         private int _completed;
 
         public int Completed => Volatile.Read(ref _completed);
+        public int NormalClaims => Volatile.Read(ref _normalClaims);
         public TaskCompletionSource<bool> BothCommandsCompleted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
