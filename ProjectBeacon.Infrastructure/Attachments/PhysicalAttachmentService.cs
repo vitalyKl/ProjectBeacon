@@ -58,7 +58,7 @@ public sealed class PhysicalAttachmentService : IAttachmentService
 
             var item = TaskAttachment.Create(projectId, taskId, safeName, normalizedType,
                 length, storageKey, actor.Type.ToString(), actor.UserId ?? actor.TokenId ?? actor.DeviceId);
-            db.Set<TaskAttachment>().Add(item);
+            db.TaskAttachments.Add(item);
             await db.SaveChangesAsync(ct);
             return Map(item);
         }
@@ -77,7 +77,7 @@ public sealed class PhysicalAttachmentService : IAttachmentService
         var taskExists = await db.Tasks.AsNoTracking().AnyAsync(item => item.Id == taskId && item.ProjectId == projectId, ct);
         if (!taskExists)
             return [];
-        var items = await db.Set<TaskAttachment>().AsNoTracking()
+        var items = await db.TaskAttachments.AsNoTracking()
             .Where(item => item.ProjectId == projectId && item.TaskId == taskId)
             .OrderBy(item => item.CreatedAt)
             .ToListAsync(ct);
@@ -88,7 +88,7 @@ public sealed class PhysicalAttachmentService : IAttachmentService
         Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var item = await db.Set<TaskAttachment>().AsNoTracking().SingleOrDefaultAsync(
+        var item = await db.TaskAttachments.AsNoTracking().SingleOrDefaultAsync(
             attachment => attachment.Id == attachmentId
                 && attachment.ProjectId == projectId && attachment.TaskId == taskId, ct);
         if (item is null)
