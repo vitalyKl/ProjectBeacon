@@ -6,6 +6,7 @@ using ProjectBeacon.Domain.Entities.Tasks;
 using ProjectBeacon.Domain.Enums;
 using ProjectBeacon.Infrastructure;
 using ProjectBeacon.Infrastructure.Data;
+using ProjectBeacon.Infrastructure.Attachments;
 using ProjectBeacon.Application.Mail;
 using ProjectBeacon.Web;
 using Bunit;
@@ -62,6 +63,7 @@ public abstract class BUnitRenderBase : IDisposable
         _bunit.Services.AddScoped<IDbContextFactory<BeaconDbContext>, BeaconDbFactory>(_ => new BeaconDbFactory(_options, tenant));
         _bunit.Services.AddScoped<IBeaconDbFactory>(sp => (IBeaconDbFactory)sp.GetRequiredService<IDbContextFactory<BeaconDbContext>>());
         _bunit.Services.AddApplicationPorts();
+        _bunit.Services.AddScoped<IAttachmentService, FakeAttachmentService>();
         _bunit.Services.AddApplicationHandlers();
         _bunit.Services.AddMudServices();
         _bunit.Services.AddLocalization();
@@ -144,4 +146,21 @@ public sealed class FakeEmailSender : IEmailSender
 {
     public bool IsConfigured => true;
     public System.Threading.Tasks.Task SendAsync(string to, string subject, string textBody, System.Threading.CancellationToken ct = default) => System.Threading.Tasks.Task.CompletedTask;
+}
+
+
+internal sealed class FakeAttachmentService : IAttachmentService
+{
+    public Task<TaskAttachmentDto?> UploadTaskAsync(
+        Guid projectId, Guid taskId, ProjectBeacon.Application.Authorization.ActorContext actor,
+        Stream content, string fileName, string? contentType, long length, CancellationToken ct = default)
+        => Task.FromResult<TaskAttachmentDto?>(null);
+
+    public Task<IReadOnlyList<TaskAttachmentDto>> ListTaskAsync(
+        Guid projectId, Guid taskId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<TaskAttachmentDto>>([]);
+
+    public Task<(TaskAttachmentDto Attachment, byte[] Content)?> ReadTaskAsync(
+        Guid projectId, Guid taskId, Guid attachmentId, CancellationToken ct = default)
+        => Task.FromResult<(TaskAttachmentDto Attachment, byte[] Content)?>(null);
 }
