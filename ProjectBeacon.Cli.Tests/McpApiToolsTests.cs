@@ -8,6 +8,22 @@ using ProjectBeacon.Cli.Mcp;
 public sealed class McpApiToolsTests
 {
     [Fact]
+    public async Task ReportSubtaskResult_OversizedSummary_IsRejectedBeforeHttpRequest()
+    {
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.ReportResultAsync(
+            Guid.NewGuid(), Guid.NewGuid(), "diff", new string('x', 5001), api);
+
+        Assert.True(result.IsError);
+        Assert.Contains("5000-character limit", result.Text);
+        Assert.Empty(handler.Calls);
+    }
+
+    [Fact]
     public async Task ToolsList_IncludesControlPlaneTools_AndNoShell()
     {
         var root = TempRoot();
