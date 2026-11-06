@@ -5,6 +5,11 @@ using System.Net.Http.Json;
 internal interface IDaemonLlamaSync
 {
     Task SyncAsync(WorkstationSettings settings, CancellationToken ct);
+    async Task<bool> TrySyncAsync(WorkstationSettings settings, CancellationToken ct)
+    {
+        await SyncAsync(settings, ct);
+        return true;
+    }
     Task RunLockedAsync(Func<Task> action, CancellationToken ct);
     Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
         => concurrent ? action() : RunLockedAsync(action, ct);
@@ -32,6 +37,9 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
 
     public Task SyncAsync(WorkstationSettings settings, CancellationToken ct) =>
         RunLockedAsync(() => SyncCoreAsync(settings, ct), ct);
+
+    public Task<bool> TrySyncAsync(WorkstationSettings settings, CancellationToken ct) =>
+        _scheduler.TryRunMaintenanceAsync(() => SyncCoreAsync(settings, ct), ct);
 
     private async Task SyncCoreAsync(WorkstationSettings settings, CancellationToken ct)
     {
