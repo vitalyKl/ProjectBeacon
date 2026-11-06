@@ -10,6 +10,8 @@ using ProjectBeacon.Domain.Enums;
 /// </summary>
 public class Subtask : Entity, IProjectScoped
 {
+    /// <summary>Maximum summary length, matching the persisted column limit.</summary>
+    public const int MaxSummaryLength = 5000;
     public Subtask() { }
 
     public Guid TaskId { get; private set; }
@@ -117,6 +119,8 @@ public class Subtask : Entity, IProjectScoped
     /// <summary>Records the diff and summary and marks Done. Allowed while active or waiting for a user answer.</summary>
     public void ReportResult(string diffRef, string summary)
     {
+        if (summary.Length > MaxSummaryLength)
+            throw new ArgumentException($"Summary exceeds the {MaxSummaryLength}-character limit.", nameof(summary));
         if (Status is not (SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
             throw new InvalidOperationException($"Cannot report result for subtask in status {Status}");
         DiffRef = diffRef;
@@ -153,6 +157,8 @@ public class Subtask : Entity, IProjectScoped
     /// <summary>Marks Failed from any non-failed status. <paramref name="reason"/> is required.</summary>
     public void ForceFail(string reason)
     {
+        if (reason.Length > MaxSummaryLength)
+            throw new ArgumentException($"Failure reason exceeds the {MaxSummaryLength}-character limit.", nameof(reason));
         if (string.IsNullOrWhiteSpace(reason))
             throw new ArgumentException("Force-fail reason cannot be empty.", nameof(reason));
         if (Status == SubtaskStatus.Failed)

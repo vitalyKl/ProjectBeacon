@@ -3,6 +3,7 @@ namespace ProjectBeacon.Cli.Mcp;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Domain.Enums;
+using Domain.Entities.Tasks;
 
 internal readonly record struct McpToolText(bool IsError, string Text);
 
@@ -115,6 +116,10 @@ internal static partial class McpApiTools
     public static Task<McpToolText> ReportResultAsync(
         Guid taskId, Guid subtaskId, string diffRef, string summary, BeaconApiClient api, CancellationToken ct = default)
     {
+        if (summary.Length > Subtask.MaxSummaryLength)
+            return Task.FromResult(new McpToolText(true,
+                $"Summary exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten it and retry."));
+
         var body = new JsonObject
         {
             ["taskId"] = taskId.ToString("D"),

@@ -2,6 +2,7 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 
 internal static partial class McpApiTools
@@ -84,6 +85,8 @@ internal static partial class McpApiTools
         var reason = Text(args, "reason");
         if (string.IsNullOrWhiteSpace(reason))
             return new McpToolText(true, "missing 'reason'");
+        if (reason.Length > Subtask.MaxSummaryLength)
+            return new McpToolText(true, $"Failure reason exceeds the {Subtask.MaxSummaryLength}-character limit. Shorten it and retry.");
         var body = new JsonObject
         {
             ["taskId"] = taskId.ToString("D"),
