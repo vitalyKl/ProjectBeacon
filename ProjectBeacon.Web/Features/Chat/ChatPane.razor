@@ -152,7 +152,7 @@
     // PromptTokens is the input context consumed by the model. Cost and output
     // throughput are supplementary and must not hide the primary context metric.
     private int? EffectiveContextLimit =>
-        Model is null ? Session?.ContextLimit : SelectedContextLimit ?? Session?.ContextLimit;
+        Model is null ? Session?.ContextLimit : SelectedContextLimit;
 
     private int? UsagePercent
     {
