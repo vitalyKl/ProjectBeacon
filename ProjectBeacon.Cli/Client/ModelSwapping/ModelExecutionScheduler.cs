@@ -11,19 +11,37 @@ internal sealed class ModelExecutionScheduler
     private readonly AsyncReaderWriterGate _lifecycle = new();
     private readonly AsyncReaderWriterGate _swapGroup = new();
 
-    public async Task RunModelRequestAsync(
+    public Task RunModelRequestAsync(
         bool concurrent,
         Func<Task> action,
         CancellationToken ct)
+        => RunModelRequestAsync(() => concurrent, action, ct);
+
+    public async Task RunModelRequestAsync(
+        Func<bool> isConcurrent,
+        Func<Task> action,
+        CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(isConcurrent);
         ArgumentNullException.ThrowIfNull(action);
 
-        IDisposable? swapLease = null;
-        if (!concurrent)
-            swapLease = await _swapGroup.AcquireWriteAsync(ct);
+        // Read residency only while maintenance is excluded. If the model is exclusive,
+        // release the lifecycle read lease before waiting for the FIFO swap slot, then
+        // reacquire it and re-check: a config update may have changed the residency flag
+        // while this request was queued.
+        using var initialLifecycleLease = await _lifecycle.AcquireReadAsync(ct);
+        if (isConcurrent())
+        {
+            await action();
+            return;
+        }
 
-        using var swapScope = swapLease;
+        initialLifecycleLease.Dispose();
+        using var swapLease = await _swapGroup.AcquireWriteAsync(ct);
         using var lifecycleLease = await _lifecycle.AcquireReadAsync(ct);
+        if (isConcurrent())
+            swapLease.Dispose();
+
         await action();
     }
 
