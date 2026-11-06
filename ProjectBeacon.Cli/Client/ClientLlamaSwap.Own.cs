@@ -87,6 +87,11 @@ public sealed partial class ClientLlamaSwap
         throw new InvalidOperationException($"Local model '{name}' is not present in the active LlamaSwap configuration.");
     }
 
+    internal string GetLocalModelBaseUrl(string name)
+        => UseOwnSwapper
+            ? GetOwnModelBaseUrl(name)
+            : $"http://127.0.0.1:{_port}/v1";
+
     private async Task<bool> TryAdmitAsync(long need, CancellationToken ct)
     {
         if (need <= 0)
