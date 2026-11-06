@@ -460,7 +460,6 @@ public class ReplyChatFormHandler : ICommandHandler<ReplyChatFormCommand, Result
             JsonSerializer.Serialize(new { externalSessionId = session.ExternalSessionId, formId, answerJson }), session.ProjectId)), ct);
         if (!queued.Success)
         {
-            await db.SaveChangesAsync(ct);
             return Result.Failure<ChatSessionDto>(queued.Error ?? "Could not reach the device.");
         }
         await db.SaveChangesAsync(ct);

@@ -10,8 +10,10 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class NativeAgentRuntimeTests
 {
-    [Fact]
-    public async Task NativeRuntimeWaitsForCommandApprovalBeforeRunningArgvAndResumesAfterReply()
+    [Theory]
+    [InlineData("once")]
+    [InlineData("always")]
+    public async Task NativeRuntimeWaitsForCommandApprovalBeforeRunningArgvAndResumesAfterReply(string decision)
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-native-command-approval-" + Guid.NewGuid().ToString("N"));
         var project = Path.Combine(temp, "project");
@@ -54,7 +56,7 @@ public sealed class NativeAgentRuntimeTests
             }
 
             Assert.True(await capabilities.ReplyFormAsync(session, approval.Id,
-                """{"decision":"once"}""", CancellationToken.None));
+                JsonSerializer.Serialize(new { decision }), CancellationToken.None));
 
             AgentTurnStatus? status = null;
             for (var i = 0; i < 200; i++)
@@ -69,6 +71,11 @@ public sealed class NativeAgentRuntimeTests
             Assert.Equal(1, provider.FinalRequests);
             Assert.Empty(await capabilities.ListPendingFormsAsync(session, CancellationToken.None));
             Assert.Contains("\"exitCode\":0", provider.LastToolResult, StringComparison.Ordinal);
+            var savedPrefixes = CommandExecutionPolicy.GetManuallyApprovedPrefixes(project);
+            if (decision == "always")
+                Assert.Contains("dotnet --version", savedPrefixes);
+            else
+                Assert.DoesNotContain("dotnet --version", savedPrefixes);
         }
         finally
         {
