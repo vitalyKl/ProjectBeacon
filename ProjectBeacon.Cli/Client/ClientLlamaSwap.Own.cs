@@ -64,6 +64,11 @@ public sealed partial class ClientLlamaSwap
             throw new InvalidOperationException("The local model configuration is not available.");
 
         var specs = LlamaSwapConfigParser.Parse(yaml);
+        var loaded = Status.LoadedModels?.FirstOrDefault(
+            model => string.Equals(model.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (!string.Equals(loaded?.State, "ready", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Local model '{name}' is not loaded and ready.");
+
         var residentIndex = 0;
         foreach (var spec in specs)
         {
