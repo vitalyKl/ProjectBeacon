@@ -26,7 +26,9 @@ public sealed record AgentHarnessAuthorization(
     Guid? SubtaskId = null,
     string? PipelineRole = null,
     IReadOnlyList<string>? AllowedMcpTools = null,
-    IReadOnlyList<McpServerConfiguration>? McpServers = null);
+    IReadOnlyList<McpServerConfiguration>? McpServers = null,
+    string? ProjectRoot = null,
+    bool IsolatedWorkspace = false);
 
 /// <summary>Optional temperature, reasoning effort, and tool permissions sent with a prompt.</summary>
 public sealed record AgentPromptControls(double? Temperature, string? ReasoningEffort, string? ToolPermissions)

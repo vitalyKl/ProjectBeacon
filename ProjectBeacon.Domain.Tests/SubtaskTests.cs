@@ -94,6 +94,45 @@ public sealed class SubtaskTests
     }
 
     [Fact]
+    public void WaitForUser_ResumesInProgressSubtaskWithoutFailingIt()
+    {
+        var subtask = NewSubtask();
+        subtask.Start();
+
+        subtask.WaitForUser();
+
+        Assert.Equal(SubtaskStatus.WaitingForUser, subtask.Status);
+        Assert.NotNull(subtask.UpdatedAt);
+
+        subtask.ResumeFromUser();
+
+        Assert.Equal(SubtaskStatus.InProgress, subtask.Status);
+    }
+
+    [Fact]
+    public void ReportResult_FromWaitingForUser_CompletesSubtask()
+    {
+        var subtask = NewSubtask();
+        subtask.Start();
+        subtask.WaitForUser();
+
+        subtask.ReportResult("worktree:verified", "Build and tests passed after approval.");
+
+        Assert.Equal(SubtaskStatus.Done, subtask.Status);
+        Assert.Equal("worktree:verified", subtask.DiffRef);
+    }
+
+    [Fact]
+    public void ResumeFromUser_WhenNotWaiting_IsIdempotent()
+    {
+        var subtask = NewSubtask();
+
+        subtask.ResumeFromUser();
+
+        Assert.Equal(SubtaskStatus.Pending, subtask.Status);
+    }
+
+    [Fact]
     public void Fail_FromPending_SetsFailedWithReason()
     {
         var subtask = NewSubtask();

@@ -118,10 +118,8 @@ public sealed class WorkstationSettings
     public int LlamaSwapPort { get; set; } = 8080;
     public bool UseOwnSwapper { get; set; }
     public string AgentRuntime { get; set; } = "opencode";
-    /// <summary>Command prefixes the native harness may execute directly; empty disables run_command.</summary>
-    public List<string> AllowedCommandPrefixes { get; set; } = [];
-    /// <summary>Explicit workstation-wide approval for interactive terminal tools. False by default.</summary>
-    public bool AllowTerminalExecution { get; set; }
+    /// <summary>Workstation-wide native command policy: off, ask, or auto. Defaults to ask.</summary>
+    public string CommandPolicy { get; set; } = "ask";
     public int ConcurrentPortBase { get; set; } = 9000;
     /// <summary>Absolute cap for one native pipeline agent turn. The server lease is 75 minutes.</summary>
     public int PipelineTurnTimeoutMinutes { get; set; } = 60;

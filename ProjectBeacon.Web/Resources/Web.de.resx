@@ -1784,6 +1784,21 @@ orthstar</value>
 <data name="CommandTimedOut" xml:space="preserve">
     <value>Zeitüberschreitung</value>
   </data>
+  <data name="CommandPolicy" xml:space="preserve">
+    <value>Richtlinie für Agentenbefehle</value>
+  </data>
+  <data name="CommandPolicyAsk" xml:space="preserve">
+    <value>Nachfragen — unbekannte Befehle genehmigen</value>
+  </data>
+  <data name="CommandPolicyAuto" xml:space="preserve">
+    <value>Automatisch — Befehle in einer isolierten Arbeitskopie ausführen</value>
+  </data>
+  <data name="CommandPolicyHelp" xml:space="preserve">
+    <value>Gilt für native Agenten auf dieser Workstation. Projektmanifeste und CI-Workflows schlagen Befehle nur vor; bei der ersten Verwendung wirst du um Genehmigung gebeten. Gespeicherte Genehmigungen verfallen, wenn sich die geprüften Manifeste oder Workflows ändern. Der automatische Modus überspringt die Zustimmung und ist keine Sicherheits-Sandbox.</value>
+  </data>
+  <data name="CommandPolicyOff" xml:space="preserve">
+    <value>Aus — Befehlsausführung deaktivieren</value>
+  </data>
 <data name="RuntimeOffline" xml:space="preserve">
     <value>Offline</value>
   </data>

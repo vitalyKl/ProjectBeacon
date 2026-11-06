@@ -1777,6 +1777,21 @@
 <data name="CommandTimedOut" xml:space="preserve">
     <value>Время вышло</value>
   </data>
+  <data name="CommandPolicy" xml:space="preserve">
+    <value>Политика запуска команд агента</value>
+  </data>
+  <data name="CommandPolicyAsk" xml:space="preserve">
+    <value>Спрашивать — запрашивать подтверждение незнакомых команд</value>
+  </data>
+  <data name="CommandPolicyAuto" xml:space="preserve">
+    <value>Автоматически — запускать команды в изолированном worktree</value>
+  </data>
+  <data name="CommandPolicyHelp" xml:space="preserve">
+    <value>Применяется к нативным агентам на этой рабочей станции. Файлы манифестов проекта и CI-workflow только предлагают команды; при первом запуске требуется подтверждение. Сохранённые разрешения сбрасываются при изменении проверенных манифестов или workflow. Автоматический режим пропускает запрос подтверждения и не является песочницей безопасности.</value>
+  </data>
+  <data name="CommandPolicyOff" xml:space="preserve">
+    <value>Выключено — запретить запуск команд</value>
+  </data>
 <data name="RuntimeOffline" xml:space="preserve">
     <value>Не в сети</value>
   </data>

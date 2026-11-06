@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -17,13 +18,14 @@ public sealed class RunPipelineSessionDispatchTests
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-dispatch-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
+        var sessionId = Guid.NewGuid();
         Directory.CreateDirectory(projectRoot);
 
         try
         {
+            await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
-            var sessionId = Guid.NewGuid();
             var commandId = Guid.NewGuid();
             const int generation = 3;
             AgentHarnessAuthorization? capturedAuthorization = null;
@@ -42,7 +44,7 @@ public sealed class RunPipelineSessionDispatchTests
                 AgentRuntime = "native",
                 OpencodeDataDir = Path.Combine(temp, "native-data"),
                 LlamaSwapPort = 8080,
-                AllowedCommandPrefixes = []
+                CommandPolicy = "off"
             };
             Func<WorkstationSettings> settingsLoader = () => settings;
             var deps = new DaemonDependencies(
@@ -106,15 +108,19 @@ public sealed class RunPipelineSessionDispatchTests
             Assert.Equal(taskId, capturedAuthorization.TaskId);
             Assert.Equal(commandId, capturedAuthorization.CommandId);
             Assert.Equal(generation, capturedAuthorization.Generation);
-            Assert.Equal(projectRoot, capturedAuthorization.WorkingDirectory);
+            Assert.NotEqual(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.WorkingDirectory));
+            Assert.Equal(Path.GetFullPath(projectRoot), Path.GetFullPath(capturedAuthorization.ProjectRoot!));
+            Assert.True(capturedAuthorization.IsolatedWorkspace);
             Assert.Equal("test-short-lived-token", capturedAuthorization.ApiToken);
             Assert.Equal("Planner", capturedAuthorization.PipelineRole);
             Assert.Empty(capturedAuthorization.AllowedMcpTools!);
             Assert.True(capturedAuthorization.ExpiresAt > DateTime.UtcNow);
             Assert.Equal(generation, tokenHandler.RequestedGeneration);
+            Assert.True(tokenHandler.ProgressRequests > 0, "The pipeline must report progress through the command API.");
         }
         finally
         {
+            await RemovePreservedWorktreesAsync(projectRoot, sessionId);
             try { Directory.Delete(temp, true); } catch { }
         }
     }
@@ -124,13 +130,14 @@ public sealed class RunPipelineSessionDispatchTests
     {
         var temp = Path.Combine(Path.GetTempPath(), "beacon-pipeline-aborted-" + Guid.NewGuid().ToString("N"));
         var projectRoot = Path.Combine(temp, "project");
+        var sessionId = Guid.NewGuid();
         Directory.CreateDirectory(projectRoot);
 
         try
         {
+            await InitializeGitRepositoryAsync(projectRoot, TestContext.Current.CancellationToken);
             var projectId = Guid.NewGuid();
             var taskId = Guid.NewGuid();
-            var sessionId = Guid.NewGuid();
             var commandId = Guid.NewGuid();
             const int generation = 1;
             var tokenHandler = new HarnessTokenHandler(projectId, commandId, generation);
@@ -196,18 +203,110 @@ public sealed class RunPipelineSessionDispatchTests
         }
         finally
         {
+            await RemovePreservedWorktreesAsync(projectRoot, sessionId);
             try { Directory.Delete(temp, true); } catch { }
         }
+    }
+
+    private static async Task InitializeGitRepositoryAsync(string projectRoot, CancellationToken ct)
+    {
+        await GitAsync(projectRoot, ct, "init", "-b", "main");
+        await GitAsync(projectRoot, ct, "config", "core.autocrlf", "false");
+        await GitAsync(projectRoot, ct, "config", "user.name", "ProjectBeacon Tests");
+        await GitAsync(projectRoot, ct, "config", "user.email", "tests@projectbeacon.local");
+        await GitAsync(projectRoot, ct, "config", "commit.gpgsign", "false");
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "README.md"), "pipeline fixture\n", ct);
+        await GitAsync(projectRoot, ct, "add", "README.md");
+        await GitAsync(projectRoot, ct, "commit", "-m", "initialize pipeline fixture");
+    }
+
+    private static async Task RemovePreservedWorktreesAsync(string projectRoot, Guid sessionId)
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "ProjectBeacon", "agent-worktrees");
+        if (!Directory.Exists(parent))
+            return;
+
+        foreach (var worktree in Directory.EnumerateDirectories(parent, sessionId.ToString("N") + "-*"))
+        {
+            try { await GitAsync(projectRoot, CancellationToken.None, "worktree", "remove", "--force", worktree); }
+            catch { }
+            try { if (Directory.Exists(worktree)) Directory.Delete(worktree, recursive: true); } catch { }
+        }
+
+        try { await GitAsync(projectRoot, CancellationToken.None, "worktree", "prune"); } catch { }
+    }
+
+    private static async Task GitAsync(string directory, CancellationToken ct, params string[] arguments)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("Could not start git for the pipeline fixture.");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            var timedOutOutput = await stdout;
+            var timedOutError = await stderr;
+            throw new TimeoutException(
+                $"git {string.Join(' ', arguments)} exceeded the 30-second test command timeout: {timedOutError}{timedOutOutput}");
+        }
+
+        var output = await stdout;
+        var error = await stderr;
+        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {error}{output}");
     }
 
     private sealed class HarnessTokenHandler(Guid projectId, Guid commandId, int generation) : HttpMessageHandler
     {
         public int? RequestedGeneration { get; private set; }
 
+        private int _progressRequests;
+        public int ProgressRequests => Volatile.Read(ref _progressRequests);
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (request.Method != HttpMethod.Post
-                || request.RequestUri?.AbsolutePath != $"/v1/commands/{commandId:D}/harness-token")
+            if (request.Method != HttpMethod.Post)
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+
+            var path = request.RequestUri?.AbsolutePath.TrimEnd('/');
+            if (request.Method == HttpMethod.Post
+                && path is not null
+                && path.EndsWith("/progress", StringComparison.OrdinalIgnoreCase))
+            {
+                var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                if (segments.Length < 2
+                    || !Guid.TryParse(segments[^2], out var progressCommandId)
+                    || progressCommandId != commandId)
+                    return new HttpResponseMessage(HttpStatusCode.NotFound);
+
+                using var progress = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                if (progress.RootElement.GetProperty("generation").GetInt32() != generation)
+                    return new HttpResponseMessage(HttpStatusCode.Conflict);
+
+                Interlocked.Increment(ref _progressRequests);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            if (path != $"/v1/commands/{commandId:D}/harness-token")
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
 
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));

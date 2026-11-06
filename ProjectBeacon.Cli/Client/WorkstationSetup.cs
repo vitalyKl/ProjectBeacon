@@ -74,6 +74,8 @@ public static class WorkstationSetup
             if (selected is "opencode" or "native")
                 settings.AgentRuntime = selected;
         }
+        if (root.TryGetProperty("commandPolicy", out var commandPolicy) && commandPolicy.ValueKind == JsonValueKind.String)
+            settings.CommandPolicy = AgentHarness.CommandExecutionPolicy.NormalizeMode(commandPolicy.GetString());
         if (root.TryGetProperty("concurrentPortBase", out var cport) && cport.TryGetInt32(out var cp) && cp > 0)
             settings.ConcurrentPortBase = cp;
         if (root.TryGetProperty("pipelineTurnTimeoutMinutes", out var pipelineMax) && pipelineMax.TryGetInt32(out var maxMinutes))

@@ -68,7 +68,7 @@ public sealed class DaemonDeviceTests
     }
 }
 
-public sealed class WorkstationCommandTests
+public sealed class WorkstationCommandStateTests
 {
     [Fact]
     public void Claim_Succeed_Fail()

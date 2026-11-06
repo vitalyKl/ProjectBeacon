@@ -55,9 +55,38 @@ jobs:
         run: |
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
-      - name: Test
-        run: dotnet test --solution ProjectBeacon.sln --no-build --results-directory TestResults --results-directory-layout per-module --report-xunit-trx --report-xunit-trx-filename test-results.trx
+      - name: Test — API
+        if: always()
+        timeout-minutes: 8
+        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.API.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Test — Application
+        if: always()
+        timeout-minutes: 8
+        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Application.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Test — CLI
+        if: always()
+        timeout-minutes: 8
+        run: |
+          mkdir -p TestResults/ProjectBeacon.Cli.Tests
+          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
+      - name: Test — Domain
+        if: always()
+        timeout-minutes: 8
+        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Domain.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Test — Infrastructure
+        if: always()
+        timeout-minutes: 8
+        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Infrastructure.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Test — Web
+        if: always()
+        timeout-minutes: 8
+        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Web.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Test — Worker
+        if: always()
+        timeout-minutes: 8
+        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Verify test results (TRX guards)
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +111,7 @@ jobs:
               tree = ET.parse(path)
               return [r for r in tree.iter() if r.tag.endswith("UnitTestResult")]
 
-          paths = sorted(glob.glob(BASE + "/*/*/test-results.trx"))
+          paths = sorted(glob.glob(BASE + "/**/test-results.trx", recursive=True))
           if len(paths) != EXPECTED_MODULES:
               raise SystemExit(f"::error::Expected {EXPECTED_MODULES} per-module TRX reports under {BASE}, found {len(paths)}: {paths}")
 

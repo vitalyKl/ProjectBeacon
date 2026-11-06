@@ -425,6 +425,12 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         if (!readiness.Ready)
             return (false, null, readiness.Error ?? "The native agent runtime is not ready.");
 
+        var originalProjectRoot = readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot);
+        var createdWorktree = await AgentSessionWorktree.CreateAsync(originalProjectRoot, pipelineSessionId, ct);
+        if (createdWorktree.Workspace is null)
+            return (false, null, createdWorktree.Error ?? "Could not create an isolated agent worktree.");
+        await using var sessionWorktree = createdWorktree.Workspace;
+
         using var tokenResponse = await _http.PostAsJsonAsync(
             $"/v1/commands/{command.Id:D}/harness-token",
             new { generation = command.Generation },
@@ -446,11 +452,13 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             taskId,
             command.Id,
             command.Generation,
-            readiness.WorkingDirectory ?? Path.GetFullPath(command.LocalRoot),
+            sessionWorktree.WorkingDirectory,
             token.ExpiresAt,
             subtaskId,
             pipelineRole,
-            token.AllowedMcpTools, token.McpServers);
+            token.AllowedMcpTools, token.McpServers,
+            sessionWorktree.ProjectRoot,
+            IsolatedWorkspace: true);
         var externalSessionId = await runtime.CreateSessionAsync(title ?? "ProjectBeacon pipeline", ct);
         var workstationSettings = _loadSettings();
         var pipelineMaxMinutes = Math.Clamp(workstationSettings.PipelineTurnTimeoutMinutes, 15, 60);
@@ -459,11 +467,16 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         var lastProgressAt = DateTime.UtcNow;
         string? lastProgressSignature = null;
         string? timeoutReason = null;
+        var awaitingUser = false;
 
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
 
-        async Task<bool> PublishActivityAsync(string state, AgentTurnStatus? turnStatus, CancellationToken tokenCt)
+        async Task<bool> PublishActivityAsync(
+            string state,
+            AgentTurnStatus? turnStatus,
+            CancellationToken tokenCt,
+            bool terminal = false)
         {
             var collected = new List<AgentMessagePart>();
             await foreach (var part in runtime.StreamPartsAsync(externalSessionId, tokenCt))
@@ -508,6 +521,24 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     fields = fields ?? new JsonArray()
                 };
             }).ToArray();
+
+            // A human question is a durable pause, not an idle agent. Suspend both idle and
+            // absolute turn timeouts while the form remains pending; resume the cap after reply.
+            if (forms.Count > 0)
+            {
+                lastProgressAt = DateTime.UtcNow;
+                if (!awaitingUser)
+                {
+                    awaitingUser = true;
+                    turnCts.CancelAfter(Timeout.InfiniteTimeSpan);
+                }
+            }
+            else if (awaitingUser)
+            {
+                awaitingUser = false;
+                lastProgressAt = DateTime.UtcNow;
+                turnCts.CancelAfter(TimeSpan.FromMinutes(pipelineMaxMinutes));
+            }
 
             // Ignore elapsed-duration counters: only transcript/tool/form changes count
             // as progress, so a stuck tool cannot keep the turn alive indefinitely.
@@ -568,7 +599,22 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 new { generation = command.Generation, progressJson = snapshot },
                 tokenCt);
             if (!response.IsSuccessStatusCode)
+            {
                 _state.Log($"pipeline activity report returned HTTP {(int)response.StatusCode}");
+                // A terminal snapshot is best-effort: the API may already have closed
+                // the pipeline session (for example, after an Actor reports its result or
+                // an operator cancels it). Never replace the actual agent outcome with a
+                // secondary failure to publish that final snapshot.
+                if (!terminal && (response.StatusCode is System.Net.HttpStatusCode.Conflict
+                    or System.Net.HttpStatusCode.NotFound
+                    or System.Net.HttpStatusCode.Unauthorized
+                    or System.Net.HttpStatusCode.Forbidden))
+                {
+                    timeoutReason = $"The server no longer accepts progress for this pipeline command (HTTP {(int)response.StatusCode}); its session was cancelled or is no longer authorized.";
+                    turnCts.Cancel();
+                    tokenCt.ThrowIfCancellationRequested();
+                }
+            }
             return madeProgress;
         }
 
@@ -589,7 +635,7 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
             do
             {
                 await PublishActivityAsync("running", null, turnCts.Token);
-                if (DateTime.UtcNow - lastProgressAt >= pipelineIdleTimeout)
+                if (!awaitingUser && DateTime.UtcNow - lastProgressAt >= pipelineIdleTimeout)
                 {
                     timeoutReason = $"The pipeline agent turn made no progress for {pipelineIdleMinutes} minutes.";
                     turnCts.Cancel();
@@ -607,14 +653,23 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                 || string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(status.Finish);
 
-            await PublishActivityAsync(failed ? "failed" : "completed", status, ct);
+            await PublishActivityAsync(failed ? "failed" : "completed", status, ct, terminal: true);
             if (failed)
             {
                 var failure = status.Error
                     ?? (string.Equals(status.Finish, "aborted", StringComparison.OrdinalIgnoreCase)
                         ? "The pipeline agent turn was aborted."
                         : "The pipeline agent turn failed.");
-                return (false, null, failure);
+                sessionWorktree.Preserve();
+                return (false, null, failure + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
+            }
+
+            var applied = await sessionWorktree.ApplyChangesAsync(ct);
+            if (!applied.Success)
+            {
+                sessionWorktree.Preserve();
+                return (false, null, (applied.Error ?? "Could not apply isolated agent changes.")
+                    + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
             }
 
             return (true, JsonSerializer.Serialize(new
@@ -630,9 +685,27 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
-            try { await PublishActivityAsync("failed", null, CancellationToken.None); } catch { }
-            return (false, null, timeoutReason
-                ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.");
+            try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
+            sessionWorktree.Preserve();
+            return (false, null, (timeoutReason
+                ?? $"The pipeline agent turn exceeded the {pipelineMaxMinutes}-minute workstation limit.")
+                + $" Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
+        }
+        catch (OperationCanceledException)
+        {
+            sessionWorktree.Preserve();
+            throw;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            try { await runtime.AbortAsync(externalSessionId, CancellationToken.None); } catch { }
+            try { await PublishActivityAsync("failed", null, CancellationToken.None, terminal: true); } catch { }
+            sessionWorktree.Preserve();
+            return (false, null, $"Pipeline agent failed ({ex.GetType().Name}). Agent worktree preserved at {sessionWorktree.RecoveryPath}.");
+        }
+        finally
+        {
+            try { await runtime.StopServicesAsync(externalSessionId, CancellationToken.None); } catch { }
         }
     }
 

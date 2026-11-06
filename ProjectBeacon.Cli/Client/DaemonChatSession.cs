@@ -21,7 +21,7 @@ internal interface IDaemonChatSession
     Task<(bool Ok, string? Result, string? Error)> ReplyFormAsync(string payload, CancellationToken ct);
 }
 
-internal sealed class DaemonChatSession : IDaemonChatSession
+internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
@@ -31,6 +31,9 @@ internal sealed class DaemonChatSession : IDaemonChatSession
     private readonly DaemonTiming _timing;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeTurns = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _abortRequested = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<Guid, AgentSessionWorktree> _chatWorktrees = new();
+    private readonly ConcurrentDictionary<Guid, string> _chatExternalSessions = new();
+    private readonly SemaphoreSlim _worktreeGate = new(1, 1);
 
     public DaemonChatSession(
         DaemonDependencies deps,
@@ -82,6 +85,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var projectId = doc.RootElement.TryGetProperty("projectId", out var p) && p.TryGetGuid(out var pid) ? pid : Guid.Empty;
         if (string.IsNullOrWhiteSpace(externalId) || string.IsNullOrWhiteSpace(text) || chatId == Guid.Empty)
             return (false, null, "chatSessionId, externalSessionId, and text are required.");
+        _chatExternalSessions[chatId] = externalId;
 
         using var activeTurn = CancellationTokenSource.CreateLinkedTokenSource(ct);
         if (!_activeTurns.TryAdd(externalId, activeTurn))
@@ -206,6 +210,42 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         var readiness = await _gate.EnsureReadyAsync(cwd, ct);
         if (!readiness.Ready)
             return (false, null, readiness.Error ?? "The selected agent runtime is not ready.");
+
+        AgentSessionWorktree? sessionWorktree = null;
+        if (harnessAuthorization is not null)
+        {
+            await _worktreeGate.WaitAsync(ct);
+            try
+            {
+                if (!_chatWorktrees.TryGetValue(chatId, out sessionWorktree))
+                {
+                    var created = await AgentSessionWorktree.CreateAsync(
+                        readiness.WorkingDirectory ?? Path.GetFullPath(cwd),
+                        chatId,
+                        ct);
+                    if (created.Workspace is null)
+                        return (false, null, created.Error ?? "Could not create an isolated chat worktree.");
+                    sessionWorktree = _chatWorktrees.GetOrAdd(chatId, created.Workspace);
+                    if (!ReferenceEquals(sessionWorktree, created.Workspace))
+                        await created.Workspace.DisposeAsync();
+                }
+            }
+            finally
+            {
+                _worktreeGate.Release();
+            }
+        }
+        if (sessionWorktree is not null && harnessAuthorization is not null)
+        {
+            cwd = sessionWorktree.WorkingDirectory;
+            harnessAuthorization = harnessAuthorization with
+            {
+                WorkingDirectory = sessionWorktree.WorkingDirectory,
+                ProjectRoot = sessionWorktree.ProjectRoot,
+                IsolatedWorkspace = true
+            };
+        }
+
         if (_llama.UseOwnSwapper && model is not null)
             await _llamaSync.RunLockedAsync(() => _llama.EnsureSwapModelAsync(DaemonPayload.ExtractSwapName(model), ct), ct);
         // Baseline: the last assistant message before the prompt; an ended turn from an
@@ -326,17 +366,25 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                 }
                 // Surface model questions: v2 forms live outside the message list, so poll them
                 // while the turn runs instead of waiting for the durable parts.
-                await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
-                quiet = added > 0 ? 0 : quiet + 1;
+                var waitingForUser = await SurfacePendingFormsAsync(capabilities, externalId, chatId, projectId, seenForms, ct);
+                if (harnessAuthorization is { } chatAuthorization)
+                    await ReportPromptProgressAsync(chatAuthorization, waitingForUser, ct);
+                if (waitingForUser)
+                    i--; // Human wait is not part of the normal chat turn duration.
+                quiet = waitingForUser || added > 0 ? 0 : quiet + 1;
                 // The turn ends only when the last assistant message finishes without pending tool calls;
                 // a tool-calls finish means the agent keeps working, so quiet polls are not idle.
                 var turn = await runtime.GetTurnStatusAsync(externalId, ct);
                 lastTurn = turn;
                 // Fresh means a new assistant message appeared after the baseline.
                 var fresh = turn is not null && turn.MessageId is not null && turn.MessageId != baselineMessageId;
+                // A pending form suspends the duration-based idle cutoff, but it must not
+                // suppress a terminal assistant turn. Some runtimes mark an ask-user tool
+                // request as ended while keeping the form pending for the UI to answer; return
+                // control to the caller so the user can submit that answer.
                 if (turn is { Ended: true } && fresh)
                     idle = true;
-                else if (turn is null && quiet >= maxQuiet && assistantParts > 0)
+                else if (!waitingForUser && turn is null && quiet >= maxQuiet && assistantParts > 0)
                     // The quiet path must not end a turn before the first assistant part: a slow
                     // first token (model swap, context compaction) can outlast ChatIdleTimeout.
                     idle = true;
@@ -353,6 +401,12 @@ internal sealed class DaemonChatSession : IDaemonChatSession
             {
                 try { await runtime.AbortAsync(externalId, CancellationToken.None); } catch { }
             }
+            sessionWorktree?.Preserve();
+            throw;
+        }
+        catch
+        {
+            sessionWorktree?.Preserve();
             throw;
         }
         finally
@@ -395,8 +449,34 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         {
             _state.Log($"chat usage report failed: {ex.Message}");
         }
+        // Services belong to the chat session, not an individual prompt turn. They remain
+        // available to the next user message and are stopped by ChatAbort/session reaper.
+
+        if (sessionWorktree is not null)
+        {
+            if (!idle || lastTurn?.Error is not null)
+            {
+                sessionWorktree.Preserve();
+            }
+            else
+            {
+                var applied = await sessionWorktree.ApplyChangesAsync(ct);
+                if (!applied.Success)
+                {
+                    sessionWorktree.Preserve();
+                    return (false, null, (applied.Error ?? "Could not apply isolated chat changes.")
+                        + $" Chat worktree preserved at {sessionWorktree.RecoveryPath}.");
+                }
+            }
+        }
+
         await PostChatAsync($"/v1/chat/sessions/{chatId}/idle", new { }, projectId, ct);
-        return (true, JsonSerializer.Serialize(new { sessionId = externalId, interrupted = !idle }), null);
+        return (true, JsonSerializer.Serialize(new
+        {
+            sessionId = externalId,
+            interrupted = !idle,
+            worktree = sessionWorktree is not null && (!idle || lastTurn?.Error is not null) ? sessionWorktree.RecoveryPath : null
+        }), null);
     }
 
     private static string ClipError(string error) => error.Length <= 200 ? error : error[..200];
@@ -415,7 +495,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         }, projectId, ct);
     }
 
-    private async Task SurfacePendingFormsAsync(
+    private async Task<bool> SurfacePendingFormsAsync(
         IAgentRuntimeCapabilities? capabilities, string externalId, Guid chatId, Guid projectId, HashSet<string> seenForms, CancellationToken ct)
     {
         try
@@ -428,7 +508,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     .Select(form => new AgentRuntimeForm(form.Id, form.Title, form.Metadata, form.FieldsJson))
                     .ToArray();
             else
-                return;
+                return false;
 
             foreach (var form in forms)
             {
@@ -450,6 +530,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession
                     complete = true
                 }, projectId, ct);
             }
+            return forms.Count > 0;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -458,6 +539,35 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         catch (Exception ex)
         {
             _state.Log($"chat form poll failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task ReportPromptProgressAsync(
+        AgentHarnessAuthorization authorization,
+        bool waitingForUser,
+        CancellationToken ct)
+    {
+        if (_http.BaseAddress is null || authorization.CommandId == Guid.Empty)
+            return;
+
+        var progressJson = waitingForUser ? "{\"forms\":[{}]}" : "{\"forms\":[]}";
+        try
+        {
+            using var response = await _http.PostAsJsonAsync(
+                $"/v1/commands/{authorization.CommandId:D}/progress",
+                new { generation = authorization.Generation, progressJson },
+                ct);
+            if (!response.IsSuccessStatusCode)
+                _state.Log($"chat command progress report returned HTTP {(int)response.StatusCode}");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _state.Log($"chat command progress report failed: {ex.GetType().Name}");
         }
     }
 
@@ -467,6 +577,45 @@ internal sealed class DaemonChatSession : IDaemonChatSession
         if (projectId != Guid.Empty)
             request.Headers.TryAddWithoutValidation("X-Project-Id", projectId.ToString());
         return _http.SendAsync(request, ct);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Stop prompt loops before removing the directories that their MCP and service
+        // child processes may still be using. The bounded drain avoids hanging daemon shutdown.
+        foreach (var activeTurn in _activeTurns.Values)
+            activeTurn.Cancel();
+
+        for (var attempt = 0; attempt < 200 && !_activeTurns.IsEmpty; attempt++)
+            await Task.Delay(50);
+
+        foreach (var externalId in _chatExternalSessions.Values.Distinct(StringComparer.Ordinal))
+        {
+            try { await _gate.Runtime.AbortAsync(externalId, CancellationToken.None); }
+            catch (Exception ex) { _state.Log($"chat service cleanup failed: {ex.GetType().Name}"); }
+        }
+
+        await _worktreeGate.WaitAsync();
+        try
+        {
+            foreach (var workspace in _chatWorktrees.Values)
+            {
+                try
+                {
+                    if (!_activeTurns.IsEmpty)
+                        workspace.Preserve();
+                    await workspace.DisposeAsync();
+                }
+                catch (Exception ex) { _state.Log($"chat worktree cleanup failed: {ex.GetType().Name}"); }
+            }
+            _chatWorktrees.Clear();
+            _chatExternalSessions.Clear();
+        }
+        finally
+        {
+            _worktreeGate.Release();
+            _worktreeGate.Dispose();
+        }
     }
 
     private static async Task<IReadOnlyList<AgentMessagePart>> CollectPartsAsync(IAgentRuntime runtime, string sessionId, CancellationToken ct)

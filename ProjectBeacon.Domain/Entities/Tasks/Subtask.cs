@@ -94,10 +94,30 @@ public class Subtask : Entity, IProjectScoped
         UpdatedAt = DateTime.UtcNow;
     }
 
-    /// <summary>Records the diff and summary and marks Done. Only from InProgress.</summary>
+    /// <summary>Moves an in-progress Actor subtask to the resumable waiting-for-user state.</summary>
+    public void WaitForUser()
+    {
+        if (Status == SubtaskStatus.WaitingForUser)
+            return;
+        if (Status != SubtaskStatus.InProgress)
+            throw new InvalidOperationException($"Cannot pause subtask in status {Status}");
+        Status = SubtaskStatus.WaitingForUser;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Resumes a subtask after its pending user forms have been answered.</summary>
+    public void ResumeFromUser()
+    {
+        if (Status != SubtaskStatus.WaitingForUser)
+            return;
+        Status = SubtaskStatus.InProgress;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Records the diff and summary and marks Done. Allowed while active or waiting for a user answer.</summary>
     public void ReportResult(string diffRef, string summary)
     {
-        if (Status != SubtaskStatus.InProgress)
+        if (Status is not (SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
             throw new InvalidOperationException($"Cannot report result for subtask in status {Status}");
         DiffRef = diffRef;
         Summary = summary;

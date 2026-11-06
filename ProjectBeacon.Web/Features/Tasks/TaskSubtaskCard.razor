@@ -90,6 +90,7 @@
     {
         SubtaskStatus.Done => Color.Success,
         SubtaskStatus.InProgress => Color.Info,
+        SubtaskStatus.WaitingForUser => Color.Warning,
         SubtaskStatus.Failed => Color.Error,
         _ => Color.Default
     };
