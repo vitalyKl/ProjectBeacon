@@ -33,6 +33,17 @@ internal sealed class ModelExecutionScheduler
         using (await _lifecycle.AcquireWriteAsync(ct))
             await action();
     }
+
+    public async Task<bool> TryRunMaintenanceAsync(Func<Task> action, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        ct.ThrowIfCancellationRequested();
+        using var lease = _lifecycle.TryAcquireWrite();
+        if (lease is null)
+            return false;
+        await action();
+        return true;
+    }
 }
 
 /// <summary>
@@ -52,6 +63,17 @@ internal sealed class AsyncReaderWriterGate
 
     public ValueTask<IDisposable> AcquireWriteAsync(CancellationToken ct = default)
         => AcquireAsync(writer: true, ct);
+
+    public IDisposable? TryAcquireWrite()
+    {
+        lock (_sync)
+        {
+            if (_writerActive || _activeReaders != 0 || _waiters.Count != 0)
+                return null;
+            _writerActive = true;
+            return new Lease(this, writer: true);
+        }
+    }
 
     private ValueTask<IDisposable> AcquireAsync(bool writer, CancellationToken ct)
     {
