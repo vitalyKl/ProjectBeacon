@@ -52,6 +52,11 @@
                         <MudText Typo="Typo.caption" Color="Color.Warning">@PreflightMessage(session)</MudText>
                     }
                 }
+                @if (session.Status is SessionStatus.Ready or SessionStatus.Active or SessionStatus.WaitingForUser)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                               OnClick="@(() => OnCancel.InvokeAsync(session))" Disabled="Busy">@L["CancelWork"]</MudButton>
+                }
             </MudStack>
             @if (!string.IsNullOrEmpty(session.LaunchSpec))
             {
@@ -80,6 +85,7 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnLaunch { get; set; }
     [Parameter] public EventCallback<PipelineSessionDto> OnRetry { get; set; }
+    [Parameter] public EventCallback<PipelineSessionDto> OnCancel { get; set; }
     private bool CanLaunch(PipelineSessionDto session) => session.CanLaunch;
 
     private bool IsCurrentStage(PipelineSessionDto session) => session.Role switch
@@ -127,6 +133,7 @@
         TaskPipelineStage.Reviewing => L["StageReviewing"].Value,
         TaskPipelineStage.Approved => L["StageApproved"].Value,
         TaskPipelineStage.Closed => L["Closed"].Value,
+        TaskPipelineStage.Cancelled => L["StageCancelled"].Value,
         _ => L["PipelineNotStarted"].Value
     };
 

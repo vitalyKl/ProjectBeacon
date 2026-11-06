@@ -18,6 +18,11 @@
 @inject StartActorSessionHandler StartActorSession
 @inject LaunchSessionHandler LaunchSession
 @inject RetryPipelineSessionHandler RetrySession
+@inject CancelPipelineSessionHandler CancelPipelineSession
+@inject CancelSubtaskHandler CancelSubtask
+@inject CancelPipelineHandler CancelPipeline
+@inject RestartPipelineHandler RestartPipeline
+@inject DeleteTaskHandler DeleteTask
 @inject StartReviewHandler StartReview
 @inject ListTaskStepsHandler ListSteps
 @inject ListTaskPhasesHandler ListPhases
@@ -87,6 +92,17 @@ else
                         <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ConfirmClose))" Disabled="_busy">@L["ConfirmClose"]</MudButton>
                         break;
                 }
+                <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
+                    @if (_pipeline.Stage is not (TaskPipelineStage.Cancelled or TaskPipelineStage.Closed))
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="OnCancelPipeline" Disabled="_busy">
+                            @L["CancelPipeline"]
+                        </MudButton>
+                    }
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="OnRestartPipeline" Disabled="_busy">
+                        @L["RestartPipeline"]
+                    </MudButton>
+                </MudStack>
             }
         </div>
     </header>
@@ -123,10 +139,11 @@ else
                               Busy="_busy" Preflight="_pipeline?.Preflight" OnStartActorSession="OnStartActorSession"
                               OnReportResult="@(subtask => OpenPipelineDialog(PipelineDialogMode.ReportResult, subtask))"
                               OnFailSubtask="@(subtask => OpenPipelineDialog(PipelineDialogMode.FailSubtask, subtask))"
+                              OnCancelSubtask="OnCancelSubtask"
                               OnLaunchSession="OnLaunchSession" OnRetrySession="OnRetrySession" />
                 @if (_pipeline?.Stage is not null && _pipeline.Stage != TaskPipelineStage.None)
                 {
-                    <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" />
+                    <TaskPipelinePanel Pipeline="_pipeline" Busy="_busy" OnLaunch="OnLaunchSession" OnRetry="OnRetrySession" OnCancel="OnCancelPipelineSession" />
                 }
             </section>
         </main>
@@ -147,6 +164,7 @@ else
                             <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
                         }
                         <MudButton Variant="Variant.Text" OnClick="EditTask">@L["Edit"]</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="OnDeleteTask" Disabled="_busy">@L["DeleteTask"]</MudButton>
                         <MudSelect T="TaskItemStatus"
                             Value="_status"
                             ValueChanged="OnStatusChanged"
@@ -317,7 +335,7 @@ else
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
-                if (_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed)
+                if (_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed or TaskPipelineStage.Cancelled)
                     continue;
                 try
                 {
@@ -464,6 +482,149 @@ else
             return;
         }
         await ReloadSteps();
+    }
+
+    private async Task<bool> ConfirmActionAsync(string title, string message, bool destructive = false)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(TaskActionConfirmDialog.Message), message },
+            { nameof(TaskActionConfirmDialog.ConfirmText), destructive ? L["Delete"].Value : L["Confirm"].Value },
+            { nameof(TaskActionConfirmDialog.CancelText), L["Cancel"].Value },
+            { nameof(TaskActionConfirmDialog.Destructive), destructive }
+        };
+        var reference = await Dialogs.ShowAsync(typeof(TaskActionConfirmDialog), title, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await reference.Result;
+        return result?.Data is true;
+    }
+
+    private async Task OnCancelPipeline()
+    {
+        if (_busy || _pipeline is null) return;
+        if (!await ConfirmActionAsync(L["CancelPipeline"].Value, L["CancelPipelineConfirm"].Value))
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await CancelPipeline.HandleAsync(
+                new CancelPipelineCommand(new CancelPipelineRequest(TaskId)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["PipelineCancelled"].Value, Severity.Info);
+            await Reload();
+            await ReloadPipeline();
+            await ReloadSteps();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnRestartPipeline()
+    {
+        if (_busy || _pipeline is null) return;
+        if (!await ConfirmActionAsync(L["RestartPipeline"].Value, L["RestartPipelineConfirm"].Value))
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await RestartPipeline.HandleAsync(
+                new RestartPipelineCommand(new RestartPipelineRequest(TaskId)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["PipelineRestarted"].Value, Severity.Success);
+            await Reload();
+            await ReloadPipeline();
+            await ReloadSteps();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnCancelPipelineSession(PipelineSessionDto session)
+    {
+        if (_busy) return;
+        if (!await ConfirmActionAsync(L["CancelWork"].Value, L["CancelWorkConfirm"].Value))
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await CancelPipelineSession.HandleAsync(
+                new CancelPipelineSessionCommand(new CancelPipelineSessionRequest(TaskId, session.Id)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["WorkCancelled"].Value, Severity.Info);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnCancelSubtask(SubtaskDto subtask)
+    {
+        if (_busy) return;
+        if (!await ConfirmActionAsync(L["CancelWork"].Value, L["CancelWorkConfirm"].Value))
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await CancelSubtask.HandleAsync(
+                new CancelSubtaskCommand(new CancelSubtaskRequest(TaskId, subtask.Id)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Snackbar.Add(L["WorkCancelled"].Value, Severity.Info);
+            await ReloadPipeline();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnDeleteTask()
+    {
+        if (_busy) return;
+        if (!await ConfirmActionAsync(L["DeleteTask"].Value, L["DeleteTaskConfirm"].Value, destructive: true))
+            return;
+
+        _busy = true;
+        try
+        {
+            var result = await DeleteTask.HandleAsync(
+                new DeleteTaskCommand(new DeleteTaskRequest(TaskId)));
+            if (!result.Success)
+            {
+                Snackbar.Add(result.Error ?? L["Error"].Value, Severity.Error);
+                return;
+            }
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task OnStartPipeline()
@@ -657,6 +818,7 @@ else
         TaskPipelineStage.Reviewing => L["StageReviewing"].Value,
         TaskPipelineStage.Approved => L["StageApproved"].Value,
         TaskPipelineStage.Closed => L["Closed"].Value,
+        TaskPipelineStage.Cancelled => L["StageCancelled"].Value,
         _ => L["PipelineNotStarted"].Value
     };
 

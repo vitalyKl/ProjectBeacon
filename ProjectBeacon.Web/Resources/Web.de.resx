@@ -2381,4 +2381,34 @@ orthstar</value>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>Kein aktuelles Signal</value>
   </data>
+  <data name="CancelPipeline" xml:space="preserve">
+    <value>Pipeline abbrechen</value>
+  </data>
+  <data name="CancelPipelineConfirm" xml:space="preserve">
+    <value>Alle aktiven Arbeiten stoppen? Der aktuelle Plan bleibt erhalten und kann später neu gestartet werden.</value>
+  </data>
+  <data name="CancelWork" xml:space="preserve">
+    <value>Arbeit abbrechen</value>
+  </data>
+  <data name="CancelWorkConfirm" xml:space="preserve">
+    <value>Diese Agentensitzung stoppen?</value>
+  </data>
+  <data name="PipelineCancelled" xml:space="preserve">
+    <value>Pipeline abgebrochen.</value>
+  </data>
+  <data name="PipelineRestarted" xml:space="preserve">
+    <value>Pipeline zurückgesetzt. Starten Sie sie erneut, um eine neue Planung zu beginnen.</value>
+  </data>
+  <data name="RestartPipeline" xml:space="preserve">
+    <value>Pipeline neu starten</value>
+  </data>
+  <data name="RestartPipelineConfirm" xml:space="preserve">
+    <value>Mit der Planung neu beginnen? Unteraufgaben und Prüfergebnisse werden gelöscht; der Sitzungsverlauf bleibt erhalten.</value>
+  </data>
+  <data name="StageCancelled" xml:space="preserve">
+    <value>Abgebrochen</value>
+  </data>
+  <data name="WorkCancelled" xml:space="preserve">
+    <value>Arbeit abgebrochen.</value>
+  </data>
 </root>

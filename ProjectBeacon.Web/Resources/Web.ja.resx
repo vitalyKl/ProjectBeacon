@@ -2389,4 +2389,34 @@ orthstar</value>
   <data name="PipelineNoRecentSignal" xml:space="preserve">
     <value>最近の信号なし</value>
   </data>
+  <data name="CancelPipeline" xml:space="preserve">
+    <value>パイプラインをキャンセル</value>
+  </data>
+  <data name="CancelPipelineConfirm" xml:space="preserve">
+    <value>実行中のすべての作業を停止しますか？現在の計画は保持され、後で再開できます。</value>
+  </data>
+  <data name="CancelWork" xml:space="preserve">
+    <value>作業をキャンセル</value>
+  </data>
+  <data name="CancelWorkConfirm" xml:space="preserve">
+    <value>このエージェントセッションを停止しますか？</value>
+  </data>
+  <data name="PipelineCancelled" xml:space="preserve">
+    <value>パイプラインをキャンセルしました。</value>
+  </data>
+  <data name="PipelineRestarted" xml:space="preserve">
+    <value>パイプラインをリセットしました。新しい計画を開始するには、再度起動してください。</value>
+  </data>
+  <data name="RestartPipeline" xml:space="preserve">
+    <value>パイプラインを再起動</value>
+  </data>
+  <data name="RestartPipelineConfirm" xml:space="preserve">
+    <value>計画からやり直しますか？サブタスクとレビュー結果は削除され、セッション履歴は保持されます。</value>
+  </data>
+  <data name="StageCancelled" xml:space="preserve">
+    <value>キャンセル済み</value>
+  </data>
+  <data name="WorkCancelled" xml:space="preserve">
+    <value>作業をキャンセルしました。</value>
+  </data>
 </root>

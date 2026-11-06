@@ -256,6 +256,64 @@ internal static class PipelineSupport
                 .SetProperty(command => command.LeaseExpiresAt, (DateTime?)null), ct);
     }
 
+    public static async Task<int> CancelReviewCheckCommandsAsync(
+        IBeaconDb db,
+        Guid projectId,
+        Guid taskId,
+        CancellationToken ct)
+    {
+        var reviewRunIds = (await db.ReviewRuns.IgnoreQueryFilters()
+            .Where(run => run.ProjectId == projectId && run.TaskId == taskId)
+            .Select(run => run.Id)
+            .ToListAsync(ct)).ToHashSet();
+        if (reviewRunIds.Count == 0)
+            return 0;
+
+        var candidates = await db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(command => command.ProjectId == projectId
+                && command.Kind == WorkstationCommandKind.RunReviewCheck
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running))
+            .Select(command => new { command.Id, command.PayloadJson })
+            .ToListAsync(ct);
+
+        var commandIds = candidates
+            .Where(candidate => TryReadJsonGuid(candidate.PayloadJson, "reviewRunId") is { } runId
+                && reviewRunIds.Contains(runId))
+            .Select(candidate => candidate.Id)
+            .ToArray();
+        if (commandIds.Length == 0)
+            return 0;
+
+        var completedAt = DateTime.UtcNow;
+        return await db.WorkstationCommands.IgnoreQueryFilters()
+            .Where(command => commandIds.Contains(command.Id)
+                && (command.Status == WorkstationCommandStatus.Pending
+                    || command.Status == WorkstationCommandStatus.Running))
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(command => command.Status, WorkstationCommandStatus.Cancelled)
+                .SetProperty(command => command.CompletedAt, completedAt)
+                .SetProperty(command => command.LeaseExpiresAt, (DateTime?)null), ct);
+    }
+
+    private static Guid? TryReadJsonGuid(string payloadJson, string propertyName)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payloadJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(propertyName, out var value)
+                && value.ValueKind == JsonValueKind.String
+                && Guid.TryParse(value.GetString(), out var parsed)
+                    ? parsed
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static Guid? TryReadPipelineSessionId(string payloadJson)
     {
         try
