@@ -234,7 +234,7 @@ internal sealed class AgentSessionWorktree : IAsyncDisposable
     {
         if (_preserve)
             return;
-        await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot);
+        await RemoveWorktreeAsync(_repositoryRoot, _worktreeRoot, _disabledFilterDrivers);
     }
 
     private static async Task<(AgentSessionWorktree? Workspace, string? Error)> FailCreateAsync(
