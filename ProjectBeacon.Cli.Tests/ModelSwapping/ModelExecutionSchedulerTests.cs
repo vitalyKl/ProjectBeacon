@@ -219,4 +219,104 @@ public sealed class ModelExecutionSchedulerTests
         releaseSecond.TrySetResult(true);
         await Task.WhenAll(first, second, third).WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
     }
+    [Fact]
+    public async Task PausedTask_YieldsSlotAndResumesAheadOfTasksQueuedLater()
+    {
+        var scheduler = new ModelExecutionScheduler();
+        var order = new List<string>();
+        var firstWaiting = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var answer = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSecond = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thirdStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ct = TestContext.Current.CancellationToken;
+
+        var first = scheduler.RunModelTaskAsync(() => false, async lease =>
+        {
+            order.Add("A:start");
+            firstWaiting.TrySetResult(true);
+            await lease.WaitForUserAsync(answer.Task, ct);
+            order.Add("A:resume");
+        }, ct);
+        await firstWaiting.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var second = scheduler.RunModelTaskAsync(() => false, async _ =>
+        {
+            order.Add("B:start");
+            secondStarted.TrySetResult(true);
+            await releaseSecond.Task.WaitAsync(ct);
+            order.Add("B:end");
+        }, ct);
+        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var third = scheduler.RunModelTaskAsync(() => false, _ =>
+        {
+            order.Add("C:start");
+            thirdStarted.TrySetResult(true);
+            return Task.CompletedTask;
+        }, ct);
+
+        answer.TrySetResult("approved");
+        Assert.False(first.IsCompleted);
+        Assert.False(thirdStarted.Task.IsCompleted);
+        releaseSecond.TrySetResult(true);
+        await Task.WhenAll(first, second, third).WaitAsync(TimeSpan.FromSeconds(2), ct);
+        Assert.Equal(new[] { "A:start", "B:start", "B:end", "A:resume", "C:start" }, order);
+    }
+
+    [Fact]
+    public async Task ExclusiveTask_HoldsQueueAcrossNonWaitingWork()
+    {
+        var scheduler = new ModelExecutionScheduler();
+        var firstStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ct = TestContext.Current.CancellationToken;
+
+        var first = scheduler.RunModelTaskAsync(() => false, async _ =>
+        {
+            firstStarted.TrySetResult(true);
+            await releaseFirst.Task.WaitAsync(ct);
+        }, ct);
+        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var second = scheduler.RunModelTaskAsync(() => false, _ =>
+        {
+            secondStarted.TrySetResult(true);
+            return Task.CompletedTask;
+        }, ct);
+        Assert.False(secondStarted.Task.IsCompleted);
+        releaseFirst.TrySetResult(true);
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(2), ct);
+        Assert.True(secondStarted.Task.IsCompleted);
+    }
+
+
+    [Fact]
+    public async Task ConcurrentResidentTasks_CanRunInParallel()
+    {
+        var scheduler = new ModelExecutionScheduler();
+        var firstStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ct = TestContext.Current.CancellationToken;
+
+        var first = scheduler.RunModelTaskAsync(() => true, async _ =>
+        {
+            firstStarted.TrySetResult(true);
+            await release.Task.WaitAsync(ct);
+        }, ct);
+        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var second = scheduler.RunModelTaskAsync(() => true, _ =>
+        {
+            secondStarted.TrySetResult(true);
+            return Task.CompletedTask;
+        }, ct);
+        await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        release.TrySetResult(true);
+
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(2), ct);
+    }
+
 }

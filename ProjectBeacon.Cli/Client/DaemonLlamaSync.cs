@@ -12,6 +12,11 @@ internal interface IDaemonLlamaSync
         return true;
     }
     Task RunLockedAsync(Func<Task> action, CancellationToken ct);
+    Task RunModelTaskAsync(
+        Func<bool> isConcurrent,
+        Func<IModelTaskLease, Task> action,
+        CancellationToken ct)
+        => action(NoopModelTaskLease.Instance);
     Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
         => concurrent ? action() : RunLockedAsync(action, ct);
     Task RunModelRequestAsync(Func<bool> isConcurrent, Func<Task> action, CancellationToken ct)
@@ -68,6 +73,9 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
 
     public Task RunLockedAsync(Func<Task> action, CancellationToken ct)
         => _scheduler.RunMaintenanceAsync(action, ct);
+
+    public Task RunModelTaskAsync(Func<bool> isConcurrent, Func<IModelTaskLease, Task> action, CancellationToken ct)
+        => _scheduler.RunModelTaskAsync(isConcurrent, action, ct);
 
     public Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
         => _scheduler.RunModelRequestAsync(concurrent, action, ct);

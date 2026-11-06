@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using ProjectBeacon.Application.Context;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
+using ProjectBeacon.Cli.Client.ModelSwapping;
 
 /// <summary>
 /// Workstation-local chat runtime. It owns session transcripts and the model/tool loop; it never
@@ -165,7 +166,14 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             throw;
         }
 
-        var task = Task.Run(() => RunTurnAsync(session, turnNumber, selectedModel, controls, turnCts.Token), CancellationToken.None);
+        var isExclusiveLocalModel = selectedModel.StartsWith("beacon-local/", StringComparison.OrdinalIgnoreCase);
+        var localModelName = isExclusiveLocalModel ? selectedModel["beacon-local/".Length..] : string.Empty;
+        var task = Task.Run(
+            () => _llamaSync.RunModelTaskAsync(
+                () => !isExclusiveLocalModel || _llama.IsModelConcurrent(localModelName),
+                taskLease => RunTurnAsync(session, turnNumber, selectedModel, controls, taskLease, turnCts.Token),
+                turnCts.Token),
+            CancellationToken.None);
         lock (session.Sync)
             session.ActiveTask = task;
     }
@@ -352,6 +360,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         int turnNumber,
         string model,
         AgentPromptControls? controls,
+        IModelTaskLease taskLease,
         CancellationToken ct)
     {
         var messageId = $"native:{session.Id}:{turnNumber}";
@@ -705,6 +714,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 projectRoot,
                                                 suggestionAuthorization.WorkingDirectory,
                                                 suggestions,
+                                                taskLease,
                                                 ct);
                                             isError = result.IsError;
                                             toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
@@ -753,6 +763,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 commandAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
                                                 commandArgv,
+                                                taskLease,
                                                 ct);
 
                                         if (!permission.Allowed)
@@ -831,6 +842,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 serviceAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
                                                 serviceArgv,
+                                                taskLease,
                                                 ct);
 
                                         if (!permission.Allowed)
@@ -1544,6 +1556,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         string projectRoot,
         string workingDirectory,
         IReadOnlyList<(string Prefix, string Source)> suggestions,
+        IModelTaskLease taskLease,
         CancellationToken ct)
     {
         await session.CommandPermissionGate.WaitAsync(ct);
@@ -1589,7 +1602,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             try
             {
-                var answerJson = await pending.Completion.Task.WaitAsync(ct);
+                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct);
                 if (!TryReadApprovedCommandPrefixes(answerJson, out var selected))
                     return new McpToolResult(true, "The command suggestion answer was malformed; no prefixes were approved.");
 
@@ -1677,6 +1690,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         string workingDirectory,
         string approvalProjectRoot,
         IReadOnlyList<string> argv,
+        IModelTaskLease taskLease,
         CancellationToken ct)
     {
         await session.CommandPermissionGate.WaitAsync(ct);
@@ -1691,7 +1705,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 throw new InvalidOperationException("Could not register the command permission request.");
             try
             {
-                var answerJson = await pending.Completion.Task.WaitAsync(ct);
+                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct);
                 switch (ParseCommandPermissionDecision(answerJson))
                 {
                     case "once":
