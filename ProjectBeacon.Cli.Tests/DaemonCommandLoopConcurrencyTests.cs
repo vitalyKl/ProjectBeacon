@@ -70,6 +70,7 @@ public sealed class DaemonCommandLoopConcurrencyTests
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            await Task.Delay(1, cancellationToken);
             var uri = request.RequestUri!;
             var path = uri.AbsolutePath;
 
