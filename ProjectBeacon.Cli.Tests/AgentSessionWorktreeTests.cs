@@ -67,6 +67,56 @@ public sealed class AgentSessionWorktreeTests
         }
     }
 
+
+    [Fact]
+    public async Task CreateAndApply_DisablesExternalGitFiltersAndAllowsWorkingTreeEncoding()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-agent-worktree-filter-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await Git(root, "init", "-b", "main");
+            await Git(root, "config", "core.autocrlf", "false");
+            await Git(root, "config", "user.name", "ProjectBeacon Tests");
+            await Git(root, "config", "user.email", "tests@projectbeacon.local");
+
+            await File.WriteAllTextAsync(Path.Combine(root, ".gitattributes"),
+                "filtered.txt filter=blocked\\nencoded.txt working-tree-encoding=UTF-8\\n");
+            await File.WriteAllTextAsync(Path.Combine(root, "filtered.txt"), "base filtered content\\n");
+            await File.WriteAllTextAsync(Path.Combine(root, "encoded.txt"), "base encoded content\\n");
+            await Git(root, "add", "-A");
+            await Git(root, "commit", "-m", "initial");
+
+            // These commands must never run during worktree snapshot, checkout, agent staging,
+            // patch creation, or cleanup. The required flag makes accidental execution fatal.
+            const string blockedCommand = "projectbeacon-filter-command-must-not-run";
+            await Git(root, "config", "filter.blocked.clean", blockedCommand);
+            await Git(root, "config", "filter.blocked.smudge", blockedCommand);
+            await Git(root, "config", "filter.blocked.process", blockedCommand);
+            await Git(root, "config", "filter.blocked.required", "true");
+
+            await File.WriteAllTextAsync(Path.Combine(root, "filtered.txt"), "user edit\\n");
+            var created = await AgentSessionWorktree.CreateAsync(root, Guid.NewGuid(), CancellationToken.None);
+            Assert.NotNull(created.Workspace);
+            Assert.Null(created.Error);
+            await using var workspace = created.Workspace!;
+
+            Assert.Equal("user edit\\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "filtered.txt"))));
+            Assert.Equal("base encoded content\\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(workspace.WorkingDirectory, "encoded.txt"))));
+
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkingDirectory, "agent-output.filtered"), "agent result\\n");
+            var applied = await workspace.ApplyChangesAsync(CancellationToken.None);
+            Assert.True(applied.Success, applied.Error);
+
+            Assert.Equal("user edit\\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(root, "filtered.txt"))));
+            Assert.Equal("agent result\\n", NormalizeLineEndings(await File.ReadAllTextAsync(Path.Combine(root, "agent-output.filtered"))));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
     private static string NormalizeLineEndings(string value)
         => value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
