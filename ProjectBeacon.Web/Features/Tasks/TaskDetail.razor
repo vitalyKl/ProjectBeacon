@@ -214,6 +214,7 @@ else
     <MudTabs Rounded="true" ApplyEffectsToContainer="false" Class="mt-4 beacon-task-tabs">
     <MudTabPanel Text="@L["Discussion"]">
         <TaskDiscussionPanel Task="_task" OnSaved="Reload" />
+        <TaskAttachmentsPanel Task="_task" />
     </MudTabPanel>
     <MudTabPanel Text="@L["Context"]">
         <TaskContextPanel Task="_task" />
