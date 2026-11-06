@@ -65,6 +65,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     public bool SupportsAgentSwitch => true;
     public bool SupportsReasoningEffort => true;
     public bool SupportsLiveDeltas => true;
+    public bool SupportsConcurrentSessions => true;
 
     public async Task<string> CreateSessionAsync(string title, CancellationToken ct)
     {
