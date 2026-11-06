@@ -56,9 +56,30 @@ public sealed partial class ClientLlamaSwap
     {
         if (!UseOwnSwapper)
             throw new InvalidOperationException("A direct model endpoint is only available with the in-process swapper.");
-        if (!_own.TryGetValue(name, out var backend) || backend.State != BackendState.Ready)
-            throw new InvalidOperationException($"Local model '{name}' is not loaded and ready.");
-        return $"http://127.0.0.1:{backend.Port}/v1";
+
+        var yaml = _ownLastYaml;
+        if (string.IsNullOrWhiteSpace(yaml) && File.Exists(ConfigFile))
+            yaml = File.ReadAllText(ConfigFile);
+        if (string.IsNullOrWhiteSpace(yaml))
+            throw new InvalidOperationException("The local model configuration is not available.");
+
+        var specs = LlamaSwapConfigParser.Parse(yaml);
+        var residentIndex = 0;
+        foreach (var spec in specs)
+        {
+            if (spec.Concurrent)
+            {
+                if (string.Equals(spec.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return $"http://127.0.0.1:{ConcurrentPortBase + residentIndex}/v1";
+                residentIndex++;
+            }
+            else if (string.Equals(spec.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"http://127.0.0.1:{_port}/v1";
+            }
+        }
+
+        throw new InvalidOperationException($"Local model '{name}' is not present in the active LlamaSwap configuration.");
     }
 
     private async Task<bool> TryAdmitAsync(long need, CancellationToken ct)
