@@ -14,6 +14,8 @@ internal interface IDaemonLlamaSync
     Task RunLockedAsync(Func<Task> action, CancellationToken ct);
     Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
         => concurrent ? action() : RunLockedAsync(action, ct);
+    Task RunModelRequestAsync(Func<bool> isConcurrent, Func<Task> action, CancellationToken ct)
+        => RunModelRequestAsync(isConcurrent(), action, ct);
     Task ReloadAsync(CancellationToken ct);
     Task UnloadAsync(CancellationToken ct);
     Task SyncNowAsync(CancellationToken ct);
@@ -69,6 +71,8 @@ internal sealed class DaemonLlamaSync : IDaemonLlamaSync
 
     public Task RunModelRequestAsync(bool concurrent, Func<Task> action, CancellationToken ct)
         => _scheduler.RunModelRequestAsync(concurrent, action, ct);
+    public Task RunModelRequestAsync(Func<bool> isConcurrent, Func<Task> action, CancellationToken ct)
+        => _scheduler.RunModelRequestAsync(isConcurrent, action, ct);
 
     public Task ReloadAsync(CancellationToken ct) =>
         RunLockedAsync(() => _llama.ReloadAsync(ct), ct);
