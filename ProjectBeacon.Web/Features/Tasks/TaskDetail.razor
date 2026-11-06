@@ -59,7 +59,10 @@ else
             <div class="beacon-task-title">@_task.Title</div>
             @if (!string.IsNullOrEmpty(_task.Description))
             {
-                <p class="beacon-task-goal"><strong>@L["Goal"]</strong>@_task.Description</p>
+                <div class="beacon-task-goal">
+                    <strong>@L["Goal"]</strong>
+                    <ChatMarkdown Text="@_task.Description" />
+                </div>
             }
         </div>
         <div class="beacon-page-actions">
