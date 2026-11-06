@@ -31,20 +31,20 @@ internal sealed class ModelExecutionScheduler
     /// FIFO task queue; resident models may run independently. A task waiting for user input is
     /// skipped by dispatch without losing its original sequence.
     /// </summary>
-    public async Task RunModelTaskAsync(Func<bool> isConcurrent, Func<IModelTaskLease, Task> action, CancellationToken ct)
+    public async Task RunModelTaskAsync(bool concurrent, Func<IModelTaskLease, Task> action, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(isConcurrent);
         ArgumentNullException.ThrowIfNull(action);
-        using var lifecycleLease = await _lifecycle.AcquireReadAsync(ct);
-        if (isConcurrent())
+        if (concurrent)
         {
-            lifecycleLease.Dispose();
+            await Task.Yield();
             await action(NoopModelTaskLease.Instance);
             return;
         }
 
-        lifecycleLease.Dispose();
         using var taskLease = await _tasks.AcquireAsync(ct);
+        // The ticket is assigned before yielding so queue order follows prompt arrival rather
+        // than whichever ThreadPool work item happens to start first.
+        await Task.Yield();
         await action(taskLease);
     }
 

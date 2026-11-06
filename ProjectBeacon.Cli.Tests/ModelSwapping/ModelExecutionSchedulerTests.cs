@@ -231,7 +231,7 @@ public sealed class ModelExecutionSchedulerTests
         var thirdStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var ct = TestContext.Current.CancellationToken;
 
-        var first = scheduler.RunModelTaskAsync(() => false, async lease =>
+        var first = scheduler.RunModelTaskAsync(false, async lease =>
         {
             order.Add("A:start");
             firstWaiting.TrySetResult(true);
@@ -301,7 +301,7 @@ public sealed class ModelExecutionSchedulerTests
         var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var ct = TestContext.Current.CancellationToken;
 
-        var first = scheduler.RunModelTaskAsync(() => true, async _ =>
+        var first = scheduler.RunModelTaskAsync(true, async _ =>
         {
             firstStarted.TrySetResult(true);
             await release.Task.WaitAsync(ct);

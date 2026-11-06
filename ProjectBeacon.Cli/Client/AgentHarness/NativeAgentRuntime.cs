@@ -166,14 +166,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             throw;
         }
 
-        var isExclusiveLocalModel = selectedModel.StartsWith("beacon-local/", StringComparison.OrdinalIgnoreCase);
-        var localModelName = isExclusiveLocalModel ? selectedModel["beacon-local/".Length..] : string.Empty;
-        var task = Task.Run(
-            () => _llamaSync.RunModelTaskAsync(
-                () => !isExclusiveLocalModel || _llama.IsModelConcurrent(localModelName),
-                taskLease => RunTurnAsync(session, turnNumber, selectedModel, controls, taskLease, turnCts.Token),
-                turnCts.Token),
-            CancellationToken.None);
+        var isLocalModel = selectedModel.StartsWith("beacon-local/", StringComparison.OrdinalIgnoreCase);
+        var localModelName = isLocalModel ? selectedModel["beacon-local/".Length..] : string.Empty;
+        var concurrentTask = !isLocalModel || _llama.IsModelConcurrent(localModelName);
+        var task = _llamaSync.RunModelTaskAsync(
+            concurrentTask,
+            taskLease => RunTurnAsync(session, turnNumber, selectedModel, controls, taskLease, turnCts.Token),
+            turnCts.Token);
         lock (session.Sync)
             session.ActiveTask = task;
     }
