@@ -369,14 +369,52 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         try
         {
             resolved = await ResolveProviderAsync(model, ct);
-            // The local model swap is performed under the generation lock for each provider
-            // request. The lock is released between tool calls, including while a user form
-            // is pending, so another session can use the model without racing a model swap.
+            var localModelConcurrent = resolved.IsLocal && _llama.IsModelConcurrent(resolved.Model);
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-            var provider = string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
-                ? new AnthropicProvider(providerHttp, resolved.BaseUrl, resolved.ApiKey)
-                : _providerFactory(providerHttp, resolved.BaseUrl, resolved.ApiKey);
+
+            IChatProvider CreateProvider()
+            {
+                var baseUrl = resolved.IsLocal && _llama.UseOwnSwapper
+                    ? _llama.GetOwnModelBaseUrl(resolved.Model)
+                    : resolved.BaseUrl;
+                return string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
+                    ? new AnthropicProvider(providerHttp, baseUrl, resolved.ApiKey)
+                    : _providerFactory(providerHttp, baseUrl, resolved.ApiKey);
+            }
+
+            async Task RunModelRequestAsync(Func<Task> request, CancellationToken requestCt)
+            {
+                if (!resolved.IsLocal)
+                {
+                    await request();
+                    return;
+                }
+
+                await _llamaSync.RunModelRequestAsync(localModelConcurrent, async () =>
+                {
+                    // Exclusive swap-group models are selected only after they own the shared
+                    // slot. Concurrent resident models are already loaded on their own ports.
+                    if (_llama.UseOwnSwapper && !localModelConcurrent)
+                        await _llama.EnsureSwapModelAsync(resolved.Model, requestCt);
+                    await request();
+                }, requestCt);
+            }
+
+            async Task<string> SummarizeAsync(ChatProviderRequest summaryRequest, CancellationToken requestCt)
+            {
+                var summary = new StringBuilder();
+                await RunModelRequestAsync(async () =>
+                {
+                    var summaryProvider = CreateProvider();
+                    await foreach (var item in summaryProvider.StreamAsync(summaryRequest, requestCt))
+                    {
+                        if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
+                            summary.Append(item.Text);
+                    }
+                }, requestCt);
+                return summary.ToString();
+            }
             await using var mcpClient = controls?.HarnessAuthorization is { } harnessAuthorization
                 ? await _mcpClientFactory(harnessAuthorization, ct)
                 : null;
@@ -445,7 +483,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     return currentPartOrdinal;
                 }
 
-                var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, mcpTools, ct);
+                var messages = await BuildContextMessagesAsync(session, resolved.Model, controls, mcpTools, SummarizeAsync, ct);
                 var requestMessageCount = messages.Count;
                 var request = new ChatProviderRequest(
                     resolved.Model,
@@ -465,6 +503,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     var stepEmittedContent = false;
                     async Task StreamProviderAttemptAsync()
                     {
+                        var provider = CreateProvider();
                         await foreach (var item in provider.StreamAsync(request, ct))
                         {
                             ct.ThrowIfCancellationRequested();
@@ -523,20 +562,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
                     try
                     {
-                        if (resolved.IsLocal && _llama.UseOwnSwapper)
-                        {
-                            // LlamaSwap hosts one active model. Keep its lock for a single
-                            // provider generation only, not the whole agent turn.
-                            await _llamaSync.RunLockedAsync(async () =>
-                            {
-                                await _llama.EnsureSwapModelAsync(resolved.Model, ct);
-                                await StreamProviderAttemptAsync();
-                            }, ct);
-                        }
-                        else
-                        {
-                            await StreamProviderAttemptAsync();
-                        }
+                        await RunModelRequestAsync(StreamProviderAttemptAsync, ct);
                         requestCompleted = true;
                     }
                     catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts
@@ -1128,10 +1154,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private async Task<JsonArray> BuildContextMessagesAsync(
         SessionState session,
-        IChatProvider provider,
         string model,
         AgentPromptControls? controls,
         JsonArray tools,
+        Func<ChatProviderRequest, CancellationToken, Task<string>> summarize,
         CancellationToken ct)
     {
         List<JsonObject> snapshot;
@@ -1212,9 +1238,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     var summary = new StringBuilder();
                     try
                     {
-                        await foreach (var item in provider.StreamAsync(summaryRequest, ct))
-                            if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
-                                summary.Append(item.Text);
+                        summary.Append(await summarize(summaryRequest, ct));
                     }
                     catch (Exception ex) when (!ct.IsCancellationRequested
                         && ex is HttpRequestException or IOException or InvalidDataException)
