@@ -52,6 +52,9 @@ public interface IAgentRuntimeCapabilities
     bool SupportsReasoningEffort { get; }
     bool SupportsLiveDeltas { get; }
 
+    /// <summary>True when independent session turns may execute concurrently on this runtime.</summary>
+    bool SupportsConcurrentSessions => false;
+
     Task<AgentRuntimeReadiness> EnsureReadyAsync(string? workingDirectory, CancellationToken ct);
     Task StreamTextAsync(string sessionId, Func<string, string, int, string, CancellationToken, Task> onDelta, CancellationToken ct);
     Task<IReadOnlyList<AgentRuntimeForm>> ListPendingFormsAsync(string sessionId, CancellationToken ct);

@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using ProjectBeacon.Application.Context;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
+using ProjectBeacon.Cli.Client.ModelSwapping;
 
 /// <summary>
 /// Workstation-local chat runtime. It owns session transcripts and the model/tool loop; it never
@@ -65,6 +66,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
     public bool SupportsAgentSwitch => true;
     public bool SupportsReasoningEffort => true;
     public bool SupportsLiveDeltas => true;
+    public bool SupportsConcurrentSessions => true;
 
     public async Task<string> CreateSessionAsync(string title, CancellationToken ct)
     {
@@ -164,7 +166,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
             throw;
         }
 
-        var task = Task.Run(() => RunTurnAsync(session, turnNumber, selectedModel, controls, turnCts.Token), CancellationToken.None);
+        var isLocalModel = selectedModel.StartsWith("beacon-local/", StringComparison.OrdinalIgnoreCase);
+        var localModelName = isLocalModel ? selectedModel["beacon-local/".Length..] : string.Empty;
+        var concurrentTask = !isLocalModel || _llama.IsModelConcurrent(localModelName);
+        var task = _llamaSync.RunModelTaskAsync(
+            concurrentTask,
+            taskLease => RunTurnAsync(session, turnNumber, selectedModel, controls, taskLease, turnCts.Token),
+            turnCts.Token);
         lock (session.Sync)
             session.ActiveTask = task;
     }
@@ -283,7 +291,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
         var session = await GetSessionAsync(sessionId, ct);
         return session.PendingForms.TryGetValue(formId, out var pending)
-            && pending.Completion.TrySetResult(answerJson);
+            && pending.TrySetResult(answerJson);
     }
 
     public async Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
@@ -351,6 +359,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         int turnNumber,
         string model,
         AgentPromptControls? controls,
+        IModelTaskLease taskLease,
         CancellationToken ct)
     {
         var messageId = $"native:{session.Id}:{turnNumber}";
@@ -363,20 +372,58 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         string? error = null;
         var emittedContent = false;
         var responseText = new StringBuilder();
-        ResolvedProvider? resolved = null;
-
         try
         {
-            resolved = await ResolveProviderAsync(model, ct);
-            if (resolved.IsLocal && _llama.UseOwnSwapper)
-                await _llamaSync.RunLockedAsync(
-                    () => _llama.EnsureSwapModelAsync(resolved.Model, ct),
-                    ct);
+            var resolved = await ResolveProviderAsync(model, ct);
 
             using var providerHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-            var provider = string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
-                ? new AnthropicProvider(providerHttp, resolved.BaseUrl, resolved.ApiKey)
-                : _providerFactory(providerHttp, resolved.BaseUrl, resolved.ApiKey);
+
+            IChatProvider CreateProvider()
+            {
+                var baseUrl = resolved.IsLocal
+                    ? _llama.GetLocalModelBaseUrl(resolved.Model)
+                    : resolved.BaseUrl;
+                return string.Equals(resolved.ProviderId, "anthropic", StringComparison.OrdinalIgnoreCase)
+                    ? new AnthropicProvider(providerHttp, baseUrl, resolved.ApiKey)
+                    : _providerFactory(providerHttp, baseUrl, resolved.ApiKey);
+            }
+
+            async Task RunModelRequestAsync(Func<Task> request, CancellationToken requestCt)
+            {
+                if (!resolved.IsLocal)
+                {
+                    await request();
+                    return;
+                }
+
+                await _llamaSync.RunModelRequestAsync(
+                    () => _llama.IsModelConcurrent(resolved.Model),
+                    async () =>
+                    {
+                        // Residency is read again inside the scheduler's lifecycle lease.
+                        // Exclusive swap-group models are selected only after they own the
+                        // shared slot; resident models stay on their dedicated endpoints.
+                        if (_llama.UseOwnSwapper && !_llama.IsModelConcurrent(resolved.Model))
+                            await _llama.EnsureSwapModelAsync(resolved.Model, requestCt);
+                        await request();
+                    },
+                    requestCt);
+            }
+
+            async Task<string> SummarizeAsync(ChatProviderRequest summaryRequest, CancellationToken requestCt)
+            {
+                var summary = new StringBuilder();
+                await RunModelRequestAsync(async () =>
+                {
+                    var summaryProvider = CreateProvider();
+                    await foreach (var item in summaryProvider.StreamAsync(summaryRequest, requestCt))
+                    {
+                        if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
+                            summary.Append(item.Text);
+                    }
+                }, requestCt);
+                return summary.ToString();
+            }
             await using var mcpClient = controls?.HarnessAuthorization is { } harnessAuthorization
                 ? await _mcpClientFactory(harnessAuthorization, ct)
                 : null;
@@ -445,7 +492,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     return currentPartOrdinal;
                 }
 
-                var messages = await BuildContextMessagesAsync(session, provider, resolved.Model, controls, mcpTools, ct);
+                var messages = await BuildContextMessagesAsync(session, resolved.Model, controls, mcpTools, SummarizeAsync, ct);
                 var requestMessageCount = messages.Count;
                 var request = new ChatProviderRequest(
                     resolved.Model,
@@ -463,8 +510,9 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 for (var attempt = 1; attempt <= MaxAttempts && !requestCompleted; attempt++)
                 {
                     var stepEmittedContent = false;
-                    try
+                    async Task StreamProviderAttemptAsync()
                     {
+                        var provider = CreateProvider();
                         await foreach (var item in provider.StreamAsync(request, ct))
                         {
                             ct.ThrowIfCancellationRequested();
@@ -519,6 +567,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                     break;
                             }
                         }
+                    }
+
+                    try
+                    {
+                        await RunModelRequestAsync(StreamProviderAttemptAsync, ct);
                         requestCompleted = true;
                     }
                     catch (Exception ex) when (IsRetryable(ex) && attempt < MaxAttempts
@@ -587,9 +640,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         session.Messages.Add(assistantToolMessage);
                     await PersistAsync(session, ct);
 
-                    var executedTools = await Task.WhenAll(toolCalls.Values.Select(async call =>
+                    async Task<(ToolCallAccumulator Call, string Result, bool IsError, int DurationMs, bool CacheHit)> ExecuteToolCallAsync(ToolCallAccumulator call)
                     {
                         ct.ThrowIfCancellationRequested();
+
                         var startedAt = Stopwatch.GetTimestamp();
                         var isError = false;
                         var hasArguments = call.TryReadArguments(out var parsedArguments);
@@ -660,6 +714,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 projectRoot,
                                                 suggestionAuthorization.WorkingDirectory,
                                                 suggestions,
+                                                taskLease,
                                                 ct);
                                             isError = result.IsError;
                                             toolResult = result.IsError ? "Tool error: " + result.Text : result.Text;
@@ -708,6 +763,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 commandAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
                                                 commandArgv,
+                                                taskLease,
                                                 ct);
 
                                         if (!permission.Allowed)
@@ -786,6 +842,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                                                 serviceAuthorization.WorkingDirectory,
                                                 approvalProjectRoot,
                                                 serviceArgv,
+                                                taskLease,
                                                 ct);
 
                                         if (!permission.Allowed)
@@ -883,18 +940,33 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             isError = true;
                             toolResult = "Tool error: " + SafeError(ex);
                         }
-
                         var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                         return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
-                    }));
+                    }
 
+                    // Ordinary tools still execute concurrently inside their owning task. Tools
+                    // that can request user input run after those siblings have finished, so a
+                    // paused task never releases its queue ticket while another sibling is still
+                    // reading or mutating the worktree.
+                    var parallelCalls = toolCalls.Values
+                        .Where(call => !MayRequestUserInput(call.Name))
+                        .Select(ExecuteToolCallAsync)
+                        .ToArray();
+                    var approvalCalls = toolCalls.Values
+                        .Where(call => MayRequestUserInput(call.Name))
+                        .OrderBy(call => call.Index)
+                        .ToArray();
+                    var executedTools = new List<(ToolCallAccumulator Call, string Result, bool IsError, int DurationMs, bool CacheHit)>();
+                    executedTools.AddRange(await Task.WhenAll(parallelCalls));
+                    foreach (var call in approvalCalls)
+                        executedTools.Add(await ExecuteToolCallAsync(call));
                     // Any non-cacheable operation may have changed project state, even when
                     // it reports an error after a partial write. Invalidate earlier reads.
                     if (executedTools.Any(item => !IsCacheableTool(item.Call.Name)))
                         toolResultCache.Clear();
 
-                    // Execute calls concurrently, but append their results in the model's index
-                    // order so the transcript remains deterministic and every tool_call_id matches.
+                    // Append results in the model's index order so the transcript remains deterministic
+                    // and every tool_call_id matches. Execution itself is serialized above.
                     foreach (var executed in executedTools.OrderBy(item => item.Call.Index))
                     {
                         var call = executed.Call;
@@ -1110,10 +1182,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
     private async Task<JsonArray> BuildContextMessagesAsync(
         SessionState session,
-        IChatProvider provider,
         string model,
         AgentPromptControls? controls,
         JsonArray tools,
+        Func<ChatProviderRequest, CancellationToken, Task<string>> summarize,
         CancellationToken ct)
     {
         List<JsonObject> snapshot;
@@ -1194,9 +1266,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     var summary = new StringBuilder();
                     try
                     {
-                        await foreach (var item in provider.StreamAsync(summaryRequest, ct))
-                            if (item.Kind == ChatProviderEventKind.TextDelta && item.Text is not null)
-                                summary.Append(item.Text);
+                        summary.Append(await summarize(summaryRequest, ct));
                     }
                     catch (Exception ex) when (!ct.IsCancellationRequested
                         && ex is HttpRequestException or IOException or InvalidDataException)
@@ -1501,6 +1571,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         string projectRoot,
         string workingDirectory,
         IReadOnlyList<(string Prefix, string Source)> suggestions,
+        IModelTaskLease taskLease,
         CancellationToken ct)
     {
         await session.CommandPermissionGate.WaitAsync(ct);
@@ -1546,7 +1617,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             try
             {
-                var answerJson = await pending.Completion.Task.WaitAsync(ct);
+                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct, pending.RegisterResumeCallback);
                 if (!TryReadApprovedCommandPrefixes(answerJson, out var selected))
                     return new McpToolResult(true, "The command suggestion answer was malformed; no prefixes were approved.");
 
@@ -1634,6 +1705,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         string workingDirectory,
         string approvalProjectRoot,
         IReadOnlyList<string> argv,
+        IModelTaskLease taskLease,
         CancellationToken ct)
     {
         await session.CommandPermissionGate.WaitAsync(ct);
@@ -1648,7 +1720,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 throw new InvalidOperationException("Could not register the command permission request.");
             try
             {
-                var answerJson = await pending.Completion.Task.WaitAsync(ct);
+                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct, pending.RegisterResumeCallback);
                 switch (ParseCommandPermissionDecision(answerJson))
                 {
                     case "once":
@@ -1818,6 +1890,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         "get_milestone", "list_milestones", "get_label", "list_labels", "context_compile",
         "context_get", "search_code"
     };
+
+    private static bool MayRequestUserInput(string? tool)
+        => string.Equals(tool, "suggest_command_prefixes", StringComparison.Ordinal)
+            || string.Equals(tool, "run_command", StringComparison.Ordinal)
+            || string.Equals(tool, "service_start", StringComparison.Ordinal);
 
     internal static bool IsCacheableTool(string? name)
         => name is not null && CacheableReadOnlyTools.Contains(name);
@@ -2207,7 +2284,43 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public static NativeDelta End(int turn) => new(turn, "", "", 0, "", true);
     }
 
-    private sealed record PendingFormState(AgentRuntimeForm Form, TaskCompletionSource<string> Completion);
+    private sealed class PendingFormState(AgentRuntimeForm form, TaskCompletionSource<string> completion)
+    {
+        private readonly object _sync = new();
+        private Action? _resumeCallback;
+
+        public AgentRuntimeForm Form { get; } = form;
+        public TaskCompletionSource<string> Completion { get; } = completion;
+
+        public void RegisterResumeCallback(Action callback)
+        {
+            ArgumentNullException.ThrowIfNull(callback);
+            var alreadyCompleted = false;
+            lock (_sync)
+            {
+                if (Completion.Task.IsCompleted)
+                    alreadyCompleted = true;
+                else
+                    _resumeCallback = callback;
+            }
+            if (alreadyCompleted)
+                callback();
+        }
+
+        public bool TrySetResult(string answerJson)
+        {
+            lock (_sync)
+            {
+                if (Completion.Task.IsCompleted)
+                    return false;
+
+                // Make the queued task runnable before the completion continuation can run.
+                _resumeCallback?.Invoke();
+                _resumeCallback = null;
+                return Completion.TrySetResult(answerJson);
+            }
+        }
+    }
 
     private sealed class SessionState
     {

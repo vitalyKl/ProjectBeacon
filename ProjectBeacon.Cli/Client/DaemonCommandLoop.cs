@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Client;
 
+using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ProjectBeacon.Domain.Enums;
@@ -17,6 +18,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
     private readonly IDaemonCommandExecutor _executor;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
+    private readonly ConcurrentDictionary<Guid, Task> _inFlightPrompts = new();
 
     public DaemonCommandLoop(
         DaemonDependencies deps,
@@ -49,7 +51,7 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 if (command is null)
                     continue;
                 if (command.Kind is WorkstationCommandKind.ChatPrompt or WorkstationCommandKind.RunPipelineSession)
-                    await ProcessPromptWithControlLaneAsync(command, ct);
+                    await StartPromptWithControlLaneAsync(command, ct);
                 else
                     await ProcessCommandAsync(command, ct);
             }
@@ -69,6 +71,54 @@ internal sealed class DaemonCommandLoop : IDaemonLoop
                 try { await _timing.DelayAsync(_timing.ErrorBackoffInterval, ct); }
                 catch (OperationCanceledException) { break; }
             }
+        }
+
+        // A command loop may be stopped while several prompts are still active. They share
+        // the daemon shutdown token and must finish their cancellation/completion paths before
+        // the loop is considered stopped.
+        var inFlight = _inFlightPrompts.Values.ToArray();
+        if (inFlight.Length > 0)
+        {
+            try { await Task.WhenAll(inFlight); }
+            catch (OperationCanceledException) { }
+        }
+    }
+
+    private async Task StartPromptWithControlLaneAsync(
+        WorkstationDaemon.CommandWire prompt, CancellationToken ct)
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_inFlightPrompts.TryAdd(prompt.Id, completion.Task))
+        {
+            _state.Log($"duplicate in-flight prompt command {prompt.Id}; processing in the command loop");
+            await ProcessPromptWithControlLaneAsync(prompt, ct);
+            return;
+        }
+
+        _ = Task.Run(() => ExecutePromptInBackgroundAsync(prompt, ct, completion), CancellationToken.None);
+    }
+
+    private async Task ExecutePromptInBackgroundAsync(
+        WorkstationDaemon.CommandWire prompt,
+        CancellationToken ct,
+        TaskCompletionSource<bool> completion)
+    {
+        try
+        {
+            await ProcessPromptWithControlLaneAsync(prompt, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The shutdown path below waits for the prompt task to observe cancellation.
+        }
+        catch (Exception ex)
+        {
+            _state.Log($"{prompt.Kind} background execution failed: {ex.Message}");
+        }
+        finally
+        {
+            completion.TrySetResult(true);
+            _inFlightPrompts.TryRemove(prompt.Id, out _);
         }
     }
 

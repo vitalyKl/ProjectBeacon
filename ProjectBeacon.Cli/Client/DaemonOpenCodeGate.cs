@@ -119,6 +119,15 @@ internal sealed class DaemonOpenCodeGate : IDaemonOpenCodeGate
 
     public async Task RunExclusiveAsync(Func<Task> action, CancellationToken ct)
     {
+        // NativeAgentRuntime keeps independent state per session. Do not hold the shared
+        // runtime gate for an entire model turn: a waiting form in one chat must not block
+        // other chat sessions. OpenCode still requires single-operation access.
+        if (Runtime is IAgentRuntimeCapabilities { SupportsConcurrentSessions: true })
+        {
+            await action();
+            return;
+        }
+
         await _lock.WaitAsync(ct);
         try
         {
@@ -132,6 +141,9 @@ internal sealed class DaemonOpenCodeGate : IDaemonOpenCodeGate
 
     public async Task<T> RunExclusiveAsync<T>(Func<Task<T>> action, CancellationToken ct)
     {
+        if (Runtime is IAgentRuntimeCapabilities { SupportsConcurrentSessions: true })
+            return await action();
+
         await _lock.WaitAsync(ct);
         try
         {
