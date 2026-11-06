@@ -149,9 +149,14 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
         _port = nextPort;
         _lastBin = bin;
         var launched = EnsureProcess(bin);
+        if (!launched)
+        {
+            if (!Status.Healthy)
+                Status = new LlamaSwapStatusDto(true, false, null, null, _lastSwap, PortBusyMessage());
+            return;
+        }
+
         await PollAsync(ct);
-        if (!launched && !Status.Healthy)
-            Status = new LlamaSwapStatusDto(true, false, null, null, _lastSwap, PortBusyMessage());
     }
 
     public async Task ReloadAsync(CancellationToken ct)
@@ -177,9 +182,14 @@ public sealed partial class ClientLlamaSwap : IAsyncDisposable
             return;
         }
         var launched = EnsureProcess(_lastBin);
+        if (!launched)
+        {
+            if (!Status.Healthy)
+                Status = new LlamaSwapStatusDto(true, false, null, null, _lastSwap, PortBusyMessage());
+            return;
+        }
+
         await PollAsync(ct);
-        if (!launched && !Status.Healthy)
-            Status = new LlamaSwapStatusDto(true, false, null, null, _lastSwap, PortBusyMessage());
     }
 
     public async Task UnloadAsync(CancellationToken ct)
