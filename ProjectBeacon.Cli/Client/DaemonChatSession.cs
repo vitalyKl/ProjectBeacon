@@ -246,7 +246,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             };
         }
 
-        if (_llama.UseOwnSwapper && model is not null)
+        if (_llama.UseOwnSwapper && model is not null && capabilities?.SupportsConcurrentSessions != true)
             await _llamaSync.RunLockedAsync(() => _llama.EnsureSwapModelAsync(DaemonPayload.ExtractSwapName(model), ct), ct);
         // Baseline: the last assistant message before the prompt; an ended turn from an
         // earlier prompt must not close this one.
