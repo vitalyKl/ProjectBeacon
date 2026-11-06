@@ -781,7 +781,10 @@
 <data name="CompileBrief" xml:space="preserve">
     <value>Compile brief</value>
   </data>
-<data name="TokenBudget" xml:space="preserve">
+<data name="ContextInputEstimate" xml:space="preserve">
+    <value>Estimated input tokens</value>
+  </data>
+  <data name="TokenBudget" xml:space="preserve">
     <value>Token budget</value>
   </data>
 <data name="CreateProject" xml:space="preserve">
@@ -2242,6 +2245,9 @@ No Beacon-hosted coding agent.</value>
   </data>
 <data name="ChatModelSwitching" xml:space="preserve">
     <value>Switching model: {0}</value>
+  </data>
+<data name="ChatInputTokens" xml:space="preserve">
+    <value>Input context</value>
   </data>
 <data name="ChatUsage" xml:space="preserve">
     <value>{0} tokens · {1}</value>

@@ -363,7 +363,10 @@
 <data name="CompileBrief" xml:space="preserve">
     <value>Собрать бриф</value>
   </data>
-<data name="TokenBudget" xml:space="preserve">
+<data name="ContextInputEstimate" xml:space="preserve">
+    <value>Оценка входящих токенов</value>
+  </data>
+  <data name="TokenBudget" xml:space="preserve">
     <value>Бюджет токенов</value>
   </data>
 <data name="InvalidCredentials" xml:space="preserve">
@@ -2055,6 +2058,9 @@
   </data>
 <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Модель не загружена: {0}</value>
+  </data>
+<data name="ChatInputTokens" xml:space="preserve">
+    <value>Входящий контекст</value>
   </data>
 <data name="ChatUsage" xml:space="preserve">
     <value>Токены: {0} · {1}</value>

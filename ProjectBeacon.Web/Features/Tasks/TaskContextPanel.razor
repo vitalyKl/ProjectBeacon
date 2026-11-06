@@ -10,9 +10,9 @@
             @L["CompileBrief"]
         </MudButton>
     </MudStack>
-    <div class="beacon-budget mt-2">
+    <div class="beacon-budget mt-2 beacon-task-context-usage">
         <div class="beacon-budget-label">
-            <span class="mud-typography mud-typography-caption">@L["TokenBudget"]</span>
+            <span class="mud-typography mud-typography-caption">@L["ContextInputEstimate"]</span>
             <span class="mud-typography mud-typography-caption">@_tokens / @_budget</span>
         </div>
         <MudProgressLinear Value="@TokenBudgetMeter.Percent(_tokens, _budget)" Color="@(_overflow ? Color.Warning : Color.Default)" Class="mt-1 beacon-track" />

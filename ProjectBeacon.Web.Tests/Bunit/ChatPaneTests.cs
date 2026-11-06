@@ -83,6 +83,19 @@ public sealed class ChatPaneTests : BUnitRenderBase
     }
 
     [Fact]
+    public void InputContextUsage_RendersWithoutCostMetadata()
+    {
+        var session = SessionDto("Usage") with { PromptTokens = 12_345, ContextLimit = 65_536 };
+        var cut = Bunit.RenderComponent<ChatPane>(parameters => parameters
+            .Add(p => p.Session, session)
+            .Add(p => p.SelectedContextLimit, 65_536));
+
+        Assert.Contains("Input context", cut.Find(".beacon-chat-usage").TextContent);
+        Assert.Contains("12,345 / 65,536", cut.Find(".beacon-chat-usage").TextContent);
+        Assert.Single(cut.FindAll(".beacon-chat-usage-meter"));
+    }
+
+    [Fact]
     public void RestoredSessionDisplaysPersistedPlanMode()
     {
         var session = SessionDto("Plan session") with { AgentMode = "plan" };
