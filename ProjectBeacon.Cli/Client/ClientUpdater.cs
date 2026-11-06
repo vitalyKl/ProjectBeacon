@@ -19,7 +19,34 @@ public static class ClientUpdater
     private const string Repository = "vitalyKl/ProjectBeacon";
     private const string ReleaseApi = "https://api.github.com/repos/" + Repository + "/releases/latest";
 
-    public sealed record UpdateInfo(string CurrentVersion, string LatestVersion, bool UpdateAvailable, string RuntimeIdentifier, string ReleaseUrl);
+    public sealed record UpdateInfo(
+        string CurrentVersion,
+        string LatestVersion,
+        bool NewerVersionAvailable,
+        bool PackageAvailable,
+        string RuntimeIdentifier,
+        string ReleaseUrl)
+    {
+        public bool UpdateAvailable => NewerVersionAvailable && PackageAvailable;
+    }
+
+    internal static UpdateInfo CreateUpdateInfo(
+        Version current,
+        Version latest,
+        bool packageAvailable,
+        string runtimeIdentifier,
+        string releaseUrl)
+    {
+        current = Normalize(current);
+        latest = Normalize(latest);
+        return new UpdateInfo(
+            current.ToString(4),
+            latest.ToString(4),
+            latest > current,
+            packageAvailable,
+            runtimeIdentifier,
+            releaseUrl);
+    }
 
     public static async Task<UpdateInfo> CheckAsync(CancellationToken ct = default)
     {
@@ -40,7 +67,7 @@ public static class ClientUpdater
             .Where(name => name is not null)
             .ToHashSet(StringComparer.Ordinal);
         var hasPackage = assetNames.Contains($"beacon-client-{rid}.zip") && assetNames.Contains("SHA256SUMS.txt");
-        return new UpdateInfo(current.ToString(4), latest.ToString(4), latest > current && hasPackage, rid, releaseUrl);
+        return CreateUpdateInfo(current, latest, hasPackage, rid, releaseUrl);
     }
 
     public static Task<UpdateInfo> DownloadAndScheduleAsync(CancellationToken ct = default) =>
@@ -71,11 +98,21 @@ public static class ClientUpdater
             .ToDictionary(a => a.GetProperty("name").GetString()!, a => a.GetProperty("browser_download_url").GetString()!, StringComparer.Ordinal);
         var archiveName = $"beacon-client-{rid}.zip";
         var hasPackage = assets.ContainsKey(archiveName) && assets.ContainsKey("SHA256SUMS.txt");
-        var info = new UpdateInfo(current.ToString(4), latest.ToString(4), latest > current && hasPackage, rid, releaseUrl);
-        if (!info.UpdateAvailable)
+        var info = CreateUpdateInfo(current, latest, hasPackage, rid, releaseUrl);
+        if (!info.NewerVersionAvailable)
         {
             await ReportProgressAsync(reportProgress,
                 new ClientUpdateProgress("complete", "The client is already up to date", 100), ct);
+            return info;
+        }
+
+        if (!info.PackageAvailable)
+        {
+            await ReportProgressAsync(reportProgress,
+                new ClientUpdateProgress(
+                    "unavailable",
+                    $"Client {info.LatestVersion} is available, but the {rid} update package has not been published yet. Try again shortly.",
+                    100), ct);
             return info;
         }
 
