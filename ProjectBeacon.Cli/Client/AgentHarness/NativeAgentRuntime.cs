@@ -291,7 +291,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         }
         var session = await GetSessionAsync(sessionId, ct);
         return session.PendingForms.TryGetValue(formId, out var pending)
-            && pending.Completion.TrySetResult(answerJson);
+            && pending.TrySetResult(answerJson);
     }
 
     public async Task SwitchAgentAsync(string sessionId, string agent, CancellationToken ct)
@@ -640,16 +640,10 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         session.Messages.Add(assistantToolMessage);
                     await PersistAsync(session, ct);
 
-                    // Tool calls in one model step are serialized. A tool may pause the
-                    // task for user input; no sibling tool may continue reading or mutating
-                    // the worktree while the task ticket is yielded to another session.
-                    using var toolBatchGate = new SemaphoreSlim(1, 1);
-                    var executedTools = await Task.WhenAll(toolCalls.Values.Select(async call =>
+                    async Task<(ToolCallAccumulator Call, string Result, bool IsError, int DurationMs, bool CacheHit)> ExecuteToolCallAsync(ToolCallAccumulator call)
                     {
-                        await toolBatchGate.WaitAsync(ct);
-                        try
-                        {
-                            ct.ThrowIfCancellationRequested();
+                        ct.ThrowIfCancellationRequested();
+
                         var startedAt = Stopwatch.GetTimestamp();
                         var isError = false;
                         var hasArguments = call.TryReadArguments(out var parsedArguments);
@@ -946,16 +940,26 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             isError = true;
                             toolResult = "Tool error: " + SafeError(ex);
                         }
+                        var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                        return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
+                    }
 
-                            var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                            return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
-                        }
-                        finally
-                        {
-                            toolBatchGate.Release();
-                        }
-                    }));
-
+                    // Ordinary tools still execute concurrently inside their owning task. Tools
+                    // that can request user input run after those siblings have finished, so a
+                    // paused task never releases its queue ticket while another sibling is still
+                    // reading or mutating the worktree.
+                    var parallelCalls = toolCalls.Values
+                        .Where(call => !MayRequestUserInput(call.Name))
+                        .Select(ExecuteToolCallAsync)
+                        .ToArray();
+                    var approvalCalls = toolCalls.Values
+                        .Where(call => MayRequestUserInput(call.Name))
+                        .OrderBy(call => call.Index)
+                        .ToArray();
+                    var executedTools = new List<(ToolCallAccumulator Call, string Result, bool IsError, int DurationMs, bool CacheHit)>();
+                    executedTools.AddRange(await Task.WhenAll(parallelCalls));
+                    foreach (var call in approvalCalls)
+                        executedTools.Add(await ExecuteToolCallAsync(call));
                     // Any non-cacheable operation may have changed project state, even when
                     // it reports an error after a partial write. Invalidate earlier reads.
                     if (executedTools.Any(item => !IsCacheableTool(item.Call.Name)))
@@ -1613,7 +1617,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
 
             try
             {
-                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct);
+                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct, pending.RegisterResumeCallback);
                 if (!TryReadApprovedCommandPrefixes(answerJson, out var selected))
                     return new McpToolResult(true, "The command suggestion answer was malformed; no prefixes were approved.");
 
@@ -1716,7 +1720,7 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                 throw new InvalidOperationException("Could not register the command permission request.");
             try
             {
-                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct);
+                var answerJson = await taskLease.WaitForUserAsync(pending.Completion.Task, ct, pending.RegisterResumeCallback);
                 switch (ParseCommandPermissionDecision(answerJson))
                 {
                     case "once":
@@ -1886,6 +1890,11 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         "get_milestone", "list_milestones", "get_label", "list_labels", "context_compile",
         "context_get", "search_code"
     };
+
+    private static bool MayRequestUserInput(string? tool)
+        => string.Equals(tool, "suggest_command_prefixes", StringComparison.Ordinal)
+            || string.Equals(tool, "run_command", StringComparison.Ordinal)
+            || string.Equals(tool, "service_start", StringComparison.Ordinal);
 
     internal static bool IsCacheableTool(string? name)
         => name is not null && CacheableReadOnlyTools.Contains(name);
@@ -2275,7 +2284,43 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
         public static NativeDelta End(int turn) => new(turn, "", "", 0, "", true);
     }
 
-    private sealed record PendingFormState(AgentRuntimeForm Form, TaskCompletionSource<string> Completion);
+    private sealed class PendingFormState(AgentRuntimeForm form, TaskCompletionSource<string> completion)
+    {
+        private readonly object _sync = new();
+        private Action? _resumeCallback;
+
+        public AgentRuntimeForm Form { get; } = form;
+        public TaskCompletionSource<string> Completion { get; } = completion;
+
+        public void RegisterResumeCallback(Action callback)
+        {
+            ArgumentNullException.ThrowIfNull(callback);
+            var alreadyCompleted = false;
+            lock (_sync)
+            {
+                if (Completion.Task.IsCompleted)
+                    alreadyCompleted = true;
+                else
+                    _resumeCallback = callback;
+            }
+            if (alreadyCompleted)
+                callback();
+        }
+
+        public bool TrySetResult(string answerJson)
+        {
+            lock (_sync)
+            {
+                if (Completion.Task.IsCompleted)
+                    return false;
+
+                // Make the queued task runnable before the completion continuation can run.
+                _resumeCallback?.Invoke();
+                _resumeCallback = null;
+                return Completion.TrySetResult(answerJson);
+            }
+        }
+    }
 
     private sealed class SessionState
     {

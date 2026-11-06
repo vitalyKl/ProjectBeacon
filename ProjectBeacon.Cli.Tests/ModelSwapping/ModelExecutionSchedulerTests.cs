@@ -226,6 +226,7 @@ public sealed class ModelExecutionSchedulerTests
         var order = new List<string>();
         var firstWaiting = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var answer = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action? markFirstReady = null;
         var secondStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseSecond = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var thirdStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -235,7 +236,7 @@ public sealed class ModelExecutionSchedulerTests
         {
             order.Add("A:start");
             firstWaiting.TrySetResult(true);
-            await lease.WaitForUserAsync(answer.Task, ct);
+            await lease.WaitForUserAsync(answer.Task, ct, callback => markFirstReady = callback);
             order.Add("A:resume");
         }, ct);
         await firstWaiting.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
@@ -256,6 +257,7 @@ public sealed class ModelExecutionSchedulerTests
             return Task.CompletedTask;
         }, ct);
 
+        markFirstReady?.Invoke();
         answer.TrySetResult("approved");
         Assert.False(first.IsCompleted);
         Assert.False(thirdStarted.Task.IsCompleted);

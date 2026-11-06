@@ -9,14 +9,14 @@ namespace ProjectBeacon.Cli.Client.ModelSwapping;
 /// </summary>
 internal interface IModelTaskLease : IDisposable
 {
-    Task<T> WaitForUserAsync<T>(Task<T> pending, CancellationToken ct);
+    Task<T> WaitForUserAsync<T>(Task<T> pending, CancellationToken ct, Action<Action> registerResumeCallback);
 }
 
 internal sealed class NoopModelTaskLease : IModelTaskLease
 {
     public static NoopModelTaskLease Instance { get; } = new();
     private NoopModelTaskLease() { }
-    public Task<T> WaitForUserAsync<T>(Task<T> pending, CancellationToken ct) => pending.WaitAsync(ct);
+    public Task<T> WaitForUserAsync<T>(Task<T> pending, CancellationToken ct, Action<Action> registerResumeCallback) => pending.WaitAsync(ct);
     public void Dispose() { }
 }
 
@@ -118,7 +118,11 @@ internal sealed class ModelExecutionScheduler
             }
         }
 
-        private async Task<T> WaitForUserAsync<T>(Ticket ticket, Task<T> pending, CancellationToken ct)
+        private async Task<T> WaitForUserAsync<T>(
+            Ticket ticket,
+            Task<T> pending,
+            CancellationToken ct,
+            Action<Action> registerResumeCallback)
         {
             if (pending.IsCompleted)
                 return await pending.ConfigureAwait(false);
@@ -126,8 +130,14 @@ internal sealed class ModelExecutionScheduler
             Pause(ticket);
             try
             {
+                // The form publishes readiness synchronously before completing its task.
+                // This preserves the ticket's place even if the current task finishes at once.
+                registerResumeCallback(() => MarkReady(ticket));
                 var result = await pending.WaitAsync(ct).ConfigureAwait(false);
-                await ResumeAsync(ticket, ct).ConfigureAwait(false);
+                Task activation;
+                lock (_sync)
+                    activation = ticket.ActiveSignal.Task;
+                await activation.WaitAsync(ct).ConfigureAwait(false);
                 return result;
             }
             catch
@@ -150,18 +160,15 @@ internal sealed class ModelExecutionScheduler
             }
         }
 
-        private async Task ResumeAsync(Ticket ticket, CancellationToken ct)
+        private void MarkReady(Ticket ticket)
         {
-            Task signal;
             lock (_sync)
             {
                 if (ticket.State != TicketState.Waiting || !_tickets.ContainsKey(ticket.Sequence))
-                    throw new InvalidOperationException("The paused task is no longer queued.");
+                    return;
                 ticket.State = TicketState.Ready;
                 PumpLocked();
-                signal = ticket.ActiveSignal.Task;
             }
-            await signal.WaitAsync(ct).ConfigureAwait(false);
         }
 
         private void Complete(Ticket ticket)
@@ -208,11 +215,12 @@ internal sealed class ModelExecutionScheduler
         private sealed class TaskLease(ModelTaskQueue owner, Ticket ticket) : IModelTaskLease
         {
             private ModelTaskQueue? _owner = owner;
-            public Task<T> WaitForUserAsync<T>(Task<T> pending, CancellationToken ct)
+            public Task<T> WaitForUserAsync<T>(Task<T> pending, CancellationToken ct, Action<Action> registerResumeCallback)
             {
                 ArgumentNullException.ThrowIfNull(pending);
+                ArgumentNullException.ThrowIfNull(registerResumeCallback);
                 var current = _owner ?? throw new ObjectDisposedException(nameof(TaskLease));
-                return current.WaitForUserAsync(ticket, pending, ct);
+                return current.WaitForUserAsync(ticket, pending, ct, registerResumeCallback);
             }
             public void Dispose() => Interlocked.Exchange(ref _owner, null)?.Complete(ticket);
         }
