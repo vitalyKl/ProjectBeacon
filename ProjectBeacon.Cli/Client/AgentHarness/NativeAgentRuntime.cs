@@ -640,9 +640,16 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                         session.Messages.Add(assistantToolMessage);
                     await PersistAsync(session, ct);
 
+                    // Tool calls in one model step are serialized. A tool may pause the
+                    // task for user input; no sibling tool may continue reading or mutating
+                    // the worktree while the task ticket is yielded to another session.
+                    using var toolBatchGate = new SemaphoreSlim(1, 1);
                     var executedTools = await Task.WhenAll(toolCalls.Values.Select(async call =>
                     {
-                        ct.ThrowIfCancellationRequested();
+                        await toolBatchGate.WaitAsync(ct);
+                        try
+                        {
+                            ct.ThrowIfCancellationRequested();
                         var startedAt = Stopwatch.GetTimestamp();
                         var isError = false;
                         var hasArguments = call.TryReadArguments(out var parsedArguments);
@@ -940,8 +947,13 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                             toolResult = "Tool error: " + SafeError(ex);
                         }
 
-                        var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
-                        return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
+                            var durationMs = (int)Math.Min(int.MaxValue, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                            return (Call: call, Result: TruncateToolResult(toolResult), IsError: isError, DurationMs: durationMs, CacheHit: cacheHit);
+                        }
+                        finally
+                        {
+                            toolBatchGate.Release();
+                        }
                     }));
 
                     // Any non-cacheable operation may have changed project state, even when
@@ -949,8 +961,8 @@ internal sealed class NativeAgentRuntime : IAgentRuntime, IAgentRuntimeCapabilit
                     if (executedTools.Any(item => !IsCacheableTool(item.Call.Name)))
                         toolResultCache.Clear();
 
-                    // Execute calls concurrently, but append their results in the model's index
-                    // order so the transcript remains deterministic and every tool_call_id matches.
+                    // Append results in the model's index order so the transcript remains deterministic
+                    // and every tool_call_id matches. Execution itself is serialized above.
                     foreach (var executed in executedTools.OrderBy(item => item.Call.Index))
                     {
                         var call = executed.Call;
