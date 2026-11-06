@@ -240,7 +240,7 @@ public sealed class ModelExecutionSchedulerTests
         }, ct);
         await firstWaiting.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
 
-        var second = scheduler.RunModelTaskAsync(() => false, async _ =>
+        var second = scheduler.RunModelTaskAsync(false, async _ =>
         {
             order.Add("B:start");
             secondStarted.TrySetResult(true);
@@ -249,7 +249,7 @@ public sealed class ModelExecutionSchedulerTests
         }, ct);
         await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
 
-        var third = scheduler.RunModelTaskAsync(() => false, _ =>
+        var third = scheduler.RunModelTaskAsync(false, _ =>
         {
             order.Add("C:start");
             thirdStarted.TrySetResult(true);
@@ -273,14 +273,14 @@ public sealed class ModelExecutionSchedulerTests
         var secondStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var ct = TestContext.Current.CancellationToken;
 
-        var first = scheduler.RunModelTaskAsync(() => false, async _ =>
+        var first = scheduler.RunModelTaskAsync(false, async _ =>
         {
             firstStarted.TrySetResult(true);
             await releaseFirst.Task.WaitAsync(ct);
         }, ct);
         await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
 
-        var second = scheduler.RunModelTaskAsync(() => false, _ =>
+        var second = scheduler.RunModelTaskAsync(false, _ =>
         {
             secondStarted.TrySetResult(true);
             return Task.CompletedTask;
@@ -308,7 +308,7 @@ public sealed class ModelExecutionSchedulerTests
         }, ct);
         await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
 
-        var second = scheduler.RunModelTaskAsync(() => true, _ =>
+        var second = scheduler.RunModelTaskAsync(true, _ =>
         {
             secondStarted.TrySetResult(true);
             return Task.CompletedTask;
