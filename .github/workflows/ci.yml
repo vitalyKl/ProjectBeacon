@@ -63,6 +63,8 @@ jobs:
         run: dotnet build ProjectBeacon.sln --no-restore
       - name: No pending model changes
         run: |
+          # Release compiler/MSBuild server memory before starting EF design-time services.
+          dotnet build-server shutdown
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
       - name: Test — API
