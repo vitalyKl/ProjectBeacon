@@ -105,7 +105,10 @@ public sealed class PhysicalAttachmentService : IAttachmentService
         if (key.Length != 32 || !key.All(Uri.IsHexDigit))
             throw new InvalidDataException("Invalid attachment storage key.");
         var path = Path.GetFullPath(Path.Combine(_root, key));
-        if (!path.StartsWith(_root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        var relative = Path.GetRelativePath(_root, path);
+        if (Path.IsPathRooted(relative)
+            || relative == ".."
+            || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             throw new InvalidDataException("Attachment path escaped the storage root.");
         return path;
     }
