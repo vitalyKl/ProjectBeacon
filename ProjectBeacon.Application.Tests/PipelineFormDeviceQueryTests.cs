@@ -30,7 +30,8 @@ public sealed class PipelineFormDeviceQueryTests
                 .Select(device => device.Id)
                 .ToListAsync(TestContext.Current.CancellationToken);
 
-            Assert.Equal([active.Id], matches);
+            Assert.Single(matches);
+            Assert.Equal(active.Id, matches[0]);
         }
     }
 }
