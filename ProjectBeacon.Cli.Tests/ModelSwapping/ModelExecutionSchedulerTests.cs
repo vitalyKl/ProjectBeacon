@@ -131,4 +131,42 @@ public sealed class ModelExecutionSchedulerTests
         await Task.WhenAll(request, maintenance).WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
         Assert.True(maintenanceStarted.Task.IsCompleted);
     }
+
+    [Fact]
+    public async Task HeartbeatMaintenance_DoesNotWaitForAnActiveModelGeneration()
+    {
+        var scheduler = new ModelExecutionScheduler();
+        var requestStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRequest = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var maintenanceStarted = false;
+
+        var request = scheduler.RunModelRequestAsync(false, async () =>
+        {
+            requestStarted.TrySetResult(true);
+            await releaseRequest.Task.WaitAsync(TestContext.Current.CancellationToken);
+        }, TestContext.Current.CancellationToken);
+
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        var synced = await scheduler.TryRunMaintenanceAsync(() =>
+        {
+            maintenanceStarted = true;
+            return Task.CompletedTask;
+        }, TestContext.Current.CancellationToken);
+
+        Assert.False(synced);
+        Assert.False(maintenanceStarted);
+
+        releaseRequest.TrySetResult(true);
+        await request.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        synced = await scheduler.TryRunMaintenanceAsync(() =>
+        {
+            maintenanceStarted = true;
+            return Task.CompletedTask;
+        }, TestContext.Current.CancellationToken);
+
+        Assert.True(synced);
+        Assert.True(maintenanceStarted);
+    }
 }
