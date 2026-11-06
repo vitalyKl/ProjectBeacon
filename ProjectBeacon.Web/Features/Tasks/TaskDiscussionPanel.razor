@@ -15,7 +15,7 @@
     {
         @foreach (var comment in Task.Comments.OrderBy(c => c.CreatedAt))
         {
-            <MudText Typo="Typo.body2" Class="mt-2">@comment.Content</MudText>
+            <div class="mt-2"><ChatMarkdown Text="@comment.Content" /></div>
             <MudText Typo="Typo.caption"><LocalTime Value="comment.CreatedAt" Format="d" /></MudText>
         }
     }
