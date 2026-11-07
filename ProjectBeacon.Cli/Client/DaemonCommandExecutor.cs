@@ -88,6 +88,9 @@ internal sealed class DaemonCommandExecutor : IDaemonCommandExecutor
                     ? (true, JsonSerializer.Serialize(update), null)
                     : (false, null, "The workstation client is already up to date.");
             }
+            if (kind is WorkstationCommandKind.RetiredAgentConfigApply or WorkstationCommandKind.RetiredProviderSync)
+                return (false, null, "This legacy external-agent command has been retired; use native agent settings.");
+
             if (CommandSandbox.IsProjectKind(kind))
             {
                 if (string.IsNullOrWhiteSpace(command.LocalRoot))
