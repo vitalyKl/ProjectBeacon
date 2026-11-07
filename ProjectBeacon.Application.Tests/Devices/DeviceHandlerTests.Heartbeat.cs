@@ -62,7 +62,7 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
-    public async Task Heartbeat_RequeuesApplyOpencode_WhenConfigRevisionAhead()
+    public async Task Heartbeat_DoesNotRequeueRetiredAgentConfig_WhenLegacyConfigRevisionAhead()
     {
         var (user, project, deviceId) = await OnlineProjectDeviceAsync();
         var attached = await new AttachRuntimeHandler(Factory()).HandleAsync(
@@ -75,25 +75,10 @@ public sealed partial class DeviceHandlerTests
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
+        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
+            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
         var listed = await new ListCommandsHandler(Factory()).HandleAsync(
             new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
         Assert.DoesNotContain(listed.Value!, c => c.Kind == WorkstationCommandKind.RetiredAgentConfigApply);
-
-        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
-            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
-        listed = await new ListCommandsHandler(Factory()).HandleAsync(
-            new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
-        var apply = Assert.Single(listed.Value!, c => c.Kind == WorkstationCommandKind.RetiredAgentConfigApply);
-        Assert.Equal(project.Id, apply.ProjectId);
-
-        var done = await new CompleteCommandHandler(Factory()).HandleAsync(
-            new CompleteCommandCommand(new CompleteCommandRequest(apply.Id, deviceId, true, apply.PayloadJson, null)), TestContext.Current.CancellationToken);
-        Assert.True(done.Success, done.Error);
-
-        await new HeartbeatDeviceHandler(Factory()).HandleAsync(
-            new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}")), TestContext.Current.CancellationToken);
-        var after = await new ListCommandsHandler(Factory()).HandleAsync(
-            new ListCommandsCommand(new ListCommandsRequest(deviceId, user.Id, 20)), TestContext.Current.CancellationToken);
-        Assert.Equal(1, after.Value!.Count(c => c.Kind == WorkstationCommandKind.RetiredAgentConfigApply));
     }
 }
