@@ -129,6 +129,10 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
         }
 
         await using var db = _dbFactory.CreateDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+        db.ChangeTracker.Clear();
         var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == request.TaskId, ct);
         if (task is null)
             return Result.Failure<TaskWorkspaceSectionDto>("Task not found.", ErrorKind.NotFound);
@@ -219,6 +223,7 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
         await transaction.CommitAsync(ct);
         var updated = await db.TaskWorkspaceSections.AsNoTracking().FirstAsync(s => s.Id == section.Id, ct);
         return Result<TaskWorkspaceSectionDto>.Ok(WorkspaceReadHandler.ToDto(updated));
+        });
     }
 
     private static bool ValidKey(string key) =>
