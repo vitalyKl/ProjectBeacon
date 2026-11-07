@@ -19,17 +19,20 @@ public class CreateOrgInviteHandler
     private readonly IEmailSender _email;
     private readonly IAuthorizationService _auth;
     private readonly IConfiguration? _configuration;
+    private readonly TimeProvider _timeProvider;
 
     public CreateOrgInviteHandler(
         IBeaconDbFactory dbFactory,
         IEmailSender email,
         IAuthorizationService auth,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        TimeProvider? timeProvider = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _auth = auth;
         _configuration = configuration;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Result<InviteCreatedDto>> HandleAsync(CreateOrgInviteRequest request, CancellationToken ct = default)
@@ -38,6 +41,7 @@ public class CreateOrgInviteHandler
         if (email.Length == 0)
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         await using var db = _dbFactory.CreateDbContext();
         var check = await _auth.CanAsync(db, request.Actor, ResourceType.Org, AuthAction.Administer, orgId: request.OrgId, ct: ct);
         if (!check.Success)
@@ -52,14 +56,14 @@ public class CreateOrgInviteHandler
             .ToListAsync(ct);
         foreach (var existing in pending)
         {
-            if (existing.ExpiredAt < DateTime.UtcNow)
+            if (existing.ExpiredAt < now)
                 existing.Expire();
             else
                 return Result.Failure<InviteCreatedDto>("Invite already pending.");
         }
 
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
-        var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw));
+        var invite = OrgInvite.Create(request.OrgId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
         db.OrgInvites.Add(invite);
         await db.SaveChangesAsync(ct);
 
@@ -77,17 +81,20 @@ public class CreateProjectInviteHandler
     private readonly IEmailSender _email;
     private readonly IAuthorizationService _auth;
     private readonly IConfiguration? _configuration;
+    private readonly TimeProvider _timeProvider;
 
     public CreateProjectInviteHandler(
         IBeaconDbFactory dbFactory,
         IEmailSender email,
         IAuthorizationService auth,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        TimeProvider? timeProvider = null)
     {
         _dbFactory = dbFactory;
         _email = email;
         _auth = auth;
         _configuration = configuration;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Result<InviteCreatedDto>> HandleAsync(CreateProjectInviteRequest request, CancellationToken ct = default)
@@ -96,6 +103,7 @@ public class CreateProjectInviteHandler
         if (email.Length == 0)
             return Result.Failure<InviteCreatedDto>("Email is required.");
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         await using var db = _dbFactory.CreateDbContext();
         var check = await _auth.CanAsync(db, request.Actor, ResourceType.Project, AuthAction.Administer, projectId: request.ProjectId, ct: ct);
         if (!check.Success)
@@ -110,14 +118,14 @@ public class CreateProjectInviteHandler
             .ToListAsync(ct);
         foreach (var existing in pending)
         {
-            if (existing.ExpiredAt < DateTime.UtcNow)
+            if (existing.ExpiredAt < now)
                 existing.Expire();
             else
                 return Result.Failure<InviteCreatedDto>("Invite already pending.");
         }
 
         var raw = OpaqueToken.Generate(OpaqueToken.InvitePrefix);
-        var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw));
+        var invite = ProjectInvite.Create(request.ProjectId, email, request.Role, request.Actor.UserId!.Value, OpaqueToken.Hash(raw), now);
         db.ProjectInvites.Add(invite);
         await db.SaveChangesAsync(ct);
 
@@ -132,13 +140,19 @@ public class CreateProjectInviteHandler
 public class GetInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly TimeProvider _timeProvider;
 
-    public GetInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GetInviteHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result<InvitePreviewDto>> HandleAsync(string token, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var found = await InviteLookup.FindAsync(db, token, ct);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var found = await InviteLookup.FindAsync(db, token, now, ct);
         if (found is null)
             return Result.Failure<InvitePreviewDto>("Invite not found.");
         return Result.Ok(found);
@@ -150,11 +164,17 @@ public class GetInviteHandler
 public class AcceptInviteHandler
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly TimeProvider _timeProvider;
 
-    public AcceptInviteHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public AcceptInviteHandler(IBeaconDbFactory dbFactory, TimeProvider? timeProvider = null)
+    {
+        _dbFactory = dbFactory;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<Result> HandleAsync(AcceptInviteRequest request, CancellationToken ct = default)
     {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         await using var db = _dbFactory.CreateDbContext();
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.Actor.UserId!.Value, ct);
         if (user is null)
@@ -167,7 +187,7 @@ public class AcceptInviteHandler
         {
             if (!string.Equals(orgInvite.Email, user.Email, StringComparison.Ordinal))
                 return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
-            if (!orgInvite.TryAccept())
+            if (!orgInvite.TryAccept(now))
                 return Result.Failure("Invite is no longer valid.");
             if (!await db.OrgMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.OrgId == orgInvite.OrgId && m.UserId == user.Id, ct))
@@ -182,7 +202,7 @@ public class AcceptInviteHandler
             return Result.Failure("Invite not found.");
         if (!string.Equals(projectInvite.Email, user.Email, StringComparison.Ordinal))
             return Result.Failure("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
-        if (!projectInvite.TryAccept())
+        if (!projectInvite.TryAccept(now))
             return Result.Failure("Invite is no longer valid.");
 
         var project = await db.Projects.IgnoreQueryFilters()
@@ -316,7 +336,7 @@ public class RevokeProjectInviteHandler
 
 internal static class InviteLookup
 {
-    public static async Task<InvitePreviewDto?> FindAsync(IBeaconDb db, string token, CancellationToken ct)
+    public static async Task<InvitePreviewDto?> FindAsync(IBeaconDb db, string token, DateTime now, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
             return null;
@@ -326,7 +346,7 @@ internal static class InviteLookup
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
         if (orgInvite is not null)
         {
-            if (orgInvite.Status != InviteStatus.Pending || orgInvite.ExpiredAt < DateTime.UtcNow)
+            if (orgInvite.Status != InviteStatus.Pending || orgInvite.ExpiredAt < now)
                 return null;
             return new InvitePreviewDto("org", orgInvite.OrgId, orgInvite.Org.Name, orgInvite.Email, orgInvite.Role, orgInvite.ExpiredAt);
         }
@@ -336,7 +356,7 @@ internal static class InviteLookup
             .FirstOrDefaultAsync(i => i.TokenHash == hash, ct);
         if (projectInvite is null)
             return null;
-        if (projectInvite.Status != InviteStatus.Pending || projectInvite.ExpiredAt < DateTime.UtcNow)
+        if (projectInvite.Status != InviteStatus.Pending || projectInvite.ExpiredAt < now)
             return null;
         return new InvitePreviewDto(
             "project", projectInvite.ProjectId, projectInvite.Project.Name,
