@@ -22,7 +22,7 @@
         {
             <div class="beacon-tool-panel">
                 <div class="beacon-tool-panel-head">
-                    <MudText Typo="Typo.body2" Class="beacon-ellipsis beacon-tool-name">@ToolTitle</MudText>
+                    <MudText Typo="Typo.body2" Class="beacon-ellipsis beacon-tool-name" title="@ToolTitle">@ToolTitle</MudText>
                     @if (!string.IsNullOrWhiteSpace(Part.ToolStatus))
                     {
                         <StatusChip Color="@StatusColor" Label="@Part.ToolStatus" />

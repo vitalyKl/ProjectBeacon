@@ -4,7 +4,7 @@
         var mark = i < CurrentIndex ? "done" : i == CurrentIndex ? (Warning ? "warning" : "active") : string.Empty;
         <div class="beacon-stage @(i == CurrentIndex ? "is-current" : null)" aria-current="@(i == CurrentIndex ? "step" : null)">
             <span class="beacon-phase-mark @mark" aria-hidden="true"></span>
-            <span class="mud-typography mud-typography-caption">@Labels[i]</span>
+            <span class="mud-typography mud-typography-caption" title="@Labels[i]">@Labels[i]</span>
         </div>
     }
 </div>

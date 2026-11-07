@@ -1,4 +1,5 @@
 /* Product landing — dark, workstation-first product story. */
+/* 1050/1100px are landing composition adjustments; shared shell thresholds use 960/768/600/480/390px. */
 .landing-shell {
     color: var(--color-text-primary);
     background:
@@ -249,7 +250,7 @@
     .landing-intro { gap: var(--space-8); }
     .landing-architecture { gap: var(--space-8); padding: var(--space-8); }
 }
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .landing-nav { min-height: 64px; padding-inline: var(--space-4); }
     .landing-nav-links { display: none; }
     .landing-nav-actions { margin-left: auto; }
@@ -286,7 +287,7 @@
     .landing-final-cta .landing-hero-actions { margin-top: var(--space-4); }
     .landing-footer { align-items: flex-start; flex-direction: column; gap: var(--space-3); padding-inline: var(--space-4); }
 }
-@media (max-width: 390px) {
+@media (max-width: 390.98px) {
     .landing-window-body { grid-template-columns: 1fr; }
     .landing-window-sidebar { display: none; }
     .landing-feature-grid { grid-template-columns: 1fr; }
@@ -321,7 +322,7 @@
     width: 100%;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .landing-footer {
         align-items: flex-start;
         flex-direction: column;
@@ -526,7 +527,7 @@
     }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
     .landing-nav {
         display: flex;
         min-height: 64px;
@@ -661,7 +662,7 @@
     }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 479.98px) {
     .landing-main {
         padding-inline: 14px;
     }
@@ -693,3 +694,24 @@
     }
 }
 
+/* Keep the decorative product preview readable instead of simulating dense, truncated UI. */
+.landing-window-body { grid-template-columns: 156px minmax(0, 1fr); }
+.landing-window-nav { min-width: 0; gap: 8px; font-size: 11px; white-space: normal; }
+.landing-window-nav .mud-icon-root { width: 16px; height: 16px; flex: 0 0 16px; font-size: 16px; }
+.landing-window-sidebar-foot { white-space: normal; overflow-wrap: anywhere; }
+.landing-window-metrics span { overflow: visible; font-size: 10px; text-overflow: clip; white-space: normal; }
+.landing-window-metrics small { font-size: 10px; line-height: 1.3; }
+.landing-window-task strong { overflow: visible; font-size: 11px; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.landing-window-task small { font-size: 10px; line-height: 1.3; }
+.landing-task-state { font-size: 10px; white-space: normal; text-align: end; }
+.landing-window-runtime strong { font-size: 11px; }
+.landing-window-runtime small { overflow: visible; font-size: 10px; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 959.98px) {
+    .landing-window-body { grid-template-columns: 120px minmax(0, 1fr); }
+    .landing-window-nav { font-size: 10px; }
+}
+@media (max-width: 599.98px) {
+    .landing-window-body { grid-template-columns: 1fr; }
+    .landing-window-sidebar { display: none; }
+    .landing-window-metrics span { font-size: 10px; }
+}

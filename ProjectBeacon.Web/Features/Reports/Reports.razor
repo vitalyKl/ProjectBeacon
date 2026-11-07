@@ -6,6 +6,7 @@
 @using ProjectBeacon.Application.Projects
 @using System.Text.Json
 @using ProjectBeacon.Application.Reports
+@using ProjectBeacon.Web.Features.Chat
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
@@ -37,7 +38,7 @@ else
     }
     else
     {
-        <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true">
+        <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["CreatedAt"]</MudTh>
                 <MudTh>@L["Title"]</MudTh>
@@ -60,7 +61,7 @@ else
             <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
                 <MudText Typo="Typo.h6">@_open.Title</MudText>
                 <MudText Typo="Typo.caption">@ScopeLabel(_open) · @StatusLabel(_open)</MudText>
-                <MudText Typo="Typo.body2" Class="mt-3 beacon-pre">@_open.BodyMarkdown</MudText>
+                <div class="mt-3"><ChatMarkdown Text="@_open.BodyMarkdown" /></div>
                 <ContextCostReport ProjectId="_project.Id" />
             </MudPaper>
         }

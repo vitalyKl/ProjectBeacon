@@ -13,7 +13,7 @@
     }
     @if (!string.IsNullOrWhiteSpace(Subtask.DiffRef))
     {
-        <MudText Typo="Typo.caption" Class="beacon-ellipsis">@Subtask.DiffRef</MudText>
+        <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@Subtask.DiffRef">@Subtask.DiffRef</MudText>
     }
     @foreach (var session in Sessions)
     {
