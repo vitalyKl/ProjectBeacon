@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Text.Json;
 using ProjectBeacon.Cli.Client;
 
 public sealed class ClientStoreTests : IDisposable
