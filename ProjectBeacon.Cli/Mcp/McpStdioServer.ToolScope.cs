@@ -98,6 +98,7 @@ public static partial class McpStdioServer
         McpToolNames.GetProject,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
         McpToolNames.ListConstraints, McpToolNames.ListDecisions, McpToolNames.ListMilestones, McpToolNames.ListLabels, McpToolNames.MatchLabel,
+        McpToolNames.WorkspaceWrite,
         ..PlannerSupervisorTools
     ];
 
@@ -105,6 +106,7 @@ public static partial class McpStdioServer
     [
         ..ReadOnlyWorkspaceTools,
         McpToolNames.GetProject,
+        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         ..ReviewerSupervisorTools
     ];
