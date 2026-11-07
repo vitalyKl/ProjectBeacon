@@ -184,7 +184,6 @@ public static partial class McpStdioServer
             // clients. Pipeline Actors have a stricter contract: only explicitly granted
             // workspace tools are exposed, while lifecycle tools are added below.
             if (!ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
-                && !ActorWorkspaceTools.Contains(name, StringComparer.OrdinalIgnoreCase)
                 && !IsGrantedToSubtask(active.Tools, name))
                 continue;
 
