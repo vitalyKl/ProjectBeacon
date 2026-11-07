@@ -171,7 +171,7 @@ public sealed class WorkstationSettings
         var (settings, error) = TryRead(path);
         if (error is null)
             return settings;
-        throw new InvalidDataException($"{error}. Delete the file or re-save it from the client TUI (s).");
+        throw new InvalidDataException($"Could not load workstation settings: {error}. Delete the file or re-save it from the client TUI (s).");
     }
 
     public void Save(string? path = null)
