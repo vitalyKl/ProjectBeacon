@@ -17,24 +17,24 @@
 <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
     <MudText Typo="Typo.body2" Class="mud-text-secondary">@L["AgentProviderConnectionsLead"]</MudText>
     <ol class="mud-text-secondary ps-4 mt-2 mb-4">
-        <li>@L["OpenCodeStepPick"]</li>
-        <li>@L["OpenCodeStepKey"]</li>
-        <li>@L["OpenCodeStepSave"]</li>
+        <li>@L["AgentProviderStepPick"]</li>
+        <li>@L["AgentProviderStepKey"]</li>
+        <li>@L["AgentProviderStepSave"]</li>
     </ol>
     <div class="beacon-form">
         <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mb-1">
             <MudButton Variant="@PresetVariant("xai/grok-3")" Size="Size.Small" OnClick='() => Pick("xai/grok-3")'>Grok</MudButton>
             <MudButton Variant="@PresetVariant("openai/gpt-4.1")" Size="Size.Small" OnClick='() => Pick("openai/gpt-4.1")'>OpenAI</MudButton>
             <MudButton Variant="@PresetVariant("anthropic/claude-sonnet-4-5")" Size="Size.Small" OnClick='() => Pick("anthropic/claude-sonnet-4-5")'>Claude</MudButton>
-            <MudButton Variant="@(_custom ? Variant.Filled : Variant.Outlined)" Size="Size.Small" OnClick="PickCustom">@L["OpenCodeOwnServer"]</MudButton>
+            <MudButton Variant="@(_custom ? Variant.Filled : Variant.Outlined)" Size="Size.Small" OnClick="PickCustom">@L["AgentProviderOwnServer"]</MudButton>
         </MudStack>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["OpenCodeOnePerService"]</MudText>
-        <MudTextField @bind-Value="_model" Label="@L["OpenCodeModel"]" Placeholder="xai/grok-3" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@L["OpenCodeModelExample"]" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["AgentProviderOnePerService"]</MudText>
+        <MudTextField @bind-Value="_model" Label="@L["AgentProviderModel"]" Placeholder="xai/grok-3" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@L["AgentProviderModelExample"]" />
         @if (_custom)
         {
-            <MudTextField @bind-Value="_baseUrl" Label="@L["OpenCodeBaseUrl"]" Placeholder="http://127.0.0.1:11434/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeBaseUrlHint"]" />
+            <MudTextField @bind-Value="_baseUrl" Label="@L["AgentProviderBaseUrl"]" Placeholder="http://127.0.0.1:11434/v1" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["AgentProviderBaseUrlHint"]" />
         }
-        <MudTextField @bind-Value="_apiKey" Label="@L["OpenCodeApiKey"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["OpenCodeApiKeyHint"]" />
+        <MudTextField @bind-Value="_apiKey" Label="@L["AgentProviderApiKey"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["AgentProviderApiKeyHint"]" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save" Disabled="_busy || _userId == Guid.Empty">@L["Save"]</MudButton>
     </div>
     @if (_rows.Count == 0)
@@ -58,7 +58,7 @@
                         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
                             @if (row.HasApiKey)
                             {
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["OpenCodeKeySaved"]</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentProviderKeySaved"]</MudText>
                             }
                             <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Edit(row)">@L["Edit"]</MudButton>
                             <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => Remove(row)">@L["Delete"]</MudButton>
@@ -143,7 +143,7 @@
         var slash = _model.IndexOf('/');
         if (slash <= 0 || slash == _model.Length - 1)
         {
-            Snackbar.Add(L["OpenCodeModelExample"].Value, Severity.Warning);
+            Snackbar.Add(L["AgentProviderModelExample"].Value, Severity.Warning);
             return;
         }
         _busy = true;
