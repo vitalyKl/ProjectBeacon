@@ -30,6 +30,16 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                   AND "Status" IN ('Pending', 'Running');
 
                 UPDATE "WorkstationCommands"
+                SET "Status" = 'Failed',
+                    "Error" = 'Legacy OpenCode eval command retired during Native runtime migration.',
+                    "CompletedAt" = COALESCE("CompletedAt", CURRENT_TIMESTAMP),
+                    "StartedAt" = COALESCE("StartedAt", CURRENT_TIMESTAMP),
+                    "LeaseExpiresAt" = NULL
+                WHERE "Kind" = 'RunEvalTurn'
+                  AND "Status" IN ('Pending', 'Running')
+                  AND "PayloadJson"::jsonb ->> 'runtime' = 'opencode';
+
+                UPDATE "WorkstationCommands"
                 SET "Kind" = CASE "Kind"
                     WHEN 'ApplyOpencode' THEN 'RetiredAgentConfigApply'
                     WHEN 'ConfigureOpenCode' THEN 'RetiredProviderSync'
