@@ -40,6 +40,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("ActorBackendId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ActorInstructions")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<string>("Mode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -52,8 +57,18 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid?>("PlannerBackendId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PlannerInstructions")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<Guid?>("ReviewBackendId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewInstructions")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
 
                     b.Property<Guid?>("SoloBackendId")
                         .HasColumnType("uuid");
@@ -183,6 +198,11 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ProfileInstructions")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
 
                     b.Property<string>("Role")
                         .IsRequired()
