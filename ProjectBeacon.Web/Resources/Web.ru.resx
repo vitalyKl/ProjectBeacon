@@ -151,10 +151,10 @@
     <value>Эту модель берёт чат приложения, если в сообщении не указана другая. Сохранение ставит команду работающему клиенту обновить AgentProvider.</value>
   </data>
 <data name="AgentProviderModel" xml:space="preserve">
-    <value>Модель AgentProvider</value>
+    <value>ID модели провайдера</value>
   </data>
 <data name="AgentProviderModelHint" xml:space="preserve">
-    <value>Провайдер и модель, которые AgentProvider уже знает, например xai/grok-3. Ключ можно сохранить в подключении, иначе вход на машине: the native agent runtime auth login.</value>
+    <value>Укажите провайдера и модель, например anthropic/claude-sonnet-4-5. Данные подключения провайдера используются для авторизации.</value>
   </data>
 <data name="AgentProviderConnections" xml:space="preserve">
     <value>Подключения AgentProvider</value>
@@ -1237,7 +1237,7 @@
     <value>Обзор</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>Инициализировать на устройстве (.gitignore, opencode.json)</value>
+    <value>Инициализировать на устройстве (.gitignore)</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>Вверх</value>
@@ -1367,9 +1367,6 @@
   </data>
 <data name="ProbeGit" xml:space="preserve">
     <value>git</value>
-  </data>
-<data name="ProbeOpencode" xml:space="preserve">
-    <value>opencode</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1616,7 +1613,7 @@
     <value>Папку можно не указывать сейчас и прикрепить позже на панели управления.</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>Записывает .gitignore и opencode.json в эту папку на рабочей станции.</value>
+    <value>Создаёт папку проекта и записывает необходимые правила .gitignore на рабочую станцию.</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>Папка проекта</value>
@@ -2104,11 +2101,8 @@
 <data name="AgentRuntime" xml:space="preserve">
     <value>Среда выполнения агента</value>
   </data>
-<data name="AgentRuntimeAgentProvider" xml:space="preserve">
-    <value>AgentProvider (по умолчанию)</value>
-  </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
-    <value>Нативный harness (экспериментально)</value>
+    <value>Нативная среда агента</value>
   </data>
 <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Изменение вступит в силу после перезапуска клиента рабочей станции.</value>
@@ -2406,5 +2400,11 @@
   </data>
   <data name="StageCancelled" xml:space="preserve">
     <value>Отменён</value>
+  </data>
+  <data name="ProviderModelId" xml:space="preserve">
+    <value>ID модели провайдера</value>
+  </data>
+  <data name="ProviderModelIdHint" xml:space="preserve">
+    <value>Укажите идентификатор в формате provider/model, например xai/grok-3 или anthropic/claude-sonnet-4-5.</value>
   </data>
 </root>
