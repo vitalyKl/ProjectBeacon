@@ -17,7 +17,7 @@ public interface ISessionSpawner
     Task<SpawnedSession> SpawnAsync(IBeaconDb db, Guid projectId, PipelineRole role, Guid taskId, CancellationToken ct);
 }
 
-/// <summary>v1 spawner: fills LaunchSpec from the registry; the real spawn happens in the Phase 7 harness.</summary>
+/// <summary>v1 selector: resolves backend identity. Only LlamaCpp gets a local process launch spec; remote providers are not process-launched by this harness.</summary>
 public sealed class ManualSessionSpawner : ISessionSpawner
 {
     private readonly ILlamaSwapCatalog _catalog;
@@ -61,6 +61,11 @@ public sealed class ManualSessionSpawner : ISessionSpawner
 
     private SpawnedSession SessionFrom(LocalModelBackend backend)
     {
+        // FreeToken and OpenAI-compatible models are addressed through provider/model IDs.
+        // They must never be converted into a llama-swap process command.
+        if (backend.BackendType != ModelBackendType.LlamaCpp)
+            return new SpawnedSession(backend.Id, backend.Name, null);
+
         var port = _catalog.Port.ToString(CultureInfo.InvariantCulture);
         var command = backend.LaunchCommand.Replace("${PORT}", port, StringComparison.Ordinal);
         var spec = _catalog.BuildLaunchSpec(backend.Name, command, backend.ContextSize, backend.Ttl, backend.ExtraFlags);
