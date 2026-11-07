@@ -201,8 +201,7 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
         {
             if (request.ExpectedRevision is null)
                 return Result.Failure<TaskWorkspaceSectionDto>("expectedRevision is required for replace.");
-            if (!string.Equals(section.AuthorType, authorType, StringComparison.Ordinal)
-                || !string.Equals(section.AuthorId, authorId, StringComparison.Ordinal))
+            if (!IsSameAuthor(section, authorType, authorId, command))
                 return Result.Failure<TaskWorkspaceSectionDto>("Only the section author may replace it.", ErrorKind.Forbidden);
             changed = await db.TaskWorkspaceSections
                 .Where(s => s.Id == section.Id && s.Revision == request.ExpectedRevision.Value
@@ -224,6 +223,24 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
         var updated = await db.TaskWorkspaceSections.AsNoTracking().FirstAsync(s => s.Id == section.Id, ct);
         return Result.Ok(WorkspaceReadHandler.ToDto(updated));
         });
+    }
+
+    private static bool IsSameAuthor(
+        TaskWorkspaceSection section,
+        string authorType,
+        string? authorId,
+        WorkspaceWriteCommand command)
+    {
+        if (!string.Equals(section.AuthorType, authorType, StringComparison.Ordinal)
+            || !string.Equals(section.AuthorId, authorId, StringComparison.Ordinal))
+            return false;
+
+        if (command.PipelineSubtaskId is { } subtaskId)
+            return section.AuthorSubtaskId == subtaskId;
+        if (command.PipelineSessionId is { } sessionId)
+            return section.AuthorSessionId == sessionId;
+
+        return section.AuthorSubtaskId is null && section.AuthorSessionId is null;
     }
 
     private static bool ValidKey(string key) =>
