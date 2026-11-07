@@ -194,10 +194,10 @@
     <value>Used by the app chat when a message does not name another model. Saving tells the running client to refresh the agent runtime.</value>
   </data>
 <data name="AgentProviderModel" xml:space="preserve">
-    <value>Agent model</value>
+    <value>Provider model ID</value>
   </data>
 <data name="AgentProviderModelHint" xml:space="preserve">
-    <value>Provider and model AgentProvider already knows, like xai/grok-3. A saved connection can supply the key; otherwise sign in on the machine with the native agent runtime auth login.</value>
+    <value>Enter the provider and model ID, for example anthropic/claude-sonnet-4-5. The saved provider connection supplies credentials.</value>
   </data>
 <data name="AgentProviderConnections" xml:space="preserve">
     <value>Model connections</value>
@@ -1331,7 +1331,7 @@
     <value>Browse</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>Initialize on device (.gitignore, opencode.json)</value>
+    <value>Initialize on device (.gitignore)</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>Up</value>
@@ -1461,9 +1461,6 @@
   </data>
 <data name="ProbeGit" xml:space="preserve">
     <value>git</value>
-  </data>
-<data name="ProbeOpencode" xml:space="preserve">
-    <value>opencode</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1710,7 +1707,7 @@ No Beacon-hosted coding agent.</value>
     <value>You can skip the folder now and attach it later on the dashboard.</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>Writes .gitignore and opencode.json into that folder on the workstation.</value>
+    <value>Creates the project folder and writes the required .gitignore rules on the workstation.</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>Project folder</value>
@@ -2297,11 +2294,8 @@ No Beacon-hosted coding agent.</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>Agent runtime</value>
   </data>
-<data name="AgentRuntimeAgentProvider" xml:space="preserve">
-    <value>AgentProvider (default)</value>
-  </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
-    <value>Native harness (experimental)</value>
+    <value>Native runtime</value>
   </data>
 <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>Runtime changes take effect after restarting the workstation client.</value>
@@ -2615,5 +2609,11 @@ No Beacon-hosted coding agent.</value>
   </data>
   <data name="StageCancelled" xml:space="preserve">
     <value>Cancelled</value>
+  </data>
+  <data name="ProviderModelId" xml:space="preserve">
+    <value>Provider model ID</value>
+  </data>
+  <data name="ProviderModelIdHint" xml:space="preserve">
+    <value>Enter a provider/model identifier, for example xai/grok-3 or anthropic/claude-sonnet-4-5.</value>
   </data>
 </root>
