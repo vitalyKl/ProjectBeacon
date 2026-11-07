@@ -373,8 +373,8 @@ Capability gate `TaskWrite`/`TaskRead` on the route. Registry/proxy reads are hu
 | GET | `/v1/models` | ModelEndpoints.cs:14 | Human-only | TaskRead | `UserId is null → 401` (:28) | user | model registry read |
 | POST | `/v1/models` | ModelEndpoints.cs:15 | Human-only | TaskWrite | `UserId is null → 401` (:39) | user | upsert model backend |
 | DELETE | `/v1/models/{id}` | ModelEndpoints.cs:16 | Human-only | TaskWrite | `UserId is null → 401` (:53) | user | |
-| POST | `/v1/models/bind` | ModelEndpoints.cs:17 | Any-auth | TaskWrite | **none** (handler reads no actor) | project | `REVIEW REQUIRED`: no human/role gate |
-| DELETE | `/v1/models/bind/{role}` | ModelEndpoints.cs:18 | Any-auth | TaskWrite | **none** (handler reads no actor) | project | `REVIEW REQUIRED` |
+| POST | `/v1/models/bind` | ModelEndpoints.cs:22 | Human | — | `RequireHuman`; Application handler requires Project Administer | project | API and direct handler share the same policy |
+| DELETE | `/v1/models/bind/{role}` | ModelEndpoints.cs:23 | Human | — | `RequireHuman`; Application handler requires Project Administer | project | API and direct handler share the same policy |
 | GET | `/v1/models/proxy/status` | ModelEndpoints.cs:19 | Any-auth | TaskRead | **none** (handler reads no actor) | project | `REVIEW REQUIRED` |
 | POST | `/v1/models/proxy/reload` | ModelEndpoints.cs:20 | Any-auth | TaskWrite | **none** (handler reads no actor) | project | `REVIEW REQUIRED` |
 | POST | `/v1/models/proxy/unload` | ModelEndpoints.cs:21 | Any-auth | TaskWrite | **none** (handler reads no actor) | project | `REVIEW REQUIRED` |
