@@ -28,13 +28,14 @@ public sealed class WorkstationDaemon : IAsyncDisposable
         ClientLlamaSwap llama,
         Func<WorkstationSettings>? loadSettings = null,
         Action<string>? log = null,
-        ClientOpenCodeServe? openCode = null)
+        ClientOpenCodeServe? openCode = null,
+        TimeProvider? timeProvider = null)
     {
         _http = http;
         _llama = llama;
         _ownsOpenCode = openCode is null;
         _openCode = openCode ?? new ClientOpenCodeServe();
-        _timing = new DaemonTiming();
+        _timing = new DaemonTiming(timeProvider);
         _state = new DaemonRuntimeState(http.BaseAddress?.ToString().TrimEnd('/') ?? "", log, _shutdown.Cancel);
         _llama.Log = message => _state.Log(message);
         _openCode.Log = message => _state.Log(message);

@@ -17,17 +17,22 @@ public sealed class StaleCommandRecoveryService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<StaleCommandRecoveryService> _logger;
+    private readonly TimeProvider _timeProvider;
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
 
-    public StaleCommandRecoveryService(IServiceScopeFactory scopeFactory, ILogger<StaleCommandRecoveryService> logger)
+    public StaleCommandRecoveryService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<StaleCommandRecoveryService> logger,
+        TimeProvider? timeProvider = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Interval);
+        using var timer = new PeriodicTimer(Interval, _timeProvider);
         do
         {
             try
@@ -55,7 +60,7 @@ public sealed class StaleCommandRecoveryService : BackgroundService
         {
             await TenantRlsSession.ApplyAsync(db, null, null, unscoped: true);
             var pipelineQueue = scope.ServiceProvider.GetService<PipelineActorQueueDispatcher>();
-            var recovered = await CommandRecovery.RecoverAsync(db, DateTime.UtcNow, ct, pipelineQueue);
+            var recovered = await CommandRecovery.RecoverAsync(db, _timeProvider, ct, pipelineQueue);
             if (recovered > 0)
                 _logger.LogInformation("Recovered {Count} stale workstation commands", recovered);
             return recovered;

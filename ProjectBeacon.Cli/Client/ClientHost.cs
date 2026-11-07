@@ -16,10 +16,8 @@ public static class ClientHost
         if (storePath is not null)
             Environment.SetEnvironmentVariable("BEACON_CLIENT_STORE", storePath);
         var store = ClientStore.Load(storePath);
-        if (!string.IsNullOrWhiteSpace(opts.Url))
-            store.Url = opts.Url.TrimEnd('/');
-        if (!string.IsNullOrWhiteSpace(opts.Token))
-            store.Token = opts.Token;
+        store.Url = (ClientConfiguration.ResolveValue(opts.Url, null, store.Url) ?? string.Empty).TrimEnd('/');
+        store.Token = ClientConfiguration.ResolveValue(opts.Token, null, store.Token) ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(opts.Url) || !string.IsNullOrWhiteSpace(opts.Token))
             store.Save(storePath);
 

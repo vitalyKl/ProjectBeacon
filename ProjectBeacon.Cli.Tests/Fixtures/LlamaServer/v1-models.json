@@ -1,0 +1,11 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "fixture-model",
+      "object": "model",
+      "created": 0,
+      "owned_by": "llamacpp"
+    }
+  ]
+}

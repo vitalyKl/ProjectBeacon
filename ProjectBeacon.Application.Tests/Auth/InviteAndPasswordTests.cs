@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
 using Application.Auth;
+using Application.Common;
 using Application.Authorization;
 using Application.Identity;
 using Application.Persistence;
@@ -113,6 +114,8 @@ public sealed class InviteAndPasswordTests : IDisposable
             new RegisterCommand(new RegisterRequest("bob", "other@test.com", "password1", invited.Value!.Token)), TestContext.Current.CancellationToken);
         Assert.False(registered.Success);
         Assert.Equal("Email does not match invite.", registered.Error);
+        Assert.Equal(ErrorCodes.InviteEmailMismatch, registered.ErrorCode);
+        Assert.Equal(ErrorKind.Forbidden, registered.Kind);
     }
 
     [Fact]

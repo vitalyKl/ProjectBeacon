@@ -8,6 +8,25 @@ using ProjectBeacon.Cli.Mcp;
 public sealed class McpApiToolsTests
 {
     [Fact]
+    public async Task ApiProblemDetails_ExposeStableErrorCodeAndDetail()
+    {
+        var env = McpEnvironment.Of(("BEACON_TASK_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.Forbidden,
+            """{"type":"about:blank","title":"Forbidden","status":403,"detail":"Project administration is required.","code":"forbidden"}"""))
+        {
+            BaseAddress = new Uri("http://beacon.test/")
+        };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.PipelineStatusAsync(Guid.NewGuid(), api);
+
+        Assert.True(result.IsError);
+        Assert.Contains("HTTP 403 [forbidden]", result.Text, StringComparison.Ordinal);
+        Assert.Contains("Project administration is required.", result.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReportSubtaskResult_OversizedSummary_IsRejectedBeforeHttpRequest()
     {
         var env = McpEnvironment.Of(("BEACON_PROJECT_ID", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
@@ -203,6 +222,15 @@ public sealed class McpApiToolsTests
         var resolved = BeaconApiClient.Resolve(env);
         Assert.True(resolved.Misconfigured);
         Assert.Null(resolved.Client);
+    }
+
+    private sealed class ProblemResponseHandler(HttpStatusCode status, string body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/problem+json")
+            });
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

@@ -207,6 +207,7 @@ else
     private LlamaSwapStatusDto? _status;
     private bool _busy;
     private Guid _userId;
+    private ActorContext _caller = ActorContext.Anonymous;
     private AgentRunMode _mode = AgentRunMode.Solo;
     private Guid? _solo;
     private Guid? _runtimeDeviceId;
@@ -219,9 +220,10 @@ else
     protected override async Task OnInitializedAsync()
     {
         var user = (await Auth.GetAuthenticationStateAsync()).User;
+        _caller = ActorContextFactory.FromPrincipal(user);
         if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id))
             _userId = id;
-        var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal(user));
+        var current = await CurrentProject.HandleAsync(_caller);
         _project = current.Value;
         await ReloadAsync();
     }
@@ -350,13 +352,13 @@ else
             string? error = null;
             if (backendId is { } id)
             {
-                var set = await SetBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, id)));
+                var set = await SetBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, id), _caller));
                 ok = set.Success;
                 error = set.Error;
             }
             else
             {
-                var removed = await RemoveBinding.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(role)));
+                var removed = await RemoveBinding.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(role), _caller));
                 ok = removed.Success;
                 error = removed.Error;
             }
@@ -554,7 +556,7 @@ else
         {
             SetLifecycle(WorkstationCommandStatus.Pending, null);
             var applied = await ApplyAgentConfig.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-                _project.Id, deviceId, _userId, _mode, _solo, _planner, _actor, _review)));
+                _project.Id, deviceId, _userId, _mode, _solo, _planner, _actor, _review), _caller));
             if (!applied.Success)
             {
                 SetLifecycle(WorkstationCommandStatus.Failed, applied.Error);

@@ -73,12 +73,14 @@ public class RegisterHandler
     private readonly IBeaconDbFactory _dbFactory;
     private readonly IPasswordHasher _passwords;
     private readonly IConfiguration? _configuration;
+    private readonly TimeProvider _timeProvider;
 
-    public RegisterHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration = null)
+    public RegisterHandler(IBeaconDbFactory dbFactory, IPasswordHasher passwords, IConfiguration? configuration = null, TimeProvider? timeProvider = null)
     {
         _dbFactory = dbFactory;
         _passwords = passwords;
         _configuration = configuration;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Result<RegisterResponse>> HandleAsync(RegisterCommand command, CancellationToken ct = default)
@@ -94,6 +96,7 @@ public class RegisterHandler
             return Result.Failure<RegisterResponse>("Password must be at least 8 characters.");
 
         var inviteOnly = LocalAuthOptions.InviteOnly(_configuration);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         if (inviteOnly && string.IsNullOrEmpty(inviteToken))
             return Result.Failure<RegisterResponse>("Invite required.", ErrorKind.Forbidden);
 
@@ -125,10 +128,10 @@ public class RegisterHandler
                 return Result.Failure<RegisterResponse>("Invite not found.");
             var inviteEmail = orgInvite?.Email ?? projectInvite!.Email;
             if (!string.Equals(inviteEmail, email, StringComparison.Ordinal))
-                return Result.Failure<RegisterResponse>("Email does not match invite.");
-            if (orgInvite is not null && (orgInvite.Status != Domain.Enums.InviteStatus.Pending || orgInvite.ExpiredAt < DateTime.UtcNow))
+                return Result.Failure<RegisterResponse>("Email does not match invite.", ErrorCodes.InviteEmailMismatch, ErrorKind.Forbidden);
+            if (orgInvite is not null && (orgInvite.Status != Domain.Enums.InviteStatus.Pending || orgInvite.ExpiredAt < now))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
-            if (projectInvite is not null && (projectInvite.Status != Domain.Enums.InviteStatus.Pending || projectInvite.ExpiredAt < DateTime.UtcNow))
+            if (projectInvite is not null && (projectInvite.Status != Domain.Enums.InviteStatus.Pending || projectInvite.ExpiredAt < now))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
             if (projectInvite is not null)
             {
@@ -157,7 +160,7 @@ public class RegisterHandler
         {
             var invite = await writeDb.OrgInvites.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(i => i.Id == orgInvite.Id, ct);
-            if (invite is null || !invite.TryAccept())
+            if (invite is null || !invite.TryAccept(now))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
             if (!await writeDb.OrgMembers.IgnoreQueryFilters()
                     .AnyAsync(m => m.OrgId == invite.OrgId && m.UserId == user.Id, ct))
@@ -168,7 +171,7 @@ public class RegisterHandler
         {
             var invite = await writeDb.ProjectInvites.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(i => i.Id == projectInvite.Id, ct);
-            if (invite is null || !invite.TryAccept())
+            if (invite is null || !invite.TryAccept(now))
                 return Result.Failure<RegisterResponse>("Invite is no longer valid.");
             var project = await writeDb.Projects.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(p => p.Id == projectInvite.ProjectId, ct);

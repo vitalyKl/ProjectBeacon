@@ -1,0 +1,19 @@
+[
+  {
+    "info": { "role": "assistant" },
+    "parts": [
+      { "id": "t1", "type": "text", "text": "hello" },
+      { "id": "r1", "type": "reasoning", "text": "think" },
+      {
+        "id": "c1",
+        "type": "tool",
+        "tool": "read",
+        "state": {
+          "status": "completed",
+          "output": "src/a.cs",
+          "time": { "start": 1000, "end": 2500 }
+        }
+      }
+    ]
+  }
+]

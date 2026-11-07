@@ -10,6 +10,7 @@ using Application.Agents;
 using Application.CodeIndex;
 using Application.Mcp;
 using Application.Tasks;
+using Domain.Common;
 using Domain.Enums;
 using Infrastructure;
 using Infrastructure.Data;
@@ -21,23 +22,23 @@ public static partial class McpStdioServer
 {
     private static JsonObject[] LocalTools() =>
     [
-        Tool("read_file", "Read a file inside the project root.",
+        Tool(McpToolNames.ReadFile, "Read a file inside the project root.",
             Props(("path", "string", true))),
-        Tool("write_file", "Write a file inside the project root. Rejects path escape.",
+        Tool(McpToolNames.WriteFile, "Write a file inside the project root. Rejects path escape.",
             Props(("path", "string", true), ("content", "string", true))),
-        Tool("apply_patch", "Replace one exact occurrence of oldText with newText in a file.",
+        Tool(McpToolNames.ApplyPatch, "Replace one exact occurrence of oldText with newText in a file.",
             Props(("path", "string", true), ("oldText", "string", true), ("newText", "string", true))),
-        Tool("get_tree", "List files and directories under the project root or a sub-path. Re-scans the working tree on every call.",
+        Tool(McpToolNames.GetTree, "List files and directories under the project root or a sub-path. Re-scans the working tree on every call.",
             Props(("path", "string", false), ("maxEntries", "integer", false))),
-        Tool("search_code", "Literal substring search over text files in the working tree.",
+        Tool(McpToolNames.SearchCode, "Literal substring search over text files in the working tree.",
             Props(("query", "string", true), ("path", "string", false), ("maxMatches", "integer", false))),
-        Tool("get_changed_scope", "List working-tree changed files from git status, optionally filtered by a path prefix.",
+        Tool(McpToolNames.GetChangedScope, "List working-tree changed files from git status, optionally filtered by a path prefix.",
             Props(("path", "string", false), ("maxFiles", "integer", false))),
-        Tool("get_signatures", "Extract symbol signatures (classes, methods, functions) from changed or specified source files.",
+        Tool(McpToolNames.GetSignatures, "Extract symbol signatures (classes, methods, functions) from changed or specified source files.",
             Props(("path", "string", false), ("maxFiles", "integer", false))),
-        Tool("get_callers", "Find single-hop incoming references (callers) for a symbol at a given file/line.",
+        Tool(McpToolNames.GetCallers, "Find single-hop incoming references (callers) for a symbol at a given file/line.",
             Props(("path", "string", true), ("symbolName", "string", true), ("line", "integer", true))),
-        Tool("hash_range", "SHA-256 of an inclusive 1-based line range of a file, as a bare lowercase hex string. For content-staleness comparison.",
+        Tool(McpToolNames.HashRange, "SHA-256 of an inclusive 1-based line range of a file, as a bare lowercase hex string. For content-staleness comparison.",
             Props(("path", "string", true), ("startLine", "integer", true), ("endLine", "integer", true)))
     ];
 
