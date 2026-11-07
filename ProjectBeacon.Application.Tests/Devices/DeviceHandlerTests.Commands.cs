@@ -246,7 +246,7 @@ public sealed partial class DeviceHandlerTests
         var (user, project, deviceId) = await OnlineProjectDeviceAsync("""{"projectsRoot":"D:\\\\projects"}""");
         var queued = await new EnqueueCommandHandler(Factory()).HandleAsync(
             new EnqueueCommandCommand(new EnqueueCommandRequest(
-                deviceId, user.Id, WorkstationCommandKind.ApplyOpencode, """{"path":"."}""", project.Id)), TestContext.Current.CancellationToken);
+                deviceId, user.Id, WorkstationCommandKind.ChatEnsureSession, """{"path":"."}""", project.Id)), TestContext.Current.CancellationToken);
         Assert.False(queued.Success);
         Assert.Equal(CommandSandbox.RuntimeRequired, queued.Error);
     }
@@ -488,11 +488,11 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
-    public async Task HarnessToken_ForOpenCodeEvalRequiresMatchingPersistedRuntime()
+    public async Task HarnessToken_ForNativeEvalRequiresMatchingPersistedRuntime()
     {
         var (owner, _, project) = await SeedOwnerAndMemberAsync();
         var device = await new CreateDeviceHandler(Factory()).HandleAsync(
-            new CreateDeviceCommand(new CreateDeviceRequest("opencode-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            new CreateDeviceCommand(new CreateDeviceRequest("native-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
             TestContext.Current.CancellationToken);
         var deviceId = device.Value!.Id;
         var instanceId = "eval-instance-" + Guid.NewGuid().ToString("N");
@@ -500,14 +500,14 @@ public sealed partial class DeviceHandlerTests
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
             TestContext.Current.CancellationToken);
 
-        var task = TaskItem.Create("OpenCode eval task", project.Id);
-        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.OpenCode);
-        run.Pin("opencode/test", 0.2, "low", "read", 120, "revision", "dotnet test", "opencode");
+        var task = TaskItem.Create("Native eval task", project.Id);
+        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.WithBrief);
+        run.Pin("provider/test", 0.2, "low", "read", 120, "revision", "dotnet test", "native");
         var payload = JsonSerializer.Serialize(new
         {
             evalRunId = run.Id,
             taskId = task.Id,
-            runtime = "opencode",
+            runtime = "native",
             prompt = "Inspect the workspace."
         });
 
@@ -541,11 +541,11 @@ public sealed partial class DeviceHandlerTests
     }
 
     [Fact]
-    public async Task HarnessToken_RejectsEvalRunThatIsNotPinnedToNativeRuntime()
+    public async Task HarnessToken_RejectsEvalPayloadWithDifferentRuntime()
     {
         var (owner, _, project) = await SeedOwnerAndMemberAsync();
         var device = await new CreateDeviceHandler(Factory()).HandleAsync(
-            new CreateDeviceCommand(new CreateDeviceRequest("opencode-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
+            new CreateDeviceCommand(new CreateDeviceRequest("native-eval", "eval-" + Guid.NewGuid().ToString("N"), owner.Id)),
             TestContext.Current.CancellationToken);
         var deviceId = device.Value!.Id;
         var instanceId = "eval-instance-" + Guid.NewGuid().ToString("N");
@@ -553,14 +553,14 @@ public sealed partial class DeviceHandlerTests
             new HeartbeatDeviceCommand(new HeartbeatDeviceRequest(deviceId, "{}", "{}", instanceId)),
             TestContext.Current.CancellationToken);
 
-        var task = TaskItem.Create("OpenCode eval task", project.Id);
-        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.OpenCode);
-        run.Pin("opencode/test", 0.2, "low", "read", 120, "revision", "dotnet test", "opencode");
+        var task = TaskItem.Create("Native eval task", project.Id);
+        var run = EvalRun.Create(project.Id, task.Id, Guid.NewGuid().ToString("N"), EvalCondition.WithBrief);
+        run.Pin("provider/test", 0.2, "low", "read", 120, "revision", "dotnet test", "native");
         var payload = JsonSerializer.Serialize(new
         {
             evalRunId = run.Id,
             taskId = task.Id,
-            runtime = "native",
+            runtime = "unsupported",
             prompt = "Try to use native tools."
         });
 
