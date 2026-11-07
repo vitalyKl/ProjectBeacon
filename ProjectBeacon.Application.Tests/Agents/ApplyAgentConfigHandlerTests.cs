@@ -62,7 +62,7 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
     {
         var (user, project, deviceId, backendId) = await SeedAsync(attachRuntime: false);
         var factory = HandlerSqlite.Factory(_connection, Scope(project.Id));
-        var handler = new ApplyAgentConfigHandler(factory, new AuthorizationService(), new SetRoleBindingHandler(factory, new AuthorizationService()), new EnqueueCommandHandler(factory));
+        var handler = new ApplyAgentConfigHandler(factory, new AuthorizationService(), new SetRoleBindingHandler(factory, new AuthorizationService()));
 
         var result = await handler.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
             project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null),
