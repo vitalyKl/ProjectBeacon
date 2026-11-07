@@ -9,7 +9,7 @@ using Domain.Enums;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 /// <summary>
-/// An OpenCode provider connection without the API key. HasApiKey is true when one is stored.
+/// A provider connection without the API key. HasApiKey is true when one is stored.
 /// </summary>
 public record AgentProviderConnectionDto(Guid Id, string ProviderId, string ModelId, string BaseUrl, bool HasApiKey);
 /// <summary>
@@ -37,11 +37,11 @@ public record DeleteAgentProviderConnectionCommand(DeleteAgentProviderConnection
 /// </summary>
 public record ListAgentProviderConnectionsCommand(Guid UserId) : ICommand<Result<IList<AgentProviderConnectionDto>>>;
 /// <summary>
-/// Device asking for its owner's OpenCode connections, including secrets.
+/// Device asking for its owner's provider connections, including secrets.
 /// </summary>
 public record DeviceAgentProviderConnectionsCommand(Guid DeviceId) : ICommand<Result<IList<AgentProviderConnectionSecretDto>>>;
 /// <summary>
-/// Lists the user's OpenCode provider connections without returning stored API keys.
+/// Lists the user's provider connections without returning stored API keys.
 /// </summary>
 public sealed class ListAgentProviderConnectionsHandler : ICommandHandler<ListAgentProviderConnectionsCommand, Result<IList<AgentProviderConnectionDto>>>
 {
@@ -65,11 +65,9 @@ public sealed class ListAgentProviderConnectionsHandler : ICommandHandler<ListAg
 public sealed class SaveAgentProviderConnectionHandler : ICommandHandler<SaveAgentProviderConnectionCommand, Result<AgentProviderConnectionDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly NudgeOpenCodeHandler _nudge;
-
     private readonly ISecretProtector _secrets;
 
-    public SaveAgentProviderConnectionHandler(IBeaconDbFactory dbFactory, NudgeOpenCodeHandler nudge, ISecretProtector secrets)
+    public SaveAgentProviderConnectionHandler(IBeaconDbFactory dbFactory, ISecretProtector secrets)
     {
         _dbFactory = dbFactory;
         _secrets = secrets;
@@ -101,22 +99,19 @@ public sealed class SaveAgentProviderConnectionHandler : ICommandHandler<SaveAge
         }
         await DesiredState.BumpUserAsync(db, request.UserId, ct);
         await db.SaveChangesAsync(ct);
-        await _nudge.HandleAsync(new NudgeOpenCodeCommand(request.UserId), ct);
         return Result.Ok(ListAgentProviderConnectionsHandler.Map(existing));
     }
 }
 /// <summary>
-/// Deletes one of the user's OpenCode connections.
+/// Deletes one of the user's provider connections.
 /// </summary>
 public sealed class DeleteAgentProviderConnectionHandler : ICommandHandler<DeleteAgentProviderConnectionCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
-    private readonly NudgeOpenCodeHandler _nudge;
 
     public DeleteAgentProviderConnectionHandler(IBeaconDbFactory dbFactory, NudgeOpenCodeHandler nudge)
     {
         _dbFactory = dbFactory;
-        _nudge = nudge;
     }
 
     public async Task<Result> HandleAsync(DeleteAgentProviderConnectionCommand command, CancellationToken ct = default)
@@ -128,12 +123,11 @@ public sealed class DeleteAgentProviderConnectionHandler : ICommandHandler<Delet
         db.AgentProviderConnections.Remove(row);
         await DesiredState.BumpUserAsync(db, command.Request.UserId, ct);
         await db.SaveChangesAsync(ct);
-        await _nudge.HandleAsync(new NudgeOpenCodeCommand(command.Request.UserId), ct);
         return Result.Ok();
     }
 }
 /// <summary>
-/// Returns the device owner's OpenCode connections, including secrets, for the enrolled device. Fails when the device is missing.
+/// Returns the device owner's provider connections, including secrets, for the enrolled device. Fails when the device is missing.
 /// </summary>
 public sealed class DeviceAgentProviderConnectionsHandler : ICommandHandler<DeviceAgentProviderConnectionsCommand, Result<IList<AgentProviderConnectionSecretDto>>>
 {
