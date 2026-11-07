@@ -371,7 +371,7 @@ public sealed class ApiTokenAuthMiddleware
                 && segments[3] == "pipeline")
                 return true;
 
-            if (TaskWorkspaceToolForRequest(segments, method) is { } workspaceTool)
+            if (TaskWorkspaceToolForRequest(segments, scopedTaskId, method) is { } workspaceTool)
                 return IsMcpToolGranted(allowedMcpTools, workspaceTool);
 
             return method == HttpMethods.Post
@@ -455,10 +455,10 @@ public sealed class ApiTokenAuthMiddleware
         return false;
     }
 
-    private static string? TaskWorkspaceToolForRequest(string[] segments, string method)
+    private static string? TaskWorkspaceToolForRequest(string[] segments, Guid taskId, string method)
     {
         if (segments.Length < 4 || segments[0] != "v1"
-            || segments[1] != "tasks" || !Guid.TryParse(segments[2], out _)
+            || segments[1] != "tasks" || !GuidSegmentEquals(segments, 2, taskId)
             || segments[3] != "workspace")
             return null;
 

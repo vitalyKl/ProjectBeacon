@@ -22,6 +22,9 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/pipeline", _taskId, _subtaskId));
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceIndex]));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
             [McpToolNames.WorkspaceIndex]));
