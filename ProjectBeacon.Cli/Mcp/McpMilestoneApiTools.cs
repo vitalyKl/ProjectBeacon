@@ -2,27 +2,28 @@ namespace ProjectBeacon.Cli.Mcp;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Common;
 using Domain.Enums;
 
 internal static partial class McpApiTools
 {
     private static IEnumerable<McpTool> MilestoneTools() =>
     [
-        new("list_milestones", "List roadmap milestones.",
+        new(McpToolNames.ListMilestones, "List roadmap milestones.",
             () => Props(("projectId", "string", false)), MilestonesList),
-        new("get_milestone", "Get one milestone.",
+        new(McpToolNames.GetMilestone, "Get one milestone.",
             () => Props(("milestoneId", "string", true)), MilestoneGet),
-        new("create_milestone", "Create a roadmap milestone.",
+        new(McpToolNames.CreateMilestone, "Create a roadmap milestone.",
             () => Props(("name", "string", true), ("description", "string", false), ("order", "integer", false),
                 ("projectId", "string", false)), MilestoneCreate),
-        new("update_milestone", "Update a milestone name, description, or order.",
+        new(McpToolNames.UpdateMilestone, "Update a milestone name, description, or order.",
             () => Props(("milestoneId", "string", true), ("name", "string", false), ("description", "string", false),
                 ("order", "integer", false)), MilestoneUpdate),
-        new("delete_milestone", "Delete a milestone.",
+        new(McpToolNames.DeleteMilestone, "Delete a milestone.",
             () => Props(("milestoneId", "string", true), ("projectId", "string", false)), MilestoneDelete),
-        new("close_milestone", "Close a milestone.",
+        new(McpToolNames.CloseMilestone, "Close a milestone.",
             () => Props(("milestoneId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => MilestoneAction(args, "close", api, env, ct)),
-        new("reopen_milestone", "Reopen a milestone.",
+        new(McpToolNames.ReopenMilestone, "Reopen a milestone.",
             () => Props(("milestoneId", "string", true), ("projectId", "string", false)), (args, api, env, ct) => MilestoneAction(args, "reopen", api, env, ct)),
     ];
 

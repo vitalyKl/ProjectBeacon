@@ -3,23 +3,24 @@ namespace ProjectBeacon.Cli.Mcp;
 using System.Text.Json.Nodes;
 using Application.CodeIndex;
 using Application.Mcp;
+using Domain.Common;
 using Domain.Enums;
 
 public static partial class McpStdioServer
 {
     private static JsonObject[] SessionTools() =>
     [
-        Tool("model_bind", "Bind a pipeline role (planner, actor, review) to a local model backend. Requires Beacon API credentials and BEACON_PROJECT_ID.",
+        Tool(McpToolNames.ModelBind, "Bind a pipeline role (planner, actor, review) to a local model backend. Requires Beacon API credentials and BEACON_PROJECT_ID.",
             Props(("role", "string", true), ("modelBackendId", "string", true))),
-        Tool("model_status", "Show local model backends, role bindings and llama-swap proxy status. Requires Beacon API credentials and BEACON_PROJECT_ID.",
+        Tool(McpToolNames.ModelStatus, "Show local model backends, role bindings and llama-swap proxy status. Requires Beacon API credentials and BEACON_PROJECT_ID.",
             Props()),
-        Tool("task_create_subtask", "Create a subtask on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
+        Tool(McpToolNames.TaskCreateSubtask, "Create a subtask on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("instructions", "string", true), ("allowedMcpTools", "string", false), ("allowedPaths", "string", false))),
-        Tool("subtask_report_result", "Report the result of an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
+        Tool(McpToolNames.SubtaskReportResult, "Report the result of an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("subtaskId", "string", false), ("diffRef", "string", true), ("summary", "string", true))),
-        Tool("task_review_verdict", "Record a review verdict (approve, reopen_subtask) on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
+        Tool(McpToolNames.TaskReviewVerdict, "Record a review verdict (approve, reopen_subtask) on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("verdict", "string", true), ("note", "string", true), ("subtaskId", "string", false))),
-        Tool("task_pipeline_status", "Show the pipeline state (subtasks, sessions, verdicts) for the task linked to this chat. A task created during this chat becomes the active task automatically; no BEACON_TASK_ID setup or manual GUID copy is needed.",
+        Tool(McpToolNames.TaskPipelineStatus, "Show the pipeline state (subtasks, sessions, verdicts) for the task linked to this chat. A task created during this chat becomes the active task automatically; no BEACON_TASK_ID setup or manual GUID copy is needed.",
             Props())
     ];
 
