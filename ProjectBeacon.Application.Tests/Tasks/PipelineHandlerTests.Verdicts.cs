@@ -13,6 +13,44 @@ using Microsoft.Data.Sqlite;
 public sealed partial class PipelineHandlerTests
 {
     [Fact]
+    public async Task ReportSubtaskResult_PersistsServerWorkspaceReport()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var spawner = new FakeSpawner();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var subtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement the requested feature")), TestContext.Current.CancellationToken);
+        Assert.True(subtask.Success, subtask.Error);
+        var actor = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(actor.Success, actor.Error);
+
+        var result = await new ReportSubtaskResultHandler(factory).HandleAsync(
+            new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
+                task.Id, subtask.Value.Id, "diff://verified", "Implemented and verified the feature.",
+                "Implementation completed")),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(SubtaskStatus.Done, result.Value!.Subtasks.Single().Status);
+        using (TenantScope.EnterUnscoped())
+        {
+            var report = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Value.Id,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("report/" + subtask.Value.Id.ToString("N"), report.Key);
+            Assert.Equal("Report", report.Kind);
+            Assert.Equal("Server", report.AuthorType);
+            Assert.Equal("Actor", report.AuthorRole);
+            Assert.Equal("Implementation completed", report.Abstract);
+            Assert.Equal("Implemented and verified the feature.", report.Content);
+            Assert.Equal(actor.Value.Id, report.AuthorSessionId);
+        }
+    }
+
+    [Fact]
     public async Task Verdict_MissingNoteOrSubtask_Fails()
     {
         var (projectId, task) = await SeedTaskAsync("T");
