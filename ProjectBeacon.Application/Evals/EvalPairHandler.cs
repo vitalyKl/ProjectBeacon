@@ -25,15 +25,13 @@ public record EvalPairRequest(
     string? ReasoningEffort = null,
     string? ToolPermissions = null,
     int? TimeoutSeconds = null,
-    string? RepoRevision = null,
-    string? Reserved = null);
+    string? RepoRevision = null);
 
 /// <summary>Command for creating paired eval runs.</summary>
 public record EvalPairCommand(EvalPairRequest Request) : ICommand<Result<EvalPairResult>>;
 
 /// <summary>
-/// Identifiers for an enqueued eval pair. The legacy WithBrief/WithoutBrief identifiers are
-/// The two evaluation variants and their workstation commands.
+/// Identifiers for the two evaluation variants and their workstation commands.
 /// </summary>
 public record EvalPairResult(
     string PairId,
@@ -46,7 +44,7 @@ public record EvalPairResult(
 
 /// <summary>
 /// Enqueues a with/without-brief pair on an online device.
-/// All model, sampling, permission, repository, check, timeout, and runtime controls are pinned.
+/// All model, sampling, permission, repository, check, and timeout controls are pinned.
 /// </summary>
 public class EvalPairHandler : ICommandHandler<EvalPairCommand, Result<EvalPairResult>>
 {
