@@ -21,19 +21,19 @@ public record AgentProviderConnectionSecretDto(string ProviderId, string ModelId
 /// </summary>
 public record SaveAgentProviderConnectionRequest(Guid UserId, string ProviderId, string ModelId, string? BaseUrl, string? ApiKey);
 /// <summary>
-/// Command for save open code connection.
+/// Command for saving a provider connection.
 /// </summary>
 public record SaveAgentProviderConnectionCommand(SaveAgentProviderConnectionRequest Request) : ICommand<Result<AgentProviderConnectionDto>>;
 /// <summary>
-/// Fields for delete open code connection.
+/// Fields for deleting a provider connection.
 /// </summary>
 public record DeleteAgentProviderConnectionRequest(Guid UserId, Guid Id);
 /// <summary>
-/// Command for delete open code connection.
+/// Command for deleting a provider connection.
 /// </summary>
 public record DeleteAgentProviderConnectionCommand(DeleteAgentProviderConnectionRequest Request) : ICommand<Result>;
 /// <summary>
-/// Command for list open code connections.
+/// Command for listing provider connections.
 /// </summary>
 public record ListAgentProviderConnectionsCommand(Guid UserId) : ICommand<Result<IList<AgentProviderConnectionDto>>>;
 /// <summary>
