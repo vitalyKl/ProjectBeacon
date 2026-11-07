@@ -39,6 +39,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<TaskDependency> TaskDependencies { get; }
     DbSet<TaskComment> TaskComments { get; }
     DbSet<TaskAttachment> TaskAttachments { get; }
+    DbSet<TaskWorkspaceSection> TaskWorkspaceSections { get; }
     DbSet<Constraint> Constraints { get; }
     DbSet<Decision> Decisions { get; }
     DbSet<DecisionTask> DecisionTasks { get; }

@@ -1627,6 +1627,86 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.ToTable("Subtasks");
                 });
 
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskWorkspaceSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Abstract")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("AuthorId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("AuthorProfileKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("AuthorSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorRole")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid?>("AuthorSubtaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TaskId", "Key")
+                        .IsUnique();
+
+                    b.HasIndex("TaskId", "UpdatedAt");
+
+                    b.ToTable("TaskWorkspaceSections");
+                });
+
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2302,6 +2382,17 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                 {
                     b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", "Task")
                         .WithMany("Subtasks")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskWorkspaceSection", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", "Task")
+                        .WithMany()
                         .HasForeignKey("TaskId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
