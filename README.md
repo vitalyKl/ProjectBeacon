@@ -31,7 +31,7 @@ Canonical environment setup and test procedures (unit, PostgreSQL integration, P
 
 ## Workstation client
 
-The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (init repo, OpenCode config, model process, install). Agents and model backends belong to the user; a project only binds a device and a local root.
+The Web UI never browses the developer machine. A local client enrolls, heartbeats, and runs commands (initialize project files, manage model processes, install tools). Agents and model backends belong to the user; a project only binds a device and a local root.
 
 1. In a terminal, run the first-run walkthrough (URL, sign-in, paths, probe/install, Windows autostart):
    ```
@@ -44,7 +44,7 @@ The Web UI never browses the developer machine. A local client enrolls, heartbea
    dotnet run --project ProjectBeacon.Cli -- client --url http://localhost:5083 --token <bcd_…> --headless
    ```
    Or mint a device in Settings and paste the `bcd_` token (shown once) into the walkthrough or `--token`.
-3. Create a project (`/projects/new`), pick the online device, browse its disk, optionally initialize `.gitignore` + `opencode.json`.
+3. Create a project (`/projects/new`), pick the online device, browse its disk, optionally initialize `.gitignore`.
 4. Agents: Solo/Pipeline models and MCP catalog apply on the selected device. Settings: models/history paths and winget install (git/node/docker) after Confirm. Mark a backend **Load with others** so llama-swap keeps it resident (`groups.resident`). Agents and Dashboard show CPU/RAM/GPU from the client heartbeat.
 
 The client starts the model process (`GET /v1/devices/me/llamaswap-config`), not the Web process. `UseOwnSwapper` uses the in-client swapper; otherwise the client launches external llama-swap. Concurrent backends must use `${PORT}` in the launch command.
