@@ -342,6 +342,35 @@ public sealed class ModelBackendHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task SetRoleBinding_UnauthorizedRequestedProjectWithFailClosedScope_IsForbidden()
+    {
+        var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");
+        var ownerId = await SeedOwnerAsync(projectId);
+        var outsider = User.Create("scope-outsider", "scope-outsider@beacon.local", "hash");
+        var backend = LocalModelBackend.Create("owner-model", ModelBackendType.LlamaCpp, "cmd", 1024, 0, ownerId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Users.Add(outsider);
+            _db.LocalModelBackends.Add(backend);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var actor = new ActorContext(ActorType.Human, outsider.Id, false, null, null, null, null, ApiTokenCapability.None);
+        var handler = new SetRoleBindingHandler(
+            HandlerSqlite.Factory(_connection, EmptyGuidScope()), new AuthorizationService());
+
+        var result = await handler.HandleAsync(
+            new SetRoleBindingCommand(
+                new SetRoleBindingRequest(PipelineRole.Actor, backend.Id), actor, projectId),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(ErrorCodes.Forbidden, result.ErrorCode);
+        Assert.Equal(0, await CountBindingsAsync());
+    }
+
+    [Fact]
     public async Task SetRoleBinding_UnknownBackend_Fails()
     {
         var (_, projectId) = await SeedProjectAsync(_db, "OrgA", "A");

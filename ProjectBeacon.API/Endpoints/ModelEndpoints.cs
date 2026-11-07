@@ -73,7 +73,9 @@ public static class ModelEndpoints
     private static async Task<IResult> BindRole(HttpContext ctx, [FromBody] BindRoleBody body, SetRoleBindingHandler handler, CancellationToken ct)
     {
         var result = await handler.HandleAsync(new SetRoleBindingCommand(
-            new SetRoleBindingRequest(body.Role, body.ModelBackendId), ctx.GetActor()), ct);
+            new SetRoleBindingRequest(body.Role, body.ModelBackendId),
+            ctx.GetActor(),
+            RequestedProjectId(ctx)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -84,10 +86,19 @@ public static class ModelEndpoints
         if (!Enum.TryParse<PipelineRole>(role, ignoreCase: true, out var parsed))
             return ProblemResults.Bad($"Unknown role '{role}'.");
 
-        var result = await handler.HandleAsync(new RemoveRoleBindingCommand(new RemoveRoleBindingRequest(parsed), ctx.GetActor()), ct);
+        var result = await handler.HandleAsync(new RemoveRoleBindingCommand(
+            new RemoveRoleBindingRequest(parsed), ctx.GetActor(), RequestedProjectId(ctx)), ct);
         return result.Success
             ? Results.NoContent()
             : result.FromResult(404);
+    }
+
+    private static Guid? RequestedProjectId(HttpContext ctx)
+    {
+        var value = ctx.Request.Headers["X-Project-Id"].ToString();
+        return Guid.TryParse(value, out var projectId) && projectId != Guid.Empty
+            ? projectId
+            : null;
     }
 
     private static async Task<IResult> GetProxyStatus(GetProxyStatusHandler handler, CancellationToken ct)

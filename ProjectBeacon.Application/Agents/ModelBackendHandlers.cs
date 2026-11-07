@@ -23,6 +23,29 @@ public static class ModelProjectScope
         projectId = scope.Value;
         return true;
     }
+
+    /// <summary>
+    /// Uses the resolved tenant first. A requested id is only a candidate for human actors
+    /// when middleware failed closed; callers must authorize it before accessing project data.
+    /// </summary>
+    public static bool TryGetAuthorizedCandidate(
+        IBeaconDb db,
+        Guid? requestedProjectId,
+        bool allowRequestedCandidate,
+        out Guid projectId)
+    {
+        if (TryGet(db, out projectId))
+            return true;
+
+        projectId = Guid.Empty;
+        if (!allowRequestedCandidate
+            || requestedProjectId is not { } requested
+            || requested == Guid.Empty)
+            return false;
+
+        projectId = requested;
+        return true;
+    }
 }
 
 internal static class ModelAccount
