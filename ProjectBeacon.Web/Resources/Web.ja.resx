@@ -130,10 +130,10 @@
     <value>メッセージが別のモデルを指定しないとき、アプリのチャットが使います。保存すると、実行中のクライアントにエージェント実行環境の更新を指示します。</value>
   </data>
 <data name="AgentProviderModel" xml:space="preserve">
-    <value>エージェントモデル</value>
+    <value>プロバイダーモデル ID</value>
   </data>
 <data name="AgentProviderModelHint" xml:space="preserve">
-    <value>AgentProvider が既に知っているプロバイダーとモデル。例: xai/grok-3。保存した接続がキーを渡せます。そうでなければ、マシンで the native agent runtime auth login してください。</value>
+    <value>anthropic/claude-sonnet-4-5 のように、プロバイダーとモデルを指定します。認証情報には保存済みのプロバイダー接続を使用します。</value>
   </data>
 <data name="AgentProviderConnections" xml:space="preserve">
     <value>モデル接続</value>
@@ -1243,7 +1243,7 @@
     <value>参照</value>
   </data>
 <data name="InitializeOnDevice" xml:space="preserve">
-    <value>デバイス上で初期化（.gitignore、opencode.json）</value>
+    <value>デバイス上で初期化（.gitignore）</value>
   </data>
 <data name="ParentDirectory" xml:space="preserve">
     <value>上へ</value>
@@ -1370,9 +1370,6 @@
   </data>
 <data name="ProbeGit" xml:space="preserve">
     <value>git</value>
-  </data>
-<data name="ProbeOpencode" xml:space="preserve">
-    <value>opencode</value>
   </data>
 <data name="ProbeNode" xml:space="preserve">
     <value>node</value>
@@ -1619,7 +1616,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>今はフォルダを飛ばし、後でダッシュボードから付けられます。</value>
   </data>
 <data name="InitializeOnDeviceHint" xml:space="preserve">
-    <value>ワークステーション上のそのフォルダに .gitignore と opencode.json を書き込みます。</value>
+    <value>ワークステーションにプロジェクトフォルダーを作成し、必要な .gitignore ルールを書き込みます。</value>
   </data>
 <data name="ProjectFolder" xml:space="preserve">
     <value>プロジェクトフォルダ</value>
@@ -2081,11 +2078,8 @@ orthstar</value>
 <data name="AgentRuntime" xml:space="preserve">
     <value>エージェントランタイム</value>
   </data>
-<data name="AgentRuntimeAgentProvider" xml:space="preserve">
-    <value>AgentProvider（既定）</value>
-  </data>
 <data name="AgentRuntimeNative" xml:space="preserve">
-    <value>ネイティブハーネス（実験的）</value>
+    <value>ネイティブ実行環境</value>
   </data>
 <data name="AgentRuntimeRestartHint" xml:space="preserve">
     <value>ランタイムの変更はワークステーション クライアントの再起動後に反映されます。</value>
@@ -2424,5 +2418,11 @@ orthstar</value>
   </data>
   <data name="ContextInputEstimate" xml:space="preserve">
     <value>入力トークン数の推定値</value>
+  </data>
+  <data name="ProviderModelId" xml:space="preserve">
+    <value>プロバイダーモデル ID</value>
+  </data>
+  <data name="ProviderModelIdHint" xml:space="preserve">
+    <value>xai/grok-3 や anthropic/claude-sonnet-4-5 のように provider/model 形式で指定します。</value>
   </data>
 </root>
