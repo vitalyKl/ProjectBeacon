@@ -25,6 +25,9 @@ public static class ApiRoutes
     public static string ChatSessionUsage(Guid sessionId) => $"/v1/chat/sessions/{sessionId:D}/usage";
 }
 
+/// <summary>Empty JSON body used by compatibility device calls that require a POST.</summary>
+public sealed record EmptyRequest;
+
 /// <summary>Request body used to report workstation heartbeat state.</summary>
 public sealed record WorkstationHeartbeatRequest(string? ProbeJson, string? WorkstationJson, string? InstanceId = null);
 

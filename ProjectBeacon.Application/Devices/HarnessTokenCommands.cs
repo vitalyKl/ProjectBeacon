@@ -69,7 +69,22 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
             return Result.Failure<HarnessTokenDto>("The command belongs to a different workstation process instance.", ErrorKind.Forbidden);
 
         IReadOnlyList<string>? allowedMcpTools = null;
-        if (work.Kind == WorkstationCommandKind.RunPipelineSession)
+        if (work.Kind == WorkstationCommandKind.ChatPrompt)
+        {
+            if (!WorkstationCommandPayloads.TryReadChatPrompt(work.PayloadJson, out var chatPayload))
+                return Result.Failure<HarnessTokenDto>("The chat command has an invalid session scope.", ErrorKind.Forbidden);
+
+            var chat = await db.ChatSessions.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == chatPayload.ChatSessionId
+                    && s.ProjectId == projectId
+                    && s.DeviceId == deviceId
+                    && s.ArchivedAt == null
+                    && s.Status == ChatSessionStatus.Streaming
+                    && s.ExternalSessionId == chatPayload.ExternalSessionId, ct);
+            if (chat is null)
+                return Result.Failure<HarnessTokenDto>("The chat command does not match an active database session.", ErrorKind.Forbidden);
+        }
+        else if (work.Kind == WorkstationCommandKind.RunPipelineSession)
         {
             if (!WorkstationCommandPayloads.TryReadPipelineSession(work.PayloadJson, out var scope) || scope.ProjectId != projectId)
                 return Result.Failure<HarnessTokenDto>("The pipeline command has an invalid session scope.", ErrorKind.Forbidden);

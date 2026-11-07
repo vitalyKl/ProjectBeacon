@@ -454,7 +454,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
             }
         }
 
-        await PostChatAsync(ApiRoutes.ChatSessionIdle(chatId), new { }, projectId, ct);
+        await PostChatAsync(ApiRoutes.ChatSessionIdle(chatId), new EmptyRequest(), projectId, ct);
         return (true, JsonSerializer.Serialize(new
         {
             sessionId = externalId,
