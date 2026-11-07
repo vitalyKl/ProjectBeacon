@@ -25,7 +25,7 @@ public class ProjectInvite : Entity, IProjectScoped
 
     public static ProjectInvite Create(Guid projectId, string email, MemberRole role, Guid invitedByUserId, string tokenHash) => Create(projectId, email, role, invitedByUserId, tokenHash, DateTime.UtcNow);
 
-    public static ProjectInvite Create
+    public static ProjectInvite Create(Guid projectId, string email, MemberRole role, Guid invitedByUserId, string tokenHash, DateTime now)
     {
         var invite = Entity.New<ProjectInvite>();
         invite.ProjectId = projectId;
