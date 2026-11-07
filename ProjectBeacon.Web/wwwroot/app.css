@@ -1,3 +1,10 @@
+:root {
+    --beacon-mobile-appbar-height: 56px;
+    --beacon-mobile-nav-height: 56px;
+    --beacon-chat-session-rail-height: 92px;
+    --beacon-chat-controls-height: 80px;
+}
+
 html, body, .mud-typography, .mud-button-root, .mud-input, .mud-nav-link {
     font-family: var(--font-sans);
 }
@@ -1095,9 +1102,10 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
     .mud-dialog {
         margin: 0;
-        width: 100vw;
-        max-width: 100vw !important;
+        width: 100%;
+        max-width: 100% !important;
         max-height: 100vh;
+        max-height: 100dvh;
         height: 100%;
         border-radius: 0;
     }
@@ -1146,6 +1154,9 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 .beacon-card-title-row .beacon-card-title {
     flex-grow: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .beacon-status-dot {
@@ -1169,8 +1180,19 @@ body:has(.beacon-theme-dark) .mud-main-content {
 }
 
 .beacon-pre {
+    min-width: 0;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     font-family: monospace;
+}
+
+.beacon-table-cell-clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    overflow-wrap: anywhere;
 }
 
 .beacon-chat-fab {
@@ -1981,7 +2003,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
         left: 0;
         right: 0;
         bottom: 0;
-        height: 61px;
+        height: var(--beacon-mobile-nav-height);
         padding: var(--space-1) var(--space-1) max(var(--space-1), env(safe-area-inset-bottom));
         display: flex;
         align-items: center;
@@ -2149,6 +2171,12 @@ body:has(.beacon-theme-dark) .mud-main-content {
     gap: var(--space-3);
 }
 
+.beacon-task-aside .grow {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
 .beacon-task-aside .beacon-next-action {
     margin-bottom: 0;
 }
@@ -2158,7 +2186,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 959.98px) {
     .beacon-task-hero {
         flex-direction: column;
         align-items: stretch;
@@ -2707,7 +2735,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     .beacon-main:has(.beacon-chat-page) .beacon-content-max { display: flex; flex-direction: column; min-height: 0; }
     .beacon-chat-page {
         flex: 1 1 auto; flex-direction: column; gap: var(--space-2);
-        height: calc(var(--beacon-visual-viewport-height, 100dvh) - var(--mud-appbar-height, 64px) - 61px - 92px);
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - var(--beacon-mobile-appbar-height) - var(--beacon-mobile-nav-height) - var(--beacon-chat-session-rail-height));
         min-height: 300px;
     }
     .beacon-chat-sessions {
@@ -2764,7 +2792,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
     }
 
     .beacon-mobile-nav {
-        height: 56px;
+        height: var(--beacon-mobile-nav-height);
         padding-block: var(--space-1);
         padding-bottom: max(var(--space-1), env(safe-area-inset-bottom, 0px));
     }
@@ -2772,7 +2800,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
 @media (max-width: 767px) {
     .beacon-chat-page {
-        height: calc(var(--beacon-visual-viewport-height, 100dvh) - 56px - 56px - 80px);
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - var(--beacon-mobile-appbar-height) - var(--beacon-mobile-nav-height) - var(--beacon-chat-controls-height));
     }
 }
 
@@ -2831,7 +2859,7 @@ body:has(.beacon-theme-dark) .mud-main-content {
 
     .beacon-main:has(.beacon-chat-page) {
         box-sizing: border-box;
-        height: calc(var(--beacon-visual-viewport-height, 100dvh) - 56px);
+        height: calc(var(--beacon-visual-viewport-height, 100dvh) - var(--beacon-mobile-appbar-height));
         min-height: 0;
         padding: 0;
         overflow: hidden;

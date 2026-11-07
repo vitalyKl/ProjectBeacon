@@ -60,7 +60,7 @@
             </MudStack>
             @if (!string.IsNullOrEmpty(session.LaunchSpec))
             {
-                <MudText Typo="Typo.caption" Class="beacon-ellipsis">@session.LaunchSpec</MudText>
+                <MudText Typo="Typo.caption" Class="beacon-ellipsis" title="@session.LaunchSpec">@session.LaunchSpec</MudText>
             }
         }
 

@@ -9,12 +9,12 @@
 
 <MudPaper Class="@CardClass" Elevation="0" Outlined="true">
     <div class="beacon-card-title-row">
-        <MudText Typo="Typo.subtitle2" Class="beacon-card-title" tabindex="0" @onclick="Open" @onkeydown="OnTitleKey">@Task.Title</MudText>
+        <MudText Typo="Typo.subtitle2" Class="beacon-card-title" role="link" tabindex="0" @onclick="Open" @onkeydown="OnTitleKey">@Task.Title</MudText>
         <span class="beacon-status-dot"></span>
     </div>
     @if (!string.IsNullOrEmpty(Task.Description))
     {
-        <MudText Typo="Typo.body2" Class="text-truncate mt-1">@Task.Description</MudText>
+        <MudText Typo="Typo.body2" Class="text-truncate mt-1" title="@Task.Description">@Task.Description</MudText>
     }
     @if (Task.Status == "InProgress" && Task.SubStage.HasValue)
     {

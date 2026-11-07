@@ -57,7 +57,7 @@ else
                 <StatusChip Color="@ChipPalette.ForPriority(_task.Priority)" Label="@ChromeLabels.Priority(L, _task.Priority)" />
                 <span class="beacon-ops-sub">@ChromeLabels.Type(L, _task.Type)</span>
             </div>
-            <div class="beacon-task-title">@_task.Title</div>
+            <div class="beacon-task-title" title="@_task.Title">@_task.Title</div>
             @if (!string.IsNullOrEmpty(_task.Description))
             {
                 <div class="beacon-task-goal">
@@ -103,9 +103,12 @@ else
                             @L["CancelPipeline"]
                         </MudButton>
                     }
-                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="OnRestartPipeline" Disabled="_busy">
-                        @L["RestartPipeline"]
-                    </MudButton>
+                    @if (_task.Status != "Done" && _pipeline.Stage is not (TaskPipelineStage.Cancelled or TaskPipelineStage.Closed))
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="OnRestartPipeline" Disabled="_busy">
+                            @L["RestartPipeline"]
+                        </MudButton>
+                    }
                 </MudStack>
             }
         </div>
@@ -167,8 +170,9 @@ else
                         {
                             <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => OpenPipelineDialog(PipelineDialogMode.ForceClose))" Disabled="_busy">@L["ForceClose"]</MudButton>
                         }
+                        <MudDivider Class="my-1" />
                         <MudButton Variant="Variant.Text" OnClick="EditTask">@L["Edit"]</MudButton>
-                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="OnDeleteTask" Disabled="_busy">@L["DeleteTask"]</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="OnDeleteTask" Disabled="_busy">@L["DeleteTask"]</MudButton>
                         <MudSelect T="TaskItemStatus"
                             Value="_status"
                             ValueChanged="OnStatusChanged"
@@ -205,7 +209,7 @@ else
                         @foreach (var step in _steps)
                         {
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-2">
-                                <MudCheckBox T="bool" Value="step.IsDone" ValueChanged="done => OnToggleStep(step, done)" Dense="true" />
+                                <MudCheckBox T="bool" Value="step.IsDone" ValueChanged="done => OnToggleStep(step, done)" Dense="true" aria-label="@step.Title" />
                                 <MudText Typo="Typo.body2" Class="@StepTitleClass(step.IsDone)">@step.Title</MudText>
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => OnDeleteStep(step)">@L["Delete"]</MudButton>
                             </MudStack>

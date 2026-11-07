@@ -49,7 +49,8 @@ else
             @foreach (var session in _sessions)
             {
                 <div class="beacon-session-item @SessionClass(session)">
-                    <div class="beacon-session-main" @onclick="() => Select(session)">
+                    <div class="beacon-session-main" role="button" tabindex="0" aria-label="@session.Title" title="@session.Title"
+                         @onclick="() => Select(session)" @onkeydown="args => OnSessionKeyDown(args, session)">
                         <MudText Typo="Typo.body2" Class="beacon-ellipsis">@session.Title</MudText>
                         <MudText Typo="Typo.caption"><LocalTime Value="session.CreatedAt" /></MudText>
                         @if (session.Status == ChatSessionStatus.Streaming)
@@ -202,6 +203,11 @@ else
         if (_selected?.Id != session.Id)
             return;
         _parts = parts.Success ? parts.Value!.ToList() : [];
+    }
+
+    private Task OnSessionKeyDown(KeyboardEventArgs args, ChatSessionDto session)
+    {
+        return args.Key is "Enter" or " " ? Select(session) : Task.CompletedTask;
     }
 
     private async Task OnMobileSessionChanged(ChangeEventArgs args)

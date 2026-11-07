@@ -44,7 +44,7 @@ else
     }
     else
     {
-        <MudTable Items="_decisions" Hover="true" Dense="true" Class="mt-4">
+        <MudTable Items="_decisions" Hover="true" Dense="true" Class="mt-4" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["Title"]</MudTh>
                 <MudTh>@L["Status"]</MudTh>
@@ -58,10 +58,10 @@ else
                     <StatusChip Color="@ChipPalette.ForDecisionStatus(context.Status)" Label="@ChromeLabels.Decision(L, context.Status)" />
                 </MudTd>
                 <MudTd DataLabel="@L["Context"]">
-                    <MudText Typo="Typo.caption">@context.Context</MudText>
+                    <MudText Typo="Typo.caption" Class="beacon-table-cell-clamp" title="@context.Context">@context.Context</MudText>
                 </MudTd>
                 <MudTd DataLabel="@L["Consequences"]">
-                    <MudText Typo="Typo.caption">@context.Consequences</MudText>
+                    <MudText Typo="Typo.caption" Class="beacon-table-cell-clamp" title="@context.Consequences">@context.Consequences</MudText>
                 </MudTd>
                 <MudTd DataLabel="@L["Actions"]">
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Select(context)">@L["Open"]</MudButton>

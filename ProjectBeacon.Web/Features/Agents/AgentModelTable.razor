@@ -21,7 +21,7 @@
     }
     else
     {
-        <MudTable Items="Backends" Hover="true" Dense="true">
+        <MudTable Items="Backends" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
                 <MudTh>@L["ModelName"]</MudTh>
                 <MudTh>@L["Type"]</MudTh>
@@ -40,7 +40,7 @@
                     }
                 </MudTd>
                 <MudTd DataLabel="@L["Type"]">@L["Backend" + context.BackendType].Value</MudTd>
-                <MudTd DataLabel="@L["LaunchCommand"]" Class="beacon-ellipsis" Style="max-width: 16rem">@context.LaunchCommand</MudTd>
+                <MudTd DataLabel="@L["LaunchCommand"]" Class="beacon-ellipsis" Style="max-width: 16rem" title="@context.LaunchCommand">@context.LaunchCommand</MudTd>
                 <MudTd DataLabel="@L["ContextSize"]">@context.ContextSize</MudTd>
                 <MudTd DataLabel="@L["Ttl"]">@context.Ttl</MudTd>
                 <MudTd DataLabel="@L["LoadWithOthers"]">@(context.Concurrent ? L["Yes"].Value : L["No"].Value)</MudTd>
