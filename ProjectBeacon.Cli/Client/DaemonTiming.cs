@@ -8,6 +8,8 @@ internal sealed class DaemonTiming
     public DaemonTiming(TimeProvider? timeProvider = null)
     {
         TimeProvider = timeProvider ?? TimeProvider.System;
+        DelayAsync = (delay, cancellationToken) =>
+            Task.Delay(delay, TimeProvider, cancellationToken);
     }
 
     public TimeProvider TimeProvider { get; }
@@ -15,7 +17,7 @@ internal sealed class DaemonTiming
     public TimeSpan HeartbeatInterval { get; set; } = TimeSpan.FromSeconds(5);
     public TimeSpan CommandErrorDelay { get; set; } = TimeSpan.FromSeconds(2);
     public TimeSpan ErrorBackoffInterval { get; set; } = TimeSpan.FromSeconds(3);
-    public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; } = Task.Delay;
+    public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; }
     // 250ms: streams parts as they arrive without hammering the local OpenCode serve.
     public TimeSpan ChatPollInterval { get; set; } = TimeSpan.FromMilliseconds(250);
     // CPU inference routinely pauses between tokens; 10s of quiet counts the turn as done.
