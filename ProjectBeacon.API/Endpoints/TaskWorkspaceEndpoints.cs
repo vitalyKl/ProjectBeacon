@@ -47,9 +47,14 @@ public static class TaskWorkspaceEndpoints
             return ProblemResults.Bad("TaskId mismatch.");
         var request = new WorkspaceWriteRequest(taskId, body.Key, body.Title, body.Abstract,
             body.Content, body.Mode ?? "append", body.ExpectedRevision);
-        var result = await handler.HandleAsync(new WorkspaceWriteCommand(request, context.GetActor()), ct);
+        var result = await handler.HandleAsync(new WorkspaceWriteCommand(
+            request, context.GetActor(), context.User.FindFirst("pipeline_role")?.Value,
+            ParseClaimGuid(context, "pipeline_subtask_id"), ParseClaimGuid(context, "pipeline_session_id")), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
+
+    private static Guid? ParseClaimGuid(HttpContext context, string claimType) =>
+        Guid.TryParse(context.User.FindFirst(claimType)?.Value, out var value) ? value : null;
 
     public sealed record WorkspaceWriteBody(
         Guid? TaskId, string Key, string? Title, string? Abstract, string Content,

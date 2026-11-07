@@ -23,7 +23,9 @@ public sealed record WorkspaceReadQuery(WorkspaceReadRequest Request) : IQuery<R
 public sealed record WorkspaceWriteRequest(
     Guid TaskId, string Key, string? Title, string? Abstract, string Content,
     string Mode = "append", int? ExpectedRevision = null);
-public sealed record WorkspaceWriteCommand(WorkspaceWriteRequest Request, ActorContext Actor)
+public sealed record WorkspaceWriteCommand(
+    WorkspaceWriteRequest Request, ActorContext Actor,
+    string? PipelineRole = null, Guid? PipelineSubtaskId = null, Guid? PipelineSessionId = null)
     : ICommand<Result<TaskWorkspaceSectionDto>>;
 
 public sealed class WorkspaceIndexHandler : IQueryHandler<WorkspaceIndexQuery, Result<IReadOnlyList<TaskWorkspaceSectionSummaryDto>>>
@@ -153,7 +155,8 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
                 return Result.Failure<TaskWorkspaceSectionDto>("The task workspace has reached its total size limit.");
 
             section = TaskWorkspaceSection.Create(request.TaskId, task.ProjectId, key, title, abstractText,
-                "Notes", content, authorType, authorId);
+                "Notes", content, authorType, authorId, command.PipelineRole, null,
+                command.PipelineSubtaskId, command.PipelineSessionId);
             db.TaskWorkspaceSections.Add(section);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
