@@ -23,7 +23,6 @@ public sealed class WorkstationCommandCatalogTests
         var expected = new[]
         {
             WorkstationCommandKind.InitProject,
-            WorkstationCommandKind.ApplyOpencode,
             WorkstationCommandKind.ChatEnsureSession,
             WorkstationCommandKind.ChatPrompt,
             WorkstationCommandKind.RunEvalTurn,
@@ -98,6 +97,22 @@ public sealed class WorkstationCommandCatalogTests
 
         Assert.Equal(TimeSpan.FromMinutes(CommandLease.PipelineMinutes),
             WorkstationCommandCatalog.Get(WorkstationCommandKind.RunPipelineSession).LeaseDuration);
+    }
+
+    [Fact]
+    public void LegacyExternalAgentCommands_AreDisabledAndDeviceScoped()
+    {
+        foreach (var kind in new[]
+        {
+            WorkstationCommandKind.RetiredAgentConfigApply,
+            WorkstationCommandKind.RetiredProviderSync
+        })
+        {
+            var descriptor = WorkstationCommandCatalog.Get(kind);
+            Assert.False(descriptor.Enabled);
+            Assert.Equal(WorkstationCommandScope.Device, descriptor.Scope);
+            Assert.False(CommandSandbox.IsProjectKind(kind));
+        }
     }
 
     [Fact]
