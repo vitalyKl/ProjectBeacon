@@ -97,14 +97,8 @@
             <FolderPicker DeviceId="_wsDeviceId" UserId="_userId" RootKind="projects" AdvancedPath="true"
                           Path="@_projectsRoot" PathChanged="OnProjectsRootChanged" Label="@L["ProjectsLocation"]"
                           Disabled="_busy || !WorkstationOnline" />
-            <MudSelect T="string" @bind-Value="_agentRuntime" Label="@L["AgentRuntime"]" Variant="Variant.Outlined"
-                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-4" Disabled="_busy">
-                <MudSelectItem T="string" Value="@("opencode")">@L["AgentRuntimeOpenCode"]</MudSelectItem>
-                <MudSelectItem T="string" Value="@("native")">@L["AgentRuntimeNative"]</MudSelectItem>
-            </MudSelect>
-            <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["AgentRuntimeRestartHint"]</MudText>
             <MudSelect T="string" @bind-Value="_commandPolicy" Label="@L["CommandPolicy"]" Variant="Variant.Outlined"
-                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" Disabled='_busy || _agentRuntime != "native"'>
+                       Margin="Margin.Dense" ShrinkLabel="true" Class="mt-3" Disabled="_busy">
                 <MudSelectItem T="string" Value="@("off")">@L["CommandPolicyOff"]</MudSelectItem>
                 <MudSelectItem T="string" Value="@("ask")">@L["CommandPolicyAsk"]</MudSelectItem>
                 <MudSelectItem T="string" Value="@("auto")">@L["CommandPolicyAuto"]</MudSelectItem>
@@ -117,11 +111,6 @@
                              Label="@L["PipelineIdleTimeout"]" Min="1" Max="30" Step="1"
                              Variant="Variant.Outlined" Margin="Margin.Dense" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["PipelineTimeoutHelp"]</MudText>
-            <MudText Typo="Typo.body2" Class="mt-2">@L["AgentRuntimeActive"]: @RuntimeLabel(_probeAgentRuntime)</MudText>
-            @if (_probeAgentRuntime != "-" && !string.Equals(_probeAgentRuntime, _agentRuntime, StringComparison.OrdinalIgnoreCase))
-            {
-                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@L["AgentRuntimePendingRestart"]</MudAlert>
-            }
             @if (_probeAgentRuntimeHealthy == false && !string.IsNullOrWhiteSpace(_probeAgentRuntimeError))
             {
                 <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_probeAgentRuntimeError</MudAlert>
@@ -237,9 +226,8 @@
     private string _deviceTotp = string.Empty;
     private Guid? _wsDeviceId;
     private string _modelsRoot = string.Empty;
-    private string _historyDir = string.Empty;
+    private string _agentDataDir = string.Empty;
     private string _projectsRoot = string.Empty;
-    private string _agentRuntime = "native";
     private string _commandPolicy = "ask";
     private int _pipelineTurnTimeoutMinutes = 60;
     private int _pipelineIdleTimeoutMinutes = 15;
@@ -247,7 +235,6 @@
     private string _llamaCppBin = string.Empty;
     private long _wsRevision;
     private string _probeGit = "-";
-    private string _probeOpencode = "-";
     private string _probeNode = "-";
     private string _probeDocker = "-";
     private string _probeLlamaSwap = "-";
@@ -352,13 +339,10 @@
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(device.WorkstationJson) ? "{}" : device.WorkstationJson);
             var root = doc.RootElement;
             _modelsRoot = Str(root, "modelsRoot");
-            _historyDir = Str(root, "opencodeDataDir");
+            _agentDataDir = Str(root, "agentDataDir");
+            if (string.IsNullOrWhiteSpace(_agentDataDir))
+                _agentDataDir = Str(root, "opencodeDataDir");
             _projectsRoot = Str(root, "projectsRoot");
-            _agentRuntime = root.TryGetProperty("agentRuntime", out var runtime)
-                && runtime.ValueKind == JsonValueKind.String
-                && string.Equals(runtime.GetString(), "opencode", StringComparison.OrdinalIgnoreCase)
-                    ? "opencode"
-                    : "native";
             _commandPolicy = root.TryGetProperty("commandPolicy", out var commandPolicy)
                 && commandPolicy.ValueKind == JsonValueKind.String
                     ? commandPolicy.GetString()?.Trim().ToLowerInvariant() is "off" or "auto" or "ask" ? commandPolicy.GetString()!.Trim().ToLowerInvariant() : "ask"
@@ -378,17 +362,9 @@
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() ?? "" : "";
 
-    private string RuntimeLabel(string runtime) => runtime switch
-    {
-        "native" => L["AgentRuntimeNative"].Value,
-        "opencode" => L["AgentRuntimeOpenCode"].Value,
-        "unavailable" => L["AgentRuntimeUnavailable"].Value,
-        _ => L["AgentRuntimeUnknown"].Value
-    };
-
     private void FillProbe(string probeJson)
     {
-        _probeGit = _probeOpencode = _probeNode = _probeDocker = _probeLlamaSwap = "-";
+        _probeGit = _probeNode = _probeDocker = _probeLlamaSwap = "-";
         _probeAgentRuntime = "-";
         _probeAgentRuntimeHealthy = null;
         _probeAgentRuntimeError = null;
@@ -396,22 +372,18 @@
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(probeJson) ? "{}" : probeJson);
             _probeGit = Tool(doc.RootElement, "git");
-            _probeOpencode = Tool(doc.RootElement, "opencode");
             _probeNode = Tool(doc.RootElement, "node");
             _probeDocker = Tool(doc.RootElement, "docker");
             _probeLlamaSwap = Tool(doc.RootElement, "llamaSwap");
             var root = doc.RootElement;
-            if (root.TryGetProperty("agentRuntime", out var runtimeStatus)
-                || root.TryGetProperty("opencodeServe", out runtimeStatus))
+            if (root.TryGetProperty("agentRuntime", out var runtimeStatus))
             {
                 if (runtimeStatus.ValueKind == JsonValueKind.Object)
                 {
                     _probeAgentRuntime = Str(runtimeStatus, "runtime");
                     if (string.IsNullOrWhiteSpace(_probeAgentRuntime))
                     {
-                        _probeAgentRuntime = string.Equals(Str(runtimeStatus, "version"), "native", StringComparison.OrdinalIgnoreCase)
-                            ? "native"
-                            : "opencode";
+                        _probeAgentRuntime = "native";
                     }
                     if (runtimeStatus.TryGetProperty("healthy", out var healthy)
                         && healthy.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -484,9 +456,8 @@
             {
                 revision = _wsRevision,
                 modelsRoot = _modelsRoot,
-                opencodeDataDir = _historyDir,
+                agentDataDir = _agentDataDir,
                 projectsRoot = _projectsRoot,
-                agentRuntime = _agentRuntime,
                 commandPolicy = _commandPolicy,
                 pipelineTurnTimeoutMinutes = _pipelineTurnTimeoutMinutes,
                 pipelineIdleTimeoutMinutes = _pipelineIdleTimeoutMinutes,
