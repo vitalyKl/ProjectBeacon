@@ -327,19 +327,24 @@ All task routes use `RequireAuthorization`. Capability gate where shown; **no ro
 
 ### 4.11 Chat (`ChatEndpoints.cs`)
 
-Human surface uses `RequireHuman()`. Device ingestion surface uses `RequireDevice()` plus the device-boundary metadata.
+Human chat/session routes use `RequireHuman()`. Device ingestion routes use `RequireDevice()`; the endpoint metadata grants the device boundary only for these routes.
 
-| Method | Route | Source | Actor | Cap | Handler check | Scope | Notes / status |
+| Method | Route | Source | Actor | Cap | Handler / route check | Scope | Notes / status |
 |---|---|---|---|---|---|---|---|
-| GET | `/v1/chat/sessions` | ChatEndpoints.cs:13 | Human-only | — | `UserId is null → 401` (:31) | user | |
-| POST | `/v1/chat/sessions` | ChatEndpoints.cs:14 | Human-only | — | `UserId is null → 401` (:40) | user | |
-| GET | `/v1/chat/sessions/{id}` | ChatEndpoints.cs:15 | Human-only | — | `UserId is null → 401` (:49) | user | |
-| GET | `/v1/chat/sessions/{id}/parts` | ChatEndpoints.cs:16 | Human-only | — | `UserId is null → 401` (:58) | user | |
-| POST | `/v1/chat/sessions/{id}/prompt` | ChatEndpoints.cs:17 | Human-only | — | `UserId is null → 401` (:67) | user | |
-| POST | `/v1/chat/sessions/{id}/abort` | ChatEndpoints.cs:18 | Human-only | — | `UserId is null → 401` (:76) | user | |
-| POST | `/v1/chat/sessions/{id}/parts` | ChatEndpoints.cs:19 | Device | — | `RequireDevice`; `DeviceId is null → 401` | session | |
-| POST | `/v1/chat/sessions/{id}/idle` | ChatEndpoints.cs:20 | Device | — | `RequireDevice`; `DeviceId is null → 401` | session | |
-| POST | `/v1/chat/sessions/{id}/usage` | ChatEndpoints.cs:21 | Device | — | `RequireDevice`; `DeviceId is null → 401` | session | |
+| GET | `/v1/chat/sessions` | ChatEndpoints.cs:22 | Human | — | `RequireHuman` | user | |
+| POST | `/v1/chat/sessions` | ChatEndpoints.cs:23 | Human | — | `RequireHuman` | user | |
+| GET | `/v1/chat/sessions/{id:guid}` | ChatEndpoints.cs:24 | Human | — | `RequireHuman` | session | |
+| PATCH | `/v1/chat/sessions/{id:guid}` | ChatEndpoints.cs:25 | Human | — | `RequireHuman` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/archive` | ChatEndpoints.cs:26 | Human | — | `RequireHuman` | session | |
+| GET | `/v1/chat/sessions/{id:guid}/parts` | ChatEndpoints.cs:27 | Human | — | `RequireHuman` | session | |
+| GET | `/v1/chat/sessions/{id:guid}/events` | ChatEndpoints.cs:28 | Human | — | `RequireHuman` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/prompt` | ChatEndpoints.cs:29 | Human | — | `RequireHuman` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/abort` | ChatEndpoints.cs:30 | Human | — | `RequireHuman` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/agent` | ChatEndpoints.cs:31 | Human | — | `RequireHuman` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/forms/{formId}/reply` | ChatEndpoints.cs:32 | Human | — | `RequireHuman` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/parts` | ChatEndpoints.cs:33 | Device | — | `RequireDevice` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/idle` | ChatEndpoints.cs:34 | Device | — | `RequireDevice` | session | |
+| POST | `/v1/chat/sessions/{id:guid}/usage` | ChatEndpoints.cs:35 | Device | — | `RequireDevice` | session | |
 
 ### 4.12 Devices (`DeviceEndpoints.cs`)
 
@@ -418,52 +423,11 @@ These are places where the three enforcement layers disagree or are applied unev
 
 ---
 
-## 6. Cross-check report
+## 6. Route inventory cross-check
 
-**Method.** The endpoint set below was produced by enumerating every `app.Map<Verb>(…)` call across the 16 endpoint files and reading each file in full (not sampled). Each row in §4 was then checked against the source line.
+The route inventory is generated from the mapped `EndpointDataSource`, rather than maintained as an independent route count. This catches routes added after the manual resource-level review above and reports each HTTP method, route template, and route actor policy. The generated inventory is exercised by `EndpointAuthorizationInventoryTests`; any `/v1` route without explicit anonymous, authenticated, or typed actor metadata fails the test.
 
-| File | Mapped routes | Routes in file | Match |
-|---|---|---|---|
-| `AuthEndpoints.cs` | 12 | 12 (lines 20–31) | ✔ |
-| `VersionEndpoints.cs` | 1 | 1 (line 11) | ✔ |
-| `ProjectEndpoints.cs` | 17 | 17 (lines 22–40) | ✔ |
-| `TaskEndpoints.cs` | 24 | 24 (lines 20–43) | ✔ |
-| `PipelineEndpoints.cs` | 12 | 12 (lines 15–26) | ✔ |
-| `ContextEndpoints.cs` | 11 | 11 (lines 14–24) | ✔ |
-| `DecisionEndpoints.cs` | 5 | 5 (lines 12–16) | ✔ |
-| `MilestoneEndpoints.cs` | 10 | 10 (lines 16–25) | ✔ |
-| `LabelEndpoints.cs` | 3 | 3 (lines 12–14) | ✔ |
-| `ReportEndpoints.cs` | 4 | 4 (lines 13–16) | ✔ |
-| `ChatEndpoints.cs` | 8 | 8 (lines 13–20) | ✔ |
-| `DeviceEndpoints.cs` | 13 | 13 (lines 15–27) | ✔ |
-| `ModelEndpoints.cs` | 8 | 8 (lines 14–21) | ✔ |
-| `EvalEndpoints.cs` | 1 | 1 (line 11) | ✔ |
-| `OrgEndpoints.cs` | 7 | 7 (lines 20–26) | ✔ |
-| `WorkEndpoints.cs` | 1 | 1 (line 15) | ✔ |
-| **Total** | **137** | **137** | ✔ |
-
-### 6.a Endpoints present in code but missing from the matrix
-
-None. All 137 `app.Map*` registrations across the 16 files are represented in §4.
-
-### 6.b Matrix rows with no corresponding endpoint
-
-None. Every §4 row maps to a verified `file:line`.
-
-### 6.c Authorization behavior differing from description
-
-None found beyond the six inconsistencies already flagged in §5 (which are intentional findings, not matrix errors).
-
-### 6.d Verification note
-
-- Route **line numbers** were taken from a full read of each endpoint file.
-- **Capability gates** (`RequireHumanOrApiToken`), **device gates** (`RequireDevice`), and **`AllowAnonymous`** were read directly from the `app.Map*` chains.
-- **Handler guards** (`UserId is null`, `IsDevice`, `DeviceId is null`) were read from the endpoint lambdas; line numbers in §4 refer to those guard lines.
-- **`ProjectAuthorization` call sites** in Application handlers were confirmed by grep: `ProjectHandlers.cs:66`, `ProjectMemberHandlers.cs:18/:50`, `ApiTokenHandlers.cs:26/:100/:141/:171`, `InviteHandlers.cs:37/:89/:196/:217/:241/:261`, `TenantContextBinder.cs:22`.
-
-> **Coverage:** every one of the 16 endpoint files was read in full in this session, including `ModelEndpoints.cs` (lines 1–107). All literal route paths, capability gates, and handler guards in §4 are backed by that full read. No rows remain unverified.
-
----
+The resource-group rollup and handler-level findings in §§3–5 remain a separate authorization review: route metadata does not establish project membership, resource ownership, tenant scope, or authorization performed inside Application handlers.
 
 ## 6.e Generated route-policy inventory
 
