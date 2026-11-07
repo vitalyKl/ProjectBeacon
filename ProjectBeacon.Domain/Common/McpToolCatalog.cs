@@ -159,8 +159,8 @@ public static class McpToolCatalog
 
     private static IReadOnlyDictionary<string, McpToolDescriptor> Build()
     {
-        var descriptors = new[]
-        {
+        McpToolDescriptor[] descriptors =
+        [
             // Task and project API tools.
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
                 McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps),
@@ -214,7 +214,7 @@ public static class McpToolCatalog
                 McpToolNames.ModelStatus, McpToolNames.TaskPipelineStatus),
             ..Session(McpToolScope.Write, ApiTokenCapability.TaskWrite, McpToolSurface.Pipeline,
                 McpToolNames.TaskCreateSubtask, McpToolNames.SubtaskReportResult, McpToolNames.TaskReviewVerdict)
-        };
+        ];
 
         var duplicateNames = descriptors.GroupBy(descriptor => descriptor.Name, StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
