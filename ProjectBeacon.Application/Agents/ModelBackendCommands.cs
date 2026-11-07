@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
+using Application.Authorization;
 using Domain.Enums;
 using Application.Runtime;
 /// <summary>
@@ -80,7 +81,7 @@ public record SetRoleBindingRequest(PipelineRole Role, Guid ModelBackendId);
 /// <summary>
 /// Command for set role binding.
 /// </summary>
-public record SetRoleBindingCommand(SetRoleBindingRequest Request) : ICommand<Result<RoleBindingDto>>;
+public record SetRoleBindingCommand(SetRoleBindingRequest Request, ActorContext Actor) : ICommand<Result<RoleBindingDto>>;
 /// <summary>
 /// Fields for remove role binding.
 /// </summary>
@@ -88,7 +89,7 @@ public record RemoveRoleBindingRequest(PipelineRole Role);
 /// <summary>
 /// Command for remove role binding.
 /// </summary>
-public record RemoveRoleBindingCommand(RemoveRoleBindingRequest Request) : ICommand<Result>;
+public record RemoveRoleBindingCommand(RemoveRoleBindingRequest Request, ActorContext Actor) : ICommand<Result>;
 /// <summary>
 /// Command for get model registry.
 /// </summary>
