@@ -26,7 +26,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 {
     private readonly HttpClient _http;
     private readonly ClientLlamaSwap _llama;
-    private readonly IDaemonOpenCodeGate _gate;
+    private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonLlamaSync _llamaSync;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
@@ -38,7 +38,7 @@ internal sealed class DaemonChatSession : IDaemonChatSession, IAsyncDisposable
 
     public DaemonChatSession(
         DaemonDependencies deps,
-        IDaemonOpenCodeGate gate,
+        IDaemonAgentRuntimeGate gate,
         IDaemonLlamaSync llamaSync,
         IDaemonRuntimeState state,
         DaemonTiming timing)
