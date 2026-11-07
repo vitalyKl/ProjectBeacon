@@ -168,6 +168,19 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
         if (section.Kind == "Report")
             return Result.Failure<TaskWorkspaceSectionDto>("Server-generated report sections are immutable.", ErrorKind.Forbidden);
 
+        if (mode == "replace" && content.Length > MaxSectionLength)
+            return Result.Failure<TaskWorkspaceSectionDto>($"A workspace section cannot exceed {MaxSectionLength} characters.");
+
+        var existingTotal = await db.TaskWorkspaceSections
+            .Where(s => s.TaskId == request.TaskId)
+            .Select(s => (long)s.Content.Length)
+            .SumAsync(ct);
+        var projectedLength = mode == "append"
+            ? (long)section.Content.Length + content.Length + 2
+            : content.Length;
+        if (existingTotal - section.Content.Length + projectedLength > MaxTaskLength)
+            return Result.Failure<TaskWorkspaceSectionDto>("The task workspace has reached its total size limit.");
+
         var now = DateTime.UtcNow;
         int changed;
         if (mode == "append")

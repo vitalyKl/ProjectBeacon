@@ -14,7 +14,7 @@ public static class TaskWorkspaceEndpoints
     {
         app.MapGet("/v1/tasks/{taskId:guid}/workspace", Index)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
-        app.MapGet("/v1/tasks/{taskId:guid}/workspace/{key}", Read)
+        app.MapGet("/v1/tasks/{taskId:guid}/workspace/{**key}", Read)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/workspace", Write)
             .RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
