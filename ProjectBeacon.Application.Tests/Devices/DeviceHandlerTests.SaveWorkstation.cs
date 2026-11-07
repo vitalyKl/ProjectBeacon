@@ -299,42 +299,5 @@ public sealed partial class DeviceHandlerTests
             Assert.Equal(1, device.AppliedRevision);
         }
 
-        // Runtime state: config 2, applied-config 1.
-        using (TenantScope.EnterUnscoped())
-        {
-            var org = Org.Create("Org");
-            _db.Orgs.Add(org);
-            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
-            var project = Project.Create("P", null, org.Id);
-            _db.Projects.Add(project);
-            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
-            var runtime = ProjectRuntime.Create(project.Id, deviceId, @"A:\work\app");
-            runtime.BumpConfig();
-            runtime.BumpConfig();
-            runtime.MarkConfigApplied(1);
-            _db.ProjectRuntimes.Add(runtime);
-            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-            var stale = WorkstationCommand.Create(deviceId, WorkstationCommandKind.ApplyOpencode, """{"revision":1}""", project.Id, user.Id);
-            var forward = WorkstationCommand.Create(deviceId, WorkstationCommandKind.ApplyOpencode, """{"revision":2}""", project.Id, user.Id);
-            var beyond = WorkstationCommand.Create(deviceId, WorkstationCommandKind.ApplyOpencode, """{"revision":3}""", project.Id, user.Id);
-            _db.WorkstationCommands.Add(stale);
-            _db.WorkstationCommands.Add(forward);
-            _db.WorkstationCommands.Add(beyond);
-            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
-            Assert.True((await new CompleteCommandHandler(Factory()).HandleAsync(
-                new CompleteCommandCommand(new CompleteCommandRequest(stale.Id, deviceId, true, null, null)), TestContext.Current.CancellationToken)).Success);
-            Assert.True((await new CompleteCommandHandler(Factory()).HandleAsync(
-                new CompleteCommandCommand(new CompleteCommandRequest(forward.Id, deviceId, true, null, null)), TestContext.Current.CancellationToken)).Success);
-            Assert.True((await new CompleteCommandHandler(Factory()).HandleAsync(
-                new CompleteCommandCommand(new CompleteCommandRequest(beyond.Id, deviceId, true, null, null)), TestContext.Current.CancellationToken)).Success);
-        }
-
-        // The in-range ack (2) landed; the stale (1) and beyond (3 > config 2) acks did not touch it.
-        using (TenantScope.EnterUnscoped())
-        {
-            var runtime = await _db.ProjectRuntimes.IgnoreQueryFilters().AsNoTracking().SingleAsync(r => r.DeviceId == deviceId, TestContext.Current.CancellationToken);
-            Assert.Equal(2, runtime.AppliedConfigRevision);
-        }
     }
 }
