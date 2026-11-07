@@ -120,6 +120,9 @@ public static class McpToolNames
     public const string SubtaskReportResult = "subtask_report_result";
     public const string TaskReviewVerdict = "task_review_verdict";
     public const string TaskPipelineStatus = "task_pipeline_status";
+    public const string WorkspaceIndex = "workspace_index";
+    public const string WorkspaceRead = "workspace_read";
+    public const string WorkspaceWrite = "workspace_write";
 }
 
 /// <summary>
@@ -165,6 +168,10 @@ public static class McpToolCatalog
             // Task and project API tools.
             ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
                 McpToolNames.GetProject, McpToolNames.ListTasks, McpToolNames.GetTask, McpToolNames.ListTaskSteps),
+            ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
+                McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead),
+            ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
+                McpToolNames.WorkspaceWrite),
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
                 McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus,
                 McpToolNames.SetTaskSubstage, McpToolNames.ClaimTask, McpToolNames.AddTaskComment,

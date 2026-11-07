@@ -17,7 +17,7 @@ public static partial class McpStdioServer
         Tool(McpToolNames.TaskCreateSubtask, "Create a subtask on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("instructions", "string", true), ("allowedMcpTools", "string", false), ("allowedPaths", "string", false))),
         Tool(McpToolNames.SubtaskReportResult, "Report the result of an in-progress subtask. In Actor sessions, subtaskId defaults to the assigned subtask; a supplied ID must match. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
-            Props(("subtaskId", "string", false), ("diffRef", "string", true), ("summary", "string", true))),
+            Props(("subtaskId", "string", false), ("diffRef", "string", false), ("summary", "string", true), ("abstract", "string", false))),
         Tool(McpToolNames.TaskReviewVerdict, "Record a review verdict (approve, reopen_subtask) on the session task. Requires Beacon API credentials, BEACON_PROJECT_ID and BEACON_TASK_ID.",
             Props(("verdict", "string", true), ("note", "string", true), ("subtaskId", "string", false))),
         Tool(McpToolNames.TaskPipelineStatus, "Show the pipeline state (subtasks, sessions, verdicts) for the task linked to this chat. A task created during this chat becomes the active task automatically; no BEACON_TASK_ID setup or manual GUID copy is needed.",
@@ -173,15 +173,13 @@ public static partial class McpStdioServer
         var subtaskId = ParseGuid(args, "subtaskId");
         if (subtaskId is null)
             return ToolError(id, "missing or invalid 'subtaskId' (expected a GUID)");
-        var diffRef = OptArg(args, "diffRef");
-        if (string.IsNullOrWhiteSpace(diffRef))
-            return ToolError(id, "missing 'diffRef'");
+        var diffRef = OptArg(args, "diffRef") ?? string.Empty;
         var summary = OptArg(args, "summary");
         if (string.IsNullOrWhiteSpace(summary))
             return ToolError(id, "missing 'summary'");
         if (!TrySessionTask(env, out var taskId, out var error))
             return ToolError(id, error);
-        return await ApiTextAsync(id, await McpApiTools.ReportResultAsync(taskId, subtaskId.Value, diffRef, summary, api!));
+        return await ApiTextAsync(id, await McpApiTools.ReportResultAsync(taskId, subtaskId.Value, diffRef, summary, api!, abstractText: OptArg(args, "abstract")));
     }
 
     private static async Task<JsonObject> TaskReviewVerdictAsync(JsonNode id, JsonObject? args, BeaconApiClient? api, McpEnvironment env)

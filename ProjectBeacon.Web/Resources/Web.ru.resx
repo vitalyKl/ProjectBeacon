@@ -2431,4 +2431,19 @@
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
     <value>Не удалось загрузить вложения: {0}</value>
   </data>
+  <data name="RoleProfileInstructions" xml:space="preserve">
+    <value>Инструкции профилей ролей</value>
+  </data>
+  <data name="RoleProfileInstructionsDescription" xml:space="preserve">
+    <value>Эти инструкции добавляются в запрос каждой роли. Они не предоставляют инструменты и не отменяют ограничения задачи и безопасности.</value>
+  </data>
+  <data name="PlannerProfileInstructions" xml:space="preserve">
+    <value>Инструкции профиля планировщика</value>
+  </data>
+  <data name="ActorProfileInstructions" xml:space="preserve">
+    <value>Инструкции профиля исполнителя</value>
+  </data>
+  <data name="ReviewProfileInstructions" xml:space="preserve">
+    <value>Инструкции профиля проверяющего</value>
+  </data>
 </root>

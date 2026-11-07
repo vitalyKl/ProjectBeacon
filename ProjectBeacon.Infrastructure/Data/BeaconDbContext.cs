@@ -38,6 +38,7 @@ public class BeaconDbContext : DbContext, IBeaconDb
     public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
     public DbSet<TaskComment> TaskComments => Set<TaskComment>();
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
+    public DbSet<TaskWorkspaceSection> TaskWorkspaceSections => Set<TaskWorkspaceSection>();
     public DbSet<Constraint> Constraints => Set<Constraint>();
     public DbSet<Decision> Decisions => Set<Decision>();
     public DbSet<DecisionTask> DecisionTasks => Set<DecisionTask>();

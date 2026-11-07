@@ -17,7 +17,10 @@ public record ApplyAgentConfigRequest(
     Guid? SoloBackendId,
     Guid? PlannerBackendId,
     Guid? ActorBackendId,
-    Guid? ReviewBackendId);
+    Guid? ReviewBackendId,
+    string? PlannerInstructions = null,
+    string? ActorInstructions = null,
+    string? ReviewInstructions = null);
 /// <summary>
 /// Command for apply agent config.
 /// </summary>
@@ -73,26 +76,33 @@ public sealed class ApplyAgentConfigHandler : ICommandHandler<ApplyAgentConfigCo
             var solo = request.SoloBackendId ?? backends.FirstOrDefault()?.Id;
             if (solo is not { } soloId)
                 return Result.Failure("A model backend is required.");
-            foreach (var role in new[] { PipelineRole.Planner, PipelineRole.Actor, PipelineRole.Review })
+            var profileInstructions = new (PipelineRole Role, string? Instructions)[]
             {
-                var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, soloId), command.Actor), ct);
+                (PipelineRole.Planner, request.PlannerInstructions),
+                (PipelineRole.Actor, request.ActorInstructions),
+                (PipelineRole.Review, request.ReviewInstructions)
+            };
+            foreach (var (role, instructions) in profileInstructions)
+            {
+                var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(
+                    new SetRoleBindingRequest(role, soloId, instructions ?? string.Empty), command.Actor), ct);
                 if (!bound.Success)
                     return Result.Failure(bound.Error ?? "Failed to bind role.");
             }
         }
         else
         {
-            var pairs = new (PipelineRole Role, Guid? Id)[]
+            var pairs = new (PipelineRole Role, Guid? Id, string? Instructions)[]
             {
-                (PipelineRole.Planner, request.PlannerBackendId),
-                (PipelineRole.Actor, request.ActorBackendId),
-                (PipelineRole.Review, request.ReviewBackendId)
+                (PipelineRole.Planner, request.PlannerBackendId, request.PlannerInstructions),
+                (PipelineRole.Actor, request.ActorBackendId, request.ActorInstructions),
+                (PipelineRole.Review, request.ReviewBackendId, request.ReviewInstructions)
             };
-            foreach (var (role, id) in pairs)
+            foreach (var (role, id, instructions) in pairs)
             {
                 if (id is not { } backendId)
                     continue;
-                var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, backendId), command.Actor), ct);
+                var bound = await _setBinding.HandleAsync(new SetRoleBindingCommand(new SetRoleBindingRequest(role, backendId, instructions ?? string.Empty), command.Actor), ct);
                 if (!bound.Success)
                     return Result.Failure(bound.Error ?? "Failed to bind role.");
             }

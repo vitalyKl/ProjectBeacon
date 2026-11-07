@@ -1,5 +1,6 @@
 namespace ProjectBeacon.API.Tests;
 
+using Domain.Common;
 using Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using ProjectBeacon.API.Auth;
@@ -20,6 +21,23 @@ public sealed class HarnessApiAuthorizationTests
             HttpMethods.Get, $"/v1/tasks/{_taskId:D}/pipeline", _taskId, _subtaskId));
         Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/pipeline", _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceIndex]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceIndex]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace/report%2Fabc", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceRead]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceIndex]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId, _subtaskId,
+            [McpToolNames.WorkspaceWrite]));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
             HttpMethods.Post, resultPath, _taskId, _subtaskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
@@ -38,6 +56,10 @@ public sealed class HarnessApiAuthorizationTests
     [Fact]
     public void PlannerToken_CanOrchestrateOnlyItsPinnedTask()
     {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/subtasks", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
@@ -112,6 +134,10 @@ public sealed class HarnessApiAuthorizationTests
     public void ReviewerToken_CanReviewButCannotPlanOrExecuteActorWork()
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/workspace", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/verdict", _taskId));
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
             HttpMethods.Post, $"/v1/tasks/{_taskId:D}/pipeline/approve", _taskId));
@@ -173,7 +199,8 @@ public sealed class HarnessApiAuthorizationTests
         string method,
         string path,
         Guid? taskId = null,
-        Guid? subtaskId = null)
+        Guid? subtaskId = null,
+        IReadOnlyList<string>? allowedMcpTools = null)
         => ApiTokenAuthMiddleware.IsHarnessRequestAllowed(
             commandKind,
             role,
@@ -181,5 +208,6 @@ public sealed class HarnessApiAuthorizationTests
             taskId,
             subtaskId,
             method,
-            path);
+            path,
+            allowedMcpTools: allowedMcpTools);
 }

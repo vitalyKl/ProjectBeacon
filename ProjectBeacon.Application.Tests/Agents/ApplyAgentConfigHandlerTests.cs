@@ -44,7 +44,8 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
         var handler = new ApplyAgentConfigHandler(factory, new AuthorizationService(), new SetRoleBindingHandler(factory, new AuthorizationService()));
 
         var result = await handler.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null), new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
+            project.Id, deviceId, user.Id, AgentRunMode.Solo, backendId, null, null, null,
+            "Planner profile", "Actor profile", "Review profile"), new ActorContext(ActorType.Human, user.Id, false, null, null, null, null, ApiTokenCapability.None)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Success, result.Error);
         Assert.Empty(await _db.WorkstationCommands.IgnoreQueryFilters().ToListAsync(TestContext.Current.CancellationToken));
@@ -54,6 +55,9 @@ public sealed class ApplyAgentConfigHandlerTests : IDisposable
             var bindings = await _db.RoleBindings.IgnoreQueryFilters().Where(b => b.ProjectId == project.Id).ToListAsync(TestContext.Current.CancellationToken);
             Assert.Equal(3, bindings.Count);
             Assert.All(bindings, b => Assert.Equal(backendId, b.ModelBackendId));
+            Assert.Equal("Planner profile", bindings.Single(b => b.Role == PipelineRole.Planner).ProfileInstructions);
+            Assert.Equal("Actor profile", bindings.Single(b => b.Role == PipelineRole.Actor).ProfileInstructions);
+            Assert.Equal("Review profile", bindings.Single(b => b.Role == PipelineRole.Review).ProfileInstructions);
         }
     }
 

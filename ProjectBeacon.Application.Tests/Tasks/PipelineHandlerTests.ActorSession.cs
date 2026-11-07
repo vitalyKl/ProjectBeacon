@@ -246,6 +246,15 @@ public sealed partial class PipelineHandlerTests
             Assert.Equal(WorkstationCommandStatus.Cancelled, command.Status);
             Assert.Null(command.LeaseExpiresAt);
             Assert.NotNull(command.CompletedAt);
+
+            var report = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id
+                    && section.AuthorSubtaskId == created.Value.Id
+                    && section.Kind == "Report",
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("report/" + created.Value.Id.ToString("N") + "/attempt-1", report.Key);
+            Assert.Equal("Server", report.AuthorType);
+            Assert.Equal("cancel the waiting Actor", report.Content);
         }
     }
 
@@ -361,6 +370,18 @@ public sealed partial class PipelineHandlerTests
         var againSub = again.Value!.Subtasks.Single(s => s.Id == sub.Value.Id);
         Assert.Equal(SubtaskStatus.Failed, againSub.Status);
         Assert.Equal(firstSub.Summary, againSub.Summary);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var report = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id && section.AuthorSubtaskId == sub.Value.Id,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("Report", report.Kind);
+            Assert.Equal("Server", report.AuthorType);
+            Assert.Equal("Actor", report.AuthorRole);
+            Assert.Equal(actor.Value.Id, report.AuthorSessionId);
+            Assert.Equal("attempt 1 failed", report.Content);
+        }
     }
     [Fact]
     public async Task ReportSubtaskResult_OversizedSummary_ReturnsValidationErrorInsteadOfDatabaseFailure()

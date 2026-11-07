@@ -12,6 +12,7 @@ public class RoleBindingConfiguration : IEntityTypeConfiguration<RoleBinding>
     {
         entity.HasKey(e => e.Id);
         entity.Property(e => e.Role).HasConversion<string>().IsRequired();
+        entity.Property(e => e.ProfileInstructions).HasMaxLength(8000).IsRequired();
         entity.HasIndex(e => new { e.ProjectId, e.Role }).IsUnique();
         entity.HasOne(e => e.ModelBackend)
             .WithMany()

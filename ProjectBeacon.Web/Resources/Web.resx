@@ -2640,4 +2640,19 @@ No Beacon-hosted coding agent.</value>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
     <value>Upload failed: {0}</value>
   </data>
+  <data name="RoleProfileInstructions" xml:space="preserve">
+    <value>Role profile instructions</value>
+  </data>
+  <data name="RoleProfileInstructionsDescription" xml:space="preserve">
+    <value>These instructions are added to each role's prompt. They do not grant tools or override task and security boundaries.</value>
+  </data>
+  <data name="PlannerProfileInstructions" xml:space="preserve">
+    <value>Planner profile instructions</value>
+  </data>
+  <data name="ActorProfileInstructions" xml:space="preserve">
+    <value>Actor profile instructions</value>
+  </data>
+  <data name="ReviewProfileInstructions" xml:space="preserve">
+    <value>Review profile instructions</value>
+  </data>
 </root>

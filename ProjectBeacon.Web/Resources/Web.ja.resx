@@ -2449,4 +2449,19 @@ orthstar</value>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
     <value>アップロードに失敗しました: {0}</value>
   </data>
+  <data name="RoleProfileInstructions" xml:space="preserve">
+    <value>役割プロファイルの指示</value>
+  </data>
+  <data name="RoleProfileInstructionsDescription" xml:space="preserve">
+    <value>これらの指示は各ロールのプロンプトに追加されます。ツール権限を付与したり、タスクやセキュリティの制約を上書きしたりすることはありません。</value>
+  </data>
+  <data name="PlannerProfileInstructions" xml:space="preserve">
+    <value>プランナープロファイルの指示</value>
+  </data>
+  <data name="ActorProfileInstructions" xml:space="preserve">
+    <value>アクタープロファイルの指示</value>
+  </data>
+  <data name="ReviewProfileInstructions" xml:space="preserve">
+    <value>レビュープロファイルの指示</value>
+  </data>
 </root>

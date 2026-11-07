@@ -108,13 +108,13 @@ public record RetryPipelineSessionRequest(Guid SessionId);
 public record RetryPipelineSessionCommand(RetryPipelineSessionRequest Request) : ICommand<Result<PipelineSessionDto>>;
 
 /// <summary>Diff reference and summary reported for a subtask.</summary>
-public record ReportSubtaskResultRequest(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary);
+public record ReportSubtaskResultRequest(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary, string? Abstract = null);
 
 /// <summary>Records a subtask result and returns pipeline state.</summary>
 public record ReportSubtaskResultCommand(ReportSubtaskResultRequest Request) : ICommand<Result<PipelineStateDto>>;
 
 /// <summary>Reason a subtask failed.</summary>
-public record FailSubtaskRequest(Guid TaskId, Guid SubtaskId, string Reason);
+public record FailSubtaskRequest(Guid TaskId, Guid SubtaskId, string Reason, string? Abstract = null);
 
 /// <summary>Marks a subtask failed and returns pipeline state.</summary>
 public record FailSubtaskCommand(FailSubtaskRequest Request) : ICommand<Result<PipelineStateDto>>;

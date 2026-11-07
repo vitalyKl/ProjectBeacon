@@ -85,9 +85,10 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
             return Result.Failure<PipelineSessionDto>(spawnFailure.Message);
         }
 
+        var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Review, ct);
         var session = PipelineSession.Create(
             task.Id, task.ProjectId, PipelineRole.Review,
-            SessionPrompts.Review(task, subtasks), null, spawned!.ModelBackendId, spawned.LaunchSpec);
+            SessionPrompts.Review(task, subtasks, profileInstructions), null, spawned!.ModelBackendId, spawned.LaunchSpec);
         db.PipelineSessions.Add(session);
         await db.SaveChangesAsync(ct);
 

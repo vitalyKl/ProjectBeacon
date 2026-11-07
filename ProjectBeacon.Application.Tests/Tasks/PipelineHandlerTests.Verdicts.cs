@@ -9,9 +9,48 @@ using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 public sealed partial class PipelineHandlerTests
 {
+    [Fact]
+    public async Task ReportSubtaskResult_PersistsServerWorkspaceReport()
+    {
+        var (projectId, task) = await SeedTaskAsync("T");
+        var spawner = new FakeSpawner();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        await new StartPipelineHandler(factory, spawner)
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)), TestContext.Current.CancellationToken);
+        var subtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "implement the requested feature")), TestContext.Current.CancellationToken);
+        Assert.True(subtask.Success, subtask.Error);
+        var actor = await new StartActorSessionHandler(factory, spawner)
+            .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, subtask.Value!.Id)), TestContext.Current.CancellationToken);
+        Assert.True(actor.Success, actor.Error);
+
+        var result = await new ReportSubtaskResultHandler(factory).HandleAsync(
+            new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
+                task.Id, subtask.Value.Id, "diff://verified", "Implemented and verified the feature.",
+                "Implementation completed")),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(SubtaskStatus.Done, result.Value!.Subtasks.Single().Status);
+        using (TenantScope.EnterUnscoped())
+        {
+            var report = await _db.TaskWorkspaceSections.AsNoTracking()
+                .SingleAsync(section => section.TaskId == task.Id && section.AuthorSubtaskId == subtask.Value.Id,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal("report/" + subtask.Value.Id.ToString("N") + "/attempt-1", report.Key);
+            Assert.Equal("Report", report.Kind);
+            Assert.Equal("Server", report.AuthorType);
+            Assert.Equal("Actor", report.AuthorRole);
+            Assert.Equal("Implementation completed", report.Abstract);
+            Assert.Equal("Implemented and verified the feature.", report.Content);
+            Assert.Equal(actor.Value!.Id, report.AuthorSessionId);
+        }
+    }
+
     [Fact]
     public async Task Verdict_MissingNoteOrSubtask_Fails()
     {
@@ -117,6 +156,18 @@ public sealed partial class PipelineHandlerTests
                 .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(done.Task.Id, done.SubtaskId, "diff://a2", "fixed")), TestContext.Current.CancellationToken);
             Assert.True(redone.Success, redone.Error);
             Assert.Equal(SubtaskStatus.Done, redone.Value!.Subtasks.Single(s => s.Id == done.SubtaskId).Status);
+            using (TenantScope.EnterUnscoped())
+            {
+                var reports = await _db.TaskWorkspaceSections.AsNoTracking()
+                    .Where(section => section.TaskId == done.Task.Id
+                        && section.AuthorSubtaskId == done.SubtaskId
+                        && section.Kind == "Report")
+                    .OrderBy(section => section.Key)
+                    .ToListAsync(TestContext.Current.CancellationToken);
+                Assert.Equal(2, reports.Count);
+                Assert.Contains(reports, report => report.Key.EndsWith("/attempt-1", StringComparison.Ordinal));
+                Assert.Contains(reports, report => report.Key.EndsWith("/attempt-2", StringComparison.Ordinal));
+            }
 
             var review2 = await new StartReviewHandler(factory, spawner)
                 .HandleAsync(new StartReviewCommand(new StartReviewRequest(done.Task.Id)), TestContext.Current.CancellationToken);

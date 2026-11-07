@@ -183,7 +183,7 @@ public static class PipelineEndpoints
             return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
 
         var result = await handler.HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
-            body.TaskId, body.SubtaskId, body.DiffRef, body.Summary)), ct);
+            body.TaskId, body.SubtaskId, body.DiffRef, body.Summary, body.Abstract)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -195,7 +195,7 @@ public static class PipelineEndpoints
             return ProblemResults.Bad("TaskId/SubtaskId mismatch.");
 
         var result = await handler.HandleAsync(new FailSubtaskCommand(new FailSubtaskRequest(
-            body.TaskId, body.SubtaskId, body.Reason)), ct);
+            body.TaskId, body.SubtaskId, body.Reason, body.Abstract)), ct);
         return result.Success
             ? Results.Ok(result.Value)
             : result.FromResult();
@@ -297,10 +297,10 @@ public static class PipelineEndpoints
     public record ActorSessionBody(Guid TaskId, Guid SubtaskId);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/result</c>.</summary>
-    public record SubtaskResultBody(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary);
+    public record SubtaskResultBody(Guid TaskId, Guid SubtaskId, string DiffRef, string Summary, string? Abstract = null);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/subtasks/{subtaskId:guid}/fail</c>.</summary>
-    public record SubtaskFailBody(Guid TaskId, Guid SubtaskId, string Reason);
+    public record SubtaskFailBody(Guid TaskId, Guid SubtaskId, string Reason, string? Abstract = null);
 
     /// <summary>JSON body for <c>POST /v1/tasks/{taskId:guid}/pipeline/verdict</c>.</summary>
     public record VerdictBody(Guid TaskId, ReviewVerdictKind Kind, string Note, Guid? SubtaskId = null);
