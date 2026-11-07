@@ -126,6 +126,20 @@ public sealed class TaskWorkspaceHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task Workspace_RejectsClientWritesToReservedReportNamespace()
+    {
+        var (projectId, task) = await SeedTaskAsync();
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+        var result = await new WorkspaceWriteHandler(factory).HandleAsync(new WorkspaceWriteCommand(
+            new WorkspaceWriteRequest(task.Id, "report/manual", "Spoofed report", "Client-created report",
+                "This must not shadow server output.", "create"),
+            ApiActor(Guid.NewGuid()), "Actor"));
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+    }
+
+    [Fact]
     public async Task Workspace_ServerGeneratedReportsAreImmutable()
     {
         var (projectId, task) = await SeedTaskAsync();
