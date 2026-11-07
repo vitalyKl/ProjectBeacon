@@ -189,7 +189,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task LaunchSpec_OpenAiCompatible_OmitsReasoningFlag()
+    public async Task LaunchSpec_OpenAiCompatible_DoesNotCreateLlamaSwapLaunchSpec()
     {
         var (projectId, task) = await SeedTaskAsync("T");
         var backend = LocalModelBackend.Create("openai-compat", ModelBackendType.OpenAiCompatible, "server --port ${PORT}", 0, 0, projectId);
@@ -211,9 +211,8 @@ public sealed partial class PipelineHandlerTests
             .HandleAsync(new StartActorSessionCommand(new StartActorSessionRequest(task.Id, sub.Value!.Id)), TestContext.Current.CancellationToken);
         Assert.True(actor.Success, actor.Error);
         Assert.Equal(backend.Id, actor.Value!.ModelBackendId);
-        Assert.Contains("--port 8123", actor.Value.LaunchSpec!);
-        Assert.DoesNotContain("--no-reasoning-preserve", actor.Value.LaunchSpec);
-        Assert.DoesNotContain("--ctx-size", actor.Value.LaunchSpec);
+        Assert.Equal("openai-compat", actor.Value.ModelName);
+        Assert.Null(actor.Value.LaunchSpec);
     }
 
     [Fact]
