@@ -129,7 +129,7 @@ internal static partial class McpApiTools
     }
 
     public static Task<McpToolText> ReportResultAsync(
-        Guid taskId, Guid subtaskId, string diffRef, string summary, BeaconApiClient api, string? abstractText = null, CancellationToken ct = default)
+        Guid taskId, Guid subtaskId, string diffRef, string summary, BeaconApiClient api, CancellationToken ct = default, string? abstractText = null)
     {
         if (summary.Length > Subtask.MaxSummaryLength)
             return Task.FromResult(new McpToolText(true,
