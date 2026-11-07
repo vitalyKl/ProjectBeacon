@@ -448,7 +448,7 @@ public static class ClientTui
     {
         var table = new Table().Border(TableBorder.Rounded).AddColumn("Tool").AddColumn("Path");
         using var doc = JsonDocument.Parse(json);
-        foreach (var name in new[] { "git", "node", "docker", "dotnet", "opencode", "llamaSwap", "llamaServer" })
+        foreach (var name in new[] { "git", "node", "docker", "dotnet", "llamaSwap", "llamaServer" })
         {
             var value = doc.RootElement.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String
                 ? el.GetString()
