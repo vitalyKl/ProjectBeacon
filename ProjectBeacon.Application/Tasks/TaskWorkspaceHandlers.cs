@@ -134,96 +134,96 @@ public sealed class WorkspaceWriteHandler : ICommandHandler<WorkspaceWriteComman
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
-        db.ChangeTracker.Clear();
-        var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<TaskWorkspaceSectionDto>("Task not found.", ErrorKind.NotFound);
+            db.ChangeTracker.Clear();
+            var task = await db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<TaskWorkspaceSectionDto>("Task not found.", ErrorKind.NotFound);
 
-        var authorType = command.Actor.Type.ToString();
-        var authorId = command.Actor.UserId?.ToString("D")
-            ?? command.Actor.TokenId?.ToString("D")
-            ?? command.Actor.DeviceId?.ToString("D");
+            var authorType = command.Actor.Type.ToString();
+            var authorId = command.Actor.UserId?.ToString("D")
+                ?? command.Actor.TokenId?.ToString("D")
+                ?? command.Actor.DeviceId?.ToString("D");
 
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var section = await db.TaskWorkspaceSections
-            .FirstOrDefaultAsync(s => s.TaskId == request.TaskId && s.Key == key, ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var section = await db.TaskWorkspaceSections
+                .FirstOrDefaultAsync(s => s.TaskId == request.TaskId && s.Key == key, ct);
 
-        if (mode == "create")
-        {
-            if (section is not null)
-                return Result.Failure<TaskWorkspaceSectionDto>("A workspace section with this key already exists.", ErrorKind.Conflict);
-            var count = await db.TaskWorkspaceSections.CountAsync(s => s.TaskId == request.TaskId, ct);
-            if (count >= MaxSectionsPerTask)
-                return Result.Failure<TaskWorkspaceSectionDto>($"A task can have at most {MaxSectionsPerTask} workspace sections.");
-            var total = await db.TaskWorkspaceSections.Where(s => s.TaskId == request.TaskId)
-                .Select(s => (long)s.Content.Length).SumAsync(ct);
-            if (total + content.Length > MaxTaskLength)
+            if (mode == "create")
+            {
+                if (section is not null)
+                    return Result.Failure<TaskWorkspaceSectionDto>("A workspace section with this key already exists.", ErrorKind.Conflict);
+                var count = await db.TaskWorkspaceSections.CountAsync(s => s.TaskId == request.TaskId, ct);
+                if (count >= MaxSectionsPerTask)
+                    return Result.Failure<TaskWorkspaceSectionDto>($"A task can have at most {MaxSectionsPerTask} workspace sections.");
+                var total = await db.TaskWorkspaceSections.Where(s => s.TaskId == request.TaskId)
+                    .Select(s => (long)s.Content.Length).SumAsync(ct);
+                if (total + content.Length > MaxTaskLength)
+                    return Result.Failure<TaskWorkspaceSectionDto>("The task workspace has reached its total size limit.");
+
+                section = TaskWorkspaceSection.Create(request.TaskId, task.ProjectId, key, title, abstractText,
+                    "Notes", content, authorType, authorId, command.PipelineRole, null,
+                    command.PipelineSubtaskId, command.PipelineSessionId);
+                db.TaskWorkspaceSections.Add(section);
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return Result.Ok(WorkspaceReadHandler.ToDto(section));
+            }
+
+            if (section is null)
+                return Result.Failure<TaskWorkspaceSectionDto>("Workspace section not found.", ErrorKind.NotFound);
+            if (section.Kind == "Report")
+                return Result.Failure<TaskWorkspaceSectionDto>("Server-generated report sections are immutable.", ErrorKind.Forbidden);
+
+            if (mode == "replace" && content.Length > MaxSectionLength)
+                return Result.Failure<TaskWorkspaceSectionDto>($"A workspace section cannot exceed {MaxSectionLength} characters.");
+
+            var existingTotal = await db.TaskWorkspaceSections
+                .Where(s => s.TaskId == request.TaskId)
+                .Select(s => (long)s.Content.Length)
+                .SumAsync(ct);
+            var projectedLength = mode == "append"
+                ? (long)section.Content.Length + content.Length + 2
+                : content.Length;
+            if (existingTotal - section.Content.Length + projectedLength > MaxTaskLength)
                 return Result.Failure<TaskWorkspaceSectionDto>("The task workspace has reached its total size limit.");
 
-            section = TaskWorkspaceSection.Create(request.TaskId, task.ProjectId, key, title, abstractText,
-                "Notes", content, authorType, authorId, command.PipelineRole, null,
-                command.PipelineSubtaskId, command.PipelineSessionId);
-            db.TaskWorkspaceSections.Add(section);
-            await db.SaveChangesAsync(ct);
+            var now = DateTime.UtcNow;
+            int changed;
+            if (mode == "append")
+            {
+                changed = await db.TaskWorkspaceSections
+                    .Where(s => s.Id == section.Id && s.Kind == "Notes"
+                        && s.Content.Length <= MaxSectionLength - content.Length - 2)
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(s => s.Content, s => s.Content + "\n\n" + content)
+                        .SetProperty(s => s.Revision, s => s.Revision + 1)
+                        .SetProperty(s => s.UpdatedAt, now), ct);
+            }
+            else
+            {
+                if (request.ExpectedRevision is null)
+                    return Result.Failure<TaskWorkspaceSectionDto>("expectedRevision is required for replace.");
+                if (!IsSameAuthor(section, authorType, authorId, command))
+                    return Result.Failure<TaskWorkspaceSectionDto>("Only the section author may replace it.", ErrorKind.Forbidden);
+                changed = await db.TaskWorkspaceSections
+                    .Where(s => s.Id == section.Id && s.Revision == request.ExpectedRevision.Value
+                        && s.AuthorType == authorType && s.AuthorId == authorId && s.Kind == "Notes")
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(s => s.Title, title)
+                        .SetProperty(s => s.Abstract, abstractText)
+                        .SetProperty(s => s.Content, content)
+                        .SetProperty(s => s.Revision, s => s.Revision + 1)
+                        .SetProperty(s => s.UpdatedAt, now), ct);
+            }
+
+            if (changed == 0)
+                return Result.Failure<TaskWorkspaceSectionDto>(
+                    mode == "append" ? "Workspace section size limit reached or section changed; retry."
+                        : "Workspace section revision changed; reload and retry.", ErrorKind.Conflict);
+
             await transaction.CommitAsync(ct);
-            return Result.Ok(WorkspaceReadHandler.ToDto(section));
-        }
-
-        if (section is null)
-            return Result.Failure<TaskWorkspaceSectionDto>("Workspace section not found.", ErrorKind.NotFound);
-        if (section.Kind == "Report")
-            return Result.Failure<TaskWorkspaceSectionDto>("Server-generated report sections are immutable.", ErrorKind.Forbidden);
-
-        if (mode == "replace" && content.Length > MaxSectionLength)
-            return Result.Failure<TaskWorkspaceSectionDto>($"A workspace section cannot exceed {MaxSectionLength} characters.");
-
-        var existingTotal = await db.TaskWorkspaceSections
-            .Where(s => s.TaskId == request.TaskId)
-            .Select(s => (long)s.Content.Length)
-            .SumAsync(ct);
-        var projectedLength = mode == "append"
-            ? (long)section.Content.Length + content.Length + 2
-            : content.Length;
-        if (existingTotal - section.Content.Length + projectedLength > MaxTaskLength)
-            return Result.Failure<TaskWorkspaceSectionDto>("The task workspace has reached its total size limit.");
-
-        var now = DateTime.UtcNow;
-        int changed;
-        if (mode == "append")
-        {
-            changed = await db.TaskWorkspaceSections
-                .Where(s => s.Id == section.Id && s.Kind == "Notes"
-                    && s.Content.Length <= MaxSectionLength - content.Length - 2)
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(s => s.Content, s => s.Content + "\n\n" + content)
-                    .SetProperty(s => s.Revision, s => s.Revision + 1)
-                    .SetProperty(s => s.UpdatedAt, now), ct);
-        }
-        else
-        {
-            if (request.ExpectedRevision is null)
-                return Result.Failure<TaskWorkspaceSectionDto>("expectedRevision is required for replace.");
-            if (!IsSameAuthor(section, authorType, authorId, command))
-                return Result.Failure<TaskWorkspaceSectionDto>("Only the section author may replace it.", ErrorKind.Forbidden);
-            changed = await db.TaskWorkspaceSections
-                .Where(s => s.Id == section.Id && s.Revision == request.ExpectedRevision.Value
-                    && s.AuthorType == authorType && s.AuthorId == authorId && s.Kind == "Notes")
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(s => s.Title, title)
-                    .SetProperty(s => s.Abstract, abstractText)
-                    .SetProperty(s => s.Content, content)
-                    .SetProperty(s => s.Revision, s => s.Revision + 1)
-                    .SetProperty(s => s.UpdatedAt, now), ct);
-        }
-
-        if (changed == 0)
-            return Result.Failure<TaskWorkspaceSectionDto>(
-                mode == "append" ? "Workspace section size limit reached or section changed; retry."
-                    : "Workspace section revision changed; reload and retry.", ErrorKind.Conflict);
-
-        await transaction.CommitAsync(ct);
-        var updated = await db.TaskWorkspaceSections.AsNoTracking().FirstAsync(s => s.Id == section.Id, ct);
-        return Result.Ok(WorkspaceReadHandler.ToDto(updated));
+            var updated = await db.TaskWorkspaceSections.AsNoTracking().FirstAsync(s => s.Id == section.Id, ct);
+            return Result.Ok(WorkspaceReadHandler.ToDto(updated));
         });
     }
 
