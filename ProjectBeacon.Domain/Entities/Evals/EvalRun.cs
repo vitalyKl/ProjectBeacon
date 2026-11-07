@@ -47,7 +47,7 @@ public sealed class EvalRun : Entity, IProjectScoped
 
     public void Pin(string model, double temperature, string reasoningEffort, string toolPermissions, int timeoutSeconds, string repoRevision, string checkCommand, string runtime = "native")
     {
-        var normalizedRuntime = runtime?.Trim().ToLowerInvariant();
+        var normalizedRuntime = runtime.Trim().ToLowerInvariant();
         if (!string.Equals(normalizedRuntime, "native", StringComparison.Ordinal))
             throw new ArgumentException("Only the native workstation runtime is supported for eval runs.", nameof(runtime));
 
