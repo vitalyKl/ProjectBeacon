@@ -24,6 +24,7 @@ internal static partial class McpApiTools
     private static readonly McpTool[] Tools =
     [
         ..TaskTools(),
+        ..TaskWorkspaceTools(),
         ..ContextTools(),
         ..GovernTools(),
         ..MilestoneTools(),

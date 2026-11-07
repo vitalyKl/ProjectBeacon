@@ -271,7 +271,7 @@ public static partial class McpStdioServer
                     || requestedSubtaskId != ownedSubtaskId)
                     return "Actor lifecycle tools can only report the current subtask.";
             }
-            else if (McpApiTools.IsApiTool(tool))
+            else if (McpApiTools.IsApiTool(tool) && !ActorWorkspaceTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
             {
                 return $"Tool '{tool}' is not allowed for the Actor pipeline role.";
             }

@@ -82,7 +82,8 @@ public static partial class McpStdioServer
 
     private static readonly string[] PlannerSupervisorTools =
     [
-        McpToolNames.ContextCompile, McpToolNames.TaskCreateSubtask, McpToolNames.PipelineStartActor,
+        McpToolNames.ContextCompile, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
+        McpToolNames.TaskCreateSubtask, McpToolNames.PipelineStartActor,
         McpToolNames.PipelineLaunchSession, McpToolNames.TaskPipelineStatus, McpToolNames.PipelineStartReview
     ];
 
@@ -111,6 +112,11 @@ public static partial class McpStdioServer
     private static readonly string[] ActorTerminalTools =
     [
         McpToolNames.SubtaskReportResult, McpToolNames.PipelineFailSubtask
+    ];
+
+    private static readonly string[] ActorWorkspaceTools =
+    [
+        McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.WorkspaceWrite
     ];
 
     private static readonly string[] EvalAllowedTools =
@@ -176,6 +182,7 @@ public static partial class McpStdioServer
             // clients. Pipeline Actors have a stricter contract: only explicitly granted
             // workspace tools are exposed, while lifecycle tools are added below.
             if (!ActorTerminalTools.Contains(name, StringComparer.OrdinalIgnoreCase)
+                && !ActorWorkspaceTools.Contains(name, StringComparer.OrdinalIgnoreCase)
                 && !IsGrantedToSubtask(active.Tools, name))
                 continue;
 
@@ -213,7 +220,8 @@ public static partial class McpStdioServer
 
     private static bool IsActorToolAllowed(string tool)
     {
-        if (ActorTerminalTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
+        if (ActorTerminalTools.Contains(tool, StringComparer.OrdinalIgnoreCase)
+            || ActorWorkspaceTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
             return true;
         if (ActorForbiddenTools.Contains(tool, StringComparer.OrdinalIgnoreCase))
             return false;
