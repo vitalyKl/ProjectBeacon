@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Agents;
 
 using Application.Common;
+using Application.Authorization;
 using Application.Devices;
 using Domain.Enums;
 using Domain.Entities.Agents;
@@ -140,14 +141,24 @@ public sealed class DeleteLocalModelBackendHandler : ICommandHandler<DeleteLocal
 public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingCommand, Result<RoleBindingDto>>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public SetRoleBindingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public SetRoleBindingHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result<RoleBindingDto>> HandleAsync(SetRoleBindingCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out var projectId))
             return Result.Failure<RoleBindingDto>("Project scope is not resolved.");
+
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden<RoleBindingDto>();
 
         var backendOwner = await db.LocalModelBackends
             .Where(b => b.Id == command.Request.ModelBackendId)
@@ -182,14 +193,24 @@ public sealed class SetRoleBindingHandler : ICommandHandler<SetRoleBindingComman
 public sealed class RemoveRoleBindingHandler : ICommandHandler<RemoveRoleBindingCommand, Result>
 {
     private readonly IBeaconDbFactory _dbFactory;
+    private readonly IAuthorizationService _authorization;
 
-    public RemoveRoleBindingHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+    public RemoveRoleBindingHandler(IBeaconDbFactory dbFactory, IAuthorizationService authorization)
+    {
+        _dbFactory = dbFactory;
+        _authorization = authorization;
+    }
 
     public async Task<Result> HandleAsync(RemoveRoleBindingCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
         if (!ModelProjectScope.TryGet(db, out var projectId))
             return Result.Failure("Project scope is not resolved.");
+
+        var access = await _authorization.CanAsync(
+            db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: projectId, ct: ct);
+        if (!access.Success)
+            return Result.Forbidden();
 
         var binding = await db.RoleBindings.FirstOrDefaultAsync(r => r.Role == command.Request.Role, ct);
         if (binding is null)
