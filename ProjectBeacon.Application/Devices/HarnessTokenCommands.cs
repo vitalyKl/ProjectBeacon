@@ -8,6 +8,7 @@ using Application.Security;
 using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Domain.Common;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
@@ -70,7 +71,7 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
         IReadOnlyList<string>? allowedMcpTools = null;
         if (work.Kind == WorkstationCommandKind.RunPipelineSession)
         {
-            if (!TryReadPipelineScope(work.PayloadJson, out var scope) || scope.ProjectId != projectId)
+            if (!WorkstationCommandPayloads.TryReadPipelineSession(work.PayloadJson, out var scope) || scope.ProjectId != projectId)
                 return Result.Failure<HarnessTokenDto>("The pipeline command has an invalid session scope.", ErrorKind.Forbidden);
 
             var session = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
@@ -109,7 +110,7 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
 
         else if (work.Kind == WorkstationCommandKind.RunEvalTurn)
         {
-            if (!TryReadEvalScope(work.PayloadJson, out var evalScope))
+            if (!WorkstationCommandPayloads.TryReadEvalTurn(work.PayloadJson, out var evalScope))
                 return Result.Failure<HarnessTokenDto>("The eval command has an invalid run scope.", ErrorKind.Forbidden);
 
             var evalRun = await db.EvalRuns.IgnoreQueryFilters().AsNoTracking()
@@ -184,84 +185,4 @@ public sealed class IssueHarnessTokenHandler(IBeaconDbFactory dbFactory, ISecret
         return Result.Ok(new HarnessTokenDto(rawToken, projectId, work.Id, command.Generation, leaseExpiresAt, allowedMcpTools, mcpServers));
     }
 
-    private static bool TryReadEvalScope(string payload, out EvalCommandScope scope)
-    {
-        scope = default;
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !TryReadGuid(root, "evalRunId", out var evalRunId)
-                || !TryReadGuid(root, "taskId", out var taskId)
-                || !root.TryGetProperty("runtime", out var runtime)
-                || runtime.ValueKind != JsonValueKind.String)
-                return false;
-
-            var runtimeName = runtime.GetString()?.Trim().ToLowerInvariant();
-            if (runtimeName is not ("native" or "opencode"))
-                return false;
-
-            scope = new EvalCommandScope(evalRunId, taskId, runtimeName);
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryReadPipelineScope(string payload, out PipelineCommandScope scope)
-    {
-        scope = default;
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !TryReadGuid(root, "projectId", out var projectId)
-                || !TryReadGuid(root, "taskId", out var taskId)
-                || !TryReadGuid(root, "sessionId", out var sessionId)
-                || !root.TryGetProperty("role", out var roleValue)
-                || roleValue.ValueKind != JsonValueKind.String
-                || !Enum.TryParse(roleValue.GetString(), true, out PipelineRole role)
-                || !Enum.IsDefined(typeof(PipelineRole), role)
-                || !TryReadNullableGuid(root, "subtaskId", out var subtaskId))
-                return false;
-
-            scope = new PipelineCommandScope(projectId, taskId, sessionId, role, subtaskId);
-            return true;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryReadGuid(JsonElement root, string name, out Guid value)
-    {
-        value = Guid.Empty;
-        return root.TryGetProperty(name, out var element)
-            && element.ValueKind == JsonValueKind.String
-            && Guid.TryParse(element.GetString(), out value)
-            && value != Guid.Empty;
-    }
-
-    private static bool TryReadNullableGuid(JsonElement root, string name, out Guid? value)
-    {
-        value = null;
-        if (!root.TryGetProperty(name, out var element) || element.ValueKind == JsonValueKind.Null)
-            return true;
-        if (element.ValueKind != JsonValueKind.String
-            || !Guid.TryParse(element.GetString(), out var parsed)
-            || parsed == Guid.Empty)
-            return false;
-        value = parsed;
-        return true;
-    }
-
-    private readonly record struct PipelineCommandScope(
-        Guid ProjectId, Guid TaskId, Guid SessionId, PipelineRole Role, Guid? SubtaskId);
-
-    private readonly record struct EvalCommandScope(Guid EvalRunId, Guid TaskId, string Runtime);
 }

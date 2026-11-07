@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Application.Authorization;
 using Application.Devices;
+using Domain.Common;
 using Domain.Entities.Evals;
 using Domain.Entities.Identity;
 using Domain.Entities.Tasks;
@@ -226,19 +227,16 @@ public sealed class ApiTokenAuthMiddleware
 
             if (kind == WorkstationCommandKind.ChatPrompt)
             {
-                if (!TryReadGuid(root, "chatSessionId", out var chatSessionId)
-                    || !root.TryGetProperty("externalSessionId", out var external)
-                    || external.ValueKind != JsonValueKind.String
-                    || string.IsNullOrWhiteSpace(external.GetString()))
+                if (!WorkstationCommandPayloads.TryReadChatPrompt(payloadJson, out var chatPayload))
                     return null;
 
                 var chat = await db.ChatSessions.IgnoreQueryFilters().AsNoTracking()
-                    .FirstOrDefaultAsync(s => s.Id == chatSessionId
+                    .FirstOrDefaultAsync(s => s.Id == chatPayload.ChatSessionId
                         && s.ProjectId == projectId
                         && s.DeviceId == deviceId
                         && s.ArchivedAt == null
                         && s.Status == ChatSessionStatus.Streaming
-                        && s.ExternalSessionId == external.GetString(), ct);
+                        && s.ExternalSessionId == chatPayload.ExternalSessionId, ct);
                 return chat is null
                     ? null
                     : new HarnessCommandScope(kind, projectId, null, null, null, null);
@@ -246,70 +244,56 @@ public sealed class ApiTokenAuthMiddleware
 
             if (kind == WorkstationCommandKind.RunPipelineSession)
             {
-                if (!TryReadGuid(root, "projectId", out var payloadProjectId)
-                    || payloadProjectId != projectId
-                    || !TryReadGuid(root, "taskId", out var taskId)
-                    || !TryReadGuid(root, "sessionId", out var sessionId)
-                    || !root.TryGetProperty("role", out var roleValue)
-                    || roleValue.ValueKind != JsonValueKind.String
-                    || !Enum.TryParse(roleValue.GetString(), true, out PipelineRole role)
-                    || !Enum.IsDefined(typeof(PipelineRole), role)
-                    || !TryReadNullableGuid(root, "subtaskId", out var subtaskId))
+                if (!WorkstationCommandPayloads.TryReadPipelineSession(payloadJson, out var pipeline)
+                    || pipeline.ProjectId != projectId)
                     return null;
 
                 var session = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
-                    .FirstOrDefaultAsync(s => s.Id == sessionId && s.ProjectId == projectId, ct);
+                    .FirstOrDefaultAsync(s => s.Id == pipeline.SessionId && s.ProjectId == projectId, ct);
                 var taskExists = await db.Tasks.IgnoreQueryFilters()
-                    .AnyAsync(t => t.Id == taskId && t.ProjectId == projectId, ct);
+                    .AnyAsync(t => t.Id == pipeline.TaskId && t.ProjectId == projectId, ct);
                 if (session is null
                     || !taskExists
                     || session.Status != SessionStatus.Active
-                    || session.TaskId != taskId
-                    || session.Role != role
-                    || session.SubtaskId != subtaskId)
+                    || session.TaskId != pipeline.TaskId
+                    || session.Role != pipeline.Role
+                    || session.SubtaskId != pipeline.SubtaskId)
                     return null;
 
-                if (role == PipelineRole.Actor)
+                if (pipeline.Role == PipelineRole.Actor)
                 {
-                    if (subtaskId is not { } actorSubtaskId)
+                    if (pipeline.SubtaskId is not { } actorSubtaskId)
                         return null;
                     var subtaskExists = await db.Subtasks.IgnoreQueryFilters()
                         .AnyAsync(s => s.Id == actorSubtaskId
-                            && s.TaskId == taskId
+                            && s.TaskId == pipeline.TaskId
                             && s.ProjectId == projectId
                             && s.Status == SubtaskStatus.InProgress, ct);
                     if (!subtaskExists)
                         return null;
                 }
-                else if (subtaskId is not null)
+                else if (pipeline.SubtaskId is not null)
                 {
                     return null;
                 }
 
-                return new HarnessCommandScope(kind, projectId, taskId, sessionId, role, subtaskId);
+                return new HarnessCommandScope(kind, projectId, pipeline.TaskId, pipeline.SessionId, pipeline.Role, pipeline.SubtaskId);
             }
 
             if (kind == WorkstationCommandKind.RunEvalTurn)
             {
-                if (!TryReadGuid(root, "evalRunId", out var evalRunId)
-                    || !TryReadGuid(root, "taskId", out var taskId)
-                    || !root.TryGetProperty("runtime", out var runtimeValue)
-                    || runtimeValue.ValueKind != JsonValueKind.String)
-                    return null;
-
-                var runtime = runtimeValue.GetString()?.Trim().ToLowerInvariant();
-                if (runtime is not ("native" or "opencode"))
+                if (!WorkstationCommandPayloads.TryReadEvalTurn(payloadJson, out var eval))
                     return null;
 
                 var evalRun = await db.EvalRuns.IgnoreQueryFilters().AsNoTracking()
-                    .FirstOrDefaultAsync(run => run.Id == evalRunId
+                    .FirstOrDefaultAsync(run => run.Id == eval.EvalRunId
                         && run.ProjectId == projectId
-                        && run.TaskId == taskId
-                        && run.Runtime == runtime
+                        && run.TaskId == eval.TaskId
+                        && run.Runtime == eval.Runtime
                         && run.CompletedAt == null, ct);
                 return evalRun is null
                     ? null
-                    : new HarnessCommandScope(kind, projectId, taskId, null, null, null);
+                    : new HarnessCommandScope(kind, projectId, eval.TaskId, null, null, null);
             }
 
             return null;
@@ -567,19 +551,6 @@ public sealed class ApiTokenAuthMiddleware
             && element.ValueKind == JsonValueKind.String
             && Guid.TryParse(element.GetString(), out value)
             && value != Guid.Empty;
-    }
-
-    private static bool TryReadNullableGuid(JsonElement root, string name, out Guid? value)
-    {
-        value = null;
-        if (!root.TryGetProperty(name, out var element) || element.ValueKind == JsonValueKind.Null)
-            return true;
-        if (element.ValueKind != JsonValueKind.String
-            || !Guid.TryParse(element.GetString(), out var parsed)
-            || parsed == Guid.Empty)
-            return false;
-        value = parsed;
-        return true;
     }
 
     private static bool TryGetGuidSegment(string? path, int index, out Guid value)
