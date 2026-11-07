@@ -111,6 +111,14 @@ else
                     <MudSelectItem Value="@((Guid?)backend.Id)">@backend.Name</MudSelectItem>
                 }
             </MudSelect>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">Role profile instructions</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2">
+                These instructions are added to each role's prompt. They do not grant tools or override task and security boundaries.
+            </MudText>
+            <MudTextField @bind-Value="_plannerInstructions" Label="Planner profile instructions" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_actorInstructions" Label="Actor profile instructions" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            <MudTextField @bind-Value="_reviewInstructions" Label="Review profile instructions" Lines="4" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         }
         <MudStack Row="true" Spacing="2" Class="mt-3">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCurrentTemplate" Disabled="_busy || string.IsNullOrWhiteSpace(_templateName)">@L["Save"]</MudButton>
@@ -201,6 +209,9 @@ else
     private Guid? _planner;
     private Guid? _actor;
     private Guid? _review;
+    private string _plannerInstructions = string.Empty;
+    private string _actorInstructions = string.Empty;
+    private string _reviewInstructions = string.Empty;
     private LlamaSwapStatusDto? _status;
     private bool _busy;
     private Guid _userId;
@@ -399,6 +410,7 @@ else
             _templateName = string.Empty;
             _mode = AgentRunMode.Solo;
             _solo = _planner = _actor = _review = null;
+            _plannerInstructions = _actorInstructions = _reviewInstructions = string.Empty;
             return Task.CompletedTask;
         }
         CopyTemplate(selected);
@@ -414,6 +426,9 @@ else
         _planner = template.PlannerBackendId;
         _actor = template.ActorBackendId;
         _review = template.ReviewBackendId;
+        _plannerInstructions = template.PlannerInstructions;
+        _actorInstructions = template.ActorInstructions;
+        _reviewInstructions = template.ReviewInstructions;
     }
 
     private async Task SaveCurrentTemplate()
@@ -423,7 +438,8 @@ else
         try
         {
             var saved = await SaveTemplate.HandleAsync(new SaveAgentTemplateCommand(new SaveAgentTemplateRequest(
-                _templateId, _userId, _templateName, _mode, _solo, _planner, _actor, _review)));
+                _templateId, _userId, _templateName, _mode, _solo, _planner, _actor, _review,
+                _plannerInstructions, _actorInstructions, _reviewInstructions)));
             if (!saved.Success)
             {
                 Snackbar.Add(saved.Error ?? L["Error"].Value, Severity.Error);
@@ -549,7 +565,8 @@ else
         try
         {
             var applied = await ApplyAgentConfig.HandleAsync(new ApplyAgentConfigCommand(new ApplyAgentConfigRequest(
-                _project.Id, deviceId, _userId, _mode, _solo, _planner, _actor, _review), _caller));
+                _project.Id, deviceId, _userId, _mode, _solo, _planner, _actor, _review,
+                _plannerInstructions, _actorInstructions, _reviewInstructions), _caller));
             if (!applied.Success)
             {
                 Snackbar.Add(applied.Error ?? L["Error"].Value, Severity.Error);
@@ -580,6 +597,7 @@ else
         _templateName = string.Empty;
         _mode = AgentRunMode.Solo;
         _solo = _planner = _actor = _review = null;
+        _plannerInstructions = _actorInstructions = _reviewInstructions = string.Empty;
     }
 
 }
