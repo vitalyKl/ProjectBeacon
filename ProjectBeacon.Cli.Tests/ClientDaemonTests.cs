@@ -2,7 +2,6 @@ namespace ProjectBeacon.Cli.Tests;
 
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using Application.Common;
 using Application.Devices;
@@ -219,8 +218,7 @@ public sealed class ClientDaemonTests : IDisposable
         };
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), null, openCode)
+        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings())
         {
             // A real (non-zero) interval keeps the daemon from spawning a fresh nvidia-smi
             // process every loop turn, which would starve the polling below on loaded hosts.
@@ -374,72 +372,6 @@ public sealed class ClientDaemonTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteAsync_ChatPrompt_CompletesOnIdle()
-    {
-        var chatId = Guid.NewGuid();
-        var logs = new List<string>();
-        using var http = new HttpClient(new RouteHandler()) { BaseAddress = new Uri("http://localhost/") };
-        await using var llama = new ClientLlamaSwap
-        {
-            SkipRealProcess = true,
-            ConfigFile = Path.Combine(_dir, "config.yaml")
-        };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
-        {
-            DelayAsync = (_, _) => Task.CompletedTask,
-            ChatIdleTimeout = TimeSpan.FromSeconds(1),
-            ChatMaxDuration = TimeSpan.FromSeconds(180)
-        };
-        var (ok, result, error) = await daemon.ExecuteAsync(
-            new WorkstationDaemon.CommandWire
-            {
-                Id = Guid.NewGuid(),
-                Kind = WorkstationCommandKind.ChatPrompt,
-                LocalRoot = _dir,
-                PayloadJson = JsonSerializer.Serialize(new { path = ".", chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
-            },
-            CancellationToken.None);
-        Assert.True(ok, error);
-        Assert.Contains("idle", string.Join("\n", logs));
-        Assert.Contains("\"interrupted\":false", result);
-        Assert.Equal(0, openCode.AbortCount);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ChatPrompt_InterruptsOnMaxDuration()
-    {
-        var chatId = Guid.NewGuid();
-        var logs = new List<string>();
-        using var http = new HttpClient(new RouteHandler()) { BaseAddress = new Uri("http://localhost/") };
-        await using var llama = new ClientLlamaSwap
-        {
-            SkipRealProcess = true,
-            ConfigFile = Path.Combine(_dir, "config.yaml")
-        };
-        await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        await using var daemon = new WorkstationDaemon(http, llama, () => new WorkstationSettings(), m => logs.Add(m), openCode)
-        {
-            DelayAsync = (_, _) => Task.CompletedTask,
-            ChatIdleTimeout = TimeSpan.FromSeconds(10),
-            ChatMaxDuration = TimeSpan.FromSeconds(1)
-        };
-        var (ok, result, error) = await daemon.ExecuteAsync(
-            new WorkstationDaemon.CommandWire
-            {
-                Id = Guid.NewGuid(),
-                Kind = WorkstationCommandKind.ChatPrompt,
-                LocalRoot = _dir,
-                PayloadJson = JsonSerializer.Serialize(new { chatSessionId = chatId, externalSessionId = "oc-1", text = "hello" })
-            },
-            CancellationToken.None);
-        Assert.True(ok, error);
-        Assert.Contains("interrupted", string.Join("\n", logs));
-        Assert.Contains("\"interrupted\":true", result);
-        Assert.Equal(1, openCode.AbortCount);
-    }
-
-    [Fact]
     public async Task ExecuteAsync_ChatPrompt_RejectsAbsolutePathAndEscape()
     {
         using var http = new HttpClient { BaseAddress = new Uri("http://localhost/") };
@@ -529,7 +461,8 @@ public sealed class ClientDaemonTests : IDisposable
         await using var llama = new ClientLlamaSwap { SkipRealProcess = true, ConfigFile = Path.Combine(_dir, "config.yaml") };
         var state = new DaemonRuntimeState("http://localhost", null);
         await using var openCode = new ClientOpenCodeServe { SkipRealProcess = true };
-        var deps = new DaemonDependencies(http, llama, openCode, new OpenCodeAgentRuntime(openCode), () => new WorkstationSettings());
+        var deps = new DaemonDependencies(http, llama, () => new WorkstationSettings(),
+            _ => new ProjectBeacon.Cli.Client.AgentHarness.UnavailableAgentRuntime("Unused llama-sync test runtime"));
         var sync = new DaemonLlamaSync(deps, state);
         try
         {
@@ -845,18 +778,7 @@ public sealed class ClientDaemonTests : IDisposable
         Assert.Equal(8, messageGets);
     }
 
-    // The v2 server lists newest-first when ?order=desc is requested; the chat fixtures are authored oldest-first.
-    private static string DescPage(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var items = new List<string>();
-        foreach (var element in doc.RootElement.EnumerateArray())
-            items.Add(element.GetRawText());
-        var reversed = new string[items.Count];
-        for (var i = 0; i < items.Count; i++)
-            reversed[i] = items[items.Count - 1 - i];
-        return "[" + string.Join(",", reversed) + "]";
-    }
+}
 
     private static HttpResponseMessage OkJson(string json) =>
         new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
