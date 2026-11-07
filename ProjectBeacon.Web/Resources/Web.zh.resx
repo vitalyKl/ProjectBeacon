@@ -2449,4 +2449,19 @@ orthstar</value>
   <data name="TaskAttachmentsUploadFailed" xml:space="preserve">
     <value>上传失败：{0}</value>
   </data>
+  <data name="RoleProfileInstructions" xml:space="preserve">
+    <value>角色配置说明</value>
+  </data>
+  <data name="RoleProfileInstructionsDescription" xml:space="preserve">
+    <value>这些指示会附加到各角色的提示中。它们不会授予工具权限，也不会覆盖任务或安全边界。</value>
+  </data>
+  <data name="PlannerProfileInstructions" xml:space="preserve">
+    <value>规划者配置说明</value>
+  </data>
+  <data name="ActorProfileInstructions" xml:space="preserve">
+    <value>执行者配置说明</value>
+  </data>
+  <data name="ReviewProfileInstructions" xml:space="preserve">
+    <value>审查者配置说明</value>
+  </data>
 </root>
