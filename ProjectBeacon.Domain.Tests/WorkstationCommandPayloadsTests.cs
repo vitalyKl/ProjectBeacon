@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Domain.Tests;
 
+using System.Text.Json;
 using ProjectBeacon.Domain.Common;
 using ProjectBeacon.Domain.Enums;
 using Xunit;
